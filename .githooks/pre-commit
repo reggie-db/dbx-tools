@@ -1,0 +1,24 @@
+#!/bin/sh
+set -e
+
+# Run updates (updates pyproject files)
+uv run lfp-build sync
+
+# Stage any changes made by the sync so they land in THIS commit
+git add -A
+
+# Optional: tell the user what was staged
+if ! git diff --quiet --cached; then
+  echo "pre-commit: staged version updates."
+fi
+
+# >>> lfp-build managed pre-commit >>>
+# Sync workspace pyproject.toml files; stage anything the sync changed so it
+# lands in this commit. Edits inside this block are overwritten the next time
+# `lfp-build hooks` runs - keep custom logic outside the markers.
+uv run lfp-build sync || exit 1
+git add -A
+if ! git diff --quiet --cached; then
+    echo "pre-commit: staged version updates."
+fi
+# <<< lfp-build managed pre-commit <<<

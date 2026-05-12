@@ -1,0 +1,31 @@
+[build-system]
+requires = ["uv_build>=0.9,<0.12"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "lfp-build @ git+https://github.com/regbo/lfp-build-py.git",
+]
+genie = ["dbx-tools-genie"]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+dbx-tools-genie = { workspace = true }
+dbx-tools-core = { workspace = true }
+dbx-tools-api = { workspace = true }
+dbx-tools-appkit = { workspace = true }
+
+[tool.lfp-build.member-project]
+project.requires-python = ">=3.10"
+
+[tool.pyrefly]
+search-path = [
+    ".",
+    "packages/dbx-tools-api/src",
+    "packages/dbx-tools-appkit/src",
+    "packages/dbx-tools-core/src",
+    "packages/dbx-tools-genie/src",
+]

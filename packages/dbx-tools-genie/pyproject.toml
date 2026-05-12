@@ -1,0 +1,16 @@
+[build-system]
+requires = ["uv_build>=0.9,<0.12"]
+build-backend = "uv_build"
+
+[project]
+name = "dbx-tools-genie"
+version = "0.1.0+ts1778566185"
+requires-python = ">=3.10"
+dependencies = ["dbx-tools-core @ file://${PROJECT_ROOT}/../dbx-tools-core"]
+
+[tool.uv.build-backend]
+module-name = "dbx_tools.genie"
+module-root = "src"
+
+[tool.uv.sources]
+dbx-tools-core = { workspace = true }
