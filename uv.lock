@@ -338,7 +338,7 @@ wheels = [
 
 [[package]]
 name = "dbx-tools-api"
-version = "0.1.0+ts1778566178"
+version = "0.1.0+rev9ed3aab"
 source = { editable = "packages/dbx-tools-api" }
 dependencies = [
     { name = "dbx-tools-core" },
@@ -353,7 +353,7 @@ requires-dist = [
 
 [[package]]
 name = "dbx-tools-appkit"
-version = "0.1.0+ts1778566178"
+version = "0.1.0+rev9ed3aab"
 source = { editable = "packages/dbx-tools-appkit" }
 dependencies = [
     { name = "dbx-tools-core" },
@@ -364,7 +364,7 @@ requires-dist = [{ name = "dbx-tools-core", editable = "packages/dbx-tools-core"
 
 [[package]]
 name = "dbx-tools-core"
-version = "0.1.0+ts1778566178"
+version = "0.1.0+rev9ed3aab"
 source = { editable = "packages/dbx-tools-core" }
 dependencies = [
     { name = "databricks-sdk" },
@@ -375,7 +375,7 @@ requires-dist = [{ name = "databricks-sdk" }]
 
 [[package]]
 name = "dbx-tools-genie"
-version = "0.1.0+ts1778566178"
+version = "0.1.0+rev9ed3aab"
 source = { editable = "packages/dbx-tools-genie" }
 dependencies = [
     { name = "dbx-tools-core" },
