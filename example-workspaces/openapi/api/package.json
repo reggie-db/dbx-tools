@@ -1,8 +1,5 @@
 {
-  "name": "@dbx-tools/cli-main",
-  "bin": {
-    "pw-demo": "./src/cli.ts"
-  },
+  "name": "@dbx-tools/openapi-api",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -15,21 +12,11 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
+    "@types/node": "^24.13.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@clack/prompts": "catalog:",
-    "@dbx-tools/shared-core": "workspace:*",
-    "@dbx-tools/shared-neat": "workspace:*",
-    "commander": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": ">=10",
-      "onFail": "ignore"
-    }
+    "openapi-fetch": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

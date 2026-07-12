@@ -68,7 +68,7 @@
       "name": "dbxtools",
       "steps": [
         {
-          "exec": "tsx dbx-tools/bin/dbxtools.ts",
+          "exec": "tsx workspaces/cli/dbx-tools/bin/dbxtools.ts",
           "receiveArgs": true
         }
       ]

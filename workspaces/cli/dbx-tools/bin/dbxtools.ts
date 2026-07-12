@@ -3,15 +3,17 @@
  * `dbxtools` - the single CLI for the toolchain (commander). Invoked as a bin
  * (`dbxtools <cmd>`) and by the projen `watch` task (`pnpm dbxtools sync --watch`).
  *
- *   sync            re-synthesize the workspace (runs projen; barrels regenerate).
+ *   sync            bootstrap an empty folder, or re-synthesize an existing
+ *                   workspace (runs projen; barrels regenerate).
  *   sync --watch    keep it in sync while editing: re-synth on config/package
  *                   changes, rebuild barrels on source edits.
  *   barrels         regenerate every package's root index.ts barrel.
  *   typecheck       type-check every package against its own env tsconfig.
- *   openapi         (deferred) generate the openapi env from @openapi annotations.
+ *   openapi         generate the openapi env from tsoa controllers.
  *
- * `watch` and `openapi` are imported lazily so `sync`/`barrels`/`typecheck` don't
- * require their heavier deps (chokidar, openapi-typescript) to be installed.
+ * `bootstrap`, `watch`, and `openapi` are imported lazily so `sync`/`barrels`/
+ * `typecheck` don't require their heavier deps (chokidar, openapi-typescript) to
+ * be installed.
  */
 import { Command } from "commander";
 import { logger } from "../src/log";
@@ -24,18 +26,22 @@ program.name("dbxtools").description("dbx-tools monorepo toolchain");
 
 program
   .command("sync")
-  .description("re-synthesize the workspace; with --watch, keep it in sync as you edit")
+  .description("bootstrap an empty folder, or re-synthesize the workspace; --watch keeps it in sync")
   .option("-w, --watch", "watch: re-synth on config/package changes, rebuild barrels on edits")
   .action(async (opts: { watch?: boolean }) => {
+    const log = logger.withTag("projen:sync");
+    const { needsBootstrap, bootstrapWorkspace } = await import("../src/projen/bootstrap");
+    if (needsBootstrap()) {
+      bootstrapWorkspace();
+    } else {
+      log.start("synthesizing");
+      runSynth({ post: true }); // full projen: installs + regenerates barrels (post-synth)
+      log.success("synced");
+    }
     if (opts.watch) {
       const { startWatch } = await import("../src/projen/watch");
       startWatch();
-      return;
     }
-    const log = logger.withTag("projen:sync");
-    log.start("synthesizing");
-    runSynth({ post: true }); // full projen: installs + regenerates barrels (post-synth)
-    log.success("synced");
   });
 
 program

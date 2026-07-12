@@ -1,29 +1,27 @@
 {
-  "name": "@dbx-tools/openapi-api",
+  "name": "@dbx-tools/server-api",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
     "default": "projen default",
+    "dev": "projen dev",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "start": "projen start",
     "test": "projen test",
     "watch": "projen watch",
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
+    "@types/express": "catalog:",
+    "@types/node": "catalog:",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "openapi-fetch": "catalog:"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": ">=10",
-      "onFail": "ignore"
-    }
+    "@dbx-tools/shared-core": "workspace:*",
+    "express": "catalog:",
+    "tsoa": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

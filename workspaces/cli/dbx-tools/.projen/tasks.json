@@ -43,7 +43,7 @@
       "steps": [
         {
           "exec": "pnpm exec projen default",
-          "cwd": ".."
+          "cwd": "../../.."
         }
       ]
     },

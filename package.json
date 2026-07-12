@@ -22,13 +22,6 @@
     "typescript": "^5.9.3"
   },
   "pnpm": {},
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": ">=10",
-      "onFail": "ignore"
-    }
-  },
   "license": "UNLICENSED",
   "publishConfig": {
     "access": "public"

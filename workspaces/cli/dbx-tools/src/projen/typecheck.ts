@@ -17,7 +17,15 @@ import { discoverPackages, repoRoot } from "./workspace";
 
 const log = logger.withTag("projen:typecheck");
 const require = createRequire(import.meta.url);
-const TSC = require.resolve("typescript/bin/tsc");
+
+// Resolved lazily (not at module load) so importing this module - e.g. via the
+// package barrel, which `configureProjen` pulls in - doesn't require `typescript`
+// to already be installed, and doesn't fail just because *some* consumer's
+// `typescript` happens to be an unusual version without this subpath exported.
+let tscBin: string | undefined;
+function tscPath(): string {
+  return (tscBin ??= require.resolve("typescript/bin/tsc"));
+}
 
 interface Target {
   readonly label: string;
@@ -40,7 +48,7 @@ export function typecheckAll(): number {
   let failures = 0;
   for (const t of targets()) {
     try {
-      execFileSync(process.execPath, [TSC, "--noEmit", "-p", t.tsconfig], {
+      execFileSync(process.execPath, [tscPath(), "--noEmit", "-p", t.tsconfig], {
         cwd: repoRoot,
         stdio: "pipe",
       });

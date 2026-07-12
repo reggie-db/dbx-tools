@@ -124,6 +124,10 @@ const SUBPROJECT_DEFAULTS: Partial<typescript.TypeScriptProjectOptions> = {
   npmignoreEnabled: false,
   licensed: false,
   depsUpgrade: false,
+  // pnpm 11 errors "Cannot use both packageManager and devEngines.packageManager"
+  // - projen would otherwise auto-add the latter alongside the former (every
+  // subproject sets `packageManager` explicitly below).
+  addPackageManagerToDevEngines: false,
 };
 
 /**

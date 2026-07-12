@@ -20,23 +20,18 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@clack/prompts": "catalog:",
     "barrelsby": "^2.8.1",
     "chokidar": "^4.0.3",
     "commander": "catalog:",
     "consola": "^3.4.2",
     "constructs": "^10.0.0",
     "openapi-typescript": "^7.13.0",
+    "pnpm": "catalog:",
     "projen": "^0.101.4",
     "tsoa": "catalog:",
     "tsx": "^4.23.0",
     "yaml": "^2.9.0"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": ">=10",
-      "onFail": "ignore"
-    }
   },
   "main": "index.ts",
   "license": "UNLICENSED",

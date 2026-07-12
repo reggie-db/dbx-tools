@@ -33,6 +33,9 @@ catalogs:
     openapi-fetch:
       specifier: ^0.17.0
       version: 0.17.0
+    pnpm:
+      specifier: ^11.0.6
+      version: 11.10.0
     react:
       specifier: ^19.2.4
       version: 19.2.7
@@ -66,47 +69,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  dbx-tools:
-    dependencies:
-      barrelsby:
-        specifier: ^2.8.1
-        version: 2.8.1
-      chokidar:
-        specifier: ^4.0.3
-        version: 4.0.3
-      commander:
-        specifier: 'catalog:'
-        version: 15.0.0
-      consola:
-        specifier: ^3.4.2
-        version: 3.4.2
-      constructs:
-        specifier: ^10.0.0
-        version: 10.6.0
-      openapi-typescript:
-        specifier: ^7.13.0
-        version: 7.13.0(typescript@5.9.3)
-      projen:
-        specifier: ^0.101.4
-        version: 0.101.4(constructs@10.6.0)
-      tsoa:
-        specifier: 'catalog:'
-        version: 6.6.0
-      tsx:
-        specifier: ^4.23.0
-        version: 4.23.0
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.13.2
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  workspaces/cli/main:
+  example-workspaces/cli/main:
     dependencies:
       '@clack/prompts':
         specifier: 'catalog:'
@@ -128,7 +91,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  workspaces/openapi/api:
+  example-workspaces/openapi/api:
     dependencies:
       openapi-fetch:
         specifier: 'catalog:'
@@ -141,7 +104,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  workspaces/server/api:
+  example-workspaces/server/api:
     dependencies:
       '@dbx-tools/shared-core':
         specifier: workspace:*
@@ -163,7 +126,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  workspaces/shared/core:
+  example-workspaces/shared/core:
     devDependencies:
       '@types/node':
         specifier: ^24.13.2
@@ -172,7 +135,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  workspaces/shared/neat:
+  example-workspaces/shared/neat:
     devDependencies:
       '@types/node':
         specifier: ^24.13.2
@@ -181,7 +144,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  workspaces/ui/app:
+  example-workspaces/ui/app:
     dependencies:
       '@dbx-tools/shared-core':
         specifier: workspace:*
@@ -211,6 +174,52 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 7.3.6(@types/node@24.13.2)(tsx@4.23.0)(yaml@2.9.0)
+
+  workspaces/cli/dbx-tools:
+    dependencies:
+      '@clack/prompts':
+        specifier: 'catalog:'
+        version: 1.7.0
+      barrelsby:
+        specifier: ^2.8.1
+        version: 2.8.1
+      chokidar:
+        specifier: ^4.0.3
+        version: 4.0.3
+      commander:
+        specifier: 'catalog:'
+        version: 15.0.0
+      consola:
+        specifier: ^3.4.2
+        version: 3.4.2
+      constructs:
+        specifier: ^10.0.0
+        version: 10.6.0
+      openapi-typescript:
+        specifier: ^7.13.0
+        version: 7.13.0(typescript@5.9.3)
+      pnpm:
+        specifier: 'catalog:'
+        version: 11.10.0
+      projen:
+        specifier: ^0.101.4
+        version: 0.101.4(constructs@10.6.0)
+      tsoa:
+        specifier: 'catalog:'
+        version: 6.6.0
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
 packages:
 
@@ -1457,6 +1466,11 @@ packages:
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
+
+  pnpm@11.10.0:
+    resolution: {integrity: sha512-C3+LmAYAMZBMAX46QesYehbUDuuCm5XE+MsDaBdh/Eq1PdIZEVubRH9NzhoFohR2RGHn03AzkqnzL5URzoyGyA==}
+    engines: {node: '>=22.13'}
+    hasBin: true
 
   postcss@8.5.16:
     resolution: {integrity: sha512-vuwillviilfKZsg0VGj5R/YwwcHx4SLsIOI/7K6mQkWx+l5cUHTjj5g0AasTBcyXsbfTgrwsUNmVUb5xVwyPwg==}
@@ -3114,6 +3128,8 @@ snapshots:
       load-json-file: 4.0.0
 
   pluralize@8.0.0: {}
+
+  pnpm@11.10.0: {}
 
   postcss@8.5.16:
     dependencies:

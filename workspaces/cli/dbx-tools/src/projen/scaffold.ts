@@ -36,6 +36,14 @@ export function packageSetChanged(): boolean {
  * post-synth barrels component - which is what the one-shot `dbxtools sync`
  * wants. The default (`post: false`) sets `PROJEN_DISABLE_POST`, skipping both so
  * the watch loop stays fast; there the caller rebuilds barrels explicitly.
+ *
+ * Deliberately never forces `CI: "true"` here: besides pnpm's own no-TTY prompt,
+ * `CI` also makes pnpm choose a `--frozen-lockfile` install for a MULTI-package
+ * workspace's subprojects, which is the wrong tradeoff for routine re-synths (a
+ * newly added/edited package's lockfile entry is expected to be behind). Where a
+ * caller genuinely needs the no-TTY prompt answered non-interactively (only
+ * `bootstrapWorkspace`, on a workspace with no subprojects yet), it runs with
+ * `post: false` and does its own install afterward instead.
  */
 export function runSynth(options: { post?: boolean } = {}): void {
   const env = { ...process.env };
