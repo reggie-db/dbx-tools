@@ -20,6 +20,7 @@ import { resolve, sep } from "node:path";
 import { watch } from "chokidar";
 import { logger } from "../log";
 import { generateBarrels } from "./barrels";
+import { isTsoaController } from "./openapi";
 import { packageSetChanged, runSynth } from "./scaffold";
 import {
   discoverPackages,
@@ -89,7 +90,7 @@ export function startWatch(): void {
   let running = false;
   let rerun = false;
 
-  function flush(): void {
+  async function flush(): Promise<void> {
     if (running) {
       rerun = true;
       return;
@@ -98,19 +99,19 @@ export function startWatch(): void {
     const batch = [...pending];
     pending.clear();
     try {
-      runCycle(batch);
+      await runCycle(batch);
     } catch (err) {
       log.error("watch cycle failed:", err instanceof Error ? err.message : err);
     } finally {
       running = false;
       if (rerun) {
         rerun = false;
-        setTimeout(flush, 0);
+        setTimeout(() => void flush(), 0);
       }
     }
   }
 
-  function runCycle(batch: string[]): void {
+  async function runCycle(batch: string[]): Promise<void> {
     const relevant = batch.map((p) => resolve(p)).filter((p) => !ignored(p));
     if (relevant.length === 0) return;
 
@@ -123,6 +124,17 @@ export function startWatch(): void {
     if (packageSetChanged()) {
       resynth("package set changed", true);
       return;
+    }
+
+    // 2.5: a tsoa controller changed -> regenerate the openapi env (spec + client)
+    // and rebuild its barrel. openapi is imported lazily (heavy deps).
+    if (relevant.some(isTsoaController)) {
+      const { generateOpenapi } = await import("./openapi");
+      const dirs = await generateOpenapi();
+      if (dirs.length) {
+        generateBarrels({ dirs });
+        log.success(`regenerated openapi (${dirs.length} package${dirs.length === 1 ? "" : "s"})`);
+      }
     }
 
     // 3: content edit inside existing packages -> rebuild the affected barrels.
@@ -143,7 +155,7 @@ export function startWatch(): void {
   watcher.on("all", (_event, path) => {
     pending.add(path);
     clearTimeout(timer);
-    timer = setTimeout(flush, DEBOUNCE_MS);
+    timer = setTimeout(() => void flush(), DEBOUNCE_MS);
   });
   watcher.on("error", (err) => log.error("watcher error:", err));
   watcher.on("ready", () => log.info("watching for changes … (Ctrl-C to stop)"));

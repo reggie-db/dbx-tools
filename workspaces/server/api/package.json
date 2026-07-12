@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
-    "express": "catalog:"
+    "express": "catalog:",
+    "tsoa": "catalog:"
   },
   "devEngines": {
     "packageManager": {

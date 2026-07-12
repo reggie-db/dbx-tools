@@ -6,11 +6,6 @@
       "type": "build"
     },
     {
-      "name": "@types/swagger-jsdoc",
-      "version": "^6.0.4",
-      "type": "build"
-    },
-    {
       "name": "typescript",
       "version": "^5.9.3",
       "type": "build"
@@ -51,8 +46,8 @@
       "type": "runtime"
     },
     {
-      "name": "swagger-jsdoc",
-      "version": "^6.2.8",
+      "name": "tsoa",
+      "version": "catalog:",
       "type": "runtime"
     },
     {

@@ -1,9 +1,5 @@
 {
-  "name": "@dbx-tools/cli",
-  "bin": {
-    "dbxtools": "./bin/dbxtools.ts",
-    "dbxtools.ts": "bin/dbxtools.ts"
-  },
+  "name": "@dbx-tools/openapi-api",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -16,20 +12,11 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
+    "@types/node": "^24.13.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "barrelsby": "^2.8.1",
-    "chokidar": "^4.0.3",
-    "commander": "catalog:",
-    "consola": "^3.4.2",
-    "constructs": "^10.0.0",
-    "openapi-typescript": "^7.13.0",
-    "projen": "^0.101.4",
-    "tsoa": "catalog:",
-    "tsx": "^4.23.0",
-    "yaml": "^2.9.0"
+    "openapi-fetch": "catalog:"
   },
   "devEngines": {
     "packageManager": {

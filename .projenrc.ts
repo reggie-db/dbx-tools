@@ -59,13 +59,13 @@ const engineEnv: EnvDef = {
     "commander@catalog:",
     "consola@^3.4.2",
     "openapi-typescript@^7.13.0",
-    "swagger-jsdoc@^6.2.8",
+    "tsoa@catalog:",
     "yaml@^2.9.0",
     "tsx@^4.23.0",
   ],
   // typescript is provided as a devDep by projen's TypeScriptProject; pin it here.
   typescriptVersion: "^5.9.3",
-  devDeps: ["@types/node@catalog:", "@types/swagger-jsdoc@^6.0.4"],
+  devDeps: ["@types/node@catalog:"],
   tsconfig: {
     include: ["index.ts", "bin/**/*.ts", "src/**/*.ts"],
     compilerOptions: { target: "ES2022", lib: ["ES2022"], types: ["node"], rootDir: "." },

@@ -3,6 +3,7 @@
 packages:
   - dbx-tools
   - workspaces/cli/main
+  - workspaces/openapi/api
   - workspaces/server/api
   - workspaces/shared/core
   - workspaces/shared/neat
@@ -22,5 +23,6 @@ catalog:
   commander: ^15.0.0
   "@clack/prompts": ^1.7.0
   openapi-fetch: ^0.17.0
+  tsoa: ^6.6.0
 allowBuilds:
   esbuild: true

@@ -72,5 +72,8 @@ edit them directly.
 ## Status
 
 Green: synth, `pnpm install`, `dbxtools barrels`, `dbxtools typecheck`, and
-`dbxtools sync --watch` all work. OpenAPI generation is deferred (moving from
-JSDoc to zod). This work lives on the `main` branch of `reggie-db/dbx-tools`.
+`dbxtools sync --watch` all work. **OpenAPI**: `dbxtools openapi` reads tsoa
+controllers in the `server` env and generates a read-only `@dbx-tools/openapi-*`
+package (OpenAPI 3 spec + a typed openapi-fetch client), auto-regenerated on
+controller edits under `sync --watch`. This work lives on the `main` branch of
+`reggie-db/dbx-tools`.

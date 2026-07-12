@@ -49,6 +49,7 @@ export const DEFAULT_CATALOG: Catalog = {
   commander: "^15.0.0",
   "@clack/prompts": "^1.7.0",
   "openapi-fetch": "^0.17.0",
+  tsoa: "^6.6.0",
 };
 
 export interface ConfigureProjenOptions {

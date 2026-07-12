@@ -12,7 +12,7 @@ ships the **`dbxtools`** CLI. `workspaces/*` are example packages that exercise 
 
 > Local dir is `projen-workspace/`; the GitHub repo is `reggie-db/dbx-tools`
 > (this work is on branch **`main`**; `master` holds older work and is still the
-> default). OpenAPI generation is deferred (see below).
+> default).
 
 ## Vocabulary (important)
 
@@ -53,7 +53,7 @@ ships the **`dbxtools`** CLI. `workspaces/*` are example packages that exercise 
   - `server` / `node` → Node (`@types/node`, no DOM)
   - `cli` → Node + `commander` + `@clack/prompts`
   - `shared` → agnostic (no DOM, no Node)
-  - `openapi` → generated, read-only clients (deferred)
+  - `openapi` → generated, read-only clients (from tsoa controllers)
   Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
   `document` in `shared`/`server` fails `tsc`; `process`/`node:*` in `ui` fails.
 - **Names**: `npmNameOf(scope, "<env>/<name>")` (`packages.ts`) → normalized,
@@ -96,7 +96,7 @@ dbx-tools/                   # the engine (package "@dbx-tools/cli"), hand-autho
       barrels.ts             # barrelsby driver (root index.ts, header + read-only)
       watch.ts               # chokidar orchestration for `sync --watch`
       scaffold.ts            # packageSetChanged() + runSynth({ post })
-      openapi.ts             # openapi env generator (deferred: still swagger-jsdoc)
+      openapi.ts             # openapi env generator (tsoa controllers -> spec + client)
       typecheck.ts, generated.ts, files.ts
 workspaces/<env>/<name>/     # example packages; each is a projen TypeScriptProject subproject
 ```
@@ -172,6 +172,11 @@ Change an env, a hook, or `.projenrc.ts` and re-synth — never edit generated f
   still rewrites it each synth (clears the bit, writes, restores). Source/sample
   files the developer owns (`.projenrc.ts`, each package's `README.md`, `src/*`)
   stay writable.
-- **Deferred:** OpenAPI generation (`openapi.ts`) should move from swagger-jsdoc
-  (`@openapi` JSDoc) to **zod** (`zod-openapi`, no JSDoc), scanning `server`/`node`
-  env packages.
+- **OpenAPI** (`openapi.ts`, `dbxtools openapi`): scans `server`/`node` packages for
+  **tsoa** controllers (classes with `@Route`/`@Get`/... - no JSDoc/YAML). For each,
+  tsoa's `generateSpec` infers an OpenAPI 3 spec from the decorators + TS types, then
+  openapi-typescript + openapi-fetch produce a read-only `<envRoot>/openapi/<name>`
+  package (`openapi.json` + `src/schema.ts` + `src/client.ts`). The `server` env ships
+  `tsoa` + `experimentalDecorators`. tsoa/typescript/openapi-typescript are lazy-loaded
+  (only `dbxtools openapi` / a watched controller edit needs them). `sync --watch`
+  regenerates it automatically when a controller changes.

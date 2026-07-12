@@ -89,7 +89,12 @@ export const WORKSPACE_ENVS = {
     devDeps: ["@types/node@catalog:"],
   },
   server: {
-    tsconfig: { compilerOptions: NODE_COMPILER_OPTIONS },
+    // experimentalDecorators lets tsoa controllers (@Route/@Get/...) type-check;
+    // `dbxtools openapi` reads them to generate the openapi env (spec + client).
+    tsconfig: {
+      compilerOptions: { ...NODE_COMPILER_OPTIONS, experimentalDecorators: true },
+    },
+    deps: ["tsoa@catalog:"],
     devDeps: ["@types/node@catalog:"],
   },
   node: {
