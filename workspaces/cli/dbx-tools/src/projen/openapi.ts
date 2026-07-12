@@ -27,6 +27,7 @@ import {
   type DiscoveredPackage,
   discoverPackages,
   isModuleFile,
+  packageTags,
   repoRoot,
   walkFiles,
 } from "./workspace";
@@ -57,9 +58,10 @@ export function hasTsoaControllers(pkg: DiscoveredPackage): boolean {
 /** `server`/`node` env packages (never the generated `openapi` env) with tsoa controllers. */
 function controllerPackages(): DiscoveredPackage[] {
   return discoverPackages().filter(
-    (p) =>
-      (p.envCandidates.includes("server") || p.envCandidates.includes("node")) &&
-      hasTsoaControllers(p),
+    (p) => {
+      const tags = packageTags(p);
+      return (tags.includes("server") || tags.includes("node")) && hasTsoaControllers(p);
+    },
   );
 }
 

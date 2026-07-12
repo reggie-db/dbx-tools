@@ -12,9 +12,10 @@
  * yields cumulative-join env candidates (`ui/app` -> `[ui, ui-app]`), matched
  * against {@link ConfigureProjenOptions.workspacePackageEnvPaths} (default: identity
  * over the env names) to resolve the applied env(s) - possibly NONE, in which case
- * the agnostic default applies. The matched {@link WorkspaceEnvDef}s are merged and
- * spread into the subproject; the resolved env names are recorded on the project as
- * `workspacePackageEnvs` and passed to the `workspacePackage` hook via `spec.envs`.
+ * the agnostic default applies. The default is the baseline floor and the matched
+ * {@link WorkspaceEnvDef}s merge on top; the resolved (deduped) tags are written to
+ * each package's `package.json` as `dbxToolsConfig.tags` and passed to the
+ * `workspacePackage` hook via `spec.tags`.
  * `pnpm-workspace.yaml` (the SOURCE OF TRUTH every other command reads back) sources
  * its members from `project.subprojects`, so a package configured MANUALLY with
  * `applyEnv` - without auto-discovery - lands there too.
@@ -224,20 +225,23 @@ export function configureProjen(options: ConfigureProjenOptions = {}): javascrip
   const effectiveEnvs: Record<string, WorkspaceEnvDef> = { ...workspaceEnvs };
   for (const e of disableWorkspaceEnvs) delete effectiveEnvs[e];
 
-  // path token -> env name(s). Default: identity over the effective env names, so
-  // a package at `<root>/ui/app` (candidate `ui`) resolves to env `ui`.
-  const envPaths: Record<string, OneOrMany<string>> =
-    workspacePackageEnvPaths ?? Object.fromEntries(Object.keys(effectiveEnvs).map((k) => [k, k]));
+  // path token -> tag(s). Default: identity over the effective env names (so a
+  // package at `<root>/ui/app`, candidate `ui`, resolves to tag `ui`); any
+  // `workspacePackageEnvPaths` entries AUGMENT that identity rather than replace it.
+  const envPaths: Record<string, OneOrMany<string>> = {
+    ...Object.fromEntries(Object.keys(effectiveEnvs).map((k) => [k, k])),
+    ...(workspacePackageEnvPaths ?? {}),
+  };
 
-  /** Union (ordered, deduped) of env names matched by a package's candidates; may be []. */
-  const resolveEnvNames = (candidates: string[]): string[] => {
-    const names: string[] = [];
+  /** Union of tags matched by a package's candidates (ordered, deduped); may be []. */
+  const resolveTags = (candidates: string[]): string[] => {
+    const tags: string[] = [];
     for (const candidate of candidates) {
-      for (const envName of toArray(envPaths[candidate])) {
-        if (!names.includes(envName)) names.push(envName);
+      for (const tag of toArray(envPaths[candidate])) {
+        if (!tags.includes(tag)) tags.push(tag);
       }
     }
-    return names;
+    return tags;
   };
 
   // Discover env packages by scanning the filesystem once (synth-time). The member
@@ -287,17 +291,17 @@ export function configureProjen(options: ConfigureProjenOptions = {}): javascrip
   // the same `applyEnv` primitive a caller uses manually. The matched env config(s)
   // are merged and applied; an unmatched package falls back to the agnostic default.
   for (const p of discovered) {
-    const envNames = resolveEnvNames(p.envCandidates);
-    const env = envNames.length
-      ? envNames.map((n) => workspaceEnvConfig(n, effectiveEnvs))
-      : DEFAULT_WORKSPACE_ENV;
+    const tags = resolveTags(p.envCandidates);
+    // The agnostic default is the baseline floor; the matched-tag env configs merge
+    // on top (later-wins), so a package with no tags still gets a sane config.
+    const env = [DEFAULT_WORKSPACE_ENV, ...tags.map((t) => workspaceEnvConfig(t, effectiveEnvs))];
     const packageName = npmNameOf(name, p.relPath);
     applyEnv(project, {
       outdir: p.memberPath,
       name: packageName,
       env,
-      envNames,
-      spec: { envs: envNames, name: p.name, packageName },
+      tags,
+      spec: { tags, name: p.name, packageName },
       workspacePackage,
     });
   }

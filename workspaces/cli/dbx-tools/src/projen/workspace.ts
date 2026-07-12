@@ -286,6 +286,23 @@ export function discoverPackages(
 }
 
 /**
+ * A package's resolved tags, read from its `package.json` `dbxToolsConfig.tags`
+ * (written at synth by `applyEnv`) - the per-package source of truth. Falls back
+ * to the path-derived {@link DiscoveredPackage.envCandidates} when the manifest has
+ * none yet (e.g. a package added but not yet synthesized).
+ */
+export function packageTags(pkg: DiscoveredPackage): string[] {
+  try {
+    const manifest = JSON.parse(readFileSync(resolve(pkg.dir, "package.json"), "utf8"));
+    const tags = manifest?.dbxToolsConfig?.tags;
+    if (Array.isArray(tags)) return tags as string[];
+  } catch {
+    // no manifest yet / unreadable - fall back to the path candidates
+  }
+  return pkg.envCandidates;
+}
+
+/**
  * The roots to scan for a live filesystem check: the distinct first segment of
  * every recorded member, unioned with the defaults. Lets a command compare disk
  * against the recorded truth without knowing the `workspacePackageRoots` the last

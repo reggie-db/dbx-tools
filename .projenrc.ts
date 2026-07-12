@@ -16,19 +16,19 @@ const project = configureProjen({
   workspacePackageRoots: ["workspaces", "example-workspaces"],
   // The single place per-package tweaks belong; everything else is auto-detected.
   // `pkg` is the real projen subproject (edits use projen's own API); dispatch on
-  // the STABLE folder identity `spec.envs`/`spec.name`, not the derived package name.
+  // the STABLE folder identity `spec.tags`/`spec.name`, not the derived package name.
   workspacePackage(pkg, spec) {
-    if (spec.envs.includes("ui") && spec.name === "app") {
+    if (spec.tags.includes("ui") && spec.name === "app") {
       pkg.addDeps("@dbx-tools/shared-core@workspace:*");
-    } else if (spec.envs.includes("server") && spec.name === "api") {
+    } else if (spec.tags.includes("server") && spec.name === "api") {
       pkg.addDeps("@dbx-tools/shared-core@workspace:*", "express@catalog:");
       pkg.addDevDeps("@types/express@catalog:");
       pkg.addTask("dev", { exec: "tsx watch src/server.ts" });
       pkg.addTask("start", { exec: "tsx src/server.ts" });
-    } else if (spec.envs.includes("cli") && spec.name === "main") {
+    } else if (spec.tags.includes("cli") && spec.name === "main") {
       pkg.package.addBin({ "pw-demo": "./src/cli.ts" });
       pkg.addDeps("@dbx-tools/shared-core@workspace:*", "@dbx-tools/shared-neat@workspace:*");
-    } else if (spec.envs.includes("cli") && spec.name === "dbx-tools") {
+    } else if (spec.tags.includes("cli") && spec.name === "dbx-tools") {
       // The engine, dogfooded through the normal `cli` env. Override the
       // auto-derived name (`@dbx-tools/cli-dbx-tools`) to the clean `@dbx-tools/cli`.
       pkg.package.addField("name", "@dbx-tools/cli");

@@ -15,7 +15,7 @@ import { configureProjen } from "@dbx-tools/cli";
 // configureProjen constructs the NodeProject itself, merging its own sensible
 // defaults (pnpm, no jest/eslint/prettier/release/...) with anything you set in
 // `extends`. The one place per-package tweaks live: mutate the real projen
-// subproject `pkg`, dispatching on the stable folder identity spec.envs/spec.name.
+// subproject `pkg`, dispatching on the stable folder identity spec.tags/spec.name.
 const project = configureProjen({
   workspace: (pkg, spec) => {
     /* e.g. pkg.addDeps("@dbx-tools/shared-core@workspace:*") */

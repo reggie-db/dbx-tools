@@ -11,11 +11,12 @@
  *
  * A package may match MULTIPLE envs (see `workspace.ts` env candidates); their
  * {@link EnvDef}s are merged in order (deps concatenated, tsconfig/tasks
- * later-wins) before being spread into the subproject. The resolved env-name list
- * is recorded on the project as `workspacePackageEnvs` and handed to the
- * `workspacePackage` hook via `spec.envs`, which runs LAST so a caller tweaks the
- * REAL subproject with projen's own API (`pkg.addDeps(...)`, `pkg.addTask(...)`,
- * `pkg.package.addBin({...})`) rather than mutating a serialized object.
+ * later-wins) before being spread into the subproject. The resolved (deduped) tag
+ * list is written to the package's `package.json` under `dbxToolsConfig.tags` (the
+ * per-package source of truth) and handed to the `workspacePackage` hook via
+ * `spec.tags`, which runs LAST so a caller tweaks the REAL subproject with
+ * projen's own API (`pkg.addDeps(...)`, `pkg.addTask(...)`, `pkg.package.addBin({...})`)
+ * rather than mutating a serialized object.
  */
 import { type Project, type TaskOptions, TextFile, javascript, typescript } from "projen";
 import type { EnvDef } from "./envs";
@@ -24,12 +25,12 @@ import { type OneOrMany, toArray, toPosix } from "./workspace";
 /**
  * Read-only identity of a workspace package, passed to a
  * {@link WorkspacePackageModifier} so callers dispatch on the STABLE folder
- * (`envs`/`name`, e.g. envs including `cli` and name `main`) rather than the
+ * (`tags`/`name`, e.g. tags including `cli` and name `main`) rather than the
  * derived `packageName`, which depends on the root npm scope.
  */
 export interface WorkspacePackageSpec {
-  /** The resolved env names applied to this package (may be empty). */
-  readonly envs: string[];
+  /** The resolved, deduped tag list (the package's applied env names; may be empty). */
+  readonly tags: string[];
   /** The package folder name (last path segment), e.g. `app`. */
   readonly name: string;
   /** The derived npm name, e.g. `@dbx-tools/cli-main`. */
@@ -46,12 +47,6 @@ export type WorkspacePackageModifier = (
   spec: WorkspacePackageSpec,
 ) => void;
 
-/** A `TypeScriptProject` with the resolved env-name list recorded on it. */
-export interface WorkspacePackageProject extends typescript.TypeScriptProject {
-  /** The env names applied to this package (see {@link WorkspacePackageSpec.envs}). */
-  workspacePackageEnvs: string[];
-}
-
 export interface ApplyEnvOptions {
   /** Repo-relative posix path for the package, e.g. `workspaces/ui/app`. */
   readonly outdir: string;
@@ -59,8 +54,8 @@ export interface ApplyEnvOptions {
   readonly name: string;
   /** The env config(s) to apply, merged in order (tsconfig overlay + deps/tasks). */
   readonly env: OneOrMany<EnvDef>;
-  /** The resolved env names to record on the project + `spec.envs`. */
-  readonly envNames?: string[];
+  /** The resolved tags to record in `package.json` (`dbxToolsConfig.tags`) + `spec.tags`. */
+  readonly tags?: string[];
   /** Identity handed to `workspacePackage`; derived from `outdir`/`name` when omitted. */
   readonly spec?: WorkspacePackageSpec;
   /** Per-workspace-package tweak hook, run last. */
@@ -226,9 +221,9 @@ const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
 };
 
 /** Derive a {@link WorkspacePackageSpec} from a member path when the caller didn't pass one. */
-function specFromOutdir(outdir: string, packageName: string, envs: string[]): WorkspacePackageSpec {
+function specFromOutdir(outdir: string, packageName: string, tags: string[]): WorkspacePackageSpec {
   const segs = toPosix(outdir).split("/").filter(Boolean);
-  return { envs, name: segs[segs.length - 1] ?? outdir, packageName };
+  return { tags, name: segs[segs.length - 1] ?? outdir, packageName };
 }
 
 /**
@@ -242,7 +237,7 @@ function specFromOutdir(outdir: string, packageName: string, envs: string[]): Wo
 export function applyEnv(
   parent: javascript.NodeProject,
   options: ApplyEnvOptions,
-): WorkspacePackageProject {
+): typescript.TypeScriptProject {
   // Merge the one-or-many env defs, then peel the two engine extras (and tsconfig,
   // which we merge below) off; the rest spreads straight into TypeScriptProject.
   const merged = mergeEnvDefs(toArray(options.env));
@@ -267,7 +262,7 @@ export function applyEnv(
       include: include.length ? include : undefined,
       compilerOptions: { ...SHARED_COMPILER_OPTIONS, ...tsconfig?.compilerOptions },
     },
-  }) as WorkspacePackageProject;
+  });
 
   // Source-first entry: point the package at the package-ROOT `index.ts` barrel
   // (above `src/`, written by the barrels step) so workspace packages resolve each
@@ -298,11 +293,12 @@ export function applyEnv(
     });
   }
 
-  // Record the resolved env-name list on the project (a field) and expose it to
-  // the hook via `spec.envs`; the hook runs LAST.
-  const envs = options.envNames ?? options.spec?.envs ?? [];
-  pkg.workspacePackageEnvs = [...envs];
-  options.workspacePackage?.(pkg, options.spec ?? specFromOutdir(options.outdir, options.name, envs));
+  // Persist the resolved (deduped) tag list in the package's package.json under
+  // `dbxToolsConfig.tags` - the per-package source of truth, readable by post-synth
+  // commands - and expose it to the hook via `spec.tags`; the hook runs LAST.
+  const tags = [...new Set(options.tags ?? options.spec?.tags ?? [])];
+  pkg.package.addField("dbxToolsConfig", { tags });
+  options.workspacePackage?.(pkg, options.spec ?? specFromOutdir(options.outdir, options.name, tags));
 
   // Lock the manifest last: projen leaves package.json writable, but here it is
   // fully projen-owned, so it joins the rest of the read-only generated tree.

@@ -58,8 +58,10 @@ special case). It exports **`configureProjen(options)`** and ships the
   looked up in **`workspacePackageEnvPaths`** (`Record<token, OneOrMany<env>>`,
   default: identity over the env names) and the union of matches is the package's
   applied envs — possibly NONE (then the agnostic default applies). The applied
-  env-name list is recorded on the subproject as a `workspacePackageEnvs` field
-  and passed to the hook via `spec.envs`. (`OneOrMany<T> = T | T[]`, `workspace.ts`.)
+  deduped tag list is written to each package's `package.json` under
+  **`dbxToolsConfig.tags`** (the per-package source of truth, read back by
+  post-synth commands via `packageTags()`) and passed to the hook via `spec.tags`.
+  (`OneOrMany<T> = T | T[]`, `workspace.ts`.)
   No declaration needed — drop a `src/` folder and it's picked up on next synth.
 - **Every package is a real projen subproject**, built by the exported
   `applyEnv(parent, {outdir, name, env, envNames?, spec?, workspacePackage?})`
@@ -101,7 +103,7 @@ special case). It exports **`configureProjen(options)`** and ships the
   (`pkg.addDeps("x@catalog:")`, `pkg.addTask(...)`, `pkg.package.addBin({...})`,
   `pkg.tsconfig?.addInclude(...)`, `pkg.tsconfig?.file.addOverride(...)`).
   `spec` is read-only identity (`WorkspacePackageSpec`); dispatch on the stable
-  folder — **`spec.envs`** (a list; use `.includes("cli")`) + `spec.name` (e.g.
+  folder — **`spec.tags`** (a list; use `.includes("cli")`) + `spec.name` (e.g.
   `"main"`) — not the derived `packageName`.
 
 ## Layout
@@ -190,7 +192,7 @@ Change an env, a hook, or `.projenrc.ts` and re-synth — never edit generated f
   authored special case: it lives at `workspaces/cli/dbx-tools` (env `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts`'s `workspace(pkg, spec)` hook
-  special-cases `spec.envs.includes("cli") && spec.name === "dbx-tools"` to:
+  special-cases `spec.tags.includes("cli") && spec.name === "dbx-tools"` to:
   override the name to `@dbx-tools/cli` (`pkg.package.addField("name", ...)`),
   add its bin (`pkg.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), add its
   own deps (`projen`, `constructs`, `barrelsby`, `chokidar`, `consola`,
