@@ -43,24 +43,31 @@ special case). It exports **`configureProjen(options)`** and ships the
   `dbxtools` root task, which every consumer needs but the engine can't add for
   itself - see Gotchas).
 - **`pnpm-workspace.yaml` is the source of truth.** `configureProjen` scans the
-  filesystem ONCE at synth (under each `workspaceEnvPaths` root) and its
-  `packages:` list is sourced from `project.subprojects` (every discovered
-  package becomes a real subproject, so this needs no separate/manual member
-  list). Every other command (`barrels`, `typecheck`, the watcher) reads it back
-  via `discoverPackages()` (no args) — see `workspace.ts` — rather than
-  re-scanning the tree. Passing `discoverPackages(root, paths)` is the
+  filesystem ONCE at synth (under each `workspacePackageRoots` root, default
+  `["workspaces"]`) and its `packages:` list is sourced from `project.subprojects`
+  (every discovered package becomes a real subproject, so this needs no
+  separate/manual member list). Every other command (`barrels`, `typecheck`, the
+  watcher) reads it back via `discoverPackages()` (no args) — see `workspace.ts` —
+  rather than re-scanning the tree. Passing `discoverPackages(root, roots)` is the
   filesystem scan; passing nothing reads the recorded truth.
-- **Discovery.** For each `workspaceEnvPaths` root (default `["workspaces"]`;
-  this repo passes `["workspaces", "example-workspaces"]`), the immediate
-  subfolders are env names; each `<env>/<name>` folder whose `src/` contains a
-  `.ts`/`.tsx`/`.js`/`.jsx` module file becomes a package. No declaration
-  needed — drop a `src/` folder and it's picked up on the next synth.
+- **Discovery + env resolution.** Under each `workspacePackageRoots` root (this
+  repo passes `["workspaces", "example-workspaces"]`), ANY `src`-bearing folder at
+  ANY depth is a package. Its path relative to the root is decomposed into
+  cumulative dash-join **env candidates**: `ui/app` → `[ui, ui-app]`;
+  `dir/another/path` → `[dir, dir-another, dir-another-path]`. Each candidate is
+  looked up in **`workspacePackageEnvPaths`** (`Record<token, OneOrMany<env>>`,
+  default: identity over the env names) and the union of matches is the package's
+  applied envs — possibly NONE (then the agnostic default applies). The applied
+  env-name list is recorded on the subproject as a `workspacePackageEnvs` field
+  and passed to the hook via `spec.envs`. (`OneOrMany<T> = T | T[]`, `workspace.ts`.)
+  No declaration needed — drop a `src/` folder and it's picked up on next synth.
 - **Every package is a real projen subproject**, built by the exported
-  `applyEnv(parent, {outdir, name, env, spec?, workspace?})` primitive
-  (`packages.ts`). `configureProjen` calls it once per discovered folder; a
-  `.projenrc.ts` can also call it directly to configure a path WITHOUT
-  auto-discovery (this repo doesn't need to - the engine is dogfooded through
-  normal discovery instead, see Gotchas). Either way projen OWNS that package's
+  `applyEnv(parent, {outdir, name, env, envNames?, spec?, workspacePackage?})`
+  primitive (`packages.ts`), where `env` is `OneOrMany<EnvDef>` — multiple env
+  defs are MERGED in order (deps concatenated, `tsconfig.compilerOptions`/`tasks`
+  later-wins, `viteConfig` OR'd). `configureProjen` calls it once per discovered
+  folder; a `.projenrc.ts` can also call it directly to configure a path WITHOUT
+  auto-discovery. Either way projen OWNS that package's
   `package.json`/`tsconfig.json`/tasks/`README.md`/`.projen/`. Baseline projen
   features are off to match the root (`sampleCode: false` stops projen from
   dropping template `src/` files over real sources).
@@ -80,21 +87,22 @@ special case). It exports **`configureProjen(options)`** and ships the
   - `openapi` → generated, read-only clients (from tsoa controllers)
   Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
   `document` in `shared`/`server` fails `tsc`; `process`/`node:*` in `ui` fails.
-- **Names**: `npmNameOf(scope, "<env>/<name>")` (`packages.ts`) → normalized,
-  lowercased, joined as `@<scope>/<env>-<name>` (e.g. `@dbx-tools/shared-core`).
-  The npm scope is the resolved project name: `configureProjen`'s `name` option
-  is optional and, if omitted, auto-detected (git remote → folder name) and
-  threaded into `applyEnv` calls. So this repo's project (no explicit `name`
-  passed) resolves to `dbx-tools`, giving `@dbx-tools/*` packages. The engine
-  itself keeps the derived name `@dbx-tools/cli-dbx-tools` UNLESS overridden -
-  which it is, to the clean `@dbx-tools/cli` (see Gotchas).
+- **Names**: `npmNameOf(scope, p.relPath)` (`packages.ts`) → normalized,
+  lowercased, the root-relative path dash-joined as `@<scope>/<seg-seg-...>` (e.g.
+  `workspaces/shared/core` → `@dbx-tools/shared-core`, `workspaces/cli/dbx-tools`
+  → `@dbx-tools/cli-dbx-tools`). The npm scope is the resolved project name:
+  `configureProjen`'s `name` option is optional and, if omitted, auto-detected
+  (git remote → folder name). So this repo (no explicit `name`) resolves to
+  `dbx-tools`, giving `@dbx-tools/*` packages. The engine keeps its derived name
+  UNLESS overridden - which it is, to the clean `@dbx-tools/cli` (see Gotchas).
 - **No per-package config in `.projenrc.ts`.** Everything is auto-detected; the
-  only place per-package tweaks belong is **`workspace(pkg, spec)`**. `pkg` is
-  the REAL subproject and the only thing you mutate — use projen's API
+  only place per-package tweaks belong is **`workspacePackage(pkg, spec)`**. `pkg`
+  is the REAL subproject and the only thing you mutate — use projen's API
   (`pkg.addDeps("x@catalog:")`, `pkg.addTask(...)`, `pkg.package.addBin({...})`,
   `pkg.tsconfig?.addInclude(...)`, `pkg.tsconfig?.file.addOverride(...)`).
-  `spec` is read-only identity; dispatch on the stable folder
-  (`spec.env` + `spec.name`, e.g. `"cli"`/`"main"`), not the derived `packageName`.
+  `spec` is read-only identity (`WorkspacePackageSpec`); dispatch on the stable
+  folder — **`spec.envs`** (a list; use `.includes("cli")`) + `spec.name` (e.g.
+  `"main"`) — not the derived `packageName`.
 
 ## Layout
 
@@ -182,7 +190,7 @@ Change an env, a hook, or `.projenrc.ts` and re-synth — never edit generated f
   authored special case: it lives at `workspaces/cli/dbx-tools` (env `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts`'s `workspace(pkg, spec)` hook
-  special-cases `spec.env === "cli" && spec.name === "dbx-tools"` to:
+  special-cases `spec.envs.includes("cli") && spec.name === "dbx-tools"` to:
   override the name to `@dbx-tools/cli` (`pkg.package.addField("name", ...)`),
   add its bin (`pkg.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), add its
   own deps (`projen`, `constructs`, `barrelsby`, `chokidar`, `consola`,

@@ -1,57 +1,70 @@
 /**
  * `applyEnv` - the reusable primitive that turns any repo path into a projen
- * `TypeScriptProject` subproject configured by an {@link EnvDef}.
+ * `TypeScriptProject` subproject configured by one or more {@link EnvDef}s.
  *
- * Auto-discovery (`configureProjen`) calls it once per discovered
- * `workspaces/<env>/<name>` folder; a `.projenrc.ts` can also call it directly to
- * configure a package WITHOUT auto-discovery (e.g. the in-tree `dbx-tools` engine).
- * Either way the result is a real projen subproject, so projen OWNS its
- * `package.json`, `tsconfig.json`, and tasks - and, because it is a subproject, it
- * is sourced into `pnpm-workspace.yaml` from `project.subprojects` (see
- * `files.pnpmWorkspace`) with no manual member list.
+ * Auto-discovery (`configureProjen`) calls it once per discovered package; a
+ * `.projenrc.ts` can also call it directly to configure a package WITHOUT
+ * auto-discovery. Either way the result is a real projen subproject, so projen
+ * OWNS its `package.json`, `tsconfig.json`, and tasks - and, because it is a
+ * subproject, it is sourced into `pnpm-workspace.yaml` from `project.subprojects`
+ * (see `files.pnpmWorkspace`) with no manual member list.
  *
- * What stays package-specific is only the {@link EnvDef} (the tsconfig
- * `lib`/`jsx`/`types` overlay + baseline deps/tasks - the real env enforcement)
- * and the `workspace` hook, which receives the REAL subproject so a caller tweaks
- * it with projen's own API (`pkg.addDeps("x@catalog:")`, `pkg.addTask(...)`,
+ * A package may match MULTIPLE envs (see `workspace.ts` env candidates); their
+ * {@link EnvDef}s are merged in order (deps concatenated, tsconfig/tasks
+ * later-wins) before being spread into the subproject. The resolved env-name list
+ * is recorded on the project as `workspacePackageEnvs` and handed to the
+ * `workspacePackage` hook via `spec.envs`, which runs LAST so a caller tweaks the
+ * REAL subproject with projen's own API (`pkg.addDeps(...)`, `pkg.addTask(...)`,
  * `pkg.package.addBin({...})`) rather than mutating a serialized object.
  */
 import { type Project, type TaskOptions, TextFile, javascript, typescript } from "projen";
 import type { EnvDef } from "./envs";
-import { toPosix } from "./workspace";
+import { type OneOrMany, toArray, toPosix } from "./workspace";
 
 /**
- * Read-only identity of a package, passed to a {@link WorkspaceModifier} so callers
- * dispatch on the STABLE folder (`env`/`name`, e.g. `cli`/`main`) rather than the
+ * Read-only identity of a workspace package, passed to a
+ * {@link WorkspacePackageModifier} so callers dispatch on the STABLE folder
+ * (`envs`/`name`, e.g. envs including `cli` and name `main`) rather than the
  * derived `packageName`, which depends on the root npm scope.
  */
-export interface PackageSpec {
-  /** The workspace env (folder under the env root), e.g. `ui`. `""` if unknown. */
-  readonly env: string;
-  /** The package folder name, e.g. `app`. */
+export interface WorkspacePackageSpec {
+  /** The resolved env names applied to this package (may be empty). */
+  readonly envs: string[];
+  /** The package folder name (last path segment), e.g. `app`. */
   readonly name: string;
   /** The derived npm name, e.g. `@dbx-tools/cli-main`. */
   readonly packageName: string;
 }
 
 /**
- * Last-chance per-package hook. `pkg` (the workspace) is the real projen
- * subproject and the only mutation target - edits go through projen's own API and
- * stay projen-owned. `spec` is the stable folder identity to switch on.
+ * Last-chance per-workspace-package hook. `pkg` (the workspace package) is the
+ * real projen subproject and the only mutation target - edits go through projen's
+ * own API and stay projen-owned. `spec` is the stable identity to switch on.
  */
-export type WorkspaceModifier = (pkg: typescript.TypeScriptProject, spec: PackageSpec) => void;
+export type WorkspacePackageModifier = (
+  pkg: typescript.TypeScriptProject,
+  spec: WorkspacePackageSpec,
+) => void;
+
+/** A `TypeScriptProject` with the resolved env-name list recorded on it. */
+export interface WorkspacePackageProject extends typescript.TypeScriptProject {
+  /** The env names applied to this package (see {@link WorkspacePackageSpec.envs}). */
+  workspacePackageEnvs: string[];
+}
 
 export interface ApplyEnvOptions {
-  /** Repo-relative posix path for the package, e.g. `workspaces/ui/app` or `dbx-tools`. */
+  /** Repo-relative posix path for the package, e.g. `workspaces/ui/app`. */
   readonly outdir: string;
   /** The npm package name, e.g. `@dbx-tools/ui-app`. */
   readonly name: string;
-  /** The env config to apply (tsconfig overlay + baseline deps/tasks/viteConfig). */
-  readonly env: EnvDef;
-  /** Identity handed to `workspace`; derived from `outdir`/`name` when omitted. */
-  readonly spec?: PackageSpec;
-  /** Per-package tweak hook (the workspace). */
-  readonly workspace?: WorkspaceModifier;
+  /** The env config(s) to apply, merged in order (tsconfig overlay + deps/tasks). */
+  readonly env: OneOrMany<EnvDef>;
+  /** The resolved env names to record on the project + `spec.envs`. */
+  readonly envNames?: string[];
+  /** Identity handed to `workspacePackage`; derived from `outdir`/`name` when omitted. */
+  readonly spec?: WorkspacePackageSpec;
+  /** Per-workspace-package tweak hook, run last. */
+  readonly workspacePackage?: WorkspacePackageModifier;
 }
 
 /**
@@ -88,6 +101,72 @@ export function npmNameOf(name: string, ...names: string[]): string {
 export function lockPackageJson(project: Project): void {
   const manifest = project.tryFindObjectFile("package.json");
   if (manifest) manifest.readonly = true;
+}
+
+/** Env-def keys handled specially by {@link mergeEnvDefs}; the rest pass through. */
+type EnvDefExtras = {
+  deps?: string[];
+  devDeps?: string[];
+  peerDeps?: string[];
+  bundledDeps?: string[];
+  tasks?: Record<string, TaskOptions>;
+  viteConfig?: boolean;
+  tsconfig?: {
+    include?: string[];
+    compilerOptions?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+};
+
+/**
+ * Merge multiple {@link EnvDef}s into one, in order. Dependency arrays
+ * (`deps`/`devDeps`/`peerDeps`/`bundledDeps`) and `tsconfig.include` concatenate
+ * (deduped); `tsconfig.compilerOptions` and `tasks` shallow-merge (later wins); a
+ * `viteConfig` anywhere wins; every other projen option is later-wins. A single
+ * def passes through essentially unchanged.
+ */
+function mergeEnvDefs(defs: EnvDef[]): EnvDef {
+  const rest: Record<string, unknown> = {};
+  const deps = new Set<string>();
+  const devDeps = new Set<string>();
+  const peerDeps = new Set<string>();
+  const bundledDeps = new Set<string>();
+  let tasks: Record<string, TaskOptions> = {};
+  let viteConfig = false;
+  let compilerOptions: Record<string, unknown> = {};
+  const include = new Set<string>();
+  let tsconfigRest: Record<string, unknown> = {};
+
+  for (const def of defs) {
+    const { deps: d, devDeps: dd, peerDeps: pd, bundledDeps: bd, tasks: t, viteConfig: v, tsconfig, ...other } =
+      def as EnvDef & EnvDefExtras;
+    for (const x of d ?? []) deps.add(x);
+    for (const x of dd ?? []) devDeps.add(x);
+    for (const x of pd ?? []) peerDeps.add(x);
+    for (const x of bd ?? []) bundledDeps.add(x);
+    if (t) tasks = { ...tasks, ...t };
+    if (v) viteConfig = true;
+    if (tsconfig) {
+      const { include: inc, compilerOptions: co, ...tr } = tsconfig;
+      for (const x of inc ?? []) include.add(x);
+      if (co) compilerOptions = { ...compilerOptions, ...co };
+      tsconfigRest = { ...tsconfigRest, ...tr };
+    }
+    Object.assign(rest, other);
+  }
+
+  const merged: Record<string, unknown> = { ...rest };
+  if (deps.size) merged.deps = [...deps];
+  if (devDeps.size) merged.devDeps = [...devDeps];
+  if (peerDeps.size) merged.peerDeps = [...peerDeps];
+  if (bundledDeps.size) merged.bundledDeps = [...bundledDeps];
+  if (Object.keys(tasks).length) merged.tasks = tasks;
+  if (viteConfig) merged.viteConfig = true;
+  const tsconfig: Record<string, unknown> = { ...tsconfigRest };
+  if (Object.keys(compilerOptions).length) tsconfig.compilerOptions = compilerOptions;
+  if (include.size) tsconfig.include = [...include];
+  if (Object.keys(tsconfig).length) merged.tsconfig = tsconfig;
+  return merged as EnvDef;
 }
 
 /**
@@ -146,30 +225,28 @@ const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   skipLibCheck: true,
 };
 
-/** Derive a {@link PackageSpec} from a member path when the caller didn't pass one. */
-function specFromOutdir(outdir: string, packageName: string): PackageSpec {
+/** Derive a {@link WorkspacePackageSpec} from a member path when the caller didn't pass one. */
+function specFromOutdir(outdir: string, packageName: string, envs: string[]): WorkspacePackageSpec {
   const segs = toPosix(outdir).split("/").filter(Boolean);
-  return {
-    env: segs.length >= 2 ? segs[segs.length - 2]! : "",
-    name: segs[segs.length - 1] ?? outdir,
-    packageName,
-  };
+  return { envs, name: segs[segs.length - 1] ?? outdir, packageName };
 }
 
 /**
  * Create the projen `TypeScriptProject` subproject for `options.outdir`, configured
- * by `options.env`, and return it. The env's projen options are spread straight in
- * (deps + the `tsconfig` overlay, where `lib`/`jsx`/`types` enforcement lives);
- * projen supplies module/outDir/rootDir/strictness from its own defaults. Structural
- * fields (`parent`/`outdir`/`name`) are set last so an env can never override them.
+ * by the merged `options.env`, and return it. The merged env's projen options are
+ * spread straight in (deps + the `tsconfig` overlay, where `lib`/`jsx`/`types`
+ * enforcement lives); projen supplies module/outDir/rootDir/strictness from its own
+ * defaults. Structural fields (`parent`/`outdir`/`name`) are set last so an env can
+ * never override them.
  */
 export function applyEnv(
   parent: javascript.NodeProject,
   options: ApplyEnvOptions,
-): typescript.TypeScriptProject {
-  // An env IS a projen options bag plus two engine extras; peel the extras (and
-  // tsconfig, which we merge below) off, then spread the rest straight through.
-  const { tasks, viteConfig, tsconfig, ...envOptions } = options.env;
+): WorkspacePackageProject {
+  // Merge the one-or-many env defs, then peel the two engine extras (and tsconfig,
+  // which we merge below) off; the rest spreads straight into TypeScriptProject.
+  const merged = mergeEnvDefs(toArray(options.env));
+  const { tasks, viteConfig, tsconfig, ...envOptions } = merged as EnvDef & EnvDefExtras;
 
   // jsx envs (React) keep components in `.tsx`; add that glob to projen's default
   // `src/**/*.ts` include (projen concatenates, it doesn't replace).
@@ -190,7 +267,7 @@ export function applyEnv(
       include: include.length ? include : undefined,
       compilerOptions: { ...SHARED_COMPILER_OPTIONS, ...tsconfig?.compilerOptions },
     },
-  });
+  }) as WorkspacePackageProject;
 
   // Source-first entry: point the package at the package-ROOT `index.ts` barrel
   // (above `src/`, written by the barrels step) so workspace packages resolve each
@@ -221,7 +298,11 @@ export function applyEnv(
     });
   }
 
-  options.workspace?.(pkg, options.spec ?? specFromOutdir(options.outdir, options.name));
+  // Record the resolved env-name list on the project (a field) and expose it to
+  // the hook via `spec.envs`; the hook runs LAST.
+  const envs = options.envNames ?? options.spec?.envs ?? [];
+  pkg.workspacePackageEnvs = [...envs];
+  options.workspacePackage?.(pkg, options.spec ?? specFromOutdir(options.outdir, options.name, envs));
 
   // Lock the manifest last: projen leaves package.json writable, but here it is
   // fully projen-owned, so it joins the rest of the read-only generated tree.

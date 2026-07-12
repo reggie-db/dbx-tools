@@ -1,23 +1,37 @@
 /**
  * Workspace discovery + shared filesystem helpers.
  *
- * Terminology (Bit-style): a workspace **env** is a folder directly under a
- * *workspace-env root* (e.g. `workspaces/ui` -> env `ui`) - it names the
- * environment (React/Vite, Node, agnostic, ...) its packages build for. A
- * workspace **package** is a folder under an env (`workspaces/ui/app`) whose
- * `src/` holds at least one module file (`.ts`/`.tsx`/`.js`/`.jsx`). "Scope" is
+ * Terminology (Bit-style): a workspace **env** names a target environment
+ * (React/Vite, Node, agnostic, ...); a workspace **package** is a folder with a
+ * `src/` holding at least one module file (`.ts`/`.tsx`/`.js`/`.jsx`). "Scope" is
  * reserved for the npm `@scope/` in package identifiers (e.g. `@dbx-tools/ui-app`).
  *
- * `pnpm-workspace.yaml` is the SOURCE OF TRUTH for the discovered packages:
- * `configureProjen` scans the filesystem once at synth (given the configured
- * `workspaceEnvPaths`) and writes the member list there; every other command
- * (`barrels`, `typecheck`, the watcher) reads it back via {@link discoverPackages}
- * with no arguments rather than re-scanning the tree.
+ * A package is discovered by scanning the {@link workspacePackageRoots} (default
+ * `["workspaces"]`). Its path *relative to the root* drives everything: the path
+ * segments join with `-` cumulatively into {@link DiscoveredPackage.envCandidates}
+ * (e.g. `dir/another/path` -> `[dir, dir-another, dir-another-path]`), and those
+ * candidates are matched against `workspacePackageEnvPaths` to decide which env(s)
+ * apply. The match may yield NO envs - that is fine (the package still gets the
+ * agnostic default).
+ *
+ * `pnpm-workspace.yaml` is the SOURCE OF TRUTH for the discovered member set:
+ * `configureProjen` scans the filesystem once at synth (given the roots) and the
+ * members flow from `project.subprojects`; every other command reads them back via
+ * {@link discoverPackages} with no roots argument rather than re-scanning.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { basename, extname, join, resolve, sep } from "node:path";
+import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { parse } from "yaml";
+
+/** A value that may be given as a single item or an array of them. */
+export type OneOrMany<T> = T | T[];
+
+/** Normalize a {@link OneOrMany} (or `undefined`) into an array. */
+export function toArray<T>(value?: OneOrMany<T>): T[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
 
 /** Run a command, returning trimmed stdout, or undefined on any failure. */
 function tryCmd(cmd: string, args: string[]): string | undefined {
@@ -42,10 +56,10 @@ export const repoRoot =
   process.cwd();
 
 /**
- * Default workspace-env roots. Each is scanned for `<env>/<name>` packages;
- * override via `configureProjen({ workspaceEnvPaths })`.
+ * Default workspace-package roots. Each is scanned for packages; override via
+ * `configureProjen({ workspacePackageRoots })`.
  */
-export const DEFAULT_WORKSPACE_ENV_PATHS = ["workspaces"] as const;
+export const DEFAULT_WORKSPACE_PACKAGE_ROOTS = ["workspaces"] as const;
 
 /** A project name: the git remote's repo name, else the root folder name. */
 export function projectName(): string {
@@ -150,36 +164,58 @@ export function hasWorkspaceSources(dir: string): boolean {
 }
 
 /**
- * One discovered workspace package: `<envRoot>/<env>/<name>` (e.g.
- * `workspaces/ui/app`). Carries the pieces every consumer needs - the absolute
- * `dir` (barrels/typecheck), the repo-relative `memberPath` (pnpm member + projen
- * `outdir`), and the `envPath` used to derive the npm name.
+ * One discovered workspace package: a `src`-bearing folder somewhere under a
+ * workspace-package root, identified by that root plus the segments of its path
+ * *relative to the root*. For `workspaces/ui/app` the root is `workspaces` and the
+ * segments are `["ui", "app"]`.
+ *
+ * The relative segments drive everything downstream: the npm name
+ * (`@<scope>/<segments joined by ->`), the `memberPath`/`dir`, and the
+ * {@link envCandidates} used to resolve which env(s) apply.
  */
 export class DiscoveredPackage {
   constructor(
     /** Absolute repo root. */
     readonly projectRoot: string,
-    /** Repo-relative workspace-env root, e.g. `workspaces`. */
-    readonly envRoot: string,
-    /** The workspace env, e.g. `ui`. */
-    readonly env: string,
-    /** The package folder name, e.g. `app`. */
-    readonly name: string,
+    /** Repo-relative workspace-package root, e.g. `workspaces`. */
+    readonly root: string,
+    /** Path segments relative to `root`, e.g. `["ui", "app"]`. */
+    readonly relSegments: readonly string[],
   ) {}
 
-  /** Absolute package directory. */
-  get dir(): string {
-    return resolve(this.projectRoot, this.envRoot, this.env, this.name);
+  /** Posix path relative to the root, e.g. `ui/app`. */
+  get relPath(): string {
+    return this.relSegments.join("/");
   }
 
   /** Repo-relative posix member path: `workspaces/ui/app` (pnpm member + `outdir`). */
   get memberPath(): string {
-    return [this.envRoot, this.env, this.name].join("/");
+    return [this.root, ...this.relSegments].join("/");
   }
 
-  /** `ui/app` - env + name, the input to the npm-name derivation. */
-  get envPath(): string {
-    return `${this.env}/${this.name}`;
+  /** Absolute package directory. */
+  get dir(): string {
+    return resolve(this.projectRoot, this.root, ...this.relSegments);
+  }
+
+  /** The package folder name (last segment), e.g. `app`. */
+  get name(): string {
+    return this.relSegments[this.relSegments.length - 1] ?? this.root;
+  }
+
+  /**
+   * Env-name candidates derived from the relative segments by cumulative `-`
+   * join: `["dir", "another", "path"]` -> `["dir", "dir-another", "dir-another-path"]`.
+   * Matched (as a set) against `workspacePackageEnvPaths` to resolve applied envs.
+   */
+  get envCandidates(): string[] {
+    const out: string[] = [];
+    let acc = "";
+    for (const seg of this.relSegments) {
+      acc = acc ? `${acc}-${seg}` : seg;
+      out.push(acc);
+    }
+    return out;
   }
 }
 
@@ -191,45 +227,58 @@ export function readWorkspaceMembers(projectRoot: string = repoRoot): string[] {
   return doc?.packages ?? [];
 }
 
-/** A member path is an env package iff it is exactly `<root>/<env>/<name>`. */
-function envPackageOf(projectRoot: string, member: string): DiscoveredPackage | undefined {
+/** A member path `<root>/<...rel>` (>= 2 segments) as a {@link DiscoveredPackage}. */
+function packageOfMember(projectRoot: string, member: string): DiscoveredPackage | undefined {
   const segs = toPosix(member).split("/").filter(Boolean);
-  if (segs.length !== 3) return undefined;
-  return new DiscoveredPackage(projectRoot, segs[0]!, segs[1]!, segs[2]!);
+  if (segs.length < 2) return undefined;
+  return new DiscoveredPackage(projectRoot, segs[0]!, segs.slice(1));
+}
+
+/**
+ * Recursively collect package dirs under `rootAbs`: a directory whose `src/` holds
+ * a module file is a package (and we do NOT descend into it, so a package's own
+ * subfolders never become nested packages). Depth is unbounded, so
+ * `<root>/a/b/c/src` is discovered as the package `a/b/c`.
+ */
+function collectPackageDirs(rootAbs: string): string[] {
+  const out: string[] = [];
+  const visit = (dirAbs: string): void => {
+    if (hasWorkspaceSources(dirAbs)) {
+      out.push(dirAbs);
+      return; // this dir is a package; its subtree belongs to it
+    }
+    for (const child of listDirs(dirAbs)) visit(child);
+  };
+  for (const child of listDirs(rootAbs)) visit(child);
+  return out;
 }
 
 /**
  * Discover workspace packages.
  *
- *  - **With `workspaceEnvPaths`** (synth time): scan the filesystem. Under each
- *    root, every `<env>/<name>` folder whose `src/` holds a module file is a
- *    package.
+ *  - **With `roots`** (synth time): scan the filesystem. Under each root, every
+ *    `src`-bearing folder (at any depth) is a package.
  *  - **Without** (every other command): read the recorded member list from
- *    `pnpm-workspace.yaml` - the source of truth - and keep the `<root>/<env>/<name>`
- *    members (non-env members like the in-tree engine are ignored).
+ *    `pnpm-workspace.yaml` - the source of truth.
  *
  * Returns packages sorted by member path.
  */
 export function discoverPackages(
   projectRoot: string = repoRoot,
-  workspaceEnvPaths?: readonly string[],
+  roots?: readonly string[],
 ): DiscoveredPackage[] {
   const out: DiscoveredPackage[] = [];
-  if (workspaceEnvPaths) {
-    for (const envRoot of workspaceEnvPaths) {
-      for (const envDir of listDirs(resolve(projectRoot, envRoot))) {
-        for (const pkgDir of listDirs(envDir)) {
-          if (hasWorkspaceSources(pkgDir)) {
-            out.push(
-              new DiscoveredPackage(projectRoot, envRoot, basename(envDir), basename(pkgDir)),
-            );
-          }
-        }
+  if (roots) {
+    for (const root of roots) {
+      const rootAbs = resolve(projectRoot, root);
+      for (const pkgDir of collectPackageDirs(rootAbs)) {
+        const rel = toPosix(relative(rootAbs, pkgDir)).split("/").filter(Boolean);
+        out.push(new DiscoveredPackage(projectRoot, root, rel));
       }
     }
   } else {
     for (const member of readWorkspaceMembers(projectRoot)) {
-      const pkg = envPackageOf(projectRoot, member);
+      const pkg = packageOfMember(projectRoot, member);
       if (pkg) out.push(pkg);
     }
   }
@@ -237,16 +286,16 @@ export function discoverPackages(
 }
 
 /**
- * The workspace-env roots to scan for a live filesystem check: the distinct first
- * segment of every recorded env member, unioned with the defaults. Lets a command
- * compare disk against the recorded truth without knowing the `workspaceEnvPaths`
- * the last synth was configured with.
+ * The roots to scan for a live filesystem check: the distinct first segment of
+ * every recorded member, unioned with the defaults. Lets a command compare disk
+ * against the recorded truth without knowing the `workspacePackageRoots` the last
+ * synth was configured with.
  */
-export function recordedEnvRoots(projectRoot: string = repoRoot): string[] {
-  const roots = new Set<string>(DEFAULT_WORKSPACE_ENV_PATHS);
+export function recordedRoots(projectRoot: string = repoRoot): string[] {
+  const roots = new Set<string>(DEFAULT_WORKSPACE_PACKAGE_ROOTS);
   for (const member of readWorkspaceMembers(projectRoot)) {
-    const pkg = envPackageOf(projectRoot, member);
-    if (pkg) roots.add(pkg.envRoot);
+    const pkg = packageOfMember(projectRoot, member);
+    if (pkg) roots.add(pkg.root);
   }
   return [...roots];
 }

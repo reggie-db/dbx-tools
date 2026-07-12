@@ -57,7 +57,9 @@ export function hasTsoaControllers(pkg: DiscoveredPackage): boolean {
 /** `server`/`node` env packages (never the generated `openapi` env) with tsoa controllers. */
 function controllerPackages(): DiscoveredPackage[] {
   return discoverPackages().filter(
-    (p) => (p.env === "server" || p.env === "node") && hasTsoaControllers(p),
+    (p) =>
+      (p.envCandidates.includes("server") || p.envCandidates.includes("node")) &&
+      hasTsoaControllers(p),
   );
 }
 
@@ -104,7 +106,7 @@ export async function generateOpenapi(): Promise<string[]> {
 
   const written: string[] = [];
   for (const p of pkgs) {
-    const outDir = join(repoRoot, p.envRoot, OPENAPI_ENV, p.name);
+    const outDir = join(repoRoot, p.root, OPENAPI_ENV, p.name);
     const srcDir = join(outDir, "src");
     mkdirSync(srcDir, { recursive: true });
 
@@ -119,7 +121,7 @@ export async function generateOpenapi(): Promise<string[]> {
         outputDirectory: outDir,
         specFileBaseName: "openapi",
         specVersion: 3,
-        name: `${p.envPath} API`,
+        name: `${p.relPath} API`,
         version: "0.0.0",
       },
       compilerOptions,
@@ -133,7 +135,7 @@ export async function generateOpenapi(): Promise<string[]> {
     writeFileSync(schemaPath, astToString(await openapiTS(spec)));
     stampGenerated(schemaPath, {
       tool: "dbxtools openapi (tsoa + openapi-typescript)",
-      source: `the tsoa controllers in ${p.envPath}`,
+      source: `the tsoa controllers in ${p.relPath}`,
     });
 
     // 3) src/client.ts: a typed openapi-fetch client over those types.
@@ -143,7 +145,7 @@ export async function generateOpenapi(): Promise<string[]> {
     stampGenerated(clientPath, { tool: "dbxtools openapi (openapi-fetch)", source: "./schema" });
 
     written.push(outDir);
-    log.success(`openapi/${p.name} (from ${p.envPath})`);
+    log.success(`openapi/${p.name} (from ${p.relPath})`);
   }
   return written;
 }

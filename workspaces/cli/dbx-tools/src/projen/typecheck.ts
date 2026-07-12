@@ -37,7 +37,7 @@ function targets(): Target[] {
   for (const p of discoverPackages()) {
     const tsconfig = join(p.dir, "tsconfig.json");
     if (existsSync(tsconfig)) {
-      out.push({ label: p.envPath, tsconfig });
+      out.push({ label: p.relPath, tsconfig });
     }
   }
   return out;

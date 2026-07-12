@@ -9,11 +9,11 @@
  */
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { discoverPackages, recordedEnvRoots, repoRoot } from "./workspace";
+import { discoverPackages, recordedRoots, repoRoot } from "./workspace";
 
 /** Member paths that currently exist on disk (scan of the recorded env roots). */
 export function currentPackages(): string[] {
-  return discoverPackages(repoRoot, recordedEnvRoots()).map((p) => p.memberPath);
+  return discoverPackages(repoRoot, recordedRoots()).map((p) => p.memberPath);
 }
 
 /** Member paths recorded by the last synth (read from `pnpm-workspace.yaml`). */

@@ -26,7 +26,7 @@ import {
   discoverPackages,
   isGeneratedFile,
   readWorkspaceMembers,
-  recordedEnvRoots,
+  recordedRoots,
   repoRoot,
   toPosix,
 } from "./workspace";
@@ -82,7 +82,7 @@ export function startWatch(): void {
     log.success(`initial sync (${n} barrel${n === 1 ? "" : "s"})`);
   }
 
-  const envRoots = recordedEnvRoots().map((r) => resolve(repoRoot, r));
+  const envRoots = recordedRoots().map((r) => resolve(repoRoot, r));
   const watchPaths = [PROJENRC, ...envRoots, ...configSrcDirs()];
 
   const pending = new Set<string>();
