@@ -1,16 +1,20 @@
 /**
  * projen definition. The caller creates the projen project and passes it to
- * `configureProjen` (from the `dbx-tools` engine in `tooling/dbx-tools`), which
- * taps into it: scopes are applied automatically from folder names under
- * `packages/`; the only per-package config lives in the `modifyPackage` hook.
+ * `configureProjen` (from the in-tree `dbx-tools` engine), which taps into it:
+ * workspace envs are applied automatically from folder names under the
+ * `workspaceEnvPaths` roots (default `workspaces/`); the only per-package config
+ * lives in the `modifyPackage` hook.
  */
 import { javascript } from "projen";
-import { configureProjen } from "./tooling/dbx-tools/src/configure";
-import type { PackageManifest } from "./tooling/dbx-tools/src/packages";
+import { configureProjen } from "./dbx-tools/src/projen/configure";
 
 const project = new javascript.NodeProject({
-  name: "dbx-tools-workspace",
+  // Empty name: the engine backfills it from the auto-detected repo identity
+  // (`reggie-db/dbx-tools` -> `dbx-tools`), which also becomes the npm scope.
+  name: "",
   defaultReleaseBranch: "main",
+  // The engine is pnpm-only (it generates pnpm-workspace.yaml + catalog). projen's
+  // packageManager is readonly after construction, so it must be set here.
   packageManager: javascript.NodePackageManager.PNPM,
   projenrcJs: false,
   buildWorkflow: false,
@@ -25,34 +29,37 @@ const project = new javascript.NodeProject({
   peerDependencyOptions: { pinnedDevDependency: false },
 });
 
-const addDeps = (m: PackageManifest, deps: Record<string, string>): void => {
-  m.dependencies = { ...(m.dependencies as Record<string, string> | undefined), ...deps };
-};
+// The engine lives in-tree (imported by relative path above), so it is NOT installed
+// as a dependency and its `dbxtools` bin is not linked. Expose the CLI as a
+// `dbxtools` script that runs the source through tsx; `receiveArgs` forwards the
+// subcommand, so `pnpm dbxtools <cmd>` (used by the generated `watch` task and
+// interactively) works here. A repo consuming dbx-tools from npm omits this - there
+// `pnpm dbxtools` resolves the package's bin.
+project.addTask("dbxtools", {
+  exec: "tsx dbx-tools/bin/dbxtools.ts",
+  receiveArgs: true,
+});
 
 configureProjen(project, {
-  scope: "dbx-tools",
+  // This repo keeps the dbx-tools engine in-tree, so it is an extra workspace
+  // member on top of the auto-discovered env packages (and its `src` is watched
+  // for re-synth). A repo consuming dbx-tools from npm omits this.
+  additionalWorkspaces: ["dbx-tools"],
   // The single place per-package tweaks belong; everything else is auto-detected.
-  modifyPackage(_scope, m) {
-    switch (m.name) {
-      case "@dbx-tools/ui-app":
-        m.private = true;
-        delete m.exports;
-        addDeps(m, { "@dbx-tools/shared-core": "workspace:*" });
-        break;
-      case "@dbx-tools/server-api":
-        addDeps(m, { "@dbx-tools/shared-core": "workspace:*", express: "catalog:" });
-        m.devDependencies = {
-          ...(m.devDependencies as Record<string, string> | undefined),
-          "@types/express": "catalog:",
-        };
-        m.scripts = { dev: "tsx watch src/server.ts", start: "tsx src/server.ts" };
-        break;
-      case "@dbx-tools/cli-main":
-        m.bin = { "pw-demo": "./src/cli.ts" };
-        addDeps(m, { "@dbx-tools/shared-core": "workspace:*" });
-        break;
+  // `pkg` is the real projen subproject (edits use projen's own API); dispatch on
+  // the STABLE folder identity `spec.env`/`spec.name`, not the derived package name.
+  modifyPackage(pkg, spec) {
+    if (spec.env === "ui" && spec.name === "app") {
+      pkg.addDeps("@dbx-tools/shared-core@workspace:*");
+    } else if (spec.env === "server" && spec.name === "api") {
+      pkg.addDeps("@dbx-tools/shared-core@workspace:*", "express@catalog:");
+      pkg.addDevDeps("@types/express@catalog:");
+      pkg.addTask("dev", { exec: "tsx watch src/server.ts" });
+      pkg.addTask("start", { exec: "tsx src/server.ts" });
+    } else if (spec.env === "cli" && spec.name === "main") {
+      pkg.package.addBin({ "pw-demo": "./src/cli.ts" });
+      pkg.addDeps("@dbx-tools/shared-core@workspace:*", "@dbx-tools/shared-neat@workspace:*");
     }
-    return m;
   },
 });
 

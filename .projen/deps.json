@@ -11,16 +11,6 @@
       "type": "build"
     },
     {
-      "name": "dbx-tools",
-      "version": "workspace:*",
-      "type": "build"
-    },
-    {
-      "name": "onchange",
-      "version": "^7.1.0",
-      "type": "build"
-    },
-    {
       "name": "projen",
       "type": "build"
     },

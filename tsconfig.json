@@ -9,7 +9,7 @@
     ]
   },
   "include": [
-    "projenrc.ts"
+    ".projenrc.ts"
   ],
   "exclude": [
     "node_modules",

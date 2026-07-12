@@ -35,16 +35,6 @@ jspm_packages/
 !/.vscode/tasks.json
 !/.vscode/settings.json
 !/.vscode/extensions.json
-!/packages/cli/main/package.json
-!/packages/cli/main/tsconfig.json
-!/packages/server/api/package.json
-!/packages/server/api/tsconfig.json
-!/packages/shared/core/package.json
-!/packages/shared/core/tsconfig.json
-!/packages/ui/app/package.json
-!/packages/ui/app/tsconfig.json
-!/packages/ui/app/vite.config.ts
-!/projenrc/discovered.json
 .DS_Store
 dist
 **/dist

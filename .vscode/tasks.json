@@ -3,7 +3,7 @@
   "tasks": [
     {
       "label": "watch",
-      "detail": "projen watch - regenerate barrels + scaffold new packages",
+      "detail": "projen watch - barrels + scaffold new packages + re-synth on config change",
       "type": "shell",
       "command": "pnpm exec projen watch",
       "isBackground": true,

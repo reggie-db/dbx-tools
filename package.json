@@ -1,9 +1,10 @@
 {
-  "name": "dbx-tools-workspace",
+  "name": "dbx-tools",
   "scripts": {
     "build": "projen build",
     "clobber": "projen clobber",
     "compile": "projen compile",
+    "dbxtools": "projen dbxtools",
     "default": "projen default",
     "eject": "projen eject",
     "package": "projen package",
@@ -16,8 +17,6 @@
   "devDependencies": {
     "@types/node": "^24.6.0",
     "constructs": "^10.0.0",
-    "dbx-tools": "workspace:*",
-    "onchange": "^7.1.0",
     "projen": "^0.101.4",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"

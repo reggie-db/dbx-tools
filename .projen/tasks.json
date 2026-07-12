@@ -64,12 +64,31 @@
       "name": "compile",
       "description": "Only compile"
     },
+    "dbxtools": {
+      "name": "dbxtools",
+      "steps": [
+        {
+          "exec": "tsx dbx-tools/bin/dbxtools.ts",
+          "receiveArgs": true
+        }
+      ]
+    },
     "default": {
       "name": "default",
       "description": "Synthesize project files",
       "steps": [
         {
-          "exec": "tsx .projenrc.ts"
+          "execArgs": [
+            "tsx",
+            ".projenrc.ts"
+          ],
+          "shell": [
+            "npx",
+            "-y",
+            "-p",
+            "tsx",
+            "-c"
+          ]
         }
       ]
     },
@@ -140,7 +159,7 @@
       "name": "watch",
       "steps": [
         {
-          "exec": "onchange -i -d 250 -e \"packages/openapi/**\" \"packages/*/*/src/**/*.{ts,tsx,js}\" -- tsx tooling/dbx-tools/bin/dbxtools.ts sync"
+          "exec": "pnpm dbxtools sync --watch"
         }
       ]
     }

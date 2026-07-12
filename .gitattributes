@@ -12,21 +12,11 @@
 /.vscode/settings.json linguist-generated
 /.vscode/tasks.json linguist-generated
 /package.json linguist-generated
-/packages/*/*/index.ts linguist-generated
-/packages/cli/main/package.json linguist-generated
-/packages/cli/main/tsconfig.json linguist-generated
-/packages/openapi/** linguist-generated
-/packages/server/api/package.json linguist-generated
-/packages/server/api/tsconfig.json linguist-generated
-/packages/shared/core/package.json linguist-generated
-/packages/shared/core/tsconfig.json linguist-generated
-/packages/ui/app/package.json linguist-generated
-/packages/ui/app/tsconfig.json linguist-generated
-/packages/ui/app/vite.config.ts linguist-generated
 /pnpm-lock.yaml linguist-generated
 /pnpm-workspace.yaml linguist-generated
 /prettier.config.js linguist-generated
-/projenrc/discovered.json linguist-generated
 /tsconfig.base.json linguist-generated
 /tsconfig.json linguist-generated
 /tsconfig.projen.json linguist-generated linguist-language=JSON-with-Comments
+/workspaces/*/*/index.ts linguist-generated
+/workspaces/openapi/** linguist-generated
