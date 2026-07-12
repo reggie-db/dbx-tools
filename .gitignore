@@ -37,12 +37,6 @@ jspm_packages/
 !/.vscode/extensions.json
 !/packages/cli/main/package.json
 !/packages/cli/main/tsconfig.json
-!/packages/dbx-tools/projen-config/package.json
-!/packages/dbx-tools/projen-config/tsconfig.json
-!/packages/openapi/api/package.json
-!/packages/openapi/api/tsconfig.json
-!/packages/openapi/projen-config/package.json
-!/packages/openapi/projen-config/tsconfig.json
 !/packages/server/api/package.json
 !/packages/server/api/tsconfig.json
 !/packages/shared/core/package.json
@@ -50,13 +44,6 @@ jspm_packages/
 !/packages/ui/app/package.json
 !/packages/ui/app/tsconfig.json
 !/packages/ui/app/vite.config.ts
-!/packages/dom/util/package.json
-!/packages/dom/util/tsconfig.json
-!/packages/ui/components/package.json
-!/packages/ui/components/tsconfig.json
-!/packages/ui/components/vite.config.ts
-!/packages/client/app/package.json
-!/packages/client/app/tsconfig.json
 !/projenrc/discovered.json
 .DS_Store
 dist

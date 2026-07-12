@@ -1,72 +1,59 @@
 /**
- * projen definition for the monorepo.
- *
- * All the machinery lives in `@dbx-tools/projen-config`
- * (`packages/dbx-tools/projen-config`), exported as `configureProjen`. Scopes
- * are applied automatically from folder names under `packages/` - see the
- * engine's `SCOPE_PROFILES` (ui / cli / server / shared / node, plus the
- * generated `openapi` scope and `dbx-tools` for the engine). Packages listed
- * here are only *overrides* (deps, bin, scripts); a folder with no entry (e.g.
- * `packages/shared/core`) is configured purely from its scope's profile.
+ * projen definition. The caller creates the projen project and passes it to
+ * `configureProjen` (from the `dbx-tools` engine in `tooling/dbx-tools`), which
+ * taps into it: scopes are applied automatically from folder names under
+ * `packages/`; the only per-package config lives in the `modifyPackage` hook.
  */
-import { configureProjen } from "./packages/dbx-tools/projen-config/src/configure";
-import type { PackageSpec } from "./packages/dbx-tools/projen-config/src/packages";
+import { javascript } from "projen";
+import { configureProjen } from "./tooling/dbx-tools/src/configure";
+import type { PackageManifest } from "./tooling/dbx-tools/src/packages";
 
-/** Optional overrides. shared/core and the generated openapi/* need none. */
-const PACKAGES: PackageSpec[] = [
-  // The engine itself (dbx-tools scope -> node profile). Its `dbxtools` bin is
-  // the single CLI the projen tasks call.
-  {
-    scope: "dbx-tools",
-    name: "projen-config",
-    tsconfigInclude: ["index.ts", "src", "bin", "test"],
-    bin: { dbxtools: "./bin/dbxtools.ts" },
-    dependencies: {
-      projen: "^0.101.4",
-      constructs: "^10.0.0",
-      barrelsby: "^2.8.1",
-      chokidar: "^4.0.3",
-      commander: "catalog:",
-      consola: "catalog:",
-      "swagger-jsdoc": "catalog:",
-      "openapi-typescript": "catalog:",
-      tsx: "^4.23.0",
-      typescript: "catalog:",
-    },
-    devDependencies: { "@types/swagger-jsdoc": "catalog:" },
-  },
+const project = new javascript.NodeProject({
+  name: "dbx-tools-workspace",
+  defaultReleaseBranch: "main",
+  packageManager: javascript.NodePackageManager.PNPM,
+  projenrcJs: false,
+  buildWorkflow: false,
+  release: false,
+  jest: false,
+  prettier: false,
+  github: false,
+  npmignoreEnabled: false,
+  licensed: false,
+  entrypoint: "",
+  depsUpgrade: false,
+  peerDependencyOptions: { pinnedDevDependency: false },
+});
 
-  // server scope -> node profile; add Express + the shared lib.
-  {
-    scope: "server",
-    name: "api",
-    dependencies: { "@dbx-tools/shared-core": "workspace:*", express: "catalog:" },
-    devDependencies: { "@types/express": "catalog:" },
-    scripts: { dev: "tsx watch src/server.ts", start: "tsx src/server.ts" },
-  },
+const addDeps = (m: PackageManifest, deps: Record<string, string>): void => {
+  m.dependencies = { ...(m.dependencies as Record<string, string> | undefined), ...deps };
+};
 
-  // cli scope -> cli profile (auto commander + @clack/prompts); add a bin.
-  {
-    scope: "cli",
-    name: "main",
-    bin: { "pw-demo": "./src/cli.ts" },
-    dependencies: { "@dbx-tools/shared-core": "workspace:*" },
-  },
-
-  // ui scope -> vite profile (auto react + vite + vite.config + dev/build scripts).
-  {
-    scope: "ui",
-    name: "app",
-    private: true,
-    noExports: true,
-    dependencies: { "@dbx-tools/shared-core": "workspace:*" },
-  },
-];
-
-configureProjen({
-  name: "projen-workspace",
-  // Root npm scope for generated package names (@dbx-tools/<scope>-<name>).
-  // Set now so it survives the eventual folder rename to `dbx-tools`.
+configureProjen(project, {
   scope: "dbx-tools",
-  packages: PACKAGES,
-}).synth();
+  // The single place per-package tweaks belong; everything else is auto-detected.
+  modifyPackage(_scope, m) {
+    switch (m.name) {
+      case "@dbx-tools/ui-app":
+        m.private = true;
+        delete m.exports;
+        addDeps(m, { "@dbx-tools/shared-core": "workspace:*" });
+        break;
+      case "@dbx-tools/server-api":
+        addDeps(m, { "@dbx-tools/shared-core": "workspace:*", express: "catalog:" });
+        m.devDependencies = {
+          ...(m.devDependencies as Record<string, string> | undefined),
+          "@types/express": "catalog:",
+        };
+        m.scripts = { dev: "tsx watch src/server.ts", start: "tsx src/server.ts" };
+        break;
+      case "@dbx-tools/cli-main":
+        m.bin = { "pw-demo": "./src/cli.ts" };
+        addDeps(m, { "@dbx-tools/shared-core": "workspace:*" });
+        break;
+    }
+    return m;
+  },
+});
+
+project.synth();

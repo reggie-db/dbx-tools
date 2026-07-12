@@ -20,7 +20,7 @@ export function pnpmWorkspace(project: Project, catalog: Deps): void {
     marker: true,
     readonly: true,
     obj: {
-      packages: ["packages/*/*"],
+      packages: ["packages/*/*", "tooling/*"],
       catalog,
       // Approve the one dependency with a build script (esbuild, pulled in by
       // tsx). pnpm v11 gates build scripts behind `allowBuilds` and errors on a

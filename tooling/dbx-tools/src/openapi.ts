@@ -37,7 +37,7 @@ export function createApiClient(options?: ClientOptions) {
 /** Packages (outside the generated `openapi` scope) whose src has @openapi annotations. */
 function annotatedPackages() {
   return discoverPackagesOnDisk()
-    .filter((p) => p.scope !== "openapi")
+    .filter((p) => p.scope === "server" || p.scope === "node")
     .map((p) => ({
       pkg: p,
       apis: walkFiles(p.src)
@@ -76,7 +76,8 @@ export async function generateOpenapi(): Promise<string[]> {
     // src/schema.ts (types) + src/client.ts (openapi-fetch client)
     const schemaPath = join(srcDir, "schema.ts");
     makeWritable(schemaPath);
-    writeFileSync(schemaPath, astToString(await openapiTS(spec)));
+    const ast = await openapiTS(spec as unknown as Parameters<typeof openapiTS>[0]);
+    writeFileSync(schemaPath, astToString(ast));
     stampGenerated(schemaPath, {
       tool: "dbxtools openapi (openapi-typescript)",
       source: `the @openapi annotations in ${pkg.scope}/${pkg.name}`,

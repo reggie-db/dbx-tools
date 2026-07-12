@@ -1,11 +1,6 @@
 {
   "dependencies": [
     {
-      "name": "@dbx-tools/projen-config",
-      "version": "workspace:*",
-      "type": "build"
-    },
-    {
       "name": "@types/node",
       "version": "^24.6.0",
       "type": "build"
@@ -13,6 +8,16 @@
     {
       "name": "constructs",
       "version": "^10.0.0",
+      "type": "build"
+    },
+    {
+      "name": "dbx-tools",
+      "version": "workspace:*",
+      "type": "build"
+    },
+    {
+      "name": "onchange",
+      "version": "^7.1.0",
       "type": "build"
     },
     {

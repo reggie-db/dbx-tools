@@ -1,26 +1,23 @@
 {
-  "name": "projen-workspace",
+  "name": "dbx-tools-workspace",
   "scripts": {
-    "barrels": "projen barrels",
     "build": "projen build",
     "clobber": "projen clobber",
     "compile": "projen compile",
     "default": "projen default",
     "eject": "projen eject",
-    "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
-    "scaffold": "projen scaffold",
     "test": "projen test",
-    "typecheck": "projen typecheck",
     "watch": "projen watch",
     "projen": "projen"
   },
   "devDependencies": {
-    "@dbx-tools/projen-config": "workspace:*",
     "@types/node": "^24.6.0",
     "constructs": "^10.0.0",
+    "dbx-tools": "workspace:*",
+    "onchange": "^7.1.0",
     "projen": "^0.101.4",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"

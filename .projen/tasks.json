@@ -4,15 +4,6 @@
     "PATH": "$(pnpm -c exec \"node --print process.env.PATH\")"
   },
   "tasks": {
-    "barrels": {
-      "name": "barrels",
-      "description": "Regenerate every package's root index.ts barrel.",
-      "steps": [
-        {
-          "exec": "tsx packages/dbx-tools/projen-config/bin/dbxtools.ts barrels"
-        }
-      ]
-    },
     "build": {
       "name": "build",
       "description": "Full release build",
@@ -112,15 +103,6 @@
         }
       ]
     },
-    "openapi": {
-      "name": "openapi",
-      "description": "Generate the openapi scope from server @openapi annotations.",
-      "steps": [
-        {
-          "exec": "tsx packages/dbx-tools/projen-config/bin/dbxtools.ts openapi"
-        }
-      ]
-    },
     "package": {
       "name": "package",
       "description": "Creates the distribution package",
@@ -150,34 +132,15 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
     },
-    "scaffold": {
-      "name": "scaffold",
-      "description": "Configure any new packages/<scope>/<name>/src folder.",
-      "steps": [
-        {
-          "exec": "tsx packages/dbx-tools/projen-config/bin/dbxtools.ts scaffold"
-        }
-      ]
-    },
     "test": {
       "name": "test",
       "description": "Run tests"
     },
-    "typecheck": {
-      "name": "typecheck",
-      "description": "Type-check every package against its own profile tsconfig.",
-      "steps": [
-        {
-          "exec": "tsx packages/dbx-tools/projen-config/bin/dbxtools.ts typecheck"
-        }
-      ]
-    },
     "watch": {
       "name": "watch",
-      "description": "Watch packages/*: barrels, scaffold, and OpenAPI on change.",
       "steps": [
         {
-          "exec": "tsx packages/dbx-tools/projen-config/bin/dbxtools.ts watch"
+          "exec": "onchange -i -d 250 -e \"packages/openapi/**\" \"packages/*/*/src/**/*.{ts,tsx,js}\" -- tsx tooling/dbx-tools/bin/dbxtools.ts sync"
         }
       ]
     }

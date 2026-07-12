@@ -14,16 +14,6 @@
 /package.json linguist-generated
 /packages/cli/main/package.json linguist-generated
 /packages/cli/main/tsconfig.json linguist-generated
-/packages/client/app/package.json linguist-generated
-/packages/client/app/tsconfig.json linguist-generated
-/packages/dbx-tools/projen-config/package.json linguist-generated
-/packages/dbx-tools/projen-config/tsconfig.json linguist-generated
-/packages/dom/util/package.json linguist-generated
-/packages/dom/util/tsconfig.json linguist-generated
-/packages/openapi/api/package.json linguist-generated
-/packages/openapi/api/tsconfig.json linguist-generated
-/packages/openapi/projen-config/package.json linguist-generated
-/packages/openapi/projen-config/tsconfig.json linguist-generated
 /packages/server/api/package.json linguist-generated
 /packages/server/api/tsconfig.json linguist-generated
 /packages/shared/core/package.json linguist-generated
@@ -31,9 +21,6 @@
 /packages/ui/app/package.json linguist-generated
 /packages/ui/app/tsconfig.json linguist-generated
 /packages/ui/app/vite.config.ts linguist-generated
-/packages/ui/components/package.json linguist-generated
-/packages/ui/components/tsconfig.json linguist-generated
-/packages/ui/components/vite.config.ts linguist-generated
 /pnpm-lock.yaml linguist-generated
 /pnpm-workspace.yaml linguist-generated
 /prettier.config.js linguist-generated
