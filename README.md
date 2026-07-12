@@ -1,125 +1,61 @@
-# projen-workspace
+# dbx-tools
 
-A [projen](https://projen.io)-driven **pnpm monorepo** where the folder a package
-lives in enforces which runtime it may touch, barrels are regenerated for you,
-and dropping a `src/` folder is enough to scaffold a fully-configured package.
+A [projen](https://projen.io)-driven **pnpm monorepo generator**. The reusable
+engine is its own package — **`dbx-tools`** (`tooling/dbx-tools`) — exported as
+`configureProjen()` and driven by the **`dbxtools`** CLI. Drop a folder under
+`packages/` and it's configured, type-checked, and barrelled automatically.
 
-All the machinery lives in one reusable package — **`@dbx-tools/projen-config`**
-(`packages/dbx-tools/projen-config`) — exported as `configureProjen()` and driven
-by a single `dbxtools` CLI, so the same setup can be published to npm and reused
-from any other repo's `projenrc.ts`:
+> New contributor or agent? Read **[AGENTS.md](./AGENTS.md)** for the full model.
 
 ```ts
-// projenrc.ts — the whole repo config (no leading dot; projen finds it natively)
-import { configureProjen } from "./packages/dbx-tools/projen-config/src/configure";
-import type { PackageSpec } from "./packages/dbx-tools/projen-config/src/packages";
+// .projenrc.ts
+import { javascript } from "projen";
+import { configureProjen } from "./tooling/dbx-tools/src/configure";
 
-const PACKAGES: PackageSpec[] = [ /* this repo's packages */ ];
-
-configureProjen({ name: "projen-workspace", packages: PACKAGES }).synth();
+const project = new javascript.NodeProject({ name: "dbx-tools-workspace", /* … */ });
+configureProjen(project, {
+  scope: "dbx-tools",
+  modifyPackage: (scope, manifest) => manifest, // the one place per-package tweaks go
+});
+project.synth();
 ```
 
-## Scopes enforce a runtime
+## Scopes enforce a runtime (auto-applied by folder)
 
-The folder directly under `packages/` maps to one of six enforcement **profiles**.
-The profile is the single source of truth for a package's generated
-`tsconfig.json` (`lib`/`jsx`/`types`) and baseline deps, so enforcement is real:
+The folder under `packages/` is the scope; each maps to one config (`SCOPES` in
+`tooling/dbx-tools/src/scopes.ts`) that drives the generated `tsconfig`
+(`lib`/`jsx`/`types`) + baseline deps — so misuse fails `tsc`:
 
-| Scope folder | Profile    | DOM | Node | Injected deps                    |
-| ------------ | ---------- | --- | ---- | -------------------------------- |
-| `shared/*`   | `agnostic` |  ✗  |  ✗   | —                                |
-| `server/*`   | `node`     |  ✗  |  ✓   | `@types/node`                    |
-| `cli/*`      | `cli`      |  ✗  |  ✓   | `commander`, `@clack/prompts`    |
-| `dom/*`      | `dom`      |  ✓  |  ✗   | —                                |
-| `ui/*`       | `react`    |  ✓  |  ✗   | `react` (peer) + types           |
-| `client/*`   | `vite`     |  ✓  |  ✗   | `react`, `vite`, + `vite.config` |
-| `dbx-tools/*`| `node`     |  ✗  |  ✓   | (the engine)                     |
+| Scope    | Runtime                    | DOM | Node |
+| -------- | -------------------------- | --- | ---- |
+| `ui`     | Vite + React (+vite.config)|  ✓  |  ✗   |
+| `server` | Node (Express, …)          |  ✗  |  ✓   |
+| `node`   | Node                       |  ✗  |  ✓   |
+| `cli`    | Node + commander + @clack  |  ✗  |  ✓   |
+| `shared` | agnostic                   |  ✗  |  ✗   |
+| `openapi`| generated read-only client |  ✓  |  ✗   |
 
-`tsc` proves it: `document` in a `shared`/`server`/`cli` package fails (no DOM
-`lib`), and `process`/`node:*` in a `ui`/`client` package fails (no `node` types).
-Add or remap a scope with one line in the engine's `SCOPES`.
+Packages are named `@<scope>/<folder>-<name>` (here `@dbx-tools/*`).
 
-## Packages
-
-`packages/<scope>/<name>` → published `@<scope>/<name>`; multiple packages can
-share a scope. Each package gets a projen-generated `package.json` + `tsconfig.json`
-(and `vite.config.ts` in the `vite` scope). The `vite` profile writes the vite
-config automatically — you never hand-author one.
-
-## The `dbxtools` CLI + projen tasks
-
-Everything runs through `dbxtools` (commander, a single entry point). The projen
-tasks are thin subcommands — run `pnpm exec projen <task>`:
-
-| Task        | `dbxtools` cmd | What it does                                           |
-| ----------- | -------------- | ------------------------------------------------------ |
-| `projen`    | —              | Synthesize all generated config (default) + install.   |
-| `watch`     | `watch`        | Watch `packages/*`: barrels + scaffolding on change.   |
-| `barrels`   | `barrels`      | Rebuild every package's root `index.ts` barrel.        |
-| `scaffold`  | `scaffold`     | Configure any new `packages/<scope>/<name>/src`.       |
-| `typecheck` | `typecheck`    | Type-check each package against its own profile.       |
-
-## Barrels (index above src)
-
-`watch`/`barrels` drive **barrelsby** to write one `index.ts` **at each package
-root** (above `src/`) that flat-re-exports `./src/*`, subject to two rules:
-
-1. a file/folder whose name starts with `_` is private and never barrelled;
-2. only files that actually contain an `export` are re-exported.
-
-Each barrel gets a `// GENERATED … DO NOT EDIT` header and is set **read-only**;
-the watcher unlocks → regenerates → re-locks on every change.
-
-## Auto-scaffold
-
-Create `packages/<scope>/<name>/src/anything.ts` and run `projen scaffold` (or
-just have `projen watch` running). The engine discovers the folder, generates its
-`package.json` + `tsconfig.json` from the scope's profile, and gives it a
-generated name **`@<rootScope>/<scope>-<name>`** (e.g. `@projen-workspace/ui-widgets`).
-`rootScope` is the `scope` option, defaulting to the project name; pass `scope: ""`
-to leave scaffolded packages unscoped. Declare the package explicitly in
-`projenrc.ts` to override the name/deps.
-
-## Hooks
-
-- `configureProjen({ packageModifier })` — a `(manifest, ctx) => manifest`
-  last-chance hook to change any generated `package.json` before it's written.
-- `generateBarrels({ modifier })` — a `(content, ctx) => content` hook for the
-  barrel contents.
-
-## Logging
-
-The dev logger is a single [consola](https://github.com/unjs/consola) instance
-(`src/log.ts`) that routes **all** output to **stderr** (stdout stays clean for
-piping). Each task tags its output with `logger.withTag("projen:watch")` etc.
-
-## Generated files
-
-- **projen-owned** (`package.json`, `tsconfig*.json`, `pnpm-workspace.yaml`,
-  `.vscode/*`, `projenrc/discovered.json`) — read-only, projen marker.
-- **barrels** (`<pkg>/index.ts`) — read-only, do-not-edit header.
-
-Edit `projenrc.ts` (source of truth) and re-synth; never edit generated files.
-
-## VS Code
-
-`.vscode/tasks.json` (a projen `JsonFile`) has `runOn: folderOpen`, so opening the
-workspace auto-starts `projen watch`. No custom extension.
-
-## Portability
-
-The engine is pure Node: `node:fs` for walking, `fs.chmodSync` for read-only, and
-the three tools it invokes (barrelsby, tsc, the projenrc re-synth) run via
-`execFileSync(process.execPath, [require.resolve(...)…])` — Node executing a
-resolved `.js`, no shell and no platform-specific bin paths. Relative imports
-(`./log`, `../src/watch`) resolve within the package whether it's in-repo or
-installed from npm.
-
-## Getting started
+## The `dbxtools` CLI
 
 ```sh
 pnpm install
-pnpm exec projen           # synthesize config
-pnpm exec projen barrels
-pnpm exec projen typecheck
+pnpm exec projen              # synthesize all generated config
+pnpm exec dbxtools barrels    # rebuild every package's root index.ts barrel
+pnpm exec dbxtools typecheck  # type-check each package against its scope tsconfig
+pnpm exec projen watch        # onchange -> `dbxtools sync` (barrels + re-synth on change)
 ```
+
+## Barrels & generated files
+
+Each package gets a root `index.ts` (via barrelsby) re-exporting `./src/*`,
+skipping files/folders starting with `_` and files with no `export`. Barrels and
+all projen-owned files (`package.json`, `tsconfig*`, `pnpm-workspace.yaml`, …)
+are **read-only with a do-not-edit / projen marker** — edit `.projenrc.ts` (or a
+`modifyPackage`/`modifyTsconfig` hook) and re-synth; never edit them directly.
+
+## Status
+
+WIP. OpenAPI generation is being moved from JSDoc to zod (`zod-openapi`). This
+repo lives on the `main` branch of `reggie-db/dbx-tools`.

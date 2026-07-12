@@ -150,5 +150,10 @@ export function configureProjen(
     "tmp",
   );
 
+  // Mark the watcher-generated barrels + the generated openapi scope as generated
+  // in .gitattributes (collapses them in PR diffs, excludes from language stats).
+  project.annotateGenerated("/packages/*/*/index.ts");
+  project.annotateGenerated("/packages/openapi/**");
+
   return project;
 }

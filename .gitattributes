@@ -12,8 +12,10 @@
 /.vscode/settings.json linguist-generated
 /.vscode/tasks.json linguist-generated
 /package.json linguist-generated
+/packages/*/*/index.ts linguist-generated
 /packages/cli/main/package.json linguist-generated
 /packages/cli/main/tsconfig.json linguist-generated
+/packages/openapi/** linguist-generated
 /packages/server/api/package.json linguist-generated
 /packages/server/api/tsconfig.json linguist-generated
 /packages/shared/core/package.json linguist-generated
