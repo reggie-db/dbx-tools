@@ -1,0 +1,6 @@
+node_modules
+dist
+**/dist/**
+pnpm-lock.yaml
+# generated barrels carry a do-not-edit header and are read-only
+**/src/**/index.ts

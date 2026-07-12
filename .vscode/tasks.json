@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "watch",
+      "detail": "projen watch - regenerate barrels + scaffold new packages",
+      "type": "shell",
+      "command": "pnpm exec projen watch",
+      "isBackground": true,
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "projen"
+      }
+    },
+    {
+      "label": "synth",
+      "detail": "projen - synthesize all generated config",
+      "type": "shell",
+      "command": "pnpm exec projen",
+      "problemMatcher": []
+    }
+  ]
+}
