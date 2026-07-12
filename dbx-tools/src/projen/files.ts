@@ -6,9 +6,11 @@
  * prettier config, `.vscode/*`, and the VS Code extension manifest all have a
  * single code source of truth in `.projenrc.ts`.
  */
+import { relative } from "node:path";
 import type { Project } from "projen";
 import { JsonFile, TextFile, YamlFile, javascript } from "projen";
 import type { Catalog } from "./configure";
+import { toPosix } from "./workspace";
 
 /**
  * Default pnpm v11 build-script allowlist: only `esbuild` (pulled in by tsx).
@@ -23,7 +25,12 @@ const DEFAULT_ALLOW_BUILDS: Record<string, boolean> = { esbuild: true };
  * any other pnpm-workspace setting (`overrides`, `packageExtensions`, ...).
  */
 export interface PnpmWorkspaceConfig {
-  /** Workspace members (what pnpm links): the discovered env packages + `additionalWorkspaces`. */
+  /**
+   * Workspace members (what pnpm links). Sourced from `project.subprojects` - every
+   * `applyEnv` package (auto-discovered OR configured manually) is a subproject, so
+   * it lands here automatically; nothing is hardcoded. A `pnpmWorkspace` hook may
+   * still push extra globs/members.
+   */
   packages: string[];
   /** The `catalog:` version registry every `catalog:` specifier resolves against. */
   catalog: Catalog;
@@ -36,31 +43,39 @@ export interface PnpmWorkspaceConfig {
 export type ModifyPnpmWorkspace = (workspace: PnpmWorkspaceConfig) => void;
 
 /**
- * `pnpm-workspace.yaml`: the workspace `packages` list (assembled by
- * `configureProjen` from discovery + `additionalWorkspaces`, so it is never
- * hardcoded here) plus the `catalog:` version registry and the build-script
- * allowlist. This file is the SOURCE OF TRUTH every other command reads back.
- * `modify` receives the assembled object last, so a caller can add members,
- * catalog entries, or any other pnpm setting.
+ * `pnpm-workspace.yaml`: the SOURCE OF TRUTH every other command reads back. Its
+ * `packages` list is sourced from `project.subprojects` at synth time (via a thunk
+ * projen resolves late), so any subproject - discovered by `configureProjen` or
+ * attached manually with `applyEnv` - is included with no hardcoded member list.
+ * `pnpmWorkspace` receives the assembled object last, so a caller can add members,
+ * catalog entries, or any other pnpm setting (`overrides`, `packageExtensions`, ...).
  */
 export function pnpmWorkspace(
   project: Project,
   options: {
-    readonly packages: readonly string[];
     readonly catalog: Catalog;
     readonly modify?: ModifyPnpmWorkspace;
   },
 ): void {
-  const workspace: PnpmWorkspaceConfig = {
-    packages: [...options.packages],
-    catalog: options.catalog,
-    allowBuilds: { ...DEFAULT_ALLOW_BUILDS },
-  };
-  options.modify?.(workspace);
+  const root = project.outdir;
   new YamlFile(project, "pnpm-workspace.yaml", {
     marker: true,
     readonly: true,
-    obj: workspace,
+    // A thunk: projen resolves functions in a file `obj` at synth, by which point
+    // every subproject is attached - so member order/timing doesn't matter.
+    obj: () => {
+      const packages = project.subprojects
+        .map((s) => toPosix(relative(root, s.outdir)))
+        .filter(Boolean)
+        .sort();
+      const workspace: PnpmWorkspaceConfig = {
+        packages,
+        catalog: options.catalog,
+        allowBuilds: { ...DEFAULT_ALLOW_BUILDS },
+      };
+      options.modify?.(workspace);
+      return workspace;
+    },
   });
 }
 

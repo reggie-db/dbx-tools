@@ -1,29 +1,32 @@
 /**
- * Turns one discovered workspace folder (`workspaces/<env>/<name>`) into a real
- * projen `TypeScriptProject` subproject (attached to the root via `parent`).
- * projen then OWNS that package's `package.json`, `tsconfig.json`, and tasks (its
- * generated marker) - there is no hand-rolled, read-only manifest generation.
+ * `applyEnv` - the reusable primitive that turns any repo path into a projen
+ * `TypeScriptProject` subproject configured by an {@link EnvDef}.
  *
- * What stays package-specific is only:
- *  - the workspace-env config (see `./envs`), which drives the tsconfig
- *    `lib`/`jsx`/`types` overlay (the real env enforcement) plus baseline
- *    deps/tasks, and
- *  - the `modifyPackage` hook, which receives the REAL subproject, so a caller
- *    tweaks it with normal projen APIs (`pkg.addDeps("x@catalog:")`,
- *    `pkg.addTask(...)`, `pkg.package.addBin({...})`) rather than mutating a plain
- *    object we then serialize.
+ * Auto-discovery (`configureProjen`) calls it once per discovered
+ * `workspaces/<env>/<name>` folder; a `.projenrc.ts` can also call it directly to
+ * configure a package WITHOUT auto-discovery (e.g. the in-tree `dbx-tools` engine).
+ * Either way the result is a real projen subproject, so projen OWNS its
+ * `package.json`, `tsconfig.json`, and tasks - and, because it is a subproject, it
+ * is sourced into `pnpm-workspace.yaml` from `project.subprojects` (see
+ * `files.pnpmWorkspace`) with no manual member list.
+ *
+ * What stays package-specific is only the {@link EnvDef} (the tsconfig
+ * `lib`/`jsx`/`types` overlay + baseline deps/tasks - the real env enforcement)
+ * and the `workspace` hook, which receives the REAL subproject so a caller tweaks
+ * it with projen's own API (`pkg.addDeps("x@catalog:")`, `pkg.addTask(...)`,
+ * `pkg.package.addBin({...})`) rather than mutating a serialized object.
  */
 import { type Project, type TaskOptions, TextFile, javascript, typescript } from "projen";
-import { type WorkspaceEnvDef, workspaceEnvConfig } from "./envs";
-import { DiscoveredPackage } from "./workspace";
+import type { EnvDef } from "./envs";
+import { toPosix } from "./workspace";
 
 /**
- * Read-only identity of a package, passed to {@link ModifyPackage} so callers
+ * Read-only identity of a package, passed to a {@link WorkspaceModifier} so callers
  * dispatch on the STABLE folder (`env`/`name`, e.g. `cli`/`main`) rather than the
  * derived `packageName`, which depends on the root npm scope.
  */
 export interface PackageSpec {
-  /** The workspace env (folder under the env root), e.g. `ui`. */
+  /** The workspace env (folder under the env root), e.g. `ui`. `""` if unknown. */
   readonly env: string;
   /** The package folder name, e.g. `app`. */
   readonly name: string;
@@ -32,25 +35,23 @@ export interface PackageSpec {
 }
 
 /**
- * Last-chance per-package hook. `pkg` is the real projen subproject and the only
- * mutation target - edits go through projen's own API and stay projen-owned:
- * `pkg.addDeps("express@catalog:")`, `pkg.addTask("dev", { exec })`,
- * `pkg.package.addBin({ tool: "./src/cli.ts" })`, etc. `spec` is the stable folder
- * identity to switch on.
+ * Last-chance per-package hook. `pkg` (the workspace) is the real projen
+ * subproject and the only mutation target - edits go through projen's own API and
+ * stay projen-owned. `spec` is the stable folder identity to switch on.
  */
-export type ModifyPackage = (pkg: typescript.TypeScriptProject, spec: PackageSpec) => void;
+export type WorkspaceModifier = (pkg: typescript.TypeScriptProject, spec: PackageSpec) => void;
 
-export interface DefinePackageOptions {
-  /** The root project every subproject attaches to (via projen `parent`). */
-  readonly parent: javascript.NodeProject;
-  /**
-   * The npm scope for generated names (`@<npmScope>/<env>-<name>`). Passed in
-   * explicitly because the root `project.name` is readonly and often left `""`
-   * for the engine to backfill, so it can't be read back off the parent here.
-   */
-  readonly npmScope: string;
-  readonly workspaceEnvs?: Record<string, WorkspaceEnvDef>;
-  readonly modifyPackage?: ModifyPackage;
+export interface ApplyEnvOptions {
+  /** Repo-relative posix path for the package, e.g. `workspaces/ui/app` or `dbx-tools`. */
+  readonly outdir: string;
+  /** The npm package name, e.g. `@dbx-tools/ui-app`. */
+  readonly name: string;
+  /** The env config to apply (tsconfig overlay + baseline deps/tasks/viteConfig). */
+  readonly env: EnvDef;
+  /** Identity handed to `workspace`; derived from `outdir`/`name` when omitted. */
+  readonly spec?: PackageSpec;
+  /** Per-package tweak hook (the workspace). */
+  readonly workspace?: WorkspaceModifier;
 }
 
 /**
@@ -80,10 +81,9 @@ export function npmNameOf(name: string, ...names: string[]): string {
  * Force `project`'s `package.json` read-only. Alone among the files projen owns,
  * it writes `package.json` read-WRITE so package managers can mutate it; here
  * every dependency and field is projen-owned via `.projenrc.ts`, so we align it
- * with the rest of the generated tree (tsconfig, pnpm-workspace, ...). projen
- * still rewrites it on every synth - it clears the read-only bit, writes, then
- * restores it - so this never blocks re-synth. Works for the root project and any
- * subproject alike. No-op if the project has no `package.json`.
+ * with the rest of the generated tree. projen still rewrites it on every synth (it
+ * clears the read-only bit, writes, then restores it), so this never blocks
+ * re-synth. Works for the root project and any subproject. No-op if none exists.
  */
 export function lockPackageJson(project: Project): void {
   const manifest = project.tryFindObjectFile("package.json");
@@ -107,10 +107,10 @@ function applyTasks(pkg: typescript.TypeScriptProject, tasks?: Record<string, Ta
 }
 
 /**
- * Baseline options every example subproject shares. They mirror the ROOT
- * project's own choices (no jest/eslint/prettier/github/release/upgrade) so the
- * generated workspace stays lean and consistent. `sampleCode: false` stops projen
- * from dropping template `src/` files over the developer's own sources.
+ * Baseline options every subproject shares. They mirror the ROOT project's own
+ * choices (no jest/eslint/prettier/github/release/upgrade) so the generated
+ * workspace stays lean and consistent. `sampleCode: false` stops projen from
+ * dropping template `src/` files over the developer's own sources.
  */
 const SUBPROJECT_DEFAULTS: Partial<typescript.TypeScriptProjectOptions> = {
   defaultReleaseBranch: "main",
@@ -131,31 +131,41 @@ const SUBPROJECT_DEFAULTS: Partial<typescript.TypeScriptProjectOptions> = {
  * `type: module` (ESM) and the sources use `import.meta`, so we override projen's
  * `module: "CommonJS"` default. `moduleResolution: BUNDLER` honors the `exports`
  * map, so a bare `@scope/pkg` import resolves to the package-root `index.ts`
- * barrel (see {@link definePackage}) with no build step. Env options layer on top,
- * so an env can still override any of these.
+ * barrel with no build step. Env options layer on top, so an env can still
+ * override any of these.
  */
 const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   module: "ESNext",
   moduleResolution: javascript.TypeScriptModuleResolution.BUNDLER,
+  // Don't type-check third-party `.d.ts` (e.g. openapi-typescript's transitive
+  // @redocly/js-yaml types); a package's own code is still fully checked.
+  skipLibCheck: true,
 };
 
+/** Derive a {@link PackageSpec} from a member path when the caller didn't pass one. */
+function specFromOutdir(outdir: string, packageName: string): PackageSpec {
+  const segs = toPosix(outdir).split("/").filter(Boolean);
+  return {
+    env: segs.length >= 2 ? segs[segs.length - 2]! : "",
+    name: segs[segs.length - 1] ?? outdir,
+    packageName,
+  };
+}
+
 /**
- * Create the projen `TypeScriptProject` subproject for one discovered package and
- * return it. The env's projen options are spread straight in (deps + the
- * `tsconfig` overlay, where `lib`/`jsx`/`types` enforcement lives); projen
- * supplies module/outDir/rootDir/strictness from its own defaults. Structural
+ * Create the projen `TypeScriptProject` subproject for `options.outdir`, configured
+ * by `options.env`, and return it. The env's projen options are spread straight in
+ * (deps + the `tsconfig` overlay, where `lib`/`jsx`/`types` enforcement lives);
+ * projen supplies module/outDir/rootDir/strictness from its own defaults. Structural
  * fields (`parent`/`outdir`/`name`) are set last so an env can never override them.
  */
-export function definePackage(
-  discoveredPackage: DiscoveredPackage,
-  options: DefinePackageOptions,
+export function applyEnv(
+  parent: javascript.NodeProject,
+  options: ApplyEnvOptions,
 ): typescript.TypeScriptProject {
   // An env IS a projen options bag plus two engine extras; peel the extras (and
   // tsconfig, which we merge below) off, then spread the rest straight through.
-  const { tasks, viteConfig, tsconfig, ...envOptions } = workspaceEnvConfig(
-    discoveredPackage.env,
-    options.workspaceEnvs,
-  );
+  const { tasks, viteConfig, tsconfig, ...envOptions } = options.env;
 
   // jsx envs (React) keep components in `.tsx`; add that glob to projen's default
   // `src/**/*.ts` include (projen concatenates, it doesn't replace).
@@ -164,15 +174,13 @@ export function definePackage(
     ...(tsconfig?.compilerOptions?.jsx ? ["src/**/*.tsx"] : []),
   ];
 
-  const packageName = npmNameOf(options.npmScope, discoveredPackage.envPath);
-
   const pkg = new typescript.TypeScriptProject({
     ...SUBPROJECT_DEFAULTS,
     ...envOptions,
-    parent: options.parent,
-    outdir: discoveredPackage.memberPath,
-    name: packageName,
-    packageManager: options.parent.package.packageManager,
+    parent,
+    outdir: options.outdir,
+    name: options.name,
+    packageManager: parent.package.packageManager,
     tsconfig: {
       ...tsconfig,
       include: include.length ? include : undefined,
@@ -209,11 +217,7 @@ export function definePackage(
     });
   }
 
-  options.modifyPackage?.(pkg, {
-    env: discoveredPackage.env,
-    name: discoveredPackage.name,
-    packageName,
-  });
+  options.workspace?.(pkg, options.spec ?? specFromOutdir(options.outdir, options.name));
 
   // Lock the manifest last: projen leaves package.json writable, but here it is
   // fully projen-owned, so it joins the rest of the read-only generated tree.

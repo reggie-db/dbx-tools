@@ -32,6 +32,14 @@ export type WorkspaceEnvDef = Partial<typescript.TypeScriptProjectOptions> & {
   readonly viteConfig?: boolean;
 };
 
+/**
+ * The config {@link applyEnv} applies to a path. Same shape as a
+ * {@link WorkspaceEnvDef} - the discovered-env map holds these, and callers pass
+ * one directly to `applyEnv` to configure a package WITHOUT auto-discovery (e.g.
+ * the in-tree engine in `.projenrc.ts`).
+ */
+export type EnvDef = WorkspaceEnvDef;
+
 /** Node compiler options: ES2020 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   target: "ES2020",

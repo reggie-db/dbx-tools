@@ -4,18 +4,24 @@
  *
  * Everything is auto-detected from folders: under each `workspaceEnvPaths` root,
  * any `<env>/<name>` folder with a `src/` becomes a projen `TypeScriptProject`
- * subproject configured from its env (see `./envs`). The discovered set is
- * written to `pnpm-workspace.yaml` (the SOURCE OF TRUTH) - every other command
- * reads it back rather than re-scanning. Per-package tweaks go in `modifyPackage`.
- * The engine itself lives outside the env layout, so it is never auto-configured -
- * consumers install it from npm as `dbx-tools` and add it via `additionalWorkspaces`.
+ * subproject (via the exported `applyEnv` primitive) configured from its env (see
+ * `./envs`). `pnpm-workspace.yaml` (the SOURCE OF TRUTH every other command reads
+ * back) sources its members from `project.subprojects`, so a package configured
+ * MANUALLY with `applyEnv` - without auto-discovery - lands there too. Per-package
+ * tweaks go in the `workspace` hook. The engine itself lives outside the env
+ * layout and is configured manually (`applyEnv`) in `.projenrc.ts`.
  */
 import { resolve } from "node:path";
 import { Component, type javascript, typescript } from "projen";
 import { generateBarrels } from "./barrels";
-import { WORKSPACE_ENVS, type WorkspaceEnv, type WorkspaceEnvDef } from "./envs";
+import {
+  WORKSPACE_ENVS,
+  type WorkspaceEnv,
+  type WorkspaceEnvDef,
+  workspaceEnvConfig,
+} from "./envs";
 import * as files from "./files";
-import { type ModifyPackage, definePackage, lockPackageJson, npmNameOf } from "./packages";
+import { type WorkspaceModifier, applyEnv, lockPackageJson, npmNameOf } from "./packages";
 import { DEFAULT_WORKSPACE_ENV_PATHS, discoverPackages, projectName } from "./workspace";
 
 export type { ModifyPnpmWorkspace, PnpmWorkspaceConfig } from "./files";
@@ -53,22 +59,19 @@ export interface ConfigureProjenOptions {
    * (`["workspaces"]`).
    */
   readonly workspaceEnvPaths?: readonly string[];
-  /**
-   * Extra literal workspace members added to `pnpm-workspace.yaml` on top of the
-   * discovered env packages - e.g. an in-tree copy of this engine. Their `src` is
-   * watched for re-synth. Defaults to `[]`.
-   */
-  readonly additionalWorkspaces?: readonly string[];
   /** Env -> config map. Defaults to the built-in {@link WORKSPACE_ENVS}. */
   readonly workspaceEnvs?: Record<string, WorkspaceEnvDef>;
   /** Envs to turn off (their folders fall back to the default/agnostic config). */
   readonly disableWorkspaceEnvs?: WorkspaceEnv[];
   /** pnpm `catalog:` versions. Defaults to {@link DEFAULT_CATALOG}. */
   readonly catalog?: Catalog;
-  /** Per-package hook to tweak the generated subproject (deps, tasks, bin, ...). */
-  readonly modifyPackage?: ModifyPackage;
+  /**
+   * Per-package hook to tweak each discovered subproject (the workspace): add deps,
+   * tasks, a bin, etc. via projen's own API. Dispatch on the stable `spec.env`/`spec.name`.
+   */
+  readonly workspace?: WorkspaceModifier;
   /** Hook to tweak the assembled `pnpm-workspace.yaml` object (members, catalog, ...). */
-  readonly modifyPnpmWorkspace?: files.ModifyPnpmWorkspace;
+  readonly pnpmWorkspace?: files.ModifyPnpmWorkspace;
 }
 
 /**
@@ -90,12 +93,11 @@ export function configureProjen(
 ): javascript.NodeProject {
   const {
     workspaceEnvPaths = DEFAULT_WORKSPACE_ENV_PATHS,
-    additionalWorkspaces = [],
     workspaceEnvs = WORKSPACE_ENVS,
     disableWorkspaceEnvs = [],
     catalog = DEFAULT_CATALOG,
-    modifyPackage,
-    modifyPnpmWorkspace,
+    workspace,
+    pnpmWorkspace,
   } = options;
 
   // Resolve the project name: use the one the caller set, else backfill it from
@@ -141,12 +143,10 @@ export function configureProjen(
   watch.reset("pnpm dbxtools sync --watch");
 
   // Root config files (all projen-owned: read-only + generated marker). The pnpm
-  // workspace members are the discovered env packages plus any extra members.
-  files.pnpmWorkspace(project, {
-    packages: [...discovered.map((p) => p.memberPath), ...additionalWorkspaces],
-    catalog,
-    modify: modifyPnpmWorkspace,
-  });
+  // workspace `packages` list is sourced from `project.subprojects` at synth (see
+  // files.pnpmWorkspace) - so both these discovered packages AND any manual
+  // `applyEnv` packages land there with no hardcoded member list.
+  files.pnpmWorkspace(project, { catalog, modify: pnpmWorkspace });
   files.tsconfigBase(project);
   files.tsconfigRoot(project);
   files.prettierConfig(project);
@@ -155,10 +155,18 @@ export function configureProjen(
   files.vscodeSettings(project);
   files.vscodeExtensions(project);
 
-  // Each discovered folder becomes a real projen TypeScriptProject subproject
-  // (projen then owns its package.json/tsconfig/tasks).
+  // Each discovered folder becomes a real projen TypeScriptProject subproject via
+  // the same `applyEnv` primitive a caller uses manually - projen then owns its
+  // package.json/tsconfig/tasks, and it is sourced into pnpm-workspace.yaml.
   for (const p of discovered) {
-    definePackage(p, { parent: project, npmScope: name, workspaceEnvs: effectiveEnvs, modifyPackage });
+    const packageName = npmNameOf(name, p.envPath);
+    applyEnv(project, {
+      outdir: p.memberPath,
+      name: packageName,
+      env: workspaceEnvConfig(p.env, effectiveEnvs),
+      spec: { env: p.env, name: p.name, packageName },
+      workspace,
+    });
   }
 
   // Barrels regenerate on every (plain) synth.

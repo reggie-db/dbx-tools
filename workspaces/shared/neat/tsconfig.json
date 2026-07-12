@@ -27,7 +27,8 @@
     "stripInternal": true,
     "target": "ES2022",
     "types": [],
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*.ts"
