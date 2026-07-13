@@ -28,10 +28,10 @@ import { IGNORE_DIRS, repoRoot, toPosix, walkFiles } from "./workspace";
  * {@link IGNORE_DIRS} minus `.projen`: unlike discovery, a clean SHOULD reach the
  * generated task/dep manifests projen keeps under `.projen/`.
  */
-const CLEAN_IGNORE_DIRS: ReadonlySet<string> = new Set(
-  [...IGNORE_DIRS].filter((d) => d !== ".projen"),
-);
-
+const CLEAN_IGNORE_DIRS: ReadonlySet<string> = new Set([
+  ...[...IGNORE_DIRS].filter((d) => d !== ".projen"),
+  ".gitignore",
+]);
 /**
  * Every generated (read-only) file in the workspace, as absolute paths sorted by
  * repo-relative posix path. Vendor/build/VCS dirs are skipped; `.projen/*` is included.
