@@ -2,6 +2,7 @@
 
 packages:
   - example-workspaces/cli/main
+  - example-workspaces/openapi/api
   - example-workspaces/server/api
   - example-workspaces/shared/core
   - example-workspaces/shared/fun

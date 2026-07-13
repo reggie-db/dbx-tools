@@ -17,9 +17,8 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   (`cli/main`, `server/api`, `shared/core`, `shared/fun`, `shared/neat`, `ui/app`),
   kept in a separate root so they stay visually distinct from anything you build.
 
-> Local dir is `projen-workspace/`; the GitHub repo is `reggie-db/dbx-tools`
-> (this work is on branch **`main`**; `master` holds older work and is still the
-> default).
+> Local dir is `dbx-tools/`; the GitHub repo is `reggie-db/dbx-tools`
+> (default branch **`main`**).
 
 ## Vocabulary (important)
 

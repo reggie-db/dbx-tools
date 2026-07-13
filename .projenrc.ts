@@ -12,15 +12,24 @@
  * construction). `synth()` is called manually because this repo adds a `dbxtools`
  * root task first (see below); a normal consumer constructs, `with(...)`s, synths.
  */
-import { basename } from "node:path";
+import path, { basename } from "node:path";
 import { packageMixin } from "./workspaces/cli/dbx-tools/src/projen/mixins";
 import { DBXToolsNodeProject } from "./workspaces/cli/dbx-tools/src/projen/project";
+
+const EXAMPLE_WORKSPACES_ROOT = "example-workspaces";
+const CLI_PACKAGE_DIR = "workspaces/cli/dbx-tools";
 
 const project = new DBXToolsNodeProject({
   scope: "dbx-tools",
   // `workspaces/` is the default; `example-workspaces/` is this repo's own addition
   // so seed content stays visually separate from real content added later.
-  workspacePackageRoots: ["workspaces", "example-workspaces"],
+  workspacePackageRoots: ["workspaces", EXAMPLE_WORKSPACES_ROOT],
+  github: true,
+  buildWorkflow: true,
+  release: true,
+  releaseToNpm: true,
+  workflowPackageCache: true,
+  depsUpgrade: false,
 });
 
 
@@ -31,6 +40,14 @@ const project = new DBXToolsNodeProject({
 // during construction. Each dispatches on the STABLE folder identity: the
 // package's resolved tags + its folder name (not the derived npm name).
 project.with(
+  packageMixin(
+    (p) => {
+      const outdirRelativeToRoot = path.relative(project.root.outdir, p.outdir)
+      const exampleWorkspace = outdirRelativeToRoot == (EXAMPLE_WORKSPACES_ROOT) || outdirRelativeToRoot.startsWith(EXAMPLE_WORKSPACES_ROOT + "/")
+      return exampleWorkspace
+    },
+    (p) => p.package.addField("private", true),
+  ),
   packageMixin(
     (p) => p.dbxToolsConfig.tags.includes("ui") && basename(p.outdir) === "app",
     (p) => {
@@ -58,6 +75,7 @@ project.with(
       // The engine, dogfooded through the normal `cli` tag. Override the
       // auto-derived name (`@dbx-tools/cli-dbx-tools`) to the clean `@dbx-tools/cli`.
       p.package.addField("name", "@dbx-tools/cli");
+      p.package.addField("publishConfig", { access: "public", provenance: true });
       p.package.addField("cool-dude", "0.0.0");
       p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
       // `commander` + `@types/node` already come from the `cli` tag; the rest are
@@ -106,5 +124,12 @@ project.addTask("dbxtools", {
   exec: "tsx workspaces/cli/dbx-tools/bin/dbxtools.ts",
   receiveArgs: true,
 });
+
+// CI/release: type-check every workspace package, then pack the publishable CLI
+// tarball into the root `dist/js` artifact projen's release workflow uploads.
+project.compileTask.reset("pnpm -r compile");
+project.packageTask.reset(
+  `node --input-type=module -e "import { readFileSync, writeFileSync } from 'node:fs'; const version = JSON.parse(readFileSync('package.json', 'utf8')).version; const pkgPath = '${CLI_PACKAGE_DIR}/package.json'; const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); pkg.version = version; writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');" && mkdir -p dist/js && pnpm --dir ${CLI_PACKAGE_DIR} pack --pack-destination ../../../dist/js`,
+);
 
 project.synth();

@@ -3,6 +3,7 @@
   "scripts": {
     "barrels": "projen barrels",
     "build": "projen build",
+    "bump": "projen bump",
     "clobber": "projen clobber",
     "compile": "projen compile",
     "dbxtools": "projen dbxtools",
@@ -12,12 +13,15 @@
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "release": "projen release",
     "sync": "projen sync",
     "test": "projen test",
+    "unbump": "projen unbump",
     "projen": "projen"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
+    "commit-and-tag-version": "^12",
     "constructs": "^10.0.0",
     "picomatch": "^4.0.5",
     "prettier": "^3.9.4",

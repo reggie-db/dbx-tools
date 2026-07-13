@@ -11,7 +11,6 @@ import {
 // Unmanaged override modules (relative to this file), merged over the generated
 // config in order - later wins, absent files are skipped.
 const OVERRIDE_FILES = [
-  "vite.config.custom.js",
   "vite.config.override.js",
 ];
 
