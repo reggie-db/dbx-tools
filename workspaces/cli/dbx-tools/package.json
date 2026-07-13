@@ -52,7 +52,7 @@
     "access": "public",
     "provenance": true
   },
-  "version": "0.0.0",
+  "version": "0.0.1",
   "packageManager": "pnpm@10.33.0",
   "types": "index.ts",
   "dbxToolsConfig": {
