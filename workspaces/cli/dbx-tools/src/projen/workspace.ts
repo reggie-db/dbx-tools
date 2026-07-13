@@ -19,8 +19,8 @@
  * path relative to the root, reading NO manifest. {@link workspacePackages} reads
  * the recorded members from `pnpm-workspace.yaml` - the SOURCE OF TRUTH - and
  * augments each with the `name` and `tags` read back from its own `package.json`
- * (post-synth: barrels, watch, typecheck, openapi), which is authoritative and so
- * reflects any synth-time name override or resolved tag set.
+ * (post-synth: barrels, watch, openapi), which is authoritative and so reflects any
+ * synth-time name override or resolved tag set.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -316,9 +316,9 @@ function readManifest(dir: string): { name?: string; tags?: string[] } {
 /**
  * The recorded workspace members from `pnpm-workspace.yaml` (the source of truth),
  * each augmented with the `name` + `tags` read back from its `package.json`. This is
- * what every post-synth command (barrels, watch, typecheck, openapi) uses: the
- * manifest is authoritative, so it reflects any synth-time name override or resolved
- * tag set. Sorted by path.
+ * what every post-synth command (barrels, watch, openapi) uses: the manifest is
+ * authoritative, so it reflects any synth-time name override or resolved tag set.
+ * Sorted by path.
  */
 export function workspacePackages(projectRoot: string = repoRoot): WorkspacePackage[] {
   const out: WorkspacePackage[] = [];

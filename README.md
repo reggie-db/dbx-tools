@@ -92,8 +92,9 @@ pnpm exec projen sync --watch  # keep in sync while editing (single dbxtools wat
 pnpm dbxtools sync             # bootstrap an empty folder, or synth an existing workspace (one-shot)
 pnpm dbxtools sync --watch     # sync, then watch: re-synth on .projenrc.ts/package changes, barrels on edits
 pnpm dbxtools barrels          # rebuild every package's root index.ts barrel
-pnpm dbxtools typecheck        # type-check each package against its tag tsconfig
+pnpm -r compile                # type-check each package (projen's per-package compile: tsc --build)
 pnpm dbxtools openapi          # generate the openapi packages from tsoa controllers
+pnpm dbxtools clean            # remove generated files (projen config + barrels); interactive picker, -y to skip
 ```
 
 ## OpenAPI, without JSDoc
@@ -127,7 +128,7 @@ re-synth; never edit them directly.
 
 ## Status
 
-Green: synth, `pnpm install`, `dbxtools barrels`/`typecheck`/`openapi`,
+Green: synth, `pnpm install`, `dbxtools barrels`/`openapi`, `pnpm -r compile`,
 `projen sync --watch` (the single `dbxtools watch` loop), and bootstrapping
 a completely empty folder all work end to end. This work lives on the `main`
 branch of `reggie-db/dbx-tools`.

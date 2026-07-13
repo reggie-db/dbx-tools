@@ -6,8 +6,9 @@
  * resolvable (installed, or fetched transiently via `npx dbxtools`) both are
  * already sitting in `node_modules` - no global `npm install -g pnpm`, no PATH
  * lookup, no network access beyond what installing the engine already required.
- * {@link resolvePnpmBin} finds pnpm's own CLI entry the same way `./barrels.ts`
- * resolves barrelsby's: `require.resolve`, then run it with `execFileSync`.
+ * {@link resolvePnpmLauncher} finds pnpm's own CLI entry the same way `./barrels.ts`
+ * resolves barrelsby's (`require.resolve`, run via `execFileSync`), falling back to
+ * `npx pnpm` only if pnpm can't be resolved as a dependency (a broken/partial install).
  *
  * Never scaffolds workspace-package folders or sample code - just enough for `pnpm exec projen`
  * (or `dbxtools sync`) to work from here on. Drop a
@@ -28,32 +29,58 @@ const log = logger.withTag("projen:bootstrap");
 type BinField = string | Record<string, string>;
 
 /**
- * Absolute path to pnpm's own CLI entry point, resolved from `@dbx-tools/cli`'s
- * `pnpm` dependency - never a system `pnpm` on PATH, so this works before any
- * global tooling exists.
+ * How to launch pnpm, as a `[command, ...prefixArgs]` argv prefix.
+ *
+ * Preferred: pnpm's own CLI entry resolved from `@dbx-tools/cli`'s `pnpm`
+ * DEPENDENCY and run via this Node - it works before any global/PATH pnpm exists
+ * (the point of bootstrap) and can't pick up a different system pnpm. Fallback,
+ * only if that dependency can't be resolved (e.g. a broken/partial install where
+ * `pnpm` is not on PATH either): `npx -y pnpm`, since `npx` ships with Node.
  */
-function resolvePnpmBin(): string {
-  const require = createRequire(import.meta.url);
-  // pnpm's own `exports` map is `{ ".": "./package.json" }` - the bare specifier
-  // (not a "/package.json" subpath, which isn't separately exported) resolves to
-  // its manifest directly.
-  const pkgJsonPath = require.resolve("pnpm");
-  const pkg = require(pkgJsonPath) as { bin: BinField };
-  const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin.pnpm;
-  return join(dirname(pkgJsonPath), bin);
+function resolvePnpmLauncher(): { command: string; prefixArgs: string[] } {
+  try {
+    const require = createRequire(import.meta.url);
+    // pnpm's own `exports` map is `{ ".": "./package.json" }` - the bare specifier
+    // (not a "/package.json" subpath, which isn't separately exported) resolves to
+    // its manifest directly.
+    const pkgJsonPath = require.resolve("pnpm");
+    const pkg = require(pkgJsonPath) as { bin: BinField };
+    const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin.pnpm;
+    return { command: process.execPath, prefixArgs: [join(dirname(pkgJsonPath), bin)] };
+  } catch {
+    return { command: "npx", prefixArgs: ["-y", "pnpm"] };
+  }
 }
 
-/** Run pnpm (resolved from the engine's own dependency) with `args` in `repoRoot`. */
+/**
+ * Run pnpm with `args` in `repoRoot`, using pnpm resolved from the engine's own
+ * dependency (or `npx pnpm` if it can't be resolved - see {@link resolvePnpmLauncher}).
+ */
 function pnpm(args: string[]): void {
-  execFileSync(process.execPath, [resolvePnpmBin(), ...args], {
+  const { command, prefixArgs } = resolvePnpmLauncher();
+  execFileSync(command, [...prefixArgs, ...args], {
     cwd: repoRoot,
     stdio: "inherit",
   });
 }
 
-/** True if `repoRoot` looks uninitialized - no `package.json` yet. */
-export function needsBootstrap(): boolean {
+/** True if `repoRoot` has no `package.json` yet, so `pnpm init` must create one. */
+function needsPackageJson(): boolean {
   return !existsSync(join(repoRoot, "package.json"));
+}
+
+/**
+ * True if `repoRoot` is a genuinely uninitialized folder that needs full
+ * bootstrapping - keyed off the ABSENCE of `.projenrc.ts`, a projen workspace's
+ * hand-authored source of truth (NOT a generated file). Its presence means "already
+ * a workspace, just re-synth" even when every generated file - `package.json`,
+ * `pnpm-workspace.yaml`, `.projen/*` - has been wiped by `dbxtools clean`. Keying off
+ * `package.json` (which `clean` removes) would wrongly re-bootstrap a merely-cleaned
+ * workspace, clobbering it with `pnpm init` defaults instead of regenerating from
+ * `.projenrc.ts`.
+ */
+export function needsBootstrap(): boolean {
+  return !existsSync(join(repoRoot, ".projenrc.ts"));
 }
 
 const PROJENRC_TEMPLATE = `import { DBXToolsNodeProject } from "@dbx-tools/cli";
@@ -91,7 +118,7 @@ allowBuilds:
 export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
   log.start(`bootstrapping an empty workspace in ${repoRoot}`);
 
-  if (needsBootstrap()) {
+  if (needsPackageJson()) {
     pnpm(["init"]);
   }
   const workspaceFile = join(repoRoot, "pnpm-workspace.yaml");
@@ -99,10 +126,9 @@ export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
     writeFileSync(workspaceFile, WORKSPACE_SEED);
   }
   // Pinned (not bare "typescript"/"tsx"): an unpinned install can resolve to
-  // whatever a registry currently tags "latest", including an unstable
-  // prerelease with a narrowed `exports` map (breaks `typecheck.ts`'s
-  // `typescript/bin/tsc` resolution). Matches the versions `DBXToolsNodeProject`
-  // itself adds as root devDeps.
+  // whatever a registry currently tags "latest", including an unstable prerelease
+  // that breaks projen's `tsc`/`tsx` invocation. Matches the versions
+  // `DBXToolsNodeProject` itself adds as root devDeps.
   pnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", dbxToolsSpecifier]);
 
   const projenrc = join(repoRoot, ".projenrc.ts");

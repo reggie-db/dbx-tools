@@ -3,11 +3,11 @@
  *
  * Each returns a projen file component written with a "generated" marker and
  * read-only permissions, so the checked-in `pnpm-workspace.yaml`, tsconfigs,
- * prettier config, `.vscode/*`, and the VS Code extension manifest all have a
- * single code source of truth in `.projenrc.ts`.
+ * `.vscode/*`, and the VS Code extension manifest all have a single code source of
+ * truth in `.projenrc.ts`. (Prettier is projen's built-in component, not emitted here.)
  */
 import type { Project } from "projen";
-import { JsonFile, TextFile, javascript } from "projen";
+import { JsonFile, javascript } from "projen";
 
 /**
  * Compiler options for the ROOT program only (`.projenrc.ts` + the engine as
@@ -47,8 +47,8 @@ export function tsconfigBase(project: Project): void {
 /**
  * `tsconfig.json`: the root program, covering just `.projenrc.ts`. The engine is
  * type-checked against its own hand-authored tsconfig; every package is checked
- * against its own projen-generated tsconfig by `dbxtools typecheck`, which is what
- * makes per-scope `lib` enforcement real.
+ * against its own projen-generated tsconfig by projen's per-package `compile` task
+ * (`tsc --build`), which is what makes per-scope `lib` enforcement real.
  */
 export function tsconfigRoot(project: Project): void {
   new JsonFile(project, "tsconfig.json", {
@@ -60,41 +60,6 @@ export function tsconfigRoot(project: Project): void {
       include: [".projenrc.ts"],
       exclude: ["node_modules", "**/dist", "**/node_modules"],
     },
-  });
-}
-
-/** `prettier.config.js`: shared formatting rules. */
-export function prettierConfig(project: Project): void {
-  new TextFile(project, "prettier.config.js", {
-    marker: true,
-    readonly: true,
-    lines: [
-      '/** @type {import("prettier").Config} */',
-      "export default {",
-      "  printWidth: 88,",
-      "  tabWidth: 2,",
-      "  semi: true,",
-      '  trailingComma: "all",',
-      "};",
-      "",
-    ],
-  });
-}
-
-/** `.prettierignore`: generated + build output the formatter should skip. */
-export function prettierIgnore(project: Project): void {
-  new TextFile(project, ".prettierignore", {
-    marker: false,
-    readonly: true,
-    lines: [
-      "node_modules",
-      "dist",
-      "**/dist/**",
-      "pnpm-lock.yaml",
-      "# generated barrels carry a do-not-edit header and are read-only",
-      "**/src/**/index.ts",
-      "",
-    ],
   });
 }
 

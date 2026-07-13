@@ -13,7 +13,7 @@
  * The override modules are `.js` because Vite loads them via a plain dynamic
  * `import()` at config time. Being a package-ROOT file (not under `src/`), the
  * generated `vite.config.ts` is excluded from the package's `tsconfig` `include`, so
- * its `node:*` usage never trips `dbxtools typecheck` under the DOM-only `ui`
+ * its `node:*` usage never trips the `ui` package's `compile` under the DOM-only
  * tsconfig; Vite transpiles it with esbuild and runs it in Node at config time.
  */
 import { type Project, TextFile, typescript } from "projen";

@@ -17,10 +17,10 @@
  *   deps/tsconfig/tasks come from the {@link WORKSPACE_TAG_MIXINS} applied via
  *   `construct.with(...)` across the subtree during the root's construction, and
  *   per-package tweaks are user mixins the caller applies with `project.with(...)`.
- * - The root also emits the shared config (tsconfig base/root, prettier, vscode,
- *   `pnpm-workspace.yaml`), the native projen tasks (`barrels`/`typecheck`/
- *   `openapi`, and a `sync` task that runs the single `dbxtools watch` loop),
- *   barrels on synth, and `annotateGenerated`.
+ * - The root also emits the shared config (tsconfig base/root, projen's built-in
+ *   prettier, vscode, `pnpm-workspace.yaml`), the native projen tasks (`barrels`/`openapi`, and a
+ *   `sync` task that runs the single `dbxtools watch` loop), barrels on synth, and
+ *   `annotateGenerated`. Per-package type-checking is projen's own `compile` task.
  *
  * Replaces the removed `configureProject()` function.
  */
@@ -49,35 +49,70 @@ import {
   toPosix,
 } from "./workspace";
 
-/**
- * The engine's opinionated `NodeProject` defaults for the monorepo root. Any
- * option a caller passes overrides these; `name`/`defaultReleaseBranch` are
- * resolved/applied separately.
- */
-const NODE_PROJECT_OPTIONS_DEFAULT: Partial<javascript.NodeProjectOptions> = {
-  packageManager: javascript.NodePackageManager.PNPM,
-  defaultReleaseBranch: "main",
-  projenrcJs: false,
-  buildWorkflow: false,
-  release: false,
-  jest: false,
-  prettier: false,
-  github: false,
-  npmignoreEnabled: false,
-  licensed: false,
-  entrypoint: "",
-  depsUpgrade: false,
-  peerDependencyOptions: { pinnedDevDependency: false },
-  addPackageManagerToDevEngines: false,
-  devDeps: [
-    "@types/node@^24.6.0",]
+/** Shared formatting rules, applied by projen's Prettier on whichever project is root. */
+const PRETTIER_SETTINGS: javascript.PrettierSettings = {
+  printWidth: 100,
+  tabWidth: 2,
+  useTabs: false,
+  semi: true,
+  singleQuote: false,
+  quoteProps: javascript.QuoteProps.ASNEEDED,
+  jsxSingleQuote: false,
+  trailingComma: javascript.TrailingComma.ALL,
+  bracketSpacing: true,
+  bracketSameLine: false,
+  arrowParens: javascript.ArrowParens.ALWAYS,
+  endOfLine: javascript.EndOfLine.LF,
 };
 
-const TYPE_SCRIPT_PROJECT_OPTIONS_DEFAULT: Partial<typescript.TypeScriptProjectOptions> = {
-  ...NODE_PROJECT_OPTIONS_DEFAULT,
-  sampleCode: false,
-  entrypoint: undefined,
-  devDeps: [...(NODE_PROJECT_OPTIONS_DEFAULT.devDeps ?? []), "tsx@^4.23.0", "typescript@^5.9.3"]
+/**
+ * The engine's opinionated `NodeProject` defaults. A caller's own options override
+ * these (they are spread AFTER this). Root-only concerns key off `options.parent`,
+ * NOT the class: only the tree ROOT (no parent) turns on projen's built-in Prettier
+ * (the `prettier` devDep + `.prettierrc.json` + `.prettierignore`), so a child package
+ * inherits the root's config rather than emitting its own. `name`/`defaultReleaseBranch`
+ * are resolved/applied by the caller.
+ */
+function defaultNodeProjectOptions(
+  options: Pick<javascript.NodeProjectOptions, "parent">,
+): Partial<javascript.NodeProjectOptions> {
+  const isRoot = options.parent === undefined;
+  return {
+    packageManager: javascript.NodePackageManager.PNPM,
+    defaultReleaseBranch: "main",
+    projenrcJs: false,
+    buildWorkflow: false,
+    release: false,
+    jest: false,
+    prettier: isRoot,
+    prettierOptions: { settings: PRETTIER_SETTINGS },
+    github: false,
+    npmignoreEnabled: false,
+    licensed: false,
+    entrypoint: "",
+    depsUpgrade: false,
+    peerDependencyOptions: { pinnedDevDependency: false },
+    addPackageManagerToDevEngines: false,
+    devDeps: ["picomatch", "@types/node@^24.6.0"],
+  };
+}
+
+/**
+ * The engine's `TypeScriptProject` defaults - a superset of
+ * {@link defaultNodeProjectOptions}. A DBXTools TS project can itself be the ROOT (a
+ * standalone compiling root), so the same parent-based root/child logic applies; this
+ * just layers on tsx/typescript and disables sample code.
+ */
+function defaultTypeScriptProjectOptions(
+  options: Pick<typescript.TypeScriptProjectOptions, "parent">,
+): Partial<typescript.TypeScriptProjectOptions> {
+  const base = defaultNodeProjectOptions(options);
+  return {
+    ...base,
+    sampleCode: false,
+    entrypoint: undefined,
+    devDeps: [...(base.devDeps ?? []), "tsx@^4.23.0", "typescript@^5.9.3"],
+  };
 }
 
 
@@ -141,35 +176,49 @@ export interface DBXToolsTypeScriptProjectOptions
 export interface DBXToolsConfigOptions {
   /** Initial tags to record (distinct; order preserved). */
   readonly tags?: string[];
+  /**
+   * Force the project's `package.json` read-only at synth (projen's per-file
+   * `FileBase.readonly`). Persisted to `dbxToolsConfig.lockPackageJson` so it
+   * survives re-synths, and applied by {@link DBXToolsConfig.preSynthesize}; `false`
+   * leaves it writable.
+   * @default true
+   */
+  readonly lockPackageJson?: boolean;
 }
 
 
 /**
- * Owns the package's `dbxToolsConfig` field in `package.json` - today just `tags`,
- * the per-package source of truth every post-synth command reads back. It reads and
- * writes that field directly (no cached copy), so the manifest is always the single
- * source of truth, and preserves any sibling keys already under `dbxToolsConfig`.
+ * Owns the package's `dbxToolsConfig` field in `package.json` - today `tags` and
+ * `lockPackageJson`, the per-package source of truth every post-synth command reads
+ * back. It resolves each value once (option, else the value persisted in the manifest,
+ * else the default) and writes the field directly, so the manifest is the single
+ * source of truth across re-synths. `lockPackageJson` (default `true`) is the ONLY
+ * switch that forces `package.json` read-only, applied in {@link preSynthesize} so a
+ * mixin can still flip it after construction.
  */
 export class DBXToolsConfig extends Component {
+  private _lockPackageJson = true;
   private _tags: readonly string[] = [];
 
   constructor(readonly project: javascript.NodeProject, options: DBXToolsConfigOptions = {}) {
     super(project);
-    const tags: string[] = [];
-    if ("manifest" in project.package) {
-      const manifest = project.package["manifest"] as any;
-      const manifestTags = manifest.dbxToolsConfig?.tags;
-      if (Array.isArray(manifestTags)) {
-        tags.push(...manifestTags);
-      }
-    }
-    if (options.tags) tags.push(...options.tags);
-    this.writeTags(tags);
+    if (options.lockPackageJson !== undefined) this._lockPackageJson = options.lockPackageJson;
+    if (options.tags !== undefined) this.writeTags(options.tags);
+  }
+
+  /** Whether this project's `package.json` is forced read-only at synth. */
+  public get lockPackageJson(): boolean {
+    return this._lockPackageJson;
   }
 
   /** The distinct tags on `package.json` `dbxToolsConfig.tags` (empty if unset). */
   public get tags(): readonly string[] {
     return this._tags;
+  }
+
+  public set lockPackageJson(value: boolean) {
+    this._lockPackageJson = value;
+    this.write();
   }
 
   /** Add tags at the end, keeping the list distinct (incoming moved to the end). */
@@ -185,14 +234,28 @@ export class DBXToolsConfig extends Component {
     this.writeTags([...tags, ...this._tags]);
   }
 
+  /**
+   * The single point that actually locks `package.json`: at synth, and ONLY when
+   * `lockPackageJson` is set (checked here so a mixin toggling it post-construction is
+   * honored). `false` leaves projen's default (writable).
+   */
+  public override preSynthesize(): void {
+    if (this._lockPackageJson) lockPackageJson(this.project);
+  }
+
+
+
   private writeTags(tags: string[]): void {
-    this._tags = [...new Set(tags.map(t => t.trim()).filter(Boolean))];
+    this._tags = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
     this.write();
   }
 
-  /** Write `tags` back to `dbxToolsConfig.tags`, preserving any sibling keys. */
+  /** Write `lockPackageJson`/`tags` back to the `dbxToolsConfig` field. */
   private write(): void {
-    this.project.package.addField("dbxToolsConfig", { tags: this._tags });
+    this.project.package.addField("dbxToolsConfig", {
+      lockPackageJson: this._lockPackageJson,
+      tags: this._tags,
+    });
   }
 }
 
@@ -229,10 +292,9 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXT
   constructor(options: DBXToolsNodeProjectOptions = {}) {
     const { name, scope } = resolveIdentity(options);
     super({
-      ...NODE_PROJECT_OPTIONS_DEFAULT,
+      ...defaultNodeProjectOptions(options),
       ...options,
       name,
-      defaultReleaseBranch: options.defaultReleaseBranch ?? "main",
     });
 
     this.scope = scope;
@@ -269,7 +331,7 @@ export class DBXToolsTypeScriptProject extends typescript.TypeScriptProject impl
         : javascript.NodePackageManager.PNPM);
 
     super({
-      ...TYPE_SCRIPT_PROJECT_OPTIONS_DEFAULT,
+      ...defaultTypeScriptProjectOptions(options),
       ...options,
       name: options.name ?? name,
       packageManager,
@@ -307,7 +369,6 @@ export class DBXToolsTypeScriptProject extends typescript.TypeScriptProject impl
     });
     applyTasks(this, options.tasks ?? {});
     if (options.viteConfig ?? false) emitViteConfig(this);
-    lockPackageJson(this);
     initDBXToolsProject(this, options);
   }
 
@@ -409,9 +470,8 @@ function registerRootTasks(project: javascript.NodeProject): void {
     const task = project.tasks.tryFind(name) ?? project.addTask(name);
     task.reset(exec, options);
   };
-  set("barrels", "pnpm dbxtools barrels");
-  set("typecheck", "pnpm dbxtools typecheck");
-  set("openapi", "pnpm dbxtools openapi");
+  set("barrels", "pnpm dbxtools barrels", { receiveArgs: true });
+  set("openapi", "pnpm dbxtools openapi", { receiveArgs: true });
   // `sync`: re-synthesize once. `receiveArgs` forwards extra CLI args, so
   // `pnpm exec projen sync --watch` runs `pnpm dbxtools sync --watch`, which syncs
   // and then starts the SINGLE watcher. projen's own `--watch` only fires for the
@@ -455,12 +515,16 @@ function initDBXToolsProject(project: javascript.NodeProject & IDBXToolsProject,
   }
   project.package.addField("type", "module");
   project.package.addField("private", true);
-  lockPackageJson(project);
 
   files.tsconfigBase(project);
   files.tsconfigRoot(project);
-  files.prettierConfig(project);
-  files.prettierIgnore(project);
+  // projen's built-in Prettier (enabled root-only in the default options) already
+  // wrote `.prettierrc.json`/`.prettierignore` and added the `prettier` devDep during
+  // super(); just teach its ignore file the generated/vendored paths to skip.
+  const prettier = javascript.Prettier.of(project);
+  for (const pattern of ["node_modules", "dist", "**/dist/**", "pnpm-lock.yaml", "**/src/**/index.ts"]) {
+    prettier?.addIgnorePattern(pattern);
+  }
   files.vscodeTasks(project);
   files.vscodeSettings(project);
   files.vscodeExtensions(project);

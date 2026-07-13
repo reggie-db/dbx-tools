@@ -38,9 +38,11 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
 
 - **`new DBXToolsNodeProject(options?)` gives you a configured monorepo root**
   (`project.ts`). It extends projen's `NodeProject`, merging its opinionated
-  defaults (`NODE_ENGINE_DEFAULTS`: pnpm, no jest/eslint/prettier/github/release/
-  depsUpgrade, no `devEngines.packageManager` — pnpm 11 errors if that and
-  `packageManager` are both set) under anything you pass. You then call
+  defaults (`defaultNodeProjectOptions`/`defaultTypeScriptProjectOptions`, root-aware
+  functions keyed off `options.parent`: pnpm, no jest/eslint/github/release/depsUpgrade,
+  no `devEngines.packageManager`, since pnpm 11 errors if that and
+  `packageManager` are both set; projen's built-in prettier runs on the ROOT only)
+  under anything you pass. You then call
   `project.synth()` yourself. A normal consuming `.projenrc.ts` is two lines:
   `const project = new DBXToolsNodeProject(); project.synth();`. Both classes
   share `DBXToolsCommonOptions` (`scope`, `workspacePackageRoots`,
@@ -70,7 +72,7 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   package's path + the tags implied by its path, reading no manifest), while
   `workspacePackages()` reads the recorded members back from `pnpm-workspace.yaml`
   and augments each with the `name` + `tags` from its own `package.json` — what
-  every post-synth command (`barrels`, `typecheck`, the watcher, `openapi`) uses.
+  every post-synth command (`barrels`, the watcher, `openapi`) uses.
 - **Discovery + tag resolution.** Under each `workspacePackageRoots` root (this
   repo passes `["workspaces", "example-workspaces"]`), ANY `src`-bearing folder at
   ANY depth is a package. Its path relative to the root is decomposed into
@@ -145,7 +147,7 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbxtools root task
 workspaces/
   cli/dbx-tools/                          # the engine itself, DOGFOODED as a normal cli package
-    bin/dbxtools.ts                       # the CLI (commander): sync[--watch] | barrels | typecheck | openapi
+    bin/dbxtools.ts                       # the CLI (commander): sync[--watch] | barrels | openapi | clean
     index.ts                             # generated barrel (public API surface, like any package)
     src/
       log.ts                             # projen-AGNOSTIC utilities live at src/ root
@@ -161,7 +163,7 @@ workspaces/
         scaffold.ts                      # packageSetChanged() + runSynth({ post })
         bootstrap.ts                     # bootstraps a COMPLETELY EMPTY folder (see Commands)
         openapi.ts                       # openapi generator (tsoa controllers -> spec + client)
-        typecheck.ts, generated.ts, files.ts
+        clean.ts, generated.ts, files.ts, vite.ts
   openapi/<name>/                        # generated from tsoa controllers, same root as the source
 example-workspaces/
   cli/main/ server/api/ shared/core/ shared/neat/ ui/app/   # seed examples, each a real subproject
@@ -176,8 +178,9 @@ pnpm exec projen sync --watch # keep it in sync while editing (runs the single d
 pnpm dbxtools sync           # bootstrap an empty folder, OR re-synth an existing workspace (one-shot)
 pnpm dbxtools sync --watch   # sync, then watch: re-synth on .projenrc.ts/package changes, barrels on edits
 pnpm dbxtools barrels        # rebuild every package's root index.ts barrel
-pnpm dbxtools typecheck      # tsc --noEmit per package (proves tag enforcement)
+pnpm -r compile              # type-check every package (projen's per-package compile: tsc --build)
 pnpm dbxtools openapi        # generate the openapi packages from tsoa controllers
+pnpm dbxtools clean          # remove generated files (read-only ones); interactive picker, -y to skip
 ```
 
 - **`projen sync --watch` is the always-on watcher** (the generated `sync` task run
@@ -212,6 +215,13 @@ pnpm dbxtools openapi        # generate the openapi packages from tsoa controlle
   (`GeneratedBarrels` in `project.ts`) on the plain `projen` path; `dbxtools`/
   watch's `runSynth` sets `PROJEN_DISABLE_POST` (skipping the component for speed)
   and call `generateBarrels()` explicitly.
+- **`dbxtools clean`** (`clean.ts`) deletes generated files. It doesn't hardcode a
+  list: every file the toolchain writes is read-only (see below), so a read-only file
+  under the repo (skipping vendor/build/VCS, but INCLUDING `.projen/*`) is a clean
+  target. It shows a `@clack/prompts` picker with all files preselected (uncheck to
+  keep); `-y` removes them all non-interactively. Safe to run - `.projenrc.ts` imports
+  the engine by SOURCE path, so `npx tsx .projenrc.ts` (or `pnpm exec projen`)
+  regenerates everything afterward.
 
 Barrels re-export every exporting file under `src/` except names starting with
 `_`; a package's barrel lives at its ROOT (`index.ts`), re-exporting `./src/*`.
@@ -265,11 +275,14 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 - **`DBXToolsNodeProject` defaults `packageManager: PNPM`** (projen's
   `packageManager` is readonly after construction); pass a different one only if
   you know what you're doing, since the whole toolchain assumes pnpm workspaces.
-- **`typecheck.ts` resolves `typescript/bin/tsc` lazily** (memoized function,
-  not a module-level const) - like `barrels.ts` already does for barrelsby.
-  Resolving it eagerly broke merely *importing* the engine (which pulls in
-  `typecheck.ts` via the barrel) whenever a consumer's `typescript` install
-  happened to be an unusual version with a narrower `exports` map.
+- **Type-checking is projen's own per-package `compile`** (`tsc --build` against
+  each package's tag tsconfig), not a `dbxtools` command - the tag `lib`/`types`
+  overrides are what make misuse fail. Check one package with `pnpm exec projen
+  compile` (or `pnpm compile`) in its dir, or all of them with `pnpm -r compile`.
+- **Tool bins are resolved lazily** (a memoized function, not a module-level
+  const): `barrels.ts` resolves barrelsby this way. Resolving eagerly broke merely
+  *importing* the engine (which the barrel pulls in) whenever a consumer's install
+  of that tool was an unusual version with a narrower `exports` map.
 - Repo is `type: module`. Packages get a `module: ESNext` + `moduleResolution:
   bundler` overlay (`SHARED_COMPILER_OPTIONS` in `packages.ts`) because projen's
   default `module: CommonJS` breaks the ESM sources' `import.meta`; `bundler`

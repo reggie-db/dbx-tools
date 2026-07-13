@@ -54,6 +54,7 @@ project.with(
   packageMixin(
     (p) => p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "dbx-tools",
     (p) => {
+      p.dbxToolsConfig.lockPackageJson = false
       // The engine, dogfooded through the normal `cli` tag. Override the
       // auto-derived name (`@dbx-tools/cli-dbx-tools`) to the clean `@dbx-tools/cli`.
       p.package.addField("name", "@dbx-tools/cli");
