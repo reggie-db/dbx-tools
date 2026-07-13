@@ -32,8 +32,8 @@ const project = new DBXToolsNodeProject({
   depsUpgrade: false,
 });
 
-
-
+project.pnpmWorkspace?.allowBuild("unrs-resolver");
+project.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
 // Per-package tweaks are user MIXINS applied across the subtree with the
 // constructs-native `project.with(...)` - it runs each mixin over the current tree
 // (captured at call time), after the built-in tag mixins the root already applied
