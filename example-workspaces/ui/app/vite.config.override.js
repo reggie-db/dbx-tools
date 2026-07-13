@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 export default {
   // Pin the dev server to a fixed port instead of Vite's default 5173.
   server: {
-    port: 5180,
+    port: 5183,
     strictPort: true,
   },
   // Let source import `@/x` as a shortcut for this package's `src/x`.

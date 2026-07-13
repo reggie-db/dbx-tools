@@ -25,7 +25,7 @@ async function resolveConfig(
   return await config;
 }
 
-export default defineConfig(async (env) => {
+export default defineConfig(async (configEnv: ConfigEnv) => {
   let config: UserConfig = {
     plugins: [react()],
   };
@@ -38,7 +38,7 @@ export default defineConfig(async (env) => {
     const overrideModule = await import(overrideUrl.href);
     const override = await resolveConfig(
       overrideModule.default as UserConfigExport,
-      env,
+      configEnv,
     );
     config = mergeConfig(config, override);
   }

@@ -132,10 +132,15 @@ export function isGeneratedFile(file: string): boolean {
 
 /**
  * All files under `dir`, recursively, skipping the `ignore` dir names (default
- * {@link IGNORE_DIRS}); [] if `dir` is missing. `clean` passes a set that keeps
- * `.projen` so projen's generated task/dep manifests are walked too.
+ * {@link IGNORE_DIRS}) plus any dir the optional `skipDir` predicate rejects; []
+ * if `dir` is missing. `clean` passes `skipDir: (name) => name.startsWith(".")`
+ * so dot-prefixed folders (`.projen`, `.vscode`, `.git`, ...) are left untouched.
  */
-export function walkFiles(dir: string, ignore: ReadonlySet<string> = IGNORE_DIRS): string[] {
+export function walkFiles(
+  dir: string,
+  ignore: ReadonlySet<string> = IGNORE_DIRS,
+  skipDir?: (name: string) => boolean,
+): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
   const stack = [dir];
@@ -143,7 +148,7 @@ export function walkFiles(dir: string, ignore: ReadonlySet<string> = IGNORE_DIRS
     const cur = stack.pop()!;
     for (const d of readdirSync(cur, { withFileTypes: true })) {
       if (d.isDirectory()) {
-        if (!ignore.has(d.name)) stack.push(join(cur, d.name));
+        if (!ignore.has(d.name) && !skipDir?.(d.name)) stack.push(join(cur, d.name));
       } else if (d.isFile()) {
         out.push(join(cur, d.name));
       }

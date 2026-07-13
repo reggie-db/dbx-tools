@@ -20,10 +20,9 @@ import { type Project, TextFile, typescript } from "projen";
 
 /**
  * Default unmanaged override modules, merged over the generated config in order
- * (later wins, absent files skipped): a package's `vite.config.custom.js` then
- * `vite.config.override.js`.
+ * (later wins, absent files skipped): a package's `vite.config.override.js`.
  */
-export const DEFAULT_VITE_OVERRIDES = ["vite.config.custom.js", "vite.config.override.js"];
+export const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js"];
 
 /** Options for {@link ViteConfigFile}. */
 export interface ViteConfigFileOptions {
@@ -66,7 +65,7 @@ async function resolveConfig(
   return await config;
 }
 
-export default defineConfig(async (env) => {
+export default defineConfig(async (configEnv: ConfigEnv) => {
   let config: UserConfig = {
     plugins: [react()],
   };
@@ -79,7 +78,7 @@ export default defineConfig(async (env) => {
     const overrideModule = await import(overrideUrl.href);
     const override = await resolveConfig(
       overrideModule.default as UserConfigExport,
-      env,
+      configEnv,
     );
     config = mergeConfig(config, override);
   }

@@ -7,9 +7,10 @@
  * "Generated" is detected structurally, not by a hardcoded list: every file this
  * toolchain writes is set READ-ONLY (projen's own config + the barrelsby barrels; see
  * {@link isReadonly}), while every hand-authored source stays writable. So a read-only
- * file under the repo - skipping vendor/build/VCS dirs, but INCLUDING `.projen` - is a
- * generated file and a clean target. `node_modules` is enumerated separately (see
- * {@link listNodeModulesDirs}) as whole directories rather than files.
+ * file under the repo is a clean target - EXCEPT anything inside a dot-prefixed folder
+ * (`.projen`, `.vscode`, `.git`, ...) and `.gitignore` itself, which clean always leaves
+ * alone (projen re-syncs `.projen`/`.vscode` on the next synth). `node_modules` is
+ * enumerated separately (see {@link listNodeModulesDirs}) as whole directories.
  *
  * Deleting only generated files is never destructive to the ability to regenerate:
  * `.projenrc.ts` imports the engine by SOURCE path (`workspaces/cli/dbx-tools/src/...`),
@@ -24,25 +25,23 @@ import { isReadonly, makeWritable } from "./generated";
 import { IGNORE_DIRS, repoRoot, toPosix, walkFiles } from "./workspace";
 
 /**
- * Dir names `clean` must never descend into (vendored, build output, VCS). This is
- * {@link IGNORE_DIRS} minus `.projen`: unlike discovery, a clean SHOULD reach the
- * generated task/dep manifests projen keeps under `.projen/`.
+ * Basenames `clean` never removes even when they are generated/read-only. `.gitignore`
+ * is hand-relevant git plumbing: nuking it would un-ignore `node_modules`/build output
+ * on the very next tool run, so it is always kept.
  */
-const CLEAN_IGNORE_DIRS: ReadonlySet<string> = new Set([
-  ...[...IGNORE_DIRS].filter((d) => d !== ".projen")
-]);
-
-
-const CLEAN_IGNORE_FILES = ".gitignore"
+const CLEAN_SKIP_FILES: ReadonlySet<string> = new Set([".gitignore"]);
 
 /**
  * Every generated (read-only) file in the workspace, as absolute paths sorted by
- * repo-relative posix path. Vendor/build/VCS dirs are skipped; `.projen/*` is included.
+ * repo-relative posix path. Skips vendor/build/VCS dirs ({@link IGNORE_DIRS}) AND every
+ * dot-prefixed folder (`.projen`, `.vscode`, `.github`, ...), and never lists a
+ * {@link CLEAN_SKIP_FILES} entry (`.gitignore`).
  */
 export function listGeneratedFiles(root: string = repoRoot): string[] {
   const rel = (f: string): string => toPosix(relative(root, f));
-  return walkFiles(root, CLEAN_IGNORE_DIRS)
-    .filter(isReadonly).filter(f => !CLEAN_IGNORE_FILES.includes(basename(f)))
+  return walkFiles(root, IGNORE_DIRS, (name) => name.startsWith("."))
+    .filter(isReadonly)
+    .filter((f) => !CLEAN_SKIP_FILES.has(basename(f)))
     .sort((a, b) => rel(a).localeCompare(rel(b)));
 }
 
