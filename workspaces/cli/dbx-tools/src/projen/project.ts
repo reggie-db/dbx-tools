@@ -35,7 +35,6 @@ import {
   SHARED_COMPILER_OPTIONS,
   addWorkspacePackageTags,
   applyTasks,
-  lockPackageJson,
   npmNameOf,
 } from "./packages";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
@@ -197,18 +196,23 @@ export interface DBXToolsConfigOptions {
  * mixin can still flip it after construction.
  */
 export class DBXToolsConfig extends Component {
-  private _lockPackageJson: boolean | undefined;
+  private _lockPackageJson: boolean = true;
   private _tags: readonly string[] = [];
 
   constructor(readonly project: javascript.NodeProject, options: DBXToolsConfigOptions = {}) {
     super(project);
-    if (options.lockPackageJson !== undefined) this._lockPackageJson = options.lockPackageJson;
+    if (options.lockPackageJson !== undefined) this.lockPackageJson = options.lockPackageJson;
     if (options.tags !== undefined) this.writeTags(options.tags);
   }
 
   /** Whether this project's `package.json` is forced read-only at synth. */
   public get lockPackageJson(): boolean {
-    return this._lockPackageJson ?? true;
+    return this._lockPackageJson
+  }
+
+  public set lockPackageJson(value: boolean) {
+    this._lockPackageJson = value;
+    this.write();
   }
 
   /** The distinct tags on `package.json` `dbxToolsConfig.tags` (empty if unset). */
@@ -216,10 +220,7 @@ export class DBXToolsConfig extends Component {
     return this._tags;
   }
 
-  public set lockPackageJson(value: boolean) {
-    this._lockPackageJson = value;
-    this.write();
-  }
+
 
   /** Add tags at the end, keeping the list distinct (incoming moved to the end). */
   public addTags(...tags: string[]): void {
@@ -241,10 +242,10 @@ export class DBXToolsConfig extends Component {
    * default (writable).
    */
   public override preSynthesize(): void {
-    if (this.lockPackageJson) lockPackageJson(this.project);
+    if (this.lockPackageJson) {
+      this.project.package.file.readonly = true;
+    }
   }
-
-
 
   private writeTags(tags: string[]): void {
     this._tags = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
@@ -254,8 +255,8 @@ export class DBXToolsConfig extends Component {
   /** Write `lockPackageJson`/`tags` back to the `dbxToolsConfig` field. */
   private write(): void {
     this.project.package.addField("dbxToolsConfig", {
-      ...this._lockPackageJson !== undefined ? { lockPackageJson: this._lockPackageJson } : {},
-      tags: this._tags,
+      ...this._lockPackageJson === false ? { lockPackageJson: false } : {},
+      ...this._tags.length > 0 ? { tags: this._tags } : {},
     });
   }
 }

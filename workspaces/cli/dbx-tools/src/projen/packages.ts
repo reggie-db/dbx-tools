@@ -43,18 +43,6 @@ export function npmNameOf(name: string, ...names: string[]): string {
   return `@${nameParts[0]}/${nameParts.slice(1).join("-")}`;
 }
 
-/**
- * Force `project`'s `package.json` read-only. Alone among the files projen owns,
- * it writes `package.json` read-WRITE so package managers can mutate it; here
- * every dependency and field is projen-owned via `.projenrc.ts`, so we align it
- * with the rest of the generated tree. projen still rewrites it on every synth (it
- * clears the read-only bit, writes, then restores it), so this never blocks
- * re-synth. Works for the root project and any subproject. No-op if none exists.
- */
-export function lockPackageJson(project: Project): void {
-  const manifest = project.tryFindObjectFile("package.json");
-  if (manifest) manifest.readonly = true;
-}
 
 /** Tags recorded per NON-DBXTools project, so more can be unioned in later. */
 const RECORDED_TAGS = new WeakMap<Project, string[]>();
