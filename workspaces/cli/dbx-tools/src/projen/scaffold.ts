@@ -1,11 +1,11 @@
 /**
  * Scaffold helpers: decide when a re-synth is due, and run it.
  *
- * `configureProject` discovers packages by scanning the filesystem at synth and
- * records them in `pnpm-workspace.yaml` (the source of truth). During `watch`,
- * the one-shot `dbxtools sync` compares the live filesystem against that record
- * to decide whether the package SET changed (a package was added/removed) and a
- * full re-synth is needed - versus a content edit, where only barrels rebuild.
+ * The root project (`DBXToolsNodeProject`) discovers packages by scanning the
+ * filesystem at synth and records them in `pnpm-workspace.yaml` (the source of
+ * truth). During `dbxtools watch`, this compares the live filesystem against that
+ * record to decide whether the package SET changed (a package was added/removed)
+ * and a full re-synth is needed - versus a content edit, where only barrels rebuild.
  */
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";

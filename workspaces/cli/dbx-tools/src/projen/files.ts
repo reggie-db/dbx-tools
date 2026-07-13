@@ -6,78 +6,8 @@
  * prettier config, `.vscode/*`, and the VS Code extension manifest all have a
  * single code source of truth in `.projenrc.ts`.
  */
-import { relative } from "node:path";
 import type { Project } from "projen";
-import { JsonFile, TextFile, YamlFile, javascript } from "projen";
-import type { Catalog } from "./configure";
-import { toPosix } from "./workspace";
-
-/**
- * Default pnpm v11 build-script allowlist: only `esbuild` (pulled in by tsx).
- * pnpm v11 gates build scripts behind `allowBuilds` and errors on a
- * non-interactive install until each is explicitly allowed.
- */
-const DEFAULT_ALLOW_BUILDS: Record<string, boolean> = { esbuild: true };
-
-/**
- * The `pnpm-workspace.yaml` object this engine writes. The three fields it always
- * manages are typed; the index signature lets {@link ModifyPnpmWorkspace} attach
- * any other pnpm-workspace setting (`overrides`, `packageExtensions`, ...).
- */
-export interface PnpmWorkspaceConfig {
-  /**
-   * Workspace members (what pnpm links). Sourced from `project.subprojects` - every
-   * `applyTags` package (auto-discovered OR configured manually) is a subproject, so
-   * it lands here automatically; nothing is hardcoded. A `pnpmWorkspace` hook may
-   * still push extra globs/members.
-   */
-  packages: string[];
-  /** The `catalog:` version registry every `catalog:` specifier resolves against. */
-  catalog: Catalog;
-  /** pnpm v11 build-script allowlist: dependency name -> allowed. */
-  allowBuilds: Record<string, boolean>;
-  [key: string]: unknown;
-}
-
-/** Last-chance hook to tweak the assembled `pnpm-workspace.yaml` object. */
-export type ModifyPnpmWorkspace = (workspace: PnpmWorkspaceConfig) => void;
-
-/**
- * `pnpm-workspace.yaml`: the SOURCE OF TRUTH every other command reads back. Its
- * `packages` list is sourced from `project.subprojects` at synth time (via a thunk
- * projen resolves late), so any subproject - discovered by `configureProject` or
- * attached manually with `applyTags` - is included with no hardcoded member list.
- * `pnpmWorkspace` receives the assembled object last, so a caller can add members,
- * catalog entries, or any other pnpm setting (`overrides`, `packageExtensions`, ...).
- */
-export function pnpmWorkspace(
-  project: Project,
-  options: {
-    readonly catalog: Catalog;
-    readonly modify?: ModifyPnpmWorkspace;
-  },
-): void {
-  const root = project.outdir;
-  new YamlFile(project, "pnpm-workspace.yaml", {
-    marker: true,
-    readonly: true,
-    // A thunk: projen resolves functions in a file `obj` at synth, by which point
-    // every subproject is attached - so member order/timing doesn't matter.
-    obj: () => {
-      const packages = project.subprojects
-        .map((s) => toPosix(relative(root, s.outdir)))
-        .filter(Boolean)
-        .sort();
-      const workspace: PnpmWorkspaceConfig = {
-        packages,
-        catalog: options.catalog,
-        allowBuilds: { ...DEFAULT_ALLOW_BUILDS },
-      };
-      options.modify?.(workspace);
-      return workspace;
-    },
-  });
-}
+import { JsonFile, TextFile, javascript } from "projen";
 
 /**
  * Compiler options for the ROOT program only (`.projenrc.ts` + the engine as
@@ -169,11 +99,12 @@ export function prettierIgnore(project: Project): void {
 }
 
 /**
- * `.vscode/tasks.json`: the `watch` task, set to run on folder open. projen has
- * no native tasks.json component, so a `JsonFile` is the idiomatic way to have
- * projen own `.vscode/`; `runOn: folderOpen` starts `projen watch` (which fans
- * out via concurrently to barrels + scaffolding + config re-synth) automatically
- * when the workspace opens - no extension needed.
+ * `.vscode/tasks.json`: the `sync` task, set to run on folder open. projen has no
+ * native tasks.json component, so a `JsonFile` is the idiomatic way to have projen
+ * own `.vscode/`; `runOn: folderOpen` starts `projen sync` (which fans out via
+ * concurrently to `projen --watch` + `dbxtools watch`: config re-synth, package
+ * add/remove re-synth, and barrels) automatically when the workspace opens - no
+ * extension needed.
  */
 export function vscodeTasks(project: Project): void {
   new JsonFile(project, ".vscode/tasks.json", {
@@ -183,10 +114,10 @@ export function vscodeTasks(project: Project): void {
       version: "2.0.0",
       tasks: [
         {
-          label: "watch",
-          detail: "projen watch - barrels + scaffold new packages + re-synth on config change",
+          label: "sync",
+          detail: "projen sync - projen --watch + dbxtools watch (re-synth + barrels) concurrently",
           type: "shell",
-          command: "pnpm exec projen watch",
+          command: "pnpm exec projen sync",
           isBackground: true,
           problemMatcher: [],
           runOptions: { runOn: "folderOpen" },

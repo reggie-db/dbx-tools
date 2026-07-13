@@ -1,51 +1,66 @@
 /**
- * projen definition. `configureProject` constructs the `NodeProject` (none passed),
- * then auto-discovers `<tag>/<name>` packages under `workspaces/` (real content) and
- * `example-workspaces/` (the seed examples this repo ships, kept separate). The
- * engine itself is dogfooded as a normal auto-discovered `cli` package at
- * `workspaces/cli/dbx-tools` - its `workspacePackage()` branch below renames it from
- * the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
+ * projen definition. `new DBXToolsNodeProject(...)` constructs the monorepo root
+ * and, from its `workspacePackageRoots`, scans + attaches a
+ * `DBXToolsTypeScriptProject` per `<tag>/<name>/src` folder under `workspaces/`
+ * (real content) and `example-workspaces/` (the seed examples this repo ships,
+ * kept separate). The engine itself is dogfooded as a normal auto-discovered `cli`
+ * package at `workspaces/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
+ * it from the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
  *
- * `synth: false` because this repo adds a `dbxtools` root task AFTER configuring
- * (see below) and then synthesizes manually; a normal consumer just calls
- * `configureProject()` and lets it synth.
+ * Per-package tweaks are MIXINS applied with `project.with(...)` (constructs-
+ * native, across the subtree; the built-in tag mixins already ran during
+ * construction). `synth()` is called manually because this repo adds a `dbxtools`
+ * root task first (see below); a normal consumer constructs, `with(...)`s, synths.
  */
 import { basename } from "node:path";
-import {
-  configureProject,
-  workspacePackageTagsOf,
-} from "./workspaces/cli/dbx-tools/src/projen/configure";
+import { packageMixin } from "./workspaces/cli/dbx-tools/src/projen/mixins";
+import { DBXToolsNodeProject } from "./workspaces/cli/dbx-tools/src/projen/project";
 
-const project = configureProject(undefined, {
-  synth: false,
+const project = new DBXToolsNodeProject({
+  scope: "dbx-tools",
   // `workspaces/` is the default; `example-workspaces/` is this repo's own addition
   // so seed content stays visually separate from real content added later.
   workspacePackageRoots: ["workspaces", "example-workspaces"],
-  // The single place per-package tweaks belong; everything else is auto-detected.
-  // Runs in a deferred pass (after all packages are configured), after the built-in
-  // default tag modifiers. `pkg` is the real subproject; dispatch on the STABLE
-  // folder identity: its resolved tags + its folder name.
-  workspacePackage(pkg) {
-    const tags = workspacePackageTagsOf(pkg);
-    const name = basename(pkg.outdir);
-    if (tags.includes("ui") && name === "app") {
-      pkg.addDeps("@dbx-tools/shared-core@workspace:*");
-    } else if (tags.includes("server") && name === "api") {
-      // express + dev/start come from the built-in `server` default tag modifier.
-      pkg.addDeps("@dbx-tools/shared-core@workspace:*");
-    } else if (tags.includes("cli") && name === "main") {
-      pkg.package.addBin({ "pw-demo": "./src/cli.ts" });
-      pkg.addDeps("@dbx-tools/shared-core@workspace:*", "@dbx-tools/shared-neat@workspace:*");
-    } else if (tags.includes("cli") && name === "dbx-tools") {
+});
+
+// Per-package tweaks are user MIXINS applied across the subtree with the
+// constructs-native `project.with(...)` - it runs each mixin over the current tree
+// (captured at call time), after the built-in tag mixins the root already applied
+// during construction. Each dispatches on the STABLE folder identity: the
+// package's resolved tags + its folder name (not the derived npm name).
+project.with(
+  packageMixin(
+    (p) => p.dbxToolsConfig.tags.includes("ui") && basename(p.outdir) === "app",
+    (p) => {
+      p.addDeps("@dbx-tools/shared-core@workspace:*");
+    },
+  ),
+  packageMixin(
+    (p) => p.dbxToolsConfig.tags.includes("server") && basename(p.outdir) === "api",
+    (p) => {
+      // express + dev/start come from the built-in `server` default tag mixin.
+      p.addDeps("@dbx-tools/shared-core@workspace:*");
+    },
+  ),
+  packageMixin(
+    (p) => p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "main",
+    (p) => {
+      p.package.addBin({ "pw-demo": "./src/cli.ts" });
+      p.addDeps("@dbx-tools/shared-core@workspace:*", "@dbx-tools/shared-neat@workspace:*");
+    },
+  ),
+  packageMixin(
+    (p) => p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "dbx-tools",
+    (p) => {
       // The engine, dogfooded through the normal `cli` tag. Override the
       // auto-derived name (`@dbx-tools/cli-dbx-tools`) to the clean `@dbx-tools/cli`.
-      pkg.package.addField("name", "@dbx-tools/cli");
-      pkg.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
+      p.package.addField("name", "@dbx-tools/cli");
+      p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
       // `commander` + `@types/node` already come from the `cli` tag; the rest are
       // the engine's own deps. `pnpm` here is what lets `dbxtools sync` bootstrap a
       // brand-new, completely empty folder with no global pnpm install required -
       // it resolves pnpm's own CLI via `require.resolve`, not a system PATH lookup.
-      pkg.addDeps(
+      p.addDeps(
         "projen@^0.101.4",
         "constructs@^10.0.0",
         "barrelsby@^2.8.1",
@@ -61,20 +76,22 @@ const project = configureProject(undefined, {
       // ES2020. Also cover the root `index.ts` barrel and the `bin/` CLI, which the
       // tag's default `src/**/*.ts` include doesn't reach - widening `rootDir` to
       // the package root avoids TS6059 ("not under rootDir") for both.
-      pkg.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
-      pkg.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
-      pkg.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
-      pkg.tsconfig?.addInclude("index.ts");
-      pkg.tsconfig?.addInclude("bin/**/*.ts");
-    }
-  },
-});
+      p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
+      p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
+      p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
+      p.tsconfig?.addInclude("index.ts");
+      p.tsconfig?.addInclude("bin/**/*.ts");
+    },
+  ),
+);
+
+
 
 // The engine lives in-tree (imported by relative path above) as an auto-discovered
 // workspace package, so it is NOT installed as a dependency and its `dbxtools` bin
 // is not linked at the root. Expose the CLI as a `dbxtools` script that runs the
 // source through tsx; `receiveArgs` forwards the subcommand, so `pnpm dbxtools
-// <cmd>` (used by the generated `watch` task and interactively) works here. A repo
+// <cmd>` (used by the generated `sync` task and interactively) works here. A repo
 // consuming `@dbx-tools/cli` from npm omits this - there `pnpm dbxtools` resolves
 // the installed package's linked bin.
 project.addTask("dbxtools", {

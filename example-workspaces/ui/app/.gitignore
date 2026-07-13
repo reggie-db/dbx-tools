@@ -33,4 +33,5 @@ jspm_packages/
 !/src/
 /lib
 /dist/
+!/pnpm-workspace.yaml
 !/vite.config.ts

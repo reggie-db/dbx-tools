@@ -27,14 +27,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { parse } from "yaml";
 
-/** A value that may be given as a single item or an array of them. */
-export type OneOrMany<T> = T | T[];
 
-/** Normalize a {@link OneOrMany} (or `undefined`) into an array. */
-export function toArray<T>(value?: OneOrMany<T>): T[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
-}
+
 
 /** Run a command, returning trimmed stdout, or undefined on any failure. */
 function tryCmd(cmd: string, args: string[]): string | undefined {
@@ -59,8 +53,8 @@ export const repoRoot =
   process.cwd();
 
 /**
- * Default workspace-package roots. Each is scanned for packages; override via
- * `configureProject({ workspacePackageRoots })`.
+ * Default workspace-package roots. Each is scanned for packages; override via the
+ * `workspacePackageRoots` option on a DBXTools project.
  */
 export const DEFAULT_WORKSPACE_PACKAGE_ROOTS = ["workspaces"] as const;
 
@@ -184,7 +178,7 @@ export class DiscoveredPackage {
     readonly root: string,
     /** Path segments relative to `root`, e.g. `["ui", "app"]`. */
     readonly relSegments: readonly string[],
-  ) {}
+  ) { }
 
   /** Posix path relative to the root, e.g. `ui/app`. */
   get relPath(): string {
@@ -261,7 +255,7 @@ function collectPackageDirs(rootAbs: string): string[] {
  * folder, at any depth, is one. Returns each as a {@link DiscoveredPackage} - its
  * path plus the tags implied by its path relative to the root
  * ({@link DiscoveredPackage.tagCandidates}); no `package.json` is read. Used by
- * `configureProject` at synth, and by the watcher to compare disk against the
+ * the root project's scan at synth, and by the watcher to compare disk against the
  * recorded set. Sorted by member path.
  */
 export function scanPackages(

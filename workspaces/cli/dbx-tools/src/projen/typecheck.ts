@@ -19,7 +19,7 @@ const log = logger.withTag("projen:typecheck");
 const require = createRequire(import.meta.url);
 
 // Resolved lazily (not at module load) so importing this module - e.g. via the
-// package barrel, which `configureProject` pulls in - doesn't require `typescript`
+// package barrel, which `.projenrc.ts` pulls in - doesn't require `typescript`
 // to already be installed, and doesn't fail just because *some* consumer's
 // `typescript` happens to be an unusual version without this subpath exported.
 let tscBin: string | undefined;

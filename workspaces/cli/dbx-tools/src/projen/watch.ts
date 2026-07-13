@@ -1,20 +1,20 @@
 /**
- * The `dbxtools sync --watch` engine: one chokidar process that keeps the
- * generated tree in sync while you edit. It folds the three concerns into a
- * single debounced loop:
+ * The `dbxtools watch` engine: one chokidar process that keeps the generated tree
+ * in sync while you edit. It runs ALONGSIDE `projen --watch` (both started by the
+ * `sync` task via concurrently), which owns `.projenrc.ts` re-synth - so this
+ * loop deliberately does NOT watch the projenrc, and covers the other two
+ * concerns in a single debounced loop:
  *
- *   1. **projen watch**  - `.projenrc.ts` (or any in-tree config member's `src`,
- *      e.g. the engine itself) changed -> full re-synth.
- *   2. **new-project watch** - a package folder appeared/disappeared under a
+ *   1. **new-project watch** - a package folder appeared/disappeared under a
  *      root (the package SET changed vs `pnpm-workspace.yaml`) -> full re-synth.
- *   3. **barrel watch** - a source file changed inside an existing package ->
- *      rebuild just that package's `index.ts` barrel.
+ *   2. **barrel watch** - a source file changed inside an existing package ->
+ *      rebuild just that package's `index.ts` barrel (no re-synth). A changed
+ *      tsoa controller regenerates the openapi packages first.
  *
- * A re-synth regenerates barrels too (via the post-synth component on the plain
- * `projen` path; here `runSynth` sets `PROJEN_DISABLE_POST`, so we call
- * `generateBarrels()` explicitly after it). Generated files are ignored, so the
- * loop never re-triggers itself. chokidar does the watching (the library);
- * everything here is thin glue.
+ * A re-synth regenerates barrels too (`runSynth` sets `PROJEN_DISABLE_POST`, so we
+ * call `generateBarrels()` explicitly after it). Generated files are ignored, so
+ * the loop never re-triggers itself. chokidar does the watching (the library);
+ * everything here is thin glue. Non-`src` config members (rare) still re-synth.
  */
 import { resolve, sep } from "node:path";
 import { watch } from "chokidar";
@@ -34,9 +34,7 @@ import {
 const log = logger.withTag("projen:watch");
 const DEBOUNCE_MS = 250;
 
-const PROJENRC = resolve(repoRoot, ".projenrc.ts");
-
-/** `src` dirs of config-only workspace members (e.g. the in-tree engine). */
+/** `src` dirs of config-only workspace members (e.g. a non-package config member). */
 function configSrcDirs(): string[] {
   return readWorkspaceMembers(repoRoot)
     .filter((m) => toPosix(m).split("/").filter(Boolean).length !== 3)
@@ -50,9 +48,11 @@ function ignored(p: string): boolean {
   return isGeneratedFile(p);
 }
 
-/** A path is CONFIG (edit -> re-synth) if it's the projenrc or under a config `src`. */
+/**
+ * A path is CONFIG (edit -> re-synth) if it's under a config member's `src`.
+ * `.projenrc.ts` is deliberately NOT here - `projen --watch` owns it.
+ */
 function isConfigPath(abs: string, configDirs: string[]): boolean {
-  if (abs === PROJENRC) return true;
   return configDirs.some((dir) => abs === dir || abs.startsWith(dir + sep));
 }
 
@@ -73,17 +73,16 @@ function resynth(reason: string, withInstall: boolean): void {
   log.success(n < 0 ? "re-synth complete" : `re-synth complete (${n} barrel${n === 1 ? "" : "s"})`);
 }
 
-/** Start the watch loop. Runs an initial sync, then watches until interrupted. */
+/** Start the watch loop. Builds barrels once, then watches until interrupted. */
 export function startWatch(): void {
-  // Initial sync so the tree is correct before watching (mirror `dbxtools sync`).
-  if (packageSetChanged()) resynth("package set changed", true);
-  else {
-    const n = generateBarrels();
-    log.success(`initial sync (${n} barrel${n === 1 ? "" : "s"})`);
-  }
+  // No initial full re-synth: `projen --watch` (started alongside this by the
+  // `sync` task) does the startup synth. Just build barrels so the tree is correct
+  // immediately, then watch.
+  const initial = generateBarrels();
+  log.info(`watching (${initial} barrel${initial === 1 ? "" : "s"} built)`);
 
   const workspacePackageRoots = recordedRoots().map((r) => resolve(repoRoot, r));
-  const watchPaths = [PROJENRC, ...workspacePackageRoots, ...configSrcDirs()];
+  const watchPaths = [...workspacePackageRoots, ...configSrcDirs()];
 
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;

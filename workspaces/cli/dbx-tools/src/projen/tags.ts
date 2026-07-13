@@ -1,41 +1,27 @@
 /**
- * Workspace tags: a single map from tag name to the config packages carrying that
- * tag get automatically. A tag names a target environment (React/Vite, Node,
- * agnostic, ...) - modeled on `databricks apps init` (AppKit): `ui`, `server`,
- * `shared`. There is exactly ONE type - a tag IS its config, no separate "profile"
- * layer. ("Scope" is reserved for the npm `@scope/` in package names.)
+ * Workspace tags, expressed as MIXINS (`constructs` `IMixin`).
  *
- * A `WorkspaceTagDef` is literally a projen `TypeScriptProject` options bag:
- * whatever a tag sets (`deps`/`devDeps`/`peerDeps`, `tsconfig`, ...) is spread
- * straight into the subproject in `applyTags`. The only additions are two keys
- * projen has no native option for: `tasks` (added via `pkg.addTask`) and
- * `viteConfig` (emit a `vite.config.ts`).
+ * A tag names a target environment (React/Vite, Node, agnostic, ...) - modeled on
+ * `databricks apps init` (AppKit): `ui`, `server`, `shared`. Drop a
+ * `workspaces/<tag>/<name>/src` folder and the package is configured from its tag
+ * automatically. ("Scope" is reserved for the npm `@scope/` in package names.)
  *
- * The `tsconfig` drives each package's generated `lib`/`jsx`/`types`, so
- * enforcement is real: `document` in a `shared`/`server` package fails `tsc` (no
- * DOM lib), and `process`/`node:*` in a `ui` package fails (no node types).
+ * Each tag is an {@link IMixin} keyed by name in {@link WORKSPACE_TAG_MIXINS}. The
+ * root applies them across the workspace subtree with `project.with(...)`: for every
+ * package carrying the tag, the mixin adds the tag's deps and overrides the
+ * generated tsconfig (`lib`/`jsx`/`types`, ...). Enforcement is therefore real -
+ * `document` in a `shared`/`server` package fails `tsc` (no DOM lib), and
+ * `process`/`node:*` in a `ui` package fails (no node types). A package matching
+ * several tags gets each mixin in turn (later-wins per tsconfig key).
+ *
+ * The agnostic floor ({@link AGNOSTIC_COMPILER_OPTIONS}) is applied to every package
+ * at construction, so a package with no known tag is still a valid, DOM-free ES2022
+ * project; a tag mixin only layers its specifics on top.
  */
-import { type TaskOptions, javascript, typescript } from "projen";
-
-/**
- * A workspace tag's config: a projen `TypeScriptProject` options bag, plus two
- * engine extras projen has no option for (`tasks`, `viteConfig`). Everything else
- * - `deps`, `devDeps`, `peerDeps`, `tsconfig`, ... - is projen's own option,
- * passed straight through.
- */
-export type WorkspaceTagDef = Partial<typescript.TypeScriptProjectOptions> & {
-  /** Default projen tasks for the tag's packages (name -> projen `TaskOptions`). */
-  readonly tasks?: Record<string, TaskOptions>;
-  /** Emit a projen-owned `vite.config.ts` for the tag's packages. */
-  readonly viteConfig?: boolean;
-};
-
-/**
- * Alias of {@link WorkspaceTagDef} - the config `applyTags` applies to a path.
- * Callers pass one (or many) directly to `applyTags` to configure a package
- * without going through auto-discovery.
- */
-export type TagDef = WorkspaceTagDef;
+import type { IMixin } from "constructs";
+import { javascript } from "projen";
+import { tagMixin } from "./mixins";
+import { applyCompilerOptions, applyTasks, emitViteConfig } from "./packages";
 
 /** Node compiler options: ES2020 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
@@ -43,75 +29,73 @@ const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   lib: ["ES2020"],
   types: ["node"],
 };
-const DOM_LIB = ["ES2022", "DOM", "DOM.Iterable"] as const;
 
-/** Config for a package whose tag isn't listed below: portable/agnostic. */
-export const DEFAULT_WORKSPACE_TAG: WorkspaceTagDef = {
-  tsconfig: { compilerOptions: { target: "ES2022", lib: ["ES2022"], types: [] } },
+/** The DOM-capable lib list shared by the browser tags (`ui`, `openapi`). */
+const DOM_LIB = ["ES2022", "DOM", "DOM.Iterable"];
+
+/**
+ * The agnostic floor every package gets at construction: ES2022 stdlib, no DOM, no
+ * node types. Also the whole config the `shared` tag applies.
+ */
+export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
+  target: "ES2022",
+  lib: ["ES2022"],
+  types: [],
 };
 
 /**
- * The workspace-tag table. Drop a `workspaces/<tag>/<name>/src` folder and the
- * package is configured from the tag automatically. `disableWorkspaceTags` in
- * `configureProject` removes entries (their packages fall back to
- * {@link DEFAULT_WORKSPACE_TAG}).
+ * The workspace-tag table, as mixins. Each entry configures every package carrying
+ * that tag (deps + tsconfig + tasks) when applied via `project.with(...)`. The keys
+ * are the known tag names; a `workspaces/<tag>/<name>` folder resolves to its tag by
+ * this name. Disable entries with the `disableWorkspaceTags` option (their packages
+ * fall back to {@link AGNOSTIC_COMPILER_OPTIONS}).
  */
-export const WORKSPACE_TAGS = {
-  ui: {
-    tsconfig: {
-      compilerOptions: {
-        target: "ES2022",
-        lib: [...DOM_LIB],
-        jsx: javascript.TypeScriptJsxMode.REACT_JSX,
-        types: ["vite/client"],
-      },
-    },
-    deps: ["react@catalog:", "react-dom@catalog:"],
-    devDeps: [
+export const WORKSPACE_TAG_MIXINS = {
+  ui: tagMixin("ui", (p) => {
+    p.addDeps("react@catalog:", "react-dom@catalog:");
+    p.addDevDeps(
       "vite@catalog:",
       "@vitejs/plugin-react@catalog:",
       "@types/react@catalog:",
       "@types/react-dom@catalog:",
-    ],
-    tasks: {
+    );
+    applyCompilerOptions(p, {
+      target: "ES2022",
+      lib: [...DOM_LIB],
+      jsx: javascript.TypeScriptJsxMode.REACT_JSX,
+      types: ["vite/client"],
+    });
+    applyTasks(p, {
       dev: { exec: "vite" },
       build: { exec: "vite build" },
       preview: { exec: "vite preview" },
-    },
-    viteConfig: true,
-  },
-  cli: {
-    tsconfig: { compilerOptions: NODE_COMPILER_OPTIONS },
-    deps: ["commander@catalog:", "@clack/prompts@catalog:"],
-    devDeps: ["@types/node@catalog:"],
-  },
-  server: {
+    });
+    emitViteConfig(p);
+  }),
+  cli: tagMixin("cli", (p) => {
+    p.addDeps("commander@catalog:", "@clack/prompts@catalog:");
+    p.addDevDeps("@types/node@catalog:");
+    applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
+  }),
+  server: tagMixin("server", (p) => {
     // experimentalDecorators lets tsoa controllers (@Route/@Get/...) type-check;
     // `dbxtools openapi` reads them to generate the openapi tag (spec + client).
-    tsconfig: {
-      compilerOptions: { ...NODE_COMPILER_OPTIONS, experimentalDecorators: true },
-    },
-    deps: ["tsoa@catalog:"],
-    devDeps: ["@types/node@catalog:"],
-  },
-  node: {
-    tsconfig: { compilerOptions: NODE_COMPILER_OPTIONS },
-    devDeps: ["@types/node@catalog:"],
-  },
-  shared: DEFAULT_WORKSPACE_TAG,
-  openapi: {
-    tsconfig: { compilerOptions: { target: "ES2022", lib: [...DOM_LIB], types: [] } },
-    deps: ["openapi-fetch@catalog:"],
-  },
-} satisfies Record<string, WorkspaceTagDef>;
+    p.addDeps("tsoa@catalog:");
+    p.addDevDeps("@types/node@catalog:");
+    applyCompilerOptions(p, { ...NODE_COMPILER_OPTIONS, experimentalDecorators: true });
+  }),
+  node: tagMixin("node", (p) => {
+    p.addDevDeps("@types/node@catalog:");
+    applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
+  }),
+  shared: tagMixin("shared", (p) => {
+    applyCompilerOptions(p, AGNOSTIC_COMPILER_OPTIONS);
+  }),
+  openapi: tagMixin("openapi", (p) => {
+    p.addDeps("openapi-fetch@catalog:");
+    applyCompilerOptions(p, { target: "ES2022", lib: [...DOM_LIB], types: [] });
+  }),
+} satisfies Record<string, IMixin>;
 
-/** A known workspace-tag name. */
-export type WorkspaceTag = keyof typeof WORKSPACE_TAGS;
-
-/** Resolve a workspace tag's config, defaulting to {@link DEFAULT_WORKSPACE_TAG}. */
-export function workspaceTagConfig(
-  tag: string,
-  tags: Record<string, WorkspaceTagDef> = WORKSPACE_TAGS,
-): WorkspaceTagDef {
-  return tags[tag] ?? DEFAULT_WORKSPACE_TAG;
-}
+/** A known workspace-tag name (a key of {@link WORKSPACE_TAG_MIXINS}). */
+export type WorkspaceTag = keyof typeof WORKSPACE_TAG_MIXINS;

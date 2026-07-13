@@ -6,6 +6,11 @@
       "type": "build"
     },
     {
+      "name": "concurrently",
+      "version": "^9.1.0",
+      "type": "build"
+    },
+    {
       "name": "constructs",
       "version": "^10.0.0",
       "type": "build"

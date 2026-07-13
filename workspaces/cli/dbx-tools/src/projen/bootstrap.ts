@@ -56,11 +56,13 @@ export function needsBootstrap(): boolean {
   return !existsSync(join(repoRoot, "package.json"));
 }
 
-const PROJENRC_TEMPLATE = `import { configureProject } from "@dbx-tools/cli";
+const PROJENRC_TEMPLATE = `import { DBXToolsNodeProject } from "@dbx-tools/cli";
 
-// configureProject() constructs + configures the monorepo and synthesizes it
-// (synth defaults to true).
-configureProject();
+// Constructs + configures the monorepo root (scans workspaces/ for packages),
+// then synthesizes it. Add packages by dropping a workspaces/<tag>/<name>/src
+// folder and re-running projen.
+const project = new DBXToolsNodeProject();
+project.synth();
 `;
 
 /**
@@ -68,7 +70,7 @@ configureProject();
  * `esbuild` build script non-interactively - pnpm errors on unapproved build
  * scripts with no TTY, and it only reads `allowBuilds` from a
  * `pnpm-workspace.yaml` that doesn't exist yet on a brand-new folder. The real
- * `configureProject()` synth that follows moments later fully regenerates this
+ * `DBXToolsNodeProject` synth that follows moments later fully regenerates this
  * file (same `allowBuilds` key), so this is purely a bootstrap seed.
  */
 const WORKSPACE_SEED = `packages: []
@@ -99,7 +101,7 @@ export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
   // Pinned (not bare "typescript"/"tsx"): an unpinned install can resolve to
   // whatever a registry currently tags "latest", including an unstable
   // prerelease with a narrowed `exports` map (breaks `typecheck.ts`'s
-  // `typescript/bin/tsc` resolution). Matches the versions `configureProject`
+  // `typescript/bin/tsc` resolution). Matches the versions `DBXToolsNodeProject`
   // itself adds as root devDeps.
   pnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", dbxToolsSpecifier]);
 

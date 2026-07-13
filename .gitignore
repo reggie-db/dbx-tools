@@ -26,8 +26,8 @@ jspm_packages/
 *.tgz
 .yarn-integrity
 .cache
-!/tsconfig.projen.json
 !/pnpm-workspace.yaml
+!/tsconfig.projen.json
 !/tsconfig.base.json
 !/tsconfig.json
 !/prettier.config.js

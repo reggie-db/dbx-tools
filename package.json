@@ -1,21 +1,25 @@
 {
   "name": "dbx-tools",
   "scripts": {
+    "barrels": "projen barrels",
     "build": "projen build",
     "clobber": "projen clobber",
     "compile": "projen compile",
     "dbxtools": "projen dbxtools",
     "default": "projen default",
     "eject": "projen eject",
+    "openapi": "projen openapi",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "sync": "projen sync",
     "test": "projen test",
-    "watch": "projen watch",
+    "typecheck": "projen typecheck",
     "projen": "projen"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
+    "concurrently": "^9.1.0",
     "constructs": "^10.0.0",
     "projen": "^0.101.4",
     "tsx": "^4.23.0",

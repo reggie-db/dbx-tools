@@ -2,10 +2,10 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "watch",
-      "detail": "projen watch - barrels + scaffold new packages + re-synth on config change",
+      "label": "sync",
+      "detail": "projen sync - projen --watch + dbxtools watch (re-synth + barrels) concurrently",
       "type": "shell",
-      "command": "pnpm exec projen watch",
+      "command": "pnpm exec projen sync",
       "isBackground": true,
       "problemMatcher": [],
       "runOptions": {

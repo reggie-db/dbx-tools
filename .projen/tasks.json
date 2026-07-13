@@ -4,6 +4,14 @@
     "PATH": "$(pnpm -c exec \"node --print process.env.PATH\")"
   },
   "tasks": {
+    "barrels": {
+      "name": "barrels",
+      "steps": [
+        {
+          "exec": "pnpm dbxtools barrels"
+        }
+      ]
+    },
     "build": {
       "name": "build",
       "description": "Full release build",
@@ -122,6 +130,14 @@
         }
       ]
     },
+    "openapi": {
+      "name": "openapi",
+      "steps": [
+        {
+          "exec": "pnpm dbxtools openapi"
+        }
+      ]
+    },
     "package": {
       "name": "package",
       "description": "Creates the distribution package",
@@ -151,15 +167,23 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
     },
+    "sync": {
+      "name": "sync",
+      "steps": [
+        {
+          "exec": "concurrently -k -n projen,workspace \"pnpm exec projen --watch\" \"pnpm dbxtools watch\""
+        }
+      ]
+    },
     "test": {
       "name": "test",
       "description": "Run tests"
     },
-    "watch": {
-      "name": "watch",
+    "typecheck": {
+      "name": "typecheck",
       "steps": [
         {
-          "exec": "pnpm dbxtools sync --watch"
+          "exec": "pnpm dbxtools typecheck"
         }
       ]
     }

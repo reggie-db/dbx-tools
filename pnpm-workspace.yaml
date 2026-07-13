@@ -5,6 +5,7 @@ packages:
   - example-workspaces/openapi/api
   - example-workspaces/server/api
   - example-workspaces/shared/core
+  - example-workspaces/shared/fun
   - example-workspaces/shared/neat
   - example-workspaces/ui/app
   - workspaces/cli/dbx-tools

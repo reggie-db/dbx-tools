@@ -3,13 +3,16 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * from "./src/log";
+export * from "./src/name";
 export * from "./src/projen/barrels";
 export * from "./src/projen/bootstrap";
-export * from "./src/projen/configure";
 export * from "./src/projen/files";
 export * from "./src/projen/generated";
+export * from "./src/projen/mixins";
 export * from "./src/projen/openapi";
 export * from "./src/projen/packages";
+export * from "./src/projen/pnpm-workspace";
+export * from "./src/projen/project";
 export * from "./src/projen/scaffold";
 export * from "./src/projen/tags";
 export * from "./src/projen/typecheck";

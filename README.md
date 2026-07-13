@@ -1,28 +1,32 @@
 # dbx-tools
 
 A [projen](https://projen.io)-driven **pnpm monorepo generator**. The reusable
-engine is its own package, **`@dbx-tools/cli`**, exported as `configureProject()`
-and driven by the **`dbxtools`** CLI. Drop a folder under `workspaces/` and it's
-configured, type-checked, and barrelled automatically - or bootstrap a brand-new
-empty folder from nothing with `dbxtools sync`.
+engine is its own package, **`@dbx-tools/cli`**, exported as the
+`DBXToolsNodeProject` / `DBXToolsTypeScriptProject` project subclasses and driven
+by the **`dbxtools`** CLI. Drop a folder under `workspaces/` and it's configured,
+type-checked, and barrelled automatically - or bootstrap a brand-new empty folder
+from nothing with `dbxtools sync`.
 
 > New contributor or agent? Read **[AGENTS.md](./AGENTS.md)** for the full model.
 
 ```ts
 // .projenrc.ts (a normal consumer)
-import { configureProject } from "@dbx-tools/cli";
+import { DBXToolsNodeProject, packageMixin } from "@dbx-tools/cli";
 
-// Constructs the NodeProject, auto-discovers packages, and synthesizes (synth
-// defaults to true). Pass your own project as the first arg to tap into it;
-// omit it and one is created from the engine's defaults + `extends`.
-configureProject(undefined, {
-  // The one place per-package tweaks live: mutate the real projen subproject
-  // `pkg`, dispatching on its stable folder identity - workspacePackageTagsOf(pkg)
-  // (resolved tags) + basename(pkg.outdir) (folder name).
-  workspacePackage: (pkg) => {
-    /* e.g. pkg.addDeps("@dbx-tools/shared-core@workspace:*") */
-  },
-});
+// Constructs the monorepo root and auto-discovers packages under workspaces/.
+const project = new DBXToolsNodeProject();
+
+// Per-package tweaks are mixins, applied across the construct subtree with the
+// constructs-native project.with(...) (after the built-in DEFAULT_TAG_MIXINS the
+// root applies during construction). Dispatch on a package's stable folder
+// identity - its resolved tags (p.tags) + folder name.
+project.with(
+  packageMixin(
+    (p) => p.tags.includes("ui") && p.name.endsWith("/app"),
+    (p) => p.addDeps("@dbx-tools/shared-core@workspace:*"),
+  ),
+);
+project.synth();
 ```
 
 ## Bootstrap an empty folder
@@ -64,27 +68,31 @@ being the resolved project name), and each records its resolved tags in its
 **`pnpm-workspace.yaml`** (the source of truth), sourced from projen's own
 `project.subprojects`.
 
-## Config hooks
+## Config: mixins + options
 
-- **`workspacePackage(pkg)`** - per-package tweaks; runs LAST (after the built-in
-  default tag modifiers) in a deferred pass once every package is configured.
-  Dispatch on `workspacePackageTagsOf(pkg)` + `basename(pkg.outdir)`.
-- **`workspacePackageDefaults`** (`"all"` | list) - which built-in default tag
-  modifiers run (e.g. the `server` default adds Express + `dev`/`start` tasks).
+- **`project.with(...mixins)`** - per-package tweaks, applied across the construct
+  subtree (constructs-native; runs after the built-in `DEFAULT_TAG_MIXINS` the root
+  applies during construction). `tagMixin(tag, fn)` targets packages by tag;
+  `packageMixin(predicate, fn)` by any predicate (dispatch on `p.tags` +
+  `basename(p.outdir)`); `fileMixin(fn)` targets any generated file. Mutate via
+  projen's API (`p.addDeps(...)`, `p.addTask(...)`, `p.package.addBin({...})`,
+  `p.tsconfig?.file.addOverride(...)`).
+- **`defaultTagMixins`** (`"all"` | list) - which built-in tag mixins run (e.g. the
+  `server` mixin adds Express + `dev`/`start` tasks).
 - **`workspacePackageTagPaths`** - map a path/pattern to extra tag(s).
-- **`onGeneratedFile(file, project)`** - inspect/tweak every generated projen file.
-- **`pnpmWorkspace(cfg)`** - tweak the assembled `pnpm-workspace.yaml`.
+- **`project.pnpmWorkspace`** - `.addCatalog(name, ver)` / `.allowBuild(name)` /
+  `.addPackage(glob)` to tweak `pnpm-workspace.yaml` (or `file.addOverride(...)`).
 
 ## The `dbxtools` CLI
 
 ```sh
 pnpm install
-pnpm dbxtools sync             # bootstrap an empty folder, or synth an existing workspace
-pnpm dbxtools sync --watch     # watch: re-synth on config/package changes, barrels on edits
+pnpm exec projen sync          # keep in sync while editing (projen --watch + dbxtools watch, concurrently)
+pnpm dbxtools sync             # bootstrap an empty folder, or synth an existing workspace (one-shot)
+pnpm dbxtools watch            # watch: re-synth on package add/remove, barrels on source edits
 pnpm dbxtools barrels          # rebuild every package's root index.ts barrel
 pnpm dbxtools typecheck        # type-check each package against its tag tsconfig
 pnpm dbxtools openapi          # generate the openapi packages from tsoa controllers
-pnpm exec projen watch         # projen's watch task -> `pnpm dbxtools sync --watch`
 ```
 
 ## OpenAPI, without JSDoc
@@ -105,7 +113,7 @@ export class GreetingController extends Controller {
 `dbxtools openapi` infers the OpenAPI 3 spec from the decorators + TS types and
 generates a read-only, typed [openapi-fetch](https://openapi-ts.dev/openapi-fetch/)
 client - colocated under the controller package's own root. It regenerates
-automatically under `sync --watch` whenever a controller changes.
+automatically under `projen sync` (via `dbxtools watch`) whenever a controller changes.
 
 ## Barrels & generated files
 
@@ -119,5 +127,6 @@ re-synth; never edit them directly.
 ## Status
 
 Green: synth, `pnpm install`, `dbxtools barrels`/`typecheck`/`openapi`,
-`dbxtools sync --watch`, and bootstrapping a completely empty folder all work
-end to end. This work lives on the `main` branch of `reggie-db/dbx-tools`.
+`projen sync` (concurrent `projen --watch` + `dbxtools watch`), and bootstrapping
+a completely empty folder all work end to end. This work lives on the `main`
+branch of `reggie-db/dbx-tools`.
