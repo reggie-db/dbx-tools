@@ -4,14 +4,17 @@ name: release
 run-name: ${{ inputs.dry_run && format('[DRY RUN] release by @{0}', github.actor) || '' }}
 on:
   push:
-    branches:
-      - main
+    tags:
+      - v*
   workflow_dispatch:
     inputs:
       dry_run:
         description: Dry run (skip actual publishing)
         required: false
         type: boolean
+  release:
+    types:
+      - published
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -47,7 +50,8 @@ jobs:
       - name: Install dependencies
         run: pnpm i --frozen-lockfile
       - name: release
-        run: pnpm exec projen release
+        id: release
+        run: if [ "${{ github.ref_type }}" = "tag" ]; then pnpm exec projen release:tag; else pnpm exec projen release; fi
       - name: Check if version has already been tagged
         id: check_tag_exists
         run: |-
@@ -80,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: needs.release.outputs.tag_exists != 'true' && needs.release.outputs.latest_commit == github.sha
+    if: (github.ref_type == 'tag' || needs.release.outputs.tag_exists != 'true') && needs.release.outputs.latest_commit == github.sha
     steps:
       - uses: actions/setup-node@v6
         with:
@@ -104,9 +108,8 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
-    if: needs.release.outputs.tag_exists != 'true' && needs.release.outputs.latest_commit == github.sha
+    if: (github.ref_type == 'tag' || needs.release.outputs.tag_exists != 'true') && needs.release.outputs.latest_commit == github.sha
     steps:
       - uses: actions/setup-node@v6
         with:
@@ -124,7 +127,6 @@ jobs:
         env:
           NPM_DIST_TAG: latest
           NPM_REGISTRY: registry.npmjs.org
-          NPM_CONFIG_PROVENANCE: "true"
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           PUBLIB_DRYRUN: ${{ inputs.dry_run }}
         run: npx -p publib@latest publib-npm

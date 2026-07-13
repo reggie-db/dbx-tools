@@ -1,5 +1,5 @@
 {
-  "name": "dbx-tools",
+  "name": "@dbx-tools/root",
   "scripts": {
     "barrels": "projen barrels",
     "build": "projen build",
@@ -14,7 +14,10 @@
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
     "release": "projen release",
+    "release:push": "projen release:push",
+    "release:tag": "projen release:tag",
     "sync": "projen sync",
+    "tag": "projen tag",
     "test": "projen test",
     "unbump": "projen unbump",
     "projen": "projen"
@@ -31,9 +34,6 @@
   },
   "pnpm": {},
   "license": "UNLICENSED",
-  "publishConfig": {
-    "access": "public"
-  },
   "version": "0.0.0",
   "packageManager": "pnpm@10.33.0",
   "type": "module",

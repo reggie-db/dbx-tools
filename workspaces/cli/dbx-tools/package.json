@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/cli",
+  "name": "dbx-tools",
   "bin": {
     "dbxtools": "./bin/dbxtools.ts",
     "dbxtools.ts": "bin/dbxtools.ts"

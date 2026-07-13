@@ -16,11 +16,12 @@ import path, { basename } from "node:path";
 import { packageMixin } from "./workspaces/cli/dbx-tools/src/projen/mixins";
 import { DBXToolsNodeProject } from "./workspaces/cli/dbx-tools/src/projen/project";
 
+const SCOPE = "dbx-tools";
 const EXAMPLE_WORKSPACES_ROOT = "example-workspaces";
-const CLI_PACKAGE_DIR = "workspaces/cli/dbx-tools";
 
 const project = new DBXToolsNodeProject({
-  scope: "dbx-tools",
+  name: `@${SCOPE}/root`,
+  scope: SCOPE,
   // `workspaces/` is the default; `example-workspaces/` is this repo's own addition
   // so seed content stays visually separate from real content added later.
   workspacePackageRoots: ["workspaces", EXAMPLE_WORKSPACES_ROOT],
@@ -71,10 +72,10 @@ project.with(
   packageMixin(
     (p) => p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "dbx-tools",
     (p) => {
+      p.package.addField("name", SCOPE);
       p.dbxToolsConfig.lockPackageJson = false
       // The engine, dogfooded through the normal `cli` tag. Override the
       // auto-derived name (`@dbx-tools/cli-dbx-tools`) to the clean `@dbx-tools/cli`.
-      p.package.addField("name", "@dbx-tools/cli");
       p.package.addField("publishConfig", { access: "public", provenance: true });
       p.package.addField("cool-dude", "0.0.0");
       p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
@@ -124,12 +125,5 @@ project.addTask("dbxtools", {
   exec: "tsx workspaces/cli/dbx-tools/bin/dbxtools.ts",
   receiveArgs: true,
 });
-
-// CI/release: type-check every workspace package, then pack the publishable CLI
-// tarball into the root `dist/js` artifact projen's release workflow uploads.
-project.compileTask.reset("pnpm -r compile");
-project.packageTask.reset(
-  `node --input-type=module -e "import { readFileSync, writeFileSync } from 'node:fs'; const version = JSON.parse(readFileSync('package.json', 'utf8')).version; const pkgPath = '${CLI_PACKAGE_DIR}/package.json'; const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); pkg.version = version; writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');" && mkdir -p dist/js && pnpm --dir ${CLI_PACKAGE_DIR} pack --pack-destination ../../../dist/js`,
-);
 
 project.synth();

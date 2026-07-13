@@ -15,6 +15,7 @@ export * from "./src/projen/openapi";
 export * from "./src/projen/packages";
 export * from "./src/projen/pnpm-workspace";
 export * from "./src/projen/project";
+export * from "./src/projen/release";
 export * from "./src/projen/scaffold";
 export * from "./src/projen/tags";
 export * from "./src/projen/vite";

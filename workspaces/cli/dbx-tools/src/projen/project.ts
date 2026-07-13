@@ -28,7 +28,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import picomatch from "picomatch";
+import { ReleaseTrigger } from "projen/lib/release";
 import { Component, type TaskOptions, type TaskStepOptions, javascript, typescript } from "projen";
+import { DBXToolsRelease } from "./release";
 import { generateBarrels } from "./barrels";
 import * as files from "./files";
 import {
@@ -293,9 +295,14 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXT
 
   constructor(options: DBXToolsNodeProjectOptions = {}) {
     const { name, scope } = resolveIdentity(options);
+    const releaseDefaults =
+      options.release && options.releaseTrigger === undefined
+        ? { releaseTrigger: ReleaseTrigger.workflowDispatch() }
+        : {};
     super({
       ...defaultNodeProjectOptions(options),
       ...options,
+      ...releaseDefaults,
       name,
     });
 
@@ -595,6 +602,7 @@ function initDBXToolsProject(project: javascript.NodeProject & IDBXToolsProject,
   }
 
   new GeneratedBarrels(project);
+  if (project.release) new DBXToolsRelease(project as DBXToolsNodeProject);
 }
 
 /** True if `p` is one of the DBXTools project classes (has the tag surface). */
