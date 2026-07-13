@@ -3,15 +3,14 @@
  *
  * A mixin is `{ supports(c), applyTo(c) }`. Apply them with the constructs-native
  * `construct.with(...mixins)`, which runs each across the construct's whole subtree
- * (the tree is captured at call time). The root applies the built-in
- * {@link DEFAULT_TAG_MIXINS} during construction; callers apply their own with
- * `project.with(...)` afterward, so defaults run before user mixins.
+ * (the tree is captured at call time). The root applies the built-in tag mixins
+ * (`WORKSPACE_TAG_MIXINS` in `./tags`) during construction; callers apply their own
+ * with `project.with(...)` afterward, so defaults run before user mixins.
  *
- * These replace the removed callback options (`workspacePackage`,
- * `onGeneratedFile`) and the `DEFAULT_WORKSPACE_PACKAGE_MODIFIERS` registry:
+ * This module is the mixin FACTORIES only - the per-tag table itself lives in
+ * `./tags`:
  *   - {@link tagMixin} / {@link packageMixin} target a {@link DBXToolsTypeScriptProject};
- *   - {@link fileMixin} targets any generated `FileBase`;
- *   - {@link DEFAULT_TAG_MIXINS} ports the per-tag defaults (e.g. `server`).
+ *   - {@link fileMixin} targets any generated `FileBase`.
  */
 import type { IConstruct, IMixin } from "constructs";
 import { FileBase, typescript } from "projen";
@@ -61,23 +60,3 @@ export function fileMixin(apply: (file: FileBase) => void): IMixin {
     applyTo: (c: IConstruct): void => apply(c as FileBase),
   };
 }
-
-/**
- * Built-in per-tag mixins, toggled by the `defaultTagMixins` option (`"all"` by
- * default). Ports the old `DEFAULT_WORKSPACE_PACKAGE_MODIFIERS`; extend this
- * registry to add more. Applied before user mixins.
- */
-export const DEFAULT_TAG_MIXINS = {
-  /** A `server` package: an Express app run/watched with tsx (AppKit-aligned). */
-  server: tagMixin("server", (pkg) => {
-    pkg.addDeps("express@catalog:");
-    pkg.addDevDeps("@types/express@catalog:");
-    pkg.addTask("dev", { exec: "tsx watch src/server.ts" });
-    pkg.addTask("start", { exec: "tsx src/server.ts" });
-  }),
-} satisfies Record<string, IMixin>;
-
-/** A selectable default tag mixin - a key of {@link DEFAULT_TAG_MIXINS}. */
-export type DefaultTagMixinName = keyof typeof DEFAULT_TAG_MIXINS;
-
-

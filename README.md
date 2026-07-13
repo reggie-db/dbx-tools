@@ -11,18 +11,20 @@ from nothing with `dbxtools sync`.
 
 ```ts
 // .projenrc.ts (a normal consumer)
+import { basename } from "node:path";
 import { DBXToolsNodeProject, packageMixin } from "@dbx-tools/cli";
 
 // Constructs the monorepo root and auto-discovers packages under workspaces/.
 const project = new DBXToolsNodeProject();
 
 // Per-package tweaks are mixins, applied across the construct subtree with the
-// constructs-native project.with(...) (after the built-in DEFAULT_TAG_MIXINS the
-// root applies during construction). Dispatch on a package's stable folder
-// identity - its resolved tags (p.dbxToolsConfig.tags) + folder name.
+// constructs-native project.with(...) (after the built-in tag mixins the root
+// applies during construction). Dispatch on a package's stable folder identity -
+// its resolved tags (p.dbxToolsConfig.tags) + folder name (basename(p.outdir),
+// NOT the dash-joined npm name).
 project.with(
   packageMixin(
-    (p) => p.dbxToolsConfig.tags.includes("ui") && p.name.endsWith("/app"),
+    (p) => p.dbxToolsConfig.tags.includes("ui") && basename(p.outdir) === "app",
     (p) => p.addDeps("@dbx-tools/shared-core@workspace:*"),
   ),
 );
@@ -71,14 +73,15 @@ being the resolved project name), and each records its resolved tags in its
 ## Config: mixins + options
 
 - **`project.with(...mixins)`** - per-package tweaks, applied across the construct
-  subtree (constructs-native; runs after the built-in `DEFAULT_TAG_MIXINS` the root
-  applies during construction). `tagMixin(tag, fn)` targets packages by tag;
+  subtree (constructs-native; runs after the built-in tag mixins the root applies
+  during construction). `tagMixin(tag, fn)` targets packages by tag;
   `packageMixin(predicate, fn)` by any predicate (dispatch on
   `p.dbxToolsConfig.tags` + `basename(p.outdir)`); `fileMixin(fn)` targets any
   generated file. Mutate via projen's API (`p.addDeps(...)`, `p.addTask(...)`,
   `p.package.addBin({...})`, `p.tsconfig?.file.addOverride(...)`).
-- **`defaultTagMixins`** (`"all"` | list) - which built-in tag mixins run (e.g. the
-  `server` mixin adds Express + `dev`/`start` tasks).
+- **`defaultTagMixins`** (omit = all | `false` = none | subset list) - which
+  built-in tag mixins run (e.g. the `server` mixin adds Express/tsoa + `dev`/`start`
+  tasks).
 - **`workspacePackageTagPaths`** - map a path/pattern to extra tag(s).
 - **`project.pnpmWorkspace`** (root-only field) - `?.addCatalog(name, ver)` /
   `.allowBuild(name)` / `.addPackages(glob)` to tweak `pnpm-workspace.yaml` (or

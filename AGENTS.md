@@ -14,8 +14,8 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
 
 - **`workspaces/`** — real content goes here.
 - **`example-workspaces/`** — the seed example packages this repo ships
-  (`cli/main`, `server/api`, `shared/core`, `shared/neat`, `ui/app`), kept in a
-  separate root so they stay visually distinct from anything you actually build.
+  (`cli/main`, `server/api`, `shared/core`, `shared/fun`, `shared/neat`, `ui/app`),
+  kept in a separate root so they stay visually distinct from anything you build.
 
 > Local dir is `projen-workspace/`; the GitHub repo is `reggie-db/dbx-tools`
 > (this work is on branch **`main`**; `master` holds older work and is still the
@@ -46,7 +46,7 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   `project.synth()` yourself. A normal consuming `.projenrc.ts` is two lines:
   `const project = new DBXToolsNodeProject(); project.synth();`. Both classes
   share `DBXToolsCommonOptions` (`scope`, `workspacePackageRoots`,
-  `workspacePackageTagPaths`, `disableWorkspaceTags`, `defaultTagMixins`), which
+  `workspacePackageTagPaths`, `defaultTagMixins`), which
   `extends` the component option bags directly — `DBXToolsConfigOptions` (`tags`)
   and `DBXToolsPNPMWorkspaceOptions` (`packages`/`catalog`/`allowBuilds`) — so those
   are top-level options, not nested fields. Both expose `IDBXToolsProject`:
@@ -127,11 +127,12 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   matching child. `tagMixin(tag, fn)` targets packages carrying `tag`;
   `packageMixin(predicate, fn)` targets packages by any predicate (dispatch on
   `pkg.dbxToolsConfig.tags` + `basename(pkg.outdir)`); `fileMixin(fn)` targets any generated
-  `FileBase`. The root applies the built-in **`DEFAULT_TAG_MIXINS`** (toggled by
-  the `defaultTagMixins` option, `"all"` by default) during its own construction —
-  e.g. the `server` mixin adds `express` + `dev`/`start` tasks. Consumers apply
-  their own AFTER construction with `project.with(...)` (see `.projenrc.ts`), so
-  user mixins run after the defaults.
+  `FileBase`. The root applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
+  `tags.ts`) during its own construction, selected by the `defaultTagMixins` option
+  (omit = all, `false` = none, or a subset list) - e.g. the `server` mixin adds
+  `express`/`tsoa` + `dev`/`start` tasks. Consumers apply their own AFTER
+  construction with `project.with(...)` (see `.projenrc.ts`), so user mixins run
+  after the defaults.
 - **Names**: `pkg.packageNameFor(relPath)` → `npmNameOf(scope, relPath)`
   (`packages.ts`): normalized, lowercased, the root-relative path dash-joined as
   `@<scope>/<seg-seg-...>` (e.g. `workspaces/shared/core` → `@dbx-tools/shared-core`,
@@ -153,11 +154,11 @@ workspaces/
       log.ts                             # projen-AGNOSTIC utilities live at src/ root
       projen/                            # everything projen-specific lives under src/projen/
         project.ts                       # DBXToolsNode/TypeScriptProject + ITagging/IPnpmWorkspace + DBXToolsConfig + initDBXToolsProject
-        mixins.ts                        # tagMixin/packageMixin/fileMixin + DEFAULT_TAG_MIXINS
+        mixins.ts                        # tagMixin/packageMixin/fileMixin (mixin factories; tag table lives in tags.ts)
         pnpm-workspace.ts                # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
         tags.ts                          # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
         workspace.ts                     # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
-        packages.ts                      # npmNameOf, lockPackageJson, applyCompilerOptions, applyTasks, emitViteConfig, SUBPROJECT/SHARED defaults
+        packages.ts                      # npmNameOf, lockPackageJson, applyCompilerOptions, applyTasks, addWorkspacePackageTags, SHARED_COMPILER_OPTIONS
         barrels.ts                       # barrelsby driver (root index.ts, header + read-only)
         watch.ts                         # chokidar loop for `dbxtools sync --watch` (package-set re-synth + barrels)
         scaffold.ts                      # packageSetChanged() + runSynth({ post })
@@ -166,7 +167,7 @@ workspaces/
         clean.ts, generated.ts, files.ts, vite.ts
   openapi/<name>/                        # generated from tsoa controllers, same root as the source
 example-workspaces/
-  cli/main/ server/api/ shared/core/ shared/neat/ ui/app/   # seed examples, each a real subproject
+  cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ ui/app/   # seed examples, each a real subproject
 ```
 
 ## Commands (the `dbxtools` CLI)
@@ -294,11 +295,15 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   read-only is `fs.chmodSync` (Node maps it to the Windows read-only attribute).
   `bootstrap.ts` resolves `pnpm`'s own CLI the same way (`require.resolve`, not a
   PATH lookup) - `pnpm` is a regular dependency of the engine for exactly this.
-- **`package.json` is forced read-only** via `lockPackageJson` (`packages.ts`) on
-  the root and every subproject, so the whole generated tree is consistent. projen
-  still rewrites it each synth (clears the bit, writes, restores). Source/sample
-  files the developer owns (`.projenrc.ts`, each package's `README.md`, `src/*`)
-  stay writable.
+- **`package.json` is forced read-only by default** on the root and every
+  subproject, so the whole generated tree is consistent. The switch is the
+  `DBXToolsConfig` component's `lockPackageJson` (default `true`), applied in its
+  `preSynthesize` via `lockPackageJson()` (`packages.ts`); projen still rewrites the
+  file each synth (clears the bit, writes, restores). Opt a package out with
+  `p.dbxToolsConfig.lockPackageJson = false` (or the `lockPackageJson: false`
+  option) - the engine package does exactly this so its own `package.json` stays
+  writable. Source/sample files the developer owns (`.projenrc.ts`, each package's
+  `README.md`, `src/*`) stay writable regardless.
 - **OpenAPI** (`openapi.ts`, `dbxtools openapi`): scans **every discovered**
   `server`/`node` package for **tsoa** controllers (classes with
   `@Route`/`@Get`/... - no JSDoc/YAML). For each, tsoa's `generateSpec` infers an

@@ -48,8 +48,8 @@ export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
  * The workspace-tag table, as mixins. Each entry configures every package carrying
  * that tag (deps + tsconfig + tasks) when applied via `project.with(...)`. The keys
  * are the known tag names; a `workspaces/<tag>/<name>` folder resolves to its tag by
- * this name. Disable entries with the `disableWorkspaceTags` option (their packages
- * fall back to {@link AGNOSTIC_COMPILER_OPTIONS}).
+ * this name. Select which apply with the `defaultTagMixins` option (`false` = none,
+ * or a subset list; unselected packages fall back to {@link AGNOSTIC_COMPILER_OPTIONS}).
  */
 export const WORKSPACE_TAG_MIXINS = {
   ui: tagMixin("ui", (p) => {
@@ -79,11 +79,16 @@ export const WORKSPACE_TAG_MIXINS = {
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
   }),
   server: tagMixin("server", (p) => {
-    // experimentalDecorators lets tsoa controllers (@Route/@Get/...) type-check;
-    // `dbxtools openapi` reads them to generate the openapi tag (spec + client).
-    p.addDeps("tsoa@catalog:");
-    p.addDevDeps("@types/node@catalog:");
+    // A Node/Express service. tsoa's decorators (@Route/@Get/...) also drive
+    // `dbxtools openapi` (spec + client); experimentalDecorators lets them
+    // type-check. `dev`/`start` run the app's `src/server.ts` with tsx.
+    p.addDeps("express@catalog:", "tsoa@catalog:");
+    p.addDevDeps("@types/node@catalog:", "@types/express@catalog:");
     applyCompilerOptions(p, { ...NODE_COMPILER_OPTIONS, experimentalDecorators: true });
+    applyTasks(p, {
+      dev: { exec: "tsx watch src/server.ts" },
+      start: { exec: "tsx src/server.ts" },
+    });
   }),
   node: tagMixin("node", (p) => {
     p.addDevDeps("@types/node@catalog:");

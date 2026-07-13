@@ -9,8 +9,8 @@
  *   - {@link applyTasks} - apply a tag's `tasks` through projen's task system;
  *   - {@link applyCompilerOptions} - override a package's generated tsconfig
  *     `compilerOptions` (how a tag mixin enforces `lib`/`jsx`/`types`);
- *   - {@link SUBPROJECT_DEFAULTS} / {@link SHARED_COMPILER_OPTIONS} - the baseline
- *     projen options + ESM compiler options every package shares.
+ *   - {@link SHARED_COMPILER_OPTIONS} - the ESM compiler options every package
+ *     shares (the projen option defaults themselves live in `./project`).
  *
  * A package may carry MULTIPLE tags; each tag's mixin (see `./tags`) is applied
  * across the workspace subtree in turn, so their deps and tsconfig overrides layer

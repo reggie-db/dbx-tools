@@ -25,10 +25,11 @@
     "eslint": "^9",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
+    "picomatch": "^4.0.5",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
-  "dependencies":  {
+  "dependencies": {
     "@clack/prompts": "catalog:",
     "barrelsby": "^2.8.1",
     "chokidar": "^4.0.3",

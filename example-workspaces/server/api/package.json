@@ -4,27 +4,32 @@
     "build": "projen build",
     "compile": "projen compile",
     "default": "projen default",
+    "dev": "projen dev",
     "eslint": "projen eslint",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "start": "projen start",
     "test": "projen test",
     "watch": "projen watch",
     "projen": "projen"
   },
   "devDependencies": {
     "@stylistic/eslint-plugin": "^2",
+    "@types/express": "catalog:",
     "@types/node": "catalog:",
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
     "eslint": "^9",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
+    "picomatch": "^4.0.5",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
+    "express": "catalog:",
     "tsoa": "catalog:"
   },
   "main": "index.ts",
@@ -33,7 +38,6 @@
   "packageManager": "pnpm@10.33.0",
   "types": "index.ts",
   "dbxToolsConfig": {
-    "lockPackageJson": false,
     "tags": [
       "server"
     ]

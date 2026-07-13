@@ -197,7 +197,7 @@ export interface DBXToolsConfigOptions {
  * mixin can still flip it after construction.
  */
 export class DBXToolsConfig extends Component {
-  private _lockPackageJson = true;
+  private _lockPackageJson: boolean | undefined;
   private _tags: readonly string[] = [];
 
   constructor(readonly project: javascript.NodeProject, options: DBXToolsConfigOptions = {}) {
@@ -208,7 +208,7 @@ export class DBXToolsConfig extends Component {
 
   /** Whether this project's `package.json` is forced read-only at synth. */
   public get lockPackageJson(): boolean {
-    return this._lockPackageJson;
+    return this._lockPackageJson ?? true;
   }
 
   /** The distinct tags on `package.json` `dbxToolsConfig.tags` (empty if unset). */
@@ -235,12 +235,13 @@ export class DBXToolsConfig extends Component {
   }
 
   /**
-   * The single point that actually locks `package.json`: at synth, and ONLY when
-   * `lockPackageJson` is set (checked here so a mixin toggling it post-construction is
-   * honored). `false` leaves projen's default (writable).
+   * The single point that actually locks `package.json`: at synth, honoring the
+   * resolved {@link lockPackageJson} (default `true`) so a value set via option OR a
+   * post-construction mixin is respected. Only an explicit `false` leaves projen's
+   * default (writable).
    */
   public override preSynthesize(): void {
-    if (this._lockPackageJson) lockPackageJson(this.project);
+    if (this.lockPackageJson) lockPackageJson(this.project);
   }
 
 
@@ -253,7 +254,7 @@ export class DBXToolsConfig extends Component {
   /** Write `lockPackageJson`/`tags` back to the `dbxToolsConfig` field. */
   private write(): void {
     this.project.package.addField("dbxToolsConfig", {
-      lockPackageJson: this._lockPackageJson,
+      ...this._lockPackageJson !== undefined ? { lockPackageJson: this._lockPackageJson } : {},
       tags: this._tags,
     });
   }
@@ -506,13 +507,11 @@ function initDBXToolsProject(project: javascript.NodeProject & IDBXToolsProject,
   // plain exec (tsx resolves from `node_modules/.bin`, which pnpm puts on PATH).
   project.defaultTask?.reset("tsx .projenrc.ts");
 
+  // Only reached on a ROOT (early-returned above otherwise), so the root devDeps
+  // always apply; the self-dep is added only when the engine is an installed pkg.
   const selfDep = engineSelfDependency(project);
-  project.addDevDeps(
-    ...(selfDep ? [selfDep] : [])
-  );
-  if (project.parent === undefined) {
-    project.addDevDeps(...DEV_DEPS_ROOT);
-  }
+  if (selfDep) project.addDevDeps(selfDep);
+  project.addDevDeps(...DEV_DEPS_ROOT);
   project.package.addField("type", "module");
   project.package.addField("private", true);
 

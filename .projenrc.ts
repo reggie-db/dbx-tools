@@ -40,7 +40,7 @@ project.with(
   packageMixin(
     (p) => p.dbxToolsConfig.tags.includes("server") && basename(p.outdir) === "api",
     (p) => {
-      // express + dev/start come from the built-in `server` default tag mixin.
+      // express + dev/start come from the built-in `server` tag mixin (tags.ts).
       p.addDeps("@dbx-tools/shared-core@workspace:*");
     },
   ),

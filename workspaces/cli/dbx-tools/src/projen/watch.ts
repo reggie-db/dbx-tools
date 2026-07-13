@@ -29,6 +29,7 @@ import { isTsoaController } from "./openapi";
 import { packageSetChanged, runSynth } from "./scaffold";
 import {
   isGeneratedFile,
+  isIgnoredPath,
   readWorkspaceMembers,
   recordedRoots,
   repoRoot,
@@ -51,9 +52,7 @@ function configSrcDirs(): string[] {
 
 /** Vendor/build/generated paths that must never drive the watch. */
 function ignored(p: string): boolean {
-  const posix = toPosix(p);
-  if (/\/(node_modules|dist|lib|\.git|\.projen|build|tmp)(\/|$)/.test(posix)) return true;
-  return isGeneratedFile(p);
+  return isIgnoredPath(p) || isGeneratedFile(p);
 }
 
 /**

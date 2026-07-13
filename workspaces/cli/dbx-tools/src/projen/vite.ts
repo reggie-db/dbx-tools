@@ -23,7 +23,7 @@ import { type Project, TextFile, typescript } from "projen";
  * (later wins, absent files skipped): a package's `vite.config.custom.js` then
  * `vite.config.override.js`.
  */
-export const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js"];
+export const DEFAULT_VITE_OVERRIDES = ["vite.config.custom.js", "vite.config.override.js"];
 
 /** Options for {@link ViteConfigFile}. */
 export interface ViteConfigFileOptions {

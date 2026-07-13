@@ -13,7 +13,7 @@ import { JsonFile, javascript } from "projen";
  * Compiler options for the ROOT program only (`.projenrc.ts` + the engine as
  * seen from the root). Each package now owns its own projen-generated
  * `tsconfig.json` (scope `lib`/`jsx`/`types` overlaid on projen's defaults), so
- * this base no longer feeds packages — it just gives the projenrc/editor program
+ * this base no longer feeds packages - it just gives the projenrc/editor program
  * a sane ESM config. `lib` is set narrowly in `tsconfigRoot`.
  */
 const BASE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {

@@ -88,6 +88,18 @@ export function toPosix(p: string): string {
   return p.split(sep).join("/");
 }
 
+/**
+ * True if any segment of `p` is an ignored dir name ({@link IGNORE_DIRS}:
+ * vendored, build output, VCS, projen state). The single shared test the watcher
+ * uses to skip changes under `node_modules`/`dist`/`.git`/`.projen`/... - so the
+ * ignore set lives in exactly one place.
+ */
+export function isIgnoredPath(p: string): boolean {
+  return toPosix(p)
+    .split("/")
+    .some((seg) => IGNORE_DIRS.has(seg));
+}
+
 export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
