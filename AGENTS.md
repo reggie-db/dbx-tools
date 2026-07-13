@@ -145,7 +145,7 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbxtools root task
 workspaces/
   cli/dbx-tools/                          # the engine itself, DOGFOODED as a normal cli package
-    bin/dbxtools.ts                       # the CLI (commander): sync | watch | barrels | typecheck | openapi
+    bin/dbxtools.ts                       # the CLI (commander): sync[--watch] | barrels | typecheck | openapi
     index.ts                             # generated barrel (public API surface, like any package)
     src/
       log.ts                             # projen-AGNOSTIC utilities live at src/ root
@@ -157,7 +157,7 @@ workspaces/
         workspace.ts                     # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
         packages.ts                      # npmNameOf, lockPackageJson, applyCompilerOptions, applyTasks, emitViteConfig, SUBPROJECT/SHARED defaults
         barrels.ts                       # barrelsby driver (root index.ts, header + read-only)
-        watch.ts                         # chokidar loop for `dbxtools watch` (package-set re-synth + barrels)
+        watch.ts                         # chokidar loop for `dbxtools sync --watch` (package-set re-synth + barrels)
         scaffold.ts                      # packageSetChanged() + runSynth({ post })
         bootstrap.ts                     # bootstraps a COMPLETELY EMPTY folder (see Commands)
         openapi.ts                       # openapi generator (tsoa controllers -> spec + client)
@@ -172,19 +172,22 @@ example-workspaces/
 ```sh
 pnpm install                 # link workspace + engine
 pnpm exec projen             # synth all generated config (+ install + barrels)
-pnpm exec projen sync        # keep it in sync while editing (runs the single dbxtools watch loop)
+pnpm exec projen sync --watch # keep it in sync while editing (runs the single dbxtools watch loop)
 pnpm dbxtools sync           # bootstrap an empty folder, OR re-synth an existing workspace (one-shot)
-pnpm dbxtools watch          # watch: re-synth on .projenrc.ts/package changes, barrels on source edits
+pnpm dbxtools sync --watch   # sync, then watch: re-synth on .projenrc.ts/package changes, barrels on edits
 pnpm dbxtools barrels        # rebuild every package's root index.ts barrel
 pnpm dbxtools typecheck      # tsc --noEmit per package (proves tag enforcement)
 pnpm dbxtools openapi        # generate the openapi packages from tsoa controllers
 ```
 
-- **`projen sync` is the always-on watcher** (the generated `sync` task, also the
-  VS Code folder-open task). It runs the SINGLE `dbxtools watch` loop. projen's own
-  `--watch` is deliberately NOT used: it `fs.watch`es the whole repo recursively and
-  re-runs `.projenrc.ts` on EVERY file change, so a mere source edit forced a full
-  re-synth. `dbxtools watch` re-synths only when needed — see below.
+- **`projen sync --watch` is the always-on watcher** (the generated `sync` task run
+  with `--watch`, also the VS Code folder-open task). `sync`'s `receiveArgs` forwards
+  `--watch` to `dbxtools sync --watch`, which syncs once then runs the SINGLE
+  `dbxtools watch` loop. projen's own `--watch` is deliberately NOT used (and never
+  collides — it only fires for the bare `projen` synth, not a named task): it
+  `fs.watch`es the whole repo recursively and re-runs `.projenrc.ts` on EVERY file
+  change, so a mere source edit forced a full re-synth. The watcher re-synths only
+  when needed — see below.
 - **`dbxtools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
   `pnpm init`, seed a minimal `pnpm-workspace.yaml` (so the very next step can
   approve `tsx`'s `esbuild` build script non-interactively), `pnpm add -D
@@ -198,13 +201,13 @@ pnpm dbxtools openapi        # generate the openapi packages from tsoa controlle
   `pnpm exec projen`/`dbxtools sync` to work from here on.
 - **`dbxtools sync` on an existing workspace** just runs projen once (full synth,
   installs, regenerates barrels via the post-synth component).
-- **`dbxtools watch`** starts ONE chokidar process (see `watch.ts`) - the SINGLE
-  watcher - covering three concerns: a `.projenrc.ts` edit → full re-synth
-  (+install, deps may change); a package SET change (new/removed `src` folder) →
-  re-synth (+install); a source edit in an existing package → rebuild just that
-  package's barrel (no re-synth), and if it's a tsoa controller, regenerate the
-  `openapi` packages too. At startup it re-synths once if the package set drifted,
-  else just refreshes barrels.
+- **`dbxtools sync --watch`** syncs once, then starts ONE chokidar process (see
+  `watch.ts`) - the SINGLE watcher - covering three concerns: a `.projenrc.ts` edit →
+  full re-synth (+install, deps may change); a package SET change (new/removed `src`
+  folder) → re-synth (+install); a source edit in an existing package → rebuild just
+  that package's barrel (no re-synth), and if it's a tsoa controller, regenerate the
+  `openapi` packages too. The initial sync is the `sync` step, so the watcher itself
+  just watches.
 - **Barrels regenerate on every re-synth**: a post-synth projen `Component`
   (`GeneratedBarrels` in `project.ts`) on the plain `projen` path; `dbxtools`/
   watch's `runSynth` sets `PROJEN_DISABLE_POST` (skipping the component for speed)
@@ -292,5 +295,5 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   the SAME root as the controller it came from (`example-workspaces/server/
   api`'s controllers generate `example-workspaces/openapi/api`), not a hardcoded
   root. tsoa/typescript/openapi-typescript are lazy-loaded (only `dbxtools
-  openapi` / a watched controller edit needs them). `dbxtools watch` (started by
-  `projen sync`) regenerates it automatically when a controller changes.
+  openapi` / a watched controller edit needs them). The watcher (started by
+  `projen sync --watch`) regenerates it automatically when a controller changes.

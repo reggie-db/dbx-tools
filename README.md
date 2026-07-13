@@ -88,9 +88,9 @@ being the resolved project name), and each records its resolved tags in its
 
 ```sh
 pnpm install
-pnpm exec projen sync          # keep in sync while editing (single dbxtools watch loop)
+pnpm exec projen sync --watch  # keep in sync while editing (single dbxtools watch loop)
 pnpm dbxtools sync             # bootstrap an empty folder, or synth an existing workspace (one-shot)
-pnpm dbxtools watch            # watch: re-synth on .projenrc.ts/package changes, barrels on source edits
+pnpm dbxtools sync --watch     # sync, then watch: re-synth on .projenrc.ts/package changes, barrels on edits
 pnpm dbxtools barrels          # rebuild every package's root index.ts barrel
 pnpm dbxtools typecheck        # type-check each package against its tag tsconfig
 pnpm dbxtools openapi          # generate the openapi packages from tsoa controllers
@@ -114,7 +114,7 @@ export class GreetingController extends Controller {
 `dbxtools openapi` infers the OpenAPI 3 spec from the decorators + TS types and
 generates a read-only, typed [openapi-fetch](https://openapi-ts.dev/openapi-fetch/)
 client - colocated under the controller package's own root. It regenerates
-automatically under `projen sync` (via `dbxtools watch`) whenever a controller changes.
+automatically under `projen sync --watch` (via the watcher) whenever a controller changes.
 
 ## Barrels & generated files
 
@@ -128,6 +128,6 @@ re-synth; never edit them directly.
 ## Status
 
 Green: synth, `pnpm install`, `dbxtools barrels`/`typecheck`/`openapi`,
-`projen sync` (the single `dbxtools watch` loop), and bootstrapping
+`projen sync --watch` (the single `dbxtools watch` loop), and bootstrapping
 a completely empty folder all work end to end. This work lives on the `main`
 branch of `reggie-db/dbx-tools`.

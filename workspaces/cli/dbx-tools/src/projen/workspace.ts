@@ -66,7 +66,8 @@ export function projectName(): string {
   return fromGit ?? basename(repoRoot);
 }
 
-const IGNORE_DIRS = new Set([
+/** Dir names walks/globs skip: vendored, build output, VCS, and projen's own state. */
+export const IGNORE_DIRS = new Set([
   "node_modules",
   "dist",
   "lib",
@@ -117,8 +118,12 @@ export function isGeneratedFile(file: string): boolean {
   return GENERATED_BASENAMES.has(base) || BARREL_RE.test(base) || base.endsWith(".d.ts");
 }
 
-/** All files under `dir`, recursively, skipping build/vcs dirs; [] if missing. */
-export function walkFiles(dir: string): string[] {
+/**
+ * All files under `dir`, recursively, skipping the `ignore` dir names (default
+ * {@link IGNORE_DIRS}); [] if `dir` is missing. `clean` passes a set that keeps
+ * `.projen` so projen's generated task/dep manifests are walked too.
+ */
+export function walkFiles(dir: string, ignore: ReadonlySet<string> = IGNORE_DIRS): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
   const stack = [dir];
@@ -126,7 +131,7 @@ export function walkFiles(dir: string): string[] {
     const cur = stack.pop()!;
     for (const d of readdirSync(cur, { withFileTypes: true })) {
       if (d.isDirectory()) {
-        if (!IGNORE_DIRS.has(d.name)) stack.push(join(cur, d.name));
+        if (!ignore.has(d.name)) stack.push(join(cur, d.name));
       } else if (d.isFile()) {
         out.push(join(cur, d.name));
       }

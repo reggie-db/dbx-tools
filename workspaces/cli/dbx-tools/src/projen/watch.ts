@@ -1,6 +1,7 @@
 /**
- * The `dbxtools watch` engine: ONE chokidar process (started by the `sync` task)
- * that keeps the generated tree in sync while you edit. It is the SINGLE watcher -
+ * The `dbxtools watch` engine: ONE chokidar process (started by
+ * `dbxtools sync --watch`, i.e. the `sync` task run with `--watch`) that keeps
+ * the generated tree in sync while you edit. It is the SINGLE watcher -
  * projen's own `--watch` is deliberately NOT used, because it does
  * `fs.watch(<repo>, { recursive: true })` and re-runs `.projenrc.ts` on ANY change
  * anywhere in the tree, so a single source edit triggered a full re-synth. This
@@ -80,19 +81,13 @@ function resynth(reason: string, withInstall: boolean): void {
   log.success(n < 0 ? "re-synth complete" : `re-synth complete (${n} barrel${n === 1 ? "" : "s"})`);
 }
 
-/** Start the watch loop. Builds barrels once, then watches until interrupted. */
+/**
+ * Start the watch loop and watch until interrupted. The `sync` command has
+ * already brought the tree up to date before calling this (that is what
+ * `dbxtools sync --watch` does), so there is no initial synth here - we just
+ * watch and react to subsequent edits.
+ */
 export function startWatch(): void {
-  // This is the SINGLE watcher (no `projen --watch` alongside), so do the startup
-  // work here: if the package set drifted while we weren't watching, re-synth once
-  // (that rebuilds barrels too); otherwise just refresh barrels so the tree is
-  // correct immediately. Then watch.
-  if (packageSetChanged()) {
-    resynth("package set changed", true);
-  } else {
-    const initial = generateBarrels();
-    log.info(`watching (${initial} barrel${initial === 1 ? "" : "s"} built)`);
-  }
-
   const workspacePackageRoots = recordedRoots().map((r) => resolve(repoRoot, r));
   const watchPaths = [PROJENRC, ...workspacePackageRoots, ...configSrcDirs()];
 

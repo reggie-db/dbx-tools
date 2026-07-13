@@ -7,7 +7,7 @@
  * and a read-only (0o444) bit. Rewriting one therefore goes through
  * {@link makeWritable} first (barrelsby's `--delete`), then {@link stampGenerated}.
  */
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 
 const READONLY = 0o444;
 const WRITABLE = 0o644;
@@ -20,6 +20,20 @@ export function makeWritable(file: string): void {
 /** Set the read-only bit if the file exists (no-op otherwise). */
 export function makeReadonly(file: string): void {
   if (existsSync(file)) chmodSync(file, READONLY);
+}
+
+/**
+ * True if the file exists and has no owner-write bit. This is the toolchain's
+ * generated-file signal: everything projen and barrelsby write is set read-only
+ * (see {@link makeReadonly}), while hand-authored source stays writable - so a
+ * read-only file under the repo (outside vendor/build dirs) is a generated file.
+ */
+export function isReadonly(file: string): boolean {
+  try {
+    return (statSync(file).mode & 0o200) === 0;
+  } catch {
+    return false;
+  }
 }
 
 export interface HeaderOpts {

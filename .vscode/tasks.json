@@ -3,9 +3,9 @@
   "tasks": [
     {
       "label": "sync",
-      "detail": "projen sync - dbxtools watch (re-synth when needed + barrels)",
+      "detail": "projen sync --watch - dbxtools watch (re-synth when needed + barrels)",
       "type": "shell",
-      "command": "pnpm exec projen sync",
+      "command": "pnpm exec projen sync --watch",
       "isBackground": true,
       "problemMatcher": [],
       "runOptions": {

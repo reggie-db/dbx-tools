@@ -161,7 +161,8 @@
       "name": "sync",
       "steps": [
         {
-          "exec": "pnpm dbxtools watch"
+          "exec": "pnpm dbxtools sync",
+          "receiveArgs": true
         }
       ]
     },

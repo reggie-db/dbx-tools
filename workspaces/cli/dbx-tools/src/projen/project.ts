@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import picomatch from "picomatch";
-import { Component, type TaskOptions, javascript, typescript } from "projen";
+import { Component, type TaskOptions, type TaskStepOptions, javascript, typescript } from "projen";
 import { generateBarrels } from "./barrels";
 import * as files from "./files";
 import {
@@ -405,20 +405,19 @@ function resolveTags(p: DiscoveredPackage, tagPaths: Record<string, string[]>): 
 
 /** Register the native projen tasks on the monorepo root. */
 function registerRootTasks(project: javascript.NodeProject): void {
-  const set = (name: string, exec: string): void => {
+  const set = (name: string, exec: string, options?: TaskStepOptions): void => {
     const task = project.tasks.tryFind(name) ?? project.addTask(name);
-    task.reset(exec);
+    task.reset(exec, options);
   };
   set("barrels", "pnpm dbxtools barrels");
   set("typecheck", "pnpm dbxtools typecheck");
   set("openapi", "pnpm dbxtools openapi");
-  // `sync`: keep the tree in sync while editing via a SINGLE watcher. projen's own
-  // `--watch` is intentionally NOT used - it `fs.watch`es the whole repo recursively
-  // and re-runs `.projenrc.ts` on EVERY file change, so a mere source edit forced a
-  // full re-synth. `dbxtools watch` instead re-synths only when needed (the
-  // `.projenrc.ts` config or the package set changed) and otherwise just rebuilds
-  // the affected barrels.
-  set("sync", "pnpm dbxtools watch");
+  // `sync`: re-synthesize once. `receiveArgs` forwards extra CLI args, so
+  // `pnpm exec projen sync --watch` runs `pnpm dbxtools sync --watch`, which syncs
+  // and then starts the SINGLE watcher. projen's own `--watch` only fires for the
+  // bare `projen` synth (never for a named task), so there is no collision - and we
+  // avoid its re-synth-on-every-file-change overreach.
+  set("sync", "pnpm dbxtools sync", { receiveArgs: true });
 }
 
 /**

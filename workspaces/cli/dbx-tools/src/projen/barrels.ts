@@ -17,7 +17,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative } from "node:path";
-import { makeWritable, stampGenerated } from "./generated";
+import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
 import { logger } from "../log";
 import {
   escapeRegExp,
@@ -46,13 +46,33 @@ export type BarrelModifier = (
   ctx: { readonly packageDir: string },
 ) => string;
 
-/** Rebuild the root barrel for one package dir; returns 1 if one was written. */
+/**
+ * The do-not-edit banner stamped on every generated barrel. Deliberately stable
+ * (no timestamp) so a barrel is a pure function of its exporting modules - which
+ * is what lets {@link generateForPackage} skip the rewrite when nothing changed.
+ */
+const BARREL_HEADER: HeaderOpts = {
+  tool: "projen watch (barrelsby)",
+  source: "the exporting modules in ./src",
+};
+
+/**
+ * Rebuild one package's root barrel. Returns 1 only if the barrel's contents
+ * actually changed - a module was added, removed, renamed, or toggled its
+ * `export` - and 0 for a no-op. An edit *inside* an already-exported module (even
+ * adding a new named export) leaves the flat `export * from "./src/x"` list
+ * identical, so it is a no-op.
+ */
 function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   const srcDir = join(pkgDir, "src");
   if (!existsSync(srcDir)) return 0;
 
   const rootBarrel = join(pkgDir, "index.ts");
   const tmpBarrel = join(srcDir, "index.ts");
+  // Snapshot the current barrel so we can tell a real change (module added/removed/
+  // renamed) from an edit *inside* an already-exported module, which leaves the flat
+  // `export * from "./src/x"` list - and therefore this file - byte-for-byte identical.
+  const before = existsSync(rootBarrel) ? readFileSync(rootBarrel, "utf8") : undefined;
 
   // Rule 2: src files with no export are excluded by exact (tail-anchored) path.
   const noExport = walkFiles(srcDir)
@@ -107,17 +127,26 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   rmSync(tmpBarrel, { force: true });
   if (modifier) content = modifier(content, { packageDir: pkgDir });
 
+  // barrelsby regenerates on every source edit, but the barrel only *changes* when
+  // its set of exporting modules does. If the stamped result matches what's already
+  // on disk, restore the read-only bit we cleared above and report no change (0) -
+  // this is what keeps the watcher quiet on ordinary in-file edits.
+  const next = `${header(BARREL_HEADER)}\n${content}`;
+  if (before === next) {
+    makeReadonly(rootBarrel);
+    return 0;
+  }
+
   writeFileSync(rootBarrel, content);
-  stampGenerated(rootBarrel, {
-    tool: "projen watch (barrelsby)",
-    source: "the exporting modules in ./src",
-  });
+  stampGenerated(rootBarrel, BARREL_HEADER);
   return 1;
 }
 
 /**
  * Rebuild barrels for the given package dirs (default: every package recorded in
  * `pnpm-workspace.yaml` - the source of truth, read via `workspacePackages()`).
+ * Returns the number of barrels whose contents actually changed (an unchanged
+ * export surface is a no-op), so callers can stay quiet when nothing moved.
  */
 export function generateBarrels(
   opts: { dirs?: string[]; modifier?: BarrelModifier } = {},
