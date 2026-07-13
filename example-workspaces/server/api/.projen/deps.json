@@ -1,13 +1,41 @@
 {
   "dependencies": [
     {
-      "name": "@types/express",
-      "version": "catalog:",
+      "name": "@stylistic/eslint-plugin",
+      "version": "^2",
       "type": "build"
     },
     {
       "name": "@types/node",
       "version": "catalog:",
+      "type": "build"
+    },
+    {
+      "name": "@typescript-eslint/eslint-plugin",
+      "version": "^8",
+      "type": "build"
+    },
+    {
+      "name": "@typescript-eslint/parser",
+      "version": "^8",
+      "type": "build"
+    },
+    {
+      "name": "eslint-import-resolver-typescript",
+      "type": "build"
+    },
+    {
+      "name": "eslint-plugin-import",
+      "type": "build"
+    },
+    {
+      "name": "eslint",
+      "version": "^9",
+      "type": "build"
+    },
+    {
+      "name": "tsx",
+      "version": "^4.23.0",
       "type": "build"
     },
     {
@@ -17,11 +45,6 @@
     {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "express",
-      "version": "catalog:",
       "type": "runtime"
     },
     {

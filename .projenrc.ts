@@ -23,6 +23,8 @@ const project = new DBXToolsNodeProject({
   workspacePackageRoots: ["workspaces", "example-workspaces"],
 });
 
+
+
 // Per-package tweaks are user MIXINS applied across the subtree with the
 // constructs-native `project.with(...)` - it runs each mixin over the current tree
 // (captured at call time), after the built-in tag mixins the root already applied
@@ -55,23 +57,28 @@ project.with(
       // The engine, dogfooded through the normal `cli` tag. Override the
       // auto-derived name (`@dbx-tools/cli-dbx-tools`) to the clean `@dbx-tools/cli`.
       p.package.addField("name", "@dbx-tools/cli");
+      p.package.addField("cool-dude", "0.0.0");
       p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
       // `commander` + `@types/node` already come from the `cli` tag; the rest are
       // the engine's own deps. `pnpm` here is what lets `dbxtools sync` bootstrap a
       // brand-new, completely empty folder with no global pnpm install required -
       // it resolves pnpm's own CLI via `require.resolve`, not a system PATH lookup.
       p.addDeps(
-        "projen@^0.101.4",
-        "constructs@^10.0.0",
-        "barrelsby@^2.8.1",
-        "chokidar@^4.0.3",
-        "consola@^3.4.2",
-        "openapi-typescript@^7.13.0",
-        "tsoa@catalog:",
-        "yaml@^2.9.0",
-        "tsx@^4.23.0",
-        "pnpm@catalog:",
+        "projen",
+        "constructs",
+        "barrelsby",
+        "chokidar",
+        "consola",
+        "openapi-typescript",
+        "tsoa",
+        "yaml",
+        "tsx",
+        "pnpm",
+        "tinyglobby",
+        "picomatch",
+        "p-memoize",
       );
+      p.addDevDeps("@types/picomatch@^4.0.3");
       // ES2022 stdlib (e.g. Object.hasOwn in the logger) - the `cli` tag default is
       // ES2020. Also cover the root `index.ts` barrel and the `bin/` CLI, which the
       // tag's default `src/**/*.ts` include doesn't reach - widening `rootDir` to

@@ -21,7 +21,8 @@
 import type { IMixin } from "constructs";
 import { javascript } from "projen";
 import { tagMixin } from "./mixins";
-import { applyCompilerOptions, applyTasks, emitViteConfig } from "./packages";
+import { applyCompilerOptions, applyTasks } from "./packages";
+import { emitViteConfig } from "./vite";
 
 /** Node compiler options: ES2020 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {

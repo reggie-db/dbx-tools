@@ -19,10 +19,10 @@ const project = new DBXToolsNodeProject();
 // Per-package tweaks are mixins, applied across the construct subtree with the
 // constructs-native project.with(...) (after the built-in DEFAULT_TAG_MIXINS the
 // root applies during construction). Dispatch on a package's stable folder
-// identity - its resolved tags (p.tags) + folder name.
+// identity - its resolved tags (p.dbxToolsConfig.tags) + folder name.
 project.with(
   packageMixin(
-    (p) => p.tags.includes("ui") && p.name.endsWith("/app"),
+    (p) => p.dbxToolsConfig.tags.includes("ui") && p.name.endsWith("/app"),
     (p) => p.addDeps("@dbx-tools/shared-core@workspace:*"),
   ),
 );
@@ -49,9 +49,9 @@ root (default `["workspaces"]`; this repo also adds `example-workspaces/` for it
 seed content). The folder's path relative to the root becomes its **tags** (Bit
 style - a tag names a target environment, not an npm scope): `ui/app` → tags
 `[ui, ui-app]` via cumulative dash-join, matched against `workspacePackageTagPaths`
-(default: identity over the tag names). Each matched tag maps to a config in
-`WORKSPACE_TAGS` (`.../src/projen/tags.ts`) that drives the generated `tsconfig`
-(`lib`/`jsx`/`types`) + baseline deps - so misuse fails `tsc`:
+(default: identity over the tag names). Each matched tag maps to a mixin in
+`WORKSPACE_TAG_MIXINS` (`.../src/projen/tags.ts`) that drives the generated
+`tsconfig` (`lib`/`jsx`/`types`) + baseline deps - so misuse fails `tsc`:
 
 | Tag      | Runtime                    | DOM | Node |
 | -------- | -------------------------- | --- | ---- |
@@ -73,23 +73,24 @@ being the resolved project name), and each records its resolved tags in its
 - **`project.with(...mixins)`** - per-package tweaks, applied across the construct
   subtree (constructs-native; runs after the built-in `DEFAULT_TAG_MIXINS` the root
   applies during construction). `tagMixin(tag, fn)` targets packages by tag;
-  `packageMixin(predicate, fn)` by any predicate (dispatch on `p.tags` +
-  `basename(p.outdir)`); `fileMixin(fn)` targets any generated file. Mutate via
-  projen's API (`p.addDeps(...)`, `p.addTask(...)`, `p.package.addBin({...})`,
-  `p.tsconfig?.file.addOverride(...)`).
+  `packageMixin(predicate, fn)` by any predicate (dispatch on
+  `p.dbxToolsConfig.tags` + `basename(p.outdir)`); `fileMixin(fn)` targets any
+  generated file. Mutate via projen's API (`p.addDeps(...)`, `p.addTask(...)`,
+  `p.package.addBin({...})`, `p.tsconfig?.file.addOverride(...)`).
 - **`defaultTagMixins`** (`"all"` | list) - which built-in tag mixins run (e.g. the
   `server` mixin adds Express + `dev`/`start` tasks).
 - **`workspacePackageTagPaths`** - map a path/pattern to extra tag(s).
-- **`project.pnpmWorkspace`** - `.addCatalog(name, ver)` / `.allowBuild(name)` /
-  `.addPackage(glob)` to tweak `pnpm-workspace.yaml` (or `file.addOverride(...)`).
+- **`project.pnpmWorkspace`** (root-only field) - `?.addCatalog(name, ver)` /
+  `.allowBuild(name)` / `.addPackages(glob)` to tweak `pnpm-workspace.yaml` (or
+  `file.addOverride(...)`).
 
 ## The `dbxtools` CLI
 
 ```sh
 pnpm install
-pnpm exec projen sync          # keep in sync while editing (projen --watch + dbxtools watch, concurrently)
+pnpm exec projen sync          # keep in sync while editing (single dbxtools watch loop)
 pnpm dbxtools sync             # bootstrap an empty folder, or synth an existing workspace (one-shot)
-pnpm dbxtools watch            # watch: re-synth on package add/remove, barrels on source edits
+pnpm dbxtools watch            # watch: re-synth on .projenrc.ts/package changes, barrels on source edits
 pnpm dbxtools barrels          # rebuild every package's root index.ts barrel
 pnpm dbxtools typecheck        # type-check each package against its tag tsconfig
 pnpm dbxtools openapi          # generate the openapi packages from tsoa controllers
@@ -127,6 +128,6 @@ re-synth; never edit them directly.
 ## Status
 
 Green: synth, `pnpm install`, `dbxtools barrels`/`typecheck`/`openapi`,
-`projen sync` (concurrent `projen --watch` + `dbxtools watch`), and bootstrapping
+`projen sync` (the single `dbxtools watch` loop), and bootstrapping
 a completely empty folder all work end to end. This work lives on the `main`
 branch of `reggie-db/dbx-tools`.

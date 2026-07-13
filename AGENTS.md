@@ -44,12 +44,18 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   `project.synth()` yourself. A normal consuming `.projenrc.ts` is two lines:
   `const project = new DBXToolsNodeProject(); project.synth();`. Both classes
   share `DBXToolsCommonOptions` (`scope`, `workspacePackageRoots`,
-  `workspacePackageTagPaths`, `workspaceTags`, `disableWorkspaceTags`, `catalog`,
-  `tags`, `defaultTagMixins`) and a small `DBXToolsSupport` helper backing the
-  surface they expose: `tags` + `appendTag`/`prependTag` (distinct, order-
-  preserving, read/written directly on `package.json` `dbxToolsConfig.tags` via
-  `NodePackage` — never cached on a field), `scope` + `packageNameFor`, and the
-  `pnpmWorkspace` field.
+  `workspacePackageTagPaths`, `disableWorkspaceTags`, `defaultTagMixins`), which
+  `extends` the component option bags directly — `DBXToolsConfigOptions` (`tags`)
+  and `DBXToolsPNPMWorkspaceOptions` (`packages`/`catalog`/`allowBuilds`) — so those
+  are top-level options, not nested fields. Both expose `IDBXToolsProject`:
+  `scope`/`packageNameFor` plus the nested config COMPONENTS as fields (projen-style,
+  like `project.eslint?.addRules(...)`) — `project.dbxToolsConfig` (implements
+  `ITagging`: `tags` + `addTags`, distinct/order-preserving, read/written directly on
+  `package.json` `dbxToolsConfig.tags` — never cached on a field) and
+  `project.pnpmWorkspace` (implements `IPnpmWorkspace`:
+  `addPackages`/`addCatalog`/`allowBuild`; ROOT-only, so `undefined` on a child).
+  Call methods on those fields directly (`project.dbxToolsConfig.addTags(...)`), not
+  via delegator methods on the project.
 - **`pnpm-workspace.yaml` is the source of truth**, emitted by the
   `DBXToolsPNPMWorkspace` component (`pnpm-workspace.ts`) exposed as the root's
   `project.pnpmWorkspace` field. The root scans the filesystem ONCE at synth
@@ -57,8 +63,8 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   file's `packages:` list is sourced from `project.subprojects` at synth via a
   thunk (so member order/timing never matters) — every discovered package becomes
   a real subproject, no manual member list. Mutate it through the typed methods
-  `project.pnpmWorkspace.addCatalog(name, version)` / `.allowBuild(name)` /
-  `.addPackage(glob)` (or `file.addOverride(...)` for any other pnpm setting), not
+  `project.pnpmWorkspace?.addCatalog(name, version)` / `.allowBuild(name)` /
+  `.addPackages(glob)` (or `file.addOverride(...)` for any other pnpm setting), not
   by editing the YAML. Discovery is TWO functions in `workspace.ts`:
   `scanPackages(root, roots)` walks the filesystem (synth time; returns each
   package's path + the tags implied by its path, reading no manifest), while
@@ -70,46 +76,46 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   ANY depth is a package. Its path relative to the root is decomposed into
   cumulative dash-join **tag candidates**: `ui/app` → `[ui, ui-app]`;
   `dir/another/path` → `[dir, dir-another, dir-another-path]`. Each candidate is
-  looked up in **`workspacePackageTagPaths`** (`Record<token, OneOrMany<tag>>`,
+  looked up in **`workspacePackageTagPaths`** (`Record<token, string[]>`,
   default: identity over the tag names) and the union of matches — together with
   any tags already on a pre-attached project — is the package's applied tags,
   possibly NONE (then only the agnostic default applies). The deduped tag list is
   written to each package's `package.json` under **`dbxToolsConfig.tags`** (the
   per-package source of truth, surfaced post-synth as `workspacePackages()[].tags`)
-  and held on the `DBXToolsTypeScriptProject` instance (read via `pkg.tags`, the
-  basis a `packageMixin` dispatches on). (`OneOrMany<T> = T | T[]`,
-  `workspace.ts`.) No declaration needed — drop a `src/` folder, re-synth.
+  and read back via the `DBXToolsConfig` component (`pkg.dbxToolsConfig.tags`, the
+  basis a `packageMixin` dispatches on). No declaration needed — drop a `src/`
+  folder, re-synth.
 - **A root may already hold in-tree subprojects.** If a discovered folder matches
   a subproject already attached to the root, it is NOT re-created — the resolved
-  tags are unioned onto it (`appendTag` for a DBXTools project, else
+  tags are unioned onto it (`dbxToolsConfig.addTags` for a DBXTools project, else
   `addWorkspacePackageTags`). The root itself can also carry tags (a `""`/`"."`
   key in `workspacePackageTagPaths`, or the `tags` option).
 - **Every package is a `DBXToolsTypeScriptProject`** (extends
   `typescript.TypeScriptProject`). The root's scan constructs one per discovered
   folder with `parent: root`; you can also `new DBXToolsTypeScriptProject({parent,
-  ...})` directly to attach a package WITHOUT auto-discovery. Its tags' configs
-  are MERGED in order (`mergeTagDefs` in `packages.ts`: deps concatenated,
-  `tsconfig.compilerOptions`/`tasks` later-wins, `viteConfig` OR'd) over the
-  `DEFAULT_WORKSPACE_TAG` floor and spread into the projen options; the class then
-  points `main`/`types`/`exports` at the package-root `index.ts` barrel, applies
-  the tag's `tasks`, optionally emits `vite.config.ts`, and locks `package.json`.
+  ...})` directly to attach a package WITHOUT auto-discovery. Every package gets
+  the agnostic tsconfig floor (`AGNOSTIC_COMPILER_OPTIONS`: ES2022, no DOM/node) at
+  construction; the class then points `main`/`types`/`exports` at the package-root
+  `index.ts` barrel, applies any explicit `tasks`, optionally emits
+  `vite.config.ts`, and locks `package.json`. Per-tag deps/tsconfig/tasks are
+  layered afterward by the tag MIXINS the root applies (see below).
   projen OWNS that package's `package.json`/`tsconfig.json`/tasks/`README.md`/
   `.projen/`; baseline projen features are off to match the root (`SUBPROJECT_
   DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
-- **Tags are ONE map.** `tags.ts` — `WORKSPACE_TAGS` / `WorkspaceTagDef` (no
-  separate "profile" type; `TagDef` is just an alias of the same shape). A
-  `WorkspaceTagDef` IS a projen `TypeScriptProject` options bag
-  (`Partial<TypeScriptProjectOptions>`) plus two engine-only extras (`tasks`,
-  `viteConfig`), spread into the package. So a tag sets projen-native
-  `deps`/`devDeps`/`peerDeps` + `tsconfig.compilerOptions` (projen enums, e.g.
-  `TypeScriptJsxMode.REACT_JSX`), merged over projen defaults so tag
-  `lib`/`jsx`/`types`/`target` win:
+- **Tags are ONE map of mixins.** `tags.ts` — `WORKSPACE_TAG_MIXINS`
+  (`Record<WorkspaceTag, IMixin>`, keyed by tag name). Each entry is a
+  `tagMixin(name, fn)` that, for every package carrying the tag, adds the tag's
+  projen-native `deps`/`devDeps` (`@catalog:` specifiers) and OVERRIDES the
+  generated tsconfig via `applyCompilerOptions` (projen enums, e.g.
+  `TypeScriptJsxMode.REACT_JSX`) — layered over the `AGNOSTIC_COMPILER_OPTIONS`
+  floor so tag `lib`/`jsx`/`types`/`target` win. Some also `applyTasks` / emit
+  `vite.config.ts`:
   - `ui` → Vite/React (DOM + `vite/client` types, jsx, `vite.config.ts`)
   - `server` → Node (`@types/node`, `tsoa` + `experimentalDecorators`, no DOM)
   - `node` → Node (`@types/node`, no DOM)
   - `cli` → Node + `commander` + `@clack/prompts`
-  - `shared` → agnostic (no DOM, no Node)
-  - `openapi` → generated, read-only clients (from tsoa controllers)
+  - `shared` → agnostic (the `AGNOSTIC_COMPILER_OPTIONS` floor: no DOM, no Node)
+  - `openapi` → generated, read-only clients (`openapi-fetch`, DOM libs)
   Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
   `document` in `shared`/`server` fails `tsc`; `process`/`node:*` in `ui` fails.
 - **Per-package behavior is MIXINS** (`mixins.ts`; `constructs` `IMixin`). A mixin
@@ -118,7 +124,7 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   (tree captured at call time), so a root-level `project.with(...)` reaches every
   matching child. `tagMixin(tag, fn)` targets packages carrying `tag`;
   `packageMixin(predicate, fn)` targets packages by any predicate (dispatch on
-  `pkg.tags` + `basename(pkg.outdir)`); `fileMixin(fn)` targets any generated
+  `pkg.dbxToolsConfig.tags` + `basename(pkg.outdir)`); `fileMixin(fn)` targets any generated
   `FileBase`. The root applies the built-in **`DEFAULT_TAG_MIXINS`** (toggled by
   the `defaultTagMixins` option, `"all"` by default) during its own construction —
   e.g. the `server` mixin adds `express` + `dev`/`start` tasks. Consumers apply
@@ -144,12 +150,12 @@ workspaces/
     src/
       log.ts                             # projen-AGNOSTIC utilities live at src/ root
       projen/                            # everything projen-specific lives under src/projen/
-        project.ts                       # DBXToolsNodeProject + DBXToolsTypeScriptProject + initDBXToolsProject + post-synth barrels
+        project.ts                       # DBXToolsNode/TypeScriptProject + ITagging/IPnpmWorkspace + DBXToolsConfig + initDBXToolsProject
         mixins.ts                        # tagMixin/packageMixin/fileMixin + DEFAULT_TAG_MIXINS
-        pnpm-workspace.ts                # DBXToolsPNPMWorkspace (YamlFile) + Catalog/DEFAULT_CATALOG
-        tags.ts                          # WORKSPACE_TAGS map + WorkspaceTagDef/TagDef (the one tag type)
+        pnpm-workspace.ts                # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
+        tags.ts                          # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
         workspace.ts                     # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
-        packages.ts                      # npmNameOf, lockPackageJson, mergeTagDefs, applyTasks, SUBPROJECT/SHARED defaults
+        packages.ts                      # npmNameOf, lockPackageJson, applyCompilerOptions, applyTasks, emitViteConfig, SUBPROJECT/SHARED defaults
         barrels.ts                       # barrelsby driver (root index.ts, header + read-only)
         watch.ts                         # chokidar loop for `dbxtools watch` (package-set re-synth + barrels)
         scaffold.ts                      # packageSetChanged() + runSynth({ post })
@@ -166,19 +172,19 @@ example-workspaces/
 ```sh
 pnpm install                 # link workspace + engine
 pnpm exec projen             # synth all generated config (+ install + barrels)
-pnpm exec projen sync        # keep it in sync while editing (concurrently: projen --watch + dbxtools watch)
+pnpm exec projen sync        # keep it in sync while editing (runs the single dbxtools watch loop)
 pnpm dbxtools sync           # bootstrap an empty folder, OR re-synth an existing workspace (one-shot)
-pnpm dbxtools watch          # watch: re-synth on package add/remove, barrels on source edits
+pnpm dbxtools watch          # watch: re-synth on .projenrc.ts/package changes, barrels on source edits
 pnpm dbxtools barrels        # rebuild every package's root index.ts barrel
 pnpm dbxtools typecheck      # tsc --noEmit per package (proves tag enforcement)
 pnpm dbxtools openapi        # generate the openapi packages from tsoa controllers
 ```
 
 - **`projen sync` is the always-on watcher** (the generated `sync` task, also the
-  VS Code folder-open task). It runs the watches CONCURRENTLY, with NO env-var
-  handshake: `concurrently -k "pnpm exec projen --watch" "pnpm dbxtools watch"`.
-  `projen --watch` owns `.projenrc.ts` re-synth (barrels regenerate via the
-  post-synth component); `dbxtools watch` owns the rest — see below.
+  VS Code folder-open task). It runs the SINGLE `dbxtools watch` loop. projen's own
+  `--watch` is deliberately NOT used: it `fs.watch`es the whole repo recursively and
+  re-runs `.projenrc.ts` on EVERY file change, so a mere source edit forced a full
+  re-synth. `dbxtools watch` re-synths only when needed — see below.
 - **`dbxtools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
   `pnpm init`, seed a minimal `pnpm-workspace.yaml` (so the very next step can
   approve `tsx`'s `esbuild` build script non-interactively), `pnpm add -D
@@ -192,13 +198,13 @@ pnpm dbxtools openapi        # generate the openapi packages from tsoa controlle
   `pnpm exec projen`/`dbxtools sync` to work from here on.
 - **`dbxtools sync` on an existing workspace** just runs projen once (full synth,
   installs, regenerates barrels via the post-synth component).
-- **`dbxtools watch`** starts ONE chokidar process (see `watch.ts`) run ALONGSIDE
-  `projen --watch`, covering the two concerns projen's own watch does NOT: a
-  package SET change (new/removed `src` folder) → re-synth (+install); a source
-  edit in an existing package → rebuild just that package's barrel (no re-synth),
-  and if it's a tsoa controller, regenerate the `openapi` packages too. It does
-  NOT watch `.projenrc.ts` (projen --watch owns that) or do an initial full
-  re-synth (projen --watch's startup synth does).
+- **`dbxtools watch`** starts ONE chokidar process (see `watch.ts`) - the SINGLE
+  watcher - covering three concerns: a `.projenrc.ts` edit → full re-synth
+  (+install, deps may change); a package SET change (new/removed `src` folder) →
+  re-synth (+install); a source edit in an existing package → rebuild just that
+  package's barrel (no re-synth), and if it's a tsoa controller, regenerate the
+  `openapi` packages too. At startup it re-synths once if the package set drifted,
+  else just refreshes barrels.
 - **Barrels regenerate on every re-synth**: a post-synth projen `Component`
   (`GeneratedBarrels` in `project.ts`) on the plain `projen` path; `dbxtools`/
   watch's `runSynth` sets `PROJEN_DISABLE_POST` (skipping the component for speed)
@@ -225,14 +231,14 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 
 - **pnpm v11** gates build scripts behind `allowBuilds` in `pnpm-workspace.yaml`
   (NOT `onlyBuiltDependencies`) — `esbuild: true` is the default. Add allowances
-  via `project.pnpmWorkspace.allowBuild(name)` (or `.addCatalog`/`.addPackage`, or
+  via `project.pnpmWorkspace?.allowBuild(name)` (or `.addCatalog`/`.addPackages`, or
   `file.addOverride(...)` for any other pnpm setting), not by editing the YAML.
 - **The engine is dogfooded as a normal auto-discovered package**, not a hand-
   authored special case: it lives at `workspaces/cli/dbx-tools` (tag `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` applies (via `project.with(...)`) a
   `packageMixin` matching
-  `p.tags.includes("cli") && basename(p.outdir) === "dbx-tools"` that:
+  `p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "dbx-tools"` that:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
   adds its bin (`p.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), adds its
   own deps (`projen`, `constructs`, `barrelsby`, `chokidar`, `consola`,
@@ -251,8 +257,8 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `link:` install with a version range would silently repoint it at the
   registry. If the path does NOT pass through `node_modules` (this repo's own
   dogfooding - relative-imported, no package resolution involved), it returns
-  `undefined` and adds nothing. The root also adds `concurrently` (for the `sync`
-  task), `tsx`, `typescript`, `@types/node`.
+  `undefined` and adds nothing. The root also adds `tsx`, `typescript`, and
+  `@types/node`.
 - **`DBXToolsNodeProject` defaults `packageManager: PNPM`** (projen's
   `packageManager` is readonly after construction); pass a different one only if
   you know what you're doing, since the whole toolchain assumes pnpm workspaces.

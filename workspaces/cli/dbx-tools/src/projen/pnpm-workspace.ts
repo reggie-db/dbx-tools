@@ -2,10 +2,12 @@
  * `pnpm-workspace.yaml` as a first-class projen file component.
  *
  * `DBXToolsPNPMWorkspace` extends projen's `YamlFile` and is exposed as the
- * `pnpmWorkspace` field on both project classes, so a mixin or a consumer's
- * `.projenrc.ts` can tweak it uniformly (`project.pnpmWorkspace.addCatalog(...)`,
- * `.allowBuild(...)`, `.addPackage(...)`, or `file.addOverride(...)` for any other
- * pnpm setting). Its `packages` list is NOT hardcoded: it is recomputed from
+ * `pnpmWorkspace` field on a tree ROOT (only a root emits the file, so on a child
+ * package the field is `undefined` - like projen's optional `project.eslint`). A
+ * mixin or a consumer's `.projenrc.ts` tweaks it via that field
+ * (`project.pnpmWorkspace?.addCatalog(...)`, `.allowBuild(...)`, `.addPackages(...)`,
+ * or `file.addOverride(...)` for any other pnpm setting). Its `packages` list is NOT
+ * hardcoded: it is recomputed from
  * `project.subprojects` at synth time (projen resolves the `obj` thunk late, by
  * which point every subproject is attached), so any package - discovered by the
  * root's scan or attached manually - lands here automatically.
@@ -77,17 +79,15 @@ export interface DBXToolsPNPMWorkspaceOptions {
   readonly allowBuilds?: Record<string, boolean>;
 }
 
+
 /**
  * `pnpm-workspace.yaml`: the SOURCE OF TRUTH every other command reads back. Its
  * `packages` are sourced from `project.subprojects` via a thunk projen resolves at
  * synth (so member order/timing never matters), unioned with any globs added via
- * {@link addPackage}. Mutators ({@link addCatalog}, {@link allowBuild}) let mixins
+ * {@link addPackages}. Mutators ({@link addCatalog}, {@link allowBuild}) let mixins
  * and `.projenrc.ts` tweak it without a callback option.
  */
 export class DBXToolsPNPMWorkspace extends YamlFile {
-  private readonly catalog: Catalog;
-  private readonly allowBuilds: Record<string, boolean>;
-  private readonly packages: string[] = [];
 
   constructor(project: Project, options: DBXToolsPNPMWorkspaceOptions = {}) {
     super(project, "pnpm-workspace.yaml", {
@@ -95,56 +95,41 @@ export class DBXToolsPNPMWorkspace extends YamlFile {
       readonly: true,
       obj: () => this.assemble(),
     });
-    this.catalog = { ...options.catalog ?? {} };
-    this.allowBuilds = {
-      ...(options.allowBuilds ?? {})
-    };
-    this.packages = options.packages ?? [];
+
+    options.packages?.forEach((glob) => this.addPackages(glob));
+    if (options.catalog) {
+      Object.entries(options.catalog).forEach(([name, version]) => this.addCatalog(name, version));
+    }
+    if (options.allowBuilds) {
+      Object.entries(options.allowBuilds).forEach(([name, allowed]) => this.allowBuild(name, allowed));
+    }
   }
 
   /** Add extra workspace member globs beyond the discovered subprojects. */
-  public addPackage(...globs: string[]): void {
-    this.packages.push(...globs);
+  public addPackages(...globs: string[]): void {
+    globs.forEach(glob => this.addToArray("packages", glob))
   }
 
   /** Add or override a `catalog:` entry (dependency name -> version range). */
   public addCatalog(name: string, version: string): void {
-    this.catalog[name] = version;
+    this.addOverride(`catalog.${name}`, version);
   }
 
   /** Allow (or disallow) a dependency's build scripts under pnpm v11. */
   public allowBuild(name: string, allowed = true): void {
-    this.allowBuilds[name] = allowed;
+    this.addOverride(`allowBuilds.${name}`, allowed);
   }
 
-  private isEmpty() {
-    if ([this.catalog, this.allowBuilds].every(o => Object.keys(o).length === 0)) {
-      if ([this.packages].every(p => p.length === 0)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Assemble the final object (called by projen when it resolves the `obj` thunk). */
-  private assemble(): PnpmWorkspaceConfig | null {
-    if (this.project.parent) {
-      if (this.isEmpty()) return null;
-      else {
-        throw new Error("DBXToolsPNPMWorkspace cannot be used in a subproject");
-      }
-    }
-    const root = this.project.outdir;
+  private assemble(): Record<string, unknown> {
+    const outdir = this.project.outdir;
     const members = this.project.subprojects
-      .map((s) => toPosix(relative(root, s.outdir)))
+      .map((s) => toPosix(relative(outdir, s.outdir)))
       .filter(Boolean);
-    const packages = [...new Set([...members, ...this.packages])].sort();
-    const catalog = { ...DEFAULT_CATALOG, ...this.catalog };
-    const allowBuilds = { ...DEFAULT_ALLOW_BUILDS, ...this.allowBuilds };
     return {
-      packages,
-      catalog,
-      allowBuilds
+      packages: [...new Set(members)].sort(),
+      catalog: { ...DEFAULT_CATALOG },
+      allowBuilds: { ...DEFAULT_ALLOW_BUILDS },
     };
   }
+
 }

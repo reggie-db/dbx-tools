@@ -1,8 +1,46 @@
 {
   "dependencies": [
     {
+      "name": "@stylistic/eslint-plugin",
+      "version": "^2",
+      "type": "build"
+    },
+    {
       "name": "@types/node",
       "version": "catalog:",
+      "type": "build"
+    },
+    {
+      "name": "@types/picomatch",
+      "version": "^4.0.3",
+      "type": "build"
+    },
+    {
+      "name": "@typescript-eslint/eslint-plugin",
+      "version": "^8",
+      "type": "build"
+    },
+    {
+      "name": "@typescript-eslint/parser",
+      "version": "^8",
+      "type": "build"
+    },
+    {
+      "name": "eslint-import-resolver-typescript",
+      "type": "build"
+    },
+    {
+      "name": "eslint-plugin-import",
+      "type": "build"
+    },
+    {
+      "name": "eslint",
+      "version": "^9",
+      "type": "build"
+    },
+    {
+      "name": "tsx",
+      "version": "^4.23.0",
       "type": "build"
     },
     {
@@ -16,12 +54,10 @@
     },
     {
       "name": "barrelsby",
-      "version": "^2.8.1",
       "type": "runtime"
     },
     {
       "name": "chokidar",
-      "version": "^4.0.3",
       "type": "runtime"
     },
     {
@@ -31,42 +67,46 @@
     },
     {
       "name": "consola",
-      "version": "^3.4.2",
       "type": "runtime"
     },
     {
       "name": "constructs",
-      "version": "^10.0.0",
       "type": "runtime"
     },
     {
       "name": "openapi-typescript",
-      "version": "^7.13.0",
+      "type": "runtime"
+    },
+    {
+      "name": "p-memoize",
+      "type": "runtime"
+    },
+    {
+      "name": "picomatch",
       "type": "runtime"
     },
     {
       "name": "pnpm",
-      "version": "catalog:",
       "type": "runtime"
     },
     {
       "name": "projen",
-      "version": "^0.101.4",
+      "type": "runtime"
+    },
+    {
+      "name": "tinyglobby",
       "type": "runtime"
     },
     {
       "name": "tsoa",
-      "version": "catalog:",
       "type": "runtime"
     },
     {
       "name": "tsx",
-      "version": "^4.23.0",
       "type": "runtime"
     },
     {
       "name": "yaml",
-      "version": "^2.9.0",
       "type": "runtime"
     }
   ],

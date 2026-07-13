@@ -2,13 +2,12 @@
 /**
  * `dbxtools` - the single CLI for the toolchain (commander). Invoked as a bin
  * (`dbxtools <cmd>`) and by the generated `sync` task, which runs
- * `pnpm dbxtools watch` alongside `projen --watch` (via concurrently).
+ * `pnpm dbxtools watch` (the single watcher).
  *
  *   sync            bootstrap an empty folder, or re-synthesize an existing
  *                   workspace (runs projen; barrels regenerate).
- *   watch           keep it in sync while editing: re-synth on package add/remove,
- *                   rebuild barrels on source edits (runs beside `projen --watch`,
- *                   which owns `.projenrc.ts` re-synth).
+ *   watch           keep it in sync while editing: re-synth on `.projenrc.ts` or
+ *                   package add/remove, rebuild barrels on source edits.
  *   barrels         regenerate every package's root index.ts barrel.
  *   typecheck       type-check every package against its own tag tsconfig.
  *   openapi         generate the openapi packages from tsoa controllers.
@@ -43,7 +42,7 @@ program
 
 program
   .command("watch")
-  .description("watch: re-synth on package add/remove, rebuild barrels on source edits")
+  .description("watch: re-synth on .projenrc.ts/package changes, rebuild barrels on source edits")
   .action(async () => {
     const { startWatch } = await import("../src/projen/watch");
     startWatch();

@@ -1,12 +1,12 @@
 {
   "files": [
+    ".eslintrc.json",
     ".gitattributes",
     ".gitignore",
     ".projen/deps.json",
     ".projen/files.json",
     ".projen/tasks.json",
     "package.json",
-    "pnpm-workspace.yaml",
     "test/tsconfig.json",
     "tsconfig.json"
   ],

@@ -86,17 +86,7 @@
       "description": "Synthesize project files",
       "steps": [
         {
-          "execArgs": [
-            "tsx",
-            ".projenrc.ts"
-          ],
-          "shell": [
-            "npx",
-            "-y",
-            "-p",
-            "tsx",
-            "-c"
-          ]
+          "exec": "tsx .projenrc.ts"
         }
       ]
     },
@@ -171,7 +161,7 @@
       "name": "sync",
       "steps": [
         {
-          "exec": "concurrently -k -n projen,workspace \"pnpm exec projen --watch\" \"pnpm dbxtools watch\""
+          "exec": "pnpm dbxtools watch"
         }
       ]
     },

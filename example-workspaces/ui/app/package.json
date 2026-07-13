@@ -5,6 +5,7 @@
     "compile": "projen compile",
     "default": "projen default",
     "dev": "projen dev",
+    "eslint": "projen eslint",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
@@ -14,10 +15,17 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
+    "@stylistic/eslint-plugin": "^2",
+    "@types/node": "^24.6.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@typescript-eslint/eslint-plugin": "^8",
+    "@typescript-eslint/parser": "^8",
     "@vitejs/plugin-react": "catalog:",
+    "eslint": "^9",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3",
     "vite": "catalog:"
   },

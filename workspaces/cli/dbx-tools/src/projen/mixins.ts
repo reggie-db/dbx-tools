@@ -32,7 +32,8 @@ export function tagMixin(
   apply: (pkg: DBXToolsTypeScriptProject) => void,
 ): IMixin {
   return {
-    supports: (c: IConstruct): boolean => isDBXToolsPackage(c) && c.dbxToolsConfig.tags.includes(tag),
+    supports: (c: IConstruct): boolean =>
+      isDBXToolsPackage(c) && c.dbxToolsConfig.tags.includes(tag),
     applyTo: (c: IConstruct): void => apply(c as DBXToolsTypeScriptProject),
   };
 }
@@ -79,13 +80,4 @@ export const DEFAULT_TAG_MIXINS = {
 /** A selectable default tag mixin - a key of {@link DEFAULT_TAG_MIXINS}. */
 export type DefaultTagMixinName = keyof typeof DEFAULT_TAG_MIXINS;
 
-/** Resolve the selected default tag mixins (`"all"` -> every one), in order. */
-export function resolveDefaultTagMixins(
-  selection: DefaultTagMixinName[] | "all" = "all",
-): IMixin[] {
-  const names =
-    selection === "all"
-      ? (Object.keys(DEFAULT_TAG_MIXINS) as DefaultTagMixinName[])
-      : selection;
-  return names.map((name) => DEFAULT_TAG_MIXINS[name]);
-}
+

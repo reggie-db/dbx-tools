@@ -1,15 +1,19 @@
 /**
- * The `dbxtools watch` engine: one chokidar process that keeps the generated tree
- * in sync while you edit. It runs ALONGSIDE `projen --watch` (both started by the
- * `sync` task via concurrently), which owns `.projenrc.ts` re-synth - so this
- * loop deliberately does NOT watch the projenrc, and covers the other two
- * concerns in a single debounced loop:
+ * The `dbxtools watch` engine: ONE chokidar process (started by the `sync` task)
+ * that keeps the generated tree in sync while you edit. It is the SINGLE watcher -
+ * projen's own `--watch` is deliberately NOT used, because it does
+ * `fs.watch(<repo>, { recursive: true })` and re-runs `.projenrc.ts` on ANY change
+ * anywhere in the tree, so a single source edit triggered a full re-synth. This
+ * loop re-synths ONLY when it is actually needed, covering three concerns in one
+ * debounced pass:
  *
- *   1. **new-project watch** - a package folder appeared/disappeared under a
- *      root (the package SET changed vs `pnpm-workspace.yaml`) -> full re-synth.
- *   2. **barrel watch** - a source file changed inside an existing package ->
- *      rebuild just that package's `index.ts` barrel (no re-synth). A changed
- *      tsoa controller regenerates the openapi packages first.
+ *   1. **projenrc watch** - `.projenrc.ts` changed (the config itself) -> full
+ *      re-synth (+install, since deps may have changed).
+ *   2. **new-project watch** - a package folder appeared/disappeared under a root
+ *      (the package SET changed vs `pnpm-workspace.yaml`) -> full re-synth.
+ *   3. **barrel watch** - a source file changed inside an existing package ->
+ *      rebuild just that package's `index.ts` barrel (NO re-synth). A changed tsoa
+ *      controller regenerates the openapi packages first.
  *
  * A re-synth regenerates barrels too (`runSynth` sets `PROJEN_DISABLE_POST`, so we
  * call `generateBarrels()` explicitly after it). Generated files are ignored, so
@@ -34,6 +38,9 @@ import {
 const log = logger.withTag("projen:watch");
 const DEBOUNCE_MS = 250;
 
+/** The projen config file; an edit here is the one thing that must re-synth. */
+const PROJENRC = resolve(repoRoot, ".projenrc.ts");
+
 /** `src` dirs of config-only workspace members (e.g. a non-package config member). */
 function configSrcDirs(): string[] {
   return readWorkspaceMembers(repoRoot)
@@ -50,7 +57,7 @@ function ignored(p: string): boolean {
 
 /**
  * A path is CONFIG (edit -> re-synth) if it's under a config member's `src`.
- * `.projenrc.ts` is deliberately NOT here - `projen --watch` owns it.
+ * `.projenrc.ts` is handled separately by its own check (see {@link PROJENRC}).
  */
 function isConfigPath(abs: string, configDirs: string[]): boolean {
   return configDirs.some((dir) => abs === dir || abs.startsWith(dir + sep));
@@ -75,14 +82,19 @@ function resynth(reason: string, withInstall: boolean): void {
 
 /** Start the watch loop. Builds barrels once, then watches until interrupted. */
 export function startWatch(): void {
-  // No initial full re-synth: `projen --watch` (started alongside this by the
-  // `sync` task) does the startup synth. Just build barrels so the tree is correct
-  // immediately, then watch.
-  const initial = generateBarrels();
-  log.info(`watching (${initial} barrel${initial === 1 ? "" : "s"} built)`);
+  // This is the SINGLE watcher (no `projen --watch` alongside), so do the startup
+  // work here: if the package set drifted while we weren't watching, re-synth once
+  // (that rebuilds barrels too); otherwise just refresh barrels so the tree is
+  // correct immediately. Then watch.
+  if (packageSetChanged()) {
+    resynth("package set changed", true);
+  } else {
+    const initial = generateBarrels();
+    log.info(`watching (${initial} barrel${initial === 1 ? "" : "s"} built)`);
+  }
 
   const workspacePackageRoots = recordedRoots().map((r) => resolve(repoRoot, r));
-  const watchPaths = [...workspacePackageRoots, ...configSrcDirs()];
+  const watchPaths = [PROJENRC, ...workspacePackageRoots, ...configSrcDirs()];
 
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -114,8 +126,16 @@ export function startWatch(): void {
     const relevant = batch.map((p) => resolve(p)).filter((p) => !ignored(p));
     if (relevant.length === 0) return;
 
+    // A `.projenrc.ts` edit changes the config itself -> full re-synth (+install,
+    // since deps may have changed). This is the trigger projen's own `--watch` used
+    // to provide, but without its re-synth-on-every-file-in-the-tree overreach.
+    if (relevant.includes(PROJENRC)) {
+      resynth("projenrc changed", true);
+      return;
+    }
+
     const configDirs = configSrcDirs();
-    // 1 & 2: config edit or a changed package set -> full re-synth.
+    // A config-member src edit or a changed package set -> full re-synth.
     if (relevant.some((p) => isConfigPath(p, configDirs))) {
       resynth("config changed", false);
       return;

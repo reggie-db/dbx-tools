@@ -9,7 +9,6 @@
  *   - {@link applyTasks} - apply a tag's `tasks` through projen's task system;
  *   - {@link applyCompilerOptions} - override a package's generated tsconfig
  *     `compilerOptions` (how a tag mixin enforces `lib`/`jsx`/`types`);
- *   - {@link emitViteConfig} - emit a package's read-only `vite.config.ts`;
  *   - {@link SUBPROJECT_DEFAULTS} / {@link SHARED_COMPILER_OPTIONS} - the baseline
  *     projen options + ESM compiler options every package shares.
  *
@@ -19,7 +18,7 @@
  * written to the package's `package.json` under `dbxToolsConfig.tags` - the
  * per-package source of truth read back by the post-synth commands.
  */
-import { type Project, type TaskOptions, TextFile, javascript, typescript } from "projen";
+import { type Project, type TaskOptions, javascript, typescript } from "projen";
 
 /**
  * Build an npm package name from ordered parts. Each part is lowercased and split
@@ -68,7 +67,7 @@ export function workspacePackageTagsOf(project: Project): string[] {
 /**
  * Union `tags` into a NON-DBXTools project's recorded `dbxToolsConfig.tags`. Used
  * when a `workspacePackageRoots` root encapsulates an already-attached project that
- * is a plain projen project (a DBXTools project owns its own tags via `appendTag`).
+ * is a plain projen project (a DBXTools project owns its own tags via `addTags`).
  * Returns the merged (deduped) list.
  */
 export function addWorkspacePackageTags(
@@ -103,26 +102,6 @@ export function applyCompilerOptions(
 }
 
 /**
- * Emit a projen-owned, read-only `vite.config.ts` (React plugin) for a package.
- * Idempotent: a package that already has one (e.g. from the `viteConfig` option
- * and the `ui` tag mixin both firing) is left untouched.
- */
-export function emitViteConfig(pkg: typescript.TypeScriptProject): void {
-  if (pkg.tryFindFile("vite.config.ts")) return;
-  new TextFile(pkg, "vite.config.ts", {
-    marker: true,
-    readonly: true,
-    lines: [
-      'import react from "@vitejs/plugin-react";',
-      'import { defineConfig } from "vite";',
-      "",
-      "export default defineConfig({ plugins: [react()] });",
-      "",
-    ],
-  });
-}
-
-/**
  * Apply a tag's `tasks` (name -> projen `TaskOptions`) through projen's task
  * system. projen's standard `build` task is locked, and its actual output step is
  * `compile`, so a tag's `build` is applied to `compileTask` (e.g. a Vite app
@@ -141,29 +120,7 @@ export function applyTasks(
   }
 }
 
-/**
- * Baseline options every subproject shares. They mirror the ROOT project's own
- * choices (no jest/eslint/prettier/github/release/upgrade) so the generated
- * workspace stays lean and consistent. `sampleCode: false` stops projen from
- * dropping template `src/` files over the developer's own sources.
- */
-export const SUBPROJECT_DEFAULTS: Partial<typescript.TypeScriptProjectOptions> = {
-  defaultReleaseBranch: "main",
-  sampleCode: false,
-  jest: false,
-  eslint: false,
-  prettier: false,
-  github: false,
-  buildWorkflow: false,
-  release: false,
-  npmignoreEnabled: false,
-  licensed: false,
-  depsUpgrade: false,
-  // pnpm 11 errors "Cannot use both packageManager and devEngines.packageManager"
-  // - projen would otherwise auto-add the latter alongside the former (every
-  // subproject sets `packageManager` explicitly).
-  addPackageManagerToDevEngines: false,
-};
+
 
 /**
  * Compiler options every package needs regardless of tag. The whole repo is

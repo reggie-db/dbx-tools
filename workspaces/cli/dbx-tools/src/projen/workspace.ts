@@ -25,6 +25,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { globSync } from "tinyglobby";
 import { parse } from "yaml";
 
 
@@ -76,6 +77,12 @@ const IGNORE_DIRS = new Set([
 ]);
 const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
+/** Glob for module files under any `src/`, built from {@link MODULE_EXTS} exts. */
+const SRC_MODULE_GLOB = `**/src/**/*.{${[...MODULE_EXTS].map((e) => e.slice(1)).join(",")}}`;
+
+/** Globs `tinyglobby` must never descend into, built from {@link IGNORE_DIRS}. */
+const IGNORE_GLOBS = [...IGNORE_DIRS].map((d) => `**/${d}/**`);
+
 export function toPosix(p: string): string {
   return p.split(sep).join("/");
 }
@@ -110,14 +117,6 @@ export function isGeneratedFile(file: string): boolean {
   return GENERATED_BASENAMES.has(base) || BARREL_RE.test(base) || base.endsWith(".d.ts");
 }
 
-/** Absolute paths of `dir`'s immediate subdirectories (ignoring build/vcs dirs); [] if missing. */
-export function listDirs(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !IGNORE_DIRS.has(d.name))
-    .map((d) => resolve(dir, d.name));
-}
-
 /** All files under `dir`, recursively, skipping build/vcs dirs; [] if missing. */
 export function walkFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
@@ -140,7 +139,8 @@ export function walkFiles(dir: string): string[] {
 export function isModuleFile(file: string): boolean {
   if (file.endsWith(".d.ts")) return false;
   if (!MODULE_EXTS.has(extname(file))) return false;
-  const base = file.split(sep).pop()!;
+  // Accept both OS-native (walkFiles) and posix (tinyglobby) inputs.
+  const base = toPosix(file).split("/").pop()!;
   if (BARREL_RE.test(base)) return false;
   if (/\.(test|spec)\./.test(base)) return false;
   return true;
@@ -153,11 +153,6 @@ export function hasExport(file: string): boolean {
   } catch {
     return false;
   }
-}
-
-/** True if `<dir>/src` exists and holds at least one module file. */
-export function hasWorkspaceSources(dir: string): boolean {
-  return walkFiles(join(dir, "src")).some(isModuleFile);
 }
 
 /**
@@ -232,22 +227,26 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
 }
 
 /**
- * Recursively collect package dirs under `rootAbs`: a directory whose `src/` holds
- * a module file is a package (and we do NOT descend into it, so a package's own
- * subfolders never become nested packages). Depth is unbounded, so
- * `<root>/a/b/c/src` is discovered as the package `a/b/c`.
+ * Package dirs under `rootAbs`, found with a single `tinyglobby` scan for module
+ * files beneath any `src/`. A package is the folder that OWNS the `src/` - the
+ * segments before the FIRST `src/` - so a package's own subfolders never become
+ * nested packages (outermost wins). Barrels/tests/decls don't count (see
+ * {@link isModuleFile}), so a `src/` holding only an `index.ts` barrel is not a
+ * package. Depth is unbounded: `<root>/a/b/c/src` is discovered as `a/b/c`.
  */
 function collectPackageDirs(rootAbs: string): string[] {
-  const out: string[] = [];
-  const visit = (dirAbs: string): void => {
-    if (hasWorkspaceSources(dirAbs)) {
-      out.push(dirAbs);
-      return; // this dir is a package; its subtree belongs to it
-    }
-    for (const child of listDirs(dirAbs)) visit(child);
-  };
-  for (const child of listDirs(rootAbs)) visit(child);
-  return out;
+  const owners = new Set<string>();
+  for (const file of globSync(SRC_MODULE_GLOB, { cwd: rootAbs, ignore: IGNORE_GLOBS })) {
+    if (!isModuleFile(file)) continue;
+    const segs = toPosix(file).split("/");
+    const srcIdx = segs.indexOf("src");
+    if (srcIdx > 0) owners.add(segs.slice(0, srcIdx).join("/"));
+  }
+  const rels = [...owners];
+  // Outermost wins: drop any owner nested under another discovered owner.
+  return rels
+    .filter((d) => !rels.some((o) => o !== d && d.startsWith(`${o}/`)))
+    .map((rel) => resolve(rootAbs, rel));
 }
 
 /**

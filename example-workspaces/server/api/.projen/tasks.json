@@ -47,11 +47,17 @@
         }
       ]
     },
-    "dev": {
-      "name": "dev",
+    "eslint": {
+      "name": "eslint",
+      "description": "Runs eslint against the codebase",
+      "env": {
+        "ESLINT_USE_FLAT_CONFIG": "false",
+        "NODE_NO_WARNINGS": "1"
+      },
       "steps": [
         {
-          "exec": "tsx watch src/server.ts"
+          "exec": "eslint --ext .ts,.tsx --fix --no-error-on-unmatched-pattern $@ src test build-tools",
+          "receiveArgs": true
         }
       ]
     },
@@ -102,17 +108,14 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
     },
-    "start": {
-      "name": "start",
-      "steps": [
-        {
-          "exec": "tsx src/server.ts"
-        }
-      ]
-    },
     "test": {
       "name": "test",
-      "description": "Run tests"
+      "description": "Run tests",
+      "steps": [
+        {
+          "spawn": "eslint"
+        }
+      ]
     },
     "watch": {
       "name": "watch",

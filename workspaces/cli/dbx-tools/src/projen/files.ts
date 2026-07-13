@@ -101,10 +101,9 @@ export function prettierIgnore(project: Project): void {
 /**
  * `.vscode/tasks.json`: the `sync` task, set to run on folder open. projen has no
  * native tasks.json component, so a `JsonFile` is the idiomatic way to have projen
- * own `.vscode/`; `runOn: folderOpen` starts `projen sync` (which fans out via
- * concurrently to `projen --watch` + `dbxtools watch`: config re-synth, package
- * add/remove re-synth, and barrels) automatically when the workspace opens - no
- * extension needed.
+ * own `.vscode/`; `runOn: folderOpen` starts `projen sync` (the single `dbxtools
+ * watch` loop: re-synth on `.projenrc.ts`/package changes, barrels on source edits)
+ * automatically when the workspace opens - no extension needed.
  */
 export function vscodeTasks(project: Project): void {
   new JsonFile(project, ".vscode/tasks.json", {
@@ -115,7 +114,7 @@ export function vscodeTasks(project: Project): void {
       tasks: [
         {
           label: "sync",
-          detail: "projen sync - projen --watch + dbxtools watch (re-synth + barrels) concurrently",
+          detail: "projen sync - dbxtools watch (re-synth when needed + barrels)",
           type: "shell",
           command: "pnpm exec projen sync",
           isBackground: true,
