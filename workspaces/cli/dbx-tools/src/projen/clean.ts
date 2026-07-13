@@ -18,8 +18,8 @@
  * `pnpm install` first - the engine's runtime deps live there - so a clean that takes
  * `node_modules` must be followed by reinstall, then re-synth.
  */
-import { existsSync, readdirSync, rmSync, statSync, basename } from "node:fs";
-import { join, relative } from "node:path";
+import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
+import { basename, join, relative } from "node:path";
 import { isReadonly, makeWritable } from "./generated";
 import { IGNORE_DIRS, repoRoot, toPosix, walkFiles } from "./workspace";
 
