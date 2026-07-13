@@ -13,11 +13,10 @@
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "publish": "projen publish",
     "release": "projen release",
-    "release:push": "projen release:push",
     "release:tag": "projen release:tag",
     "sync": "projen sync",
-    "tag": "projen tag",
     "test": "projen test",
     "unbump": "projen unbump",
     "projen": "projen"
