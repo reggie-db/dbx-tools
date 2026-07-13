@@ -9,16 +9,16 @@
  */
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { discoverPackages, recordedRoots, repoRoot } from "./workspace";
+import { recordedRoots, repoRoot, scanPackages, workspacePackages } from "./workspace";
 
 /** Member paths that currently exist on disk (scan of the recorded roots). */
 export function currentPackages(): string[] {
-  return discoverPackages(repoRoot, recordedRoots()).map((p) => p.memberPath);
+  return scanPackages(repoRoot, recordedRoots()).map((p) => p.memberPath);
 }
 
 /** Member paths recorded by the last synth (read from `pnpm-workspace.yaml`). */
 export function recordedPackages(): string[] {
-  return discoverPackages(repoRoot).map((p) => p.memberPath);
+  return workspacePackages(repoRoot).map((p) => p.path);
 }
 
 /** True if the set of package folders on disk differs from the recorded set. */

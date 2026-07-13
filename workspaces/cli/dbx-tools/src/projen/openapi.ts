@@ -24,12 +24,11 @@ import type * as ts from "typescript";
 import { logger } from "../log";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated";
 import {
-  type DiscoveredPackage,
-  discoverPackages,
+  type WorkspacePackage,
   isModuleFile,
-  packageTags,
   repoRoot,
   walkFiles,
+  workspacePackages,
 } from "./workspace";
 
 const log = logger.withTag("projen:openapi");
@@ -49,19 +48,16 @@ export function createApiClient(options?: ClientOptions) {
 `;
 
 /** True if any module file in `<pkg>/src` imports tsoa (i.e. declares a controller). */
-export function hasTsoaControllers(pkg: DiscoveredPackage): boolean {
+export function hasTsoaControllers(pkg: Pick<WorkspacePackage, "dir">): boolean {
   return walkFiles(join(pkg.dir, "src"))
     .filter(isModuleFile)
     .some((f) => TSOA_IMPORT.test(readFileSync(f, "utf8")));
 }
 
 /** `server`/`node` packages (never the generated `openapi` tag) with tsoa controllers. */
-function controllerPackages(): DiscoveredPackage[] {
-  return discoverPackages().filter(
-    (p) => {
-      const tags = packageTags(p);
-      return (tags.includes("server") || tags.includes("node")) && hasTsoaControllers(p);
-    },
+function controllerPackages(): WorkspacePackage[] {
+  return workspacePackages().filter(
+    (p) => (p.tags.includes("server") || p.tags.includes("node")) && hasTsoaControllers(p),
   );
 }
 
@@ -108,7 +104,10 @@ export async function generateOpenapi(): Promise<string[]> {
 
   const written: string[] = [];
   for (const p of pkgs) {
-    const outDir = join(repoRoot, p.root, OPENAPI_TAG, p.name);
+    // The generated package's folder is the source's leaf folder name (`api`), not
+    // its npm name - `p.name` is now the (possibly-overridden) manifest name.
+    const leaf = p.relPath.split("/").pop() ?? p.relPath;
+    const outDir = join(repoRoot, p.root, OPENAPI_TAG, leaf);
     const srcDir = join(outDir, "src");
     mkdirSync(srcDir, { recursive: true });
 
@@ -147,7 +146,7 @@ export async function generateOpenapi(): Promise<string[]> {
     stampGenerated(clientPath, { tool: "dbxtools openapi (openapi-fetch)", source: "./schema" });
 
     written.push(outDir);
-    log.success(`openapi/${p.name} (from ${p.relPath})`);
+    log.success(`openapi/${leaf} (from ${p.relPath})`);
   }
   return written;
 }

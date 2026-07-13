@@ -17,8 +17,9 @@ import { configureProject } from "@dbx-tools/cli";
 // omit it and one is created from the engine's defaults + `extends`.
 configureProject(undefined, {
   // The one place per-package tweaks live: mutate the real projen subproject
-  // `pkg`, dispatching on the stable folder identity spec.tags / spec.name.
-  workspacePackage: (pkg, spec) => {
+  // `pkg`, dispatching on its stable folder identity - workspacePackageTagsOf(pkg)
+  // (resolved tags) + basename(pkg.outdir) (folder name).
+  workspacePackage: (pkg) => {
     /* e.g. pkg.addDeps("@dbx-tools/shared-core@workspace:*") */
   },
 });
@@ -65,9 +66,9 @@ being the resolved project name), and each records its resolved tags in its
 
 ## Config hooks
 
-- **`workspacePackage(pkg, spec)`** - per-package tweaks; runs LAST (after the
-  built-in default tag modifiers) in a deferred pass once every package is
-  configured.
+- **`workspacePackage(pkg)`** - per-package tweaks; runs LAST (after the built-in
+  default tag modifiers) in a deferred pass once every package is configured.
+  Dispatch on `workspacePackageTagsOf(pkg)` + `basename(pkg.outdir)`.
 - **`workspacePackageDefaults`** (`"all"` | list) - which built-in default tag
   modifiers run (e.g. the `server` default adds Express + `dev`/`start` tasks).
 - **`workspacePackageTagPaths`** - map a path/pattern to extra tag(s).

@@ -6,14 +6,14 @@
  * enforcement real: a `shared`/`node`/`server` package is compiled with a
  * DOM-free `lib`, and a `ui` package with no `node` types, so misuse of the other
  * runtime fails here. Packages are read from `pnpm-workspace.yaml` (source of
- * truth) via `discoverPackages()`.
+ * truth) via `workspacePackages()`.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { logger } from "../log";
-import { discoverPackages, repoRoot } from "./workspace";
+import { repoRoot, workspacePackages } from "./workspace";
 
 const log = logger.withTag("projen:typecheck");
 const require = createRequire(import.meta.url);
@@ -34,7 +34,7 @@ interface Target {
 
 function targets(): Target[] {
   const out: Target[] = [];
-  for (const p of discoverPackages()) {
+  for (const p of workspacePackages()) {
     const tsconfig = join(p.dir, "tsconfig.json");
     if (existsSync(tsconfig)) {
       out.push({ label: p.relPath, tsconfig });

@@ -20,13 +20,13 @@ import { join, relative } from "node:path";
 import { makeWritable, stampGenerated } from "./generated";
 import { logger } from "../log";
 import {
-  discoverPackages,
   escapeRegExp,
   hasExport,
   isModuleFile,
   repoRoot,
   toPosix,
   walkFiles,
+  workspacePackages,
 } from "./workspace";
 
 const log = logger.withTag("projen:barrels");
@@ -117,12 +117,12 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
 
 /**
  * Rebuild barrels for the given package dirs (default: every package recorded in
- * `pnpm-workspace.yaml` - the source of truth, read via `discoverPackages()`).
+ * `pnpm-workspace.yaml` - the source of truth, read via `workspacePackages()`).
  */
 export function generateBarrels(
   opts: { dirs?: string[]; modifier?: BarrelModifier } = {},
 ): number {
-  const dirs = opts.dirs ?? discoverPackages().map((p) => p.dir);
+  const dirs = opts.dirs ?? workspacePackages().map((p) => p.dir);
   let total = 0;
   for (const dir of dirs) total += generateForPackage(dir, opts.modifier);
   return total;

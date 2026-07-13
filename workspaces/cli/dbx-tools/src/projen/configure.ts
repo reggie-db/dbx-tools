@@ -34,24 +34,27 @@ import {
   DEFAULT_WORKSPACE_PACKAGE_MODIFIERS,
   type DefaultWorkspacePackageTag,
   type WorkspacePackageModifier,
-  type WorkspacePackageSpec,
   addWorkspacePackageTags,
   applyTags,
   lockPackageJson,
   npmNameOf,
+  workspacePackageTagsOf,
 } from "./packages";
 import {
   DEFAULT_WORKSPACE_PACKAGE_ROOTS,
   type DiscoveredPackage,
   type OneOrMany,
-  discoverPackages,
   escapeRegExp,
   projectName,
+  scanPackages,
   toArray,
   toPosix,
 } from "./workspace";
 
 export type { ModifyPnpmWorkspace, PnpmWorkspaceConfig } from "./files";
+// Re-exported so a consumer's `workspacePackage(pkg)` hook can read a package's
+// resolved tags off the project (the hook is passed only the project now).
+export { workspacePackageTagsOf } from "./packages";
 
 /**
  * The pnpm `catalog:` version registry: dependency name -> version range. This is
@@ -139,7 +142,8 @@ export interface ConfigureProjectOptions {
   readonly catalog?: Catalog;
   /**
    * Per-workspace-package hook, run LAST (after the default tag modifiers) in a
-   * deferred pass once every package is configured. Dispatch on `spec.tags`/`spec.name`.
+   * deferred pass once every package is configured. `pkg` is the real subproject;
+   * dispatch on `workspacePackageTagsOf(pkg)` + `basename(pkg.outdir)`.
    */
   readonly workspacePackage?: WorkspacePackageModifier;
   /** Hook to tweak the assembled `pnpm-workspace.yaml` object (members, catalog, ...). */
@@ -291,8 +295,8 @@ export function configureProject(
   }
 
   // --- Discover + configure packages (NO modifiers yet - see the deferred pass) ---
-  const configured: { project: typescript.TypeScriptProject; spec: WorkspacePackageSpec }[] = [];
-  for (const p of discoverPackages(rootAbs, workspacePackageRoots)) {
+  const configured: typescript.TypeScriptProject[] = [];
+  for (const p of scanPackages(rootAbs, workspacePackageRoots)) {
     const tags = resolveTags(p);
     const found = existing.get(p.memberPath);
     if (found) {
@@ -307,9 +311,7 @@ export function configureProject(
       DEFAULT_WORKSPACE_TAG,
       ...tags.map((t) => effectiveTags[t]).filter((d): d is WorkspaceTagDef => !!d),
     ];
-    const spec: WorkspacePackageSpec = { tags, name: p.name, packageName };
-    const sub = applyTags(proj, { outdir: p.memberPath, name: packageName, config, tags, spec });
-    configured.push({ project: sub, spec });
+    configured.push(applyTags(proj, { outdir: p.memberPath, name: packageName, config, tags }));
   }
 
   // The root project may itself carry tags (via a `""`/`"."` tag-path key).
@@ -334,15 +336,15 @@ export function configureProject(
   }
 
   // --- Deferred modifier pass: AFTER every package is configured, run the enabled
-  // default tag modifiers, then the caller's workspacePackage hook (LAST), each
-  // acting on the resolved tags.
-  for (const { project: sub, spec } of configured) {
-    for (const tag of spec.tags) {
+  // default tag modifiers, then the caller's workspacePackage hook (LAST). Each acts
+  // on the real subproject; the resolved tags are read back from it.
+  for (const sub of configured) {
+    for (const tag of workspacePackageTagsOf(sub)) {
       if (enabledDefaults.has(tag) && tag in DEFAULT_WORKSPACE_PACKAGE_MODIFIERS) {
-        DEFAULT_WORKSPACE_PACKAGE_MODIFIERS[tag as DefaultWorkspacePackageTag](sub, spec);
+        DEFAULT_WORKSPACE_PACKAGE_MODIFIERS[tag as DefaultWorkspacePackageTag](sub);
       }
     }
-    workspacePackage?.(sub, spec);
+    workspacePackage?.(sub);
   }
 
   // Generated-file callback: every projen file across the root + all packages.

@@ -10,7 +10,11 @@
  * (see below) and then synthesizes manually; a normal consumer just calls
  * `configureProject()` and lets it synth.
  */
-import { configureProject } from "./workspaces/cli/dbx-tools/src/projen/configure";
+import { basename } from "node:path";
+import {
+  configureProject,
+  workspacePackageTagsOf,
+} from "./workspaces/cli/dbx-tools/src/projen/configure";
 
 const project = configureProject(undefined, {
   synth: false,
@@ -19,17 +23,20 @@ const project = configureProject(undefined, {
   workspacePackageRoots: ["workspaces", "example-workspaces"],
   // The single place per-package tweaks belong; everything else is auto-detected.
   // Runs in a deferred pass (after all packages are configured), after the built-in
-  // default tag modifiers. Dispatch on the STABLE folder identity `spec.tags`/`spec.name`.
-  workspacePackage(pkg, spec) {
-    if (spec.tags.includes("ui") && spec.name === "app") {
+  // default tag modifiers. `pkg` is the real subproject; dispatch on the STABLE
+  // folder identity: its resolved tags + its folder name.
+  workspacePackage(pkg) {
+    const tags = workspacePackageTagsOf(pkg);
+    const name = basename(pkg.outdir);
+    if (tags.includes("ui") && name === "app") {
       pkg.addDeps("@dbx-tools/shared-core@workspace:*");
-    } else if (spec.tags.includes("server") && spec.name === "api") {
+    } else if (tags.includes("server") && name === "api") {
       // express + dev/start come from the built-in `server` default tag modifier.
       pkg.addDeps("@dbx-tools/shared-core@workspace:*");
-    } else if (spec.tags.includes("cli") && spec.name === "main") {
+    } else if (tags.includes("cli") && name === "main") {
       pkg.package.addBin({ "pw-demo": "./src/cli.ts" });
       pkg.addDeps("@dbx-tools/shared-core@workspace:*", "@dbx-tools/shared-neat@workspace:*");
-    } else if (spec.tags.includes("cli") && spec.name === "dbx-tools") {
+    } else if (tags.includes("cli") && name === "dbx-tools") {
       // The engine, dogfooded through the normal `cli` tag. Override the
       // auto-derived name (`@dbx-tools/cli-dbx-tools`) to the clean `@dbx-tools/cli`.
       pkg.package.addField("name", "@dbx-tools/cli");

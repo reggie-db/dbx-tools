@@ -13,39 +13,24 @@
  * {@link TagDef}s are merged in order (deps concatenated, tsconfig/tasks
  * later-wins) before being spread into the subproject. The resolved (deduped) tag
  * list is written to the package's `package.json` under `dbxToolsConfig.tags` (the
- * per-package source of truth) and handed to the `workspacePackage` hook via
- * `spec.tags`, which runs LAST so a caller tweaks the REAL subproject with
- * projen's own API (`pkg.addDeps(...)`, `pkg.addTask(...)`, `pkg.package.addBin({...})`)
+ * per-package source of truth) and recorded on the project, so the
+ * `workspacePackage` hook - which runs LAST - reads it back with
+ * {@link workspacePackageTagsOf}. The hook tweaks the REAL subproject with projen's
+ * own API (`pkg.addDeps(...)`, `pkg.addTask(...)`, `pkg.package.addBin({...})`)
  * rather than mutating a serialized object.
  */
 import { type Project, type TaskOptions, TextFile, javascript, typescript } from "projen";
 import type { TagDef, WorkspaceTag } from "./tags";
-import { type OneOrMany, toArray, toPosix } from "./workspace";
+import { type OneOrMany, toArray } from "./workspace";
 
 /**
- * Read-only identity of a workspace package, passed to a
- * {@link WorkspacePackageModifier} so callers dispatch on the STABLE folder
- * (`tags`/`name`, e.g. tags including `cli` and name `main`) rather than the
- * derived `packageName`, which depends on the root npm scope.
+ * Last-chance per-workspace-package hook. `pkg` (the workspace package) is the real
+ * projen subproject and the only argument - the mutation target AND the identity to
+ * switch on. Edits go through projen's own API and stay projen-owned. Dispatch on
+ * the stable folder via `workspacePackageTagsOf(pkg)` (the resolved tags) and
+ * `basename(pkg.outdir)` (the folder name) rather than the derived `pkg.name`.
  */
-export interface WorkspacePackageSpec {
-  /** The resolved, deduped tag list (the package's applied tags; may be empty). */
-  readonly tags: string[];
-  /** The package folder name (last path segment), e.g. `app`. */
-  readonly name: string;
-  /** The derived npm name, e.g. `@dbx-tools/cli-main`. */
-  readonly packageName: string;
-}
-
-/**
- * Last-chance per-workspace-package hook. `pkg` (the workspace package) is the
- * real projen subproject and the only mutation target - edits go through projen's
- * own API and stay projen-owned. `spec` is the stable identity to switch on.
- */
-export type WorkspacePackageModifier = (
-  pkg: typescript.TypeScriptProject,
-  spec: WorkspacePackageSpec,
-) => void;
+export type WorkspacePackageModifier = (pkg: typescript.TypeScriptProject) => void;
 
 /**
  * Built-in per-tag `workspacePackage` modifiers ("default workspace tag
@@ -56,7 +41,7 @@ export type WorkspacePackageModifier = (
  */
 export const DEFAULT_WORKSPACE_PACKAGE_MODIFIERS = {
   /** A `server` package: an Express app run/watched with tsx (AppKit-aligned). */
-  server: (pkg, _spec) => {
+  server: (pkg) => {
     pkg.addDeps("express@catalog:");
     pkg.addDevDeps("@types/express@catalog:");
     pkg.addTask("dev", { exec: "tsx watch src/server.ts" });
@@ -74,10 +59,8 @@ export interface ApplyTagsOptions {
   readonly name: string;
   /** The tag config(s) to apply, merged in order (tsconfig overlay + deps/tasks). */
   readonly config: OneOrMany<TagDef>;
-  /** The resolved tags to record in `package.json` (`dbxToolsConfig.tags`) + `spec.tags`. */
+  /** The resolved tags to record in `package.json` (`dbxToolsConfig.tags`) + on the project. */
   readonly tags?: string[];
-  /** Identity handed to the modifiers; derived from `outdir`/`name` when omitted. */
-  readonly spec?: WorkspacePackageSpec;
   /** Built-in default tag modifiers to run before `workspacePackage` (in order). */
   readonly defaultModifiers?: WorkspacePackageModifier[];
   /** Per-workspace-package tweak hook, run last. */
@@ -266,12 +249,6 @@ const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   skipLibCheck: true,
 };
 
-/** Derive a {@link WorkspacePackageSpec} from a member path when the caller didn't pass one. */
-function specFromOutdir(outdir: string, packageName: string, tags: string[]): WorkspacePackageSpec {
-  const segs = toPosix(outdir).split("/").filter(Boolean);
-  return { tags, name: segs[segs.length - 1] ?? outdir, packageName };
-}
-
 /**
  * Create the projen `TypeScriptProject` subproject for `options.outdir`, configured
  * by the merged `options.config`, and return it. The merged tag config's projen
@@ -341,16 +318,15 @@ export function applyTags(
 
   // Persist the resolved (deduped) tag list in the package's package.json under
   // `dbxToolsConfig.tags` - the per-package source of truth, readable by post-synth
-  // commands.
-  const tags = [...new Set(options.tags ?? options.spec?.tags ?? [])];
+  // commands - and record it on the project for the hook (workspacePackageTagsOf).
+  const tags = [...new Set(options.tags ?? [])];
   RECORDED_TAGS.set(pkg, tags);
   pkg.package.addField("dbxToolsConfig", { tags });
 
   // Built-in default tag modifiers run after the tag config; the caller's
-  // workspacePackage hook runs LAST.
-  const spec = options.spec ?? specFromOutdir(options.outdir, options.name, tags);
-  for (const modify of options.defaultModifiers ?? []) modify(pkg, spec);
-  options.workspacePackage?.(pkg, spec);
+  // workspacePackage hook runs LAST. Both act on the real subproject only.
+  for (const modify of options.defaultModifiers ?? []) modify(pkg);
+  options.workspacePackage?.(pkg);
 
   // Lock the manifest last: projen leaves package.json writable, but here it is
   // fully projen-owned, so it joins the rest of the read-only generated tree.

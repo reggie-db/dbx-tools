@@ -14,10 +14,13 @@
  * apply. The match may yield NO tags - that is fine (the package still gets the
  * agnostic default).
  *
- * `pnpm-workspace.yaml` is the SOURCE OF TRUTH for the discovered member set:
- * `configureProject` scans the filesystem once at synth (given the roots) and the
- * members flow from `project.subprojects`; every other command reads them back via
- * {@link discoverPackages} with no roots argument rather than re-scanning.
+ * Two discovery entry points. {@link scanPackages} walks the filesystem under the
+ * roots (synth time): it returns each package's path plus the tags implied by its
+ * path relative to the root, reading NO manifest. {@link workspacePackages} reads
+ * the recorded members from `pnpm-workspace.yaml` - the SOURCE OF TRUTH - and
+ * augments each with the `name` and `tags` read back from its own `package.json`
+ * (post-synth: barrels, watch, typecheck, openapi), which is authoritative and so
+ * reflects any synth-time name override or resolved tag set.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -254,52 +257,87 @@ function collectPackageDirs(rootAbs: string): string[] {
 }
 
 /**
- * Discover workspace packages.
- *
- *  - **With `roots`** (synth time): scan the filesystem. Under each root, every
- *    `src`-bearing folder (at any depth) is a package.
- *  - **Without** (every other command): read the recorded member list from
- *    `pnpm-workspace.yaml` - the source of truth.
- *
- * Returns packages sorted by member path.
+ * Scan the filesystem for packages under `roots` (synth time): every `src`-bearing
+ * folder, at any depth, is one. Returns each as a {@link DiscoveredPackage} - its
+ * path plus the tags implied by its path relative to the root
+ * ({@link DiscoveredPackage.tagCandidates}); no `package.json` is read. Used by
+ * `configureProject` at synth, and by the watcher to compare disk against the
+ * recorded set. Sorted by member path.
  */
-export function discoverPackages(
+export function scanPackages(
   projectRoot: string = repoRoot,
-  roots?: readonly string[],
+  roots: readonly string[] = DEFAULT_WORKSPACE_PACKAGE_ROOTS,
 ): DiscoveredPackage[] {
   const out: DiscoveredPackage[] = [];
-  if (roots) {
-    for (const root of roots) {
-      const rootAbs = resolve(projectRoot, root);
-      for (const pkgDir of collectPackageDirs(rootAbs)) {
-        const rel = toPosix(relative(rootAbs, pkgDir)).split("/").filter(Boolean);
-        out.push(new DiscoveredPackage(projectRoot, root, rel));
-      }
-    }
-  } else {
-    for (const member of readWorkspaceMembers(projectRoot)) {
-      const pkg = packageOfMember(projectRoot, member);
-      if (pkg) out.push(pkg);
+  for (const root of roots) {
+    const rootAbs = resolve(projectRoot, root);
+    for (const pkgDir of collectPackageDirs(rootAbs)) {
+      const rel = toPosix(relative(rootAbs, pkgDir)).split("/").filter(Boolean);
+      out.push(new DiscoveredPackage(projectRoot, root, rel));
     }
   }
   return out.sort((a, b) => a.memberPath.localeCompare(b.memberPath));
 }
 
 /**
- * A package's resolved tags, read from its `package.json` `dbxToolsConfig.tags`
- * (written at synth by `applyTags`) - the per-package source of truth. Falls back
- * to the path-derived {@link DiscoveredPackage.tagCandidates} when the manifest has
- * none yet (e.g. a package added but not yet synthesized).
+ * A recorded workspace package: its path, plus the `name` and `tags` read back from
+ * its own `package.json` (both written at synth, and possibly REWRITTEN by a
+ * `workspacePackage` hook - e.g. a name override). `name`/`tags` fall back to the
+ * folder name / path candidates when the manifest is missing or carries none (a
+ * package added but not yet synthesized).
  */
-export function packageTags(pkg: DiscoveredPackage): string[] {
+export interface WorkspacePackage {
+  /** Repo-relative posix member path, e.g. `workspaces/ui/app`. */
+  readonly path: string;
+  /** Repo-relative workspace-package root, e.g. `workspaces`. */
+  readonly root: string;
+  /** Posix path relative to the root, e.g. `ui/app`. */
+  readonly relPath: string;
+  /** Absolute package directory. */
+  readonly dir: string;
+  /** The npm name from `package.json` (`@dbx-tools/ui-app`), else the folder name. */
+  readonly name: string;
+  /** Resolved tags from `package.json` `dbxToolsConfig.tags`, else the path candidates. */
+  readonly tags: string[];
+}
+
+/** Read `<dir>/package.json`'s `name` + `dbxToolsConfig.tags` (each `undefined` if absent). */
+function readManifest(dir: string): { name?: string; tags?: string[] } {
   try {
-    const manifest = JSON.parse(readFileSync(resolve(pkg.dir, "package.json"), "utf8"));
-    const tags = manifest?.dbxToolsConfig?.tags;
-    if (Array.isArray(tags)) return tags as string[];
+    const m = JSON.parse(readFileSync(resolve(dir, "package.json"), "utf8"));
+    const tags = m?.dbxToolsConfig?.tags;
+    return {
+      name: typeof m?.name === "string" ? m.name : undefined,
+      tags: Array.isArray(tags) ? (tags as string[]) : undefined,
+    };
   } catch {
-    // no manifest yet / unreadable - fall back to the path candidates
+    return {};
   }
-  return pkg.tagCandidates;
+}
+
+/**
+ * The recorded workspace members from `pnpm-workspace.yaml` (the source of truth),
+ * each augmented with the `name` + `tags` read back from its `package.json`. This is
+ * what every post-synth command (barrels, watch, typecheck, openapi) uses: the
+ * manifest is authoritative, so it reflects any synth-time name override or resolved
+ * tag set. Sorted by path.
+ */
+export function workspacePackages(projectRoot: string = repoRoot): WorkspacePackage[] {
+  const out: WorkspacePackage[] = [];
+  for (const member of readWorkspaceMembers(projectRoot)) {
+    const pkg = packageOfMember(projectRoot, member);
+    if (!pkg) continue;
+    const manifest = readManifest(pkg.dir);
+    out.push({
+      path: pkg.memberPath,
+      root: pkg.root,
+      relPath: pkg.relPath,
+      dir: pkg.dir,
+      name: manifest.name ?? pkg.name,
+      tags: manifest.tags ?? pkg.tagCandidates,
+    });
+  }
+  return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /**

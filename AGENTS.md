@@ -51,10 +51,14 @@ the **`dbxtools`** CLI.
   filesystem ONCE at synth (under each `workspacePackageRoots` root, default
   `["workspaces"]`) and its `packages:` list is sourced from `project.subprojects`
   (every discovered package becomes a real subproject, so this needs no
-  separate/manual member list). Every other command (`barrels`, `typecheck`, the
-  watcher) reads it back via `discoverPackages()` (no args) — see `workspace.ts` —
-  rather than re-scanning the tree. Passing `discoverPackages(root, roots)` is the
-  filesystem scan; passing nothing reads the recorded truth.
+  separate/manual member list). Discovery is TWO functions in `workspace.ts`:
+  `scanPackages(root, roots)` walks the filesystem (synth time; returns each
+  package's path + the tags implied by its path, reading no manifest), while
+  `workspacePackages()` reads the recorded members back from `pnpm-workspace.yaml`
+  and augments each with the `name` + `tags` from its own `package.json` — what
+  every post-synth command (`barrels`, `typecheck`, the watcher, `openapi`) uses,
+  since the manifest is authoritative (it reflects a synth-time name override or
+  resolved tag set).
 - **Discovery + tag resolution.** Under each `workspacePackageRoots` root (this
   repo passes `["workspaces", "example-workspaces"]`), ANY `src`-bearing folder at
   ANY depth is a package. Its path relative to the root is decomposed into
@@ -65,17 +69,17 @@ the **`dbxtools`** CLI.
   any tags already on a pre-attached project — is the package's applied tags,
   possibly NONE (then only the agnostic default applies). The deduped tag list is
   written to each package's `package.json` under **`dbxToolsConfig.tags`** (the
-  per-package source of truth, read back by post-synth commands via
-  `packageTags()`) and passed to the hook via `spec.tags`. (`OneOrMany<T> =
-  T | T[]`, `workspace.ts`.) No declaration needed — drop a `src/` folder and it's
-  picked up on next synth.
+  per-package source of truth, surfaced post-synth as `workspacePackages()[].tags`)
+  and recorded on the projen subproject so the hook reads it back with
+  `workspacePackageTagsOf(pkg)`. (`OneOrMany<T> = T | T[]`, `workspace.ts`.) No
+  declaration needed — drop a `src/` folder and it's picked up on next synth.
 - **A root you pass may already hold in-tree subprojects.** If a discovered
   folder matches a subproject already attached to `project`, `configureProject`
   does NOT re-create it — it just unions the resolved tags onto it
   (`addWorkspacePackageTags`). The root project itself can also carry tags (via a
   `""`/`"."` key in `workspacePackageTagPaths`).
 - **Every package is a real projen subproject**, built by the exported
-  `applyTags(parent, {outdir, name, config, tags?, defaultModifiers?, spec?,
+  `applyTags(parent, {outdir, name, config, tags?, defaultModifiers?,
   workspacePackage?})` primitive (`packages.ts`), where `config` is
   `OneOrMany<TagDef>` — multiple tag defs are MERGED in order (deps concatenated,
   `tsconfig.compilerOptions`/`tasks` later-wins, `viteConfig` OR'd) over the
@@ -117,13 +121,14 @@ the **`dbxtools`** CLI.
   `dbx-tools`, giving `@dbx-tools/*` packages. The engine keeps its derived name
   UNLESS overridden - which it is, to the clean `@dbx-tools/cli` (see Gotchas).
 - **No per-package config in `.projenrc.ts`.** Everything is auto-detected; the
-  only place per-package tweaks belong is **`workspacePackage(pkg, spec)`**. `pkg`
-  is the REAL subproject and the only thing you mutate — use projen's API
-  (`pkg.addDeps("x@catalog:")`, `pkg.addTask(...)`, `pkg.package.addBin({...})`,
-  `pkg.tsconfig?.addInclude(...)`, `pkg.tsconfig?.file.addOverride(...)`).
-  `spec` is read-only identity (`WorkspacePackageSpec`); dispatch on the stable
-  folder — **`spec.tags`** (a list; use `.includes("cli")`) + `spec.name` (e.g.
-  `"main"`) — not the derived `packageName`.
+  only place per-package tweaks belong is **`workspacePackage(pkg)`**. `pkg` is the
+  REAL subproject and the ONLY argument — the mutation target AND the identity to
+  switch on. Mutate via projen's API (`pkg.addDeps("x@catalog:")`,
+  `pkg.addTask(...)`, `pkg.package.addBin({...})`, `pkg.tsconfig?.addInclude(...)`,
+  `pkg.tsconfig?.file.addOverride(...)`). Dispatch on the stable folder —
+  **`workspacePackageTagsOf(pkg)`** (the resolved tags; use `.includes("cli")`) +
+  **`basename(pkg.outdir)`** (the folder name, e.g. `"main"`) — not the derived
+  `pkg.name`.
 - **`onGeneratedFile(file, project)`** (option) is called once per generated
   projen `FileBase` across the root and every subproject in the deferred pass —
   a hook to inspect or tweak generated files (barrelsby-written barrels aren't
@@ -142,7 +147,7 @@ workspaces/
       projen/                            # everything projen-specific lives under src/projen/
         configure.ts                     # configureProject(project?, options?) + engineSelfDependency + post-synth barrels
         tags.ts                          # WORKSPACE_TAGS map + WorkspaceTagDef/TagDef (the one tag type)
-        workspace.ts                     # discovery: DiscoveredPackage + discoverPackages (fs | pnpm-yaml)
+        workspace.ts                     # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
         packages.ts                      # applyTags -> TypeScriptProject subproject + default tag modifiers
         barrels.ts                       # barrelsby driver (root index.ts, header + read-only)
         watch.ts                         # chokidar orchestration for `sync --watch`
@@ -214,8 +219,9 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 - **The engine is dogfooded as a normal auto-discovered package**, not a hand-
   authored special case: it lives at `workspaces/cli/dbx-tools` (tag `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
-  `@dbx-tools/cli-dbx-tools`. `.projenrc.ts`'s `workspacePackage(pkg, spec)` hook
-  special-cases `spec.tags.includes("cli") && spec.name === "dbx-tools"` to:
+  `@dbx-tools/cli-dbx-tools`. `.projenrc.ts`'s `workspacePackage(pkg)` hook
+  special-cases `workspacePackageTagsOf(pkg).includes("cli") && basename(pkg.outdir)
+  === "dbx-tools"` to:
   override the name to `@dbx-tools/cli` (`pkg.package.addField("name", ...)`),
   add its bin (`pkg.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), add its
   own deps (`projen`, `constructs`, `barrelsby`, `chokidar`, `consola`,

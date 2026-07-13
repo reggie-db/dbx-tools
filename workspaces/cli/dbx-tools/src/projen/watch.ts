@@ -23,12 +23,12 @@ import { generateBarrels } from "./barrels";
 import { isTsoaController } from "./openapi";
 import { packageSetChanged, runSynth } from "./scaffold";
 import {
-  discoverPackages,
   isGeneratedFile,
   readWorkspaceMembers,
   recordedRoots,
   repoRoot,
   toPosix,
+  workspacePackages,
 } from "./workspace";
 
 const log = logger.withTag("projen:watch");
@@ -138,7 +138,7 @@ export function startWatch(): void {
     }
 
     // 3: content edit inside existing packages -> rebuild the affected barrels.
-    const pkgDirs = discoverPackages().map((p) => p.dir);
+    const pkgDirs = workspacePackages().map((p) => p.dir);
     const dirs = new Set<string>();
     for (const p of relevant) {
       const owner = ownerPackageDir(p, pkgDirs);
