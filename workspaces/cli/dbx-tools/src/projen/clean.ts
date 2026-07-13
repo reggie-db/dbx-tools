@@ -18,7 +18,7 @@
  * `pnpm install` first - the engine's runtime deps live there - so a clean that takes
  * `node_modules` must be followed by reinstall, then re-synth.
  */
-import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, statSync, basename } from "node:fs";
 import { join, relative } from "node:path";
 import { isReadonly, makeWritable } from "./generated";
 import { IGNORE_DIRS, repoRoot, toPosix, walkFiles } from "./workspace";
@@ -29,9 +29,12 @@ import { IGNORE_DIRS, repoRoot, toPosix, walkFiles } from "./workspace";
  * generated task/dep manifests projen keeps under `.projen/`.
  */
 const CLEAN_IGNORE_DIRS: ReadonlySet<string> = new Set([
-  ...[...IGNORE_DIRS].filter((d) => d !== ".projen"),
-  ".gitignore",
+  ...[...IGNORE_DIRS].filter((d) => d !== ".projen")
 ]);
+
+
+const CLEAN_IGNORE_FILES = ".gitignore"
+
 /**
  * Every generated (read-only) file in the workspace, as absolute paths sorted by
  * repo-relative posix path. Vendor/build/VCS dirs are skipped; `.projen/*` is included.
@@ -39,7 +42,7 @@ const CLEAN_IGNORE_DIRS: ReadonlySet<string> = new Set([
 export function listGeneratedFiles(root: string = repoRoot): string[] {
   const rel = (f: string): string => toPosix(relative(root, f));
   return walkFiles(root, CLEAN_IGNORE_DIRS)
-    .filter(isReadonly)
+    .filter(isReadonly).filter(f => !CLEAN_IGNORE_FILES.includes(basename(f)))
     .sort((a, b) => rel(a).localeCompare(rel(b)));
 }
 
