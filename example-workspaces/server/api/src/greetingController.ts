@@ -8,7 +8,7 @@ export interface Greeting {
 
 /**
  * A tsoa controller - the source of the OpenAPI spec. `dbxtools openapi` runs
- * tsoa's spec generator over the `server` env's controllers to produce the
+ * tsoa's spec generator over the `server` tag's controllers to produce the
  * read-only `@dbx-tools/openapi-*` package (spec + a typed openapi-fetch client).
  *
  * No JSDoc/YAML: the route, path parameter, and response schema are inferred from

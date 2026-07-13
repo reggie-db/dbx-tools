@@ -27,7 +27,7 @@ const DEFAULT_ALLOW_BUILDS: Record<string, boolean> = { esbuild: true };
 export interface PnpmWorkspaceConfig {
   /**
    * Workspace members (what pnpm links). Sourced from `project.subprojects` - every
-   * `applyEnv` package (auto-discovered OR configured manually) is a subproject, so
+   * `applyTags` package (auto-discovered OR configured manually) is a subproject, so
    * it lands here automatically; nothing is hardcoded. A `pnpmWorkspace` hook may
    * still push extra globs/members.
    */
@@ -45,8 +45,8 @@ export type ModifyPnpmWorkspace = (workspace: PnpmWorkspaceConfig) => void;
 /**
  * `pnpm-workspace.yaml`: the SOURCE OF TRUTH every other command reads back. Its
  * `packages` list is sourced from `project.subprojects` at synth time (via a thunk
- * projen resolves late), so any subproject - discovered by `configureProjen` or
- * attached manually with `applyEnv` - is included with no hardcoded member list.
+ * projen resolves late), so any subproject - discovered by `configureProject` or
+ * attached manually with `applyTags` - is included with no hardcoded member list.
  * `pnpmWorkspace` receives the assembled object last, so a caller can add members,
  * catalog entries, or any other pnpm setting (`overrides`, `packageExtensions`, ...).
  */

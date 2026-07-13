@@ -1,16 +1,16 @@
 /**
- * `applyEnv` - the reusable primitive that turns any repo path into a projen
- * `TypeScriptProject` subproject configured by one or more {@link EnvDef}s.
+ * `applyTags` - the reusable primitive that turns any repo path into a projen
+ * `TypeScriptProject` subproject configured by one or more {@link TagDef}s.
  *
- * Auto-discovery (`configureProjen`) calls it once per discovered package; a
+ * Auto-discovery (`configureProject`) calls it once per discovered package; a
  * `.projenrc.ts` can also call it directly to configure a package WITHOUT
  * auto-discovery. Either way the result is a real projen subproject, so projen
  * OWNS its `package.json`, `tsconfig.json`, and tasks - and, because it is a
  * subproject, it is sourced into `pnpm-workspace.yaml` from `project.subprojects`
  * (see `files.pnpmWorkspace`) with no manual member list.
  *
- * A package may match MULTIPLE envs (see `workspace.ts` env candidates); their
- * {@link EnvDef}s are merged in order (deps concatenated, tsconfig/tasks
+ * A package may match MULTIPLE tags (see `workspace.ts` tag candidates); their
+ * {@link TagDef}s are merged in order (deps concatenated, tsconfig/tasks
  * later-wins) before being spread into the subproject. The resolved (deduped) tag
  * list is written to the package's `package.json` under `dbxToolsConfig.tags` (the
  * per-package source of truth) and handed to the `workspacePackage` hook via
@@ -19,7 +19,7 @@
  * rather than mutating a serialized object.
  */
 import { type Project, type TaskOptions, TextFile, javascript, typescript } from "projen";
-import type { EnvDef } from "./envs";
+import type { TagDef, WorkspaceTag } from "./tags";
 import { type OneOrMany, toArray, toPosix } from "./workspace";
 
 /**
@@ -29,7 +29,7 @@ import { type OneOrMany, toArray, toPosix } from "./workspace";
  * derived `packageName`, which depends on the root npm scope.
  */
 export interface WorkspacePackageSpec {
-  /** The resolved, deduped tag list (the package's applied env names; may be empty). */
+  /** The resolved, deduped tag list (the package's applied tags; may be empty). */
   readonly tags: string[];
   /** The package folder name (last path segment), e.g. `app`. */
   readonly name: string;
@@ -47,17 +47,39 @@ export type WorkspacePackageModifier = (
   spec: WorkspacePackageSpec,
 ) => void;
 
-export interface ApplyEnvOptions {
+/**
+ * Built-in per-tag `workspacePackage` modifiers ("default workspace tag
+ * modifiers"). `configureProject` runs the enabled subset (see its
+ * `workspacePackageDefaults` option) on every package carrying the tag, AFTER the
+ * tag config is applied and BEFORE the caller's `workspacePackage` hook. The keys
+ * are the selectable defaults; extend this registry to add more.
+ */
+export const DEFAULT_WORKSPACE_PACKAGE_MODIFIERS = {
+  /** A `server` package: an Express app run/watched with tsx (AppKit-aligned). */
+  server: (pkg, _spec) => {
+    pkg.addDeps("express@catalog:");
+    pkg.addDevDeps("@types/express@catalog:");
+    pkg.addTask("dev", { exec: "tsx watch src/server.ts" });
+    pkg.addTask("start", { exec: "tsx src/server.ts" });
+  },
+} satisfies Partial<Record<WorkspaceTag, WorkspacePackageModifier>>;
+
+/** A selectable default tag - a key of {@link DEFAULT_WORKSPACE_PACKAGE_MODIFIERS}. */
+export type DefaultWorkspacePackageTag = keyof typeof DEFAULT_WORKSPACE_PACKAGE_MODIFIERS;
+
+export interface ApplyTagsOptions {
   /** Repo-relative posix path for the package, e.g. `workspaces/ui/app`. */
   readonly outdir: string;
   /** The npm package name, e.g. `@dbx-tools/ui-app`. */
   readonly name: string;
-  /** The env config(s) to apply, merged in order (tsconfig overlay + deps/tasks). */
-  readonly env: OneOrMany<EnvDef>;
+  /** The tag config(s) to apply, merged in order (tsconfig overlay + deps/tasks). */
+  readonly config: OneOrMany<TagDef>;
   /** The resolved tags to record in `package.json` (`dbxToolsConfig.tags`) + `spec.tags`. */
   readonly tags?: string[];
-  /** Identity handed to `workspacePackage`; derived from `outdir`/`name` when omitted. */
+  /** Identity handed to the modifiers; derived from `outdir`/`name` when omitted. */
   readonly spec?: WorkspacePackageSpec;
+  /** Built-in default tag modifiers to run before `workspacePackage` (in order). */
+  readonly defaultModifiers?: WorkspacePackageModifier[];
   /** Per-workspace-package tweak hook, run last. */
   readonly workspacePackage?: WorkspacePackageModifier;
 }
@@ -98,8 +120,32 @@ export function lockPackageJson(project: Project): void {
   if (manifest) manifest.readonly = true;
 }
 
-/** Env-def keys handled specially by {@link mergeEnvDefs}; the rest pass through. */
-type EnvDefExtras = {
+/** Tags applyTags recorded per project, so more can be unioned in later. */
+const RECORDED_TAGS = new WeakMap<Project, string[]>();
+
+/** The (deduped) tags recorded on a project so far (empty if none). */
+export function workspacePackageTagsOf(project: Project): string[] {
+  return RECORDED_TAGS.get(project) ?? [];
+}
+
+/**
+ * Union `tags` into a project's recorded `dbxToolsConfig.tags`. Used when a
+ * `workspacePackageRoots` root encapsulates an ALREADY-attached project (we don't
+ * re-create it, just add its path-derived tags) and to give the ROOT project tags.
+ * Returns the merged (deduped) list.
+ */
+export function addWorkspacePackageTags(
+  project: javascript.NodeProject,
+  tags: string[],
+): string[] {
+  const merged = [...new Set([...(RECORDED_TAGS.get(project) ?? []), ...tags])];
+  RECORDED_TAGS.set(project, merged);
+  project.package.addField("dbxToolsConfig", { tags: merged });
+  return merged;
+}
+
+/** Tag-def keys handled specially by {@link mergeTagDefs}; the rest pass through. */
+type TagDefExtras = {
   deps?: string[];
   devDeps?: string[];
   peerDeps?: string[];
@@ -114,13 +160,13 @@ type EnvDefExtras = {
 };
 
 /**
- * Merge multiple {@link EnvDef}s into one, in order. Dependency arrays
+ * Merge multiple {@link TagDef}s into one, in order. Dependency arrays
  * (`deps`/`devDeps`/`peerDeps`/`bundledDeps`) and `tsconfig.include` concatenate
  * (deduped); `tsconfig.compilerOptions` and `tasks` shallow-merge (later wins); a
  * `viteConfig` anywhere wins; every other projen option is later-wins. A single
  * def passes through essentially unchanged.
  */
-function mergeEnvDefs(defs: EnvDef[]): EnvDef {
+function mergeTagDefs(defs: TagDef[]): TagDef {
   const rest: Record<string, unknown> = {};
   const deps = new Set<string>();
   const devDeps = new Set<string>();
@@ -134,7 +180,7 @@ function mergeEnvDefs(defs: EnvDef[]): EnvDef {
 
   for (const def of defs) {
     const { deps: d, devDeps: dd, peerDeps: pd, bundledDeps: bd, tasks: t, viteConfig: v, tsconfig, ...other } =
-      def as EnvDef & EnvDefExtras;
+      def as TagDef & TagDefExtras;
     for (const x of d ?? []) deps.add(x);
     for (const x of dd ?? []) devDeps.add(x);
     for (const x of pd ?? []) peerDeps.add(x);
@@ -161,13 +207,13 @@ function mergeEnvDefs(defs: EnvDef[]): EnvDef {
   if (Object.keys(compilerOptions).length) tsconfig.compilerOptions = compilerOptions;
   if (include.size) tsconfig.include = [...include];
   if (Object.keys(tsconfig).length) merged.tsconfig = tsconfig;
-  return merged as EnvDef;
+  return merged as TagDef;
 }
 
 /**
- * Apply an env's `tasks` (name -> projen `TaskOptions`) through projen's task
+ * Apply a tag's `tasks` (name -> projen `TaskOptions`) through projen's task
  * system. projen's standard `build` task is locked, and its actual output step is
- * `compile`, so an env's `build` is applied to `compileTask` (e.g. a Vite app
+ * `compile`, so a tag's `build` is applied to `compileTask` (e.g. a Vite app
  * compiles with `vite build`). Any other name resets an existing task if projen
  * already owns it, otherwise it is added as a new task.
  */
@@ -205,11 +251,11 @@ const SUBPROJECT_DEFAULTS: Partial<typescript.TypeScriptProjectOptions> = {
 };
 
 /**
- * Compiler options every package needs regardless of env. The whole repo is
+ * Compiler options every package needs regardless of tag. The whole repo is
  * `type: module` (ESM) and the sources use `import.meta`, so we override projen's
  * `module: "CommonJS"` default. `moduleResolution: BUNDLER` honors the `exports`
  * map, so a bare `@scope/pkg` import resolves to the package-root `index.ts`
- * barrel with no build step. Env options layer on top, so an env can still
+ * barrel with no build step. Tag options layer on top, so a tag can still
  * override any of these.
  */
 const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
@@ -228,22 +274,22 @@ function specFromOutdir(outdir: string, packageName: string, tags: string[]): Wo
 
 /**
  * Create the projen `TypeScriptProject` subproject for `options.outdir`, configured
- * by the merged `options.env`, and return it. The merged env's projen options are
- * spread straight in (deps + the `tsconfig` overlay, where `lib`/`jsx`/`types`
- * enforcement lives); projen supplies module/outDir/rootDir/strictness from its own
- * defaults. Structural fields (`parent`/`outdir`/`name`) are set last so an env can
- * never override them.
+ * by the merged `options.config`, and return it. The merged tag config's projen
+ * options are spread straight in (deps + the `tsconfig` overlay, where
+ * `lib`/`jsx`/`types` enforcement lives); projen supplies module/outDir/rootDir/
+ * strictness from its own defaults. Structural fields (`parent`/`outdir`/`name`)
+ * are set last so a tag can never override them.
  */
-export function applyEnv(
+export function applyTags(
   parent: javascript.NodeProject,
-  options: ApplyEnvOptions,
+  options: ApplyTagsOptions,
 ): typescript.TypeScriptProject {
-  // Merge the one-or-many env defs, then peel the two engine extras (and tsconfig,
+  // Merge the one-or-many tag defs, then peel the two engine extras (and tsconfig,
   // which we merge below) off; the rest spreads straight into TypeScriptProject.
-  const merged = mergeEnvDefs(toArray(options.env));
-  const { tasks, viteConfig, tsconfig, ...envOptions } = merged as EnvDef & EnvDefExtras;
+  const merged = mergeTagDefs(toArray(options.config));
+  const { tasks, viteConfig, tsconfig, ...tagOptions } = merged as TagDef & TagDefExtras;
 
-  // jsx envs (React) keep components in `.tsx`; add that glob to projen's default
+  // jsx tags (React) keep components in `.tsx`; add that glob to projen's default
   // `src/**/*.ts` include (projen concatenates, it doesn't replace).
   const include = [
     ...(tsconfig?.include ?? []),
@@ -252,7 +298,7 @@ export function applyEnv(
 
   const pkg = new typescript.TypeScriptProject({
     ...SUBPROJECT_DEFAULTS,
-    ...envOptions,
+    ...tagOptions,
     parent,
     outdir: options.outdir,
     name: options.name,
@@ -278,7 +324,7 @@ export function applyEnv(
 
   applyTasks(pkg, tasks);
 
-  // Vite-built envs get a minimal, projen-owned `vite.config.ts`.
+  // Vite-built tags get a minimal, projen-owned `vite.config.ts`.
   if (viteConfig) {
     new TextFile(pkg, "vite.config.ts", {
       marker: true,
@@ -295,10 +341,16 @@ export function applyEnv(
 
   // Persist the resolved (deduped) tag list in the package's package.json under
   // `dbxToolsConfig.tags` - the per-package source of truth, readable by post-synth
-  // commands - and expose it to the hook via `spec.tags`; the hook runs LAST.
+  // commands.
   const tags = [...new Set(options.tags ?? options.spec?.tags ?? [])];
+  RECORDED_TAGS.set(pkg, tags);
   pkg.package.addField("dbxToolsConfig", { tags });
-  options.workspacePackage?.(pkg, options.spec ?? specFromOutdir(options.outdir, options.name, tags));
+
+  // Built-in default tag modifiers run after the tag config; the caller's
+  // workspacePackage hook runs LAST.
+  const spec = options.spec ?? specFromOutdir(options.outdir, options.name, tags);
+  for (const modify of options.defaultModifiers ?? []) modify(pkg, spec);
+  options.workspacePackage?.(pkg, spec);
 
   // Lock the manifest last: projen leaves package.json writable, but here it is
   // fully projen-owned, so it joins the rest of the read-only generated tree.

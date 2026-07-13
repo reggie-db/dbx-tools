@@ -1,8 +1,8 @@
 /**
  * Per-package type-checker.
  *
- * Runs `tsc --noEmit` against each package's own env tsconfig. Checking each
- * package separately - rather than one root program - is what makes the env
+ * Runs `tsc --noEmit` against each package's own tag tsconfig. Checking each
+ * package separately - rather than one root program - is what makes the tag
  * enforcement real: a `shared`/`node`/`server` package is compiled with a
  * DOM-free `lib`, and a `ui` package with no `node` types, so misuse of the other
  * runtime fails here. Packages are read from `pnpm-workspace.yaml` (source of
@@ -19,7 +19,7 @@ const log = logger.withTag("projen:typecheck");
 const require = createRequire(import.meta.url);
 
 // Resolved lazily (not at module load) so importing this module - e.g. via the
-// package barrel, which `configureProjen` pulls in - doesn't require `typescript`
+// package barrel, which `configureProject` pulls in - doesn't require `typescript`
 // to already be installed, and doesn't fail just because *some* consumer's
 // `typescript` happens to be an unusual version without this subpath exported.
 let tscBin: string | undefined;

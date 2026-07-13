@@ -1,9 +1,9 @@
 /**
- * OpenAPI env generator (tsoa-based).
+ * OpenAPI generator (tsoa-based).
  *
- * Scans `server`/`node` env packages for **tsoa controllers** (classes decorated
+ * Scans `server`/`node` packages for **tsoa controllers** (classes decorated
  * with `@Route`/`@Get`/... - no JSDoc, no YAML) and, for each package that has
- * them, generates a read-only `<envRoot>/openapi/<name>` package:
+ * them, generates a read-only `<root>/openapi/<name>` package:
  *
  *   - `openapi.json`   - the OpenAPI 3 spec (tsoa `generateSpec`, from the types).
  *   - `src/schema.ts`  - types generated from the spec (openapi-typescript).
@@ -34,8 +34,8 @@ import {
 
 const log = logger.withTag("projen:openapi");
 
-/** The env root the generated `openapi` env is written under. */
-const OPENAPI_ENV = "openapi";
+/** The tag (and folder) the generated openapi client packages are written under. */
+const OPENAPI_TAG = "openapi";
 /** A file that imports tsoa's decorators is (part of) a controller surface. */
 const TSOA_IMPORT = /from\s+['"](?:tsoa|@tsoa\/runtime)['"]/;
 
@@ -55,7 +55,7 @@ export function hasTsoaControllers(pkg: DiscoveredPackage): boolean {
     .some((f) => TSOA_IMPORT.test(readFileSync(f, "utf8")));
 }
 
-/** `server`/`node` env packages (never the generated `openapi` env) with tsoa controllers. */
+/** `server`/`node` packages (never the generated `openapi` tag) with tsoa controllers. */
 function controllerPackages(): DiscoveredPackage[] {
   return discoverPackages().filter(
     (p) => {
@@ -69,7 +69,7 @@ function controllerPackages(): DiscoveredPackage[] {
 export function isTsoaController(path: string): boolean {
   const posix = path.replace(/\\/g, "/");
   return (
-    !posix.includes(`/${OPENAPI_ENV}/`) &&
+    !posix.includes(`/${OPENAPI_TAG}/`) &&
     isModuleFile(path) &&
     existsSync(path) &&
     TSOA_IMPORT.test(readFileSync(path, "utf8"))
@@ -77,7 +77,7 @@ export function isTsoaController(path: string): boolean {
 }
 
 /**
- * Regenerate the `openapi` env from every tsoa-controller package. Returns the
+ * Regenerate the `openapi` packages from every tsoa-controller package. Returns the
  * package dirs it wrote, so the caller can re-synth (to configure/link them) and
  * rebuild their barrels.
  */
@@ -108,7 +108,7 @@ export async function generateOpenapi(): Promise<string[]> {
 
   const written: string[] = [];
   for (const p of pkgs) {
-    const outDir = join(repoRoot, p.root, OPENAPI_ENV, p.name);
+    const outDir = join(repoRoot, p.root, OPENAPI_TAG, p.name);
     const srcDir = join(outDir, "src");
     mkdirSync(srcDir, { recursive: true });
 

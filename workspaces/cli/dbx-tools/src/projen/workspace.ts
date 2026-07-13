@@ -1,21 +1,21 @@
 /**
  * Workspace discovery + shared filesystem helpers.
  *
- * Terminology (Bit-style): a workspace **env** names a target environment
+ * Terminology (Bit-style): a workspace **tag** names a target environment
  * (React/Vite, Node, agnostic, ...); a workspace **package** is a folder with a
  * `src/` holding at least one module file (`.ts`/`.tsx`/`.js`/`.jsx`). "Scope" is
  * reserved for the npm `@scope/` in package identifiers (e.g. `@dbx-tools/ui-app`).
  *
  * A package is discovered by scanning the {@link workspacePackageRoots} (default
  * `["workspaces"]`). Its path *relative to the root* drives everything: the path
- * segments join with `-` cumulatively into {@link DiscoveredPackage.envCandidates}
+ * segments join with `-` cumulatively into {@link DiscoveredPackage.tagCandidates}
  * (e.g. `dir/another/path` -> `[dir, dir-another, dir-another-path]`), and those
- * candidates are matched against `workspacePackageEnvPaths` to decide which env(s)
- * apply. The match may yield NO envs - that is fine (the package still gets the
+ * candidates are matched against `workspacePackageTagPaths` to decide which tag(s)
+ * apply. The match may yield NO tags - that is fine (the package still gets the
  * agnostic default).
  *
  * `pnpm-workspace.yaml` is the SOURCE OF TRUTH for the discovered member set:
- * `configureProjen` scans the filesystem once at synth (given the roots) and the
+ * `configureProject` scans the filesystem once at synth (given the roots) and the
  * members flow from `project.subprojects`; every other command reads them back via
  * {@link discoverPackages} with no roots argument rather than re-scanning.
  */
@@ -57,7 +57,7 @@ export const repoRoot =
 
 /**
  * Default workspace-package roots. Each is scanned for packages; override via
- * `configureProjen({ workspacePackageRoots })`.
+ * `configureProject({ workspacePackageRoots })`.
  */
 export const DEFAULT_WORKSPACE_PACKAGE_ROOTS = ["workspaces"] as const;
 
@@ -171,7 +171,7 @@ export function hasWorkspaceSources(dir: string): boolean {
  *
  * The relative segments drive everything downstream: the npm name
  * (`@<scope>/<segments joined by ->`), the `memberPath`/`dir`, and the
- * {@link envCandidates} used to resolve which env(s) apply.
+ * {@link tagCandidates} used to resolve which tag(s) apply.
  */
 export class DiscoveredPackage {
   constructor(
@@ -204,11 +204,11 @@ export class DiscoveredPackage {
   }
 
   /**
-   * Env-name candidates derived from the relative segments by cumulative `-`
+   * Tag candidates derived from the relative segments by cumulative `-`
    * join: `["dir", "another", "path"]` -> `["dir", "dir-another", "dir-another-path"]`.
-   * Matched (as a set) against `workspacePackageEnvPaths` to resolve applied envs.
+   * Matched (as a set) against `workspacePackageTagPaths` to resolve applied tags.
    */
-  get envCandidates(): string[] {
+  get tagCandidates(): string[] {
     const out: string[] = [];
     let acc = "";
     for (const seg of this.relSegments) {
@@ -287,8 +287,8 @@ export function discoverPackages(
 
 /**
  * A package's resolved tags, read from its `package.json` `dbxToolsConfig.tags`
- * (written at synth by `applyEnv`) - the per-package source of truth. Falls back
- * to the path-derived {@link DiscoveredPackage.envCandidates} when the manifest has
+ * (written at synth by `applyTags`) - the per-package source of truth. Falls back
+ * to the path-derived {@link DiscoveredPackage.tagCandidates} when the manifest has
  * none yet (e.g. a package added but not yet synthesized).
  */
 export function packageTags(pkg: DiscoveredPackage): string[] {
@@ -299,7 +299,7 @@ export function packageTags(pkg: DiscoveredPackage): string[] {
   } catch {
     // no manifest yet / unreadable - fall back to the path candidates
   }
-  return pkg.envCandidates;
+  return pkg.tagCandidates;
 }
 
 /**

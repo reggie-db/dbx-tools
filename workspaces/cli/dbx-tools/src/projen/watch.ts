@@ -5,7 +5,7 @@
  *
  *   1. **projen watch**  - `.projenrc.ts` (or any in-tree config member's `src`,
  *      e.g. the engine itself) changed -> full re-synth.
- *   2. **new-project watch** - a package folder appeared/disappeared under an env
+ *   2. **new-project watch** - a package folder appeared/disappeared under a
  *      root (the package SET changed vs `pnpm-workspace.yaml`) -> full re-synth.
  *   3. **barrel watch** - a source file changed inside an existing package ->
  *      rebuild just that package's `index.ts` barrel.
@@ -36,7 +36,7 @@ const DEBOUNCE_MS = 250;
 
 const PROJENRC = resolve(repoRoot, ".projenrc.ts");
 
-/** `src` dirs of non-env workspace members (e.g. the in-tree engine): config code. */
+/** `src` dirs of config-only workspace members (e.g. the in-tree engine). */
 function configSrcDirs(): string[] {
   return readWorkspaceMembers(repoRoot)
     .filter((m) => toPosix(m).split("/").filter(Boolean).length !== 3)
@@ -82,8 +82,8 @@ export function startWatch(): void {
     log.success(`initial sync (${n} barrel${n === 1 ? "" : "s"})`);
   }
 
-  const envRoots = recordedRoots().map((r) => resolve(repoRoot, r));
-  const watchPaths = [PROJENRC, ...envRoots, ...configSrcDirs()];
+  const workspacePackageRoots = recordedRoots().map((r) => resolve(repoRoot, r));
+  const watchPaths = [PROJENRC, ...workspacePackageRoots, ...configSrcDirs()];
 
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -126,7 +126,7 @@ export function startWatch(): void {
       return;
     }
 
-    // 2.5: a tsoa controller changed -> regenerate the openapi env (spec + client)
+    // 2.5: a tsoa controller changed -> regenerate the openapi packages (spec + client)
     // and rebuild its barrel. openapi is imported lazily (heavy deps).
     if (relevant.some(isTsoaController)) {
       const { generateOpenapi } = await import("./openapi");

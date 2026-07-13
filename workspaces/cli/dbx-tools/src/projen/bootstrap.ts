@@ -9,9 +9,9 @@
  * {@link resolvePnpmBin} finds pnpm's own CLI entry the same way `./barrels.ts`
  * resolves barrelsby's: `require.resolve`, then run it with `execFileSync`.
  *
- * Never scaffolds env folders or sample code - just enough for `pnpm exec projen`
+ * Never scaffolds workspace-package folders or sample code - just enough for `pnpm exec projen`
  * (or `dbxtools sync`) to work from here on. Drop a
- * `workspaces/<env>/<name>/src` folder afterward and it's picked up normally.
+ * `workspaces/<tag>/<name>/src` folder afterward and it's picked up normally.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
@@ -56,9 +56,11 @@ export function needsBootstrap(): boolean {
   return !existsSync(join(repoRoot, "package.json"));
 }
 
-const PROJENRC_TEMPLATE = `import { configureProjen } from "@dbx-tools/cli";
+const PROJENRC_TEMPLATE = `import { configureProject } from "@dbx-tools/cli";
 
-configureProjen().synth();
+// configureProject() constructs + configures the monorepo and synthesizes it
+// (synth defaults to true).
+configureProject();
 `;
 
 /**
@@ -66,7 +68,7 @@ configureProjen().synth();
  * `esbuild` build script non-interactively - pnpm errors on unapproved build
  * scripts with no TTY, and it only reads `allowBuilds` from a
  * `pnpm-workspace.yaml` that doesn't exist yet on a brand-new folder. The real
- * `configureProjen()` synth that follows moments later fully regenerates this
+ * `configureProject()` synth that follows moments later fully regenerates this
  * file (same `allowBuilds` key), so this is purely a bootstrap seed.
  */
 const WORKSPACE_SEED = `packages: []
@@ -97,7 +99,7 @@ export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
   // Pinned (not bare "typescript"/"tsx"): an unpinned install can resolve to
   // whatever a registry currently tags "latest", including an unstable
   // prerelease with a narrowed `exports` map (breaks `typecheck.ts`'s
-  // `typescript/bin/tsc` resolution). Matches the versions `configureProjen`
+  // `typescript/bin/tsc` resolution). Matches the versions `configureProject`
   // itself adds as root devDeps.
   pnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", dbxToolsSpecifier]);
 
@@ -116,5 +118,5 @@ export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
   runSynth({ post: false });
   pnpm(["install", "--no-frozen-lockfile", "--force"]);
   generateBarrels();
-  log.success("workspace ready - drop a workspaces/<env>/<name>/src folder to add a package");
+  log.success("workspace ready - drop a workspaces/<tag>/<name>/src folder to add a package");
 }

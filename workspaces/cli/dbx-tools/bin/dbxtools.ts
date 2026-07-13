@@ -8,8 +8,8 @@
  *   sync --watch    keep it in sync while editing: re-synth on config/package
  *                   changes, rebuild barrels on source edits.
  *   barrels         regenerate every package's root index.ts barrel.
- *   typecheck       type-check every package against its own env tsconfig.
- *   openapi         generate the openapi env from tsoa controllers.
+ *   typecheck       type-check every package against its own tag tsconfig.
+ *   openapi         generate the openapi packages from tsoa controllers.
  *
  * `bootstrap`, `watch`, and `openapi` are imported lazily so `sync`/`barrels`/
  * `typecheck` don't require their heavier deps (chokidar, openapi-typescript) to
@@ -55,7 +55,7 @@ program
 
 program
   .command("typecheck")
-  .description("type-check every package against its own env tsconfig")
+  .description("type-check every package against its own tag tsconfig")
   .action(() => {
     const log = logger.withTag("projen:typecheck");
     const failures = typecheckAll();
@@ -68,7 +68,7 @@ program
 
 program
   .command("openapi")
-  .description("generate the openapi env from server @openapi annotations")
+  .description("generate the openapi client packages from server/node tsoa controllers")
   .action(async () => {
     const { generateOpenapi } = await import("../src/projen/openapi");
     const dirs = await generateOpenapi();

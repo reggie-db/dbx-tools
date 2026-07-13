@@ -1,48 +1,51 @@
 /**
- * `configureProjen(options)` - constructs a projen `NodeProject` and turns it
- * into an env-enforcing pnpm monorepo.
+ * `configureProject(project?, options?)` - configure a projen `NodeProject` into a
+ * tag-enforcing pnpm monorepo. If `project` is omitted, one is constructed from
+ * {@link ENGINE_DEFAULTS} merged with `options.extends`; the passed-or-created
+ * project is returned, and (unless `options.synth === false`) synthesized.
  *
- * The engine has its own opinionated `NodeProject` defaults (see
- * {@link ENGINE_DEFAULTS}); `options.extends` overrides any of them, and anything
- * left undefined there falls back to the default, so a consuming `.projenrc.ts`
- * never repeats the baseline.
- *
- * Discovery is automatic: under each {@link ConfigureProjenOptions.workspacePackageRoots}
- * root, every `src`-bearing folder is a package. Its path relative to the root
- * yields cumulative-join env candidates (`ui/app` -> `[ui, ui-app]`), matched
- * against {@link ConfigureProjenOptions.workspacePackageEnvPaths} (default: identity
- * over the env names) to resolve the applied env(s) - possibly NONE, in which case
- * the agnostic default applies. The default is the baseline floor and the matched
- * {@link WorkspaceEnvDef}s merge on top; the resolved (deduped) tags are written to
- * each package's `package.json` as `dbxToolsConfig.tags` and passed to the
- * `workspacePackage` hook via `spec.tags`.
- * `pnpm-workspace.yaml` (the SOURCE OF TRUTH every other command reads back) sources
- * its members from `project.subprojects`, so a package configured MANUALLY with
- * `applyEnv` - without auto-discovery - lands there too.
+ * Tags drive everything. A workspace package gets tags from three sources, unioned:
+ *   1. tags it already carries (a pre-attached/preconfigured subproject);
+ *   2. `workspacePackageTagPaths` (a path/pattern -> tag(s) map);
+ *   3. its path segments under a `workspacePackageRoots` root (cumulative dash-join
+ *      candidates: `dir/another/path` -> `[dir, dir-another, dir-another-path]`).
+ * A tag with a known config applies it (deps + tsconfig overlay); the agnostic
+ * default is the baseline floor. AFTER every package is
+ * configured, a deferred pass runs the enabled default tag modifiers (see
+ * `workspacePackageDefaults`) then the caller's `workspacePackage` hook, both
+ * acting on the resolved tags. `pnpm-workspace.yaml` (source of truth) sources its
+ * members from `project.subprojects`. A root that ENCAPSULATES an already-attached
+ * project doesn't re-create it - it just adds the path-derived tags. The root
+ * project may itself carry tags (via a `""`/`"."` tag-path key).
  */
 import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Component, javascript, typescript } from "projen";
+import { Component, type FileBase, type Project, javascript, typescript } from "projen";
 import { generateBarrels } from "./barrels";
 import {
-  DEFAULT_WORKSPACE_ENV,
-  WORKSPACE_ENVS,
-  type WorkspaceEnv,
-  type WorkspaceEnvDef,
-  workspaceEnvConfig,
-} from "./envs";
+  DEFAULT_WORKSPACE_TAG,
+  WORKSPACE_TAGS,
+  type WorkspaceTag,
+  type WorkspaceTagDef,
+} from "./tags";
 import * as files from "./files";
 import {
+  DEFAULT_WORKSPACE_PACKAGE_MODIFIERS,
+  type DefaultWorkspacePackageTag,
   type WorkspacePackageModifier,
-  applyEnv,
+  type WorkspacePackageSpec,
+  addWorkspacePackageTags,
+  applyTags,
   lockPackageJson,
   npmNameOf,
 } from "./packages";
 import {
   DEFAULT_WORKSPACE_PACKAGE_ROOTS,
+  type DiscoveredPackage,
   type OneOrMany,
   discoverPackages,
+  escapeRegExp,
   projectName,
   toArray,
   toPosix,
@@ -78,12 +81,9 @@ export const DEFAULT_CATALOG: Catalog = {
 };
 
 /**
- * The engine's opinionated `NodeProject` defaults: pnpm, no jest/eslint/
- * prettier/github/release/depsUpgrade (this repo brings its own toolchain), and
- * no `devEngines.packageManager` (pnpm 11 errors if both that and
- * `packageManager` are set). `options.extends` overrides any of these; `name`
- * is resolved and applied separately (see {@link configureProjen}) so it is
- * always a `string`, never left to chance in the merge.
+ * The engine's opinionated `NodeProject` defaults, used only when `configureProject`
+ * has to CONSTRUCT the project (no project passed). `options.extends` overrides any
+ * of these; `name` is resolved and applied separately.
  */
 const ENGINE_DEFAULTS: Partial<javascript.NodeProjectOptions> = {
   defaultReleaseBranch: "main",
@@ -102,46 +102,57 @@ const ENGINE_DEFAULTS: Partial<javascript.NodeProjectOptions> = {
   addPackageManagerToDevEngines: false,
 };
 
-export interface ConfigureProjenOptions {
+export interface ConfigureProjectOptions {
   /**
    * Root project name; also the npm scope for generated package names
-   * (`@<name>/<env>-<pkg>`). Auto-detected (git remote -> folder name) if omitted.
+   * (`@<name>/<seg-...>`). Auto-detected (git remote -> folder name) if omitted and
+   * not derivable from a passed project.
    */
   readonly name?: string;
-  /**
-   * Overrides for the underlying `NodeProject` construction. Anything set here
-   * wins over {@link ENGINE_DEFAULTS}; anything left `undefined` falls back to
-   * them - so a consuming `.projenrc.ts` only needs to mention what it wants to
-   * change, not re-declare the whole opinionated baseline.
-   */
+  /** Overrides merged over {@link ENGINE_DEFAULTS} when constructing the project. */
   readonly extends?: Partial<javascript.NodeProjectOptions>;
+  /** Run `project.synth()` before returning. Default `true`. */
+  readonly synth?: boolean;
   /**
    * Roots scanned for packages (each `src`-bearing folder under a root is one).
    * Defaults to {@link DEFAULT_WORKSPACE_PACKAGE_ROOTS} (`["workspaces"]`).
    */
   readonly workspacePackageRoots?: readonly string[];
   /**
-   * Maps a package path token (a cumulative-join env candidate like `ui` or
-   * `ui-app`) to the env name(s) that apply there. A package's candidates are
-   * looked up here and the union of matches becomes its applied envs. Defaults to
-   * an identity map over the (effective) env names, so `workspaces/ui/app` -> env
-   * `ui`. Matching may yield NO envs.
+   * Maps a path token / relPath / glob pattern to tag(s). A package's candidates,
+   * relPath and memberPath are matched against the keys and the union of matches is
+   * added to its tags. Defaults to an identity map over the (effective) tag names
+   * (so `workspaces/ui/app` -> tag `ui`); explicit entries AUGMENT that identity.
+   * A `""`/`"."` key tags the root project.
    */
-  readonly workspacePackageEnvPaths?: Record<string, OneOrMany<WorkspaceEnv>>;
-  /** Env name -> config map. Defaults to the built-in {@link WORKSPACE_ENVS}. */
-  readonly workspaceEnvs?: Record<string, WorkspaceEnvDef>;
-  /** Envs to turn off (removed from the env map and the default path->env identity). */
-  readonly disableWorkspaceEnvs?: WorkspaceEnv[];
+  readonly workspacePackageTagPaths?: Record<string, OneOrMany<string>>;
+  /**
+   * Which built-in default tag modifiers may run (keys of
+   * {@link DEFAULT_WORKSPACE_PACKAGE_MODIFIERS}), or `"all"`. Default `"all"`.
+   */
+  readonly workspacePackageDefaults?: DefaultWorkspacePackageTag[] | "all";
+  /** Tag name -> config map. Defaults to the built-in {@link WORKSPACE_TAGS}. */
+  readonly workspaceTags?: Record<string, WorkspaceTagDef>;
+  /** Tags to turn off (removed from the tag map and the default tag-path identity). */
+  readonly disableWorkspaceTags?: WorkspaceTag[];
   /** pnpm `catalog:` versions. Defaults to {@link DEFAULT_CATALOG}. */
   readonly catalog?: Catalog;
   /**
-   * Per-workspace-package hook to tweak each discovered subproject: add deps,
-   * tasks, a bin, etc. via projen's own API. Dispatch on the stable
-   * `spec.envs`/`spec.name`. Runs after the env configs are applied.
+   * Per-workspace-package hook, run LAST (after the default tag modifiers) in a
+   * deferred pass once every package is configured. Dispatch on `spec.tags`/`spec.name`.
    */
   readonly workspacePackage?: WorkspacePackageModifier;
   /** Hook to tweak the assembled `pnpm-workspace.yaml` object (members, catalog, ...). */
   readonly pnpmWorkspace?: files.ModifyPnpmWorkspace;
+  /**
+   * Callback invoked for every generated projen file (`package.json`, `tsconfig.json`,
+   * `vite.config.ts`, `pnpm-workspace.yaml`, `.vscode/*`, ...) across the root and
+   * every workspace package, in the deferred pass. Receives the file and its owning
+   * project - use `file.path` to target one, and for JSON/YAML files
+   * `(file as ObjectFile).addOverride(...)` to tweak it. (Barrels are written by
+   * barrelsby, not projen, so they are not included here.)
+   */
+  readonly onGeneratedFile?: (file: FileBase, project: Project) => void;
 }
 
 /**
@@ -157,25 +168,13 @@ class GeneratedBarrels extends Component {
 }
 
 /**
- * A devDep entry that keeps the engine itself resolvable for the *next* synth,
- * so a consumer's `.projenrc.ts` (which imports `configureProjen` from the
- * published package) doesn't lose that dependency the moment `configureProjen`
- * rebuilds `package.json` from its own declared deps - the caller only added it
- * manually (`pnpm add -D @dbx-tools/cli`) once, before `.projenrc.ts` existed to
- * declare it itself.
- *
- * Resolved from the engine's OWN nearby `package.json` (two levels up from this
- * file) for its name. Returns `undefined` when this code is running as plain
- * in-repo SOURCE rather than an installed dependency (this repo's own dogfooding
- * setup) - detected by whether the resolved path passes through a `node_modules`
- * segment at all, not by directory nesting (an installed copy is *always* nested
- * under the consuming project's own root; that alone doesn't distinguish it).
- *
- * Reuses whatever specifier the CURRENT `package.json` already has for that name
- * - `file:`, `link:`, an exact version, a range, whatever `pnpm add` was given -
- * rather than computing one: overwriting a caller's `file:`/`link:` install with a
- * version range would silently re-point it at the registry. Only a package.json
- * with no existing entry falls back to a computed `^<version>` pin.
+ * A devDep entry that keeps the engine itself resolvable for the *next* synth (a
+ * consumer's `.projenrc.ts` imports `configureProject` from it). Resolved from the
+ * engine's OWN nearby `package.json` for its name; `undefined` when running as
+ * plain in-repo SOURCE (detected by whether the resolved path passes through a
+ * `node_modules` segment). Reuses whatever specifier the consumer's `package.json`
+ * already has for it rather than computing one (avoids repointing a `file:`/`link:`
+ * install at the registry).
  */
 function engineSelfDependency(project: javascript.NodeProject): string | undefined {
   const enginePkgJson = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
@@ -198,118 +197,129 @@ function engineSelfDependency(project: javascript.NodeProject): string | undefin
   return `${name}@^${version}`;
 }
 
-/** Construct and configure the monorepo project. The caller runs `.synth()`. */
-export function configureProjen(options: ConfigureProjenOptions = {}): javascript.NodeProject {
+/** Configure the monorepo project. Returns it (synthed unless `options.synth === false`). */
+export function configureProject(
+  project?: javascript.NodeProject,
+  options: ConfigureProjectOptions = {},
+): javascript.NodeProject {
   const {
     name: explicitName,
     extends: extendsOptions,
+    synth = true,
     workspacePackageRoots = DEFAULT_WORKSPACE_PACKAGE_ROOTS,
-    workspacePackageEnvPaths,
-    workspaceEnvs = WORKSPACE_ENVS,
-    disableWorkspaceEnvs = [],
+    workspacePackageTagPaths,
+    workspacePackageDefaults = "all",
+    workspaceTags = WORKSPACE_TAGS,
+    disableWorkspaceTags = [],
     catalog = DEFAULT_CATALOG,
     workspacePackage,
     pnpmWorkspace,
+    onGeneratedFile,
   } = options;
 
-  // Resolve the project name up front (git remote -> folder name), so it's a real
-  // string by the time the project is constructed. Also the npm scope for names.
-  const name = explicitName ?? npmNameOf(projectName());
+  // Resolve name (options.name -> passed project's name -> auto git/folder), then
+  // construct a default NodeProject when none was passed.
+  const resolvedName = explicitName ?? npmNameOf(projectName());
+  const proj =
+    project ??
+    new javascript.NodeProject({ ...ENGINE_DEFAULTS, ...extendsOptions, name: resolvedName });
+  const name = proj.name && proj.name.length ? proj.name : resolvedName;
 
-  const project = new javascript.NodeProject({
-    ...ENGINE_DEFAULTS,
-    ...extendsOptions,
-    name,
-  });
+  const effectiveTags: Record<string, WorkspaceTagDef> = { ...workspaceTags };
+  for (const e of disableWorkspaceTags) delete effectiveTags[e];
 
-  const effectiveEnvs: Record<string, WorkspaceEnvDef> = { ...workspaceEnvs };
-  for (const e of disableWorkspaceEnvs) delete effectiveEnvs[e];
-
-  // path token -> tag(s). Default: identity over the effective env names (so a
-  // package at `<root>/ui/app`, candidate `ui`, resolves to tag `ui`); any
-  // `workspacePackageEnvPaths` entries AUGMENT that identity rather than replace it.
-  const envPaths: Record<string, OneOrMany<string>> = {
-    ...Object.fromEntries(Object.keys(effectiveEnvs).map((k) => [k, k])),
-    ...(workspacePackageEnvPaths ?? {}),
+  // path token/relPath/glob -> tag(s). Default: identity over the effective tag
+  // names; any workspacePackageTagPaths entries AUGMENT that.
+  const tagPaths: Record<string, OneOrMany<string>> = {
+    ...Object.fromEntries(Object.keys(effectiveTags).map((k) => [k, k])),
+    ...(workspacePackageTagPaths ?? {}),
   };
+  const enabledDefaults = new Set<string>(
+    workspacePackageDefaults === "all"
+      ? Object.keys(DEFAULT_WORKSPACE_PACKAGE_MODIFIERS)
+      : workspacePackageDefaults,
+  );
 
-  /** Union of tags matched by a package's candidates (ordered, deduped); may be []. */
-  const resolveTags = (candidates: string[]): string[] => {
+  // --- Root-level config -----------------------------------------------------
+  if (!project) {
+    // Only when we own construction (a passed project manages its own projenrc).
+    new typescript.ProjenrcTs(proj, { runner: typescript.TypeScriptRunner.tsx() });
+  }
+  const selfDep = engineSelfDependency(proj);
+  proj.addDevDeps(...(selfDep ? [selfDep] : []), "tsx@^4.23.0", "typescript@^5.9.3", "@types/node@^24.6.0");
+  proj.package.addField("type", "module");
+  proj.package.addField("private", true);
+  lockPackageJson(proj);
+  const watch = proj.tasks.tryFind("watch") ?? proj.addTask("watch");
+  watch.reset("pnpm dbxtools sync --watch");
+  files.pnpmWorkspace(proj, { catalog, modify: pnpmWorkspace });
+  files.tsconfigBase(proj);
+  files.tsconfigRoot(proj);
+  files.prettierConfig(proj);
+  files.prettierIgnore(proj);
+  files.vscodeTasks(proj);
+  files.vscodeSettings(proj);
+  files.vscodeExtensions(proj);
+
+  // --- Tag resolution --------------------------------------------------------
+  const tagPathMatches = (key: string, p: DiscoveredPackage): boolean => {
+    if (p.tagCandidates.includes(key)) return true;
+    if (key === p.relPath || key === p.memberPath) return true;
+    if (key.includes("*")) {
+      const re = new RegExp(`^${key.split("*").map(escapeRegExp).join(".*")}$`);
+      return re.test(p.relPath) || re.test(p.memberPath) || p.tagCandidates.some((c) => re.test(c));
+    }
+    return false;
+  };
+  const resolveTags = (p: DiscoveredPackage): string[] => {
     const tags: string[] = [];
-    for (const candidate of candidates) {
-      for (const tag of toArray(envPaths[candidate])) {
-        if (!tags.includes(tag)) tags.push(tag);
+    for (const [key, value] of Object.entries(tagPaths)) {
+      if (tagPathMatches(key, p)) {
+        for (const tag of toArray(value)) if (!tags.includes(tag)) tags.push(tag);
       }
     }
     return tags;
   };
 
-  // Discover env packages by scanning the filesystem once (synth-time). The member
-  // list, the subprojects, and the barrels all derive from this; every other
-  // command reads the recorded list back from pnpm-workspace.yaml.
-  const discovered = discoverPackages(resolve(project.outdir), workspacePackageRoots);
-
-  // Run `.projenrc.ts` through tsx.
-  new typescript.ProjenrcTs(project, { runner: typescript.TypeScriptRunner.tsx() });
-
-  // Root devDeps the toolchain needs, plus the engine's own devDep entry (see
-  // engineSelfDependency) so it stays resolvable for the next synth.
-  const selfDep = engineSelfDependency(project);
-  project.addDevDeps(
-    ...(selfDep ? [selfDep] : []),
-    "tsx@^4.23.0",
-    "typescript@^5.9.3",
-    "@types/node@^24.6.0",
-  );
-
-  const pkg = project.package;
-  pkg.addField("type", "module");
-  pkg.addField("private", true);
-  // The root package.json is fully projen-owned here (deps/fields all come from
-  // this file), so lock it read-only like the rest of the generated tree.
-  lockPackageJson(project);
-
-  // Hook into projen's own `watch` task (as projen repurposes it for cdk/jsii):
-  // point it at the single CLI watch orchestrator (`pnpm dbxtools`).
-  const watch = project.tasks.tryFind("watch") ?? project.addTask("watch");
-  watch.reset("pnpm dbxtools sync --watch");
-
-  // Root config files (all projen-owned: read-only + generated marker). The pnpm
-  // workspace `packages` list is sourced from `project.subprojects` at synth (see
-  // files.pnpmWorkspace) - so discovered AND any manual `applyEnv` packages land
-  // there with no hardcoded member list.
-  files.pnpmWorkspace(project, { catalog, modify: pnpmWorkspace });
-  files.tsconfigBase(project);
-  files.tsconfigRoot(project);
-  files.prettierConfig(project);
-  files.prettierIgnore(project);
-  files.vscodeTasks(project); // folderOpen -> `projen watch` -> `dbxtools sync --watch`
-  files.vscodeSettings(project);
-  files.vscodeExtensions(project);
-
-  // Each discovered folder becomes a real projen TypeScriptProject subproject via
-  // the same `applyEnv` primitive a caller uses manually. The matched env config(s)
-  // are merged and applied; an unmatched package falls back to the agnostic default.
-  for (const p of discovered) {
-    const tags = resolveTags(p.envCandidates);
-    // The agnostic default is the baseline floor; the matched-tag env configs merge
-    // on top (later-wins), so a package with no tags still gets a sane config.
-    const env = [DEFAULT_WORKSPACE_ENV, ...tags.map((t) => workspaceEnvConfig(t, effectiveEnvs))];
-    const packageName = npmNameOf(name, p.relPath);
-    applyEnv(project, {
-      outdir: p.memberPath,
-      name: packageName,
-      env,
-      tags,
-      spec: { tags, name: p.name, packageName },
-      workspacePackage,
-    });
+  // Already-attached subprojects, keyed by repo-relative member path.
+  const rootAbs = resolve(proj.outdir);
+  const existing = new Map<string, javascript.NodeProject>();
+  for (const sub of proj.subprojects) {
+    if (sub instanceof javascript.NodeProject) {
+      existing.set(toPosix(relative(rootAbs, sub.outdir)), sub);
+    }
   }
 
-  // Barrels regenerate on every (plain) synth.
-  new GeneratedBarrels(project);
+  // --- Discover + configure packages (NO modifiers yet - see the deferred pass) ---
+  const configured: { project: typescript.TypeScriptProject; spec: WorkspacePackageSpec }[] = [];
+  for (const p of discoverPackages(rootAbs, workspacePackageRoots)) {
+    const tags = resolveTags(p);
+    const found = existing.get(p.memberPath);
+    if (found) {
+      // A root encapsulates an already-attached project: don't re-create it, just
+      // union the path-derived tags into it.
+      addWorkspacePackageTags(found, tags);
+      continue;
+    }
+    const packageName = npmNameOf(name, p.relPath);
+    // DEFAULT_WORKSPACE_TAG is the baseline floor; each known tag's config merges on top.
+    const config = [
+      DEFAULT_WORKSPACE_TAG,
+      ...tags.map((t) => effectiveTags[t]).filter((d): d is WorkspaceTagDef => !!d),
+    ];
+    const spec: WorkspacePackageSpec = { tags, name: p.name, packageName };
+    const sub = applyTags(proj, { outdir: p.memberPath, name: packageName, config, tags, spec });
+    configured.push({ project: sub, spec });
+  }
 
-  project.gitignore.addPatterns(
+  // The root project may itself carry tags (via a `""`/`"."` tag-path key).
+  const rootTags = [...new Set([...toArray(tagPaths[""]), ...toArray(tagPaths["."])])];
+  if (rootTags.length) addWorkspacePackageTags(proj, rootTags);
+
+  // Barrels regenerate on every (plain) synth.
+  new GeneratedBarrels(proj);
+
+  proj.gitignore.addPatterns(
     ".DS_Store",
     "dist",
     "**/dist",
@@ -318,13 +328,32 @@ export function configureProjen(options: ConfigureProjenOptions = {}): javascrip
     ".env",
     "tmp",
   );
-
-  // Mark the barrels + the generated openapi env as generated in .gitattributes
-  // (collapses them in PR diffs, excludes from language stats).
   for (const root of workspacePackageRoots) {
-    project.annotateGenerated(`/${root}/**/index.ts`);
-    project.annotateGenerated(`/${root}/openapi/**`);
+    proj.annotateGenerated(`/${root}/**/index.ts`);
+    proj.annotateGenerated(`/${root}/openapi/**`);
   }
 
-  return project;
+  // --- Deferred modifier pass: AFTER every package is configured, run the enabled
+  // default tag modifiers, then the caller's workspacePackage hook (LAST), each
+  // acting on the resolved tags.
+  for (const { project: sub, spec } of configured) {
+    for (const tag of spec.tags) {
+      if (enabledDefaults.has(tag) && tag in DEFAULT_WORKSPACE_PACKAGE_MODIFIERS) {
+        DEFAULT_WORKSPACE_PACKAGE_MODIFIERS[tag as DefaultWorkspacePackageTag](sub, spec);
+      }
+    }
+    workspacePackage?.(sub, spec);
+  }
+
+  // Generated-file callback: every projen file across the root + all packages.
+  if (onGeneratedFile) {
+    const visitFiles = (pj: Project): void => {
+      for (const file of pj.files) onGeneratedFile(file, pj);
+    };
+    visitFiles(proj);
+    for (const sub of proj.subprojects) visitFiles(sub);
+  }
+
+  if (synth) proj.synth();
+  return proj;
 }

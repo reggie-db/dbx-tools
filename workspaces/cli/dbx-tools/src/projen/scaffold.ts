@@ -1,7 +1,7 @@
 /**
  * Scaffold helpers: decide when a re-synth is due, and run it.
  *
- * `configureProjen` discovers packages by scanning the filesystem at synth and
+ * `configureProject` discovers packages by scanning the filesystem at synth and
  * records them in `pnpm-workspace.yaml` (the source of truth). During `watch`,
  * the one-shot `dbxtools sync` compares the live filesystem against that record
  * to decide whether the package SET changed (a package was added/removed) and a
@@ -11,7 +11,7 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { discoverPackages, recordedRoots, repoRoot } from "./workspace";
 
-/** Member paths that currently exist on disk (scan of the recorded env roots). */
+/** Member paths that currently exist on disk (scan of the recorded roots). */
 export function currentPackages(): string[] {
   return discoverPackages(repoRoot, recordedRoots()).map((p) => p.memberPath);
 }
