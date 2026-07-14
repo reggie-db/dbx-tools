@@ -14,7 +14,10 @@
  */
 import path, { basename } from "node:path";
 import { packageMixin } from "./workspaces/cli/dbx-tools/src/projen/mixins";
-import { DBXToolsNodeProject } from "./workspaces/cli/dbx-tools/src/projen/project";
+import {
+  DBXToolsNodeProject,
+  DBXToolsTypeScriptProject,
+} from "./workspaces/cli/dbx-tools/src/projen/project";
 
 const SCOPE = "dbx-tools";
 const EXAMPLE_WORKSPACES_ROOT = "example-workspaces";
@@ -43,11 +46,25 @@ project.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
 project.with(
   packageMixin(
     (p) => {
-      const outdirRelativeToRoot = path.relative(project.root.outdir, p.outdir)
-      const exampleWorkspace = outdirRelativeToRoot == (EXAMPLE_WORKSPACES_ROOT) || outdirRelativeToRoot.startsWith(EXAMPLE_WORKSPACES_ROOT + "/")
-      return exampleWorkspace
+      const outdirRelativeToRoot = path.relative(project.root.outdir, p.outdir);
+      const exampleWorkspace =
+        outdirRelativeToRoot == EXAMPLE_WORKSPACES_ROOT ||
+        outdirRelativeToRoot.startsWith(EXAMPLE_WORKSPACES_ROOT + "/");
+      return exampleWorkspace;
     },
     (p) => p.package.addField("private", true),
+  ),
+  packageMixin(
+    (p) => p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "projen",
+    (p) => {
+      p.addDeps("projen");
+    },
+  ),
+  packageMixin(
+    (p) => p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "file-scan",
+    (p) => {
+      p.addDeps("chokidar", "glob", "minimatch", "@dbx-tools/shared-core@workspace:*");
+    },
   ),
   packageMixin(
     (p) => p.dbxToolsConfig.tags.includes("ui") && basename(p.outdir) === "app",
@@ -73,11 +90,13 @@ project.with(
     (p) => p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "dbx-tools",
     (p) => {
       p.package.addField("name", SCOPE);
-      p.dbxToolsConfig.lockPackageJson = false
+      p.dbxToolsConfig.lockPackageJson = false;
       // The engine, dogfooded through the normal `cli` tag. Override the
       // auto-derived name (`@dbx-tools/cli-dbx-tools`) to the clean `@dbx-tools/cli`.
-      p.package.addField("publishConfig", { access: "public", provenance: true });
-      p.package.addField("cool-dude", "0.0.0");
+      p.package.addField("publishConfig", {
+        access: "public",
+        provenance: true,
+      });
       p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
       // `commander` + `@types/node` already come from the `cli` tag; the rest are
       // the engine's own deps. `pnpm` here is what lets `dbxtools sync` bootstrap a
@@ -97,22 +116,23 @@ project.with(
         "tinyglobby",
         "picomatch",
         "p-memoize",
+        "@dbx-tools/shared-file-scan@workspace:*",
       );
       p.addDevDeps("@types/picomatch@^4.0.3");
-      // ES2022 stdlib (e.g. Object.hasOwn in the logger) - the `cli` tag default is
-      // ES2020. Also cover the root `index.ts` barrel and the `bin/` CLI, which the
-      // tag's default `src/**/*.ts` include doesn't reach - widening `rootDir` to
-      // the package root avoids TS6059 ("not under rootDir") for both.
-      p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
-      p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
-      p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
-      p.tsconfig?.addInclude("index.ts");
-      p.tsconfig?.addInclude("bin/**/*.ts");
+      if (p instanceof DBXToolsTypeScriptProject) {
+        // ES2022 stdlib (e.g. Object.hasOwn in the logger) - the `cli` tag default is
+        // ES2020. Also cover the root `index.ts` barrel and the `bin/` CLI, which the
+        // tag's default `src/**/*.ts` include doesn't reach - widening `rootDir` to
+        // the package root avoids TS6059 ("not under rootDir") for both.
+        p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
+        p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
+        p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
+        p.tsconfig?.addInclude("index.ts");
+        p.tsconfig?.addInclude("bin/**/*.ts");
+      }
     },
   ),
 );
-
-
 
 // The engine lives in-tree (imported by relative path above) as an auto-discovered
 // workspace package, so it is NOT installed as a dependency and its `dbxtools` bin

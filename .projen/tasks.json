@@ -50,9 +50,6 @@
       },
       "steps": [
         {
-          "exec": "[ -f package.json ] && chmod u+w package.json && [ -f workspaces/cli/dbx-tools/package.json ] && chmod u+w workspaces/cli/dbx-tools/package.json"
-        },
-        {
           "builtin": "release/bump-version"
         }
       ],
@@ -129,6 +126,15 @@
         }
       ]
     },
+    "format": {
+      "name": "format",
+      "steps": [
+        {
+          "exec": "prettier . --write",
+          "receiveArgs": true
+        }
+      ]
+    },
     "install": {
       "name": "install",
       "description": "Install project dependencies and update lockfile (non-frozen)",
@@ -161,7 +167,7 @@
       "description": "Creates the distribution package",
       "steps": [
         {
-          "exec": "node --input-type=module -e \"import { readFileSync, writeFileSync } from 'node:fs'; const version = JSON.parse(readFileSync('package.json', 'utf8')).version; const pkgPath = 'workspaces/cli/dbx-tools/package.json'; const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); pkg.version = version; writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');\" && mkdir -p dist/js && pnpm --dir workspaces/cli/dbx-tools pack --pack-destination ../../../dist/js"
+          "exec": "tsx workspaces/cli/dbx-tools/bin/publish.ts --pack"
         }
       ]
     },
@@ -172,6 +178,16 @@
     "pre-compile": {
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
+    },
+    "publish": {
+      "name": "publish",
+      "description": "Bump version (default patch), commit, push branch, tag, and push tag",
+      "steps": [
+        {
+          "exec": "tsx workspaces/cli/dbx-tools/bin/publish.ts",
+          "receiveArgs": true
+        }
+      ]
     },
     "release": {
       "name": "release",
@@ -194,48 +210,15 @@
         },
         {
           "exec": "git diff --ignore-space-at-eol --exit-code"
-        },
-        {
-          "exec": "[ -f package.json ] && chmod a-w package.json && [ -f workspaces/cli/dbx-tools/package.json ] && chmod a-w workspaces/cli/dbx-tools/package.json"
-        }
-      ]
-    },
-    "release:push": {
-      "name": "release:push",
-      "description": "Tag, push the release tag, and let CI publish on tag push",
-      "steps": [
-        {
-          "spawn": "tag"
-        },
-        {
-          "exec": "git push origin \"$(cat dist/releasetag.txt)\""
         }
       ]
     },
     "release:tag": {
       "name": "release:tag",
-      "description": "Build and pack from the git tag that triggered CI",
+      "description": "CI: build and pack from the git tag that triggered the workflow",
       "steps": [
         {
-          "exec": "[ -f package.json ] && chmod u+w package.json && [ -f workspaces/cli/dbx-tools/package.json ] && chmod u+w workspaces/cli/dbx-tools/package.json"
-        },
-        {
-          "exec": "rm -fr dist"
-        },
-        {
-          "exec": "node --input-type=module -e \"import { readFileSync, writeFileSync } from 'node:fs'; const ref = process.env.GITHUB_REF_NAME ?? ''; const version = ref.replace(/^v/, ''); if (!version) throw new Error('GITHUB_REF_NAME is required'); const root = JSON.parse(readFileSync('package.json', 'utf8')); root.version = version; writeFileSync('package.json', JSON.stringify(root, null, 2) + '\\n');\""
-        },
-        {
-          "exec": "node --input-type=module -e \"import { readFileSync, writeFileSync } from 'node:fs'; const version = JSON.parse(readFileSync('package.json', 'utf8')).version; const pkgPath = 'workspaces/cli/dbx-tools/package.json'; const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); pkg.version = version; writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');\""
-        },
-        {
-          "spawn": "build"
-        },
-        {
-          "exec": "node --input-type=module -e \"import { writeFileSync } from 'node:fs'; const ref = process.env.GITHUB_REF_NAME ?? ''; if (!ref) throw new Error('GITHUB_REF_NAME is required'); const tag = ref.startsWith('v') ? ref : `v${ref}`; writeFileSync('dist/releasetag.txt', tag + '\\n'); writeFileSync('dist/changelog.md', '# ' + tag + '\\n\\nTagged release.\\n');\""
-        },
-        {
-          "exec": "[ -f package.json ] && chmod a-w package.json && [ -f workspaces/cli/dbx-tools/package.json ] && chmod a-w workspaces/cli/dbx-tools/package.json"
+          "exec": "tsx workspaces/cli/dbx-tools/bin/publish.ts --ci"
         }
       ]
     },
@@ -245,37 +228,6 @@
         {
           "exec": "pnpm dbxtools sync",
           "receiveArgs": true
-        }
-      ]
-    },
-    "tag": {
-      "name": "tag",
-      "description": "Bump version, generate a changelog message, and tag HEAD",
-      "env": {
-        "CHANGELOG": "dist/changelog.md",
-        "RELEASE_TAG_FILE": "dist/releasetag.txt"
-      },
-      "steps": [
-        {
-          "exec": "[ -f package.json ] && chmod u+w package.json && [ -f workspaces/cli/dbx-tools/package.json ] && chmod u+w workspaces/cli/dbx-tools/package.json"
-        },
-        {
-          "exec": "rm -fr dist"
-        },
-        {
-          "spawn": "bump"
-        },
-        {
-          "exec": "node --input-type=module -e \"import { readFileSync, writeFileSync } from 'node:fs'; const version = JSON.parse(readFileSync('package.json', 'utf8')).version; const pkgPath = 'workspaces/cli/dbx-tools/package.json'; const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); pkg.version = version; writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');\""
-        },
-        {
-          "builtin": "release/tag-version"
-        },
-        {
-          "spawn": "unbump"
-        },
-        {
-          "exec": "git checkout -- package.json workspaces/cli/dbx-tools/package.json"
         }
       ]
     },
@@ -295,9 +247,6 @@
         "BUMP_PACKAGE": "commit-and-tag-version@^12"
       },
       "steps": [
-        {
-          "exec": "[ -f package.json ] && chmod u+w package.json && [ -f workspaces/cli/dbx-tools/package.json ] && chmod u+w workspaces/cli/dbx-tools/package.json"
-        },
         {
           "builtin": "release/reset-version"
         }

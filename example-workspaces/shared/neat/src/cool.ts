@@ -1,3 +1,3 @@
 export function coolDude(): string {
-    return "cool dude";
+  return "cool dude";
 }

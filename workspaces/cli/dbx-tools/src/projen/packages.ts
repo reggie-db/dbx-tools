@@ -43,7 +43,6 @@ export function npmNameOf(name: string, ...names: string[]): string {
   return `@${nameParts[0]}/${nameParts.slice(1).join("-")}`;
 }
 
-
 /** Tags recorded per NON-DBXTools project, so more can be unioned in later. */
 const RECORDED_TAGS = new WeakMap<Project, string[]>();
 
@@ -58,10 +57,7 @@ export function workspacePackageTagsOf(project: Project): string[] {
  * is a plain projen project (a DBXTools project owns its own tags via `addTags`).
  * Returns the merged (deduped) list.
  */
-export function addWorkspacePackageTags(
-  project: javascript.NodeProject,
-  tags: string[],
-): string[] {
+export function addWorkspacePackageTags(project: javascript.NodeProject, tags: string[]): string[] {
   const merged = [...new Set([...(RECORDED_TAGS.get(project) ?? []), ...tags])];
   RECORDED_TAGS.set(project, merged);
   project.package.addField("dbxToolsConfig", { tags: merged });
@@ -77,9 +73,10 @@ export function addWorkspacePackageTags(
  * adds the package's `.tsx` sources to the compile so React components type-check.
  */
 export function applyCompilerOptions(
-  pkg: typescript.TypeScriptProject,
+  pkg: javascript.NodeProject,
   compilerOptions: javascript.TypeScriptCompilerOptions,
 ): void {
+  if (!(pkg instanceof typescript.TypeScriptProject)) return;
   const file = pkg.tsconfig?.file;
   if (!file) return;
   for (const [key, value] of Object.entries(compilerOptions)) {
@@ -96,19 +93,15 @@ export function applyCompilerOptions(
  * compiles with `vite build`). Any other name resets an existing task if projen
  * already owns it, otherwise it is added as a new task.
  */
-export function applyTasks(
-  pkg: typescript.TypeScriptProject,
-  tasks?: Record<string, TaskOptions>,
-): void {
+export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, TaskOptions>): void {
   if (!tasks) return;
+
   for (const [name, options] of Object.entries(tasks)) {
     const owned = name === "build" ? pkg.compileTask : pkg.tasks.tryFind(name);
     if (owned) owned.reset(options.exec, options);
     else pkg.addTask(name, options);
   }
 }
-
-
 
 /**
  * Compiler options every package needs regardless of tag. The whole repo is

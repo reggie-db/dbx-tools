@@ -56,7 +56,10 @@ export function tsconfigRoot(project: Project): void {
     readonly: true,
     obj: {
       extends: "./tsconfig.base.json",
-      compilerOptions: { lib: ["ESNext"], types: ["node"] } satisfies javascript.TypeScriptCompilerOptions,
+      compilerOptions: {
+        lib: ["ESNext"],
+        types: ["node"],
+      } satisfies javascript.TypeScriptCompilerOptions,
       include: [".projenrc.ts"],
       exclude: ["node_modules", "**/dist", "**/node_modules"],
     },

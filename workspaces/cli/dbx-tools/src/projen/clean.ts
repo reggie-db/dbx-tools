@@ -63,7 +63,8 @@ export function listNodeModulesDirs(root: string = repoRoot): string[] {
     for (const d of readdirSync(cur, { withFileTypes: true })) {
       if (!d.isDirectory()) continue;
       const full = join(cur, d.name);
-      if (d.name === "node_modules") out.push(full); // record; do NOT descend
+      if (d.name === "node_modules")
+        out.push(full); // record; do NOT descend
       else if (!IGNORE_DIRS.has(d.name)) stack.push(full);
     }
   }

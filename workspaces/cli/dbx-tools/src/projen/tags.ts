@@ -84,7 +84,10 @@ export const WORKSPACE_TAG_MIXINS = {
     // type-check. `dev`/`start` run the app's `src/server.ts` with tsx.
     p.addDeps("express@catalog:", "tsoa@catalog:");
     p.addDevDeps("@types/node@catalog:", "@types/express@catalog:");
-    applyCompilerOptions(p, { ...NODE_COMPILER_OPTIONS, experimentalDecorators: true });
+    applyCompilerOptions(p, {
+      ...NODE_COMPILER_OPTIONS,
+      experimentalDecorators: true,
+    });
     applyTasks(p, {
       dev: { exec: "tsx watch src/server.ts" },
       start: { exec: "tsx src/server.ts" },

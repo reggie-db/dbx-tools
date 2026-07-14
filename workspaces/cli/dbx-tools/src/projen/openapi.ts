@@ -143,7 +143,10 @@ export async function generateOpenapi(): Promise<string[]> {
     const clientPath = join(srcDir, "client.ts");
     makeWritable(clientPath);
     writeFileSync(clientPath, CLIENT_SRC);
-    stampGenerated(clientPath, { tool: "dbxtools openapi (openapi-fetch)", source: "./schema" });
+    stampGenerated(clientPath, {
+      tool: "dbxtools openapi (openapi-fetch)",
+      source: "./schema",
+    });
 
     written.push(outDir);
     log.success(`openapi/${leaf} (from ${p.relPath})`);

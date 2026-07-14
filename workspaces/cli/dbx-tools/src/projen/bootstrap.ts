@@ -6,63 +6,23 @@
  * resolvable (installed, or fetched transiently via `npx dbxtools`) both are
  * already sitting in `node_modules` - no global `npm install -g pnpm`, no PATH
  * lookup, no network access beyond what installing the engine already required.
- * {@link resolvePnpmLauncher} finds pnpm's own CLI entry the same way `./barrels.ts`
- * resolves barrelsby's (`require.resolve`, run via `execFileSync`), falling back to
- * `npx pnpm` only if pnpm can't be resolved as a dependency (a broken/partial install).
+ * {@link resolvePnpmArgv} in `../bin` finds pnpm's own CLI entry the same way
+ * `./barrels.ts` resolves barrelsby's (`require.resolve`, run via `execFileSync`),
+ * falling back to `npx pnpm` only if pnpm can't be resolved as a dependency.
  *
  * Never scaffolds workspace-package folders or sample code - just enough for `pnpm exec projen`
  * (or `dbxtools sync`) to work from here on. Drop a
  * `workspaces/<tag>/<name>/src` folder afterward and it's picked up normally.
  */
-import { execFileSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { runPnpm } from "../bin";
 import { generateBarrels } from "./barrels";
 import { logger } from "../log";
 import { runSynth } from "./scaffold";
 import { repoRoot } from "./workspace";
 
 const log = logger.withTag("projen:bootstrap");
-
-/** A package.json `bin` field: either a single command string, or a name -> path map. */
-type BinField = string | Record<string, string>;
-
-/**
- * How to launch pnpm, as a `[command, ...prefixArgs]` argv prefix.
- *
- * Preferred: pnpm's own CLI entry resolved from `@dbx-tools/cli`'s `pnpm`
- * DEPENDENCY and run via this Node - it works before any global/PATH pnpm exists
- * (the point of bootstrap) and can't pick up a different system pnpm. Fallback,
- * only if that dependency can't be resolved (e.g. a broken/partial install where
- * `pnpm` is not on PATH either): `npx -y pnpm`, since `npx` ships with Node.
- */
-function resolvePnpmLauncher(): { command: string; prefixArgs: string[] } {
-  try {
-    const require = createRequire(import.meta.url);
-    // pnpm's own `exports` map is `{ ".": "./package.json" }` - the bare specifier
-    // (not a "/package.json" subpath, which isn't separately exported) resolves to
-    // its manifest directly.
-    const pkgJsonPath = require.resolve("pnpm");
-    const pkg = require(pkgJsonPath) as { bin: BinField };
-    const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin.pnpm;
-    return { command: process.execPath, prefixArgs: [join(dirname(pkgJsonPath), bin)] };
-  } catch {
-    return { command: "npx", prefixArgs: ["-y", "pnpm"] };
-  }
-}
-
-/**
- * Run pnpm with `args` in `repoRoot`, using pnpm resolved from the engine's own
- * dependency (or `npx pnpm` if it can't be resolved - see {@link resolvePnpmLauncher}).
- */
-function pnpm(args: string[]): void {
-  const { command, prefixArgs } = resolvePnpmLauncher();
-  execFileSync(command, [...prefixArgs, ...args], {
-    cwd: repoRoot,
-    stdio: "inherit",
-  });
-}
 
 /** True if `repoRoot` has no `package.json` yet, so `pnpm init` must create one. */
 function needsPackageJson(): boolean {
@@ -119,7 +79,7 @@ export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
   log.start(`bootstrapping an empty workspace in ${repoRoot}`);
 
   if (needsPackageJson()) {
-    pnpm(["init"]);
+    runPnpm(["init"]);
   }
   const workspaceFile = join(repoRoot, "pnpm-workspace.yaml");
   if (!existsSync(workspaceFile)) {
@@ -129,7 +89,7 @@ export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
   // whatever a registry currently tags "latest", including an unstable prerelease
   // that breaks projen's `tsc`/`tsx` invocation. Matches the versions
   // `DBXToolsNodeProject` itself adds as root devDeps.
-  pnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", dbxToolsSpecifier]);
+  runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", dbxToolsSpecifier]);
 
   const projenrc = join(repoRoot, ".projenrc.ts");
   if (!existsSync(projenrc)) {
@@ -144,7 +104,7 @@ export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
   // `--force` is set) - then regenerate barrels, since skipping projen's
   // post-synth also skips its barrels-on-resynth component.
   runSynth({ post: false });
-  pnpm(["install", "--no-frozen-lockfile", "--force"]);
+  runPnpm(["install", "--no-frozen-lockfile", "--force"]);
   generateBarrels();
   log.success("workspace ready - drop a workspaces/<tag>/<name>/src folder to add a package");
 }

@@ -26,8 +26,7 @@ function parseLogType(value: unknown): LogType | undefined {
       if (level === value) return key as LogType;
     }
     return undefined;
-  }
-  else if (typeof value === "string") {
+  } else if (typeof value === "string") {
     let strValue = value as string;
     for (let i = 0; i < 2; i++) {
       if (i > 0) {
@@ -54,8 +53,8 @@ function parseLogType(value: unknown): LogType | undefined {
  * @returns The consola level number, or `undefined` when unrecognized.
  */
 function parseLogLevel(value: unknown): number | undefined {
-  const logType = parseLogType(value)
-  return logType ? LogLevels[logType] : undefined
+  const logType = parseLogType(value);
+  return logType ? LogLevels[logType] : undefined;
 }
 
 /**
@@ -74,7 +73,6 @@ export const logger = createConsola({
   stderr: process.stderr,
   level: parseLogLevel(process.env.LOG_LEVEL) ?? DEFAULT_LOG_LEVEL,
 });
-
 
 if (import.meta.main) {
   console.log(logger.level);

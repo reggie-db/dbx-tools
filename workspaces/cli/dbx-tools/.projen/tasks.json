@@ -114,6 +114,9 @@
       "steps": [
         {
           "spawn": "eslint"
+        },
+        {
+          "exec": "tsx --test 'test/**/*.test.ts'"
         }
       ]
     },

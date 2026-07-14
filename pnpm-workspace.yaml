@@ -9,6 +9,9 @@ packages:
   - example-workspaces/shared/neat
   - example-workspaces/ui/app
   - workspaces/cli/dbx-tools
+  - workspaces/shared/core
+  - workspaces/shared/file-scan
+  - workspaces/shared/projen
 catalog:
   react: ^19.2.4
   react-dom: ^19.2.4

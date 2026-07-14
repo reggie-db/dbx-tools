@@ -28,9 +28,6 @@ import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { globSync } from "tinyglobby";
 import { parse } from "yaml";
 
-
-
-
 /** Run a command, returning trimmed stdout, or undefined on any failure. */
 function tryCmd(cmd: string, args: string[]): string | undefined {
   try {
@@ -49,9 +46,7 @@ function tryCmd(cmd: string, args: string[]): string | undefined {
  * the git top-level, then the current working directory.
  */
 export const repoRoot =
-  tryCmd("npm", ["prefix"]) ??
-  tryCmd("git", ["rev-parse", "--show-toplevel"]) ??
-  process.cwd();
+  tryCmd("npm", ["prefix"]) ?? tryCmd("git", ["rev-parse", "--show-toplevel"]) ?? process.cwd();
 
 /**
  * Default workspace-package roots. Each is scanned for packages; override via the
@@ -62,7 +57,11 @@ export const DEFAULT_WORKSPACE_PACKAGE_ROOTS = ["workspaces"] as const;
 /** A project name: the git remote's repo name, else the root folder name. */
 export function projectName(): string {
   const url = tryCmd("git", ["-C", repoRoot, "config", "--get", "remote.origin.url"]);
-  const fromGit = url?.replace(/\.git$/, "").split(/[/:]/).filter(Boolean).pop();
+  const fromGit = url
+    ?.replace(/\.git$/, "")
+    .split(/[/:]/)
+    .filter(Boolean)
+    .pop();
   return fromGit ?? basename(repoRoot);
 }
 
@@ -195,7 +194,7 @@ export class DiscoveredPackage {
     readonly root: string,
     /** Path segments relative to `root`, e.g. `["ui", "app"]`. */
     readonly relSegments: readonly string[],
-  ) { }
+  ) {}
 
   /** Posix path relative to the root, e.g. `ui/app`. */
   get relPath(): string {
@@ -237,7 +236,9 @@ export class DiscoveredPackage {
 export function readWorkspaceMembers(projectRoot: string = repoRoot): string[] {
   const file = resolve(projectRoot, "pnpm-workspace.yaml");
   if (!existsSync(file)) return [];
-  const doc = parse(readFileSync(file, "utf8")) as { packages?: string[] } | null;
+  const doc = parse(readFileSync(file, "utf8")) as {
+    packages?: string[];
+  } | null;
   return doc?.packages ?? [];
 }
 
@@ -258,7 +259,10 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
  */
 function collectPackageDirs(rootAbs: string): string[] {
   const owners = new Set<string>();
-  for (const file of globSync(SRC_MODULE_GLOB, { cwd: rootAbs, ignore: IGNORE_GLOBS })) {
+  for (const file of globSync(SRC_MODULE_GLOB, {
+    cwd: rootAbs,
+    ignore: IGNORE_GLOBS,
+  })) {
     if (!isModuleFile(file)) continue;
     const segs = toPosix(file).split("/");
     const srcIdx = segs.indexOf("src");

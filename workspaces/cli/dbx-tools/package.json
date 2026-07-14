@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
+    "@dbx-tools/shared-file-scan": "workspace:*",
     "barrelsby": "^2.8.1",
     "chokidar": "^4.0.3",
     "commander": "catalog:",
@@ -52,7 +53,7 @@
     "access": "public",
     "provenance": true
   },
-  "version": "0.0.1",
+  "version": "0.0.0",
   "packageManager": "pnpm@10.33.0",
   "types": "index.ts",
   "dbxToolsConfig": {

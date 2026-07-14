@@ -23,7 +23,7 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
 ## Vocabulary (important)
 
 - **tag** — a label a workspace package carries (Bit-style; it names the target
-  *environment* — React/Vite, Node, agnostic, …). A package can carry MANY tags,
+  _environment_ — React/Vite, Node, agnostic, …). A package can carry MANY tags,
   or none. Tags are NOT npm scopes. They come from three sources, unioned and
   deduped: (1) tags already on a project you attached yourself, (2) matches in
   `workspacePackageTagPaths`, (3) the cumulative dash-join of the folder's path
@@ -94,7 +94,7 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
 - **Every package is a `DBXToolsTypeScriptProject`** (extends
   `typescript.TypeScriptProject`). The root's scan constructs one per discovered
   folder with `parent: root`; you can also `new DBXToolsTypeScriptProject({parent,
-  ...})` directly to attach a package WITHOUT auto-discovery. Every package gets
+...})` directly to attach a package WITHOUT auto-discovery. Every package gets
   the agnostic tsconfig floor (`AGNOSTIC_COMPILER_OPTIONS`: ES2022, no DOM/node) at
   construction; the class then points `main`/`types`/`exports` at the package-root
   `index.ts` barrel, applies any explicit `tasks`, optionally emits
@@ -102,7 +102,7 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   layered afterward by the tag MIXINS the root applies (see below).
   projen OWNS that package's `package.json`/`tsconfig.json`/tasks/`README.md`/
   `.projen/`; baseline projen features are off to match the root (`SUBPROJECT_
-  DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
+DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
 - **Tags are ONE map of mixins.** `tags.ts` — `WORKSPACE_TAG_MIXINS`
   (`Record<WorkspaceTag, IMixin>`, keyed by tag name). Each entry is a
   `tagMixin(name, fn)` that, for every package carrying the tag, adds the tag's
@@ -117,8 +117,8 @@ for per-package tweaks, and ships the **`dbxtools`** CLI.
   - `cli` → Node + `commander` + `@clack/prompts`
   - `shared` → agnostic (the `AGNOSTIC_COMPILER_OPTIONS` floor: no DOM, no Node)
   - `openapi` → generated, read-only clients (`openapi-fetch`, DOM libs)
-  Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
-  `document` in `shared`/`server` fails `tsc`; `process`/`node:*` in `ui` fails.
+    Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
+    `document` in `shared`/`server` fails `tsc`; `process`/`node:*` in `ui` fails.
 - **Per-package behavior is MIXINS** (`mixins.ts`; `constructs` `IMixin`). A mixin
   is `{ supports(c), applyTo(c) }`, applied with the constructs-native
   `construct.with(...mixins)` — it runs each across the construct's whole subtree
@@ -194,7 +194,7 @@ pnpm dbxtools clean          # remove generated files (read-only ones); interact
 - **`dbxtools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
   `pnpm init`, seed a minimal `pnpm-workspace.yaml` (so the very next step can
   approve `tsx`'s `esbuild` build script non-interactively), `pnpm add -D
-  projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
+projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
   `.projenrc.ts` if none exists, synth (`post: false` - skips projen's own
   post-synth install, which has no non-interactive answer for "remove this
   stale node_modules?" with no TTY), then reconcile the install itself
@@ -257,9 +257,9 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   own deps (`projen`, `constructs`, `barrelsby`, `chokidar`, `consola`,
   `openapi-typescript`, `tsoa`, `yaml`, `tsx`, `pnpm` - `commander` already comes
   from the `cli` tag), and bumps its tsconfig to ES2022 lib/target + `rootDir: "."`
-  + extra includes for `index.ts`/`bin/**/*.ts` (the `cli` tag's defaults are
-  ES2020 + `src/**/*.ts` only, which doesn't cover `Object.hasOwn` in `log.ts`
-  or anything outside `src/`).
+  - extra includes for `index.ts`/`bin/**/*.ts` (the `cli` tag's defaults are
+    ES2020 + `src/**/*.ts` only, which doesn't cover `Object.hasOwn` in `log.ts`
+    or anything outside `src/`).
 - **The root keeps the engine itself resolvable across synths** via
   `engineSelfDependency()` (`project.ts`): reads the engine's OWN nearby
   `package.json` (two directories up from `project.ts`) for its name; if that
@@ -278,13 +278,13 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 - **Type-checking is projen's own per-package `compile`** (`tsc --build` against
   each package's tag tsconfig), not a `dbxtools` command - the tag `lib`/`types`
   overrides are what make misuse fail. Check one package with `pnpm exec projen
-  compile` (or `pnpm compile`) in its dir, or all of them with `pnpm -r compile`.
+compile` (or `pnpm compile`) in its dir, or all of them with `pnpm -r compile`.
 - **Tool bins are resolved lazily** (a memoized function, not a module-level
   const): `barrels.ts` resolves barrelsby this way. Resolving eagerly broke merely
-  *importing* the engine (which the barrel pulls in) whenever a consumer's install
+  _importing_ the engine (which the barrel pulls in) whenever a consumer's install
   of that tool was an unusual version with a narrower `exports` map.
 - Repo is `type: module`. Packages get a `module: ESNext` + `moduleResolution:
-  bundler` overlay (`SHARED_COMPILER_OPTIONS` in `packages.ts`) because projen's
+bundler` overlay (`SHARED_COMPILER_OPTIONS` in `packages.ts`) because projen's
   default `module: CommonJS` breaks the ESM sources' `import.meta`; `bundler`
   honors the `exports` map, so a bare `@dbx-tools/<pkg>` import resolves to that
   package's ROOT `index.ts` barrel — packages type-check against each other with
@@ -310,7 +310,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   openapi-fetch produce a read-only `<sourcePackage root>/openapi/<name>`
   package (`openapi.json` + `src/schema.ts` + `src/client.ts`) - colocated under
   the SAME root as the controller it came from (`example-workspaces/server/
-  api`'s controllers generate `example-workspaces/openapi/api`), not a hardcoded
+api`'s controllers generate `example-workspaces/openapi/api`), not a hardcoded
   root. tsoa/typescript/openapi-typescript are lazy-loaded (only `dbxtools
-  openapi` / a watched controller edit needs them). The watcher (started by
+openapi` / a watched controller edit needs them). The watcher (started by
   `projen sync --watch`) regenerates it automatically when a controller changes.

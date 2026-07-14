@@ -6,15 +6,6 @@ on:
   push:
     tags:
       - v*
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Dry run (skip actual publishing)
-        required: false
-        type: boolean
-  release:
-    types:
-      - published
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -51,7 +42,7 @@ jobs:
         run: pnpm i --frozen-lockfile
       - name: release
         id: release
-        run: if [ "${{ github.ref_type }}" = "tag" ]; then pnpm exec projen release:tag; else pnpm exec projen release; fi
+        run: pnpm exec projen release:tag
       - name: Check if version has already been tagged
         id: check_tag_exists
         run: |-
@@ -76,40 +67,13 @@ jobs:
           name: build-artifact
           path: dist
           overwrite: true
-  release_github:
-    name: Publish to GitHub Releases
-    needs:
-      - release
-      - release_npm
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    if: (github.ref_type == 'tag' || needs.release.outputs.tag_exists != 'true') && needs.release.outputs.latest_commit == github.sha
-    steps:
-      - uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          package-manager-cache: false
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          artifact-ids: ${{ needs.release.outputs.artifact_id }}
-          path: dist
-      - name: Restore build artifact permissions
-        run: cd dist && setfacl --restore=permissions-backup.acl
-        continue-on-error: true
-      - name: Release
-        if: ${{ !inputs.dry_run }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: errout=$(mktemp); gh release create $(cat dist/releasetag.txt) -R $GITHUB_REPOSITORY -F dist/changelog.md -t $(cat dist/releasetag.txt) --target $GITHUB_SHA 2> $errout && true; exitcode=$?; if [ $exitcode -ne 0 ] && ! grep -q "Release.tag_name already exists" $errout; then cat $errout; exit $exitcode; fi
   release_npm:
     name: Publish to npm
     needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: (github.ref_type == 'tag' || needs.release.outputs.tag_exists != 'true') && needs.release.outputs.latest_commit == github.sha
+    if: ${{ needs.release.outputs.latest_commit == github.sha }}
     steps:
       - uses: actions/setup-node@v6
         with:

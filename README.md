@@ -39,10 +39,12 @@ pnpm dlx dbxtools sync   # (once published) - or run the bin directly if install
 ```
 
 On a folder with no `package.json`, `sync` runs `pnpm init`, installs `projen`
-+ `typescript` + `tsx` + itself, writes a minimal `.projenrc.ts`, and synthesizes
-- no example folders or sample code, just enough for `pnpm exec projen` (or
-`dbxtools sync`) to work from there on. Drop a `workspaces/<tag>/<name>/src`
-folder afterward and it's picked up on the next sync.
+
+- `typescript` + `tsx` + itself, writes a minimal `.projenrc.ts`, and synthesizes
+
+* no example folders or sample code, just enough for `pnpm exec projen` (or
+  `dbxtools sync`) to work from there on. Drop a `workspaces/<tag>/<name>/src`
+  folder afterward and it's picked up on the next sync.
 
 ## Tags enforce a runtime (auto-applied by folder)
 
@@ -55,14 +57,14 @@ style - a tag names a target environment, not an npm scope): `ui/app` → tags
 `WORKSPACE_TAG_MIXINS` (`.../src/projen/tags.ts`) that drives the generated
 `tsconfig` (`lib`/`jsx`/`types`) + baseline deps - so misuse fails `tsc`:
 
-| Tag      | Runtime                    | DOM | Node |
-| -------- | -------------------------- | --- | ---- |
-| `ui`     | Vite + React (+vite.config)|  ✓  |  ✗   |
-| `server` | Node (Express, tsoa, …)    |  ✗  |  ✓   |
-| `node`   | Node                       |  ✗  |  ✓   |
-| `cli`    | Node + commander + @clack  |  ✗  |  ✓   |
-| `shared` | agnostic                   |  ✗  |  ✗   |
-| `openapi`| generated read-only client |  ✓  |  ✗   |
+| Tag       | Runtime                     | DOM | Node |
+| --------- | --------------------------- | --- | ---- |
+| `ui`      | Vite + React (+vite.config) | ✓   | ✗    |
+| `server`  | Node (Express, tsoa, …)     | ✗   | ✓    |
+| `node`    | Node                        | ✗   | ✓    |
+| `cli`     | Node + commander + @clack   | ✗   | ✓    |
+| `shared`  | agnostic                    | ✗   | ✗    |
+| `openapi` | generated read-only client  | ✓   | ✗    |
 
 Packages are named `@<scope>/<path-dash-joined>` (here `@dbx-tools/*`, the scope
 being the resolved project name), and each records its resolved tags in its

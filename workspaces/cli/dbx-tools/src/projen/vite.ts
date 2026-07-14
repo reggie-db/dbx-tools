@@ -16,7 +16,7 @@
  * its `node:*` usage never trips the `ui` package's `compile` under the DOM-only
  * tsconfig; Vite transpiles it with esbuild and runs it in Node at config time.
  */
-import { type Project, TextFile, typescript } from "projen";
+import { javascript, type Project, TextFile } from "projen";
 
 /**
  * Default unmanaged override modules, merged over the generated config in order
@@ -107,10 +107,6 @@ export class ViteConfigFile extends TextFile {
  * Idempotent: a package that already has one (e.g. the `viteConfig` option and the
  * `ui` tag mixin both firing) is left untouched.
  */
-export function emitViteConfig(
-  pkg: typescript.TypeScriptProject,
-  options?: ViteConfigFileOptions,
-): void {
-  if (pkg.tryFindFile("vite.config.ts")) return;
+export function emitViteConfig(pkg: javascript.NodeProject, options?: ViteConfigFileOptions): void {
   new ViteConfigFile(pkg, options);
 }

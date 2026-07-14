@@ -61,7 +61,9 @@ program
   .action(() => {
     const log = logger.withTag("projen:barrels");
     const n = generateBarrels();
-    log.success(n === 0 ? "barrels already up to date" : `updated ${n} barrel${n === 1 ? "" : "s"}`);
+    log.success(
+      n === 0 ? "barrels already up to date" : `updated ${n} barrel${n === 1 ? "" : "s"}`,
+    );
   });
 
 program
@@ -75,11 +77,14 @@ program
 
 program
   .command("clean")
-  .description("remove generated files (projen config + barrels) and node_modules; interactive picker, all preselected")
+  .description(
+    "remove generated files (projen config + barrels) and node_modules; interactive picker, all preselected",
+  )
   .option("-y, --yes", "remove every generated file and node_modules dir without prompting")
   .action(async (opts: { yes?: boolean }) => {
     const log = logger.withTag("projen:clean");
-    const { listGeneratedFiles, listNodeModulesDirs, removePaths } = await import("../src/projen/clean");
+    const { listGeneratedFiles, listNodeModulesDirs, removePaths } =
+      await import("../src/projen/clean");
     const files = listGeneratedFiles();
     const nodeModules = listNodeModulesDirs();
     const targets = [...files, ...nodeModules];
@@ -121,7 +126,10 @@ program
       message: `Select paths to remove (${files.length} generated + ${nodeModules.length} node_modules, all preselected)`,
       options: [
         ...files.map((f) => ({ value: f, label: label(f) })),
-        ...nodeModules.map((d) => ({ value: d, label: `${label(d)} (directory)` })),
+        ...nodeModules.map((d) => ({
+          value: d,
+          label: `${label(d)} (directory)`,
+        })),
       ],
       initialValues: [...targets],
       required: false,

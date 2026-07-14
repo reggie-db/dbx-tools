@@ -9,7 +9,7 @@
  *
  * This module is the mixin FACTORIES only - the per-tag table itself lives in
  * `./tags`:
- *   - {@link tagMixin} / {@link packageMixin} target a {@link DBXToolsTypeScriptProject};
+ *   - {@link tagMixin} / {@link packageMixin} target a {@link IDBXToolsProject};
  *   - {@link fileMixin} targets any generated `FileBase`.
  */
 import type { IConstruct, IMixin } from "constructs";
@@ -18,22 +18,19 @@ import { FileBase, typescript } from "projen";
 // project.ts -> tags.ts (which calls `tagMixin` at eval time) into this module's
 // init, before esbuild's keepNames `__name` helper is assigned - crashing under
 // tsx. Detect the class structurally instead (see `isDBXToolsPackage`).
-import type { DBXToolsTypeScriptProject } from "./project";
+import type { IDBXToolsProject } from "./project";
 
-/** Structural guard for a {@link DBXToolsTypeScriptProject} (no runtime import cycle). */
-function isDBXToolsPackage(c: IConstruct): c is DBXToolsTypeScriptProject {
+/** Structural guard for a {@link IDBXToolsProject} (no runtime import cycle). */
+function isDBXToolsPackage(c: IConstruct): c is IDBXToolsProject {
   return c instanceof typescript.TypeScriptProject && "dbxToolsConfig" in c;
 }
 
 /** A mixin that runs `apply` on every workspace package carrying `tag`. */
-export function tagMixin(
-  tag: string,
-  apply: (pkg: DBXToolsTypeScriptProject) => void,
-): IMixin {
+export function tagMixin(tag: string, apply: (pkg: IDBXToolsProject) => void): IMixin {
   return {
     supports: (c: IConstruct): boolean =>
       isDBXToolsPackage(c) && c.dbxToolsConfig.tags.includes(tag),
-    applyTo: (c: IConstruct): void => apply(c as DBXToolsTypeScriptProject),
+    applyTo: (c: IConstruct): void => apply(c as IDBXToolsProject),
   };
 }
 
@@ -44,12 +41,12 @@ export function tagMixin(
  * way the old `workspacePackage(pkg)` hook did.
  */
 export function packageMixin(
-  predicate: (pkg: DBXToolsTypeScriptProject) => boolean,
-  apply: (pkg: DBXToolsTypeScriptProject) => void,
+  predicate: (pkg: IDBXToolsProject) => boolean,
+  apply: (pkg: IDBXToolsProject) => void,
 ): IMixin {
   return {
     supports: (c: IConstruct): boolean => isDBXToolsPackage(c) && predicate(c),
-    applyTo: (c: IConstruct): void => apply(c as DBXToolsTypeScriptProject),
+    applyTo: (c: IConstruct): void => apply(c as IDBXToolsProject),
   };
 }
 

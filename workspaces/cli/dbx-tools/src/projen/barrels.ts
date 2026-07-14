@@ -41,10 +41,7 @@ function barrelsbyBin(): string {
 }
 
 /** Transform applied to a package's barrel contents before it is written. */
-export type BarrelModifier = (
-  content: string,
-  ctx: { readonly packageDir: string },
-) => string;
+export type BarrelModifier = (content: string, ctx: { readonly packageDir: string }) => string;
 
 /**
  * The do-not-edit banner stamped on every generated barrel. Deliberately stable
@@ -148,9 +145,7 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
  * Returns the number of barrels whose contents actually changed (an unchanged
  * export surface is a no-op), so callers can stay quiet when nothing moved.
  */
-export function generateBarrels(
-  opts: { dirs?: string[]; modifier?: BarrelModifier } = {},
-): number {
+export function generateBarrels(opts: { dirs?: string[]; modifier?: BarrelModifier } = {}): number {
   const dirs = opts.dirs ?? workspacePackages().map((p) => p.dir);
   let total = 0;
   for (const dir of dirs) total += generateForPackage(dir, opts.modifier);

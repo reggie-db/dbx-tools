@@ -25,12 +25,11 @@
  * Replaces the removed `configureProject()` function.
  */
 import { readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import picomatch from "picomatch";
-import { ReleaseTrigger } from "projen/lib/release";
 import { Component, type TaskOptions, type TaskStepOptions, javascript, typescript } from "projen";
-import { DBXToolsRelease } from "./release";
+import { ReleaseTrigger } from "projen/lib/release";
+import { ENGINE_PKG_ROOT } from "../bin";
 import { generateBarrels } from "./barrels";
 import * as files from "./files";
 import {
@@ -40,6 +39,7 @@ import {
   npmNameOf,
 } from "./packages";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
+import { DBXToolsRelease } from "./publish";
 import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, type WorkspaceTag } from "./tags";
 import { emitViteConfig } from "./vite";
 import {
@@ -49,6 +49,7 @@ import {
   scanPackages,
   toPosix,
 } from "./workspace";
+import { ignorePatterns } from "@dbx-tools/shared-file-scan";
 
 /** Shared formatting rules, applied by projen's Prettier on whichever project is root. */
 const PRETTIER_SETTINGS: javascript.PrettierSettings = {
@@ -74,9 +75,7 @@ const PRETTIER_SETTINGS: javascript.PrettierSettings = {
  * inherits the root's config rather than emitting its own. `name`/`defaultReleaseBranch`
  * are resolved/applied by the caller.
  */
-function defaultNodeProjectOptions(
-  options: Pick<javascript.NodeProjectOptions, "parent">,
-): Partial<javascript.NodeProjectOptions> {
+function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProjectOptions {
   const isRoot = options.parent === undefined;
   return {
     packageManager: javascript.NodePackageManager.PNPM,
@@ -85,8 +84,6 @@ function defaultNodeProjectOptions(
     buildWorkflow: false,
     release: false,
     jest: false,
-    prettier: isRoot,
-    prettierOptions: { settings: PRETTIER_SETTINGS },
     github: false,
     npmignoreEnabled: false,
     licensed: false,
@@ -95,6 +92,18 @@ function defaultNodeProjectOptions(
     peerDependencyOptions: { pinnedDevDependency: false },
     addPackageManagerToDevEngines: false,
     devDeps: ["picomatch", "@types/node@^24.6.0"],
+    ...(isRoot
+      ? {
+          prettier: true,
+          prettierOptions: {
+            settings: PRETTIER_SETTINGS,
+            ignoreFile: true,
+            ignoreFileOptions: { ignorePatterns: ignorePatterns() },
+          },
+        }
+      : {}),
+    ...(isRoot ? {} : { gitIgnoreOptions: {} }),
+    ...options,
   };
 }
 
@@ -105,35 +114,45 @@ function defaultNodeProjectOptions(
  * just layers on tsx/typescript and disables sample code.
  */
 function defaultTypeScriptProjectOptions(
-  options: Pick<typescript.TypeScriptProjectOptions, "parent">,
-): Partial<typescript.TypeScriptProjectOptions> {
-  const base = defaultNodeProjectOptions(options);
+  options: DBXToolsTypeScriptProjectOptions,
+): DBXToolsTypeScriptProjectOptions {
+  const base = defaultProjectOptions(options);
   return {
     ...base,
     sampleCode: false,
     entrypoint: undefined,
     devDeps: [...(base.devDeps ?? []), "tsx@^4.23.0", "typescript@^5.9.3"],
+    ...options,
   };
 }
 
+/**
+ * Append Node's built-in test runner to projen's `test` task (after eslint, when
+ * enabled). The glob is resolved at run time by tsx, so packages without tests
+ * exit 0 with zero cases; drop files under `test/` matching `*.test.ts` and they
+ * run on the next `projen test` with no extra config.
+ */
+function configureNodeTestTask(pkg: typescript.TypeScriptProject): void {
+  javascript.Eslint.of(pkg)?.addOverride({
+    files: ["test/**/*.ts", "test/**/*.tsx"],
+    rules: {
+      // node:test `describe`/`it` return promises by design.
+      "@typescript-eslint/no-floating-promises": "off",
+    },
+  });
+  pkg.testTask.exec("tsx --test 'test/**/*.test.ts'");
+}
 
 // Pinned to match the subproject defaults so pnpm resolves a single tsx/typescript
 // across the workspace (a bare name -> `*` could pull a second, newer major).
-const DEV_DEPS_ROOT: string[] = [
-  "tsx@^4.23.0",
-  "typescript@^5.9.3",
-]
+const DEV_DEPS_ROOT: string[] = ["tsx@^4.23.0", "typescript@^5.9.3"];
 
-
-/**
- * Options shared by both DBXTools project classes. Extends the component option
- * bags directly (projen-style flattening), so a project's initial `tags`
- * ({@link DBXToolsConfigOptions}) and pnpm `packages`/`catalog`/`allowBuilds`
- * ({@link DBXToolsPNPMWorkspaceOptions}) are top-level options - no nested field.
- */
-export interface DBXToolsCommonOptions
-  extends DBXToolsConfigOptions,
-  DBXToolsPNPMWorkspaceOptions {
+/** Options for {@link DBXToolsNodeProject} (the monorepo root). */
+export interface DBXToolsProjectOptions
+  extends
+    Partial<javascript.NodeProjectOptions>,
+    DBXToolsConfigOptions,
+    DBXToolsPNPMWorkspaceOptions {
   /**
    * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
    * the (resolved) project name; a leading `@` is optional.
@@ -156,19 +175,14 @@ export interface DBXToolsCommonOptions
    * a list = only those tags.
    */
   readonly defaultTagMixins?: false | WorkspaceTag[];
-}
 
-/** Options for {@link DBXToolsNodeProject} (the monorepo root). */
-export interface DBXToolsNodeProjectOptions
-  extends Partial<javascript.NodeProjectOptions>,
-  DBXToolsCommonOptions { }
+  /** Extra projen tasks for this package (name -> `TaskOptions`). */
+  readonly tasks?: Record<string, TaskOptions>;
+}
 
 /** Options for {@link DBXToolsTypeScriptProject} (a package, or a compiling root). */
 export interface DBXToolsTypeScriptProjectOptions
-  extends Partial<typescript.TypeScriptProjectOptions>,
-  DBXToolsCommonOptions {
-  /** Extra projen tasks for this package (name -> `TaskOptions`). */
-  readonly tasks?: Record<string, TaskOptions>;
+  extends Partial<typescript.TypeScriptProjectOptions>, DBXToolsProjectOptions {
   /** Emit a projen-owned `vite.config.ts`. */
   readonly viteConfig?: boolean;
 }
@@ -187,7 +201,6 @@ export interface DBXToolsConfigOptions {
   readonly lockPackageJson?: boolean;
 }
 
-
 /**
  * Owns the package's `dbxToolsConfig` field in `package.json` - today `tags` and
  * `lockPackageJson`, the per-package source of truth every post-synth command reads
@@ -201,7 +214,10 @@ export class DBXToolsConfig extends Component {
   private _lockPackageJson: boolean = true;
   private _tags: readonly string[] = [];
 
-  constructor(readonly project: javascript.NodeProject, options: DBXToolsConfigOptions = {}) {
+  constructor(
+    readonly project: javascript.NodeProject,
+    options: DBXToolsConfigOptions = {},
+  ) {
     super(project);
     if (options.lockPackageJson !== undefined) this.lockPackageJson = options.lockPackageJson;
     if (options.tags !== undefined) this.writeTags(options.tags);
@@ -209,7 +225,7 @@ export class DBXToolsConfig extends Component {
 
   /** Whether this project's `package.json` is forced read-only at synth. */
   public get lockPackageJson(): boolean {
-    return this._lockPackageJson
+    return this._lockPackageJson;
   }
 
   public set lockPackageJson(value: boolean) {
@@ -221,8 +237,6 @@ export class DBXToolsConfig extends Component {
   public get tags(): readonly string[] {
     return this._tags;
   }
-
-
 
   /** Add tags at the end, keeping the list distinct (incoming moved to the end). */
   public addTags(...tags: string[]): void {
@@ -257,8 +271,8 @@ export class DBXToolsConfig extends Component {
   /** Write `lockPackageJson`/`tags` back to the `dbxToolsConfig` field. */
   private write(): void {
     this.project.package.addField("dbxToolsConfig", {
-      ...this._lockPackageJson === false ? { lockPackageJson: false } : {},
-      ...this._tags.length > 0 ? { tags: this._tags } : {},
+      ...(this._lockPackageJson === false ? { lockPackageJson: false } : {}),
+      ...(this._tags.length > 0 ? { tags: this._tags } : {}),
     });
   }
 }
@@ -272,7 +286,7 @@ export class DBXToolsConfig extends Component {
  * so callers use `project.dbxToolsConfig.addTags(...)` /
  * `project.pnpmWorkspace?.addCatalog(...)` directly, not project-level delegators.
  */
-export interface IDBXToolsProject {
+export interface IDBXToolsProject extends javascript.NodeProject {
   /** The npm scope for generated package names (no leading `@`). */
   readonly scope: string;
   /** The component that owns `package.json` `dbxToolsConfig` (tags live here). */
@@ -293,15 +307,14 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXT
   readonly dbxToolsConfig: DBXToolsConfig;
   readonly pnpmWorkspace: DBXToolsPNPMWorkspace;
 
-  constructor(options: DBXToolsNodeProjectOptions = {}) {
+  constructor(options: DBXToolsProjectOptions = {}) {
     const { name, scope } = resolveIdentity(options);
     const releaseDefaults =
       options.release && options.releaseTrigger === undefined
-        ? { releaseTrigger: ReleaseTrigger.workflowDispatch() }
+        ? { releaseTrigger: ReleaseTrigger.tagged({ tags: ["v*"] }) }
         : {};
     super({
-      ...defaultNodeProjectOptions(options),
-      ...options,
+      ...defaultProjectOptions(options),
       ...releaseDefaults,
       name,
     });
@@ -310,7 +323,12 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXT
     // `options` extends both component option bags, so it flows straight in.
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     this.pnpmWorkspace = new DBXToolsPNPMWorkspace(this, options);
-    initDBXToolsProject(this, options);
+    initProject(this, options);
+  }
+
+  public override preSynthesize(): void {
+    super.preSynthesize();
+    preSynthesizeProject(this);
   }
 
   public packageNameFor(relPath: string): string {
@@ -325,7 +343,10 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXT
  * `tasks`, and an optional `vite.config.ts` are applied after. Per-tag deps/tsconfig
  * arrive later via the {@link WORKSPACE_TAG_MIXINS} the root applies.
  */
-export class DBXToolsTypeScriptProject extends typescript.TypeScriptProject implements IDBXToolsProject {
+export class DBXToolsTypeScriptProject
+  extends typescript.TypeScriptProject
+  implements IDBXToolsProject
+{
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
   readonly pnpmWorkspace?: DBXToolsPNPMWorkspace;
@@ -341,7 +362,6 @@ export class DBXToolsTypeScriptProject extends typescript.TypeScriptProject impl
 
     super({
       ...defaultTypeScriptProjectOptions(options),
-      ...options,
       name: options.name ?? name,
       packageManager,
       tsconfig: {
@@ -363,9 +383,7 @@ export class DBXToolsTypeScriptProject extends typescript.TypeScriptProject impl
     // Only a tree ROOT emits `pnpm-workspace.yaml`; a child package has none (like
     // projen's optional `project.eslint`). `parent` is readonly once super() ran, so
     // this root-vs-child decision is fixed here - the component never re-checks it.
-    this.pnpmWorkspace = this.parent
-      ? undefined
-      : new DBXToolsPNPMWorkspace(this, options);
+    this.pnpmWorkspace = this.parent ? undefined : new DBXToolsPNPMWorkspace(this, options);
 
     // Source-first entry: point the package at its package-ROOT `index.ts` barrel
     // so workspace packages resolve each other's `@scope/pkg` imports to source.
@@ -377,15 +395,20 @@ export class DBXToolsTypeScriptProject extends typescript.TypeScriptProject impl
       "./package.json": "./package.json",
     });
     applyTasks(this, options.tasks ?? {});
+    configureNodeTestTask(this);
     if (options.viteConfig ?? false) emitViteConfig(this);
-    initDBXToolsProject(this, options);
+    initProject(this, options);
+  }
+
+  public override preSynthesize(): void {
+    super.preSynthesize();
+    preSynthesizeProject(this);
   }
 
   public packageNameFor(relPath: string): string {
     return npmNameOf(this.scope, relPath);
   }
 }
-
 
 /**
  * Regenerates every package's root `index.ts` barrel after synth - "barrels on
@@ -417,7 +440,7 @@ function resolveIdentity(options: { name?: string; scope?: string }): {
  * consumer already has for it rather than computing one.
  */
 function engineSelfDependency(project: javascript.NodeProject): string | undefined {
-  const enginePkgJson = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
+  const enginePkgJson = join(ENGINE_PKG_ROOT, "package.json");
   if (!toPosix(enginePkgJson).includes("/node_modules/")) return undefined;
   let name: string;
   let version: string;
@@ -439,9 +462,7 @@ function engineSelfDependency(project: javascript.NodeProject): string | undefin
 }
 
 /** Resolve which {@link WORKSPACE_TAG_MIXINS} keys to apply from `defaultTagMixins`. */
-function resolveEnabledTagMixins(
-  selection: false | WorkspaceTag[] | undefined,
-): WorkspaceTag[] {
+function resolveEnabledTagMixins(selection: false | WorkspaceTag[] | undefined): WorkspaceTag[] {
   if (selection === false) return [];
   if (selection === undefined) {
     return Object.keys(WORKSPACE_TAG_MIXINS) as WorkspaceTag[];
@@ -457,9 +478,7 @@ function tagPathMatches(key: string, p: DiscoveredPackage): boolean {
   }
   // Otherwise treat the key as a glob (picomatch) against the same targets.
   const isMatch = picomatch(key);
-  return (
-    isMatch(p.relPath) || isMatch(p.memberPath) || p.tagCandidates.some((c) => isMatch(c))
-  );
+  return isMatch(p.relPath) || isMatch(p.memberPath) || p.tagCandidates.some((c) => isMatch(c));
 }
 
 /** Resolve a discovered package's tags from the `tagPaths` map (union of matches). */
@@ -497,14 +516,18 @@ function registerRootTasks(project: javascript.NodeProject): void {
  * (via `project.with`), and adds the barrels-on-synth component. Non-root projects
  * return immediately.
  */
-function initDBXToolsProject(project: javascript.NodeProject & IDBXToolsProject, options: DBXToolsCommonOptions): void {
+function initProject(
+  project: javascript.NodeProject & IDBXToolsProject,
+  options: DBXToolsProjectOptions,
+): void {
   if (project.parent) return; // only a ROOT configures the workspace
-
 
   // NodeProject has no built-in TS projenrc support (unlike TypeScriptProject), so
   // wire `.projenrc.ts` through the tsx runner - this also populates the `default`
   // task that `pnpm exec projen` runs (and that `dbxtools watch` invokes to re-synth).
-  new typescript.ProjenrcTs(project, { runner: typescript.TypeScriptRunner.tsx() });
+  new typescript.ProjenrcTs(project, {
+    runner: typescript.TypeScriptRunner.tsx(),
+  });
   // ProjenrcTs wraps that step in `npx -y -p tsx -c "tsx .projenrc.ts"` because the
   // tsx runner declares a `tsx` dependency (so it runs even uninstalled). tsx IS a
   // devDep here, so that wrapper is not merely redundant but harmful: `npx -c` exports
@@ -525,17 +548,14 @@ function initDBXToolsProject(project: javascript.NodeProject & IDBXToolsProject,
 
   files.tsconfigBase(project);
   files.tsconfigRoot(project);
-  // projen's built-in Prettier (enabled root-only in the default options) already
-  // wrote `.prettierrc.json`/`.prettierignore` and added the `prettier` devDep during
-  // super(); just teach its ignore file the generated/vendored paths to skip.
-  const prettier = javascript.Prettier.of(project);
-  for (const pattern of ["node_modules", "dist", "**/dist/**", "pnpm-lock.yaml", "**/src/**/index.ts"]) {
-    prettier?.addIgnorePattern(pattern);
-  }
   files.vscodeTasks(project);
   files.vscodeSettings(project);
   files.vscodeExtensions(project);
   registerRootTasks(project);
+  if (options.prettier || project.prettier) {
+    const formatTask = project.tasks.tryFind("format") ?? project.addTask("format");
+    formatTask.prependExec("prettier . --write", { receiveArgs: true });
+  }
 
   project.gitignore.addPatterns(
     ".DS_Store",
@@ -603,6 +623,15 @@ function initDBXToolsProject(project: javascript.NodeProject & IDBXToolsProject,
 
   new GeneratedBarrels(project);
   if (project.release) new DBXToolsRelease(project as DBXToolsNodeProject);
+}
+
+function preSynthesizeProject(project: javascript.NodeProject & IDBXToolsProject): void {
+  if (project.parent) return;
+  const prettier = project.prettier;
+  if (!prettier) return;
+  project.files.forEach((file) => {
+    if (file.readonly) prettier.addIgnorePattern(file.path);
+  });
 }
 
 /** True if `p` is one of the DBXTools project classes (has the tag surface). */

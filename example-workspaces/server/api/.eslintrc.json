@@ -207,5 +207,15 @@
       }
     ]
   },
-  "overrides": []
+  "overrides": [
+    {
+      "files": [
+        "test/**/*.ts",
+        "test/**/*.tsx"
+      ],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "off"
+      }
+    }
+  ]
 }
