@@ -21,7 +21,7 @@ import { type Project, YamlFile } from "projen";
 import YAML from "yaml";
 import { toPosix } from "./workspace";
 import { makeReadonly } from "./generated";
-import { findFiles } from "@dbx-tools/shared-file-scan";
+import { find } from "@dbx-tools/shared-file-scan";
 /**
  * The pnpm `catalog:` version registry: dependency name -> version range. A
  * pnpm-workspace feature (packages reference it via a `catalog:` specifier), so
@@ -170,7 +170,7 @@ export class DBXToolsPNPMWorkspace extends YamlFile {
 if (import.meta.main) {
   const startedAt = Date.now();
   const extensions = ["ts", "tsx", "js", "jsx"];
-  const files = findFiles(`**/*.{${extensions.join(",")}}`, {
+  const files = find.findFiles(`**/*.{${extensions.join(",")}}`, {
     ignore: ["**/index.ts", `**/_*.{${extensions.join(",")}}`],
   });
   let count = 0;

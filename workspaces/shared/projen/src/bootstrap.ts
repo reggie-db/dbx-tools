@@ -43,12 +43,12 @@ export function needsBootstrap(): boolean {
   return !existsSync(join(repoRoot, ".projenrc.ts"));
 }
 
-const PROJENRC_TEMPLATE = `import { DBXToolsNodeProject } from "@dbx-tools/cli";
+const PROJENRC_TEMPLATE = `import { project as dbx } from "@dbx-tools/cli";
 
 // Constructs + configures the monorepo root (scans workspaces/ for packages),
 // then synthesizes it. Add packages by dropping a workspaces/<tag>/<name>/src
 // folder and re-running projen.
-const project = new DBXToolsNodeProject();
+const project = new dbx.DBXToolsNodeProject();
 project.synth();
 `;
 

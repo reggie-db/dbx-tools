@@ -42,12 +42,11 @@
       "type": "runtime"
     },
     {
-      "name": "constructs",
+      "name": "commander",
       "type": "runtime"
     },
     {
-      "name": "dbx-tools",
-      "version": "workspace:*",
+      "name": "constructs",
       "type": "runtime"
     },
     {

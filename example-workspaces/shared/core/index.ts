@@ -2,5 +2,5 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * from "./src/math";
-export * from "./src/strings";
+export * as math from "./src/math";
+export * as strings from "./src/strings";

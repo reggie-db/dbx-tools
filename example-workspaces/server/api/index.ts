@@ -2,5 +2,5 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * from "./src/greetingController";
-export * from "./src/server";
+export * as greetingController from "./src/greetingController";
+export * as server from "./src/server";

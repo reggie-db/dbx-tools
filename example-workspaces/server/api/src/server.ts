@@ -1,4 +1,4 @@
-import { greet } from "@dbx-tools/shared-core";
+import { strings } from "@dbx-tools/shared-core";
 import express from "express";
 
 /**
@@ -13,7 +13,7 @@ import express from "express";
 export function createServer(): express.Express {
   const app = express();
   app.get("/greeting/:name", (req, res) => {
-    res.json({ message: greet(req.params.name) });
+    res.json({ message: strings.greet(req.params.name) });
   });
   return app;
 }

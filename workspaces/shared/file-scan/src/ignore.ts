@@ -11,7 +11,7 @@
  *   and {@link watchFiles}.
  */
 
-import { memoize, Sequence, sequence } from "@dbx-tools/shared-core";
+import { functionModule, iterable } from "@dbx-tools/shared-core";
 import { directoryNamePattern, fileExtensionPattern } from "./pattern";
 import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match";
 import { execSync } from "child_process";
@@ -45,7 +45,7 @@ export type IgnorePatternOptions = {
  * Runs `npm`/`pnpm`/`yarn config get registry` (whichever succeeds first) and
  * returns `true` when the registry host is not `registry.npmjs.org`.
  */
-const lockIgnoreMatchersAutoEnabled = memoize(() => {
+const lockIgnoreMatchersAutoEnabled = functionModule.memoize(() => {
   let registryUrl: URL | undefined;
   for (const command of ["npm", "pnpm", "yarn"]) {
     try {
@@ -170,8 +170,8 @@ function ignoreMatchPredicates(options?: IgnorePatternOptions): (Record<string, 
  *
  * @param options - Group toggles; omitted flags default to enabled.
  */
-export function ignorePatterns(options?: IgnorePatternOptions): Sequence<string> {
-  return sequence(ignoreMatchPredicates(options)).flatMap(Object.keys).distinct();
+export function ignorePatterns(options?: IgnorePatternOptions): iterable.Sequence<string> {
+  return iterable.sequence(ignoreMatchPredicates(options)).flatMap(Object.keys).distinct();
 }
 
 

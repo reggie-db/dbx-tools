@@ -2,5 +2,5 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * from "./src/hello";
-export * from "./src/wow";
+export * as hello from "./src/hello";
+export * as wow from "./src/wow";

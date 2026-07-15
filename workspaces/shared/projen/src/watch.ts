@@ -22,7 +22,7 @@
  * everything here is thin glue. Non-`src` config members (rare) still re-synth.
  */
 import { isAbsolute, resolve, sep } from "node:path";
-import { watchFiles, type FileWatchOptions } from "@dbx-tools/shared-file-scan";
+import { watch as fileScan } from "@dbx-tools/shared-file-scan";
 import { logger } from "dbx-tools/log";
 import { generateBarrels } from "./barrels";
 import { isTsoaController } from "./openapi";
@@ -165,10 +165,10 @@ export function startWatch(): void {
     if (n) log.success(`rebuilt ${n} barrel${n === 1 ? "" : "s"}`);
   }
 
-  const watcher = watchFiles(watchPaths, {
+  const watcher = fileScan.watchFiles(watchPaths, {
     cwd: repoRoot,
     ignoreInitial: true,
-    ignore: [...SCAN_EXTRA_IGNORE, (path) => ignoredPath(path)] as FileWatchOptions["ignore"],
+    ignore: [...SCAN_EXTRA_IGNORE, (path) => ignoredPath(path)] as fileScan.FileWatchOptions["ignore"],
   });
   watcher.on("all", (_event, path) => {
     pending.add(path);

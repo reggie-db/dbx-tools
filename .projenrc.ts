@@ -68,10 +68,10 @@ project.with(
         "tsx",
         "picomatch",
         "p-memoize",
+        "commander",
         "@clack/prompts",
         "@dbx-tools/shared-file-scan@workspace:*",
         "@dbx-tools/shared-core@workspace:*",
-        "dbx-tools@workspace:*",
       );
       p.addDevDeps("@types/picomatch@^4.0.3");
       if (p instanceof DBXToolsTypeScriptProject) {

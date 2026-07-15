@@ -8,10 +8,11 @@ import { createRequire } from "node:module";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { Component } from "projen";
-import { runPnpm, tsxBinTaskExec } from "dbx-tools/bin";
+import { runPnpm } from "dbx-tools/bin";
 import { logger } from "dbx-tools/log";
 import { makeReadonly, makeWritable } from "./generated";
 import { type DBXToolsNodeProject } from "./project";
+import { taskScript } from "./task-script";
 import { repoRoot, toPosix, workspacePackages } from "./workspace";
 
 /** Forced semver bump level when conventional-commit inference is overridden. */
@@ -214,18 +215,18 @@ export function configureRelease(project: DBXToolsNodeProject): void {
 
   if (!project.tasks.tryFind("release:tag")) {
     project.compileTask.reset("pnpm -r compile");
-    project.packageTask.reset(tsxBinTaskExec(project.outdir, "publish.ts", "--pack"));
+    project.packageTask.reset(taskScript(project, "publish.ts", "--pack"));
     const publishTask =
       project.tasks.tryFind("publish") ??
       project.addTask("publish", {
         description: "Bump version (default patch), commit, push branch, tag, and push tag",
       });
-    publishTask.reset(tsxBinTaskExec(project.outdir, "publish.ts"), {
+    publishTask.reset(taskScript(project, "publish.ts"), {
       receiveArgs: true,
     });
     project.addTask("release:tag", {
       description: "CI: build and pack from the git tag that triggered the workflow",
-      exec: tsxBinTaskExec(project.outdir, "publish.ts", "--ci"),
+      exec: taskScript(project, "publish.ts", "--ci"),
     });
   }
 

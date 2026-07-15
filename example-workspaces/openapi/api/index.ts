@@ -2,5 +2,5 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * from "./src/client";
-export * from "./src/schema";
+export * as client from "./src/client";
+export * as schema from "./src/schema";

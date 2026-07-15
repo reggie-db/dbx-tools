@@ -2,18 +2,19 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * from "./src/barrels";
-export * from "./src/bootstrap";
-export * from "./src/clean";
-export * from "./src/files";
-export * from "./src/generated";
-export * from "./src/mixins";
-export * from "./src/openapi";
-export * from "./src/pnpm-workspace";
-export * from "./src/project";
-export * from "./src/publish";
-export * from "./src/scaffold";
-export * from "./src/tags";
-export * from "./src/vite";
-export * from "./src/watch";
-export * from "./src/workspace";
+export * as barrels from "./src/barrels";
+export * as bootstrap from "./src/bootstrap";
+export * as clean from "./src/clean";
+export * as files from "./src/files";
+export * as generated from "./src/generated";
+export * as mixins from "./src/mixins";
+export * as openapi from "./src/openapi";
+export * as pnpmWorkspace from "./src/pnpm-workspace";
+export * as project from "./src/project";
+export * as publish from "./src/publish";
+export * as scaffold from "./src/scaffold";
+export * as tags from "./src/tags";
+export * as taskScript from "./src/task-script";
+export * as vite from "./src/vite";
+export * as watch from "./src/watch";
+export * as workspace from "./src/workspace";

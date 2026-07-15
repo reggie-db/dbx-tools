@@ -1,4 +1,4 @@
-import { greet } from "@dbx-tools/shared-core";
+import { strings } from "@dbx-tools/shared-core";
 import { Controller, Get, Path, Route, SuccessResponse } from "tsoa";
 
 /** A greeting payload (the response schema, inferred by tsoa from this type). */
@@ -19,6 +19,6 @@ export class GreetingController extends Controller {
   @Get("{name}")
   @SuccessResponse(200, "OK")
   public async greet(@Path() name: string): Promise<Greeting> {
-    return { message: greet(name) };
+    return { message: strings.greet(name) };
   }
 }

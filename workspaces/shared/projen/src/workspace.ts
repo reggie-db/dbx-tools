@@ -25,7 +25,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
-import { findFiles, type FileFindOptions } from "@dbx-tools/shared-file-scan";
+import { find } from "@dbx-tools/shared-file-scan";
 import { parse } from "yaml";
 
 /** Run a command, returning trimmed stdout, or undefined on any failure. */
@@ -85,8 +85,8 @@ export const SCAN_EXTRA_IGNORE = ["**/lib/**", "**/.projen/**"] as const;
 
 function scanFindOptions(
   cwd: string,
-  options?: Pick<FileFindOptions, "ignore" | "ignoreOptions">,
-): FileFindOptions {
+  options?: Pick<find.FileFindOptions, "ignore" | "ignoreOptions">,
+): find.FileFindOptions {
   const { ignore, ...rest } = options ?? {};
   const mergedIgnore =
     ignore === undefined
@@ -155,7 +155,7 @@ export function walkFiles(
 ): string[] {
   if (!existsSync(dir)) return [];
   return [
-    ...findFiles("**/*", scanFindOptions(dir, { ignoreOptions: { dot: skipDir !== undefined } })),
+    ...find.findFiles("**/*", scanFindOptions(dir, { ignoreOptions: { dot: skipDir !== undefined } })),
   ].map((rel) => join(dir, rel));
 }
 
@@ -262,7 +262,7 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
  */
 function collectPackageDirs(rootAbs: string): string[] {
   const owners = new Set<string>();
-  for (const file of findFiles(SRC_MODULE_GLOB, scanFindOptions(rootAbs))) {
+  for (const file of find.findFiles(SRC_MODULE_GLOB, scanFindOptions(rootAbs))) {
     if (!isModuleFile(file)) continue;
     const segs = toPosix(file).split("/");
     const srcIdx = segs.indexOf("src");

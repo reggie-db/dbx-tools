@@ -6,7 +6,7 @@
  * predicate for directory-pruning match functions shared by scanners and watchers.
  */
 
-import { sequence } from "@dbx-tools/shared-core";
+import { iterable } from "@dbx-tools/shared-core";
 import { Minimatch } from "minimatch";
 import { ignorePathMatcher } from "./ignore";
 
@@ -68,7 +68,7 @@ function withCombinators(test: (path: string) => boolean): PathMatcher {
 export function toPathMatcher(
   ...inputs: readonly (PathMatchInput | null | undefined)[]
 ): PathMatcher {
-  const tests = sequence(inputs).nonNull().map(toTest).cache();
+  const tests = iterable.sequence(inputs).nonNull().map(toTest).cache();
   return withCombinators((path) => tests.some((test) => test(path)));
 }
 

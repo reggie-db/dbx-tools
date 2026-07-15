@@ -25,8 +25,7 @@
  * Replaces the removed `configureProject()` function.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import picomatch from "picomatch";
 import {
   Component,
@@ -43,6 +42,7 @@ import * as files from "./files";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
 import { DBXToolsRelease } from "./publish";
 import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, applyTasks, type WorkspaceTag } from "./tags";
+import { taskScript } from "./task-script";
 import { emitViteConfig } from "./vite";
 import {
   DEFAULT_WORKSPACE_PACKAGE_ROOTS,
@@ -51,7 +51,7 @@ import {
   scanPackages,
   toPosix,
 } from "./workspace";
-import { ignorePatterns } from "@dbx-tools/shared-file-scan";
+import { ignore } from "@dbx-tools/shared-file-scan";
 
 /** Shared formatting rules, applied by projen's Prettier on whichever project is root. */
 const PRETTIER_SETTINGS: javascript.PrettierSettings = {
@@ -100,7 +100,7 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
           prettierOptions: {
             settings: PRETTIER_SETTINGS,
             ignoreFile: true,
-            ignoreFileOptions: { ignorePatterns: [...ignorePatterns()] },
+            ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns()] },
           },
         }
       : {}),
@@ -547,24 +547,6 @@ function registerRootTasks(project: javascript.NodeProject): void {
   set("sync", taskScript(project, "sync.ts"), { receiveArgs: true });
 }
 
-/** `tsx <rel>/tasks/<script>` from the monorepo root (works in-repo and installed). */
-function taskScript(project: javascript.NodeProject, script: string, args = ""): string {
-  const scriptPath = join(resolveTasksDir(), script);
-  const rel = toPosix(relative(resolve(project.outdir), scriptPath));
-  return args ? `tsx ${rel} ${args}` : `tsx ${rel}`;
-}
-
-/** Locate `tasks/` next to the shared-projen package root (source or `lib/` emit). */
-function resolveTasksDir(): string {
-  let dir = dirname(fileURLToPath(import.meta.url));
-  for (let i = 0; i < 4; i++) {
-    const candidate = join(dir, "tasks");
-    if (existsSync(candidate)) return candidate;
-    dir = join(dir, "..");
-  }
-  throw new Error("@dbx-tools/shared-projen tasks/ directory not found");
-}
-
 /**
  * Shared init both classes call at the end of their constructor. Only the tree
  * ROOT does anything: it attaches the projenrc runner, root devDeps/fields,
@@ -614,7 +596,7 @@ function initProject(
     formatTask.prependExec("prettier . --write", { receiveArgs: true });
   }
 
-  project.gitignore.addPatterns(...[...ignorePatterns()]);
+  project.gitignore.addPatterns(...[...ignore.ignorePatterns()]);
   const roots = options.workspacePackageRoots ?? DEFAULT_WORKSPACE_PACKAGE_ROOTS;
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);

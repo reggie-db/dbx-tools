@@ -21,7 +21,7 @@
  */
 import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import { findFiles } from "@dbx-tools/shared-file-scan";
+import { find } from "@dbx-tools/shared-file-scan";
 import { isReadonly, makeWritable } from "./generated";
 import { repoRoot, SCAN_EXTRA_IGNORE, toPosix, walkFiles } from "./workspace";
 
@@ -58,7 +58,7 @@ export function listNodeModulesDirs(root: string = repoRoot): string[] {
   if (!existsSync(root)) return [];
   const rel = (f: string): string => toPosix(relative(root, f));
   const dirs = new Set<string>();
-  for (const match of findFiles("**/node_modules", {
+  for (const match of find.findFiles("**/node_modules", {
     cwd: root,
     ignore: [...SCAN_EXTRA_IGNORE],
     ignoreOptions: { dot: false },

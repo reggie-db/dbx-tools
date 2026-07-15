@@ -2,16 +2,15 @@
  * Barrel generator, driven by barrelsby.
  *
  * For every package it writes a single `index.ts` **at the package root** (above
- * `src/`) that flat-re-exports every module under `src/`, subject to two rules:
+ * `src/`) that namespace-re-exports every module under `src/`, subject to two rules:
  *   1. a file/folder whose name starts with `_` is private and never barrelled;
  *   2. only files that actually contain an `export` are re-exported.
  *
- * barrelsby can only write inside the directory it scans, so we let it write a
- * temporary `src/index.ts`, then relocate it to `<pkg>/index.ts` and rewrite the
- * now-one-level-deeper module paths (`./x` -> `./src/x`). The result gets an
- * optional caller {@link BarrelModifier}, then a do-not-edit header + read-only
- * bit (see `./generated`). barrelsby is resolved via its own package, so this
- * works both in-repo and when installed from npm.
+ * barrelsby emits flat `export * from "./x"` lines; we relocate the barrel to
+ * `<pkg>/index.ts`, deepen paths (`./x` -> `./src/x`), then rewrite each line to
+ * `export * as <name> from "./src/x"` (kebab-case and reserved words sanitized).
+ * The result gets an optional caller {@link BarrelModifier}, then a do-not-edit
+ * header + read-only bit (see `./generated`).
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -53,12 +52,98 @@ const BARREL_HEADER: HeaderOpts = {
   source: "the exporting modules in ./src",
 };
 
+const RESERVED_NAMESPACE_NAMES = new Set([
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "let",
+  "static",
+  "enum",
+  "implements",
+  "interface",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "await",
+]);
+
+/** `pnpm-workspace` -> `pnpmWorkspace`; nested paths join in camelCase. */
+function kebabToCamel(segment: string): string {
+  return segment.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+/** Derive a valid namespace identifier from a relocated barrel module path. */
+function modulePathToNamespace(modulePath: string): string {
+  const rel = modulePath.replace(/^\.\/src\//, "").replace(/\.(tsx?|jsx?|mjs|cjs)$/, "");
+  const segments = rel.split("/").map(kebabToCamel);
+  let name =
+    segments.length === 1
+      ? segments[0]!
+      : segments[0]! +
+        segments
+          .slice(1)
+          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+          .join("");
+  if (!/^[A-Za-z_$][\w$]*$/.test(name) || RESERVED_NAMESPACE_NAMES.has(name)) {
+    name = `${name}Module`;
+  }
+  return name;
+}
+
+/** Rewrite flat barrelsby `export * from` lines as `export * as <ns> from`. */
+function namespaceBarrelExports(content: string): string {
+  return content
+    .split("\n")
+    .map((line) => {
+      const match = /^(export \* from )"(.+)"(;?)\s*$/.exec(line);
+      if (!match) return line;
+      const modulePath = match[2];
+      const ns = modulePathToNamespace(modulePath);
+      return `export * as ${ns} from "${modulePath}";`;
+    })
+    .join("\n");
+}
+
 /**
  * Rebuild one package's root barrel. Returns 1 only if the barrel's contents
  * actually changed - a module was added, removed, renamed, or toggled its
  * `export` - and 0 for a no-op. An edit *inside* an already-exported module (even
- * adding a new named export) leaves the flat `export * from "./src/x"` list
- * identical, so it is a no-op.
+ * adding a new named export) leaves the namespace `export * as … from "./src/x"`
+ * list identical, so it is a no-op.
  */
 function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   const srcDir = join(pkgDir, "src");
@@ -119,8 +204,10 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
     return 0;
   }
 
-  // Relocate src/index.ts -> <pkg>/index.ts, deepening the module paths by one.
-  let content = readFileSync(tmpBarrel, "utf8").replace(/from "\.\//g, 'from "./src/');
+  // Relocate src/index.ts -> <pkg>/index.ts, deepen paths, namespace each export.
+  let content = namespaceBarrelExports(
+    readFileSync(tmpBarrel, "utf8").replace(/from "\.\//g, 'from "./src/'),
+  );
   rmSync(tmpBarrel, { force: true });
   if (modifier) content = modifier(content, { packageDir: pkgDir });
 

@@ -2,8 +2,8 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * from "./src/bin";
-export * from "./src/collection";
-export * from "./src/engine";
-export * from "./src/log";
-export * from "./src/name";
+export * as bin from "./src/bin";
+export * as collection from "./src/collection";
+export * as engine from "./src/engine";
+export * as log from "./src/log";
+export * as name from "./src/name";

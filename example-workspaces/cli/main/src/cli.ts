@@ -1,7 +1,7 @@
 #!/usr/bin/env -S npx tsx
 import { fileURLToPath } from "node:url";
 import { intro, outro } from "@clack/prompts";
-import { add } from "@dbx-tools/shared-core";
+import { math } from "@dbx-tools/shared-core";
 import { Command } from "commander";
 
 /**
@@ -16,7 +16,7 @@ export function run(argv: string[] = process.argv.slice(2)): number {
     .description("sum numbers")
     .argument("[numbers...]", "numbers to add")
     .action((numbers: string[]) => {
-      total = numbers.map(Number).reduce((sum, n) => add(sum, n), 0);
+      total = numbers.map(Number).reduce((sum, n) => math.add(sum, n), 0);
     })
     .parse(argv, { from: "user" });
 

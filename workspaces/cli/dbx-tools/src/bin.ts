@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { repoRoot, toPosix } from "@dbx-tools/shared-projen";
+import { workspace } from "@dbx-tools/shared-projen";
 
 /** A package.json `bin` field: either a single command string, or a name -> path map. */
 type BinField = string | Record<string, string>;
@@ -37,7 +37,7 @@ export function engineBinScript(name: string): string {
 
 /** Projen task exec: `tsx <rel>/bin/<script>` from the monorepo root. */
 export function tsxBinTaskExec(root: string, script: string, args = ""): string {
-  const rel = toPosix(relative(root, engineBinScript(script)));
+  const rel = workspace.toPosix(relative(root, engineBinScript(script)));
   return args ? `tsx ${rel} ${args}` : `tsx ${rel}`;
 }
 
@@ -54,7 +54,7 @@ export function resolvePnpmArgv(): string[] {
   }
 }
 
-export function runPnpm(args: string[], cwd: string = repoRoot): void {
+export function runPnpm(args: string[], cwd: string = workspace.repoRoot): void {
   const [command, ...prefix] = resolvePnpmArgv();
   execFileSync(command, [...prefix, ...args], { cwd, stdio: "inherit" });
 }

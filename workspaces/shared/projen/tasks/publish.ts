@@ -1,10 +1,14 @@
 #!/usr/bin/env -S npx tsx
 /**
- * Projen-only entry for release tasks (`publish`, `package`, `release:tag`).
- * Invoked by generated projen tasks, not the `dbxtools` CLI.
+ * Projen task entry for release (`publish`, `package`, `release:tag`).
  */
 import { Command, Option } from "commander";
-import { buildFromTag, packForRelease, publish, type BumpLevel } from "@dbx-tools/shared-projen";
+import {
+  buildFromTag,
+  packForRelease,
+  publish,
+  type BumpLevel,
+} from "../src/publish";
 
 const INCREMENT_LEVELS = ["patch", "minor", "major"] as const;
 
