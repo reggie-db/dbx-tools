@@ -5,11 +5,14 @@
 export * as barrels from "./src/barrels";
 export * as bootstrap from "./src/bootstrap";
 export * as clean from "./src/clean";
+export * as engineRoot from "./src/engine-root";
 export * as files from "./src/files";
 export * as generated from "./src/generated";
+export * as log from "./src/log";
 export * as mixins from "./src/mixins";
 export * as openapi from "./src/openapi";
 export * as pnpmWorkspace from "./src/pnpm-workspace";
+export * as pnpm from "./src/pnpm";
 export * as project from "./src/project";
 export * as publish from "./src/publish";
 export * as scaffold from "./src/scaffold";

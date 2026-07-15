@@ -29,6 +29,7 @@ import { join, relative, resolve } from "node:path";
 import picomatch from "picomatch";
 import {
   Component,
+  IgnoreFile,
   Project,
   type TaskOptions,
   type TaskStepOptions,
@@ -36,7 +37,7 @@ import {
   typescript,
 } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
-import { resolveEnginePkgRoot } from "dbx-tools/bin";
+import { resolveEnginePkgRoot } from "./engine-root";
 import { generateBarrels } from "./barrels";
 import * as files from "./files";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
@@ -104,8 +105,27 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
           },
         }
       : {}),
-    ...(isRoot ? {} : { gitIgnoreOptions: {} }),
     ...options,
+    ...copiedGitIgnoreOptions(options),
+  };
+}
+
+/**
+ * `gitIgnoreOptions` with its `ignorePatterns` array CLONED, for handing to a
+ * projen `Project` constructor: projen's IgnoreFile ALIASES the array it is given
+ * (every later addPatterns call mutates it), so the throwaway default-laden
+ * `.gitignore` gets a copy - {@link swapChildGitignore} re-reads the caller's
+ * pristine array to seed a child's fresh one. Spread AFTER `...options`.
+ */
+function copiedGitIgnoreOptions(
+  options: DBXToolsProjectOptions,
+): Pick<javascript.NodeProjectOptions, "gitIgnoreOptions"> {
+  if (!options.gitIgnoreOptions?.ignorePatterns) return {};
+  return {
+    gitIgnoreOptions: {
+      ...options.gitIgnoreOptions,
+      ignorePatterns: [...options.gitIgnoreOptions.ignorePatterns],
+    },
   };
 }
 
@@ -128,6 +148,7 @@ function defaultTypeScriptProjectOptions(
     eslint: false,
     devDeps: [...(base.devDeps ?? []), "tsx@^4.23.0", "typescript@^5.9.3"],
     ...options,
+    ...copiedGitIgnoreOptions(options),
   };
 }
 
@@ -553,13 +574,18 @@ function registerRootTasks(project: javascript.NodeProject): void {
  * `pnpm-workspace.yaml`, shared config, tasks, gitignore/`annotateGenerated`,
  * scans + appends children, applies the built-in tag mixins across the subtree
  * (via `project.with`), and adds the barrels-on-synth component. Non-root projects
- * return immediately.
+ * only swap in a fresh custom-patterns-only `.gitignore` and return.
  */
 function initProject(
   project: javascript.NodeProject & IDBXToolsProject,
   options: DBXToolsProjectOptions,
 ): void {
-  if (project.parent) return; // only a ROOT configures the workspace
+  if (project.parent) {
+    // Only a ROOT configures the workspace; a child just swaps its default-laden
+    // `.gitignore` for a fresh one that carries package-specific patterns only.
+    swapChildGitignore(project, options);
+    return;
+  }
 
   // NodeProject has no built-in TS projenrc support (unlike TypeScriptProject), so
   // wire `.projenrc.ts` through the tsx runner - this also populates the `default`
@@ -652,7 +678,7 @@ function initProject(
   // agnostic floor is set in the child's constructor; per-tag deps/tsconfig come from
   // the WORKSPACE_TAG_MIXINS applied across the subtree below.
   for (const p of scanPackages(rootAbs, roots)) {
-    const tags = resolveTags(p, tagPaths);
+    const tags = [...new Set([...p.tagCandidates, ...resolveTags(p, tagPaths)])];
     const found = existing.get(p.memberPath);
     if (found) {
       if (isDBXToolsProject(found)) found.dbxToolsConfig.addTags(...tags);
@@ -682,6 +708,52 @@ function initProject(
   if (project.release) new DBXToolsRelease(project as DBXToolsNodeProject);
 }
 
+/**
+ * A child's `.gitignore`, tracking whether any pattern was ever added so an
+ * untouched (empty) file can be dropped at presynth. `exclude`/`include` and
+ * constructor `ignorePatterns` all funnel through {@link addPatterns}, so the flag
+ * sees every route - but seed patterns must be added AFTER construction (see
+ * {@link swapChildGitignore}) because class fields initialize after `super()`.
+ */
+class ChildGitignore extends IgnoreFile {
+  /** True once any pattern landed (custom patterns => the file is emitted). */
+  public hasPatterns = false;
+
+  public override addPatterns(...patterns: string[]): void {
+    if (patterns.length) this.hasPatterns = true;
+    super.addPatterns(...patterns);
+  }
+}
+
+/**
+ * Swap a CHILD's default `.gitignore` - pre-populated by `NodeProject` with the
+ * same defaults the root already carries (git applies the root's file to the whole
+ * tree) - for a FRESH {@link ChildGitignore}. Caller-supplied patterns
+ * (`gitignore` / `gitIgnoreOptions.ignorePatterns`) are re-seeded, and later
+ * `project.gitignore.addPatterns(...)` calls (tag/user mixins) land here too, so a
+ * package CAN carry package-specific ignores without inheriting the root noise.
+ * Left empty, the file is dropped by {@link preSynthesizeProject}. Safe because
+ * projen only writes gitignore defaults at construction time (`addDefaultGitIgnore`,
+ * yarn-berry config), never during synth.
+ */
+function swapChildGitignore(
+  project: javascript.NodeProject,
+  options: DBXToolsProjectOptions,
+): void {
+  project.tryRemoveFile(".gitignore");
+  const fresh = new ChildGitignore(project, ".gitignore", {
+    ...options.gitIgnoreOptions,
+    // Re-added below so the custom-pattern flag sees them (not clobbered by the
+    // subclass field initializer running after super()).
+    ignorePatterns: undefined,
+  });
+  const seeds = [...(options.gitignore ?? []), ...(options.gitIgnoreOptions?.ignorePatterns ?? [])];
+  if (seeds.length) fresh.addPatterns(...seeds);
+  // `Project.gitignore` is readonly only at compile time; rebind it so every
+  // subsequent `project.gitignore.*` call reaches the fresh file.
+  (project as { gitignore: IgnoreFile }).gitignore = fresh;
+}
+
 function preSynthesizeProject(project: javascript.NodeProject & IDBXToolsProject): void {
   if (project.prettier) {
     const ignorePatterns = new Set<string>();
@@ -694,7 +766,13 @@ function preSynthesizeProject(project: javascript.NodeProject & IDBXToolsProject
   }
   for (const p of projects(project)) {
     if (!p.parent) continue;
-    for (const path of [".gitignore", ".gitattributes"]) {
+    // A child's `.gitignore` survives ONLY when it carries custom patterns (see
+    // swapChildGitignore). `.gitattributes` is always dropped - the root's
+    // annotateGenerated globs cover the children. Runs once from the root's
+    // preSynthesize and again from each child's own; both passes agree, so the
+    // second is a no-op.
+    const keepGitignore = p.gitignore instanceof ChildGitignore && p.gitignore.hasPatterns;
+    for (const path of keepGitignore ? [".gitattributes"] : [".gitignore", ".gitattributes"]) {
       if (p.tryRemoveFile(path)) {
         const rootPath = resolve(p.outdir, path);
         if (existsSync(rootPath)) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S npx tsx
 import { generateBarrels } from "../src/barrels";
-import { logger } from "dbx-tools/log";
+import { logger } from "../src/log";
 
 const log = logger.withTag("projen:barrels");
 const n = generateBarrels();

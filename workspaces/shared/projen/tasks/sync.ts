@@ -2,7 +2,7 @@
 import { needsBootstrap, bootstrapWorkspace } from "../src/bootstrap";
 import { runSynth } from "../src/scaffold";
 import { startWatch } from "../src/watch";
-import { logger } from "dbx-tools/log";
+import { logger } from "../src/log";
 
 const watch = process.argv.includes("--watch");
 const log = logger.withTag("projen:sync");

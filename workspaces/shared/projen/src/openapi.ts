@@ -21,7 +21,7 @@ import { createRequire } from "node:module";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type * as ts from "typescript";
-import { logger } from "dbx-tools/log";
+import { logger } from "./log";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated";
 import {
   type WorkspacePackage,

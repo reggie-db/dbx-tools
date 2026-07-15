@@ -9,8 +9,9 @@
  * A package is discovered by scanning the {@link workspacePackageRoots} (default
  * `["workspaces"]`). Its path *relative to the root* drives everything: the path
  * segments join with `-` cumulatively into {@link DiscoveredPackage.tagCandidates}
- * (e.g. `dir/another/path` -> `[dir, dir-another, dir-another-path]`), and those
- * candidates are matched against `workspacePackageTagPaths` to decide which tag(s)
+ * (e.g. `shared/path/coolDude/another` -> `[shared, shared-path, shared-path-cool-dude]`:
+ * each ancestor folder under the root, kebab-cased, excluding the leaf package
+ * folder), and those candidates are matched against `workspacePackageTagPaths` to decide which tag(s)
  * apply. The match may yield NO tags - that is fine (the package still gets the
  * agnostic default).
  *
@@ -117,6 +118,39 @@ export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Convert a path segment to a kebab-case tag token (`coolDude` -> `cool-dude`,
+ * `pnpm-workspace` -> `pnpm-workspace`).
+ */
+export function pathSegmentToTagToken(segment: string): string {
+  return segment
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join("-");
+}
+
+/**
+ * Cumulative nesting tags from a package's path segments relative to its discovery
+ * root. The leaf folder (the package name) is excluded when there are two or more
+ * segments; a lone segment tags itself.
+ */
+export function nestingTagsFromSegments(segments: readonly string[]): string[] {
+  if (segments.length === 0) return [];
+  const prefix = segments.length === 1 ? segments : segments.slice(0, -1);
+  const out: string[] = [];
+  let acc = "";
+  for (const segment of prefix) {
+    const token = pathSegmentToTagToken(segment);
+    if (!token) continue;
+    acc = acc ? `${acc}-${token}` : token;
+    out.push(acc);
+  }
+  return out;
+}
+
 /** Matches a barrel `index.<ext>` (as a basename or a posix path tail). */
 export const BARREL_RE = /(^|\/)index\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
@@ -220,18 +254,13 @@ export class DiscoveredPackage {
   }
 
   /**
-   * Tag candidates derived from the relative segments by cumulative `-`
-   * join: `["dir", "another", "path"]` -> `["dir", "dir-another", "dir-another-path"]`.
-   * Matched (as a set) against `workspacePackageTagPaths` to resolve applied tags.
+   * Tag candidates from nesting under the discovery root: cumulative kebab-case join
+   * of every ancestor folder, excluding the leaf package folder when depth >= 2
+   * (`shared/path/coolDude/another` -> `[shared, shared-path, shared-path-cool-dude]`).
+   * Matched against `workspacePackageTagPaths` to resolve applied mixin tags.
    */
   get tagCandidates(): string[] {
-    const out: string[] = [];
-    let acc = "";
-    for (const seg of this.relSegments) {
-      acc = acc ? `${acc}-${seg}` : seg;
-      out.push(acc);
-    }
-    return out;
+    return nestingTagsFromSegments(this.relSegments);
   }
 }
 

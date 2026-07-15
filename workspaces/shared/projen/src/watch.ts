@@ -23,7 +23,7 @@
  */
 import { isAbsolute, resolve, sep } from "node:path";
 import { watch as fileScan } from "@dbx-tools/shared-file-scan";
-import { logger } from "dbx-tools/log";
+import { logger } from "./log";
 import { generateBarrels } from "./barrels";
 import { isTsoaController } from "./openapi";
 import { packageSetChanged, runSynth } from "./scaffold";

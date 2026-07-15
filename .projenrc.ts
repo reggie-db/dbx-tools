@@ -70,10 +70,19 @@ project.with(
         "p-memoize",
         "commander",
         "@clack/prompts",
+        "consola",
+        "pnpm",
         "@dbx-tools/shared-file-scan@workspace:*",
         "@dbx-tools/shared-core@workspace:*",
       );
       p.addDevDeps("@types/picomatch@^4.0.3");
+      p.package.addField("exports", {
+        ".": "./index.ts",
+        "./log": "./src/log.ts",
+        "./pnpm": "./src/pnpm.ts",
+        "./engine-root": "./src/engine-root.ts",
+        "./package.json": "./package.json",
+      });
       if (p instanceof DBXToolsTypeScriptProject) {
         p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
         p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);

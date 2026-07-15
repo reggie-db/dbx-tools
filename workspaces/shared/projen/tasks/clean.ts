@@ -2,7 +2,7 @@
 import { relative } from "node:path";
 import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean";
 import { repoRoot, toPosix } from "../src/workspace";
-import { logger } from "dbx-tools/log";
+import { logger } from "../src/log";
 
 const log = logger.withTag("projen:clean");
 const yes = process.argv.includes("-y") || process.argv.includes("--yes");
