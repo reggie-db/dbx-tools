@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
+    "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-file-scan": "workspace:*",
     "barrelsby": "^2.8.1",
     "chokidar": "^4.0.3",

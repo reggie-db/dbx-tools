@@ -68,3 +68,6 @@ pnpm-workspace.yaml
 tsconfig.base.json
 tsconfig.json
 tsconfig.projen.json
+.eslintrc.json
+test/tsconfig.json
+vite.config.ts

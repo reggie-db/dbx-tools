@@ -1,17 +1,17 @@
 /**
- * Parity tests: the same ignore patterns must make {@link fileScan} and
- * {@link fileWatch} keep the same set of files. Both run against a temp copy of
+ * Parity tests: the same ignore patterns must make {@link findFiles} and
+ * {@link watchFiles} keep the same set of files. Both run against a temp copy of
  * the fixture tree (see the note below the imports for why a temp root is used)
  * and their results are asserted equal, then checked against a concrete list.
  */
 import assert from "node:assert/strict";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, sep } from "node:path";
+import { join, relative, sep, isAbsolute } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { fileScan } from "../src/scan";
-import { fileWatch } from "../src/watch";
+import { findFiles } from "../src/find";
+import { watchFiles } from "../src/watch";
 
 const FIXTURE_SOURCE = fileURLToPath(new URL("fixtures/sample-tree", import.meta.url));
 
@@ -36,18 +36,22 @@ const toPosix = (path: string): string => path.split(sep).join("/");
 
 /** Files fileScan keeps for the fixture (relative, posix) given `ignore`. */
 function scannedFiles(ignore: string | string[] | undefined): Set<string> {
-  return new Set([...fileScan("**", { cwd: root, nodir: true, ignore })].map(toPosix));
+  return new Set([...findFiles("**", { cwd: root, nodir: true, ignore })].map(toPosix));
 }
 
 /** Files fileWatch reports for the (static) fixture (relative, posix), then closes. */
-async function watchedFiles(ignored: string | string[] | undefined): Promise<Set<string>> {
+async function watchedFiles(ignore: string | string[] | undefined): Promise<Set<string>> {
   const files = new Set<string>();
-  const watcher = fileWatch(root, {
-    ignored,
+  const watcher = watchFiles(root, {
+    cwd: root,
+    ignore,
     persistent: false,
     ignoreInitial: false,
   });
-  watcher.on("add", (path) => files.add(toPosix(relative(root, path))));
+  watcher.on("add", (path) => {
+    const rel = isAbsolute(path) ? relative(root, path) : path;
+    files.add(toPosix(rel === "" ? "." : rel));
+  });
   try {
     await new Promise<void>((resolve, reject) => {
       watcher.once("ready", () => resolve());

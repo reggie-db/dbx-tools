@@ -2,4 +2,4 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * from "./src/collection";
+export * from "./src/iterable";

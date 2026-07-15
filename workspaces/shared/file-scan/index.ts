@@ -2,6 +2,9 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export * from "./src/find";
+export * from "./src/ignore";
 export * from "./src/match";
+export * from "./src/pattern";
 export * from "./src/scan";
 export * from "./src/watch";

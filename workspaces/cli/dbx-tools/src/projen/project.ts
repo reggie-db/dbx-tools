@@ -24,10 +24,10 @@
  *
  * Replaces the removed `configureProject()` function.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import picomatch from "picomatch";
-import { Component, type TaskOptions, type TaskStepOptions, javascript, typescript } from "projen";
+import { Component, GitAttributesFile, IgnoreFile, Project, type TaskOptions, type TaskStepOptions, javascript, typescript } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
 import { ENGINE_PKG_ROOT } from "../bin";
 import { generateBarrels } from "./barrels";
@@ -50,6 +50,8 @@ import {
   toPosix,
 } from "./workspace";
 import { ignorePatterns } from "@dbx-tools/shared-file-scan";
+import { generator } from "@dbx-tools/shared-core";
+import { Pnpm } from "projen/lib/javascript";
 
 /** Shared formatting rules, applied by projen's Prettier on whichever project is root. */
 const PRETTIER_SETTINGS: javascript.PrettierSettings = {
@@ -94,13 +96,13 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     devDeps: ["picomatch", "@types/node@^24.6.0"],
     ...(isRoot
       ? {
-          prettier: true,
-          prettierOptions: {
-            settings: PRETTIER_SETTINGS,
-            ignoreFile: true,
-            ignoreFileOptions: { ignorePatterns: ignorePatterns() },
-          },
-        }
+        prettier: true,
+        prettierOptions: {
+          settings: PRETTIER_SETTINGS,
+          ignoreFile: true,
+          ignoreFileOptions: { ignorePatterns: ignorePatterns() },
+        },
+      }
       : {}),
     ...(isRoot ? {} : { gitIgnoreOptions: {} }),
     ...options,
@@ -121,25 +123,21 @@ function defaultTypeScriptProjectOptions(
     ...base,
     sampleCode: false,
     entrypoint: undefined,
+    // ESLint is configured once on the ROOT (see initProject) and lints the whole
+    // tree, so packages don't emit their own config. A caller can still override.
+    eslint: false,
     devDeps: [...(base.devDeps ?? []), "tsx@^4.23.0", "typescript@^5.9.3"],
     ...options,
   };
 }
 
 /**
- * Append Node's built-in test runner to projen's `test` task (after eslint, when
- * enabled). The glob is resolved at run time by tsx, so packages without tests
- * exit 0 with zero cases; drop files under `test/` matching `*.test.ts` and they
- * run on the next `projen test` with no extra config.
+ * Append Node's built-in test runner to projen's `test` task. The glob is resolved
+ * at run time by tsx, so packages without tests exit 0 with zero cases; drop files
+ * under `test/` matching `*.test.ts` and they run on the next `projen test` with no
+ * extra config.
  */
 function configureNodeTestTask(pkg: typescript.TypeScriptProject): void {
-  javascript.Eslint.of(pkg)?.addOverride({
-    files: ["test/**/*.ts", "test/**/*.tsx"],
-    rules: {
-      // node:test `describe`/`it` return promises by design.
-      "@typescript-eslint/no-floating-promises": "off",
-    },
-  });
   pkg.testTask.exec("tsx --test 'test/**/*.test.ts'");
 }
 
@@ -150,9 +148,9 @@ const DEV_DEPS_ROOT: string[] = ["tsx@^4.23.0", "typescript@^5.9.3"];
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export interface DBXToolsProjectOptions
   extends
-    Partial<javascript.NodeProjectOptions>,
-    DBXToolsConfigOptions,
-    DBXToolsPNPMWorkspaceOptions {
+  Partial<javascript.NodeProjectOptions>,
+  DBXToolsConfigOptions,
+  DBXToolsPNPMWorkspaceOptions {
   /**
    * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
    * the (resolved) project name; a leading `@` is optional.
@@ -345,13 +343,13 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXT
  */
 export class DBXToolsTypeScriptProject
   extends typescript.TypeScriptProject
-  implements IDBXToolsProject
-{
+  implements IDBXToolsProject {
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
   readonly pnpmWorkspace?: DBXToolsPNPMWorkspace;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
+
     const { name, scope } = resolveIdentity(options);
     const parent = options?.parent;
     const packageManager =
@@ -376,7 +374,6 @@ export class DBXToolsTypeScriptProject
         },
       },
     });
-
     this.scope = scope;
     // `options` extends both component option bags, so it flows straight in.
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
@@ -557,19 +554,37 @@ function initProject(
     formatTask.prependExec("prettier . --write", { receiveArgs: true });
   }
 
-  project.gitignore.addPatterns(
-    ".DS_Store",
-    "dist",
-    "**/dist",
-    "*.tsbuildinfo",
-    "node_modules/.cache",
-    ".env",
-    "tmp",
-  );
+  project.gitignore.addPatterns(...ignorePatterns());
   const roots = options.workspacePackageRoots ?? DEFAULT_WORKSPACE_PACKAGE_ROOTS;
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/openapi/**`);
+  }
+
+  // ESLint lives ONLY on the root and lints every package. `projectService` resolves
+  // each file to its own package tsconfig (so type-aware rules work tree-wide), and
+  // `import/no-extraneous-dependencies` still checks each file against its nearest
+  // package.json. Formatting defers to the root Prettier to avoid rule/formatter
+  // conflicts (e.g. quote style).
+  const eslint = new javascript.Eslint(project, {
+    dirs: [...roots],
+    fileExtensions: [".ts", ".tsx"],
+    projectService: true,
+    prettier: Boolean(project.prettier),
+    tsconfigPath: "./tsconfig.json",
+  });
+  eslint.addRules({ "import/no-relative-packages": "error" });
+  eslint.addOverride({
+    files: ["**/test/**/*.ts", "**/test/**/*.tsx"],
+    // node:test `describe`/`it` return promises by design.
+    rules: { "@typescript-eslint/no-floating-promises": "off" },
+  });
+  // Point the TS import resolver at every package tsconfig, not just the root's
+  // (which only includes `.projenrc.ts`), so `import/no-unresolved` resolves
+  // cross-package imports.
+  const tsResolver = eslint.config?.settings?.["import/resolver"]?.typescript;
+  if (tsResolver) {
+    tsResolver.project = ["tsconfig.json", ...roots.map((r) => `${r}/**/tsconfig.json`)];
   }
 
   const enabledTagMixins = resolveEnabledTagMixins(options.defaultTagMixins);
@@ -626,12 +641,34 @@ function initProject(
 }
 
 function preSynthesizeProject(project: javascript.NodeProject & IDBXToolsProject): void {
-  if (project.parent) return;
-  const prettier = project.prettier;
-  if (!prettier) return;
-  project.files.forEach((file) => {
-    if (file.readonly) prettier.addIgnorePattern(file.path);
-  });
+  if (project.prettier) {
+    const ignorePatterns = new Set<string>();
+    for (const p of projects(project)) {
+      p.files.forEach((file) => {
+        if (file.readonly) ignorePatterns.add(file.path);
+      });
+    }
+    ignorePatterns.forEach((pattern) => project.prettier!.addIgnorePattern(pattern));
+  }
+  for (const p of projects(project)) {
+    if (!p.parent) continue;
+    for (const path of [".gitignore", ".gitattributes"]) {
+      if (p.tryRemoveFile(path)) {
+        const rootPath = resolve(p.outdir, path);
+        if (existsSync(rootPath)) {
+          console.log(`Removed ${rootPath} from ${p.name}`);
+        }
+
+      }
+    }
+  }
+}
+
+function* projects(project: Project): Generator<Project> {
+  yield project;
+  for (const sub of project.subprojects) {
+    yield* projects(sub)
+  }
 }
 
 /** True if `p` is one of the DBXTools project classes (has the tag surface). */

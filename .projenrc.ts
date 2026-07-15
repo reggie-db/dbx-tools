@@ -117,6 +117,7 @@ project.with(
         "picomatch",
         "p-memoize",
         "@dbx-tools/shared-file-scan@workspace:*",
+        "@dbx-tools/shared-core@workspace:*"
       );
       p.addDevDeps("@types/picomatch@^4.0.3");
       if (p instanceof DBXToolsTypeScriptProject) {

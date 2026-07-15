@@ -113,6 +113,10 @@ export function vscodeSettings(project: Project): void {
     readonly: true,
     obj: {
       "typescript.tsdk": "node_modules/typescript/lib",
+      // Prefer `@scope/pkg` workspace imports over relative paths into sibling
+      // packages (e.g. `../../../../shared/file-scan/src/find`).
+      "typescript.preferences.importModuleSpecifier": "non-relative",
+      "javascript.preferences.importModuleSpecifier": "non-relative",
       "editor.formatOnSave": true,
       "editor.defaultFormatter": "esbenp.prettier-vscode",
       "files.watcherExclude": {

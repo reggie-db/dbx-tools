@@ -289,7 +289,9 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `packages.ts`) because projen's
   honors the `exports` map, so a bare `@dbx-tools/<pkg>` import resolves to that
   package's ROOT `index.ts` barrel — packages type-check against each other with
   no build step. Cross-package imports still need the workspace dep declared
-  (`p.addDeps("@dbx-tools/shared-core@workspace:*")` in a `packageMixin`).
+  (`p.addDeps("@dbx-tools/shared-core@workspace:*")` in a `packageMixin`) and MUST
+  use the package name (`@dbx-tools/shared-file-scan`), never a relative path into
+  another package's `src/` (e.g. `../../../../shared/file-scan/src/find`).
 - Everything runs on portable Node: subprocesses use `execFileSync(process.execPath, …)`;
   read-only is `fs.chmodSync` (Node maps it to the Windows read-only attribute).
   `bootstrap.ts` resolves `pnpm`'s own CLI the same way (`require.resolve`, not a
