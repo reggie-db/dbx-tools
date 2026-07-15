@@ -9,15 +9,15 @@
  *
  * Per-package tweaks are MIXINS applied with `project.with(...)` (constructs-
  * native, across the subtree; the built-in tag mixins already ran during
- * construction). `synth()` is called manually because this repo adds a `dbxtools`
+ * construction). `synth()` is called manually because this repo adds a thin `dbxtools`
  * root task first (see below); a normal consumer constructs, `with(...)`s, synths.
  */
 import path, { basename } from "node:path";
-import { packageMixin } from "./workspaces/cli/dbx-tools/src/projen/mixins";
+import { packageMixin } from "./workspaces/shared/projen/src/mixins";
 import {
   DBXToolsNodeProject,
   DBXToolsTypeScriptProject,
-} from "./workspaces/cli/dbx-tools/src/projen/project";
+} from "./workspaces/shared/projen/src/project";
 
 const SCOPE = "dbx-tools";
 const EXAMPLE_WORKSPACES_ROOT = "example-workspaces";
@@ -57,7 +57,30 @@ project.with(
   packageMixin(
     (p) => p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "projen",
     (p) => {
-      p.addDeps("projen");
+      p.dbxToolsConfig.addTags("node");
+      p.addDeps(
+        "projen",
+        "constructs",
+        "barrelsby",
+        "openapi-typescript",
+        "tsoa",
+        "yaml",
+        "tsx",
+        "picomatch",
+        "p-memoize",
+        "@clack/prompts",
+        "@dbx-tools/shared-file-scan@workspace:*",
+        "@dbx-tools/shared-core@workspace:*",
+        "dbx-tools@workspace:*",
+      );
+      p.addDevDeps("@types/picomatch@^4.0.3");
+      if (p instanceof DBXToolsTypeScriptProject) {
+        p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
+        p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
+        p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
+        p.tsconfig?.addInclude("index.ts");
+        p.tsconfig?.addInclude("tasks/**/*.ts");
+      }
     },
   ),
   packageMixin(
@@ -98,28 +121,17 @@ project.with(
         provenance: true,
       });
       p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
-      // `commander` + `@types/node` already come from the `cli` tag; the rest are
-      // the engine's own deps. `pnpm` here is what lets `dbxtools sync` bootstrap a
-      // brand-new, completely empty folder with no global pnpm install required -
-      // it resolves pnpm's own CLI via `require.resolve`, not a system PATH lookup.
+      p.package.addField("exports", {
+        ".": "./index.ts",
+        "./log": "./src/log.ts",
+        "./bin": "./src/bin.ts",
+        "./package.json": "./package.json",
+      });
       p.addDeps(
-        "projen",
-        "constructs",
-        "barrelsby",
-        "chokidar",
+        "@dbx-tools/shared-projen@workspace:*",
         "consola",
-        "openapi-typescript",
-        "tsoa",
-        "yaml",
-        "tsx",
         "pnpm",
-        "tinyglobby",
-        "picomatch",
-        "p-memoize",
-        "@dbx-tools/shared-file-scan@workspace:*",
-        "@dbx-tools/shared-core@workspace:*"
       );
-      p.addDevDeps("@types/picomatch@^4.0.3");
       if (p instanceof DBXToolsTypeScriptProject) {
         // ES2022 stdlib (e.g. Object.hasOwn in the logger) - the `cli` tag default is
         // ES2020. Also cover the root `index.ts` barrel and the `bin/` CLI, which the
@@ -135,13 +147,10 @@ project.with(
   ),
 );
 
-// The engine lives in-tree (imported by relative path above) as an auto-discovered
-// workspace package, so it is NOT installed as a dependency and its `dbxtools` bin
-// is not linked at the root. Expose the CLI as a `dbxtools` script that runs the
-// source through tsx; `receiveArgs` forwards the subcommand, so `pnpm dbxtools
-// <cmd>` (used by the generated `sync` task and interactively) works here. A repo
-// consuming `@dbx-tools/cli` from npm omits this - there `pnpm dbxtools` resolves
-// the installed package's linked bin.
+// The engine lives in-tree as an auto-discovered workspace package, so its `dbxtools`
+// bin is not linked at the root. Register a thin projen task that forwards argv to
+// projen (the bin itself has no subcommands). A repo consuming `@dbx-tools/cli` from
+// npm uses the installed package's linked bin instead.
 project.addTask("dbxtools", {
   exec: "tsx workspaces/cli/dbx-tools/bin/dbxtools.ts",
   receiveArgs: true,

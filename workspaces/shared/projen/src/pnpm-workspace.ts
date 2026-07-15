@@ -167,11 +167,12 @@ export class DBXToolsPNPMWorkspace extends YamlFile {
   }
 }
 
-
 if (import.meta.main) {
   const startedAt = Date.now();
   const extensions = ["ts", "tsx", "js", "jsx"];
-  const files = findFiles(`**/*.{${extensions.join(",")}}`, { ignore: ["**/index.ts", `**/_*.{${extensions.join(",")}}`] })
+  const files = findFiles(`**/*.{${extensions.join(",")}}`, {
+    ignore: ["**/index.ts", `**/_*.{${extensions.join(",")}}`],
+  });
   let count = 0;
   for (const file of files) {
     count++;

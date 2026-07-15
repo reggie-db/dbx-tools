@@ -4,7 +4,7 @@
  * Invoked by generated projen tasks, not the `dbxtools` CLI.
  */
 import { Command, Option } from "commander";
-import { buildFromTag, packForRelease, publish, type BumpLevel } from "../src/projen/publish";
+import { buildFromTag, packForRelease, publish, type BumpLevel } from "@dbx-tools/shared-projen";
 
 const INCREMENT_LEVELS = ["patch", "minor", "major"] as const;
 

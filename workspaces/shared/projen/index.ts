@@ -2,4 +2,18 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * from "./src/hello";
+export * from "./src/barrels";
+export * from "./src/bootstrap";
+export * from "./src/clean";
+export * from "./src/files";
+export * from "./src/generated";
+export * from "./src/mixins";
+export * from "./src/openapi";
+export * from "./src/pnpm-workspace";
+export * from "./src/project";
+export * from "./src/publish";
+export * from "./src/scaffold";
+export * from "./src/tags";
+export * from "./src/vite";
+export * from "./src/watch";
+export * from "./src/workspace";

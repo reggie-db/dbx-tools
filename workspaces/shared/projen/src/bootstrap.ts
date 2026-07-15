@@ -16,9 +16,9 @@
  */
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runPnpm } from "../bin";
+import { runPnpm } from "dbx-tools/bin";
 import { generateBarrels } from "./barrels";
-import { logger } from "../log";
+import { logger } from "dbx-tools/log";
 import { runSynth } from "./scaffold";
 import { repoRoot } from "./workspace";
 

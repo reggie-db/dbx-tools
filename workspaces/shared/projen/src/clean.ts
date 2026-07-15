@@ -19,10 +19,11 @@
  * `pnpm install` first - the engine's runtime deps live there - so a clean that takes
  * `node_modules` must be followed by reinstall, then re-synth.
  */
-import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
+import { findFiles } from "@dbx-tools/shared-file-scan";
 import { isReadonly, makeWritable } from "./generated";
-import { IGNORE_DIRS, repoRoot, toPosix, walkFiles } from "./workspace";
+import { repoRoot, SCAN_EXTRA_IGNORE, toPosix, walkFiles } from "./workspace";
 
 /**
  * Basenames `clean` never removes even when they are generated/read-only. `.gitignore`
@@ -33,13 +34,13 @@ const CLEAN_SKIP_FILES: ReadonlySet<string> = new Set([".gitignore"]);
 
 /**
  * Every generated (read-only) file in the workspace, as absolute paths sorted by
- * repo-relative posix path. Skips vendor/build/VCS dirs ({@link IGNORE_DIRS}) AND every
- * dot-prefixed folder (`.projen`, `.vscode`, `.github`, ...), and never lists a
+ * repo-relative posix path. Skips vendor/build/VCS dirs via file-scan's built-in
+ * ignores AND every dot-prefixed folder (`.projen`, `.vscode`, `.github`, ...), and
  * {@link CLEAN_SKIP_FILES} entry (`.gitignore`).
  */
 export function listGeneratedFiles(root: string = repoRoot): string[] {
   const rel = (f: string): string => toPosix(relative(root, f));
-  return walkFiles(root, IGNORE_DIRS, (name) => name.startsWith("."))
+  return walkFiles(root, undefined, (name) => name.startsWith("."))
     .filter(isReadonly)
     .filter((f) => !CLEAN_SKIP_FILES.has(basename(f)))
     .sort((a, b) => rel(a).localeCompare(rel(b)));
@@ -56,19 +57,15 @@ export function listGeneratedFiles(root: string = repoRoot): string[] {
 export function listNodeModulesDirs(root: string = repoRoot): string[] {
   if (!existsSync(root)) return [];
   const rel = (f: string): string => toPosix(relative(root, f));
-  const out: string[] = [];
-  const stack = [root];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    for (const d of readdirSync(cur, { withFileTypes: true })) {
-      if (!d.isDirectory()) continue;
-      const full = join(cur, d.name);
-      if (d.name === "node_modules")
-        out.push(full); // record; do NOT descend
-      else if (!IGNORE_DIRS.has(d.name)) stack.push(full);
-    }
+  const dirs = new Set<string>();
+  for (const match of findFiles("**/node_modules", {
+    cwd: root,
+    ignore: [...SCAN_EXTRA_IGNORE],
+    ignoreOptions: { dot: false },
+  })) {
+    dirs.add(join(root, match));
   }
-  return out.sort((a, b) => rel(a).localeCompare(rel(b)));
+  return [...dirs].sort((a, b) => rel(a).localeCompare(rel(b)));
 }
 
 /**

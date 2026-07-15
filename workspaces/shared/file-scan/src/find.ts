@@ -4,26 +4,26 @@ import { PathMatcher, PathMatchInput, toPathMatcher } from "./match";
 import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan";
 import { sequence, Sequence } from "@dbx-tools/shared-core";
 
+type FileFindIgnore = PathMatchInput | readonly PathMatchInput[] | IgnoreLike;
 
-type FileFindIgnore = PathMatchInput | readonly PathMatchInput[] | IgnoreLike
-
-export interface FileFindOptions extends Omit<GlobOptionsWithFileTypesUnset, "ignore" | "follow" | "dot" | "cwd" | "includeChildMatches">, Omit<FileScanOptions, "ignore" | "cwd"> {
+export interface FileFindOptions
+  extends
+    Omit<
+      GlobOptionsWithFileTypesUnset,
+      "ignore" | "follow" | "dot" | "cwd" | "includeChildMatches"
+    >,
+    Omit<FileScanOptions, "ignore" | "cwd"> {
   cwd?: string | URL;
   ignore?: FileFindIgnore;
-
 }
 /**
  * Recursively lists files matching `pattern`, ignoring the shared default groups
  * plus any caller `ignore` patterns. Glob matches those patterns natively, so the
  * ignore list is the same one {@link fileWatch} feeds through its matchers.
  */
-export function findFiles(
-  pattern: string | string[],
-  options?: FileFindOptions,
-): Sequence<string> {
+export function findFiles(pattern: string | string[], options?: FileFindOptions): Sequence<string> {
   return sequence(globIterateSync(pattern, toGlobOptions(options)));
 }
-
 
 function toGlobOptions(options: FileFindOptions | undefined): GlobOptionsWithFileTypesUnset {
   const { cwd, ignore, ignoreOptions, followSymlinks, ...restOptions } = options ?? {};
@@ -83,13 +83,13 @@ function normalizeIgnore(
   return {
     ignored(path) {
       if (ignoreLike?.ignored?.(path)) return true;
-      const patheRelative = path.relative()
+      const patheRelative = path.relative();
       const ignore = ignoreMatcher(patheRelative);
       return ignore;
     },
     childrenIgnored(path) {
       if (ignoreLike?.childrenIgnored?.(path)) return true;
-      const patheRelative = path.relative()
+      const patheRelative = path.relative();
       if (patheRelative) {
         if (ignoreMatcher(patheRelative)) {
           return true;
@@ -105,10 +105,6 @@ function normalizeIgnore(
     },
   };
 }
-
-
-
-
 
 // Manual demo: run this file directly (e.g. `tsx src/scan.ts`) to print the
 // files fileScan keeps for this package under the given ignore options.

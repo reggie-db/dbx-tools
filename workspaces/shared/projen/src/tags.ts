@@ -19,10 +19,34 @@
  * project; a tag mixin only layers its specifics on top.
  */
 import type { IMixin } from "constructs";
-import { javascript } from "projen";
+import { javascript, typescript, type TaskOptions } from "projen";
 import { tagMixin } from "./mixins";
-import { applyCompilerOptions, applyTasks } from "./packages";
 import { emitViteConfig } from "./vite";
+
+/** Override a package's generated tsconfig `compilerOptions` (later-wins per key). */
+export function applyCompilerOptions(
+  pkg: javascript.NodeProject,
+  compilerOptions: javascript.TypeScriptCompilerOptions,
+): void {
+  if (!(pkg instanceof typescript.TypeScriptProject)) return;
+  const file = pkg.tsconfig?.file;
+  if (!file) return;
+  for (const [key, value] of Object.entries(compilerOptions)) {
+    if (value === undefined) continue;
+    file.addOverride(`compilerOptions.${key}`, value);
+  }
+  if (compilerOptions.jsx) pkg.tsconfig?.addInclude("src/**/*.tsx");
+}
+
+/** Apply a tag's `tasks` through projen's task system. */
+export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, TaskOptions>): void {
+  if (!tasks) return;
+  for (const [name, options] of Object.entries(tasks)) {
+    const owned = name === "build" ? pkg.compileTask : pkg.tasks.tryFind(name);
+    if (owned) owned.reset(options.exec, options);
+    else pkg.addTask(name, options);
+  }
+}
 
 /** Node compiler options: ES2020 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {

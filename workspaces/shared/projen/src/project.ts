@@ -18,29 +18,31 @@
  *   `construct.with(...)` across the subtree during the root's construction, and
  *   per-package tweaks are user mixins the caller applies with `project.with(...)`.
  * - The root also emits the shared config (tsconfig base/root, projen's built-in
- *   prettier, vscode, `pnpm-workspace.yaml`), the native projen tasks (`barrels`/`openapi`, and a
- *   `sync` task that runs the single `dbxtools watch` loop), barrels on synth, and
- *   `annotateGenerated`. Per-package type-checking is projen's own `compile` task.
+ *   prettier, vscode, `pnpm-workspace.yaml`), native projen tasks (`barrels`/`openapi`/
+ *   `sync`/`clean`), barrels on synth, and `annotateGenerated`. Per-package
+ *   type-checking is projen's own `compile` task.
  *
  * Replaces the removed `configureProject()` function.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import picomatch from "picomatch";
-import { Component, GitAttributesFile, IgnoreFile, Project, type TaskOptions, type TaskStepOptions, javascript, typescript } from "projen";
+import {
+  Component,
+  Project,
+  type TaskOptions,
+  type TaskStepOptions,
+  javascript,
+  typescript,
+} from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
-import { ENGINE_PKG_ROOT } from "../bin";
+import { resolveEnginePkgRoot } from "dbx-tools/bin";
 import { generateBarrels } from "./barrels";
 import * as files from "./files";
-import {
-  SHARED_COMPILER_OPTIONS,
-  addWorkspacePackageTags,
-  applyTasks,
-  npmNameOf,
-} from "./packages";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
 import { DBXToolsRelease } from "./publish";
-import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, type WorkspaceTag } from "./tags";
+import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, applyTasks, type WorkspaceTag } from "./tags";
 import { emitViteConfig } from "./vite";
 import {
   DEFAULT_WORKSPACE_PACKAGE_ROOTS,
@@ -50,8 +52,6 @@ import {
   toPosix,
 } from "./workspace";
 import { ignorePatterns } from "@dbx-tools/shared-file-scan";
-import { generator } from "@dbx-tools/shared-core";
-import { Pnpm } from "projen/lib/javascript";
 
 /** Shared formatting rules, applied by projen's Prettier on whichever project is root. */
 const PRETTIER_SETTINGS: javascript.PrettierSettings = {
@@ -96,13 +96,13 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     devDeps: ["picomatch", "@types/node@^24.6.0"],
     ...(isRoot
       ? {
-        prettier: true,
-        prettierOptions: {
-          settings: PRETTIER_SETTINGS,
-          ignoreFile: true,
-          ignoreFileOptions: { ignorePatterns: ignorePatterns() },
-        },
-      }
+          prettier: true,
+          prettierOptions: {
+            settings: PRETTIER_SETTINGS,
+            ignoreFile: true,
+            ignoreFileOptions: { ignorePatterns: [...ignorePatterns()] },
+          },
+        }
       : {}),
     ...(isRoot ? {} : { gitIgnoreOptions: {} }),
     ...options,
@@ -145,12 +145,56 @@ function configureNodeTestTask(pkg: typescript.TypeScriptProject): void {
 // across the workspace (a bare name -> `*` could pull a second, newer major).
 const DEV_DEPS_ROOT: string[] = ["tsx@^4.23.0", "typescript@^5.9.3"];
 
+/**
+ * Build an npm package name from ordered parts. Each part is lowercased and split
+ * on `/` and any run of non-`[a-z0-9._-]` chars; the cleaned segments join into an
+ * npm name - a single segment stays bare (e.g. `dbx-tools`), while multiple become
+ * `@<first>/<rest joined by ->`.
+ */
+export function npmNameOf(name: string, ...names: string[]): string {
+  const nameParts = [name, ...names]
+    .flatMap((part) => part.split("/"))
+    .flatMap((part) =>
+      part
+        .toLowerCase()
+        .split(/[^a-z0-9._-]+/)
+        .map((seg) => seg.replace(/^[._-]+|[._-]+$/g, "")),
+    )
+    .filter(Boolean);
+  if (!nameParts.length) throw new Error(`Invalid name: ${[name, ...names].join(", ")}`);
+  if (nameParts.length === 1) return nameParts[0]!;
+  return `@${nameParts[0]}/${nameParts.slice(1).join("-")}`;
+}
+
+/** Tags recorded per NON-DBXTools project, so more can be unioned in later. */
+const RECORDED_TAGS = new WeakMap<Project, string[]>();
+
+/** The (deduped) tags recorded on a non-DBXTools project so far (empty if none). */
+export function workspacePackageTagsOf(project: Project): string[] {
+  return RECORDED_TAGS.get(project) ?? [];
+}
+
+/** Union `tags` into a NON-DBXTools project's recorded `dbxToolsConfig.tags`. */
+export function addWorkspacePackageTags(project: javascript.NodeProject, tags: string[]): string[] {
+  const merged = [...new Set([...(RECORDED_TAGS.get(project) ?? []), ...tags])];
+  RECORDED_TAGS.set(project, merged);
+  project.package.addField("dbxToolsConfig", { tags: merged });
+  return merged;
+}
+
+/** ESM compiler options every package shares regardless of tag. */
+export const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
+  module: "ESNext",
+  moduleResolution: javascript.TypeScriptModuleResolution.BUNDLER,
+  skipLibCheck: true,
+};
+
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export interface DBXToolsProjectOptions
   extends
-  Partial<javascript.NodeProjectOptions>,
-  DBXToolsConfigOptions,
-  DBXToolsPNPMWorkspaceOptions {
+    Partial<javascript.NodeProjectOptions>,
+    DBXToolsConfigOptions,
+    DBXToolsPNPMWorkspaceOptions {
   /**
    * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
    * the (resolved) project name; a leading `@` is optional.
@@ -343,13 +387,13 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXT
  */
 export class DBXToolsTypeScriptProject
   extends typescript.TypeScriptProject
-  implements IDBXToolsProject {
+  implements IDBXToolsProject
+{
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
   readonly pnpmWorkspace?: DBXToolsPNPMWorkspace;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
-
     const { name, scope } = resolveIdentity(options);
     const parent = options?.parent;
     const packageManager =
@@ -437,7 +481,7 @@ function resolveIdentity(options: { name?: string; scope?: string }): {
  * consumer already has for it rather than computing one.
  */
 function engineSelfDependency(project: javascript.NodeProject): string | undefined {
-  const enginePkgJson = join(ENGINE_PKG_ROOT, "package.json");
+  const enginePkgJson = join(resolveEnginePkgRoot(), "package.json");
   if (!toPosix(enginePkgJson).includes("/node_modules/")) return undefined;
   let name: string;
   let version: string;
@@ -495,14 +539,30 @@ function registerRootTasks(project: javascript.NodeProject): void {
     const task = project.tasks.tryFind(name) ?? project.addTask(name);
     task.reset(exec, options);
   };
-  set("barrels", "pnpm dbxtools barrels", { receiveArgs: true });
-  set("openapi", "pnpm dbxtools openapi", { receiveArgs: true });
-  // `sync`: re-synthesize once. `receiveArgs` forwards extra CLI args, so
-  // `pnpm exec projen sync --watch` runs `pnpm dbxtools sync --watch`, which syncs
-  // and then starts the SINGLE watcher. projen's own `--watch` only fires for the
-  // bare `projen` synth (never for a named task), so there is no collision - and we
-  // avoid its re-synth-on-every-file-change overreach.
-  set("sync", "pnpm dbxtools sync", { receiveArgs: true });
+  set("barrels", taskScript(project, "barrels.ts"));
+  set("openapi", taskScript(project, "openapi.ts"));
+  set("clean", taskScript(project, "clean.ts"), { receiveArgs: true });
+  // `receiveArgs` forwards `--watch`, so `pnpm exec projen sync --watch` syncs once
+  // then starts the single file-scan watcher loop.
+  set("sync", taskScript(project, "sync.ts"), { receiveArgs: true });
+}
+
+/** `tsx <rel>/tasks/<script>` from the monorepo root (works in-repo and installed). */
+function taskScript(project: javascript.NodeProject, script: string, args = ""): string {
+  const scriptPath = join(resolveTasksDir(), script);
+  const rel = toPosix(relative(resolve(project.outdir), scriptPath));
+  return args ? `tsx ${rel} ${args}` : `tsx ${rel}`;
+}
+
+/** Locate `tasks/` next to the shared-projen package root (source or `lib/` emit). */
+function resolveTasksDir(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 4; i++) {
+    const candidate = join(dir, "tasks");
+    if (existsSync(candidate)) return candidate;
+    dir = join(dir, "..");
+  }
+  throw new Error("@dbx-tools/shared-projen tasks/ directory not found");
 }
 
 /**
@@ -521,7 +581,7 @@ function initProject(
 
   // NodeProject has no built-in TS projenrc support (unlike TypeScriptProject), so
   // wire `.projenrc.ts` through the tsx runner - this also populates the `default`
-  // task that `pnpm exec projen` runs (and that `dbxtools watch` invokes to re-synth).
+  // task that `pnpm exec projen` runs (and that the `sync` watcher invokes to re-synth).
   new typescript.ProjenrcTs(project, {
     runner: typescript.TypeScriptRunner.tsx(),
   });
@@ -554,7 +614,7 @@ function initProject(
     formatTask.prependExec("prettier . --write", { receiveArgs: true });
   }
 
-  project.gitignore.addPatterns(...ignorePatterns());
+  project.gitignore.addPatterns(...[...ignorePatterns()]);
   const roots = options.workspacePackageRoots ?? DEFAULT_WORKSPACE_PACKAGE_ROOTS;
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
@@ -658,7 +718,6 @@ function preSynthesizeProject(project: javascript.NodeProject & IDBXToolsProject
         if (existsSync(rootPath)) {
           console.log(`Removed ${rootPath} from ${p.name}`);
         }
-
       }
     }
   }
@@ -667,7 +726,7 @@ function preSynthesizeProject(project: javascript.NodeProject & IDBXToolsProject
 function* projects(project: Project): Generator<Project> {
   yield project;
   for (const sub of project.subprojects) {
-    yield* projects(sub)
+    yield* projects(sub);
   }
 }
 

@@ -4,13 +4,14 @@ Orientation for AI agents / new contributors. Read this first.
 
 ## What this repo is
 
-A **projen-driven pnpm monorepo generator**. The reusable engine is its own
-package, **`@dbx-tools/cli`**, dogfooded in this repo at
-**`workspaces/cli/dbx-tools`** as a normal auto-discovered package (not a
-special case). It exports two projen project subclasses —
+A **projen-driven pnpm monorepo generator**. The reusable engine lives in
+**`@dbx-tools/shared-projen`** (`workspaces/shared/projen`); **`@dbx-tools/cli`**
+(`workspaces/cli/dbx-tools`) is the published CLI package that re-exports the
+engine and ships **`dbxtools`**. Both are dogfooded as normal auto-discovered
+packages (not special cases). The engine exports two projen project subclasses —
 **`DBXToolsNodeProject`** (the monorepo root) and **`DBXToolsTypeScriptProject`**
 (a package) — plus the **mixin** helpers (`tagMixin`/`packageMixin`/`fileMixin`)
-for per-package tweaks, and ships the **`dbxtools`** CLI.
+for per-package tweaks.
 
 - **`workspaces/`** — real content goes here.
 - **`example-workspaces/`** — the seed example packages this repo ships
@@ -146,24 +147,29 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
 ```
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbxtools root task
 workspaces/
-  cli/dbx-tools/                          # the engine itself, DOGFOODED as a normal cli package
-    bin/dbxtools.ts                       # the CLI (commander): sync[--watch] | barrels | openapi | clean
-    index.ts                             # generated barrel (public API surface, like any package)
+  cli/dbx-tools/                          # the CLI package (`dbx-tools` / `@dbx-tools/cli`)
+    bin/dbxtools.ts                       # commander entry: sync | barrels | openapi | clean
+    bin/publish.ts                        # projen release tasks (pack / publish / CI)
+    index.ts                              # CLI helpers + re-export of `@dbx-tools/shared-projen`
     src/
-      log.ts                             # projen-AGNOSTIC utilities live at src/ root
-      projen/                            # everything projen-specific lives under src/projen/
-        project.ts                       # DBXToolsNode/TypeScriptProject + ITagging/IPnpmWorkspace + DBXToolsConfig + initDBXToolsProject
-        mixins.ts                        # tagMixin/packageMixin/fileMixin (mixin factories; tag table lives in tags.ts)
-        pnpm-workspace.ts                # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
-        tags.ts                          # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
-        workspace.ts                     # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
-        packages.ts                      # npmNameOf, lockPackageJson, applyCompilerOptions, applyTasks, addWorkspacePackageTags, SHARED_COMPILER_OPTIONS
-        barrels.ts                       # barrelsby driver (root index.ts, header + read-only)
-        watch.ts                         # chokidar loop for `dbxtools sync --watch` (package-set re-synth + barrels)
-        scaffold.ts                      # packageSetChanged() + runSynth({ post })
-        bootstrap.ts                     # bootstraps a COMPLETELY EMPTY folder (see Commands)
-        openapi.ts                       # openapi generator (tsoa controllers -> spec + client)
-        clean.ts, generated.ts, files.ts, vite.ts
+      bin.ts, log.ts                      # pnpm/bin resolution + consola logger (CLI runtime)
+      engine.ts                           # re-export barrel for the projen engine public API
+      name.ts, collection.ts              # other CLI helpers
+  shared/projen/                          # the projen engine (`@dbx-tools/shared-projen`)
+    index.ts                              # generated barrel (public API surface)
+    src/
+      project.ts                          # DBXToolsNode/TypeScriptProject + ITagging/IPnpmWorkspace + DBXToolsConfig + initDBXToolsProject
+      mixins.ts                           # tagMixin/packageMixin/fileMixin (mixin factories; tag table lives in tags.ts)
+      pnpm-workspace.ts                   # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
+      tags.ts                             # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
+      workspace.ts                        # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
+      packages.ts                         # npmNameOf, lockPackageJson, applyCompilerOptions, applyTasks, addWorkspacePackageTags, SHARED_COMPILER_OPTIONS
+      barrels.ts                          # barrelsby driver (root index.ts, header + read-only)
+      watch.ts                            # `watchFiles` loop for `dbxtools sync --watch` (package-set re-synth + barrels)
+      scaffold.ts                         # packageSetChanged() + runSynth({ post })
+      bootstrap.ts                        # bootstraps a COMPLETELY EMPTY folder (see Commands)
+      openapi.ts                          # openapi generator (tsoa controllers -> spec + client)
+      clean.ts, generated.ts, files.ts, vite.ts
   openapi/<name>/                        # generated from tsoa controllers, same root as the source
 example-workspaces/
   cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ ui/app/   # seed examples, each a real subproject
@@ -204,7 +210,7 @@ projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
   `pnpm exec projen`/`dbxtools sync` to work from here on.
 - **`dbxtools sync` on an existing workspace** just runs projen once (full synth,
   installs, regenerates barrels via the post-synth component).
-- **`dbxtools sync --watch`** syncs once, then starts ONE chokidar process (see
+- **`dbxtools sync --watch`** syncs once, then starts ONE `watchFiles` process (see
   `watch.ts`) - the SINGLE watcher - covering three concerns: a `.projenrc.ts` edit →
   full re-synth (+install, deps may change); a package SET change (new/removed `src`
   folder) → re-synth (+install); a source edit in an existing package → rebuild just
@@ -253,16 +259,16 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `packageMixin` matching
   `p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "dbx-tools"` that:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
-  adds its bin (`p.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), adds its
-  own deps (`projen`, `constructs`, `barrelsby`, `chokidar`, `consola`,
-  `openapi-typescript`, `tsoa`, `yaml`, `tsx`, `pnpm` - `commander` already comes
-  from the `cli` tag), and bumps its tsconfig to ES2022 lib/target + `rootDir: "."`
-  - extra includes for `index.ts`/`bin/**/*.ts` (the `cli` tag's defaults are
-    ES2020 + `src/**/*.ts` only, which doesn't cover `Object.hasOwn` in `log.ts`
-    or anything outside `src/`).
+  adds its bin (`p.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), depends on
+  `@dbx-tools/shared-projen`, and bumps its tsconfig to ES2022 lib/target +
+  `rootDir: "."` - extra includes for `index.ts`/`bin/**/*.ts` (the `cli` tag's
+  defaults are ES2020 + `src/**/*.ts` only, which doesn't cover code outside
+  `src/`). The projen engine itself lives in `workspaces/shared/projen`
+  (`@dbx-tools/shared-projen`); a `shared`/`projen` mixin adds its deps
+  (`projen`, `constructs`, `barrelsby`, `@dbx-tools/shared-file-scan`, ...).
 - **The root keeps the engine itself resolvable across synths** via
-  `engineSelfDependency()` (`project.ts`): reads the engine's OWN nearby
-  `package.json` (two directories up from `project.ts`) for its name; if that
+  `engineSelfDependency()` (`project.ts`): resolves the `@dbx-tools/cli`
+  package (`dbx-tools`) via `require.resolve` when installed; if that
   path passes through a `node_modules` segment (an installed/external
   consumer), it adds that name as a root devDep - reusing WHATEVER specifier is
   already in the consumer's current `package.json` for it (`file:`, `link:`, a

@@ -23,9 +23,9 @@
  * synth-time name override or resolved tag set.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
-import { globSync } from "tinyglobby";
+import { findFiles, type FileFindOptions } from "@dbx-tools/shared-file-scan";
 import { parse } from "yaml";
 
 /** Run a command, returning trimmed stdout, or undefined on any failure. */
@@ -80,8 +80,22 @@ const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 /** Glob for module files under any `src/`, built from {@link MODULE_EXTS} exts. */
 const SRC_MODULE_GLOB = `**/src/**/*.{${[...MODULE_EXTS].map((e) => e.slice(1)).join(",")}}`;
 
-/** Globs `tinyglobby` must never descend into, built from {@link IGNORE_DIRS}. */
-const IGNORE_GLOBS = [...IGNORE_DIRS].map((d) => `**/${d}/**`);
+/** Ignores layered on top of file-scan's built-in groups for projen scans and watch. */
+export const SCAN_EXTRA_IGNORE = ["**/lib/**", "**/.projen/**"] as const;
+
+function scanFindOptions(
+  cwd: string,
+  options?: Pick<FileFindOptions, "ignore" | "ignoreOptions">,
+): FileFindOptions {
+  const { ignore, ...rest } = options ?? {};
+  const mergedIgnore =
+    ignore === undefined
+      ? [...SCAN_EXTRA_IGNORE]
+      : Array.isArray(ignore)
+        ? [...ignore, ...SCAN_EXTRA_IGNORE]
+        : [ignore, ...SCAN_EXTRA_IGNORE];
+  return { cwd, ...rest, ignore: mergedIgnore };
+}
 
 export function toPosix(p: string): string {
   return p.split(sep).join("/");
@@ -130,37 +144,26 @@ export function isGeneratedFile(file: string): boolean {
 }
 
 /**
- * All files under `dir`, recursively, skipping the `ignore` dir names (default
- * {@link IGNORE_DIRS}) plus any dir the optional `skipDir` predicate rejects; []
- * if `dir` is missing. `clean` passes `skipDir: (name) => name.startsWith(".")`
- * so dot-prefixed folders (`.projen`, `.vscode`, `.git`, ...) are left untouched.
+ * All files under `dir`, recursively, using {@link findFiles} with the shared
+ * ignore groups plus projen's {@link SCAN_EXTRA_IGNORE}. When `skipDir` is set
+ * (as `clean` does for dot-prefixed folders), dot-directories are ignored too.
  */
 export function walkFiles(
   dir: string,
-  ignore: ReadonlySet<string> = IGNORE_DIRS,
+  _ignore: ReadonlySet<string> = IGNORE_DIRS,
   skipDir?: (name: string) => boolean,
 ): string[] {
   if (!existsSync(dir)) return [];
-  const out: string[] = [];
-  const stack = [dir];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    for (const d of readdirSync(cur, { withFileTypes: true })) {
-      if (d.isDirectory()) {
-        if (!ignore.has(d.name) && !skipDir?.(d.name)) stack.push(join(cur, d.name));
-      } else if (d.isFile()) {
-        out.push(join(cur, d.name));
-      }
-    }
-  }
-  return out;
+  return [
+    ...findFiles("**/*", scanFindOptions(dir, { ignoreOptions: { dot: skipDir !== undefined } })),
+  ].map((rel) => join(dir, rel));
 }
 
 /** A re-exportable source module: ts/tsx/js/jsx/mjs/cjs, not a barrel/test/decl. */
 export function isModuleFile(file: string): boolean {
   if (file.endsWith(".d.ts")) return false;
   if (!MODULE_EXTS.has(extname(file))) return false;
-  // Accept both OS-native (walkFiles) and posix (tinyglobby) inputs.
+  // Accept both OS-native paths and posix (glob) inputs.
   const base = toPosix(file).split("/").pop()!;
   if (BARREL_RE.test(base)) return false;
   if (/\.(test|spec)\./.test(base)) return false;
@@ -250,7 +253,7 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
 }
 
 /**
- * Package dirs under `rootAbs`, found with a single `tinyglobby` scan for module
+ * Package dirs under `rootAbs`, found with a single {@link findFiles} scan for module
  * files beneath any `src/`. A package is the folder that OWNS the `src/` - the
  * segments before the FIRST `src/` - so a package's own subfolders never become
  * nested packages (outermost wins). Barrels/tests/decls don't count (see
@@ -259,10 +262,7 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
  */
 function collectPackageDirs(rootAbs: string): string[] {
   const owners = new Set<string>();
-  for (const file of globSync(SRC_MODULE_GLOB, {
-    cwd: rootAbs,
-    ignore: IGNORE_GLOBS,
-  })) {
+  for (const file of findFiles(SRC_MODULE_GLOB, scanFindOptions(rootAbs))) {
     if (!isModuleFile(file)) continue;
     const segs = toPosix(file).split("/");
     const srcIdx = segs.indexOf("src");

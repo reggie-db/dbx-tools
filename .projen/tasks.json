@@ -8,8 +8,7 @@
       "name": "barrels",
       "steps": [
         {
-          "exec": "pnpm dbxtools barrels",
-          "receiveArgs": true
+          "exec": "tsx workspaces/shared/projen/tasks/barrels.ts"
         }
       ]
     },
@@ -54,6 +53,15 @@
         }
       ],
       "condition": "git log --oneline -1 | grep -qv \"chore(release):\""
+    },
+    "clean": {
+      "name": "clean",
+      "steps": [
+        {
+          "exec": "tsx workspaces/shared/projen/tasks/clean.ts",
+          "receiveArgs": true
+        }
+      ]
     },
     "clobber": {
       "name": "clobber",
@@ -126,6 +134,20 @@
         }
       ]
     },
+    "eslint": {
+      "name": "eslint",
+      "description": "Runs eslint against the codebase",
+      "env": {
+        "ESLINT_USE_FLAT_CONFIG": "false",
+        "NODE_NO_WARNINGS": "1"
+      },
+      "steps": [
+        {
+          "exec": "eslint --ext .ts,.tsx --fix --no-error-on-unmatched-pattern $@ workspaces example-workspaces",
+          "receiveArgs": true
+        }
+      ]
+    },
     "format": {
       "name": "format",
       "steps": [
@@ -157,8 +179,7 @@
       "name": "openapi",
       "steps": [
         {
-          "exec": "pnpm dbxtools openapi",
-          "receiveArgs": true
+          "exec": "tsx workspaces/shared/projen/tasks/openapi.ts"
         }
       ]
     },
@@ -226,14 +247,19 @@
       "name": "sync",
       "steps": [
         {
-          "exec": "pnpm dbxtools sync",
+          "exec": "tsx workspaces/shared/projen/tasks/sync.ts",
           "receiveArgs": true
         }
       ]
     },
     "test": {
       "name": "test",
-      "description": "Run tests"
+      "description": "Run tests",
+      "steps": [
+        {
+          "spawn": "eslint"
+        }
+      ]
     },
     "unbump": {
       "name": "unbump",

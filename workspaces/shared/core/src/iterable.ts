@@ -35,9 +35,7 @@ type Source<T> = Container<T> | null | undefined;
  * Element type of a {@link group} bucket array: when the predicate `P` is a type
  * guard (`value is S`), the bucket is narrowed to `S & T`; otherwise it stays `T`.
  */
-type GroupValue<T, P> = P extends (value: any, ...rest: any[]) => value is infer S
-  ? S & T
-  : T;
+type GroupValue<T, P> = P extends (value: any, ...rest: any[]) => value is infer S ? S & T : T;
 
 /** A map of group name -> predicate, as accepted by {@link group}. */
 type GroupPredicates<T> = Record<string, (value: T, index: number) => boolean>;
@@ -123,8 +121,6 @@ export function isContainer<T = unknown>(value: unknown): value is Container<T> 
   );
 }
 
-
-
 /**
  * Flattens nested arrays for {@link flat}. Non-array values are wrapped as a
  * single-element iterable; depth decrements per array level.
@@ -142,7 +138,10 @@ function flattenValue(value: unknown, depth: number): Iterable<unknown> {
 }
 
 /** Wrap a per-element transform (each element -> an iterable) as a lazy {@link Sequence}. */
-function derive<T, U>(source: Iterable<T>, fn: (value: T, index: number) => Iterable<U>): Sequence<U> {
+function derive<T, U>(
+  source: Iterable<T>,
+  fn: (value: T, index: number) => Iterable<U>,
+): Sequence<U> {
   return sequence({
     *[Symbol.iterator]() {
       let index = 0;
@@ -461,10 +460,7 @@ export function every<T>(
  * Same semantics as `Array.prototype.forEach`, over a single {@link Container}.
  * Consumes the source.
  */
-export function forEach<T>(
-  source: Source<T>,
-  callback: (value: T, index: number) => void,
-): void {
+export function forEach<T>(source: Source<T>, callback: (value: T, index: number) => void): void {
   let index = 0;
   for (const value of sequence(source)) callback(value, index++);
 }
@@ -535,7 +531,6 @@ class SequenceImpl<T> {
         yield next.value;
       }
       this.exhausted = true;
-
     } else {
       // Cached: iterate like a list. Always replay the buffer from the start,
       // extending it from the source on demand until exhausted. A broken loop
@@ -543,7 +538,7 @@ class SequenceImpl<T> {
       // beginning.
       const buffer = this.buffer!;
       let index = 0;
-      for (; ;) {
+      for (;;) {
         if (index < buffer.length) {
           yield buffer[index++]!;
           continue;
@@ -606,7 +601,9 @@ class SequenceImpl<T> {
    *
    * @see {@link sequence}
    */
-  join(...sources: readonly (Iterable<T> | ReadonlyMap<unknown, T> | null | undefined)[]): Sequence<T> {
+  join(
+    ...sources: readonly (Iterable<T> | ReadonlyMap<unknown, T> | null | undefined)[]
+  ): Sequence<T> {
     if (sources.length === 0) return this;
     return sequence(this, ...sources);
   }
@@ -617,9 +614,7 @@ class SequenceImpl<T> {
   }
 
   /** @see {@link group} */
-  group<G extends GroupPredicates<T>>(
-    predicates: G,
-  ): { [K in keyof G]: GroupValue<T, G[K]>[] } {
+  group<G extends GroupPredicates<T>>(predicates: G): { [K in keyof G]: GroupValue<T, G[K]>[] } {
     return group(predicates, this);
   }
 

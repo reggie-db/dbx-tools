@@ -54,7 +54,7 @@ seed content). The folder's path relative to the root becomes its **tags** (Bit
 style - a tag names a target environment, not an npm scope): `ui/app` → tags
 `[ui, ui-app]` via cumulative dash-join, matched against `workspacePackageTagPaths`
 (default: identity over the tag names). Each matched tag maps to a mixin in
-`WORKSPACE_TAG_MIXINS` (`.../src/projen/tags.ts`) that drives the generated
+`WORKSPACE_TAG_MIXINS` (`workspaces/shared/projen/src/tags.ts`) that drives the generated
 `tsconfig` (`lib`/`jsx`/`types`) + baseline deps - so misuse fails `tsc`:
 
 | Tag       | Runtime                     | DOM | Node |

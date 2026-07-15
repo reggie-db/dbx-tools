@@ -18,7 +18,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative } from "node:path";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
-import { logger } from "../log";
+import { logger } from "dbx-tools/log";
 import {
   escapeRegExp,
   hasExport,

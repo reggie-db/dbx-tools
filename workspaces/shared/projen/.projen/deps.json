@@ -1,36 +1,13 @@
 {
   "dependencies": [
     {
-      "name": "@stylistic/eslint-plugin",
-      "version": "^2",
-      "type": "build"
-    },
-    {
       "name": "@types/node",
       "version": "^24.6.0",
       "type": "build"
     },
     {
-      "name": "@typescript-eslint/eslint-plugin",
-      "version": "^8",
-      "type": "build"
-    },
-    {
-      "name": "@typescript-eslint/parser",
-      "version": "^8",
-      "type": "build"
-    },
-    {
-      "name": "eslint-import-resolver-typescript",
-      "type": "build"
-    },
-    {
-      "name": "eslint-plugin-import",
-      "type": "build"
-    },
-    {
-      "name": "eslint",
-      "version": "^9",
+      "name": "@types/picomatch",
+      "version": "^4.0.3",
       "type": "build"
     },
     {
@@ -47,7 +24,58 @@
       "type": "build"
     },
     {
+      "name": "@clack/prompts",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-core",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-file-scan",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "barrelsby",
+      "type": "runtime"
+    },
+    {
+      "name": "constructs",
+      "type": "runtime"
+    },
+    {
+      "name": "dbx-tools",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "openapi-typescript",
+      "type": "runtime"
+    },
+    {
+      "name": "p-memoize",
+      "type": "runtime"
+    },
+    {
+      "name": "picomatch",
+      "type": "runtime"
+    },
+    {
       "name": "projen",
+      "type": "runtime"
+    },
+    {
+      "name": "tsoa",
+      "type": "runtime"
+    },
+    {
+      "name": "tsx",
+      "type": "runtime"
+    },
+    {
+      "name": "yaml",
       "type": "runtime"
     }
   ],

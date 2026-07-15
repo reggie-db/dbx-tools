@@ -10,7 +10,7 @@ import { sequence } from "@dbx-tools/shared-core";
 import { Minimatch } from "minimatch";
 import { ignorePathMatcher } from "./ignore";
 
-export type PathMatchPredicate = ((path: string) => boolean)
+export type PathMatchPredicate = (path: string) => boolean;
 
 /**
  * Anything {@link toPathMatcher} accepts: a glob string (compiled with
@@ -27,8 +27,6 @@ export type PathMatcher = PathMatchPredicate & {
   negate(): PathMatcher;
 };
 
-
-
 /** Normalizes a {@link PatternInput} to a plain path test. */
 function toTest(pattern: PathMatchInput): (path: string) => boolean {
   if (typeof pattern === "string") {
@@ -36,7 +34,7 @@ function toTest(pattern: PathMatchInput): (path: string) => boolean {
     return (path) => {
       const result = matcher.match(path);
       return result;
-    }
+    };
   } else {
     return pattern;
   }
@@ -74,10 +72,8 @@ export function toPathMatcher(
   return withCombinators((path) => tests.some((test) => test(path)));
 }
 
-
 if (import.meta.main) {
   const matcher = ignorePathMatcher({ test: true }).negate().and("**/cool.ts", "**/wow.ts");
   console.log(matcher("workspaces/shared/file-scan/src/cool.ts"));
   console.log(matcher("workspaces/shared/file-scan/.src/cool.ts"));
 }
-

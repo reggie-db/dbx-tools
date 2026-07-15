@@ -21,9 +21,9 @@
  * the loop never re-triggers itself. chokidar does the watching (the library);
  * everything here is thin glue. Non-`src` config members (rare) still re-synth.
  */
-import { resolve, sep } from "node:path";
-import { watch } from "chokidar";
-import { logger } from "../log";
+import { isAbsolute, resolve, sep } from "node:path";
+import { watchFiles, type FileWatchOptions } from "@dbx-tools/shared-file-scan";
+import { logger } from "dbx-tools/log";
 import { generateBarrels } from "./barrels";
 import { isTsoaController } from "./openapi";
 import { packageSetChanged, runSynth } from "./scaffold";
@@ -33,6 +33,7 @@ import {
   readWorkspaceMembers,
   recordedRoots,
   repoRoot,
+  SCAN_EXTRA_IGNORE,
   toPosix,
   workspacePackages,
 } from "./workspace";
@@ -51,8 +52,9 @@ function configSrcDirs(): string[] {
 }
 
 /** Vendor/build/generated paths that must never drive the watch. */
-function ignored(p: string): boolean {
-  return isIgnoredPath(p) || isGeneratedFile(p);
+function ignoredPath(path: string): boolean {
+  const abs = isAbsolute(path) ? path : resolve(repoRoot, path);
+  return isIgnoredPath(abs) || isGeneratedFile(abs);
 }
 
 /**
@@ -117,7 +119,9 @@ export function startWatch(): void {
   }
 
   async function runCycle(batch: string[]): Promise<void> {
-    const relevant = batch.map((p) => resolve(p)).filter((p) => !ignored(p));
+    const relevant = batch
+      .map((p) => (isAbsolute(p) ? p : resolve(repoRoot, p)))
+      .filter((p) => !ignoredPath(p));
     if (relevant.length === 0) return;
 
     // A `.projenrc.ts` edit changes the config itself -> full re-synth (+install,
@@ -161,9 +165,10 @@ export function startWatch(): void {
     if (n) log.success(`rebuilt ${n} barrel${n === 1 ? "" : "s"}`);
   }
 
-  const watcher = watch(watchPaths, {
+  const watcher = watchFiles(watchPaths, {
+    cwd: repoRoot,
     ignoreInitial: true,
-    ignored: (p: string) => ignored(p),
+    ignore: [...SCAN_EXTRA_IGNORE, (path) => ignoredPath(path)] as FileWatchOptions["ignore"],
   });
   watcher.on("all", (_event, path) => {
     pending.add(path);
