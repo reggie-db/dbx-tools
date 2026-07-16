@@ -20,8 +20,29 @@ import { mixin, project as projectApi, projectPredicate } from "@dbx-tools/proje
 
 const SCOPE = "dbx-tools";
 
+/** Only real content under `workspaces/` (not the `example-workspaces/` seeds). */
 const workspaces = projectPredicate.hasPath("workspaces");
 
+/** A workspace package selected by npm-name glob + a required tag. */
+const pkg = (name: string, tag: string) =>
+  workspaces.and(projectPredicate.hasName(name)).and(projectPredicate.hasTag(tag));
+
+/**
+ * Bump a package that compiles files outside `src/` (its root `index.ts`, a `bin/`
+ * or `tasks/` tree) to an ES2022, root-relative tsconfig and add each extra include.
+ * The tag defaults (`src/**` only, older lib/target) don't reach that code.
+ */
+function applyRootDirTsconfig(p: Project, ...includes: string[]): void {
+  if (!(p instanceof projectApi.DBXToolsTypeScriptProject)) return;
+  p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
+  p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
+  p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
+  for (const include of includes) p.tsconfig?.addInclude(include);
+}
+
+// ---------------------------------------------------------------------------
+// Root construction
+// ---------------------------------------------------------------------------
 const project = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
@@ -35,6 +56,10 @@ const project = new projectApi.DBXToolsNodeProject({
   depsUpgrade: false,
   devDeps: ["concurrently", "@dbx-tools/shared-core@workspace:*", "@dbx-tools/projen@workspace:*"],
 });
+
+// ---------------------------------------------------------------------------
+// pnpm workspace: build-script allowances + version overrides
+// ---------------------------------------------------------------------------
 project.pnpmWorkspace?.allowBuild("@databricks/appkit-ui");
 project.pnpmWorkspace?.allowBuild("@databricks/appkit");
 project.pnpmWorkspace?.allowBuild("@google/genai", true);
@@ -44,10 +69,13 @@ project.pnpmWorkspace?.allowBuild("bufferutil", false);
 project.pnpmWorkspace?.allowBuild("edgedriver", false);
 project.pnpmWorkspace?.allowBuild("geckodriver", false);
 project.pnpmWorkspace?.allowBuild("onnxruntime-node", false);
-
 project.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
-console.log("shared", project.name);
+
+// ---------------------------------------------------------------------------
+// Per-package mixins
+// ---------------------------------------------------------------------------
 project.with(
+  // Root's own tsconfig: compile the projenrc entrypoints alongside the packages.
   mixin.mixin(
     (file): file is JsonFile =>
       file instanceof JsonFile &&
@@ -57,27 +85,43 @@ project.with(
       file.addOverride("include", [".projenrc.ts", ".example.projenrc.ts"]);
     },
   ),
-  mixin.mixin(workspaces.and(projectPredicate.hasName("@dbx-tools/shared-core").negate()).and(projectPredicate.hasTag("shared")), (p) => {
-    p.addDeps("@dbx-tools/shared-core@workspace:*");
-  }),
-  mixin.mixin(workspaces.and(projectPredicate.hasName("*/shared-core")).and(projectPredicate.hasTag("shared")), (p) => {
+
+  // Every shared workspace package (except shared-core itself) depends on shared-core.
+  // This is why the per-package mixins below no longer add it explicitly.
+  mixin.mixin(
+    workspaces
+      .and(projectPredicate.hasName("@dbx-tools/shared-core").negate())
+      .and(projectPredicate.hasTag("shared")),
+    (p) => {
+      p.addDeps("@dbx-tools/shared-core@workspace:*");
+    },
+  ),
+
+  // shared-core: leans on node: builtins, so tag it node + type against node.
+  mixin.mixin(pkg("*/shared-core", "shared"), (p) => {
     p.dbxToolsConfig.tags.push("node");
     if (p instanceof projectApi.DBXToolsTypeScriptProject) {
       p.tsconfig?.file.addOverride("compilerOptions.types", ["node"]);
     }
   }),
-  mixin.mixin(workspaces.and(projectPredicate.hasName("*/shared-file-scan")).and(projectPredicate.hasTag("shared")), (p) => {
-    // Pin explicit ranges: bare names resolve against the local registry, which can
-    // return stale majors (e.g. minimatch@3 lacks the `{ Minimatch }` ESM export the
-    // code imports, chokidar@1 predates the v4 API).
-    p.addDeps(
-      "@dbx-tools/shared-core@workspace:*",
-      "glob@^10.5.0",
-      "chokidar@^4.0.3",
-      "minimatch@^10.2.5",
-    );
+
+  // shared-file-scan: filesystem glob/watch deps. Pin explicit ranges: bare names
+  // resolve against the local registry, which can return stale majors (e.g.
+  // minimatch@3 lacks the `{ Minimatch }` ESM export the code imports, chokidar@1
+  // predates the v4 API).
+  mixin.mixin(pkg("*/shared-file-scan", "shared"), (p) => {
+    p.addDeps("glob@^10.5.0", "chokidar@^4.0.3", "minimatch@^10.2.5");
   }),
-  mixin.mixin(workspaces.and(projectPredicate.hasName("*/shared-projen")).and(projectPredicate.hasTag("shared")), (p) => {
+
+  // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
+  mixin.mixin(pkg("*/shared-model", "shared"), (p) => {
+    p.addDeps("zod@catalog:");
+  }),
+
+  // shared-projen: the projen engine, renamed to @dbx-tools/projen. Node-tagged,
+  // carries the engine's toolchain deps, exports its subpath entrypoints, and
+  // compiles index.ts + tasks/ outside src/.
+  mixin.mixin(pkg("*/shared-projen", "shared"), (p) => {
     p.package.addField("name", projectApi.identifier(p.root).withName("projen").packageName);
     p.dbxToolsConfig.tags.push("node");
     p.addDeps(
@@ -96,7 +140,6 @@ project.with(
       "typescript@catalog:",
       "is-identifier@^1",
       "@dbx-tools/shared-file-scan@workspace:*",
-      "@dbx-tools/shared-core@workspace:*",
     );
     p.package.addField("exports", {
       ".": "./index.ts",
@@ -104,15 +147,13 @@ project.with(
       "./engine-root": "./src/engine-root.ts",
       "./package.json": "./package.json",
     });
-    if (p instanceof projectApi.DBXToolsTypeScriptProject) {
-      p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
-      p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
-      p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
-      p.tsconfig?.addInclude("index.ts");
-      p.tsconfig?.addInclude("tasks/**/*.ts");
-    }
+    applyRootDirTsconfig(p, "index.ts", "tasks/**/*.ts");
   }),
-  mixin.mixin(workspaces.and(projectPredicate.hasName("*/cli-dbx-tools")).and(projectPredicate.hasTag("cli")), (p) => {
+
+  // cli-dbx-tools: the published CLI, renamed to the bare scope @dbx-tools/cli.
+  // Tagged `cli` (not `shared`), so it adds its own shared-core dep. Ships the
+  // `dbxtools` bin and compiles index.ts + bin/ outside src/.
+  mixin.mixin(pkg("*/cli-dbx-tools", "cli"), (p) => {
     p.package.addField("name", SCOPE);
     p.package.file.readonly = false;
     p.package.addField("publishConfig", {
@@ -126,17 +167,9 @@ project.with(
       "./package.json": "./package.json",
     });
     p.addDeps("@dbx-tools/shared-core@workspace:*", "pnpm");
-    if (p instanceof projectApi.DBXToolsTypeScriptProject) {
-      p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
-      p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
-      p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
-      p.tsconfig?.addInclude("index.ts");
-      p.tsconfig?.addInclude("bin/**/*.ts");
-    }
-  })
+    applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
+  }),
 );
-
-
 
 applyExampleWorkspaces(project);
 
