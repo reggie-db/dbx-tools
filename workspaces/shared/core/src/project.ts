@@ -1,7 +1,5 @@
+import { spawnSync } from "node:child_process";
 import { Stats, statSync } from "node:fs";
-import { spawnSync, SyncExecOptions } from "./exec";
-import { memoize } from "./function";
-import { OneOrMany } from "./iterable";
 import { dirname, join, resolve } from "node:path";
 
 
@@ -21,17 +19,16 @@ function statPath(path: string): Stats | undefined {
 }
 
 
-function directoryCommand(command: string, args: string[], options?: SyncExecOptions): string | undefined {
-    const normalizedOptions: SyncExecOptions = {
-        ...options,
-        stdin: "ignore",
-        stderr: "ignore",
-        stdout: "capture",
-        check: false,
-        trim: true,
+/**
+ * because this is crucial do not use exec.spawnSync
+ */
+function directoryCommand(command: string, args: string[], cwd: string): string | undefined {
+    const result = spawnSync(command, args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
+    if (result.status === 0) {
+        const output = result.stdout.toString().trim();
+        return statPath(output)?.isDirectory() ? output : undefined;
     }
-    const output = spawnSync(...[command, ...args, normalizedOptions]).stdout;
-    return statPath(output)?.isDirectory() ? output : undefined;
+    return undefined;
 }
 
 const rootDirectoryCommands: Record<string, [string, string[]]> = {
@@ -57,7 +54,7 @@ function rootDirectory(name: keyof typeof rootDirectoryCommands, cwd?: string): 
             return cached!.path;
         }
     }
-    const path = directoryCommand(command, args, { cwd });
+    const path = directoryCommand(command, args, cwd);
     if (cache) {
         rootDirectoryDefaultCache.set(name, { cwd, path });
     }
