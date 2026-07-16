@@ -133,6 +133,12 @@ project.with(
     });
   }),
 
+  // shared-genie: browser-safe Genie wire contracts (zod schemas that extend the
+  // generated SDK shapes) + the high-level chat event vocabulary and detectors.
+  mixin.mixin(pkg("*/shared-genie", "shared"), (p) => {
+    p.addDeps("zod@catalog:", "@dbx-tools/shared-sdk-model@workspace:*");
+  }),
+
   // shared-projen: the projen engine, renamed to @dbx-tools/projen. Node-tagged,
   // carries the engine's toolchain deps, exports its subpath entrypoints, and
   // compiles index.ts + tasks/ outside src/.

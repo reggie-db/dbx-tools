@@ -14,6 +14,7 @@ packages:
   - workspaces/cli/dbx-tools
   - workspaces/shared/core
   - workspaces/shared/file-scan
+  - workspaces/shared/genie
   - workspaces/shared/model
   - workspaces/shared/projen
   - workspaces/shared/sdk-model

@@ -38,8 +38,10 @@
  * `unknown` (codegen output is a pure data-shape surface; peer SDK runtime
  * modules don't belong here).
  *
- * `ts-to-zod` and `typescript` are loaded lazily (heavy, and only needed for
- * `dbxtools codegen`), so importing this module stays cheap.
+ * `ts-to-zod` and `typescript` are loaded lazily (heavy, and only needed when
+ * codegen actually runs), so importing this module stays cheap. Codegen runs as
+ * part of synth's post-synthesize pass (see `GeneratedSource` in `project.ts`);
+ * SDK `.d.ts` inputs change rarely, so there's no separate task or watcher.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -338,17 +340,4 @@ export function generateCodegen(): string[] {
     written.push(generatePackage(tsRuntime, generate, target.dir, target.inputs));
   }
   return written;
-}
-
-/** True if a changed path is a codegen input for any package (triggers a rerun). */
-export function isCodegenInput(path: string): boolean {
-  const posix = path.replace(/\\/g, "/");
-  return workspacePackages().some((p) => {
-    const inputs = codegenInputs(p.dir);
-    if (!inputs) return false;
-    return inputs.some((raw) => {
-      const { source } = parseInputArg(raw);
-      return resolveInputSource(source, p.dir).replace(/\\/g, "/") === posix;
-    });
-  });
 }

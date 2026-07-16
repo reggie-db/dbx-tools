@@ -63,8 +63,8 @@ shared            LEAF   ✅ DONE (folded into shared-core)
 sdk-shared        LEAF   ✅ DONE (as shared-sdk-model, via new codegen subsystem)
 model-shared      LEAF   ✅ DONE (as shared-model)
 appkit-email-shared LEAF        (zod contract, feature-specific — not started)
-genie-shared      → sdk-shared, shared   ⏭  NEXT (unblocked)
-genie             → genie-shared, shared (+ @databricks/sdk-experimental)
+genie-shared      → sdk-shared, shared   ✅ DONE (as shared-genie)
+genie             → genie-shared, shared (+ @databricks/sdk-experimental)   ⏭  NEXT (server driver, big)
 model             → model-shared, shared
 model-proxy       → model, shared
 appkit-config     → shared
@@ -87,7 +87,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `8a69baa` | Fix shared mixin self-dependency + negated-guard narrowing in `predicate.ts`. |
 | `96b5357` | Port `model-shared` → `@dbx-tools/shared-model` (agnostic `[shared]`, zod). Tidy `.projenrc.ts` (extract `pkg()` + `applyRootDirTsconfig()` helpers, section headers, drop stray `console.log`). |
 | `cf4a75b` | Rename shared-model `protocol.ts` → `model.ts`; force-add its test. |
-| (pending commit) | **Codegen subsystem + `shared-sdk-model`** — see below. |
+| `8c94f10` | **Codegen subsystem + `shared-sdk-model`** — see below. |
+| (pending commit) | **Codegen on synth (drop task/watch) + port `genie-shared` → `@dbx-tools/shared-genie`** — see below. |
 
 ### shared-core surface now available
 
@@ -105,52 +106,46 @@ pre-existing `exec`, `functionModule` (memoize), `iterable`, `predicate`,
 `stringUtils.tokenizeWithOptions` → `string.tokenizeWithOptions`,
 `commonUtils.poll` → `async.poll`, `commonUtils.fnvHash` → `hash.fnvHash`.
 
-## Codegen subsystem (NEW — this session, pending commit)
+## Codegen subsystem (commit `8c94f10`; refined to synth-time in the pending commit)
 
-Ported `-js`'s `dbxtools codegen` into the projen engine, mirroring
-`openapi.ts` exactly (discovery by manifest field, lazy heavy-dep load,
-read-only stamped output, task + `--watch` + `sync.ts` watcher).
+Ported `-js`'s `dbxtools codegen` into the projen engine.
 
 Files:
-- `workspaces/shared/projen/src/codegen.ts` — `generateCodegen()` +
-  `isCodegenInput()`. Scans `workspacePackages()` for a `package.json`
-  `codegen.inputs` field, runs each `.d.ts` through `stripImports` (TS compiler
-  API drops imports, rewrites imported type refs → `unknown`) + `preprocess`
-  (export-promote, JSDoc → `@description`) → `ts-to-zod`. Writes read-only
-  `src/<name>.ts` (schemas + inferred types), cleans stale generated modules.
-  Uses `header()`/`makeReadonly()`/`makeWritable()`/`isReadonly()` from
+- `workspaces/shared/projen/src/codegen.ts` — `generateCodegen()`. Scans
+  `workspacePackages()` for a `package.json` `codegen.inputs` field, runs each
+  `.d.ts` through `stripImports` (TS compiler API drops imports, rewrites
+  imported type refs → `unknown`) + `preprocess` (export-promote, JSDoc →
+  `@description`) → `ts-to-zod`. Writes read-only `src/<name>.ts` (schemas +
+  inferred types), cleans stale generated modules. Uses
+  `header()`/`makeReadonly()`/`makeWritable()`/`isReadonly()` from
   `generated.ts`. **No Bun APIs** — portable Node fs.
-- `workspaces/shared/projen/tasks/codegen.ts` — one-shot (regen + re-synth) or
-  `--watch` (regen + rebuild barrels on input change). Mirrors `openapi.ts`
-  task.
-- `src/project.ts` — registered `codegen` task in `registerRootTasks`.
-- `tasks/sync.ts` — added `codegen --watch` to the `concurrently` watcher set.
-- `.projenrc.ts` — added `ts-to-zod` to the `shared-projen` engine deps;
-  added `@databricks/sdk-experimental` catalog entry; added the
-  `shared-sdk-model` mixin (zod dep, SDK devDep, `codegen.inputs` field).
+- `src/project.ts` — the post-synth component (renamed `GeneratedBarrels` →
+  `GeneratedSource`) now runs `generateCodegen()` then `generateBarrels()` on
+  every synth's `postSynthesize` pass (after `NodeProject`'s own install, so
+  `node_modules/...` inputs resolve; before barrels, so a freshly generated
+  module gets namespaced in the same pass).
+- `.projenrc.ts` — `ts-to-zod` in the `shared-projen` engine deps;
+  `@databricks/sdk-experimental` catalog entry; the `shared-sdk-model` mixin
+  (zod dep, SDK devDep, `codegen.inputs` field).
 
 Engine dep added: **`ts-to-zod`** (only new external dep; uses the already-present
-`typescript`). Verified: `dbxtools codegen` generated 74 zod schemas from the
-Databricks dashboards `.d.ts` into `workspaces/shared/sdk-model/src/dashboards.ts`
-(read-only), barrel exposes `dashboards`, compiles clean.
+`typescript`). Verified: synth generates 74 zod schemas from the Databricks
+dashboards `.d.ts` into `workspaces/shared/sdk-model/src/dashboards.ts`
+(read-only, idempotent), barrel exposes `dashboards`, compiles clean.
 
-### ⚠️ Known rough edge: chicken-and-egg bootstrap
+### Codegen runs on synth — no task, no watcher (pending commit)
 
-Auto-discovery only sees a package once its `src/` holds a module file, but
-codegen writes INTO `src/` — so a brand-new codegen-only package isn't
-discovered until it has content, and codegen (which reads `workspacePackages()`)
-won't generate into an undiscovered package. **Worked around** this session by
-seeding a one-line stub `src/dashboards.ts`, synthing (package discovered,
-`package.json` written with the `codegen` field), then running `dbxtools
-codegen` (overwrites the stub). Once generated + committed, the file is present
-so future clones/synths are fine.
+Per the user: codegen inputs (the SDK `.d.ts`) change rarely, so a standalone
+`codegen` task and a `sync --watch` watcher are overkill. Removed both
+(`registerRootTasks` no longer registers `codegen`; the `codegen --watch` entry
+is gone from `tasks/sync.ts`; `tasks/codegen.ts` and the now-unused
+`isCodegenInput` export are deleted). Codegen now runs only as part of synth's
+post-synthesize pass (see `GeneratedSource`). This also dissolves the old
+chicken-and-egg bootstrap note: a brand-new codegen package's `src/` is seeded
+by the same synth that discovers it (post-synth runs after discovery), so no
+manual stub is needed going forward.
 
-**Follow-up to consider (ask user):** make `codegen` discovery independent of
-`workspacePackages()` — scan the filesystem for any `package.json` with a
-`codegen` field (like `-js` did) so a codegen-only package needs no seed. Or
-run codegen as part of the synth pre-pass. Low priority; the seed works.
-
-## `shared-sdk-model` (NEW — this session, pending commit)
+## `shared-sdk-model` (commit `8c94f10`)
 
 - `workspaces/shared/sdk-model` → `@dbx-tools/shared-sdk-model`, tag
   `[shared]`. `zod` runtime dep, `@databricks/sdk-experimental` devDep,
@@ -162,42 +157,61 @@ run codegen as part of the synth pre-pass. Low priority; the seed works.
   present: `genieSpaceSchema`, `messageStatusSchema`, `genieQueryAttachmentSchema`,
   `genieAttachmentSchema`, `genieMessageSchema` (+ `MessageStatus` type).
 
-## ⏭ NEXT: port `genie-shared` → `@dbx-tools/shared-genie`
+## `shared-genie` (NEW — pending commit)
 
-Scope agreed with user: **genie-shared only** this pass (browser-safe zod
-contracts + event vocabulary + detectors). The server-side `genie` package
-(chat/space driver) is a SEPARATE, larger follow-up (needs
-`@databricks/sdk-experimental` at runtime + `apiUtils`/`logUtils`/`commonUtils`
-from `-js shared` that aren't in shared-core yet).
+Ported `-js genie-shared` → `@dbx-tools/shared-genie`, tag `[shared]`
+(browser-safe zod contracts + event vocabulary + detectors). Server-side `genie`
+(chat/space driver) is a separate, larger follow-up — see NEXT.
 
-Steps:
-1. Create `workspaces/shared/genie/src/` with two modules (rename `protocol.ts`
-   per the naming rule — suggest **`genie-model.ts`** so the barrel reads
-   `genieModel.GenieMessageSchema`; keep **`event.ts`** as-is):
-   - `genie-model.ts` ← `-js genie-shared/src/protocol.ts` (550 lines). Wire
-     schemas that `.extend()` the SDK schemas + event vocabulary + status
-     helpers.
-   - `event.ts` ← `-js genie-shared/src/event.ts` (362 lines). Event detectors
-     over `GenieMessage` snapshots; imports from `./protocol.js` → `./genie-model`.
-2. **Repoint imports:**
-   - `import { …Schema, type MessageStatus } from "@dbx-tools/sdk-shared"` →
-     `from "@dbx-tools/shared-sdk-model"` — BUT that barrel namespaces as
-     `dashboards`, so it's `import { dashboards } from "@dbx-tools/shared-sdk-model"`
-     then `dashboards.genieMessageSchema`. **Decision needed:** either (a) import
-     the namespace and alias (`const { genieMessageSchema: SDKGenieMessageSchema }
-     = dashboards`), or (b) have sdk-model also flat-re-export via a hand-written
-     `src/index`-style module. Recommend (a) to keep the generated barrel clean.
-   - `import { stringUtils } from "@dbx-tools/shared"` →
-     `import { string } from "@dbx-tools/shared-core"`; `stringUtils.tokenizeWithOptions`
-     → `string.tokenizeWithOptions` (the only shared helper genie-shared uses).
-   - Strip all `.js` extensions.
-3. **Mixin in `.projenrc.ts`:** add `pkg("*/shared-genie", "shared")` mixin
-   adding `zod@catalog:` + `@dbx-tools/shared-sdk-model@workspace:*`. (shared-core
-   comes free via the blanket shared mixin.)
-4. **Tests:** `-js` has no `genie-shared` test dir; the event tests live in the
-   `genie` package (`genie/test/event.test.ts`). Consider porting the
-   event-detector portions that only need genie-shared, to `node:test`.
-5. Synth, barrels, compile, verify. Force-add any test. Commit + push.
+- `src/genie-model.ts` ← `-js genie-shared/src/protocol.ts`. Renamed per the
+  naming rule so the barrel reads `genieModel.GenieMessageSchema`. SDK schemas
+  imported via **option (a)**: `import { dashboards } from
+  "@dbx-tools/shared-sdk-model"`, then destructure-alias the 5 it extends
+  (`const { genieMessageSchema: SDKGenieMessageSchema, ... } = dashboards`), and
+  `export type MessageStatus = dashboards.MessageStatus`. Keeps the generated
+  sdk-model barrel clean (no hand-written flat re-export).
+- `src/event.ts` ← `-js genie-shared/src/event.ts`. Import repointed
+  `./protocol.js` → `./genie-model`.
+- Shared helper repoint: `stringUtils.tokenizeWithOptions` →
+  `string.tokenizeWithOptions` (`import { string } from "@dbx-tools/shared-core"`).
+- Mixin: `pkg("*/shared-genie", "shared")` adds `zod@catalog:` +
+  `@dbx-tools/shared-sdk-model@workspace:*` (shared-core is free via the blanket
+  shared mixin).
+- **Test:** ported `-js genie/test/event.test.ts` → `test/event.test.ts` on
+  `node:test` + `node:assert/strict` (force-added past the `.test.*` gitignore).
+  38 tests pass. One porting nuance: `node:assert` `deepEqual` is strict about
+  present-but-`undefined` keys where Bun's `toEqual` ignored them, so exact
+  detector-output comparisons go through a local `equalPayload` helper that
+  prunes `undefined` keys first.
+
+### ⚠️ Pre-existing rough edge: cross-package typecheck of shared-core source
+
+`shared-genie`'s own code type-checks clean, but `pnpm exec projen compile` in
+genie fails with ~32 errors — **all** inside `../core/src/*` (node-using modules
+like `exec`/`project`/`value`). Cause: source-first package resolution points
+`@dbx-tools/shared-core` at its `index.ts`, so a browser-safe (`shared`-tagged,
+`types: []`, no node lib) consumer type-checks core's node-dependent source
+under its own node-free tsconfig. **This is pre-existing, not introduced here:**
+`shared-file-scan` (already committed/DONE) imports core while `shared`-tagged
+and fails identically. `shared-model` dodges it only by not importing core;
+`shared-projen` dodges it by being `node`-tagged. Tests (via `tsx`) and runtime
+are unaffected — only whole-program `tsc --build` from a browser-safe core
+consumer trips. **Follow-up to consider (ask user):** either split core's
+node-only modules behind a `types`/`exports` subpath so browser consumers only
+see the agnostic surface, or wire TS project references + `types` so a `shared`
+consumer type-checks against core's emitted `.d.ts` (agnostic) rather than its
+source. Not blocking; deferred.
+
+## ⏭ NEXT: port `genie` (server chat/space driver) → `@dbx-tools/…`
+
+The server-side driver that consumes `shared-genie`. Bigger: needs
+`@databricks/sdk-experimental` at **runtime** (WorkspaceClient) and pulls
+`apiUtils`/`logUtils`/`commonUtils` from `-js shared` that are NOT in shared-core
+yet — so it forces a shared-core server-surface expansion first. Likely
+`node`-tagged. Scope with the user before starting; consider whether
+`apiUtils`/`logUtils` land in shared-core (node-tagged additions) or a new
+server-shared package. The `chat.ts`/`poll-chat.ts` tests in `-js genie/test`
+port alongside it (the pure event tests already moved to shared-genie).
 
 ## Later passes (not yet scoped)
 

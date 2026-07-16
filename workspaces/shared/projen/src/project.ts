@@ -10,20 +10,11 @@ import { iterable, string } from "@dbx-tools/shared-core";
 import { ignore, match } from "@dbx-tools/shared-file-scan";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import {
-  Component,
-  IgnoreFile,
-  Project,
-  type TaskOptions,
-  javascript,
-  typescript,
-} from "projen";
+import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
 import { generateBarrels } from "./barrels";
-import {
-  DBXToolsConfig,
-  type DBXToolsConfigOptions,
-} from "./dbx-tools-config";
+import { generateCodegen } from "./codegen";
+import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config";
 import { resolvePkgRoot } from "./engine-root";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
 import { DBXToolsRelease } from "./publish";
@@ -134,14 +125,10 @@ export class PackageIdentifier {
   }
 }
 
-
-
 /** Parsed `package.json` `name` for a projen `NodeProject`. */
 export function identifier(project: Project): PackageIdentifier {
   return PackageIdentifier.parse(project.name) ?? new PackageIdentifier(undefined, project.name);
 }
-
-
 
 /** Root-only `package.json` fields. */
 function configureRootPackage(project: javascript.NodeProject): void {
@@ -231,13 +218,13 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     devDeps: ["@types/node@^24.6.0"],
     ...(isRoot
       ? {
-        prettier: true,
-        prettierOptions: {
-          settings: PRETTIER_SETTINGS,
-          ignoreFile: true,
-          ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns()] },
-        },
-      }
+          prettier: true,
+          prettierOptions: {
+            settings: PRETTIER_SETTINGS,
+            ignoreFile: true,
+            ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns()] },
+          },
+        }
       : {}),
     ...options,
     ...copiedGitIgnoreOptions(options),
@@ -286,7 +273,6 @@ function defaultTypeScriptProjectOptions(
   };
 }
 
-
 // Pinned to match the subproject defaults so pnpm resolves a single tsx/typescript
 // across the workspace (a bare name -> `*` could pull a second, newer major).
 const DEV_DEPS_ROOT: string[] = ["tsx@^4.23.0", "typescript@^5.9.3"];
@@ -294,9 +280,9 @@ const DEV_DEPS_ROOT: string[] = ["tsx@^4.23.0", "typescript@^5.9.3"];
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export interface DBXToolsProjectOptions
   extends
-  Partial<javascript.NodeProjectOptions>,
-  DBXToolsConfigOptions,
-  DBXToolsPNPMWorkspaceOptions {
+    Partial<javascript.NodeProjectOptions>,
+    DBXToolsConfigOptions,
+    DBXToolsPNPMWorkspaceOptions {
   /**
    * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
    * the (resolved) project name; a leading `@` is optional.
@@ -367,13 +353,9 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
     preSynthesizeProject(this);
   }
 
-
-
   public get packageIdentifier(): PackageIdentifier {
     return identifier(this);
   }
-
-
 }
 
 /**
@@ -385,7 +367,8 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
  */
 export class DBXToolsTypeScriptProject
   extends typescript.TypeScriptProject
-  implements DBXToolsProject {
+  implements DBXToolsProject
+{
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
   pnpmWorkspace?: DBXToolsPNPMWorkspace;
@@ -436,21 +419,27 @@ export class DBXToolsTypeScriptProject
     preSynthesizeProject(this);
   }
 
-
-
   public get packageIdentifier(): PackageIdentifier {
     return identifier(this);
   }
 }
 
 /**
- * Regenerates every package's root `index.ts` barrel after synth - "barrels on
- * resynth" for the plain `projen` path. projen only runs `postSynthesize` when
- * `PROJEN_DISABLE_POST` is unset, so this is skipped during the watcher's fast
- * `runSynth` (which sets it); there barrels are rebuilt explicitly.
+ * Regenerates the repo's generated source after synth: first the codegen
+ * modules (ts-to-zod schemas from each `codegen`-declaring package's upstream
+ * `.d.ts`), then every package's root `index.ts` barrel - so a freshly
+ * generated module is namespaced into its barrel in the same pass. This is the
+ * "generate on resynth" path for plain `projen`; codegen inputs (SDK `.d.ts`)
+ * change rarely, so a synth-time regen is enough and there's no separate watch.
+ *
+ * projen only runs `postSynthesize` when `PROJEN_DISABLE_POST` is unset, so this
+ * is skipped during the watcher's fast `runSynth` (which sets it); there barrels
+ * are rebuilt explicitly. It also runs after `NodeProject`'s own post-synth
+ * install, so codegen's `node_modules/...` inputs resolve.
  */
-class GeneratedBarrels extends Component {
+class GeneratedSource extends Component {
   public override postSynthesize(): void {
+    generateCodegen();
     generateBarrels();
   }
 }
@@ -458,7 +447,6 @@ class GeneratedBarrels extends Component {
 function packageNameFor(scope: string, relPath: string): string {
   return PackageIdentifier.of(scope, relPath).packageName;
 }
-
 
 /**
  * Resolve `{ name, scope }` from options. `name` is `options.name`, else
@@ -541,7 +529,6 @@ function registerRootTasks(project: javascript.NodeProject): void {
   applyTasks(project, {
     barrels: { exec: taskScript(project, "barrels.ts") },
     openapi: { exec: taskScript(project, "openapi.ts") },
-    codegen: { exec: taskScript(project, "codegen.ts") },
     clean: { exec: taskScript(project, "clean.ts"), receiveArgs: true },
     // `receiveArgs` forwards `--watch`, so `pnpm exec projen sync --watch` syncs once
     // then starts the single file-scan watcher loop.
@@ -573,7 +560,6 @@ function initProject(
   project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
   options: DBXToolsProjectOptions,
 ): void {
-
   if (project.parent) {
     project.package.file.readonly = true;
     // Only a ROOT configures the workspace; a child just swaps its default-laden
@@ -718,7 +704,7 @@ function initProject(
     project.with(...enabledTagMixins.map((t) => WORKSPACE_TAG_MIXINS[t]));
   }
 
-  new GeneratedBarrels(project);
+  new GeneratedSource(project);
   if (project.release) new DBXToolsRelease(project as DBXToolsNodeProject);
 }
 
