@@ -3,4 +3,4 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as classify from "./src/classify";
-export * as protocol from "./src/protocol";
+export * as model from "./src/model";

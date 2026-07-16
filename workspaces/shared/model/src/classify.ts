@@ -24,7 +24,7 @@
  * response without server dependencies.
  */
 
-import { ModelClass, type ServingEndpointSummary } from "./protocol";
+import { ModelClass, type ServingEndpointSummary } from "./model";
 
 /** Task hint Databricks stamps on chat completion endpoints. */
 const CHAT_TASK = "llm/v1/chat";
