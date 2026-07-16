@@ -1,13 +1,27 @@
 #!/usr/bin/env -S npx tsx
-import { generateOpenapi } from "../src/openapi";
+import { generateBarrels } from "../src/barrels";
+import { logger, pluralize } from "../src/log";
+import { generateOpenapi, isTsoaController } from "../src/openapi";
 import { runSynth } from "../src/scaffold";
-import { startOpenapiWatch } from "../src/watch";
+import { watchLoop, watchRoots } from "../src/watch";
+
+const log = logger.withTag("projen:openapi");
 
 if (process.argv.includes("--watch")) {
-  // Watch mode: regenerate on controller edits only; `projen --watch` (running
-  // alongside under `concurrently`) owns re-synth of the generated packages.
-  startOpenapiWatch();
+  // Watch the package roots; a changed tsoa controller regenerates the openapi
+  // packages (spec + client) and rebuilds just their barrels. The projenrc watcher
+  // (alongside under `concurrently`) owns full re-synth, so no re-synth here.
+  watchLoop("openapi", watchRoots(), async (changed) => {
+    if (!changed.some(isTsoaController)) return;
+    const dirs = await generateOpenapi();
+    if (dirs.length) {
+      generateBarrels({ dirs });
+      log.success(`regenerated openapi (${pluralize(dirs.length, "package")})`);
+    }
+  });
 } else {
+  // One-shot: regenerate, then re-synth so any newly created openapi folder becomes a
+  // workspace member (a new package needs install + linking, which the watch path skips).
   const dirs = await generateOpenapi();
   if (dirs.length > 0) runSynth({ post: true });
 }

@@ -1,36 +1,32 @@
 /**
- * The barrels + openapi file watchers behind `projen sync --watch`.
+ * Generic file-watch utility shared by the `sync --watch` task watchers.
  *
- * `sync --watch` runs three long-running processes under `concurrently` (see
- * `tasks/sync.ts`): projen's own `projen --watch` owns re-synth (it re-runs
- * `.projenrc.ts` on any tree change - touch `.projenrc.ts` to force one), while
- * these two focused watchers keep generated OUTPUT fresh without waiting for a
- * full synth:
+ * `watchLoop` wraps `@dbx-tools/shared-file-scan`'s chokidar watcher with the
+ * behavior every dbx-tools watcher wants: it debounces bursts, serializes runs (a
+ * change mid-run re-runs once afterwards), drops generated paths (barrels/manifests/
+ * decls - reacting to our own output would loop), and shuts down on SIGINT. Callers
+ * pass the paths to watch and an `onBatch` handler; the concern-specific glue - which
+ * barrels to rebuild, when to regenerate openapi, when to re-synth - lives in the task
+ * that owns it (`tasks/barrels.ts`, `tasks/openapi.ts`, `tasks/projenrc.ts`), each
+ * forwarding here rather than duplicating the watch machinery.
  *
- *   1. **barrel watch** (`startBarrelWatch`) - a source edit inside a package
- *      rebuilds just that package's `index.ts` barrel.
- *   2. **openapi watch** (`startOpenapiWatch`) - a changed file matching
- *      {@link isTsoaController} regenerates the openapi packages (spec + client) and
- *      their barrels.
- *
- * Generated files matched by {@link isGeneratedFile} are ignored so a watcher does
- * not re-trigger itself on its own barrel/manifest output; vendor/build dirs
- * (`node_modules`/`dist`/`lib`/`.projen`/...) are pruned by file-scan's built-in
- * ignore groups. {@link watchFiles} from `@dbx-tools/shared-file-scan` owns the
- * chokidar wiring; everything here is thin glue.
+ * `watchRoots()` is the one shared input - the workspace package roots where every
+ * watchable source file lives - so the barrels and openapi watchers don't each
+ * recompute it. {@link watchFiles} owns the chokidar wiring; this is thin glue.
  */
-import { isAbsolute, resolve, sep } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { watch as fileScan } from "@dbx-tools/shared-file-scan";
-import { generateBarrels } from "./barrels";
 import { logger } from "./log";
-import { generateOpenapi, isTsoaController } from "./openapi";
-import { isGeneratedFile, recordedRoots, repoRoot, workspacePackages } from "./workspace";
+import { isGeneratedFile, recordedRoots, repoRoot } from "./workspace";
 
 const log = logger.withTag("projen:watch");
 const DEBOUNCE_MS = 250;
 
+/** file-scan's built-in ignore-group toggles (`{ dot, temp, test, lock, defaults }`). */
+export type IgnoreGroupOptions = NonNullable<Parameters<typeof fileScan.watchFiles>[1]>["ignoreOptions"];
+
 /** The workspace package roots (absolute), where every watchable source file lives. */
-function watchRoots(): string[] {
+export function watchRoots(): string[] {
   return recordedRoots().map((r) => resolve(repoRoot, r));
 }
 
@@ -43,21 +39,22 @@ function ignoredPath(path: string): boolean {
   return isGeneratedFile(abs);
 }
 
-/** The recorded package dir that owns `abs`, if any (for a targeted barrel rebuild). */
-function ownerPackageDir(abs: string, pkgDirs: string[]): string | undefined {
-  return pkgDirs.find((dir) => abs === dir || abs.startsWith(dir + sep));
-}
-
 /**
  * Shared debounce/flush machinery backed by `watchFiles`. Watches `paths` and, on
  * each debounced batch of non-generated changes, calls `onBatch` with the absolute
  * changed paths. Runs are serialized (a change during a run re-runs once afterwards);
  * watches until SIGINT.
+ *
+ * `ignoreOptions` toggles file-scan's built-in ignore groups for this watcher only
+ * (e.g. the projenrc watcher passes `{ dot: false }` so its lone dotfile target,
+ * `.projenrc.ts`, isn't pruned by the default dotfile group and left with nothing to
+ * watch - which would let the process exit immediately).
  */
-function watchLoop(
+export function watchLoop(
   tag: string,
   paths: string[],
   onBatch: (changed: string[]) => void | Promise<void>,
+  ignoreOptions?: IgnoreGroupOptions,
 ): void {
   const pending = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -91,6 +88,7 @@ function watchLoop(
     cwd: repoRoot,
     ignoreInitial: true,
     ignore: (path) => ignoredPath(path),
+    ignoreOptions,
   });
   watcher.on("all", (_event, path) => {
     pending.add(path);
@@ -103,40 +101,5 @@ function watchLoop(
   process.on("SIGINT", () => {
     void watcher.close();
     process.exit(0);
-  });
-}
-
-/**
- * Watch the workspace package roots; a content edit inside an existing package
- * rebuilds just that package's `index.ts` barrel (no re-synth - `projen --watch`
- * owns that). Paths ignored via {@link isGeneratedFile} never drive a rebuild.
- */
-export function startBarrelWatch(): void {
-  watchLoop("barrels", watchRoots(), (changed) => {
-    const pkgDirs = workspacePackages().map((p) => p.dir);
-    const dirs = new Set<string>();
-    for (const p of changed) {
-      const owner = ownerPackageDir(p, pkgDirs);
-      if (owner) dirs.add(owner);
-    }
-    const n = generateBarrels(dirs.size ? { dirs: [...dirs] } : {});
-    if (n) log.success(`rebuilt ${n} barrel${n === 1 ? "" : "s"}`);
-  });
-}
-
-/**
- * Watch the workspace package roots; a changed file that matches {@link isTsoaController}
- * regenerates the openapi packages (spec + client) and rebuilds their barrels.
- * openapi's heavy deps (tsoa/typescript/openapi-typescript) load lazily inside
- * `generateOpenapi`.
- */
-export function startOpenapiWatch(): void {
-  watchLoop("openapi", watchRoots(), async (changed) => {
-    if (!changed.some(isTsoaController)) return;
-    const dirs = await generateOpenapi();
-    if (dirs.length) {
-      generateBarrels({ dirs });
-      log.success(`regenerated openapi (${dirs.length} package${dirs.length === 1 ? "" : "s"})`);
-    }
   });
 }

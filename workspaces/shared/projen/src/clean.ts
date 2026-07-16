@@ -1,8 +1,9 @@
 /**
  * `dbxtools clean`: enumerate the workspace's generated files (plus every
  * `node_modules` directory) and delete a chosen subset. This is the pure filesystem
- * half; the interactive picker (a `@clack/prompts` multiselect, all preselected)
- * lives in the CLI (`bin/dbxtools.ts`).
+ * half - reusable enumerate/remove helpers; the task that drives them (argv `-y`, the
+ * `@clack/prompts` multiselect picker with all preselected, the TTY guard) lives in
+ * `tasks/clean.ts`, which forwards to these functions.
  *
  * "Generated" is detected structurally, not by a hardcoded list: every file this
  * toolchain writes is set READ-ONLY (projen's own config + the barrelsby barrels; see

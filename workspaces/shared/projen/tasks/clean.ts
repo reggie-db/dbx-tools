@@ -1,7 +1,7 @@
 #!/usr/bin/env -S npx tsx
 import { relative } from "node:path";
 import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean";
-import { logger } from "../src/log";
+import { logger, pluralize } from "../src/log";
 import { repoRoot, toPosix } from "../src/workspace";
 
 const log = logger.withTag("projen:clean");
@@ -24,7 +24,7 @@ const regenHint = (removedNodeModules: boolean): string =>
 if (yes) {
   const n = removePaths(targets);
   log.success(
-    `removed ${n} path${n === 1 ? "" : "s"} (${files.length} generated + ${nodeModules.length} node_modules) - ${regenHint(nodeModules.length > 0)}`,
+    `removed ${pluralize(n, "path")} (${files.length} generated + ${nodeModules.length} node_modules) - ${regenHint(nodeModules.length > 0)}`,
   );
   process.exit(0);
 }
@@ -64,4 +64,4 @@ if (picked.length === 0) {
 
 const removedNodeModules = picked.some((p) => nodeModules.includes(p));
 const n = removePaths(picked);
-clack.outro(`removed ${n} path${n === 1 ? "" : "s"} - ${regenHint(removedNodeModules)}`);
+clack.outro(`removed ${pluralize(n, "path")} - ${regenHint(removedNodeModules)}`);

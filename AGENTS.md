@@ -169,7 +169,7 @@ workspaces/
       workspace.ts                        # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
       packages.ts                         # npmNameOf, applyCompilerOptions, applyTasks, addWorkspacePackageTags, SHARED_COMPILER_OPTIONS
       barrels.ts                          # barrelsby driver (root index.ts, header + read-only)
-      watch.ts                            # barrel + openapi file watchers (startBarrelWatch/startOpenapiWatch) for `sync --watch`
+      watch.ts                            # generic file-watch util (watchLoop + watchRoots) the sync --watch task watchers forward to
       scaffold.ts                         # packageSetChanged() + runSynth({ post })
       bootstrap.ts                        # bootstraps a COMPLETELY EMPTY folder (see Commands)
       openapi.ts                          # openapi generator (tsoa controllers -> spec + client)
@@ -184,9 +184,9 @@ example-workspaces/
 ```sh
 pnpm install                 # link workspace + engine
 pnpm exec projen             # synth all generated config (+ install + barrels)
-pnpm exec projen sync --watch # watch while editing (concurrently: projen --watch + barrels + openapi watchers)
+pnpm exec projen sync --watch # watch while editing (concurrently: projenrc + barrels + openapi watchers)
 pnpm dbxtools sync           # bootstrap an empty folder, OR re-synth an existing workspace (one-shot)
-pnpm dbxtools sync --watch   # watch: projen --watch (re-synth) + barrels + openapi watchers, via concurrently
+pnpm dbxtools sync --watch   # watch: projenrc re-synth (.projenrc.ts only) + barrels + openapi watchers, via concurrently
 pnpm dbxtools barrels        # rebuild every package's root index.ts barrel
 pnpm -r compile              # type-check every package (projen's per-package compile: tsc --build)
 pnpm dbxtools openapi        # generate the openapi packages from tsoa controllers
@@ -195,12 +195,19 @@ pnpm dbxtools clean          # remove generated files (read-only ones); interact
 
 - **`projen sync --watch` is the always-on watcher** (the generated `sync` task run
   with `--watch`, also the VS Code folder-open task). `sync`'s `receiveArgs` forwards
-  `--watch` to `tasks/sync.ts`, which runs three long-running processes under
-  `concurrently`: projen's own `projen --watch` (owns re-synth - it re-runs
-  `.projenrc.ts` on any tree change; touch it to force one), plus the two focused
-  file-scan watchers `startBarrelWatch`/`startOpenapiWatch` (`watch.ts`) that keep
-  generated OUTPUT fresh without a full synth. projen `--watch` never collides with
-  the named `sync` task (it only fires for the bare `projen` synth).
+  `--watch` to `tasks/sync.ts`, which does ONE initial full synth, then runs three
+  focused watchers under `concurrently` - each its own task script sharing the generic
+  `watchLoop`/`watchRoots` (`watch.ts`), each keyed to the smallest input that can
+  invalidate its output: `tasks/projenrc.ts` (watches ONLY `.projenrc.ts`; on edit
+  runs a full re-synth + install - the intelligent stand-in for stock `projen --watch`,
+  which re-synths on ANY tree change), `tasks/barrels.ts --watch` (a source edit
+  rebuilds just that package's barrel), and `tasks/openapi.ts --watch` (a changed tsoa
+  controller regenerates the openapi packages). The concern-specific glue lives in the
+  task; `watch.ts` only owns the shared debounce/serialize/ignore-generated/SIGINT
+  machinery. Touch `.projenrc.ts` to force a re-synth for a structural change it
+  doesn't spell out (e.g. a new package folder). Stock `projen --watch` is deliberately
+  NOT used: it `fs.watch`es the whole repo recursively and re-synths (full post, so it
+  installs) on EVERY file change, so a mere source edit forced a full re-synth + install.
 - **`dbxtools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
   `pnpm init`, seed a minimal `pnpm-workspace.yaml` (so the very next step can
   approve `tsx`'s `esbuild` build script non-interactively), `pnpm add -D
@@ -214,17 +221,19 @@ projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
   `pnpm exec projen`/`dbxtools sync` to work from here on.
 - **`dbxtools sync` on an existing workspace** just runs projen once (full synth,
   installs, regenerates barrels via the post-synth component).
-- **`dbxtools sync --watch`** forwards to `projen sync --watch`, which (via
-  `concurrently`) runs `projen --watch` alongside the barrel + openapi watchers.
-  `projen --watch` does the initial synth on start and re-synths on any tree change
-  (it `fs.watch`es the whole repo recursively, full post so it installs too); the
-  barrel watcher rebuilds just the edited package's barrel, and the openapi watcher
-  regenerates the `openapi` packages when a tsoa controller changes.
-- **Barrels regenerate on every re-synth**: a post-synth projen `Component`
-  (`GeneratedBarrels` in `project.ts`) on the plain `projen`/`projen --watch` path;
-  the one-shot `dbxtools sync` `runSynth` sets `PROJEN_DISABLE_POST` (skipping the
-  component for speed) and calls `generateBarrels()` explicitly, and the standalone
-  barrel watcher rebuilds targeted barrels on edits.
+- **`dbxtools sync --watch`** forwards to `projen sync --watch`, which does one
+  initial full synth, then (via `concurrently`) runs the projenrc watcher alongside
+  the barrel + openapi watchers. The projenrc watcher re-synths (+install) ONLY when
+  `.projenrc.ts` changes; the barrel watcher rebuilds just the edited package's
+  barrel, and the openapi watcher regenerates the `openapi` packages when a tsoa
+  controller changes.
+- **Barrels regenerate on every full (post) synth**: a post-synth projen `Component`
+  (`GeneratedBarrels` in `project.ts`) runs on any `runSynth({ post: true })` - the
+  plain `pnpm exec projen`, `sync`'s initial synth, and the projenrc watcher's
+  re-synth all install and rebuild barrels through it. Fast paths skip it: the
+  standalone barrel watcher calls `generateBarrels()` directly on edits (no synth),
+  and `bootstrap` runs `runSynth` with `PROJEN_DISABLE_POST` set, doing its own
+  install + barrels afterward.
 - **`dbxtools clean`** (`clean.ts`) deletes generated files. It doesn't hardcode a
   list: every file the toolchain writes is read-only (see below), so a read-only file
   under the repo (skipping vendor/build/VCS, but INCLUDING `.projen/*`) is a clean

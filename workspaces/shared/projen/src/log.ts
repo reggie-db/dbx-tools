@@ -75,3 +75,13 @@ export const logger = createConsola({
   stderr: process.stderr,
   level: parseLogLevel(process.env.LOG_LEVEL) ?? DEFAULT_LOG_LEVEL,
 });
+
+/**
+ * Format a count with its noun, pluralizing (naive `+s`) unless the count is 1:
+ * `pluralize(1, "barrel")` -> `"1 barrel"`, `pluralize(3, "barrel")` -> `"3 barrels"`.
+ * Shared by the task result messages so the `${n} noun${n === 1 ? "" : "s"}` idiom
+ * isn't repeated in each one.
+ */
+export function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}

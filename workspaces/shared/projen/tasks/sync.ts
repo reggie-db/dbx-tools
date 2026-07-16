@@ -17,13 +17,17 @@ if (!process.argv.includes("--watch")) {
   runSynth({ post: true });
   log.success("synced");
 } else {
-  // Watch: projen's own watcher owns re-synth (re-runs `.projenrc.ts` on any tree
-  // change; touch it to force one), running alongside the focused barrels + openapi
-  // watchers under `concurrently`. `projen --watch` does the initial synth on start,
-  // so there is no separate pre-synth here.
+  // Watch: one initial full synth to bring the tree up to date, then three focused
+  // watchers under `concurrently`. The projenrc watcher is the intelligent stand-in
+  // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts`
+  // changes, while barrels/openapi keep generated OUTPUT fresh on source edits with
+  // no full synth. Touch `.projenrc.ts` to force a re-synth.
+  log.start("initial sync");
+  runSynth({ post: true });
+  log.success("synced - watching (Ctrl-C to stop)");
   const { result } = concurrently(
     [
-      { command: "pnpm exec projen --watch", name: "projen", prefixColor: "magenta" },
+      { command: `tsx "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
       { command: `tsx "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
       { command: `tsx "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
     ],
