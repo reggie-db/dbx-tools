@@ -25,7 +25,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname, relative, resolve, sep } from "node:path";
-import { exec } from "@dbx-tools/shared-core";
+import { exec, string } from "@dbx-tools/shared-core";
 import { find } from "@dbx-tools/shared-file-scan";
 import { parse } from "yaml";
 
@@ -44,13 +44,6 @@ export function toSlugParts(value: string | null | undefined): string[] {
     .split(SLUG_PARTS_REGEXP)
     .map((part) => part.replace(SLUG_PARTS_EDGE_REGEXP, "").toLowerCase())
     .filter(Boolean);
-}
-
-/**
- * Normalize a path or name fragment to kebab-case (`coolDude` -> `cool-dude`).
- */
-function toSlug(value: string): string {
-  return toSlugParts(value).join("-");
 }
 
 /**
@@ -112,9 +105,14 @@ export function escapeRegExp(s: string): string {
 
 /**
  * Convert a path segment to a kebab-case tag token (`coolDude` -> `cool-dude`).
+ *
+ * Uses the shared {@link string.toSlug} tokenizer. Unlike {@link toSlugParts}
+ * (which backs npm package naming and preserves inner `.`/`_`/`-` so the
+ * `dbx-tools` scope survives as one token), tag tokens are always single
+ * kebab-cased folder names, so the fuller tokenization is the right fit here.
  */
 function pathSegmentToTagToken(segment: string): string {
-  return toSlug(segment);
+  return string.toSlug(segment);
 }
 
 /**
