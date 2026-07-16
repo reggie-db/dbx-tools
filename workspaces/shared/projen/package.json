@@ -25,6 +25,7 @@
     "@typescript-eslint/typescript-estree": "^8",
     "barrelsby": "^2.8.1",
     "commander": "^15.0.0",
+    "concurrently": "^10.0.3",
     "consola": "^3.4.2",
     "constructs": "^10.0.0",
     "is-identifier": "^1",

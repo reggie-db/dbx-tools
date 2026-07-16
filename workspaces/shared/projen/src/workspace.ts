@@ -153,9 +153,9 @@ const GENERATED_BASENAMES = new Set([
 ]);
 
 /**
- * True if the file is one this toolchain generates (projen manifests/tsconfigs,
- * the vite config, barrels, or declaration files) - i.e. a change to it should
- * never re-trigger the watcher.
+ * True if the file matches the watcher's generated-file heuristic: projen manifest
+ * basenames, package-root barrels (`index.ts`), vite config, or declaration files.
+ * Other read-only toolchain output (e.g. openapi artifacts) is not covered here.
  */
 export function isGeneratedFile(file: string): boolean {
   const base = file.split(sep).pop() ?? "";
@@ -173,8 +173,6 @@ export function isModuleFile(file: string): boolean {
   return true;
 }
 
-export { hasExport } from "./exports";
-
 /**
  * One discovered workspace package: a `src`-bearing folder somewhere under a
  * workspace-package root, identified by that root plus the segments of its path
@@ -182,7 +180,7 @@ export { hasExport } from "./exports";
  * segments are `["ui", "app"]`.
  *
  * The relative segments drive everything downstream: the npm name
- * (`@<scope>/<segments joined by ->`), the `memberPath`/`dir`, and the
+ * (`@<scope>/<segments joined by -`), the `memberPath`/`dir`, and the
  * {@link tagCandidates} used to resolve which tag(s) apply.
  */
 export class DiscoveredPackage {
@@ -244,12 +242,13 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
 }
 
 /**
- * Package dirs under `rootAbs`, found with a single {@link findFiles} scan for module
- * files beneath any `src/`. A package is the folder that OWNS the `src/` - the
- * segments before the FIRST `src/` - so a package's own subfolders never become
- * nested packages (outermost wins). Barrels/tests/decls don't count (see
- * {@link isModuleFile}), so a `src/` holding only an `index.ts` barrel is not a
- * package. Depth is unbounded: `<root>/a/b/c/src` is discovered as `a/b/c`.
+ * Package dirs under `rootAbs`, found with a single `find.findFiles` scan from
+ * `@dbx-tools/shared-file-scan` for module files beneath any `src/`. A package is the
+ * folder that OWNS the `src/` - the segments before the FIRST `src/` - so a package's
+ * own subfolders never become nested packages (outermost wins). Barrels/tests/decls
+ * don't count (see {@link isModuleFile}), so a `src/` holding only an `index.ts`
+ * barrel is not a package. Depth is unbounded: `<root>/a/b/c/src` is discovered as
+ * `a/b/c`.
  */
 function collectPackageDirs(rootAbs: string): string[] {
   const owners = new Set<string>();
@@ -291,10 +290,10 @@ export function scanPackages(
 
 /**
  * A recorded workspace package: its path, plus the `name` and `tags` read back from
- * its own `package.json` (both written at synth, and possibly REWRITTEN by a
- * `workspacePackage` hook - e.g. a name override). `name`/`tags` fall back to the
- * folder name / path candidates when the manifest is missing or carries none (a
- * package added but not yet synthesized).
+ * its own `package.json` (both written at synth, and possibly overridden by a consumer
+ * `packageMixin` - e.g. a name override). `name`/`tags` fall back to the folder
+ * name / path candidates when the manifest is missing or carries none (a package
+ * added but not yet synthesized).
  */
 export interface WorkspacePackage {
   /** Repo-relative posix member path, e.g. `workspaces/ui/app`. */

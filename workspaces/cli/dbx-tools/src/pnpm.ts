@@ -37,7 +37,7 @@ function resolvePnpmArgvImpl(): string[] {
   }
 }
 
-/** Memoized `[command, ...prefix]` argv prefix to run pnpm via a resolved dependency. */
+/** Memoized `[command, ...prefix]` argv prefix to run pnpm (resolved install, else corepack, else npx). */
 export const resolvePnpmArgv = functionModule.memoize(resolvePnpmArgvImpl);
 
 /** Run pnpm with inherited stdio from `cwd`. */

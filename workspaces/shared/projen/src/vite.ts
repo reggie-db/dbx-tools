@@ -4,8 +4,7 @@
  * {@link ViteConfigFile} extends projen's `TextFile` and emits a generated,
  * read-only Vite config: the React plugin plus a runtime OVERRIDE chain. At Vite
  * startup the generated config looks for each unmanaged override module sitting
- * beside it (default {@link DEFAULT_VITE_OVERRIDES}: `vite.config.custom.js` then
- * `vite.config.override.js`) and, when present, merges that module's default export
+ * beside it (default {@link DEFAULT_VITE_OVERRIDES}: `vite.config.override.js`) and, when present, merges that module's default export
  * over the generated config with Vite's `mergeConfig` - in listed order, so later
  * files win and absent ones are skipped. A package thus tweaks Vite WITHOUT editing
  * the projen-owned file; pass `overridePaths` to change the chain.

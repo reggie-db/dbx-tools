@@ -2,8 +2,8 @@
  * Path matching and predicate composition for file scanning and watching.
  *
  * {@link toPathMatcher} compiles globs into {@link predicate.Predicate} values from
- * shared-core (`and` / `or` / `negate`). {@link toMatchFunction} wraps a predicate
- * for directory-pruning match functions shared by scanners and watchers.
+ * shared-core (`and` / `or` / `negate`) for use by {@link findFiles} and
+ * {@link watchFiles}.
  */
 
 import { iterable, predicate } from "@dbx-tools/shared-core";

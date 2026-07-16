@@ -201,8 +201,9 @@ export function publish(
 }
 
 /**
- * Root release wiring when `release` is enabled. Adds a `publish` task and
- * retargets `compile` / `package` / `release:tag` for the engine publish flow.
+ * Root release wiring when `release` is enabled. Adds a `publish` task and, when
+ * `release:tag` is not yet present, retargets `compile` / `package` / `release:tag`
+ * for the engine publish flow.
  */
 export function configureRelease(project: DBXToolsNodeProject): void {
   if (!project.release) return;

@@ -31,6 +31,7 @@ catalog:
   "@clack/prompts": ^1.7.0
   openapi-fetch: ^0.17.0
   tsoa: ^6.6.0
+  concurrently: ^10.0.3
   pnpm: ^11.0.6
   "@databricks/appkit": ^0.43.0
   "@databricks/appkit-ui": ^0.43.0

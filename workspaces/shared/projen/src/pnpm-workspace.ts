@@ -3,17 +3,13 @@
  *
  * `DBXToolsPNPMWorkspace` extends projen's `YamlFile` and is exposed as the
  * `pnpmWorkspace` field on a tree ROOT (only a root emits the file, so on a child
- * package the field is `undefined` - like projen's optional `project.eslint`). A
- * mixin or a consumer's `.projenrc.ts` tweaks it via that field
+ * package the field is `undefined` - like projen's optional `project.eslint`). Mixins
+ * or a consumer's `.projenrc.ts` tweak it via that field
  * (`project.pnpmWorkspace?.addCatalog(...)`, `.allowBuild(...)`, `.addPackages(...)`,
  * or `file.addOverride(...)` for any other pnpm setting). Its `packages` list is NOT
- * hardcoded: it is recomputed from
- * `project.subprojects` at synth time (projen resolves the `obj` thunk late, by
- * which point every subproject is attached), so any package - discovered by the
- * root's scan or attached manually - lands here automatically.
- *
- * Replaces the old `files.pnpmWorkspace()` free function + `ModifyPnpmWorkspace`
- * option (both removed): mutation now goes through the typed instance methods.
+ * hardcoded: it is recomputed from `project.subprojects` at synth time (projen resolves
+ * the `obj` thunk late, by which point every subproject is attached), so any package -
+ * discovered by the root's scan or attached manually - lands here automatically.
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -46,6 +42,7 @@ export const DEFAULT_CATALOG: Catalog = {
   "@clack/prompts": "^1.7.0",
   "openapi-fetch": "^0.17.0",
   tsoa: "^6.6.0",
+  concurrently: "^10.0.3",
   pnpm: "^11.0.6",
 };
 

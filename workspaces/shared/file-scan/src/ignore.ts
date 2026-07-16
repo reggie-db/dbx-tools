@@ -19,7 +19,7 @@ import { directoryNamePattern, fileExtensionPattern } from "./pattern";
 export type IgnorePatternOptions = {
   /** Build artifacts, dependency dirs, caches, logs, and OS junk files. */
   defaults?: boolean;
-  /** Hidden dot-directories (`.git`, `.vscode`, `.idea`, etc.). */
+  /** Hidden dot-files and dot-directories (`.git`, `.vscode`, `.gitignore`, etc.). */
   dot?: boolean;
   /** Temporary directories (`tmp`, `.tmp`, `scratch`, etc.). */
   temp?: boolean;
@@ -113,7 +113,7 @@ const defaultIgnoreMatchers = compileMatchers([
   ].map((name) => directoryNamePattern(name)),
 ]);
 
-/** Hidden dot-directories such as `.git`, `.vscode`, `.idea`, etc. */
+/** Hidden dot-files and dot-directories such as `.git`, `.vscode`, `.idea`, etc. */
 const dotIgnoreMatchers = compileMatchers(
   [".*"].flatMap((glob) => [`**/${glob}`, directoryNamePattern(glob, false)]),
 );

@@ -634,7 +634,7 @@ class SequenceImpl<T> {
     return some(this, predicate);
   }
 
-  /** @see {@link every} */
+  /** @see {@link every} (the `S extends T` overload narrows at compile time only). */
   every<S extends T>(predicate: (value: T, index: number) => value is S): this is Sequence<S>;
   every(predicate: (value: T, index: number) => boolean): boolean;
   every(predicate: (value: T, index: number) => boolean): boolean {

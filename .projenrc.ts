@@ -1,9 +1,9 @@
 /**
  * projen definition. `new DBXToolsNodeProject(...)` constructs the monorepo root
  * and, from its `workspacePackageRoots`, scans + attaches a
- * `DBXToolsTypeScriptProject` per `<tag>/<name>/src` folder under `workspaces/`
- * (real content) and `example-workspaces/` (the seed examples this repo ships,
- * kept separate). The engine itself is dogfooded as a normal auto-discovered `cli`
+ * `DBXToolsTypeScriptProject` per `src`-bearing package folder at any depth under
+ * `workspaces/` (real content) and `example-workspaces/` (the seed examples this repo
+ * ships, kept separate). The engine itself is dogfooded as a normal auto-discovered `cli`
  * package at `workspaces/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
  * it from the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
  *
@@ -92,6 +92,7 @@ project.with(
         "p-memoize",
         "commander",
         "@clack/prompts",
+        "concurrently",
         "consola",
         "@typescript-eslint/typescript-estree@^8",
         "typescript@catalog:",

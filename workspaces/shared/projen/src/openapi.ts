@@ -1,18 +1,19 @@
 /**
  * OpenAPI generator (tsoa-based).
  *
- * Scans `server`/`node` packages for **tsoa controllers** (classes decorated
- * with `@Route`/`@Get`/... - no JSDoc, no YAML) and, for each package that has
- * them, generates a read-only `<root>/openapi/<name>` package:
+ * Scans `server`/`node` packages for modules that **import tsoa**
+ * (`from 'tsoa'` / `from '@tsoa/runtime'`) and, for each package that has them,
+ * generates a read-only `<root>/openapi/<name>` package:
  *
  *   - `openapi.json`   - the OpenAPI 3 spec (tsoa `generateSpec`, from the types).
  *   - `src/schema.ts`  - types generated from the spec (openapi-typescript).
  *   - `src/client.ts`  - a typed `openapi-fetch` client, usable client-side.
  *
- * tsoa infers the whole spec from the controller decorators + TypeScript types, so
- * the API surface is annotated on the methods and nothing is hand-written twice.
- * The generated client stack is openapi-typescript + openapi-fetch (openapi-ts.dev),
- * the best-of-2026 choice since AppKit ships no OpenAPI client generator.
+ * `generateSpec` then reads the actual controller decorators + TypeScript types from
+ * those files, so the API surface is annotated on the methods and nothing is
+ * hand-written twice. The generated client stack is openapi-typescript +
+ * openapi-fetch (openapi-ts.dev), the best-of-2026 choice since AppKit ships no
+ * OpenAPI client generator.
  *
  * `tsoa`, `typescript`, and `openapi-typescript` are loaded lazily (heavy, and only
  * needed for `dbxtools openapi`), so importing this module stays cheap.
@@ -35,7 +36,7 @@ const log = logger.withTag("projen:openapi");
 
 /** The tag (and folder) the generated openapi client packages are written under. */
 const OPENAPI_TAG = "openapi";
-/** A file that imports tsoa's decorators is (part of) a controller surface. */
+/** Heuristic: a module file whose source imports tsoa's runtime package. */
 const TSOA_IMPORT = /from\s+['"](?:tsoa|@tsoa\/runtime)['"]/;
 
 const CLIENT_SRC = `import createClient, { type ClientOptions } from "openapi-fetch";
@@ -47,7 +48,7 @@ export function createApiClient(options?: ClientOptions) {
 }
 `;
 
-/** True if any module file in `<pkg>/src` imports tsoa (i.e. declares a controller). */
+/** True if any module file in `<pkg>/src` matches {@link TSOA_IMPORT}. */
 export function hasTsoaControllers(pkg: Pick<WorkspacePackage, "dir">): boolean {
   const srcDir = join(pkg.dir, "src");
   return [...find.findFiles("**/*", { cwd: srcDir })]
@@ -55,14 +56,14 @@ export function hasTsoaControllers(pkg: Pick<WorkspacePackage, "dir">): boolean 
     .some((f) => TSOA_IMPORT.test(readFileSync(join(srcDir, f), "utf8")));
 }
 
-/** `server`/`node` packages (never the generated `openapi` tag) with tsoa controllers. */
+/** `server`/`node` packages (never the generated `openapi` tag) with a tsoa import. */
 function controllerPackages(): WorkspacePackage[] {
   return workspacePackages().filter(
     (p) => (p.tags.includes("server") || p.tags.includes("node")) && hasTsoaControllers(p),
   );
 }
 
-/** True if the changed path is a source file that looks like a tsoa controller. */
+/** True if the changed path is a source file that matches {@link TSOA_IMPORT}. */
 export function isTsoaController(path: string): boolean {
   const posix = path.replace(/\\/g, "/");
   return (
@@ -74,9 +75,10 @@ export function isTsoaController(path: string): boolean {
 }
 
 /**
- * Regenerate the `openapi` packages from every tsoa-controller package. Returns the
- * package dirs it wrote, so the caller can re-synth (to configure/link them) and
- * rebuild their barrels.
+ * Regenerate the `openapi` packages from every server/node package with a tsoa
+ * import. Returns the package dirs it wrote so the caller can rebuild their barrels.
+ * A separate projen synth is still needed before new openapi folders become workspace
+ * members in `pnpm-workspace.yaml`.
  */
 export async function generateOpenapi(): Promise<string[]> {
   const pkgs = controllerPackages();

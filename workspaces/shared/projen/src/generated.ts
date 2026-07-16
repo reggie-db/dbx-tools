@@ -1,11 +1,12 @@
 /**
- * Helpers for the one kind of file this repo generates that projen does *not*
- * own: the barrels barrelsby writes at watch time.
+ * Read-only / do-not-edit helpers for generated output projen does not own as a
+ * native `FileBase`: barrels barrelsby writes, openapi artifacts, and any other
+ * toolchain file stamped via {@link stampGenerated}.
  *
- * projen already writes its own generated files read-only with a marker; these
- * give a barrelsby-written `index.ts` the same contract - a do-not-edit header
- * and a read-only (0o444) bit. Rewriting one therefore goes through
- * {@link makeWritable} first (barrelsby's `--delete`), then {@link stampGenerated}.
+ * projen already writes its own generated files read-only with a marker; these give
+ * barrels and other watch-time output the same contract - a do-not-edit header and a
+ * read-only (0o444) bit. Rewriting one therefore goes through {@link makeWritable}
+ * first (barrelsby's `--delete`), then {@link stampGenerated}.
  */
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 

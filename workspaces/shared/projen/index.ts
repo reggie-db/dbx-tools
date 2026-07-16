@@ -6,7 +6,6 @@ export * as barrels from "./src/barrels";
 export * as clean from "./src/clean";
 export * as dbxToolsConfig from "./src/dbx-tools-config";
 export * as engineRoot from "./src/engine-root";
-export * as exports from "./src/exports";
 export * as generated from "./src/generated";
 export * as log from "./src/log";
 export * as mixin from "./src/mixin";

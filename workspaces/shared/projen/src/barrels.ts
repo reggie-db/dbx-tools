@@ -8,13 +8,14 @@
  *
  * barrelsby emits flat `export * from "./x"` lines; we relocate the barrel to
  * `<pkg>/index.ts`, deepen paths (`./x` -> `./src/x`), then rewrite each line to
- * `export * as <name> from "./src/x"` (kebab-case; invalid identifiers suffixed).
+ * `export * as <name> from "./src/x"` (camelCase namespace from path segments;
+ * invalid identifiers suffixed with `Module`).
  * The result gets an optional caller {@link BarrelModifier}, then a do-not-edit
  * header + read-only bit (see `./generated`).
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join, relative } from "node:path";
+import { extname, join, relative } from "node:path";
 import { exec } from "@dbx-tools/shared-core";
 import { find } from "@dbx-tools/shared-file-scan";
 import isIdentifier from "is-identifier";
@@ -22,7 +23,6 @@ import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } f
 import { logger } from "./log";
 import {
   escapeRegExp,
-  hasExport,
   isModuleFile,
   repoRoot,
   toPosix,
@@ -38,6 +38,44 @@ const require = createRequire(import.meta.url);
 let barrelsbyCli: string | undefined;
 function barrelsbyBin(): string {
   return (barrelsbyCli ??= require.resolve("barrelsby/bin/cli.js"));
+}
+
+/** Top-level statement types that make a file a re-exportable module. */
+const EXPORT_STATEMENT_TYPES = new Set([
+  "ExportNamedDeclaration",
+  "ExportDefaultDeclaration",
+  "ExportAllDeclaration",
+  "TSExportAssignment",
+]);
+
+// Lazy so importing this module during synth does not require the parser yet.
+let parseFn: ((code: string, options?: Record<string, unknown>) => { body: { type: string }[] }) | undefined;
+function parseModuleExports(code: string, file: string): { body: { type: string }[] } {
+  parseFn ??= require("@typescript-eslint/typescript-estree").parse;
+  const ext = extname(file).toLowerCase();
+  return parseFn!(code, {
+    filePath: file,
+    jsx: ext === ".tsx" || ext === ".jsx",
+    loc: false,
+    range: false,
+    errorOnUnknownASTType: false,
+  });
+}
+
+/** True when the file has at least one top-level export statement. */
+function hasExport(file: string): boolean {
+  let source: string;
+  try {
+    source = readFileSync(file, "utf8");
+  } catch {
+    return false;
+  }
+
+  try {
+    return parseModuleExports(source, file).body.some((stmt) => EXPORT_STATEMENT_TYPES.has(stmt.type));
+  } catch {
+    return false;
+  }
 }
 
 /** Transform applied to a package's barrel contents before it is written. */

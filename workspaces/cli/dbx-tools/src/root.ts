@@ -16,8 +16,9 @@ async function gitToplevel(): Promise<string | undefined> {
 }
 
 /**
- * Walk upward from `startDir` for `.projenrc.ts`. If none is found, fall back to
- * git top-level, then `startDir`.
+ * Walk upward from `startDir` for `.projenrc.ts`. If none is found, try git
+ * top-level only when that directory also contains `.projenrc.ts`; otherwise return
+ * `resolve(startDir)` (which may not be a workspace root).
  */
 export async function findWorkspaceRoot(startDir: string = process.cwd()): Promise<string> {
   let dir = resolve(startDir);
@@ -52,7 +53,7 @@ export function needsInstall(root: string): boolean {
   return false;
 }
 
-/** Memoized root lookup from the process cwd at first use. */
+/** Async, memoized root lookup from the process cwd at first use. */
 export const workspaceRoot = functionModule.memoize(() => findWorkspaceRoot());
 
 /** Short label for log output (`basename` of the resolved root). */

@@ -3,8 +3,8 @@ export interface MemoizeOptions {
    * Time-to-live in milliseconds. The cached value expires `ttlMs` after
    * it was stored, so the next call past that recomputes; a rejection is
    * also evicted so a later call retries rather than replaying the error.
-   * Omitted or `<= 0` means cache forever (the default), where even a
-   * rejection is cached.
+   * Omitted or `<= 0` means a successful value is cached forever (the default).
+   * Errors are never cached - see {@link memoize}.
    *
    * Use for periodically-refreshed data (published IP ranges, feature
    * flags, anything fetched once and reused across requests).
@@ -31,7 +31,7 @@ export interface MemoizeOptions {
  * pending promise until it settles.
  *
  * @example
- * const ranges = commonUtils.memoize(fetchIpRanges, { ttlMs: 24 * 60 * 60 * 1000 });
+ * const ranges = functionModule.memoize(fetchIpRanges, { ttlMs: 24 * 60 * 60 * 1000 });
  * await ranges(); // fetches
  * await ranges(); // cached until 24h later
  */

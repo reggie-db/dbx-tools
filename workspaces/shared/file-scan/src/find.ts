@@ -18,8 +18,9 @@ export interface FileFindOptions
 }
 /**
  * Recursively lists files matching `pattern`, ignoring the shared default groups
- * plus any caller `ignore` patterns. Glob matches those patterns natively, so the
- * ignore list is the same one {@link fileWatch} feeds through its matchers.
+ * plus any caller `ignore` patterns (unless `ignore` is a lone predicate function,
+ * in which case only that predicate applies). The ignore list mirrors what
+ * {@link watchFiles} feeds through its matchers.
  */
 export function findFiles(
   pattern: string | string[],
@@ -57,11 +58,11 @@ function isIgnoreLike(value: unknown): value is IgnoreLike {
   return false;
 }
 /**
- * Builds the {@link IgnoreLike} object fileScan hands to `glob`.
+ * Builds the {@link IgnoreLike} object {@link findFiles} hands to `glob`.
  *
  * A caller-supplied `IgnoreLike` (an object, not string/array) is consulted
  * first - its `ignored`/`childrenIgnored` win - after which the shared
- * {@link ignoreMatcher} (the SAME matcher `fileWatch` uses) decides based on the
+ * {@link ignorePathMatcher} (the same matcher {@link watchFiles} uses) decides based on the
  * package-relative path. `cacheDirectoryStats` is enabled because glob probes
  * many paths per directory. Caller string/array patterns are merged into the
  * matcher, and `add` forwards to both the caller object and the matcher.
@@ -109,8 +110,8 @@ function normalizeIgnore(
   };
 }
 
-// Manual demo: run this file directly (e.g. `tsx src/scan.ts`) to print the
-// files fileScan keeps for this package under the given ignore options.
+// Manual demo: run this file directly (e.g. `tsx src/find.ts`) to print the
+// files findFiles keeps for this package under the given ignore options.
 if (import.meta.main) {
   const startTime = performance.now();
   const cwd = process.cwd();

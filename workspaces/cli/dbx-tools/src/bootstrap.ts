@@ -25,7 +25,9 @@ allowBuilds:
 /**
  * Turn an empty folder into a functioning dbx-tools workspace: `pnpm init`, seed
  * `pnpm-workspace.yaml`, add `projen`/`typescript`/`tsx` + the engine package,
- * write a minimal `.projenrc.ts`, synth once, then install.
+ * write a minimal `.projenrc.ts`, synth once (with `PROJEN_DISABLE_POST`), then
+ * install. Does not run barrels - run `dbxtools barrels` or a full projen synth
+ * post-install to generate package barrels.
  */
 export function bootstrapWorkspace(
   root: string,

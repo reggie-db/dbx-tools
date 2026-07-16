@@ -13,9 +13,10 @@
  * enumerated separately (see {@link listNodeModulesDirs}) as whole directories.
  *
  * Deleting only generated files is never destructive to the ability to regenerate:
- * `.projenrc.ts` imports the engine by SOURCE path (`workspaces/cli/dbx-tools/src/...`),
- * so even after deleting every barrel, manifest, and `.projen/*`, `pnpm exec projen`
- * still rebuilds the whole tree. Removing `node_modules` additionally requires a
+ * `.projenrc.ts` imports the engine by SOURCE path (relative into the repo, e.g.
+ * `workspaces/shared/projen/src/...`, or from an installed package such as
+ * `@dbx-tools/shared-projen`), so even after deleting every barrel, manifest, and
+ * `.projen/*`, `pnpm exec projen` still rebuilds the whole tree. Removing `node_modules` additionally requires a
  * `pnpm install` first - the engine's runtime deps live there - so a clean that takes
  * `node_modules` must be followed by reinstall, then re-synth.
  */

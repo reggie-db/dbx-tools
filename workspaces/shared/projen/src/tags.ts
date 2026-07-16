@@ -2,9 +2,10 @@
  * Workspace tags, expressed as MIXINS (`constructs` `IMixin`).
  *
  * A tag names a target environment (React/Vite, Node, agnostic, ...) - modeled on
- * `databricks apps init` (AppKit): `ui`, `server`, `shared`. Drop a
- * `workspaces/<tag>/<name>/src` folder and the package is configured from its tag
- * automatically. ("Scope" is reserved for the npm `@scope/` in package names.)
+ * `databricks apps init` (AppKit): `ui`, `server`, `shared`. Any `src`-bearing folder
+ * under a workspace-package root is discovered automatically; path-derived tag
+ * candidates plus `workspacePackageTagPaths` decide which mixins apply. ("Scope" is
+ * reserved for the npm `@scope/` in package names.)
  *
  * Mixin factories live in {@link ./mixin}; package guards live in {@link ./package}.
  * The per-tag table is {@link WORKSPACE_TAG_MIXINS}. Apply with the constructs-native `project.with(...)`
@@ -40,8 +41,8 @@ export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
 /**
  * The workspace-tag table, as mixins. Each entry configures every package carrying
  * that tag (deps + tsconfig + tasks) when applied via `project.with(...)`. The keys
- * are the known tag names; a `workspaces/<tag>/<name>` folder resolves to its tag by
- * this name. Select which apply with the `defaultTagMixins` option (`false` = none,
+ * are the known tag names; a package carrying a given tag receives its mixin when
+ * that tag appears in `dbxToolsConfig.tags`. Select which apply with the `defaultTagMixins` option (`false` = none,
  * or a subset list; unselected packages fall back to {@link AGNOSTIC_COMPILER_OPTIONS}).
  */
 export const WORKSPACE_TAG_MIXINS = {
