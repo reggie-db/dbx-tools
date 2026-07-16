@@ -22,9 +22,17 @@ export type PredicateInput<T> = (value: T) => unknown;
 /**
  * Extracts the narrowed type from a type predicate.
  *
- * Ordinary boolean predicates do not narrow, so they produce T.
+ * Ordinary boolean predicates do not narrow, so they produce T. A guard whose
+ * narrowed type is disjoint from T (`Extract<U, T>` is `never`) is treated as a
+ * non-narrowing filter and keeps T, rather than collapsing the chain to `never` -
+ * this is what a negated narrowing guard looks like (e.g. `hasName(...).negate()`,
+ * which widens back to a supertype of T).
  */
-type NarrowedBy<T, P> = P extends (value: any) => value is infer U ? Extract<U, T> : T;
+type NarrowedBy<T, P> = P extends (value: any) => value is infer U
+  ? [Extract<U, T>] extends [never]
+    ? T
+    : Extract<U, T>
+  : T;
 
 /** Intersects the narrowed types produced by a tuple of predicates. */
 type AndNarrowed<T, P extends readonly PredicateInput<T>[], Result = T> = P extends readonly [

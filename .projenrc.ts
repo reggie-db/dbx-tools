@@ -57,8 +57,7 @@ project.with(
       file.addOverride("include", [".projenrc.ts", ".example.projenrc.ts"]);
     },
   ),
-  mixin.mixin(workspaces.and(projectPredicate.hasTag("shared")), (p) => {
-    console.log("shared", p.name);
+  mixin.mixin(workspaces.and(projectPredicate.hasName("@dbx-tools/shared-core").negate()).and(projectPredicate.hasTag("shared")), (p) => {
     p.addDeps("@dbx-tools/shared-core@workspace:*");
   }),
   mixin.mixin(workspaces.and(projectPredicate.hasName("*/shared-core")).and(projectPredicate.hasTag("shared")), (p) => {
