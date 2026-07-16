@@ -34,9 +34,10 @@ catalog:
   pnpm: ^11.0.6
   "@databricks/appkit": ^0.43.0
   "@databricks/appkit-ui": ^0.43.0
-  mastracode: ^0.4.0
+  mastracode: 0.30.0
 allowBuilds:
   esbuild: true
   unrs-resolver: true
 overrides:
   glob: ^13.0.0
+  vscode-jsonrpc: 8.2.1

@@ -17,17 +17,17 @@
  * `tsoa`, `typescript`, and `openapi-typescript` are loaded lazily (heavy, and only
  * needed for `dbxtools openapi`), so importing this module stays cheap.
  */
-import { createRequire } from "node:module";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import type * as ts from "typescript";
-import { logger } from "./log";
+import { find } from "@dbx-tools/shared-file-scan";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated";
+import { logger } from "./log";
 import {
   type WorkspacePackage,
   isModuleFile,
   repoRoot,
-  walkFiles,
   workspacePackages,
 } from "./workspace";
 
@@ -49,9 +49,10 @@ export function createApiClient(options?: ClientOptions) {
 
 /** True if any module file in `<pkg>/src` imports tsoa (i.e. declares a controller). */
 export function hasTsoaControllers(pkg: Pick<WorkspacePackage, "dir">): boolean {
-  return walkFiles(join(pkg.dir, "src"))
+  const srcDir = join(pkg.dir, "src");
+  return [...find.findFiles("**/*", { cwd: srcDir })]
     .filter(isModuleFile)
-    .some((f) => TSOA_IMPORT.test(readFileSync(f, "utf8")));
+    .some((f) => TSOA_IMPORT.test(readFileSync(join(srcDir, f), "utf8")));
 }
 
 /** `server`/`node` packages (never the generated `openapi` tag) with tsoa controllers. */

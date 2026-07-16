@@ -3,20 +3,20 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as barrels from "./src/barrels";
-export * as bootstrap from "./src/bootstrap";
 export * as clean from "./src/clean";
+export * as dbxToolsConfig from "./src/dbx-tools-config";
 export * as engineRoot from "./src/engine-root";
+export * as exports from "./src/exports";
 export * as generated from "./src/generated";
 export * as log from "./src/log";
-export * as mixins from "./src/mixins";
+export * as mixin from "./src/mixin";
 export * as openapi from "./src/openapi";
+export * as packageModule from "./src/package";
 export * as pnpmWorkspace from "./src/pnpm-workspace";
-export * as pnpm from "./src/pnpm";
 export * as project from "./src/project";
 export * as publish from "./src/publish";
 export * as scaffold from "./src/scaffold";
 export * as tags from "./src/tags";
-export * as taskScript from "./src/task-script";
 export * as tsconfig from "./src/tsconfig";
 export * as vite from "./src/vite";
 export * as vscode from "./src/vscode";

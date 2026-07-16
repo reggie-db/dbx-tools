@@ -7,8 +7,8 @@
  * record to decide whether the package SET changed (a package was added/removed)
  * and a full re-synth is needed - versus a content edit, where only barrels rebuild.
  */
-import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { exec } from "@dbx-tools/shared-core";
 import { recordedRoots, repoRoot, scanPackages, workspacePackages } from "./workspace";
 
 /** Member paths that currently exist on disk (scan of the recorded roots). */
@@ -40,18 +40,18 @@ export function packageSetChanged(): boolean {
  * Deliberately never forces `CI: "true"` here: besides pnpm's own no-TTY prompt,
  * `CI` also makes pnpm choose a `--frozen-lockfile` install for a MULTI-package
  * workspace's subprojects, which is the wrong tradeoff for routine re-synths (a
- * newly added/edited package's lockfile entry is expected to be behind). Where a
- * caller genuinely needs the no-TTY prompt answered non-interactively (only
- * `bootstrapWorkspace`, on a workspace with no subprojects yet), it runs with
- * `post: false` and does its own install afterward instead.
+ * newly added/edited package's lockfile entry is expected to be behind). A caller
+ * that needs the no-TTY prompt answered non-interactively (the `dbxtools` CLI, when
+ * bootstrapping an empty folder) runs with `post: false` and does its own install
+ * afterward instead.
  */
 export function runSynth(options: { post?: boolean } = {}): void {
   const env = { ...process.env };
   if (options.post) delete env.PROJEN_DISABLE_POST;
   else env.PROJEN_DISABLE_POST = "true";
-  execFileSync(process.execPath, ["--import", "tsx", join(repoRoot, ".projenrc.ts")], {
+  exec.execSync(process.execPath, ["--import", "tsx", join(repoRoot, ".projenrc.ts")], {
     cwd: repoRoot,
-    stdio: "inherit",
     env,
+    check: true,
   });
 }

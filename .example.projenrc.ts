@@ -5,19 +5,19 @@
  * and the original demos) stay visually and logically distinct from engine
  * development under `workspaces/`.
  */
-import path, { basename } from "node:path";
-import type { javascript } from "projen";
-import { packageMixin } from "./workspaces/shared/projen/src/mixins";
+import path from "node:path";
+import { mixin } from "./workspaces/shared/projen/src/mixin";
 import {
   DBXToolsNodeProject,
   DBXToolsTypeScriptProject,
-} from "./workspaces/shared/projen/src/project";
+  isDBXToolsPackage,
+} from "./workspaces/shared/projen/src/package";
+import { predicate } from "./workspaces/shared/core/index";
 
 const EXAMPLE_WORKSPACES_ROOT = "example-workspaces";
 
-function isExamplePackage(p: javascript.NodeProject): boolean {
-  const root = p.root.outdir;
-  const rel = path.relative(root, p.outdir);
+function isExamplePackage(p: { root: { outdir: string }; outdir: string }): boolean {
+  const rel = path.relative(p.root.outdir, p.outdir);
   return rel === EXAMPLE_WORKSPACES_ROOT || rel.startsWith(`${EXAMPLE_WORKSPACES_ROOT}/`);
 }
 
@@ -25,7 +25,9 @@ function isExamplePackage(p: javascript.NodeProject): boolean {
 export function configureExampleCatalog(project: DBXToolsNodeProject): void {
   project.pnpmWorkspace?.addCatalog("@databricks/appkit", "^0.43.0");
   project.pnpmWorkspace?.addCatalog("@databricks/appkit-ui", "^0.43.0");
-  project.pnpmWorkspace?.addCatalog("mastracode", "^0.4.0");
+  project.pnpmWorkspace?.addCatalog("mastracode", "0.30.0");
+  // mastracode@0.4.0 imports `vscode-jsonrpc/node.js`; v9 exports only `./node`.
+  project.pnpmWorkspace?.addOverride("overrides.vscode-jsonrpc", "8.2.1");
 }
 
 /** Example-workspace package mixins (private demos, AppKit, Mastra Code headless). */
@@ -33,13 +35,24 @@ export function applyExampleWorkspaces(project: DBXToolsNodeProject): void {
   configureExampleCatalog(project);
 
   project.with(
-    packageMixin(isExamplePackage, (p) => p.package.addField("private", true)),
-    packageMixin(
-      (p) => isExamplePackage(p) && p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "core",
+    mixin(
+      predicate.toPredicate(isDBXToolsPackage).and(isExamplePackage),
+      (p) => p.package.addField("private", true),
+    ),
+    mixin(
+      predicate
+        .toPredicate(isDBXToolsPackage)
+        .and(isExamplePackage)
+        .and((p) => p.dbxToolsConfig.tags.includes("shared"))
+        .and((p) => p.packageIdentifier.name === "shared-core"),
       (p) => p.package.addField("name", "@dbx-tools/example-shared-core"),
     ),
-    packageMixin(
-      (p) => isExamplePackage(p) && p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "main",
+    mixin(
+      predicate
+        .toPredicate(isDBXToolsPackage)
+        .and(isExamplePackage)
+        .and((p) => p.dbxToolsConfig.tags.includes("cli"))
+        .and((p) => p.packageIdentifier.name === "cli-main"),
       (p) => {
         p.package.addBin({ "pw-demo": "./src/cli.ts" });
         p.addDeps(
@@ -48,16 +61,28 @@ export function applyExampleWorkspaces(project: DBXToolsNodeProject): void {
         );
       },
     ),
-    packageMixin(
-      (p) => isExamplePackage(p) && p.dbxToolsConfig.tags.includes("server") && basename(p.outdir) === "api",
+    mixin(
+      predicate
+        .toPredicate(isDBXToolsPackage)
+        .and(isExamplePackage)
+        .and((p) => p.dbxToolsConfig.tags.includes("server"))
+        .and((p) => p.packageIdentifier.name === "server-api"),
       (p) => p.addDeps("@dbx-tools/example-shared-core@workspace:*"),
     ),
-    packageMixin(
-      (p) => isExamplePackage(p) && p.dbxToolsConfig.tags.includes("ui") && basename(p.outdir) === "app",
+    mixin(
+      predicate
+        .toPredicate(isDBXToolsPackage)
+        .and(isExamplePackage)
+        .and((p) => p.dbxToolsConfig.tags.includes("ui"))
+        .and((p) => p.packageIdentifier.name === "ui-app"),
       (p) => p.addDeps("@dbx-tools/example-shared-core@workspace:*"),
     ),
-    packageMixin(
-      (p) => isExamplePackage(p) && p.dbxToolsConfig.tags.includes("server") && basename(p.outdir) === "appkit-server",
+    mixin(
+      predicate
+        .toPredicate(isDBXToolsPackage)
+        .and(isExamplePackage)
+        .and((p) => p.dbxToolsConfig.tags.includes("server"))
+        .and((p) => p.packageIdentifier.name === "server-appkit-server"),
       (p) => {
         p.addDeps("@databricks/appkit@catalog:");
         if (p instanceof DBXToolsTypeScriptProject) {
@@ -66,8 +91,12 @@ export function applyExampleWorkspaces(project: DBXToolsNodeProject): void {
         }
       },
     ),
-    packageMixin(
-      (p) => isExamplePackage(p) && p.dbxToolsConfig.tags.includes("ui") && basename(p.outdir) === "appkit-client",
+    mixin(
+      predicate
+        .toPredicate(isDBXToolsPackage)
+        .and(isExamplePackage)
+        .and((p) => p.dbxToolsConfig.tags.includes("ui"))
+        .and((p) => p.packageIdentifier.name === "ui-appkit-client"),
       (p) => {
         p.addDeps("@databricks/appkit-ui@catalog:", "@databricks/appkit@catalog:");
         if (p instanceof DBXToolsTypeScriptProject) {
@@ -76,14 +105,24 @@ export function applyExampleWorkspaces(project: DBXToolsNodeProject): void {
         }
       },
     ),
-    packageMixin(
-      (p) => isExamplePackage(p) && p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "mastracode-headless",
+    mixin(
+      predicate
+        .toPredicate(isDBXToolsPackage)
+        .and(isExamplePackage)
+        .and((p) => p.dbxToolsConfig.tags.includes("cli"))
+        .and((p) => p.packageIdentifier.name === "cli-mastracode-headless"),
       (p) => {
         p.addDeps("mastracode@catalog:");
         p.package.addBin({ "mc-headless": "./src/headless.ts" });
         if (p instanceof DBXToolsTypeScriptProject) {
           p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
           p.tsconfig?.addInclude("index.ts");
+          // Workspace self-bins are not linked into the package's own .bin; expose
+          // a projen task so `pnpm mc-headless` works from this package directory.
+          p.addTask("mc-headless", {
+            exec: "tsx src/headless.ts",
+            receiveArgs: true,
+          });
         }
       },
     ),

@@ -1,8 +1,8 @@
+import { iterable } from "@dbx-tools/shared-core";
 import { globIterateSync, IgnoreLike, type GlobOptionsWithFileTypesUnset } from "glob";
 import { ignorePathMatcher } from "./ignore";
-import { PathMatcher, PathMatchInput, toPathMatcher } from "./match";
+import { PathMatcher, PathMatchInput, pathMatchTests, toPathMatcher } from "./match";
 import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan";
-import { iterable } from "@dbx-tools/shared-core";
 
 type FileFindIgnore = PathMatchInput | readonly PathMatchInput[] | IgnoreLike;
 
@@ -21,7 +21,10 @@ export interface FileFindOptions
  * plus any caller `ignore` patterns. Glob matches those patterns natively, so the
  * ignore list is the same one {@link fileWatch} feeds through its matchers.
  */
-export function findFiles(pattern: string | string[], options?: FileFindOptions): iterable.Sequence<string> {
+export function findFiles(
+  pattern: string | string[],
+  options?: FileFindOptions,
+): iterable.Sequence<string> {
   return iterable.sequence(globIterateSync(pattern, toGlobOptions(options)));
 }
 
@@ -78,7 +81,7 @@ function normalizeIgnore(
     ? toPathMatcher(ignorePathMatcherInputs[0])
     : ignorePathMatcher(ignoreOptions);
   if (ignorePathMatcherInputs && !predicateOnly) {
-    ignoreMatcher = ignoreMatcher.or(...ignorePathMatcherInputs);
+    ignoreMatcher = ignoreMatcher.or(...pathMatchTests(...ignorePathMatcherInputs));
   }
   return {
     ignored(path) {
@@ -101,7 +104,7 @@ function normalizeIgnore(
     },
     add(ignore) {
       ignoreLike?.add?.(ignore);
-      ignoreMatcher = ignoreMatcher.and(ignore);
+      ignoreMatcher = ignoreMatcher.and(...pathMatchTests(ignore));
     },
   };
 }

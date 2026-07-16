@@ -23,17 +23,15 @@
  */
 import { isAbsolute, resolve, sep } from "node:path";
 import { watch as fileScan } from "@dbx-tools/shared-file-scan";
-import { logger } from "./log";
 import { generateBarrels } from "./barrels";
+import { logger } from "./log";
 import { isTsoaController } from "./openapi";
 import { packageSetChanged, runSynth } from "./scaffold";
 import {
   isGeneratedFile,
-  isIgnoredPath,
   readWorkspaceMembers,
   recordedRoots,
   repoRoot,
-  SCAN_EXTRA_IGNORE,
   toPosix,
   workspacePackages,
 } from "./workspace";
@@ -51,10 +49,15 @@ function configSrcDirs(): string[] {
     .map((m) => resolve(repoRoot, m, "src"));
 }
 
-/** Vendor/build/generated paths that must never drive the watch. */
+/**
+ * Generated paths (barrels, manifests, tsconfigs, decls) that must never drive the
+ * watch - they change *because* we synth, so reacting would loop. Vendor/build dirs
+ * (`node_modules`/`dist`/`lib`/`.projen`/...) are pruned by file-scan's built-in
+ * ignore groups, which `watchFiles` always applies, so they never reach here.
+ */
 function ignoredPath(path: string): boolean {
   const abs = isAbsolute(path) ? path : resolve(repoRoot, path);
-  return isIgnoredPath(abs) || isGeneratedFile(abs);
+  return isGeneratedFile(abs);
 }
 
 /**
@@ -168,7 +171,7 @@ export function startWatch(): void {
   const watcher = fileScan.watchFiles(watchPaths, {
     cwd: repoRoot,
     ignoreInitial: true,
-    ignore: [...SCAN_EXTRA_IGNORE, (path) => ignoredPath(path)] as fileScan.FileWatchOptions["ignore"],
+    ignore: (path) => ignoredPath(path),
   });
   watcher.on("all", (_event, path) => {
     pending.add(path);

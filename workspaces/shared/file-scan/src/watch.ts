@@ -1,9 +1,10 @@
-import { ChokidarOptions, MatchFunction, watch } from "chokidar";
 import { Stats } from "fs";
-import { hasMagic } from "glob";
 import { isAbsolute, relative, resolve } from "path";
+import { ChokidarOptions, MatchFunction, watch } from "chokidar";
+import { hasMagic } from "glob";
 import { findFiles, type FileFindOptions } from "./find";
 import { ignorePathMatcher } from "./ignore";
+import { pathMatchTests } from "./match";
 import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan";
 
 export interface FileWatchOptions
@@ -104,7 +105,7 @@ function toWatchMatchFunction(
   }
 
   let matcher = ignorePathMatcher(ignoreOptions);
-  if (patterns.length > 0) matcher = matcher.or(...patterns);
+  if (patterns.length > 0) matcher = matcher.or(...pathMatchTests(...patterns));
 
   const matchPath = (path: string, stats?: Stats): boolean => {
     const rel = toCwdRelativePath(path, cwd);

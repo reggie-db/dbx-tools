@@ -3,16 +3,14 @@
  * wiring when `release` is enabled. Lock/unlock of generated `package.json` files
  * is internal only.
  */
-import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join, relative } from "node:path";
+import { exec } from "@dbx-tools/shared-core";
 import { Component } from "projen";
-import { runPnpm } from "./pnpm";
-import { logger } from "./log";
 import { makeReadonly, makeWritable } from "./generated";
-import { type DBXToolsNodeProject } from "./project";
-import { taskScript } from "./task-script";
+import { logger } from "./log";
+import { applyTasks, taskScript, type DBXToolsNodeProject } from "./package";
 import { repoRoot, toPosix, workspacePackages } from "./workspace";
 
 /** Forced semver bump level when conventional-commit inference is overridden. */
@@ -27,10 +25,10 @@ const FORCE_BUMP_HINT = "use --increment minor or --increment major for a larger
 function runProjenBumpVersion(env: Record<string, string>): void {
   const require = createRequire(import.meta.url);
   const scriptPath = require.resolve("projen/lib/release/bump-version.task.js");
-  execFileSync(process.execPath, [scriptPath], {
+  exec.execSync(process.execPath, [scriptPath], {
     cwd: repoRoot,
-    stdio: "inherit",
     env: { ...process.env, ...env },
+    check: true,
   });
 }
 
@@ -48,11 +46,11 @@ function bumpVersionEnv(bumpLevel: BumpLevel): Record<string, string> {
 
 /** Highest `v*` release tag (version-sorted), matching projen's bump lookup. */
 function latestReleaseTag(cwd: string = repoRoot): string | undefined {
-  const stdout = execFileSync(
+  const { stdout } = exec.execSync(
     "git",
     ["-c", "versionsort.suffix=-", "tag", "--sort=-version:refname", "--list", "v*"],
-    { cwd, encoding: "utf8" },
-  ).trim();
+    { cwd, stdout: "capture", stderr: "ignore", stdin: "ignore", check: true },
+  );
   return stdout
     .split("\n")
     .find((t) => t.trim())
@@ -64,10 +62,14 @@ function versionFromTag(tag: string): string {
 }
 
 function gitHead(cwd: string = repoRoot): string {
-  return execFileSync("git", ["rev-parse", "HEAD"], {
+  const { stdout } = exec.execSync("git", ["rev-parse", "HEAD"], {
     cwd,
-    encoding: "utf8",
-  }).trim();
+    stdout: "capture",
+    stderr: "ignore",
+    stdin: "ignore",
+    check: true,
+  });
+  return stdout;
 }
 
 /** Repo-relative path to the npm-publishable workspace package. */
@@ -122,13 +124,11 @@ function packDestinationArg(publishRelPath: string): string {
 export function packForRelease(publishRelPath: string = findPublishRelPath()): void {
   syncPublishVersion(publishRelPath);
   mkdirSync(join(repoRoot, "dist/js"), { recursive: true });
-  runPnpm([
-    "--dir",
-    publishRelPath,
-    "pack",
-    "--pack-destination",
-    packDestinationArg(publishRelPath),
-  ]);
+  exec.execSync(
+    "pnpm",
+    ["--dir", publishRelPath, "pack", "--pack-destination", packDestinationArg(publishRelPath)],
+    { cwd: repoRoot, check: true },
+  );
 }
 
 /** CI: build and pack from the git tag that triggered the workflow. */
@@ -145,7 +145,7 @@ export function buildFromTag(publishRelPath: string = findPublishRelPath()): voi
     root.version = version;
     writeFileSync(rootPath, `${JSON.stringify(root, null, 2)}\n`);
     syncPublishVersion(publishRelPath);
-    runPnpm(["exec", "projen", "build"]);
+    exec.execSync("pnpm", ["exec", "projen", "build"], { cwd: repoRoot, check: true });
     const tag = ref.startsWith("v") ? ref : `v${ref}`;
     mkdirSync(join(repoRoot, "dist"), { recursive: true });
     writeFileSync(join(repoRoot, "dist/releasetag.txt"), `${tag}\n`);
@@ -173,29 +173,29 @@ export function publish(
     }
     syncPublishVersion(publishRelPath);
     const manifests = manifestPaths(publishRelPath);
-    execFileSync("git", ["add", ...manifests], {
+    exec.execSync("git", ["add", ...manifests], {
       cwd: repoRoot,
-      stdio: "inherit",
+      check: true,
     });
-    execFileSync("git", ["commit", "-m", `chore(release): ${version}`], {
+    exec.execSync("git", ["commit", "-m", `chore(release): ${version}`], {
       cwd: repoRoot,
-      stdio: "inherit",
+      check: true,
     });
     const sha = gitHead();
-    execFileSync("git", ["push", "origin", "HEAD"], {
+    exec.execSync("git", ["push", "origin", "HEAD"], {
       cwd: repoRoot,
-      stdio: "inherit",
+      check: true,
     });
     const tag = readFileSync(join(repoRoot, "dist/releasetag.txt"), "utf8").trim();
     if (!tag) throw new Error("dist/releasetag.txt is empty");
     const changelog = join(repoRoot, "dist/changelog.md");
-    execFileSync("git", ["tag", tag, "-a", "-F", changelog, sha], {
+    exec.execSync("git", ["tag", tag, "-a", "-F", changelog, sha], {
       cwd: repoRoot,
-      stdio: "inherit",
+      check: true,
     });
-    execFileSync("git", ["push", "origin", tag], {
+    exec.execSync("git", ["push", "origin", tag], {
       cwd: repoRoot,
-      stdio: "inherit",
+      check: true,
     });
   });
 }
@@ -214,19 +214,20 @@ export function configureRelease(project: DBXToolsNodeProject): void {
   }
 
   if (!project.tasks.tryFind("release:tag")) {
-    project.compileTask.reset("pnpm -r compile");
-    project.packageTask.reset(taskScript(project, "publish.ts", "--pack"));
-    const publishTask =
-      project.tasks.tryFind("publish") ??
-      project.addTask("publish", {
+    // `build` retargets the root `compile` task (see `applyTasks`); `package` matches
+    // projen's existing package task by name, so both are reset in place.
+    applyTasks(project, {
+      build: { exec: "pnpm -r compile" },
+      package: { exec: taskScript(project, "publish.ts", "--pack") },
+      publish: {
+        exec: taskScript(project, "publish.ts"),
+        receiveArgs: true,
         description: "Bump version (default patch), commit, push branch, tag, and push tag",
-      });
-    publishTask.reset(taskScript(project, "publish.ts"), {
-      receiveArgs: true,
-    });
-    project.addTask("release:tag", {
-      description: "CI: build and pack from the git tag that triggered the workflow",
-      exec: taskScript(project, "publish.ts", "--ci"),
+      },
+      "release:tag": {
+        exec: taskScript(project, "publish.ts", "--ci"),
+        description: "CI: build and pack from the git tag that triggered the workflow",
+      },
     });
   }
 

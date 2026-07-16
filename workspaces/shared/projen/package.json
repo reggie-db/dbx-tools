@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/shared-projen",
+  "name": "@dbx-tools/projen",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -22,17 +22,19 @@
     "@clack/prompts": "^1.7.0",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-file-scan": "workspace:*",
+    "@typescript-eslint/typescript-estree": "^8",
     "barrelsby": "^2.8.1",
     "commander": "^15.0.0",
     "consola": "^3.4.2",
     "constructs": "^10.0.0",
+    "is-identifier": "^1",
     "openapi-typescript": "^7.13.0",
     "p-memoize": "^8.0.0",
     "picomatch": "^4.0.5",
-    "pnpm": "catalog:",
     "projen": "^0.101.4",
     "tsoa": "catalog:",
     "tsx": "^4.23.0",
+    "typescript": "catalog:",
     "yaml": "^2.9.0"
   },
   "main": "index.ts",
@@ -50,7 +52,6 @@
   "exports": {
     ".": "./index.ts",
     "./log": "./src/log.ts",
-    "./pnpm": "./src/pnpm.ts",
     "./engine-root": "./src/engine-root.ts",
     "./package.json": "./package.json"
   },

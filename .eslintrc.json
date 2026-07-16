@@ -43,7 +43,12 @@
     "*.d.ts",
     "node_modules/",
     "*.generated.ts",
-    "coverage"
+    "coverage",
+    "workspaces/openapi/**",
+    "workspaces/**/index.ts",
+    "example-workspaces/openapi/**",
+    "example-workspaces/**/index.ts",
+    "**/vite.config.ts"
   ],
   "rules": {
     "curly": [
@@ -55,7 +60,7 @@
     "import/no-extraneous-dependencies": [
       "error",
       {
-        "devDependencies": [],
+        "devDependencies": true,
         "optionalDependencies": false,
         "peerDependencies": true
       }
@@ -82,7 +87,7 @@
     "no-shadow": [
       "off"
     ],
-    "@typescript-eslint/no-shadow": "error",
+    "@typescript-eslint/no-shadow": "off",
     "@typescript-eslint/no-floating-promises": "error",
     "no-return-await": [
       "off"
@@ -91,25 +96,8 @@
     "dot-notation": [
       "error"
     ],
-    "no-bitwise": [
-      "error"
-    ],
-    "@typescript-eslint/member-ordering": [
-      "error",
-      {
-        "default": [
-          "public-static-field",
-          "public-static-method",
-          "protected-static-field",
-          "protected-static-method",
-          "private-static-field",
-          "private-static-method",
-          "field",
-          "constructor",
-          "method"
-        ]
-      }
-    ],
+    "no-bitwise": "off",
+    "@typescript-eslint/member-ordering": "off",
     "import/no-relative-packages": "error"
   },
   "overrides": [

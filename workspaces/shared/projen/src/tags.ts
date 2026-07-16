@@ -6,47 +6,16 @@
  * `workspaces/<tag>/<name>/src` folder and the package is configured from its tag
  * automatically. ("Scope" is reserved for the npm `@scope/` in package names.)
  *
- * Each tag is an {@link IMixin} keyed by name in {@link WORKSPACE_TAG_MIXINS}. The
- * root applies them across the workspace subtree with `project.with(...)`: for every
- * package carrying the tag, the mixin adds the tag's deps and overrides the
- * generated tsconfig (`lib`/`jsx`/`types`, ...). Enforcement is therefore real -
- * `document` in a `shared`/`server` package fails `tsc` (no DOM lib), and
- * `process`/`node:*` in a `ui` package fails (no node types). A package matching
- * several tags gets each mixin in turn (later-wins per tsconfig key).
- *
- * The agnostic floor ({@link AGNOSTIC_COMPILER_OPTIONS}) is applied to every package
- * at construction, so a package with no known tag is still a valid, DOM-free ES2022
- * project; a tag mixin only layers its specifics on top.
+ * Mixin factories live in {@link ./mixin}; package guards live in {@link ./package}.
+ * The per-tag table is {@link WORKSPACE_TAG_MIXINS}. Apply with the constructs-native `project.with(...)`
+ * across the subtree; the root applies built-in tag mixins during construction and
+ * callers add their own afterward.
  */
-import type { IMixin } from "constructs";
-import { javascript, typescript, type TaskOptions } from "projen";
-import { tagMixin } from "./mixins";
-import { emitViteConfig } from "./vite";
-
-/** Override a package's generated tsconfig `compilerOptions` (later-wins per key). */
-export function applyCompilerOptions(
-  pkg: javascript.NodeProject,
-  compilerOptions: javascript.TypeScriptCompilerOptions,
-): void {
-  if (!(pkg instanceof typescript.TypeScriptProject)) return;
-  const file = pkg.tsconfig?.file;
-  if (!file) return;
-  for (const [key, value] of Object.entries(compilerOptions)) {
-    if (value === undefined) continue;
-    file.addOverride(`compilerOptions.${key}`, value);
-  }
-  if (compilerOptions.jsx) pkg.tsconfig?.addInclude("src/**/*.tsx");
-}
-
-/** Apply a tag's `tasks` through projen's task system. */
-export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, TaskOptions>): void {
-  if (!tasks) return;
-  for (const [name, options] of Object.entries(tasks)) {
-    const owned = name === "build" ? pkg.compileTask : pkg.tasks.tryFind(name);
-    if (owned) owned.reset(options.exec, options);
-    else pkg.addTask(name, options);
-  }
-}
+import type { IMixin as ConstructsMixin } from "constructs";
+import { javascript } from "projen";
+import { mixin } from "./mixin";
+import { applyCompilerOptions, applyTasks, packageWithTag } from "./package";
+import { ViteConfigFile } from "./vite";
 
 /** Node compiler options: ES2020 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
@@ -76,7 +45,7 @@ export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
  * or a subset list; unselected packages fall back to {@link AGNOSTIC_COMPILER_OPTIONS}).
  */
 export const WORKSPACE_TAG_MIXINS = {
-  ui: tagMixin("ui", (p) => {
+  ui: mixin(packageWithTag("ui"), (p) => {
     p.addDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps(
       "vite@catalog:",
@@ -95,14 +64,14 @@ export const WORKSPACE_TAG_MIXINS = {
       build: { exec: "vite build" },
       preview: { exec: "vite preview" },
     });
-    emitViteConfig(p);
+    new ViteConfigFile(p);
   }),
-  cli: tagMixin("cli", (p) => {
+  cli: mixin(packageWithTag("cli"), (p) => {
     p.addDeps("commander@catalog:", "@clack/prompts@catalog:");
     p.addDevDeps("@types/node@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
   }),
-  server: tagMixin("server", (p) => {
+  server: mixin(packageWithTag("server"), (p) => {
     // A Node/Express service. tsoa's decorators (@Route/@Get/...) also drive
     // `dbxtools openapi` (spec + client); experimentalDecorators lets them
     // type-check. `dev`/`start` run the app's `src/server.ts` with tsx.
@@ -117,18 +86,18 @@ export const WORKSPACE_TAG_MIXINS = {
       start: { exec: "tsx src/server.ts" },
     });
   }),
-  node: tagMixin("node", (p) => {
+  node: mixin(packageWithTag("node"), (p) => {
     p.addDevDeps("@types/node@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
   }),
-  shared: tagMixin("shared", (p) => {
+  shared: mixin(packageWithTag("shared"), (p) => {
     applyCompilerOptions(p, AGNOSTIC_COMPILER_OPTIONS);
   }),
-  openapi: tagMixin("openapi", (p) => {
+  openapi: mixin(packageWithTag("openapi"), (p) => {
     p.addDeps("openapi-fetch@catalog:");
     applyCompilerOptions(p, { target: "ES2022", lib: [...DOM_LIB], types: [] });
   }),
-} satisfies Record<string, IMixin>;
+} satisfies Record<string, ConstructsMixin>;
 
 /** A known workspace-tag name (a key of {@link WORKSPACE_TAG_MIXINS}). */
 export type WorkspaceTag = keyof typeof WORKSPACE_TAG_MIXINS;

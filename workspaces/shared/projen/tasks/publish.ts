@@ -3,12 +3,7 @@
  * Projen task entry for release (`publish`, `package`, `release:tag`).
  */
 import { Command, Option } from "commander";
-import {
-  buildFromTag,
-  packForRelease,
-  publish,
-  type BumpLevel,
-} from "../src/publish";
+import { buildFromTag, packForRelease, publish, type BumpLevel } from "../src/publish";
 
 const INCREMENT_LEVELS = ["patch", "minor", "major"] as const;
 
@@ -32,4 +27,4 @@ program
     else publish(undefined, parseIncrement(opts.increment));
   });
 
-program.parseAsync();
+await program.parseAsync();

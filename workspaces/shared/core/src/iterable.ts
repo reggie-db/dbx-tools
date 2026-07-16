@@ -41,29 +41,6 @@ type GroupValue<T, P> = P extends (value: any, ...rest: any[]) => value is infer
 type GroupPredicates<T> = Record<string, (value: T, index: number) => boolean>;
 
 /**
- * The result of {@link SequenceImpl.consume}: a front-of-sequence split.
- * `consumed` is materialized eagerly; `remaining` stays lazy;
- * {@link Consumed.restore} rebuilds the original sequence from the two.
- *
- * @typeParam T - Element type of the split sequence.
- */
-export interface Consumed<T> {
-  /** The (at most `count`) leading elements pulled eagerly from the front. */
-  readonly consumed: readonly T[];
-  /**
-   * A lazy {@link Sequence} over the elements after {@link consumed}.
-   */
-  readonly remaining: Sequence<T>;
-  /**
-   * Rebuilds the original, whole sequence. A cached source is already
-   * re-iterable from the start, so it is returned as-is; a single-pass source
-   * has had its {@link consumed} head drained off the front, so {@link consumed}
-   * is prepended back onto {@link remaining}.
-   */
-  restore(): Sequence<T>;
-}
-
-/**
  * Type guard for a {@link Collection}: an {@link Array}, {@link Set}, or
  * {@link Map}. Narrows `value` so its element/value type is treated as `T`.
  *
@@ -628,40 +605,6 @@ class SequenceImpl<T> {
     return this.caching ? this : new SequenceImpl(this, []);
   }
 
-  /**
-   * Splits the sequence at `count`: eagerly pulls up to `count` leading
-   * elements into {@link Consumed.consumed} (fewer if the source is shorter),
-   * and exposes whatever follows lazily as {@link Consumed.remaining}. A single
-   * iterator is shared, so `remaining` continues exactly where `consumed`
-   * stopped - nothing is dropped or replayed between them.
-   *
-   * {@link Consumed.restore} rebuilds the original sequence: a caching sequence
-   * replays from its buffer, so it is returned as-is; a single-pass sequence has
-   * had its head drained, so `consumed` is prepended back onto `remaining`.
-   *
-   * @param count - How many leading elements to pull (`<= 0` consumes none).
-   * @returns The {@link Consumed} split of this sequence.
-   */
-  consume(count: number): Consumed<T> {
-    // Capture up-front: a caching sequence replays from index 0 on every fresh
-    // iteration, so `this` remains a faithful copy of the whole sequence and
-    // restore can hand it back directly; a single-pass sequence cannot.
-    const iterator = this[Symbol.iterator]();
-    const consumed: T[] = [];
-    for (let i = 0; i < count; i++) {
-      const next = iterator.next();
-      if (next.done) break;
-      consumed.push(next.value);
-    }
-    // Wrap the SAME, partially-advanced iterator so the tail resumes in place.
-    const remaining = sequence<T>({ [Symbol.iterator]: () => iterator });
-    return {
-      consumed,
-      remaining,
-      restore: () => (this.caching ? this : sequence(consumed, remaining)),
-    };
-  }
-
   /** @see {@link find} */
   find<S extends T>(predicate: (value: T, index: number) => value is S): S | undefined;
   find(predicate: (value: T, index: number) => boolean): T | undefined;
@@ -779,8 +722,9 @@ export function* generator<T>(
   ...items: readonly (T | Iterable<T> | null | undefined)[]
 ): Generator<T> {
   for (const item of items) {
-    if (item === null || item === undefined) continue;
-    else if (isContainer(item)) {
+    if (item === null || item === undefined) {
+      continue;
+    } else if (isContainer(item)) {
       yield* item;
     } else {
       yield item;

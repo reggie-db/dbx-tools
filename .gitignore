@@ -54,6 +54,7 @@ jspm_packages/
 **/bower_components/**
 **/jspm_packages/**
 **/dist/**
+**/lib/**
 **/build/**
 **/out/**
 **/coverage/**

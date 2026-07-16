@@ -34,9 +34,11 @@ function parseLogType(value: unknown): LogType | undefined {
         if (normalized === strValue) return undefined;
         strValue = normalized;
       }
-      if (!strValue) return undefined;
-      else if (DIGIT_REGEXP.test(strValue)) return parseLogType(Number.parseInt(strValue, 10));
-      else if (Object.hasOwn(LogLevels, strValue)) {
+      if (!strValue) {
+        return undefined;
+      } else if (DIGIT_REGEXP.test(strValue)) {
+        return parseLogType(Number.parseInt(strValue, 10));
+      } else if (Object.hasOwn(LogLevels, strValue)) {
         return strValue as LogType;
       }
     }

@@ -17,11 +17,11 @@
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { find } from "@dbx-tools/shared-file-scan";
 import { type Project, YamlFile } from "projen";
 import YAML from "yaml";
-import { toPosix } from "./workspace";
 import { makeReadonly } from "./generated";
-import { find } from "@dbx-tools/shared-file-scan";
+import { toPosix } from "./workspace";
 /**
  * The pnpm `catalog:` version registry: dependency name -> version range. A
  * pnpm-workspace feature (packages reference it via a `catalog:` specifier), so
@@ -91,6 +91,10 @@ export interface DBXToolsPNPMWorkspaceOptions {
  * and `.projenrc.ts` tweak it without a callback option.
  */
 export class DBXToolsPNPMWorkspace extends YamlFile {
+  private readonly catalogOverrides: Catalog = {};
+  private readonly allowBuildOverrides: Record<string, boolean> = {};
+  private readonly extraPackages = new Set<string>();
+
   constructor(project: Project, options: DBXToolsPNPMWorkspaceOptions = {}) {
     super(project, FILE_PATH_PNPM_WORKSPACE, {
       marker: true,
@@ -111,16 +115,21 @@ export class DBXToolsPNPMWorkspace extends YamlFile {
 
   /** Add extra workspace member globs beyond the discovered subprojects. */
   public addPackages(...globs: string[]): void {
-    globs.forEach((glob) => this.addToArray("packages", glob));
+    globs.forEach((glob) => {
+      this.extraPackages.add(glob);
+      this.addToArray("packages", glob);
+    });
   }
 
   /** Add or override a `catalog:` entry (dependency name -> version range). */
   public addCatalog(name: string, version: string): void {
+    this.catalogOverrides[name] = version;
     this.addOverride(`catalog.${name}`, version);
   }
 
   /** Allow (or disallow) a dependency's build scripts under pnpm v11. */
   public allowBuild(name: string, allowed = true): void {
+    this.allowBuildOverrides[name] = allowed;
     this.addOverride(`allowBuilds.${name}`, allowed);
   }
 
@@ -130,9 +139,9 @@ export class DBXToolsPNPMWorkspace extends YamlFile {
       .map((s) => toPosix(relative(outdir, s.outdir)))
       .filter(Boolean);
     return {
-      packages: [...new Set(members)].sort(),
-      catalog: { ...DEFAULT_CATALOG },
-      allowBuilds: { ...DEFAULT_ALLOW_BUILDS },
+      packages: [...new Set([...members, ...this.extraPackages])].sort(),
+      catalog: { ...DEFAULT_CATALOG, ...this.catalogOverrides },
+      allowBuilds: { ...DEFAULT_ALLOW_BUILDS, ...this.allowBuildOverrides },
     };
   }
 

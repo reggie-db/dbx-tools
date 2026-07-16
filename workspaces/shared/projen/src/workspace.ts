@@ -23,23 +23,52 @@
  * (post-synth: barrels, watch, openapi), which is authoritative and so reflects any
  * synth-time name override or resolved tag set.
  */
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { basename, extname, relative, resolve, sep } from "node:path";
+import { exec } from "@dbx-tools/shared-core";
 import { find } from "@dbx-tools/shared-file-scan";
 import { parse } from "yaml";
 
-/** Run a command, returning trimmed stdout, or undefined on any failure. */
-function tryCmd(cmd: string, args: string[]): string | undefined {
-  try {
-    const out = execFileSync(cmd, args, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return out || undefined;
-  } catch {
-    return undefined;
-  }
+const SLUG_PARTS_REGEXP = /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[^A-Za-z0-9._-]+/g;
+
+const SLUG_PARTS_EDGE_REGEXP = /^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g;
+
+/**
+ * Split a path or name fragment into normalized lowercase slug segments.
+ *
+ * @returns Segments used to build dashed names (`coolDude` -> `["cool", "dude"]`)
+ */
+export function toSlugParts(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(SLUG_PARTS_REGEXP)
+    .map((part) => part.replace(SLUG_PARTS_EDGE_REGEXP, "").toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Normalize a path or name fragment to kebab-case (`coolDude` -> `cool-dude`).
+ */
+export function toSlug(value: string): string {
+  return toSlugParts(value).join("-");
+}
+
+/**
+ * @deprecated Use {@link toSlugParts}.
+ */
+export function toNameParts(value: string | null | undefined): string[] {
+  return toSlugParts(value);
+}
+
+/** Trimmed stdout from a command, or undefined when the process fails or prints nothing. */
+function capturedStdout(command: string, args: string[]): string | undefined {
+  const result = exec.execSync(command, args, {
+    stdout: "capture",
+    stderr: "ignore",
+    stdin: "ignore",
+  });
+  if (result.exitCode !== 0) return undefined;
+  return result.stdout || undefined;
 }
 
 /**
@@ -47,7 +76,9 @@ function tryCmd(cmd: string, args: string[]): string | undefined {
  * the git top-level, then the current working directory.
  */
 export const repoRoot =
-  tryCmd("npm", ["prefix"]) ?? tryCmd("git", ["rev-parse", "--show-toplevel"]) ?? process.cwd();
+  capturedStdout("npm", ["prefix"]) ??
+  capturedStdout("git", ["rev-parse", "--show-toplevel"]) ??
+  process.cwd();
 
 /**
  * Default workspace-package roots. Each is scanned for packages; override via the
@@ -57,7 +88,7 @@ export const DEFAULT_WORKSPACE_PACKAGE_ROOTS = ["workspaces"] as const;
 
 /** A project name: the git remote's repo name, else the root folder name. */
 export function projectName(): string {
-  const url = tryCmd("git", ["-C", repoRoot, "config", "--get", "remote.origin.url"]);
+  const url = capturedStdout("git", ["-C", repoRoot, "config", "--get", "remote.origin.url"]);
   const fromGit = url
     ?.replace(/\.git$/, "")
     .split(/[/:]/)
@@ -66,52 +97,13 @@ export function projectName(): string {
   return fromGit ?? basename(repoRoot);
 }
 
-/** Dir names walks/globs skip: vendored, build output, VCS, and projen's own state. */
-export const IGNORE_DIRS = new Set([
-  "node_modules",
-  "dist",
-  "lib",
-  ".git",
-  ".projen",
-  "build",
-  "tmp",
-]);
 const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 /** Glob for module files under any `src/`, built from {@link MODULE_EXTS} exts. */
 const SRC_MODULE_GLOB = `**/src/**/*.{${[...MODULE_EXTS].map((e) => e.slice(1)).join(",")}}`;
 
-/** Ignores layered on top of file-scan's built-in groups for projen scans and watch. */
-export const SCAN_EXTRA_IGNORE = ["**/lib/**", "**/.projen/**"] as const;
-
-function scanFindOptions(
-  cwd: string,
-  options?: Pick<find.FileFindOptions, "ignore" | "ignoreOptions">,
-): find.FileFindOptions {
-  const { ignore, ...rest } = options ?? {};
-  const mergedIgnore =
-    ignore === undefined
-      ? [...SCAN_EXTRA_IGNORE]
-      : Array.isArray(ignore)
-        ? [...ignore, ...SCAN_EXTRA_IGNORE]
-        : [ignore, ...SCAN_EXTRA_IGNORE];
-  return { cwd, ...rest, ignore: mergedIgnore };
-}
-
 export function toPosix(p: string): string {
   return p.split(sep).join("/");
-}
-
-/**
- * True if any segment of `p` is an ignored dir name ({@link IGNORE_DIRS}:
- * vendored, build output, VCS, projen state). The single shared test the watcher
- * uses to skip changes under `node_modules`/`dist`/`.git`/`.projen`/... - so the
- * ignore set lives in exactly one place.
- */
-export function isIgnoredPath(p: string): boolean {
-  return toPosix(p)
-    .split("/")
-    .some((seg) => IGNORE_DIRS.has(seg));
 }
 
 export function escapeRegExp(s: string): string {
@@ -119,17 +111,10 @@ export function escapeRegExp(s: string): string {
 }
 
 /**
- * Convert a path segment to a kebab-case tag token (`coolDude` -> `cool-dude`,
- * `pnpm-workspace` -> `pnpm-workspace`).
+ * Convert a path segment to a kebab-case tag token (`coolDude` -> `cool-dude`).
  */
 export function pathSegmentToTagToken(segment: string): string {
-  return segment
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-    .join("-");
+  return toSlug(segment);
 }
 
 /**
@@ -177,22 +162,6 @@ export function isGeneratedFile(file: string): boolean {
   return GENERATED_BASENAMES.has(base) || BARREL_RE.test(base) || base.endsWith(".d.ts");
 }
 
-/**
- * All files under `dir`, recursively, using {@link findFiles} with the shared
- * ignore groups plus projen's {@link SCAN_EXTRA_IGNORE}. When `skipDir` is set
- * (as `clean` does for dot-prefixed folders), dot-directories are ignored too.
- */
-export function walkFiles(
-  dir: string,
-  _ignore: ReadonlySet<string> = IGNORE_DIRS,
-  skipDir?: (name: string) => boolean,
-): string[] {
-  if (!existsSync(dir)) return [];
-  return [
-    ...find.findFiles("**/*", scanFindOptions(dir, { ignoreOptions: { dot: skipDir !== undefined } })),
-  ].map((rel) => join(dir, rel));
-}
-
 /** A re-exportable source module: ts/tsx/js/jsx/mjs/cjs, not a barrel/test/decl. */
 export function isModuleFile(file: string): boolean {
   if (file.endsWith(".d.ts")) return false;
@@ -204,14 +173,7 @@ export function isModuleFile(file: string): boolean {
   return true;
 }
 
-/** True if the file has at least one top-level `export`. */
-export function hasExport(file: string): boolean {
-  try {
-    return /(^|\n)\s*export\b/.test(readFileSync(file, "utf8"));
-  } catch {
-    return false;
-  }
-}
+export { hasExport } from "./exports";
 
 /**
  * One discovered workspace package: a `src`-bearing folder somewhere under a
@@ -291,7 +253,7 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
  */
 function collectPackageDirs(rootAbs: string): string[] {
   const owners = new Set<string>();
-  for (const file of find.findFiles(SRC_MODULE_GLOB, scanFindOptions(rootAbs))) {
+  for (const file of find.findFiles(SRC_MODULE_GLOB, { cwd: rootAbs })) {
     if (!isModuleFile(file)) continue;
     const segs = toPosix(file).split("/");
     const srcIdx = segs.indexOf("src");

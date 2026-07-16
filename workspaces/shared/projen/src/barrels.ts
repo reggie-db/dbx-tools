@@ -8,14 +8,16 @@
  *
  * barrelsby emits flat `export * from "./x"` lines; we relocate the barrel to
  * `<pkg>/index.ts`, deepen paths (`./x` -> `./src/x`), then rewrite each line to
- * `export * as <name> from "./src/x"` (kebab-case and reserved words sanitized).
+ * `export * as <name> from "./src/x"` (kebab-case; invalid identifiers suffixed).
  * The result gets an optional caller {@link BarrelModifier}, then a do-not-edit
  * header + read-only bit (see `./generated`).
  */
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative } from "node:path";
+import { exec } from "@dbx-tools/shared-core";
+import { find } from "@dbx-tools/shared-file-scan";
+import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
 import { logger } from "./log";
 import {
@@ -24,7 +26,6 @@ import {
   isModuleFile,
   repoRoot,
   toPosix,
-  walkFiles,
   workspacePackages,
 } from "./workspace";
 
@@ -52,55 +53,6 @@ const BARREL_HEADER: HeaderOpts = {
   source: "the exporting modules in ./src",
 };
 
-const RESERVED_NAMESPACE_NAMES = new Set([
-  "break",
-  "case",
-  "catch",
-  "class",
-  "const",
-  "continue",
-  "debugger",
-  "default",
-  "delete",
-  "do",
-  "else",
-  "export",
-  "extends",
-  "false",
-  "finally",
-  "for",
-  "function",
-  "if",
-  "import",
-  "in",
-  "instanceof",
-  "new",
-  "null",
-  "return",
-  "super",
-  "switch",
-  "this",
-  "throw",
-  "true",
-  "try",
-  "typeof",
-  "var",
-  "void",
-  "while",
-  "with",
-  "yield",
-  "let",
-  "static",
-  "enum",
-  "implements",
-  "interface",
-  "package",
-  "private",
-  "protected",
-  "public",
-  "await",
-]);
-
 /** `pnpm-workspace` -> `pnpmWorkspace`; nested paths join in camelCase. */
 function kebabToCamel(segment: string): string {
   return segment.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
@@ -118,7 +70,7 @@ function modulePathToNamespace(modulePath: string): string {
           .slice(1)
           .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
           .join("");
-  if (!/^[A-Za-z_$][\w$]*$/.test(name) || RESERVED_NAMESPACE_NAMES.has(name)) {
+  if (!isIdentifier(name)) {
     name = `${name}Module`;
   }
   return name;
@@ -157,10 +109,13 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   const before = existsSync(rootBarrel) ? readFileSync(rootBarrel, "utf8") : undefined;
 
   // Rule 2: src files with no export are excluded by exact (tail-anchored) path.
-  const noExport = walkFiles(srcDir)
+  // find.findFiles yields paths relative to `srcDir` (its cwd) already, so they map
+  // straight to the barrelsby exclude regex; `hasExport` parses each file via
+  // typescript-estree and needs the absolute path.
+  const noExport = [...find.findFiles("**/*", { cwd: srcDir })]
     .filter(isModuleFile)
-    .filter((f) => !hasExport(f))
-    .map((f) => `${escapeRegExp(toPosix(relative(srcDir, f)))}$`);
+    .filter((f) => !hasExport(join(srcDir, f)))
+    .map((f) => `${escapeRegExp(toPosix(f))}$`);
 
   // Unlock the read-only barrels so barrelsby's --delete / our rewrite can run.
   makeWritable(rootBarrel);
@@ -184,15 +139,17 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
     "--noHeader", // we add our own do-not-edit header when stamping
     ...excludes.flatMap((e) => ["--exclude", e]),
   ];
-  try {
-    execFileSync(process.execPath, args, { cwd: repoRoot, stdio: "pipe" });
-  } catch (err) {
-    const stderr =
-      err && typeof err === "object" && "stderr" in err
-        ? `${(err as { stderr?: Buffer }).stderr ?? ""}`
-        : "";
-    log.error(`barrelsby failed for ${toPosix(relative(repoRoot, srcDir))}`, stderr);
-    throw err;
+  const result = exec.execSync(process.execPath, args, {
+    cwd: repoRoot,
+    stdout: "ignore",
+    stderr: "capture",
+    stdin: "ignore",
+  });
+  if (result.exitCode !== 0) {
+    log.error(`barrelsby failed for ${toPosix(relative(repoRoot, srcDir))}`, result.stderr);
+    throw new Error(
+      `barrelsby failed for ${toPosix(relative(repoRoot, srcDir))}${result.stderr ? `: ${result.stderr}` : ""}`,
+    );
   }
 
   // No eligible modules -> no barrel: drop any stale root barrel and bail.

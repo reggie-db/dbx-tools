@@ -23,7 +23,7 @@ import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { find } from "@dbx-tools/shared-file-scan";
 import { isReadonly, makeWritable } from "./generated";
-import { repoRoot, SCAN_EXTRA_IGNORE, toPosix, walkFiles } from "./workspace";
+import { repoRoot, toPosix } from "./workspace";
 
 /**
  * Basenames `clean` never removes even when they are generated/read-only. `.gitignore`
@@ -40,7 +40,8 @@ const CLEAN_SKIP_FILES: ReadonlySet<string> = new Set([".gitignore"]);
  */
 export function listGeneratedFiles(root: string = repoRoot): string[] {
   const rel = (f: string): string => toPosix(relative(root, f));
-  return walkFiles(root, undefined, (name) => name.startsWith("."))
+  return [...find.findFiles("**/*", { cwd: root })]
+    .map((f) => join(root, f))
     .filter(isReadonly)
     .filter((f) => !CLEAN_SKIP_FILES.has(basename(f)))
     .sort((a, b) => rel(a).localeCompare(rel(b)));
@@ -60,7 +61,6 @@ export function listNodeModulesDirs(root: string = repoRoot): string[] {
   const dirs = new Set<string>();
   for (const match of find.findFiles("**/node_modules", {
     cwd: root,
-    ignore: [...SCAN_EXTRA_IGNORE],
     ignoreOptions: { dot: false },
   })) {
     dirs.add(join(root, match));

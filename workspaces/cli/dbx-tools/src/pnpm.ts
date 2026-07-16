@@ -1,10 +1,9 @@
 /**
  * pnpm discovery, workspace install, and projen forwarding for the `dbxtools` CLI.
  */
-import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { functionModule } from "@dbx-tools/shared-core";
+import { exec, functionModule } from "@dbx-tools/shared-core";
 import { needsInstall } from "./root";
 
 /** A package.json `bin` field: either a single command string, or a name -> path map. */
@@ -19,8 +18,18 @@ function resolvePnpmArgvImpl(): string[] {
     return [process.execPath, join(dirname(pkgJsonPath), bin)];
   } catch {
     try {
-      execFileSync("corepack", ["enable", "pnpm"], { stdio: "ignore" });
-      execFileSync("pnpm", ["--version"], { stdio: "ignore" });
+      exec.execSync("corepack", ["enable", "pnpm"], {
+        stderr: "ignore",
+        stdin: "ignore",
+        stdout: "ignore",
+        check: true,
+      });
+      exec.execSync("pnpm", ["--version"], {
+        stderr: "ignore",
+        stdin: "ignore",
+        stdout: "ignore",
+        check: true,
+      });
       return ["pnpm"];
     } catch {
       return ["npx", "-y", "pnpm"];
@@ -34,7 +43,7 @@ export const resolvePnpmArgv = functionModule.memoize(resolvePnpmArgvImpl);
 /** Run pnpm with inherited stdio from `cwd`. */
 export function runPnpm(args: string[], cwd: string): void {
   const [command, ...prefix] = resolvePnpmArgv();
-  execFileSync(command, [...prefix, ...args], { cwd, stdio: "inherit" });
+  exec.execSync(command, [...prefix, ...args], { cwd, check: true });
 }
 
 /** Install workspace dependencies when `node_modules` or projen is missing. */

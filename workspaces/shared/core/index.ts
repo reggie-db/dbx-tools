@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as execModule from "./src/exec";
+export * as exec from "./src/exec";
 export * as functionModule from "./src/function";
 export * as iterable from "./src/iterable";
+export * as predicate from "./src/predicate";

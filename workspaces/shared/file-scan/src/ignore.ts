@@ -11,10 +11,9 @@
  *   and {@link watchFiles}.
  */
 
-import { functionModule, iterable } from "@dbx-tools/shared-core";
-import { directoryNamePattern, fileExtensionPattern } from "./pattern";
+import { exec, functionModule, iterable } from "@dbx-tools/shared-core";
 import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match";
-import { execSync } from "child_process";
+import { directoryNamePattern, fileExtensionPattern } from "./pattern";
 
 /** Toggles for each built-in ignore group; omitted flags default to `true`. */
 export type IgnorePatternOptions = {
@@ -38,7 +37,6 @@ export type IgnorePatternOptions = {
   lock?: boolean | "auto";
 };
 
-
 /**
  * Memoized probe for {@link IgnorePatternOptions.lock} `"auto"`.
  *
@@ -48,17 +46,19 @@ export type IgnorePatternOptions = {
 const lockIgnoreMatchersAutoEnabled = functionModule.memoize(() => {
   let registryUrl: URL | undefined;
   for (const command of ["npm", "pnpm", "yarn"]) {
-    try {
-      const output = execSync(`${command} config get registry`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-      if (output && output.includes("://")) {
-        const url = new URL(output);
-        if (url.protocol && url.hostname) {
-          registryUrl = url;
-          break;
-        }
+    const result = exec.execSync(command, ["config", "get", "registry"], {
+      stdout: "capture",
+      stderr: "ignore",
+      stdin: "ignore",
+    });
+    if (result.exitCode !== 0) continue;
+    const output = result.stdout;
+    if (output && output.includes("://")) {
+      const url = new URL(output);
+      if (url.protocol && url.hostname) {
+        registryUrl = url;
+        break;
       }
-    } catch (error) {
-      continue;
     }
   }
   if (registryUrl && registryUrl.hostname !== "registry.npmjs.org") {
@@ -76,7 +76,6 @@ function lockIgnoreMatchersEnabled(options?: IgnorePatternOptions): boolean {
   return value;
 }
 
-
 /**
  * Compiles glob strings into a `{ [glob]: PathMatchPredicate }` map.
  *
@@ -85,7 +84,6 @@ function lockIgnoreMatchersEnabled(options?: IgnorePatternOptions): boolean {
 function compileMatchers(patterns: readonly string[]): Record<string, PathMatchPredicate> {
   return Object.fromEntries(patterns.map((glob) => [glob, toPathMatcher(glob)]));
 }
-
 
 /** Build artifacts, dependency directories, caches, logs, and OS files. */
 const defaultIgnoreMatchers = compileMatchers([
@@ -100,6 +98,7 @@ const defaultIgnoreMatchers = compileMatchers([
     "bower_components",
     "jspm_packages",
     "dist",
+    "lib",
     "build",
     "out",
     "coverage",
@@ -137,14 +136,12 @@ const testIgnoreMatchers = compileMatchers([
   "**/spec.*",
 ]);
 
-
 /** Lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lockb`, …). */
 const lockIgnoreMatchers = compileMatchers([
   "**/bun.lockb",
-  ...["json", "yaml", "yml"].map(ext => `**/*-lock.${ext}`),
-  ...["lock"].map(ext => fileExtensionPattern(ext))
-])
-
+  ...["json", "yaml", "yml"].map((ext) => `**/*-lock.${ext}`),
+  ...["lock"].map((ext) => fileExtensionPattern(ext)),
+]);
 
 /**
  * Collects the pre-compiled matcher maps for each enabled built-in group.
@@ -152,8 +149,10 @@ const lockIgnoreMatchers = compileMatchers([
  * Group toggles come from `options`; the lock group also respects
  * {@link lockIgnoreMatchersEnabled} (`lock: "auto"` probes the npm registry).
  */
-function ignoreMatchPredicates(options?: IgnorePatternOptions): (Record<string, PathMatchPredicate>)[] {
-  const ignoreMatchRecords: (Record<string, PathMatchPredicate>)[] = [];
+function ignoreMatchPredicates(
+  options?: IgnorePatternOptions,
+): Record<string, PathMatchPredicate>[] {
+  const ignoreMatchRecords: Record<string, PathMatchPredicate>[] = [];
   if (options?.defaults ?? true) ignoreMatchRecords.push(defaultIgnoreMatchers);
   if (options?.temp ?? true) ignoreMatchRecords.push(tempIgnoreMatchers);
   if (options?.test ?? true) ignoreMatchRecords.push(testIgnoreMatchers);
@@ -173,7 +172,6 @@ function ignoreMatchPredicates(options?: IgnorePatternOptions): (Record<string, 
 export function ignorePatterns(options?: IgnorePatternOptions): iterable.Sequence<string> {
   return iterable.sequence(ignoreMatchPredicates(options)).flatMap(Object.keys).distinct();
 }
-
 
 /**
  * Returns a {@link PathMatcher} for paths ignored by the enabled built-in groups.

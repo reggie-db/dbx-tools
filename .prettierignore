@@ -10,6 +10,7 @@
 **/bower_components/**
 **/jspm_packages/**
 **/dist/**
+**/lib/**
 **/build/**
 **/out/**
 **/coverage/**
@@ -64,6 +65,7 @@
 .vscode/extensions.json
 .vscode/settings.json
 .vscode/tasks.json
+package.json
 pnpm-workspace.yaml
 tsconfig.base.json
 tsconfig.json

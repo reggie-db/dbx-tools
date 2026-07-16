@@ -1,10 +1,10 @@
 /**
  * Bootstrap a brand-new folder into a working dbx-tools workspace before projen runs.
  */
-import { execFileSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { intro, outro } from "@clack/prompts";
+import { exec } from "@dbx-tools/shared-core";
 import { resolvePnpmArgv, runPnpm } from "./pnpm";
 import { rootLabel } from "./root";
 
@@ -57,9 +57,9 @@ export function bootstrapWorkspace(
 
 function runSynth(root: string): void {
   const [command, ...prefix] = resolvePnpmArgv();
-  execFileSync(command, [...prefix, "exec", "tsx", ".projenrc.ts"], {
+  exec.execSync(command, [...prefix, "exec", "tsx", ".projenrc.ts"], {
     cwd: root,
-    stdio: "inherit",
     env: { ...process.env, PROJEN_DISABLE_POST: "true" },
+    check: true,
   });
 }

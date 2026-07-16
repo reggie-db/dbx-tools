@@ -49,13 +49,17 @@ for per-package tweaks.
   `workspacePackageTagPaths`, `defaultTagMixins`), which
   `extends` the component option bags directly — `DBXToolsConfigOptions` (`tags`)
   and `DBXToolsPNPMWorkspaceOptions` (`packages`/`catalog`/`allowBuilds`) — so those
-  are top-level options, not nested fields. Both expose `IDBXToolsProject`:
-  `scope`/`packageNameFor` plus the nested config COMPONENTS as fields (projen-style,
-  like `project.eslint?.addRules(...)`) — `project.dbxToolsConfig` (implements
+  are top-level options, not nested fields. Both implement `IDBXToolsNodeProject`
+  (the Node surface): `scope`/`packageIdentifier`/`packageNameFor` plus the config
+  COMPONENTS as fields (projen-style, like `project.eslint?.addRules(...)`) —
+  `project.dbxToolsConfig` (implements
   `ITagging`: `tags` + `addTags`, distinct/order-preserving, read/written directly on
   `package.json` `dbxToolsConfig.tags` — never cached on a field) and
   `project.pnpmWorkspace` (implements `IPnpmWorkspace`:
   `addPackages`/`addCatalog`/`allowBuild`; ROOT-only, so `undefined` on a child).
+  `IDBXToolsNodeProject` extends the runtime-agnostic `IDBXToolsProject`, which is
+  deliberately minimal (just `dbxToolsConfig`) so a future non-Node project (e.g.
+  Python package discovery) can implement it.
   Call methods on those fields directly (`project.dbxToolsConfig.addTags(...)`), not
   via delegator methods on the project.
 - **`pnpm-workspace.yaml` is the source of truth**, emitted by the
@@ -163,7 +167,7 @@ workspaces/
       pnpm-workspace.ts                   # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
       tags.ts                             # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
       workspace.ts                        # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
-      packages.ts                         # npmNameOf, lockPackageJson, applyCompilerOptions, applyTasks, addWorkspacePackageTags, SHARED_COMPILER_OPTIONS
+      packages.ts                         # npmNameOf, applyCompilerOptions, applyTasks, addWorkspacePackageTags, SHARED_COMPILER_OPTIONS
       barrels.ts                          # barrelsby driver (root index.ts, header + read-only)
       watch.ts                            # `watchFiles` loop for `dbxtools sync --watch` (package-set re-synth + barrels)
       scaffold.ts                         # packageSetChanged() + runSynth({ post })
@@ -303,14 +307,14 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `packages.ts`) because projen's
   `bootstrap.ts` resolves `pnpm`'s own CLI the same way (`require.resolve`, not a
   PATH lookup) - `pnpm` is a regular dependency of the engine for exactly this.
 - **`package.json` is forced read-only by default** on the root and every
-  subproject, so the whole generated tree is consistent. The switch is the
-  `DBXToolsConfig` component's `lockPackageJson` (default `true`), applied in its
-  `preSynthesize` via `lockPackageJson()` (`packages.ts`); projen still rewrites the
-  file each synth (clears the bit, writes, restores). Opt a package out with
-  `p.dbxToolsConfig.lockPackageJson = false` (or the `lockPackageJson: false`
-  option) - the engine package does exactly this so its own `package.json` stays
-  writable. Source/sample files the developer owns (`.projenrc.ts`, each package's
-  `README.md`, `src/*`) stay writable regardless.
+  subproject, so the whole generated tree is consistent. The `DBXToolsConfig`
+  component sets the manifest's `FileBase.readonly = true` in its CONSTRUCTOR (projen
+  still rewrites the file each synth - clears the bit, writes, restores). Opt a
+  package out by setting `p.package.file.readonly = false` directly - done in the
+  constructor rather than `preSynthesize` precisely so a later opt-out wins at synth.
+  The CLI package does exactly this so its own `package.json` stays writable.
+  Source/sample files the developer owns (`.projenrc.ts`, each package's `README.md`,
+  `src/*`) stay writable regardless.
 - **OpenAPI** (`openapi.ts`, `dbxtools openapi`): scans **every discovered**
   `server`/`node` package for **tsoa** controllers (classes with
   `@Route`/`@Get`/... - no JSDoc/YAML). For each, tsoa's `generateSpec` infers an

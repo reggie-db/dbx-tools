@@ -14,16 +14,24 @@
  * construction). `synth()` is called manually because this repo adds a thin `dbxtools`
  * root task first (see below); a normal consumer constructs, `with(...)`s, synths.
  */
-import { basename } from "node:path";
-import { JsonFile } from "projen";
+import path from "node:path";
+import { JsonFile, Project } from "projen";
 import { applyExampleWorkspaces } from "./.example.projenrc";
-import { fileMixin, packageMixin } from "./workspaces/shared/projen/src/mixins";
+import { mixin } from "./workspaces/shared/projen/src/mixin";
 import {
   DBXToolsNodeProject,
   DBXToolsTypeScriptProject,
-} from "./workspaces/shared/projen/src/project";
+  isDBXToolsPackage,
+  packageIdentifier,
+} from "./workspaces/shared/projen/src/package";
+import { predicate } from "./workspaces/shared/core/index";
 
 const SCOPE = "dbx-tools";
+
+function isWorkspacesPackage(p: { root: { outdir: string }; outdir: string }): boolean {
+  const rel = path.relative(p.root.outdir, p.outdir);
+  return rel === "workspaces" || rel.startsWith("workspaces/");
+}
 
 const project = new DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
@@ -41,13 +49,21 @@ project.pnpmWorkspace?.allowBuild("unrs-resolver");
 project.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
 
 project.with(
-  fileMixin((file) => {
-    if (file.path === "tsconfig.json" && file.project === project) {
-      (file as JsonFile).addOverride("include", [".projenrc.ts", ".example.projenrc.ts"]);
-    }
-  }),
-  packageMixin(
-    (p) => p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "core",
+  mixin(
+    (file): file is JsonFile =>
+      file instanceof JsonFile &&
+      file.path === "tsconfig.json" &&
+      file.project === project,
+    (file) => {
+      file.addOverride("include", [".projenrc.ts", ".example.projenrc.ts"]);
+    },
+  ),
+  mixin(
+    predicate
+      .toPredicate(isDBXToolsPackage)
+      .and(isWorkspacesPackage)
+      .and((p) => p.dbxToolsConfig.tags.includes("shared"))
+      .and((p) => p.packageIdentifier.name === "shared-core"),
     (p) => {
       p.dbxToolsConfig.addTags("node");
       if (p instanceof DBXToolsTypeScriptProject) {
@@ -55,9 +71,14 @@ project.with(
       }
     },
   ),
-  packageMixin(
-    (p) => p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "projen",
+  mixin(
+    predicate
+      .toPredicate(isDBXToolsPackage)
+      .and(isWorkspacesPackage)
+      .and((p) => p.dbxToolsConfig.tags.includes("shared"))
+      .and((p) => p.packageIdentifier.name === "shared-projen"),
     (p) => {
+      p.package.addField("name", packageIdentifier(p.root).withName("projen").packageName);
       p.dbxToolsConfig.addTags("node");
       p.addDeps(
         "projen",
@@ -72,7 +93,9 @@ project.with(
         "commander",
         "@clack/prompts",
         "consola",
-        "pnpm",
+        "@typescript-eslint/typescript-estree@^8",
+        "typescript@catalog:",
+        "is-identifier@^1",
         "@dbx-tools/shared-file-scan@workspace:*",
         "@dbx-tools/shared-core@workspace:*",
       );
@@ -80,7 +103,6 @@ project.with(
       p.package.addField("exports", {
         ".": "./index.ts",
         "./log": "./src/log.ts",
-        "./pnpm": "./src/pnpm.ts",
         "./engine-root": "./src/engine-root.ts",
         "./package.json": "./package.json",
       });
@@ -93,17 +115,25 @@ project.with(
       }
     },
   ),
-  packageMixin(
-    (p) => p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "file-scan",
+  mixin(
+    predicate
+      .toPredicate(isDBXToolsPackage)
+      .and(isWorkspacesPackage)
+      .and((p) => p.dbxToolsConfig.tags.includes("shared"))
+      .and((p) => p.packageIdentifier.name === "shared-file-scan"),
     (p) => {
       p.addDeps("chokidar", "glob", "minimatch", "@dbx-tools/shared-core@workspace:*");
     },
   ),
-  packageMixin(
-    (p) => p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "dbx-tools",
+  mixin(
+    predicate
+      .toPredicate(isDBXToolsPackage)
+      .and(isWorkspacesPackage)
+      .and((p) => p.dbxToolsConfig.tags.includes("cli"))
+      .and((p) => p.packageIdentifier.name === "cli-dbx-tools"),
     (p) => {
       p.package.addField("name", SCOPE);
-      p.dbxToolsConfig.lockPackageJson = false;
+      p.package.file.readonly = false;
       p.package.addField("publishConfig", {
         access: "public",
         provenance: true,
