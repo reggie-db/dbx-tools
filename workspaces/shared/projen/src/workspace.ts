@@ -29,30 +29,6 @@ import { exec, string } from "@dbx-tools/shared-core";
 import { find } from "@dbx-tools/shared-file-scan";
 import { parse } from "yaml";
 
-const SLUG_PARTS_REGEXP = /(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[^A-Za-z0-9._-]+/g;
-
-const SLUG_PARTS_EDGE_REGEXP = /^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g;
-
-/**
- * Split a path or name fragment into normalized lowercase slug segments.
- *
- * @returns Segments used to build dashed names (`coolDude` -> `["cool", "dude"]`)
- */
-export function toSlugParts(value: string | null | undefined): string[] {
-  if (!value) return [];
-  return value
-    .split(SLUG_PARTS_REGEXP)
-    .map((part) => part.replace(SLUG_PARTS_EDGE_REGEXP, "").toLowerCase())
-    .filter(Boolean);
-}
-
-/**
- * @deprecated Use {@link toSlugParts}.
- */
-export function toNameParts(value: string | null | undefined): string[] {
-  return toSlugParts(value);
-}
-
 /** Trimmed stdout from a command, or undefined when the process fails or prints nothing. */
 function capturedStdout(command: string, args: string[]): string | undefined {
   const result = exec.spawnSync(command, args, {
@@ -104,21 +80,10 @@ export function escapeRegExp(s: string): string {
 }
 
 /**
- * Convert a path segment to a kebab-case tag token (`coolDude` -> `cool-dude`).
- *
- * Uses the shared {@link string.toSlug} tokenizer. Unlike {@link toSlugParts}
- * (which backs npm package naming and preserves inner `.`/`_`/`-` so the
- * `dbx-tools` scope survives as one token), tag tokens are always single
- * kebab-cased folder names, so the fuller tokenization is the right fit here.
- */
-function pathSegmentToTagToken(segment: string): string {
-  return string.toSlug(segment);
-}
-
-/**
  * Cumulative nesting tags from a package's path segments relative to its discovery
- * root. The leaf folder (the package name) is excluded when there are two or more
- * segments; a lone segment tags itself.
+ * root. Each segment is kebab-cased with {@link string.toSlug} (`coolDude` ->
+ * `cool-dude`). The leaf folder (the package name) is excluded when there are two
+ * or more segments; a lone segment tags itself.
  */
 function nestingTagsFromSegments(segments: readonly string[]): string[] {
   if (segments.length === 0) return [];
@@ -126,7 +91,7 @@ function nestingTagsFromSegments(segments: readonly string[]): string[] {
   const out: string[] = [];
   let acc = "";
   for (const segment of prefix) {
-    const token = pathSegmentToTagToken(segment);
+    const token = string.toSlug(segment);
     if (!token) continue;
     acc = acc ? `${acc}-${token}` : token;
     out.push(acc);

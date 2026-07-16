@@ -6,7 +6,7 @@
  * {@link DBXToolsNodeProject} (monorepo root) and {@link DBXToolsTypeScriptProject}
  * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
  */
-import { iterable } from "@dbx-tools/shared-core";
+import { iterable, string } from "@dbx-tools/shared-core";
 import { ignore, match } from "@dbx-tools/shared-file-scan";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -37,7 +37,6 @@ import {
   projectName,
   scanPackages,
   toPosix,
-  toSlugParts,
 } from "./workspace";
 
 /**
@@ -113,13 +112,22 @@ export class PackageIdentifier {
   }
 
   /**
-   * Build from ordered path parts (slugified). One segment stays bare; multiple become
+   * Build from ordered path parts. One segment stays bare; multiple become
    * `@<first>/<rest joined by ->`.
+   *
+   * The leading segment is the npm `@scope`, kebab-cased with
+   * {@link string.toSlug} so a multi-word scope survives intact
+   * (`dbx-tools` -> `dbx-tools`, not `dbx`/`tools`). Every later path
+   * segment is tokenized with {@link string.tokenize}, so nested folders
+   * split into their own dash-joined name parts.
    */
   static of(...names: iterable.OneOrMany<string>): PackageIdentifier {
-    const nameParts = names
-      .flatMap((part) => part.split("/"))
-      .flatMap((part) => toSlugParts(part));
+    const segments = names.flatMap((part) => part.split("/")).filter(Boolean);
+    const scope = segments.length ? string.toSlug(segments[0]!) : "";
+    const nameParts = [
+      scope,
+      ...segments.slice(1).flatMap((segment) => [...string.tokenize(segment)]),
+    ].filter(Boolean);
     if (!nameParts.length) throw new Error(`Invalid name: ${names.join(", ")}`);
     if (nameParts.length === 1) return new PackageIdentifier(undefined, nameParts[0]!);
     return new PackageIdentifier(nameParts[0], nameParts.slice(1).join("-"));
