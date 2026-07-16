@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/shared-core",
+  "name": "@dbx-tools/example-shared-core",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",

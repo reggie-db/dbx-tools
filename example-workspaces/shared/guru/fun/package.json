@@ -1,8 +1,5 @@
 {
-  "name": "@dbx-tools/cli-main",
-  "bin": {
-    "pw-demo": "./src/cli.ts"
-  },
+  "name": "@dbx-tools/shared-guru-fun",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -15,16 +12,10 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
+    "@types/node": "^24.6.0",
     "picomatch": "^4.0.5",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "@clack/prompts": "catalog:",
-    "@dbx-tools/example-shared-core": "workspace:*",
-    "@dbx-tools/shared-neat": "workspace:*",
-    "commander": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -33,7 +24,8 @@
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
-      "cli"
+      "shared",
+      "shared-guru"
     ]
   },
   "type": "module",

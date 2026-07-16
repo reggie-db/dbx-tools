@@ -39,10 +39,11 @@ import {
 import { ReleaseTrigger } from "projen/lib/release";
 import { resolveEnginePkgRoot } from "./engine-root";
 import { generateBarrels } from "./barrels";
-import * as files from "./files";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
 import { DBXToolsRelease } from "./publish";
+import { DBXToolsRootTsconfig } from "./tsconfig";
 import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, applyTasks, type WorkspaceTag } from "./tags";
+import { DBXToolsVsCode } from "./vscode";
 import { taskScript } from "./task-script";
 import { emitViteConfig } from "./vite";
 import {
@@ -355,7 +356,11 @@ export interface IDBXToolsProject extends javascript.NodeProject {
   /** The component that owns `package.json` `dbxToolsConfig` (tags live here). */
   readonly dbxToolsConfig: DBXToolsConfig;
   /** The `pnpm-workspace.yaml` file component - only a tree ROOT has one. */
-  readonly pnpmWorkspace?: DBXToolsPNPMWorkspace;
+  pnpmWorkspace?: DBXToolsPNPMWorkspace;
+  /** Root projenrc tsconfigs - only a tree ROOT has one. */
+  rootTsconfig?: DBXToolsRootTsconfig;
+  /** Root `.vscode/*` - only a tree ROOT has one. */
+  vsCode?: DBXToolsVsCode;
   /** The npm name for a package at `relPath` under this project's scope. */
   packageNameFor(relPath: string): string;
 }
@@ -368,7 +373,9 @@ export interface IDBXToolsProject extends javascript.NodeProject {
 export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXToolsProject {
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
-  readonly pnpmWorkspace: DBXToolsPNPMWorkspace;
+  pnpmWorkspace?: DBXToolsPNPMWorkspace;
+  rootTsconfig?: DBXToolsRootTsconfig;
+  vsCode?: DBXToolsVsCode;
 
   constructor(options: DBXToolsProjectOptions = {}) {
     const { name, scope } = resolveIdentity(options);
@@ -383,9 +390,7 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements IDBXT
     });
 
     this.scope = scope;
-    // `options` extends both component option bags, so it flows straight in.
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
-    this.pnpmWorkspace = new DBXToolsPNPMWorkspace(this, options);
     initProject(this, options);
   }
 
@@ -412,7 +417,9 @@ export class DBXToolsTypeScriptProject
 {
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
-  readonly pnpmWorkspace?: DBXToolsPNPMWorkspace;
+  pnpmWorkspace?: DBXToolsPNPMWorkspace;
+  rootTsconfig?: DBXToolsRootTsconfig;
+  vsCode?: DBXToolsVsCode;
 
   constructor(options: DBXToolsTypeScriptProjectOptions) {
     const { name, scope } = resolveIdentity(options);
@@ -440,12 +447,7 @@ export class DBXToolsTypeScriptProject
       },
     });
     this.scope = scope;
-    // `options` extends both component option bags, so it flows straight in.
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
-    // Only a tree ROOT emits `pnpm-workspace.yaml`; a child package has none (like
-    // projen's optional `project.eslint`). `parent` is readonly once super() ran, so
-    // this root-vs-child decision is fixed here - the component never re-checks it.
-    this.pnpmWorkspace = this.parent ? undefined : new DBXToolsPNPMWorkspace(this, options);
 
     // Source-first entry: point the package at its package-ROOT `index.ts` barrel
     // so workspace packages resolve each other's `@scope/pkg` imports to source.
@@ -611,11 +613,10 @@ function initProject(
   project.package.addField("type", "module");
   project.package.addField("private", true);
 
-  files.tsconfigBase(project);
-  files.tsconfigRoot(project);
-  files.vscodeTasks(project);
-  files.vscodeSettings(project);
-  files.vscodeExtensions(project);
+  project.pnpmWorkspace = new DBXToolsPNPMWorkspace(project, options);
+  project.rootTsconfig = new DBXToolsRootTsconfig(project);
+  project.vsCode = new DBXToolsVsCode(project);
+
   registerRootTasks(project);
   if (options.prettier || project.prettier) {
     const formatTask = project.tasks.tryFind("format") ?? project.addTask("format");

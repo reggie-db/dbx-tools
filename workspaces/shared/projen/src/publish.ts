@@ -230,6 +230,10 @@ export function configureRelease(project: DBXToolsNodeProject): void {
     });
   }
 
+  project.release.publisher.publishToNpm({
+    npmProvenance: true,
+  });
+
   const releaseWorkflow = project.github?.tryFindWorkflow("release");
   releaseWorkflow?.file?.addOverride("on.push.branches", undefined);
   releaseWorkflow?.file?.addOverride("on.workflow_dispatch", undefined);

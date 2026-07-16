@@ -1,4 +1,4 @@
-import { strings } from "@dbx-tools/shared-core";
+import { strings } from "@dbx-tools/example-shared-core";
 import { Controller, Get, Path, Route, SuccessResponse } from "tsoa";
 
 /** A greeting payload (the response schema, inferred by tsoa from this type). */

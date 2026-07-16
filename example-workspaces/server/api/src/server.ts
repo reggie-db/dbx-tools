@@ -1,4 +1,4 @@
-import { strings } from "@dbx-tools/shared-core";
+import { strings } from "@dbx-tools/example-shared-core";
 import express from "express";
 
 /**

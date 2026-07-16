@@ -1,7 +1,7 @@
 {
-  "name": "@dbx-tools/cli-main",
+  "name": "@dbx-tools/cli-mastracode-headless",
   "bin": {
-    "pw-demo": "./src/cli.ts"
+    "mc-headless": "./src/headless.ts"
   },
   "scripts": {
     "build": "projen build",
@@ -16,15 +16,14 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "picomatch": "^4.0.5",
+    "picomatch": "*",
     "tsx": "^4.23.0",
-    "typescript": "^5.9.3"
+    "typescript": "*"
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
-    "@dbx-tools/example-shared-core": "workspace:*",
-    "@dbx-tools/shared-neat": "workspace:*",
-    "commander": "catalog:"
+    "commander": "catalog:",
+    "mastracode": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

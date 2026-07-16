@@ -1,30 +1,29 @@
 {
-  "name": "@dbx-tools/cli-main",
-  "bin": {
-    "pw-demo": "./src/cli.ts"
-  },
+  "name": "@dbx-tools/server-appkit-server",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
     "default": "projen default",
+    "dev": "projen dev",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "start": "projen start",
     "test": "projen test",
     "watch": "projen watch",
     "projen": "projen"
   },
   "devDependencies": {
+    "@types/express": "catalog:",
     "@types/node": "catalog:",
-    "picomatch": "^4.0.5",
+    "picomatch": "*",
     "tsx": "^4.23.0",
-    "typescript": "^5.9.3"
+    "typescript": "*"
   },
   "dependencies": {
-    "@clack/prompts": "catalog:",
-    "@dbx-tools/example-shared-core": "workspace:*",
-    "@dbx-tools/shared-neat": "workspace:*",
-    "commander": "catalog:"
+    "@databricks/appkit": "catalog:",
+    "express": "catalog:",
+    "tsoa": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -33,7 +32,7 @@
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
-      "cli"
+      "server"
     ]
   },
   "type": "module",

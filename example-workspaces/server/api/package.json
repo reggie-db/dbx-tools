@@ -21,7 +21,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/shared-core": "workspace:*",
+    "@dbx-tools/example-shared-core": "workspace:*",
     "express": "catalog:",
     "tsoa": "catalog:"
   },

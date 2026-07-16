@@ -39,7 +39,7 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/shared-core",
+      "name": "@dbx-tools/example-shared-core",
       "version": "workspace:*",
       "type": "runtime"
     },

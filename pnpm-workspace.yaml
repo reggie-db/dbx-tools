@@ -2,12 +2,15 @@
 
 packages:
   - example-workspaces/cli/main
+  - example-workspaces/cli/mastracode-headless
   - example-workspaces/openapi/api
   - example-workspaces/server/api
+  - example-workspaces/server/appkit-server
   - example-workspaces/shared/core
-  - example-workspaces/shared/fun
+  - example-workspaces/shared/guru/fun
   - example-workspaces/shared/neat
   - example-workspaces/ui/app
+  - example-workspaces/ui/appkit-client
   - workspaces/cli/dbx-tools
   - workspaces/shared/core
   - workspaces/shared/file-scan
@@ -29,6 +32,9 @@ catalog:
   openapi-fetch: ^0.17.0
   tsoa: ^6.6.0
   pnpm: ^11.0.6
+  "@databricks/appkit": ^0.43.0
+  "@databricks/appkit-ui": ^0.43.0
+  mastracode: ^0.4.0
 allowBuilds:
   esbuild: true
   unrs-resolver: true

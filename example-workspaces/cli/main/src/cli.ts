@@ -1,7 +1,7 @@
 #!/usr/bin/env -S npx tsx
 import { fileURLToPath } from "node:url";
 import { intro, outro } from "@clack/prompts";
-import { math } from "@dbx-tools/shared-core";
+import { math } from "@dbx-tools/example-shared-core";
 import { Command } from "commander";
 
 /**

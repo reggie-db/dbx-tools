@@ -1,21 +1,33 @@
 {
-  "name": "@dbx-tools/shared-fun",
+  "name": "@dbx-tools/ui-appkit-client",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
     "default": "projen default",
+    "dev": "projen dev",
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "preview": "projen preview",
     "test": "projen test",
     "watch": "projen watch",
     "projen": "projen"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
-    "picomatch": "^4.0.5",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "picomatch": "*",
     "tsx": "^4.23.0",
-    "typescript": "^5.9.3"
+    "typescript": "*",
+    "vite": "catalog:"
+  },
+  "dependencies": {
+    "@databricks/appkit": "catalog:",
+    "@databricks/appkit-ui": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -24,7 +36,7 @@
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
-      "shared"
+      "ui"
     ]
   },
   "type": "module",
