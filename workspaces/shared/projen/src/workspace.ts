@@ -49,7 +49,7 @@ export function toSlugParts(value: string | null | undefined): string[] {
 /**
  * Normalize a path or name fragment to kebab-case (`coolDude` -> `cool-dude`).
  */
-export function toSlug(value: string): string {
+function toSlug(value: string): string {
   return toSlugParts(value).join("-");
 }
 
@@ -62,7 +62,7 @@ export function toNameParts(value: string | null | undefined): string[] {
 
 /** Trimmed stdout from a command, or undefined when the process fails or prints nothing. */
 function capturedStdout(command: string, args: string[]): string | undefined {
-  const result = exec.execSync(command, args, {
+  const result = exec.spawnSync(command, args, {
     stdout: "capture",
     stderr: "ignore",
     stdin: "ignore",
@@ -113,7 +113,7 @@ export function escapeRegExp(s: string): string {
 /**
  * Convert a path segment to a kebab-case tag token (`coolDude` -> `cool-dude`).
  */
-export function pathSegmentToTagToken(segment: string): string {
+function pathSegmentToTagToken(segment: string): string {
   return toSlug(segment);
 }
 
@@ -122,7 +122,7 @@ export function pathSegmentToTagToken(segment: string): string {
  * root. The leaf folder (the package name) is excluded when there are two or more
  * segments; a lone segment tags itself.
  */
-export function nestingTagsFromSegments(segments: readonly string[]): string[] {
+function nestingTagsFromSegments(segments: readonly string[]): string[] {
   if (segments.length === 0) return [];
   const prefix = segments.length === 1 ? segments : segments.slice(0, -1);
   const out: string[] = [];
@@ -137,7 +137,7 @@ export function nestingTagsFromSegments(segments: readonly string[]): string[] {
 }
 
 /** Matches a barrel `index.<ext>` (as a basename or a posix path tail). */
-export const BARREL_RE = /(^|\/)index\.(ts|tsx|js|jsx|mjs|cjs)$/;
+const BARREL_RE = /(^|\/)index\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
 /** True if the path is a generated barrel `index.<ext>`. */
 export function isBarrel(file: string): boolean {
@@ -191,7 +191,7 @@ export class DiscoveredPackage {
     readonly root: string,
     /** Path segments relative to `root`, e.g. `["ui", "app"]`. */
     readonly relSegments: readonly string[],
-  ) {}
+  ) { }
 
   /** Posix path relative to the root, e.g. `ui/app`. */
   get relPath(): string {
@@ -225,7 +225,7 @@ export class DiscoveredPackage {
 }
 
 /** Read the raw workspace member globs from `pnpm-workspace.yaml` (source of truth). */
-export function readWorkspaceMembers(projectRoot: string = repoRoot): string[] {
+function readWorkspaceMembers(projectRoot: string = repoRoot): string[] {
   const file = resolve(projectRoot, "pnpm-workspace.yaml");
   if (!existsSync(file)) return [];
   const doc = parse(readFileSync(file, "utf8")) as {

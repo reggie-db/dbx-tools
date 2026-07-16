@@ -42,10 +42,6 @@
       "type": "runtime"
     },
     {
-      "name": "concurrently",
-      "type": "runtime"
-    },
-    {
       "name": "consola",
       "type": "runtime"
     },

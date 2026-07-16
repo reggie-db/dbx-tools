@@ -16,19 +16,13 @@
  */
 import { JsonFile, Project } from "projen";
 import { applyExampleWorkspaces } from "./.example.projenrc";
-import { mixin } from "./workspaces/shared/projen/src/mixin";
-import {
-  DBXToolsNodeProject,
-  DBXToolsTypeScriptProject,
-  packageIdentifier,
-  inRelPath,
-} from "./workspaces/shared/projen/src/project";
+import { mixin, project as projectApi, projectPredicate } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
 
-const workspaces = inRelPath("workspaces");
+const workspaces = projectPredicate.hasPath("workspaces");
 
-const project = new DBXToolsNodeProject({
+const project = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
   workspacePackageRoots: ["workspaces", "example-workspaces"],
@@ -39,13 +33,22 @@ const project = new DBXToolsNodeProject({
   releaseToNpm: true,
   workflowPackageCache: true,
   depsUpgrade: false,
+  devDeps: ["concurrently", "@dbx-tools/shared-core@workspace:*", "@dbx-tools/projen@workspace:*"],
 });
+project.pnpmWorkspace?.allowBuild("@databricks/appkit-ui");
+project.pnpmWorkspace?.allowBuild("@databricks/appkit");
+project.pnpmWorkspace?.allowBuild("@google/genai", true);
+project.pnpmWorkspace?.allowBuild("protobufjs", true);
+project.pnpmWorkspace?.allowBuild("agent-browser", false);
+project.pnpmWorkspace?.allowBuild("bufferutil", false);
+project.pnpmWorkspace?.allowBuild("edgedriver", false);
+project.pnpmWorkspace?.allowBuild("geckodriver", false);
+project.pnpmWorkspace?.allowBuild("onnxruntime-node", false);
 
-project.pnpmWorkspace?.allowBuild("unrs-resolver");
 project.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
-
+console.log("shared", project.name);
 project.with(
-  mixin(
+  mixin.mixin(
     (file): file is JsonFile =>
       file instanceof JsonFile &&
       file.path === "tsconfig.json" &&
@@ -54,18 +57,30 @@ project.with(
       file.addOverride("include", [".projenrc.ts", ".example.projenrc.ts"]);
     },
   ),
-);
-
-project
-  .mixin(workspaces.withTag("shared").supports("*/shared-core"), (p) => {
-    p.dbxToolsConfig.addTags("node");
-    if (p instanceof DBXToolsTypeScriptProject) {
+  mixin.mixin(workspaces.and(projectPredicate.hasTag("shared")), (p) => {
+    console.log("shared", p.name);
+    p.addDeps("@dbx-tools/shared-core@workspace:*");
+  }),
+  mixin.mixin(workspaces.and(projectPredicate.hasName("*/shared-core")).and(projectPredicate.hasTag("shared")), (p) => {
+    p.dbxToolsConfig.tags.push("node");
+    if (p instanceof projectApi.DBXToolsTypeScriptProject) {
       p.tsconfig?.file.addOverride("compilerOptions.types", ["node"]);
     }
-  })
-  .mixin(workspaces.withTag("shared").supports("*/shared-projen"), (p) => {
-    p.package.addField("name", packageIdentifier(p.root).withName("projen").packageName);
-    p.dbxToolsConfig.addTags("node");
+  }),
+  mixin.mixin(workspaces.and(projectPredicate.hasName("*/shared-file-scan")).and(projectPredicate.hasTag("shared")), (p) => {
+    // Pin explicit ranges: bare names resolve against the local registry, which can
+    // return stale majors (e.g. minimatch@3 lacks the `{ Minimatch }` ESM export the
+    // code imports, chokidar@1 predates the v4 API).
+    p.addDeps(
+      "@dbx-tools/shared-core@workspace:*",
+      "glob@^10.5.0",
+      "chokidar@^4.0.3",
+      "minimatch@^10.2.5",
+    );
+  }),
+  mixin.mixin(workspaces.and(projectPredicate.hasName("*/shared-projen")).and(projectPredicate.hasTag("shared")), (p) => {
+    p.package.addField("name", projectApi.identifier(p.root).withName("projen").packageName);
+    p.dbxToolsConfig.tags.push("node");
     p.addDeps(
       "projen",
       "constructs",
@@ -77,7 +92,6 @@ project
       "p-memoize",
       "commander",
       "@clack/prompts",
-      "concurrently",
       "consola",
       "@typescript-eslint/typescript-estree@^8",
       "typescript@catalog:",
@@ -91,18 +105,15 @@ project
       "./engine-root": "./src/engine-root.ts",
       "./package.json": "./package.json",
     });
-    if (p instanceof DBXToolsTypeScriptProject) {
+    if (p instanceof projectApi.DBXToolsTypeScriptProject) {
       p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
       p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
       p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
       p.tsconfig?.addInclude("index.ts");
       p.tsconfig?.addInclude("tasks/**/*.ts");
     }
-  })
-  .mixin(workspaces.withTag("shared").supports("*/shared-file-scan"), (p) => {
-    p.addDeps("chokidar", "glob", "minimatch", "@dbx-tools/shared-core@workspace:*");
-  })
-  .mixin(workspaces.withTag("cli").supports("*/cli-dbx-tools"), (p) => {
+  }),
+  mixin.mixin(workspaces.and(projectPredicate.hasName("*/cli-dbx-tools")).and(projectPredicate.hasTag("cli")), (p) => {
     p.package.addField("name", SCOPE);
     p.package.file.readonly = false;
     p.package.addField("publishConfig", {
@@ -116,14 +127,17 @@ project
       "./package.json": "./package.json",
     });
     p.addDeps("@dbx-tools/shared-core@workspace:*", "pnpm");
-    if (p instanceof DBXToolsTypeScriptProject) {
+    if (p instanceof projectApi.DBXToolsTypeScriptProject) {
       p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
       p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);
       p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
       p.tsconfig?.addInclude("index.ts");
       p.tsconfig?.addInclude("bin/**/*.ts");
     }
-  });
+  })
+);
+
+
 
 applyExampleWorkspaces(project);
 

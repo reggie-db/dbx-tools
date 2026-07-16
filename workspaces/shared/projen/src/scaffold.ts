@@ -12,12 +12,12 @@ import { exec } from "@dbx-tools/shared-core";
 import { recordedRoots, repoRoot, scanPackages, workspacePackages } from "./workspace";
 
 /** Member paths that currently exist on disk (scan of the recorded roots). */
-export function currentPackages(): string[] {
+function currentPackages(): string[] {
   return scanPackages(repoRoot, recordedRoots()).map((p) => p.memberPath);
 }
 
 /** Member paths recorded by the last synth (read from `pnpm-workspace.yaml`). */
-export function recordedPackages(): string[] {
+function recordedPackages(): string[] {
   return workspacePackages(repoRoot).map((p) => p.path);
 }
 
@@ -49,7 +49,7 @@ export function runSynth(options: { post?: boolean } = {}): void {
   const env = { ...process.env };
   if (options.post) delete env.PROJEN_DISABLE_POST;
   else env.PROJEN_DISABLE_POST = "true";
-  exec.execSync(process.execPath, ["--import", "tsx", join(repoRoot, ".projenrc.ts")], {
+  exec.spawnSync(process.execPath, ["--import", "tsx", join(repoRoot, ".projenrc.ts")], {
     cwd: repoRoot,
     env,
     check: true,

@@ -49,7 +49,7 @@ export function createApiClient(options?: ClientOptions) {
 `;
 
 /** True if any module file in `<pkg>/src` matches {@link TSOA_IMPORT}. */
-export function hasTsoaControllers(pkg: Pick<WorkspacePackage, "dir">): boolean {
+function hasTsoaControllers(pkg: Pick<WorkspacePackage, "dir">): boolean {
   const srcDir = join(pkg.dir, "src");
   return [...find.findFiles("**/*", { cwd: srcDir })]
     .filter(isModuleFile)

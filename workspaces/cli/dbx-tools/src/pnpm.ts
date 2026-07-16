@@ -18,13 +18,13 @@ function resolvePnpmArgvImpl(): string[] {
     return [process.execPath, join(dirname(pkgJsonPath), bin)];
   } catch {
     try {
-      exec.execSync("corepack", ["enable", "pnpm"], {
+      exec.spawnSync("corepack", ["enable", "pnpm"], {
         stderr: "ignore",
         stdin: "ignore",
         stdout: "ignore",
         check: true,
       });
-      exec.execSync("pnpm", ["--version"], {
+      exec.spawnSync("pnpm", ["--version"], {
         stderr: "ignore",
         stdin: "ignore",
         stdout: "ignore",
@@ -43,7 +43,7 @@ export const resolvePnpmArgv = functionModule.memoize(resolvePnpmArgvImpl);
 /** Run pnpm with inherited stdio from `cwd`. */
 export function runPnpm(args: string[], cwd: string): void {
   const [command, ...prefix] = resolvePnpmArgv();
-  exec.execSync(command, [...prefix, ...args], { cwd, check: true });
+  exec.spawnSync(command, [...prefix, ...args], { cwd, check: true });
 }
 
 /** Install workspace dependencies when `node_modules` or projen is missing. */

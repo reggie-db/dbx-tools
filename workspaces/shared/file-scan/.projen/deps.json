@@ -21,14 +21,17 @@
     },
     {
       "name": "chokidar",
+      "version": "^4.0.3",
       "type": "runtime"
     },
     {
       "name": "glob",
+      "version": "^10.5.0",
       "type": "runtime"
     },
     {
       "name": "minimatch",
+      "version": "^10.2.5",
       "type": "runtime"
     }
   ],

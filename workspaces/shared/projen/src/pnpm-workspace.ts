@@ -26,7 +26,7 @@ import { toPosix } from "./workspace";
 export type Catalog = Record<string, string>;
 
 /** Default pnpm `catalog:` versions, pinned to match `databricks apps init` (AppKit). */
-export const DEFAULT_CATALOG: Catalog = {
+const DEFAULT_CATALOG: Catalog = {
   react: "^19.2.4",
   "react-dom": "^19.2.4",
   "@types/react": "^19.2.2",

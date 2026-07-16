@@ -9,7 +9,7 @@ import { findWorkspaceRoot, needsBootstrap } from "./root";
 /**
  * Prepare the workspace at `root`, then run `pnpm exec projen` with `projenArgs`.
  */
-export async function prepareAndRunProjen(projenArgs: string[], startDir?: string): Promise<void> {
+async function prepareAndRunProjen(projenArgs: string[], startDir?: string): Promise<void> {
   const root = await findWorkspaceRoot(startDir);
   if (needsBootstrap(root)) {
     bootstrapWorkspace(root);

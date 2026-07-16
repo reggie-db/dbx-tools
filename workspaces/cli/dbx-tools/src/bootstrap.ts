@@ -59,7 +59,7 @@ export function bootstrapWorkspace(
 
 function runSynth(root: string): void {
   const [command, ...prefix] = resolvePnpmArgv();
-  exec.execSync(command, [...prefix, "exec", "tsx", ".projenrc.ts"], {
+  exec.spawnSync(command, [...prefix, "exec", "tsx", ".projenrc.ts"], {
     cwd: root,
     env: { ...process.env, PROJEN_DISABLE_POST: "true" },
     check: true,

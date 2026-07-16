@@ -69,8 +69,42 @@ export function isCollection<T = unknown>(value: unknown): value is Collection<T
  *
  * @param collection - The array, set, or map to test.
  */
-export function isEmpty(collection: Collection<unknown>): boolean {
-  return "size" in collection ? collection.size === 0 : collection.length === 0;
+export function isEmpty(
+  collection: Collection<unknown> | Record<string, unknown>,
+  options?: { recursive?: boolean },
+): boolean {
+
+  function visit(value: unknown, seen?: Set<unknown>): boolean {
+    if (value == null) return true;
+    else if (typeof value === "object") {
+      if (seen?.has(value)) return true;
+      seen?.add(value);
+      if (Array.isArray(value)) {
+        return value.length === 0 || (seen ? value.every((item) => visit(item, seen)) : false);
+      }
+      if (value instanceof Set) {
+        return (
+          value.size === 0 || (seen ? [...value].every((item) => visit(item, seen)) : false)
+        );
+      }
+      if (value instanceof Map) {
+        return (
+          value.size === 0 ||
+          (seen ? [...value.values()].every((item) => visit(item, seen)) : false)
+        );
+      }
+      const keys = Object.keys(value);
+      if (keys.length === 0) return true;
+      else if (seen) {
+        return keys.every((key) => visit((value as Record<string, unknown>)[key], seen));
+      } else {
+        return false
+      }
+    } else {
+      return false;
+    }
+  }
+  return visit(collection, options?.recursive ? new Set() : undefined);
 }
 
 

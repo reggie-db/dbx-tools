@@ -6,11 +6,10 @@
  * {@link DBXToolsNodeProject} (monorepo root) and {@link DBXToolsTypeScriptProject}
  * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
  */
+import { iterable } from "@dbx-tools/shared-core";
+import { ignore, match } from "@dbx-tools/shared-file-scan";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { ignore, match } from "@dbx-tools/shared-file-scan";
-import { predicate, iterable } from "@dbx-tools/shared-core";
-import type { IConstruct } from "constructs";
 import {
   Component,
   IgnoreFile,
@@ -26,7 +25,6 @@ import {
   type DBXToolsConfigOptions,
 } from "./dbx-tools-config";
 import { resolvePkgRoot } from "./engine-root";
-import { mixin as constructsMixin, type ConstructsMixin } from "./mixin";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
 import { DBXToolsRelease } from "./publish";
 import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, type WorkspaceTag } from "./tags";
@@ -54,8 +52,7 @@ export interface DBXToolsProject extends javascript.NodeProject {
   readonly scope: string;
   /** Parsed `package.json` `name` (optional scope + unscoped name). */
   readonly packageIdentifier: PackageIdentifier;
-  /** Full npm name for a root-relative package path. */
-  packageNameFor(relPath: string): string;
+
   /** The `pnpm-workspace.yaml` file component - only a tree ROOT has one. */
   pnpmWorkspace?: DBXToolsPNPMWorkspace;
   /** Root projenrc tsconfigs - only a tree ROOT has one. */
@@ -129,151 +126,23 @@ export class PackageIdentifier {
   }
 }
 
-/** Structural guard for a projen Node workspace package. */
-export function isDBXToolsPackage(c: IConstruct): c is DBXToolsProject {
-  return c instanceof javascript.NodeProject && "dbxToolsConfig" in c && "scope" in c;
-}
 
-
-/** True when a project's npm name matches `pattern` (e.g. `*\/shared-core`, `*\/shared-*`). */
-function matchesNamePattern(project: Project, pattern: string): boolean {
-  const id = packageIdentifier(project);
-  const matcher = match.toPathMatcher(pattern);
-  if (matcher(id.packageName) || matcher(id.name)) return true;
-  if (pattern.startsWith("*/")) return match.toPathMatcher(pattern.slice(2))(id.name);
-  return false;
-}
-
-/** Raw filter: project npm name matches any of `patterns` (glob via {@link matchesNamePattern}). */
-function matchesName(...patterns: iterable.OneOrMany<string>): (project: Project) => boolean {
-  return (project) => patterns.some((candidate) => matchesNamePattern(project, candidate));
-}
-
-/**
- * Raw filter + guard: `project` is a DBXTools package carrying every tag in `tags`
- * (`dbxToolsConfig.tags`). Narrows {@link Project} to {@link DBXToolsProject}, since tags
- * live only on DBXTools packages.
- */
-function hasTags(
-  ...tags: iterable.OneOrMany<string>
-): (project: Project) => project is DBXToolsProject {
-  return (project): project is DBXToolsProject =>
-    isDBXToolsPackage(project) && tags.every((t) => project.dbxToolsConfig.tags.includes(t));
-}
-
-/** Raw filter: project folder (relative to the tree root) is at/under any `prefix`. */
-function underRelPath(...prefixes: string[]): (project: Project) => boolean {
-  return (project) => {
-    const rel = toPosix(relative(project.root.outdir, project.outdir));
-    return prefixes.some((prefix) => rel === prefix || rel.startsWith(`${prefix}/`));
-  };
-}
-
-/**
- * A callable, fluent project predicate. It IS a {@link predicate.Predicate} narrowing an
- * {@link IConstruct} to `P` - so it composes with `.and`/`.or`/`.negate` and drops in wherever
- * a predicate is accepted - and it chains the filters {@link ProjectPredicate.supports}
- * (npm-name globs) and {@link ProjectPredicate.inRelPath} (folder), then terminates in
- * {@link ProjectPredicate.mixin} to get the {@link ConstructsMixin} you hand to `project.with(...)`.
- *
- * `P` defaults to a standard projen {@link Project} and becomes {@link DBXToolsProject} only
- * once {@link ProjectPredicate.withTag} is chained (tags live only on DBXTools packages), so the
- * `.mixin` consumer is typed to whichever the chain has narrowed to. Start one with
- * {@link projectPredicate} / {@link withTag} / {@link inRelPath}; every step returns a fresh
- * predicate, so a base can be reused.
- */
-export interface ProjectPredicate<P extends Project = Project>
-  extends predicate.Predicate<IConstruct, P> {
-  /**
-   * Narrow to DBXTools packages carrying every listed tag (`dbxToolsConfig.tags`); switches the
-   * predicate's project type (and the {@link ProjectPredicate.mixin} consumer) to
-   * {@link DBXToolsProject}.
-   */
-  withTag(...tags: iterable.OneOrMany<string>): ProjectPredicate<DBXToolsProject>;
-  /** Narrow to projects whose npm name matches any glob in `patterns`. */
-  supports(...patterns: iterable.OneOrMany<string>): ProjectPredicate<P>;
-  /** Narrow to projects whose folder (relative to the tree root) is at/under any `prefix`. */
-  inRelPath(...prefixes: string[]): ProjectPredicate<P>;
-  /** Build the constructs mixin that runs `consumer` on every matching project. */
-  mixin(consumer: (project: P) => void): ConstructsMixin;
-}
-
-/** Augment a base project predicate with the fluent {@link ProjectPredicate} surface. */
-function createProjectPredicate<P extends Project>(
-  base: predicate.Predicate<IConstruct, P>,
-): ProjectPredicate<P> {
-  const pred = base as ProjectPredicate<P>;
-  pred.withTag = (...tags: iterable.OneOrMany<string>): ProjectPredicate<DBXToolsProject> =>
-    createProjectPredicate<DBXToolsProject>(base.and(hasTags(...tags)));
-  pred.supports = (...patterns: iterable.OneOrMany<string>): ProjectPredicate<P> =>
-    createProjectPredicate<P>(base.and(matchesName(...patterns)));
-  pred.inRelPath = (...prefixes: string[]): ProjectPredicate<P> =>
-    createProjectPredicate<P>(base.and(underRelPath(...prefixes)));
-  pred.mixin = (consumer: (project: P) => void): ConstructsMixin =>
-    constructsMixin(base, consumer);
-  return pred;
-}
-
-function isProject(): predicate.Predicate<IConstruct, Project> {
-  return predicate.create((c: IConstruct): c is Project => c instanceof Project);
-}
-
-/**
- * Start a {@link ProjectPredicate} (narrowing to a standard {@link Project}) on projects whose
- * npm name matches any glob in `patterns` (e.g. `*\/shared-core`, `*\/shared-*`): matched against
- * both the full `@scope/name` and the unscoped name, with a leading `*\/` also stripped and matched
- * against the unscoped name.
- */
-export function projectPredicate(...patterns: string[]): ProjectPredicate {
-  const projectPredicate = isProject();
-  if (!iterable.isOneOrMany(patterns)) return createProjectPredicate(projectPredicate);
-  return createProjectPredicate(projectPredicate.and(matchesName(...patterns)));
-}
-
-/**
- * Start a {@link ProjectPredicate} on packages carrying every listed tag (`dbxToolsConfig.tags`),
- * narrowing to {@link DBXToolsProject}. Also used directly as the guard backing each built-in
- * {@link WORKSPACE_TAG_MIXINS} entry.
- */
-export function withTag(...tags: iterable.OneOrMany<string>): ProjectPredicate<DBXToolsProject> {
-  const projectPredicate = isProject();
-  return createProjectPredicate<DBXToolsProject>(projectPredicate.and(hasTags(...tags)));
-}
-
-/**
- * Start a {@link ProjectPredicate} (narrowing to a standard {@link Project}) on projects whose
- * folder (relative to the tree root) is at/under any `prefix` - the usual base for scoping mixins
- * to one workspace root (e.g. `inRelPath("workspaces")`).
- */
-export function inRelPath(...prefixes: string[]): ProjectPredicate {
-  const projectPredicate = isProject();
-  return createProjectPredicate(projectPredicate.and(underRelPath(...prefixes)));
-}
 
 /** Parsed `package.json` `name` for a projen `NodeProject`. */
-export function packageIdentifier(project: Project): PackageIdentifier {
+export function identifier(project: Project): PackageIdentifier {
   return PackageIdentifier.parse(project.name) ?? new PackageIdentifier(undefined, project.name);
 }
 
-/** Source-first `package.json` entry fields every workspace package shares. */
-export function configureSourceFirstPackage(project: typescript.TypeScriptProject): void {
-  project.package.addField("type", "module");
-  project.package.addField("main", "index.ts");
-  project.package.addField("types", "index.ts");
-  project.package.addField("exports", {
-    ".": "./index.ts",
-    "./package.json": "./package.json",
-  });
-}
+
 
 /** Root-only `package.json` fields. */
-export function configureRootPackage(project: javascript.NodeProject): void {
+function configureRootPackage(project: javascript.NodeProject): void {
   project.package.addField("type", "module");
   project.package.addField("private", true);
 }
 
 /** Inherit a parent's package manager, else pnpm. */
-export function inheritedPackageManager(
+function inheritedPackageManager(
   parent: javascript.NodeProject | undefined,
 ): javascript.NodePackageManager {
   return parent?.package.packageManager ?? javascript.NodePackageManager.PNPM;
@@ -305,7 +174,7 @@ export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, T
 }
 
 /** ESM compiler options every Node package shares regardless of tag. */
-export const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
+const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   module: "ESNext",
   moduleResolution: javascript.TypeScriptModuleResolution.BUNDLER,
   skipLibCheck: true,
@@ -409,15 +278,6 @@ function defaultTypeScriptProjectOptions(
   };
 }
 
-/**
- * Append Node's built-in test runner to projen's `test` task. The glob is resolved
- * at run time by tsx, so packages without tests exit 0 with zero cases; drop files
- * under `test/` matching `*.test.ts` and they run on the next `projen test` with no
- * extra config.
- */
-function configureNodeTestTask(pkg: typescript.TypeScriptProject): void {
-  pkg.testTask.exec("tsx --test 'test/**/*.test.ts'");
-}
 
 // Pinned to match the subproject defaults so pnpm resolves a single tsx/typescript
 // across the workspace (a bare name -> `*` could pull a second, newer major).
@@ -499,27 +359,13 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
     preSynthesizeProject(this);
   }
 
-  public packageNameFor(relPath: string): string {
-    return PackageIdentifier.of(this.scope, relPath).packageName;
-  }
+
 
   public get packageIdentifier(): PackageIdentifier {
-    return packageIdentifier(this);
+    return identifier(this);
   }
 
-  /**
-   * Apply a project-targeting mixin across the subtree (delegates to constructs
-   * `with` via {@link constructsMixin}). `applyTo` receives whatever the predicate
-   * narrows to - a standard {@link Project}, or {@link DBXToolsProject} once
-   * {@link ProjectPredicate.withTag} has been chained.
-   */
-  public mixin<P extends Project>(
-    supports: predicate.Predicate<IConstruct, P>,
-    applyTo: (project: P) => void,
-  ): this {
-    this.with(constructsMixin(supports, applyTo));
-    return this;
-  }
+
 }
 
 /**
@@ -563,11 +409,16 @@ export class DBXToolsTypeScriptProject
     });
     this.scope = scope;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
-
     // Source-first entry: point the package at its package-ROOT `index.ts` barrel
     // so workspace packages resolve each other's `@scope/pkg` imports to source.
-    configureSourceFirstPackage(this);
-    configureNodeTestTask(this);
+    this.package.addField("type", "module");
+    this.package.addField("main", "index.ts");
+    this.package.addField("types", "index.ts");
+    this.package.addField("exports", {
+      ".": "./index.ts",
+      "./package.json": "./package.json",
+    });
+    this.testTask.exec("tsx --test 'test/**/*.test.ts'");
     if (options.viteConfig ?? false) new ViteConfigFile(this);
     initProject(this, options);
   }
@@ -577,12 +428,10 @@ export class DBXToolsTypeScriptProject
     preSynthesizeProject(this);
   }
 
-  public packageNameFor(relPath: string): string {
-    return PackageIdentifier.of(this.scope, relPath).packageName;
-  }
+
 
   public get packageIdentifier(): PackageIdentifier {
-    return packageIdentifier(this);
+    return identifier(this);
   }
 }
 
@@ -597,6 +446,11 @@ class GeneratedBarrels extends Component {
     generateBarrels();
   }
 }
+
+function packageNameFor(scope: string, relPath: string): string {
+  return PackageIdentifier.of(scope, relPath).packageName;
+}
+
 
 /**
  * Resolve `{ name, scope }` from options. `name` is `options.name`, else
@@ -710,12 +564,15 @@ function initProject(
   project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
   options: DBXToolsProjectOptions,
 ): void {
+
   if (project.parent) {
+    project.package.file.readonly = true;
     // Only a ROOT configures the workspace; a child just swaps its default-laden
     // `.gitignore` for a fresh one that carries package-specific patterns only.
     swapChildGitignore(project, options);
     return;
   }
+  project.package.file.readonly = false;
 
   // NodeProject has no built-in TS projenrc support (unlike TypeScriptProject), so
   // wire `.projenrc.ts` through the tsx runner - this also populates the `default`
@@ -741,7 +598,7 @@ function initProject(
   configureRootPackage(project);
 
   if (options.syncResynthPaths?.length) {
-    project.dbxToolsConfig.setField("syncResynthPaths", [...options.syncResynthPaths]);
+    project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
   }
 
   project.pnpmWorkspace = new DBXToolsPNPMWorkspace(project, options);
@@ -830,20 +687,20 @@ function initProject(
     const tags = [...new Set([...p.tagCandidates, ...resolveTags(p, tagPaths)])];
     const found = existing.get(p.memberPath);
     if (found) {
-      found.dbxToolsConfig.addTags(...tags);
+      found.dbxToolsConfig.tags.push(...tags);
       continue;
     }
     new DBXToolsTypeScriptProject({
       parent: project,
       outdir: p.memberPath,
-      name: project.packageNameFor(p.relPath),
+      name: packageNameFor(project.scope, p.relPath),
       tags,
     });
   }
 
   // The root project may itself carry tags (via a `""`/`"."` tag-path key).
   const rootTags = [...new Set([...(tagPaths[""] ?? []), ...(tagPaths["."] ?? [])])];
-  if (rootTags.length) project.dbxToolsConfig.addTags(...rootTags);
+  if (rootTags.length) project.dbxToolsConfig.tags.push(...rootTags);
 
   // Apply per-tag mixins across the whole subtree now that every child exists
   // (`construct.with` captures the tree at call time). User mixins run afterward

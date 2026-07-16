@@ -8,7 +8,7 @@
  * reserved for the npm `@scope/` in package names.)
  *
  * Mixin factories live in {@link ./mixin}; package predicates live in {@link ./project}
- * ({@link withTag}, {@link projectPredicate}).
+ * ({@link projectPredicate.hasTag}, {@link projectPredicate.hasName}).
  * The per-tag table is {@link WORKSPACE_TAG_MIXINS}. Apply with the constructs-native `project.with(...)`
  * across the subtree; the root applies built-in tag mixins during construction and
  * callers add their own afterward.
@@ -16,7 +16,8 @@
 import type { IMixin as ConstructsMixin } from "constructs";
 import { javascript } from "projen";
 import { mixin } from "./mixin";
-import { applyCompilerOptions, applyTasks, withTag } from "./project";
+import { applyCompilerOptions, applyTasks } from "./project";
+import * as projectPredicate from "./project-predicate";
 import { ViteConfigFile } from "./vite";
 
 /** Node compiler options: ES2020 lib + node types, deliberately no DOM. */
@@ -47,7 +48,7 @@ export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
  * or a subset list; unselected packages fall back to {@link AGNOSTIC_COMPILER_OPTIONS}).
  */
 export const WORKSPACE_TAG_MIXINS = {
-  ui: mixin(withTag("ui"), (p) => {
+  ui: mixin(projectPredicate.hasTag("ui"), (p) => {
     p.addDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps(
       "vite@catalog:",
@@ -68,12 +69,12 @@ export const WORKSPACE_TAG_MIXINS = {
     });
     new ViteConfigFile(p);
   }),
-  cli: mixin(withTag("cli"), (p) => {
+  cli: mixin(projectPredicate.hasTag("cli"), (p) => {
     p.addDeps("commander@catalog:", "@clack/prompts@catalog:");
     p.addDevDeps("@types/node@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
   }),
-  server: mixin(withTag("server"), (p) => {
+  server: mixin(projectPredicate.hasTag("server"), (p) => {
     // A Node/Express service. tsoa's decorators (@Route/@Get/...) also drive
     // `dbxtools openapi` (spec + client); experimentalDecorators lets them
     // type-check. `dev`/`start` run the app's `src/server.ts` with tsx.
@@ -88,14 +89,14 @@ export const WORKSPACE_TAG_MIXINS = {
       start: { exec: "tsx src/server.ts" },
     });
   }),
-  node: mixin(withTag("node"), (p) => {
+  node: mixin(projectPredicate.hasTag("node"), (p) => {
     p.addDevDeps("@types/node@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
   }),
-  shared: mixin(withTag("shared"), (p) => {
+  shared: mixin(projectPredicate.hasTag("shared"), (p) => {
     applyCompilerOptions(p, AGNOSTIC_COMPILER_OPTIONS);
   }),
-  openapi: mixin(withTag("openapi"), (p) => {
+  openapi: mixin(projectPredicate.hasTag("openapi"), (p) => {
     p.addDeps("openapi-fetch@catalog:");
     applyCompilerOptions(p, { target: "ES2022", lib: [...DOM_LIB], types: [] });
   }),

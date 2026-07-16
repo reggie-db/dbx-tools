@@ -38,7 +38,15 @@ catalog:
   mastracode: 0.30.0
 allowBuilds:
   esbuild: true
-  unrs-resolver: true
+  "@databricks/appkit-ui": true
+  "@databricks/appkit": true
+  "@google/genai": true
+  protobufjs: true
+  agent-browser: false
+  bufferutil: false
+  edgedriver: false
+  geckodriver: false
+  onnxruntime-node: false
 overrides:
   glob: ^13.0.0
   vscode-jsonrpc: 8.2.1

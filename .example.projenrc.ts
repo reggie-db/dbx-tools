@@ -5,16 +5,12 @@
  * and the original demos) stay visually and logically distinct from engine
  * development under `workspaces/`.
  */
-import {
-  DBXToolsNodeProject,
-  DBXToolsTypeScriptProject,
-  inRelPath,
-} from "./workspaces/shared/projen/src/project";
+import { mixin, project as projectApi, projectPredicate } from "@dbx-tools/projen";
 
-const examples = inRelPath("example-workspaces");
+const examples = projectPredicate.hasPath("example-workspaces");
 
 /** AppKit + Mastra Code catalog pins used only by the example packages below. */
-export function configureExampleCatalog(project: DBXToolsNodeProject): void {
+export function configureExampleCatalog(project: projectApi.DBXToolsNodeProject): void {
   project.pnpmWorkspace?.addCatalog("@databricks/appkit", "^0.43.0");
   project.pnpmWorkspace?.addCatalog("@databricks/appkit-ui", "^0.43.0");
   project.pnpmWorkspace?.addCatalog("mastracode", "0.30.0");
@@ -26,47 +22,47 @@ export function configureExampleCatalog(project: DBXToolsNodeProject): void {
 }
 
 /** Example-workspace package mixins (private demos, AppKit, Mastra Code headless). */
-export function applyExampleWorkspaces(project: DBXToolsNodeProject): void {
+export function applyExampleWorkspaces(project: projectApi.DBXToolsNodeProject): void {
   configureExampleCatalog(project);
 
-  project
-    .mixin(examples, (p) => {
-      if (p instanceof DBXToolsTypeScriptProject) p.package.addField("private", true);
+  project.with(
+    mixin.mixin(examples, (p) => {
+      if (p instanceof projectApi.DBXToolsTypeScriptProject) p.package.addField("private", true);
     })
-    .mixin(examples.withTag("shared").supports("*/shared-core"), (p) => {
+    , mixin.mixin(examples.and(projectPredicate.hasName("*/shared-core"), projectPredicate.hasTag("shared")), (p) => {
       p.package.addField("name", "@dbx-tools/example-shared-core");
     })
-    .mixin(examples.withTag("cli").supports("*/cli-main"), (p) => {
+    , mixin.mixin(examples.and(projectPredicate.hasName("*/cli-main"), projectPredicate.hasTag("cli")), (p) => {
       p.package.addBin({ "pw-demo": "./src/cli.ts" });
       p.addDeps("@dbx-tools/example-shared-core@workspace:*", "@dbx-tools/shared-neat@workspace:*");
     })
-    .mixin(examples.withTag("server").supports("*/server-api"), (p) => {
+    , mixin.mixin(examples.and(projectPredicate.hasName("*/server-api"), projectPredicate.hasTag("server")), (p) => {
       p.addDeps("@dbx-tools/example-shared-core@workspace:*");
     })
-    .mixin(examples.withTag("ui").supports("*/ui-app"), (p) => {
+    , mixin.mixin(examples.and(projectPredicate.hasName("*/ui-app"), projectPredicate.hasTag("ui")), (p) => {
       p.addDeps("@dbx-tools/example-shared-core@workspace:*");
     })
-    .mixin(examples.withTag("server").supports("*/server-appkit-server"), (p) => {
+    , mixin.mixin(examples.and(projectPredicate.hasName("*/server-appkit-server"), projectPredicate.hasTag("server")), (p) => {
       p.addDeps("@databricks/appkit@catalog:");
-      if (p instanceof DBXToolsTypeScriptProject) {
+      if (p instanceof projectApi.DBXToolsTypeScriptProject) {
         p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
         p.tsconfig?.addInclude("index.ts");
       }
     })
-    .mixin(examples.withTag("ui").supports("*/ui-appkit-client"), (p) => {
+    , mixin.mixin(examples.and(projectPredicate.hasName("*/ui-appkit-client"), projectPredicate.hasTag("ui")), (p) => {
       p.addDeps("@databricks/appkit-ui@catalog:", "@databricks/appkit@catalog:");
-      if (p instanceof DBXToolsTypeScriptProject) {
+      if (p instanceof projectApi.DBXToolsTypeScriptProject) {
         p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
         p.tsconfig?.addInclude("index.ts");
       }
     })
-    .mixin(examples.withTag("cli").supports("*/cli-mastracode-headless"), (p) => {
+    , mixin.mixin(examples.and(projectPredicate.hasName("*/cli-mastracode-headless"), projectPredicate.hasTag("cli")), (p) => {
       p.addDeps("mastracode@catalog:");
       p.package.addBin({
         mastracode: "./src/tui.ts",
         "mc-headless": "./src/headless.ts",
       });
-      if (p instanceof DBXToolsTypeScriptProject) {
+      if (p instanceof projectApi.DBXToolsTypeScriptProject) {
         p.tsconfig?.file.addOverride("compilerOptions.rootDir", ".");
         p.tsconfig?.addInclude("index.ts");
         p.addTask("mastracode", {
@@ -80,5 +76,5 @@ export function applyExampleWorkspaces(project: DBXToolsNodeProject): void {
           receiveArgs: true,
         });
       }
-    });
+    }));
 }

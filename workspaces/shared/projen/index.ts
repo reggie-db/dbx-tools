@@ -11,6 +11,7 @@ export * as log from "./src/log";
 export * as mixin from "./src/mixin";
 export * as openapi from "./src/openapi";
 export * as pnpmWorkspace from "./src/pnpm-workspace";
+export * as projectPredicate from "./src/project-predicate";
 export * as project from "./src/project";
 export * as publish from "./src/publish";
 export * as scaffold from "./src/scaffold";

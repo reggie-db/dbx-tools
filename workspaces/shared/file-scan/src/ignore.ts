@@ -46,7 +46,7 @@ export type IgnorePatternOptions = {
 const lockIgnoreMatchersAutoEnabled = functionModule.memoize(() => {
   let registryUrl: URL | undefined;
   for (const command of ["npm", "pnpm", "yarn"]) {
-    const result = exec.execSync(command, ["config", "get", "registry"], {
+    const result = exec.spawnSync(command, ["config", "get", "registry"], {
       stdout: "capture",
       stderr: "ignore",
       stdin: "ignore",

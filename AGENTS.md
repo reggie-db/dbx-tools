@@ -10,8 +10,8 @@ A **projen-driven pnpm monorepo generator**. The reusable engine lives in
 engine and ships **`dbxtools`**. Both are dogfooded as normal auto-discovered
 packages (not special cases). The engine exports two projen project subclasses —
 **`DBXToolsNodeProject`** (the monorepo root) and **`DBXToolsTypeScriptProject`**
-(a package) — plus **mixin** helpers (`projectPredicate`/`withTag`/`inRelPath`,
-`mixin`/`fileMixin`) for per-package tweaks.
+(a package) — plus **mixin** helpers (the `predicate.hasName`/`predicate.hasTag`/`predicate.inRelPath`
+predicate namespace and the `mixin(predicate, consumer)` factory) for per-package tweaks.
 
 - **`workspaces/`** — real content goes here.
 - **`example-workspaces/`** — the seed example packages this repo ships
@@ -127,18 +127,19 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   `construct.with(...mixins)` — it runs each across the construct's whole subtree
   (tree captured at call time), so a root-level `project.with(...)` or
   `project.mixin(...)` reaches every matching child. Package predicates live in
-  `project.ts` as fluent, callable `ProjectPredicate`s that narrow a construct to a
-  standard projen `Project` by default and to `DBXToolsProject` only once `.withTag`
-  is chained (tags live only on DBXTools packages, so the `.mixin` consumer is typed
-  to whichever the chain narrowed to): start one with
-  `projectPredicate("*/shared-core", ...)` (npm name glob via `match.toPathMatcher`),
-  `withTag(tag, ...tags)` (all tags required, `→ DBXToolsProject`), or
-  `inRelPath("workspaces", ...)` (root-relative folder prefix), then chain
-  `.withTag`/`.supports`/`.inRelPath` to refine and `.mixin(consumer)` to build the
-  mixin. They also compose with `.and()` / `.or()` from `@dbx-tools/shared-core`
-  `predicate`. `DBXToolsNodeProject.mixin(supports, applyTo)` is sugar over
-  `project.with(mixin(supports, applyTo))`. `fileMixin(fn)` targets any generated
-  `FileBase`. The root applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
+  `project.ts` under an exported `predicate` namespace, as plain callable
+  `@dbx-tools/shared-core` predicates (narrowing a construct):
+  `predicate.hasName("*/shared-core", ...)` (npm name glob via `match.toPathMatcher`,
+  `→ Project`), `predicate.hasTag(tag, ...tags)` (all tags required,
+  `→ DBXToolsProject`), and `predicate.inRelPath("workspaces", ...)` (root-relative
+  folder prefix, `→ Project`). Compose them with `.and()`/`.or()`/`.negate()` - e.g.
+  `predicate.hasName("*/shared-core").and(predicate.hasTag("node"))` - keeping
+  `predicate.hasTag` in the same `.and(...)` (or last when chaining) so its
+  `DBXToolsProject` narrowing survives (a later non-tag `.and` re-widens to `Project`).
+  Build the mixin with `mixin(predicate, consumer)` (`mixin.ts`) and hand it to
+  `project.with(...)`; `DBXToolsNodeProject.mixin(predicate, consumer)` is chainable
+  sugar over exactly that. A `FileBase` guard as the predicate targets any generated file. The root
+  applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
   `tags.ts`) during its own construction, selected by the `defaultTagMixins` option
   (omit = all, `false` = none, or a subset list) - e.g. the `server` mixin adds
   `express`/`tsoa` + `dev`/`start` tasks. Consumers apply their own AFTER
@@ -278,7 +279,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   authored special case: it lives at `workspaces/cli/dbx-tools` (tag `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` applies (via `project.mixin(...)`) a
-  mixin matching `withTag("cli").supports("*/cli-dbx-tools")` that:
+  mixin matching `predicate.hasName("*/cli-dbx-tools").and(predicate.hasTag("cli"))` that:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
   adds its bin (`p.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), depends on
   `@dbx-tools/shared-projen`, and bumps its tsconfig to ES2022 lib/target +

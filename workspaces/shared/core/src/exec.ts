@@ -2,12 +2,12 @@
  * Portable subprocess helper built on `child_process.spawn` and line streaming.
  *
  * Ported from `dbx-tools-js/packages/cli/src/exec.ts`. Each stdio fd defaults to
- * `"inherit"`. {@link exec} streams output line-by-line into {@link ExecResult.stdoutLines}
+ * `"inherit"`. {@link spawn} streams output line-by-line into {@link ExecResult.stdoutLines}
  * / {@link ExecResult.stderrLines}; its `stdout` / `stderr` getters join those lines.
- * {@link execSync} keeps the captured string; its `stdout` / `stderr` getters read
+ * {@link spawnSync} keeps the captured string; its `stdout` / `stderr` getters read
  * that string directly (line arrays split lazily on read).
- * Omitted `trim` (default) applies adaptive normalization: {@link execSync} drops
- * at most one trailing empty line / newline `spawnSync` adds; {@link exec} does
+ * Omitted `trim` (default) applies adaptive normalization: {@link spawnSync} drops
+ * at most one trailing empty line / newline `spawnSync` adds; {@link spawn} does
  * not (readline never emits that extra line). `trim: true` strips all leading/
  * trailing whitespace in both modes; `trim: false` leaves output unchanged.
  *
@@ -37,7 +37,7 @@
  * });
  * ```
  */
-import { type ChildProcess, type SpawnOptions, spawn, spawnSync } from "node:child_process";
+import { type ChildProcess, type SpawnOptions, spawn as nodeSpawn, spawnSync as nodeSpawnSync } from "node:child_process";
 import * as readline from "node:readline";
 import { Readable } from "node:stream";
 
@@ -57,32 +57,32 @@ export type LineHandler = (line: string) => void;
  */
 export type StdioOption = ExecStdio | LineHandler | "capture" | (LineHandler | "capture")[];
 
-/** Outcome of {@link exec} / {@link execSync}: exit code, captured output, and line views. */
+/** Outcome of {@link spawn} / {@link spawnSync}: exit code, captured output, and line views. */
 export type ExecResult = {
   exitCode: number;
   /**
-   * Captured stdout lines. For {@link exec} these are built while the process runs;
-   * for {@link execSync} they are split from the captured string on first read.
+   * Captured stdout lines. For {@link spawn} these are built while the process runs;
+   * for {@link spawnSync} they are split from the captured string on first read.
    */
   readonly stdoutLines: string[];
   /**
-   * Captured stderr lines. For {@link exec} these are built while the process runs;
-   * for {@link execSync} they are split from the captured string on first read.
+   * Captured stderr lines. For {@link spawn} these are built while the process runs;
+   * for {@link spawnSync} they are split from the captured string on first read.
    */
   readonly stderrLines: string[];
   /**
-   * Captured stdout text. {@link execSync} reads the captured string;
-   * {@link exec} joins {@link stdoutLines}. See `trim` for normalization.
+   * Captured stdout text. {@link spawnSync} reads the captured string;
+   * {@link spawn} joins {@link stdoutLines}. See `trim` for normalization.
    */
   readonly stdout: string;
   /**
-   * Captured stderr text. {@link execSync} reads the captured string;
-   * {@link exec} joins {@link stderrLines}. See `trim` for normalization.
+   * Captured stderr text. {@link spawnSync} reads the captured string;
+   * {@link spawn} joins {@link stderrLines}. See `trim` for normalization.
    */
   readonly stderr: string;
 };
 
-/** Options for {@link exec}. Extends `SpawnOptions` except `stdio`, which is driven by `stdin` / `stdout` / `stderr`. */
+/** Options for {@link spawn}. Extends `SpawnOptions` except `stdio`, which is driven by `stdin` / `stdout` / `stderr`. */
 export type ExecOptions = Omit<SpawnOptions, "stdio"> & {
   /** `"inherit"` by default, or a string written to the process stdin. */
   stdin?: ExecStdio | string;
@@ -91,17 +91,17 @@ export type ExecOptions = Omit<SpawnOptions, "stdio"> & {
   /** Throw when the process exits with a non-zero code. */
   check?: boolean;
   /**
-   * Omitted — adaptive trim ({@link execSync} drops one spawn trailing newline,
-   * {@link exec} does not); `true` — strip all leading/trailing whitespace;
+   * Omitted — adaptive trim ({@link spawnSync} drops one spawn trailing newline,
+   * {@link spawn} does not); `true` — strip all leading/trailing whitespace;
    * `false` — leave captured output unchanged.
    */
   trim?: boolean;
 };
 
-/** Stdio mode for {@link execSync} (no per-line callbacks). */
+/** Stdio mode for {@link spawnSync} (no per-line callbacks). */
 export type SyncExecStdio = ExecStdio | "capture";
 
-/** Options for {@link execSync}. Same shape as {@link ExecOptions} but without line-handler stdio. */
+/** Options for {@link spawnSync}. Same shape as {@link ExecOptions} but without line-handler stdio. */
 export type SyncExecOptions = Omit<SpawnOptions, "stdio"> & {
   /** `"inherit"` by default, or a string written to the process stdin. */
   stdin?: ExecStdio | string;
@@ -110,8 +110,8 @@ export type SyncExecOptions = Omit<SpawnOptions, "stdio"> & {
   /** Throw when the process exits with a non-zero code. */
   check?: boolean;
   /**
-   * Omitted — adaptive trim ({@link execSync} drops one spawn trailing newline,
-   * {@link exec} does not); `true` — strip all leading/trailing whitespace;
+   * Omitted — adaptive trim ({@link spawnSync} drops one spawn trailing newline,
+   * {@link spawn} does not); `true` — strip all leading/trailing whitespace;
    * `false` — leave captured output unchanged.
    */
   trim?: boolean;
@@ -127,6 +127,50 @@ type ResolvedStdio = {
   /** When set, each output line is appended to the capture buffer and forwarded here. */
   onLine?: LineHandler;
 };
+
+export type SpawnArgs<T extends SpawnOptions> =
+  | [command: string, ...args: string[]]
+  | [command: string, args: readonly string[]]
+  | [command: string, args: readonly string[], options: T]
+  | [command: string, ...argsAndOptions: [...string[], T]];
+
+
+interface ParsedSpawnArgs<T extends SpawnOptions> {
+  command: string;
+  commandArgs: string[];
+  options?: T;
+}
+
+
+function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpawnArgs<T> {
+  let [value, ...values] = input;
+  const [command, ...commandArgs] = shlex(value);
+  if (commandArgs.length == 1 && values.length === 0) {
+    return {
+      command,
+      commandArgs: [],
+    };
+  }
+
+  const last = values.at(-1);
+  const options = (
+    last !== null &&
+    typeof last === "object" &&
+    !Array.isArray(last)
+  ) ? last : undefined;
+  const argumentValues = options ? values.slice(0, -1) : values;
+  const valueArgs: string[] = (
+    argumentValues.length === 1 &&
+    Array.isArray(argumentValues[0])
+  ) ? [...argumentValues[0]] : argumentValues
+
+
+  return {
+    command,
+    commandArgs: [...commandArgs, ...valueArgs],
+    options: options as T,
+  };
+}
 
 /**
  * Drop the single trailing empty entry `spawnSync` adds when splitting on a final
@@ -188,7 +232,7 @@ function commandLabel(command: string, args: string[]): string {
 }
 
 /**
- * Build the object returned from {@link exec} with live line arrays and lazy
+ * Build the object returned from {@link spawn} with live line arrays and lazy
  * trimmed `stdout` / `stderr` getters derived from those lines.
  */
 function createExecResult(
@@ -215,7 +259,7 @@ function createExecResult(
 }
 
 /**
- * Build the object returned from {@link execSync}. Captured strings are stored
+ * Build the object returned from {@link spawnSync}. Captured strings are stored
  * as-is; `stdout` / `stderr` trim directly, and line arrays split only on read.
  */
 function createSyncExecResult(
@@ -383,7 +427,7 @@ function waitForExit(proc: ChildProcess): Promise<number> {
  * @param command - Executable name or path
  * @param args - Arguments passed to the executable
  * @param result - Completed exec outcome with captured output
- * @returns Error suitable for throwing from {@link exec}
+ * @returns Error suitable for throwing from {@link spawn}
  */
 function execError(command: string, args: string[], result: ExecResult): Error {
   const detail = result.stderr || result.stdout;
@@ -420,7 +464,7 @@ function capturedText(output: string | Buffer | null | undefined): string | unde
 
 /**
  * Split captured process output into lines for {@link ExecResult.stdoutLines} /
- * {@link ExecResult.stderrLines} ({@link execSync} only; invoked lazily).
+ * {@link ExecResult.stderrLines} ({@link spawnSync} only; invoked lazily).
  */
 function linesFromCapturedOutput(output: string): string[] {
   return output.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
@@ -435,19 +479,18 @@ function linesFromCapturedOutput(output: string): string[] {
  * @returns Exit code, captured line arrays, and trimmed `stdout` / `stderr` getters
  * @throws When spawn fails, line reads fail, or `check` is true and exit code is non-zero
  */
-export async function exec(
-  command: string,
-  args: string[],
-  options: ExecOptions = {},
+export async function spawn(
+  ...args: SpawnArgs<ExecOptions>
 ): Promise<ExecResult> {
-  const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options;
+  const { command, commandArgs, options = {} } = parseSpawnArgs(args);
+  const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
   const stdoutHandler = resolveStdio(stdout, stdoutLines);
   const stderrHandler = resolveStdio(stderr, stderrLines);
   const stdinMode: ExecStdio = typeof stdin === "string" ? "pipe" : (stdin ?? "inherit");
 
-  const proc = spawn(command, args, {
+  const proc = nodeSpawn(command, commandArgs, {
     ...spawnOpts,
     stdio: [stdinMode, stdoutHandler.mode, stderrHandler.mode],
   });
@@ -468,27 +511,26 @@ export async function exec(
   }
 
   const result = createExecResult(exitCode, stdoutLines, stderrLines, trim);
-  if (check && result.exitCode !== 0) throw execError(command, args, result);
+  if (check && result.exitCode !== 0) throw execError(command, commandArgs, result);
   return result;
 }
 
 /**
  * Spawn a subprocess synchronously and wait for exit.
  *
- * Unlike {@link exec}, stdio options are limited to `"inherit"`, `"pipe"`,
+ * Unlike {@link spawn}, stdio options are limited to `"inherit"`, `"pipe"`,
  * `"ignore"`, and `"capture"` — no per-line callbacks.
  *
  * @param command - Executable to run (resolved on `PATH` when `shell` is set on options)
  * @param args - Arguments passed verbatim to the executable
- * @param options - Spawn, stdio, and check options
+ * @param spawnSync - Spawn, stdio, and check options
  * @returns Exit code, captured line arrays, and trimmed `stdout` / `stderr` getters
  * @throws When spawn fails or `check` is true and exit code is non-zero
  */
-export function execSync(
-  command: string,
-  args: string[],
-  options: SyncExecOptions = {},
+export function spawnSync(
+  ...args: SpawnArgs<SyncExecOptions>
 ): ExecResult {
+  const { command, commandArgs, options = {} } = parseSpawnArgs(args);
   const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options;
   const stdinMode: ExecStdio = typeof stdin === "string" ? "pipe" : (stdin ?? "inherit");
   const captureStdout = stdout === "capture";
@@ -496,7 +538,7 @@ export function execSync(
   const stdoutMode = resolveSyncStdio(stdout);
   const stderrMode = resolveSyncStdio(stderr);
 
-  const result = spawnSync(command, args, {
+  const result = nodeSpawnSync(command, commandArgs, {
     ...spawnOpts,
     encoding: captureStdout || captureStderr ? "utf8" : undefined,
     stdio: [stdinMode, stdoutMode, stderrMode],
@@ -510,12 +552,92 @@ export function execSync(
 
   if (result.error) {
     if (check || execResult.exitCode !== 0) {
-      const err = execError(command, args, execResult);
+      const err = execError(command, commandArgs, execResult);
       err.cause = result.error;
       throw err;
     }
   }
 
-  if (check && execResult.exitCode !== 0) throw execError(command, args, execResult);
+  if (check && execResult.exitCode !== 0) throw execError(command, commandArgs, execResult);
   return execResult;
+}
+
+/**
+ * Splits a shell-like command into argv.
+ *
+ * Supports:
+ *   - whitespace separators
+ *   - single and double quotes
+ *   - backslash escaping
+ *   - escaped spaces
+ *   - empty quoted strings
+ *
+ * If the input is malformed (for example, an unterminated quote),
+ * returns the original string as a single argument.
+ */
+export function shlex(command: string): string[] {
+  const args: string[] = [];
+
+  let current = "";
+  let quote: "'" | '"' | undefined;
+  let escaped = false;
+  let quoted = false;
+
+  const push = () => {
+    if (quoted || current.length > 0) {
+      args.push(current);
+    }
+    current = "";
+    quoted = false;
+  };
+
+  for (const ch of command) {
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (ch === quote) {
+        quote = undefined;
+        quoted = true;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      quoted = true;
+      continue;
+    }
+
+    if (/\s/.test(ch)) {
+      push();
+      continue;
+    }
+
+    current += ch;
+  }
+
+  // Malformed input: treat as a literal command.
+  if (quote) {
+    return [command];
+  }
+
+  // Trailing backslash is literal.
+  if (escaped) {
+    current += "\\";
+  }
+
+  push();
+
+  return args.length ? args : [command];
 }

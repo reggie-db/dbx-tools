@@ -6,3 +6,4 @@ export * as exec from "./src/exec";
 export * as functionModule from "./src/function";
 export * as iterable from "./src/iterable";
 export * as predicate from "./src/predicate";
+export * as project from "./src/project";

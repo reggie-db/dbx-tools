@@ -21,7 +21,7 @@ import { type Project, TextFile } from "projen";
  * Default unmanaged override modules, merged over the generated config in order
  * (later wins, absent files skipped): a package's `vite.config.override.js`.
  */
-export const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js"];
+const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js"];
 
 /** Options for {@link ViteConfigFile}. */
 export interface ViteConfigFileOptions {

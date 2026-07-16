@@ -25,7 +25,7 @@ const FORCE_BUMP_HINT = "use --increment minor or --increment major for a larger
 function runProjenBumpVersion(env: Record<string, string>): void {
   const require = createRequire(import.meta.url);
   const scriptPath = require.resolve("projen/lib/release/bump-version.task.js");
-  exec.execSync(process.execPath, [scriptPath], {
+  exec.spawnSync(process.execPath, [scriptPath], {
     cwd: repoRoot,
     env: { ...process.env, ...env },
     check: true,
@@ -46,7 +46,7 @@ function bumpVersionEnv(bumpLevel: BumpLevel): Record<string, string> {
 
 /** Highest `v*` release tag (version-sorted), matching projen's bump lookup. */
 function latestReleaseTag(cwd: string = repoRoot): string | undefined {
-  const { stdout } = exec.execSync(
+  const { stdout } = exec.spawnSync(
     "git",
     ["-c", "versionsort.suffix=-", "tag", "--sort=-version:refname", "--list", "v*"],
     { cwd, stdout: "capture", stderr: "ignore", stdin: "ignore", check: true },
@@ -62,7 +62,7 @@ function versionFromTag(tag: string): string {
 }
 
 function gitHead(cwd: string = repoRoot): string {
-  const { stdout } = exec.execSync("git", ["rev-parse", "HEAD"], {
+  const { stdout } = exec.spawnSync("git", ["rev-parse", "HEAD"], {
     cwd,
     stdout: "capture",
     stderr: "ignore",
@@ -73,7 +73,7 @@ function gitHead(cwd: string = repoRoot): string {
 }
 
 /** Repo-relative path to the npm-publishable workspace package. */
-export function findPublishRelPath(root: string = repoRoot): string {
+function findPublishRelPath(root: string = repoRoot): string {
   for (const pkg of workspacePackages(root)) {
     const manifest = JSON.parse(
       readFileSync(join(pkg.dir, "package.json"), "utf8"),
@@ -124,7 +124,7 @@ function packDestinationArg(publishRelPath: string): string {
 export function packForRelease(publishRelPath: string = findPublishRelPath()): void {
   syncPublishVersion(publishRelPath);
   mkdirSync(join(repoRoot, "dist/js"), { recursive: true });
-  exec.execSync(
+  exec.spawnSync(
     "pnpm",
     ["--dir", publishRelPath, "pack", "--pack-destination", packDestinationArg(publishRelPath)],
     { cwd: repoRoot, check: true },
@@ -145,7 +145,7 @@ export function buildFromTag(publishRelPath: string = findPublishRelPath()): voi
     root.version = version;
     writeFileSync(rootPath, `${JSON.stringify(root, null, 2)}\n`);
     syncPublishVersion(publishRelPath);
-    exec.execSync("pnpm", ["exec", "projen", "build"], { cwd: repoRoot, check: true });
+    exec.spawnSync("pnpm", ["exec", "projen", "build"], { cwd: repoRoot, check: true });
     const tag = ref.startsWith("v") ? ref : `v${ref}`;
     mkdirSync(join(repoRoot, "dist"), { recursive: true });
     writeFileSync(join(repoRoot, "dist/releasetag.txt"), `${tag}\n`);
@@ -173,27 +173,27 @@ export function publish(
     }
     syncPublishVersion(publishRelPath);
     const manifests = manifestPaths(publishRelPath);
-    exec.execSync("git", ["add", ...manifests], {
+    exec.spawnSync("git", ["add", ...manifests], {
       cwd: repoRoot,
       check: true,
     });
-    exec.execSync("git", ["commit", "-m", `chore(release): ${version}`], {
+    exec.spawnSync("git", ["commit", "-m", `chore(release): ${version}`], {
       cwd: repoRoot,
       check: true,
     });
     const sha = gitHead();
-    exec.execSync("git", ["push", "origin", "HEAD"], {
+    exec.spawnSync("git", ["push", "origin", "HEAD"], {
       cwd: repoRoot,
       check: true,
     });
     const tag = readFileSync(join(repoRoot, "dist/releasetag.txt"), "utf8").trim();
     if (!tag) throw new Error("dist/releasetag.txt is empty");
     const changelog = join(repoRoot, "dist/changelog.md");
-    exec.execSync("git", ["tag", tag, "-a", "-F", changelog, sha], {
+    exec.spawnSync("git", ["tag", tag, "-a", "-F", changelog, sha], {
       cwd: repoRoot,
       check: true,
     });
-    exec.execSync("git", ["push", "origin", tag], {
+    exec.spawnSync("git", ["push", "origin", tag], {
       cwd: repoRoot,
       check: true,
     });
@@ -205,7 +205,7 @@ export function publish(
  * `release:tag` is not yet present, retargets `compile` / `package` / `release:tag`
  * for the engine publish flow.
  */
-export function configureRelease(project: DBXToolsNodeProject): void {
+function configureRelease(project: DBXToolsNodeProject): void {
   if (!project.release) return;
 
   try {

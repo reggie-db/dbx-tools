@@ -6,6 +6,12 @@
  *   1. a file/folder whose name starts with `_` is private and never barrelled;
  *   2. only files that actually contain an `export` are re-exported.
  *
+ * A hand-authored `exports.ts` sitting next to the generated `index.ts` (a Vite-style
+ * override) is spliced in last and wins: its exports are appended, and any generated
+ * `export * as <ns>` whose namespace it also declares is dropped so the custom one
+ * takes priority. This keeps the barrel auto-generated while letting you add or
+ * override individual exports.
+ *
  * barrelsby emits flat `export * from "./x"` lines; we relocate the barrel to
  * `<pkg>/index.ts`, deepen paths (`./x` -> `./src/x`), then rewrite each line to
  * `export * as <name> from "./src/x"` (camelCase namespace from path segments;
@@ -104,10 +110,10 @@ function modulePathToNamespace(modulePath: string): string {
     segments.length === 1
       ? segments[0]!
       : segments[0]! +
-        segments
-          .slice(1)
-          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-          .join("");
+      segments
+        .slice(1)
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join("");
   if (!isIdentifier(name)) {
     name = `${name}Module`;
   }
@@ -126,6 +132,58 @@ function namespaceBarrelExports(content: string): string {
       return `export * as ${ns} from "${modulePath}";`;
     })
     .join("\n");
+}
+
+/** Hand-authored override barrel: a sibling of the generated `index.ts`. */
+const CUSTOM_EXPORTS_FILE = "exports.ts";
+
+/**
+ * Best-effort set of the top-level export names a module declares - named
+ * declarations, `export { x }` specifiers, `export * as ns`, and default. A bare
+ * `export *` re-exports opaque names that can't be resolved statically, so a custom
+ * `exports.ts` should name what it means to override explicitly.
+ */
+function customExportNames(file: string): Set<string> {
+  const names = new Set<string>();
+  let body: Array<Record<string, any>>;
+  try {
+    body = parseModuleExports(readFileSync(file, "utf8"), file).body as Array<Record<string, any>>;
+  } catch {
+    return names;
+  }
+  const add = (node: Record<string, any> | undefined | null): void => {
+    if (node && typeof node.name === "string") names.add(node.name);
+    else if (node && typeof node.value === "string") names.add(node.value);
+  };
+  for (const stmt of body) {
+    if (stmt.type === "ExportDefaultDeclaration") {
+      names.add("default");
+    } else if (stmt.type === "ExportAllDeclaration") {
+      add(stmt.exported); // `export * as ns from ...`; a bare `export *` has none
+    } else if (stmt.type === "ExportNamedDeclaration") {
+      for (const spec of stmt.specifiers ?? []) add(spec.exported);
+      const decl = stmt.declaration;
+      if (decl?.id) add(decl.id);
+      for (const d of decl?.declarations ?? []) if (d.id?.type === "Identifier") add(d.id);
+    }
+  }
+  return names;
+}
+
+/**
+ * Splice a hand-authored `<pkg>/exports.ts` into the barrel. Any generated
+ * `export * as <ns>` whose namespace the custom file also declares is dropped (so the
+ * custom export wins - a plain `export *` cannot otherwise override an explicit
+ * `export * as`), then the whole module is re-exported last.
+ */
+function mergeCustomExports(content: string, pkgDir: string): string {
+  if (!existsSync(join(pkgDir, CUSTOM_EXPORTS_FILE))) return content;
+  const overridden = customExportNames(join(pkgDir, CUSTOM_EXPORTS_FILE));
+  const kept = content.split("\n").filter((line) => {
+    const ns = /^export \* as (\w+) from /.exec(line)?.[1];
+    return !(ns && overridden.has(ns));
+  });
+  return `${kept.join("\n").replace(/\n+$/, "")}\nexport * from "./exports";\n`;
 }
 
 /**
@@ -177,7 +235,7 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
     "--noHeader", // we add our own do-not-edit header when stamping
     ...excludes.flatMap((e) => ["--exclude", e]),
   ];
-  const result = exec.execSync(process.execPath, args, {
+  const result = exec.spawnSync(process.execPath, args, {
     cwd: repoRoot,
     stdout: "ignore",
     stderr: "capture",
@@ -205,6 +263,8 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   );
   rmSync(tmpBarrel, { force: true });
   if (modifier) content = modifier(content, { packageDir: pkgDir });
+  // A sibling `exports.ts` overrides/extends the generated barrel and wins on conflict.
+  content = mergeCustomExports(content, pkgDir);
 
   // barrelsby regenerates on every source edit, but the barrel only *changes* when
   // its set of exporting modules does. If the stamped result matches what's already
