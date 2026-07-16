@@ -3,3 +3,4 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as headless from "./src/headless";
+export * as tui from "./src/tui";

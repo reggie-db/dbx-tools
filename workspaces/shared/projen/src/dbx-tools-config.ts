@@ -46,7 +46,7 @@ export class DBXToolsConfig extends Component {
   private readonly _config: Record<string, unknown>;
 
   constructor(
-    readonly project: javascript.NodeProject,
+    override readonly project: javascript.NodeProject,
     options: DBXToolsConfigOptions = {},
   ) {
     super(project);
@@ -71,7 +71,7 @@ export class DBXToolsConfig extends Component {
   }
 
   /** Write a value into the in-memory config and flush it to `package.json`. */
-  public setField(value: unknown, path: string | string[]): void {
+  public setField(path: string | string[], value: unknown): void {
     const keys = typeof path === "string" ? [path] : path;
     if (keys.length === 0) throw new Error("setField requires at least one key");
     let current = this._config;

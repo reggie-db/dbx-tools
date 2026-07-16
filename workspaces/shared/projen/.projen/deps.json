@@ -6,15 +6,6 @@
       "type": "build"
     },
     {
-      "name": "@types/picomatch",
-      "version": "^4.0.3",
-      "type": "build"
-    },
-    {
-      "name": "picomatch",
-      "type": "build"
-    },
-    {
       "name": "tsx",
       "version": "^4.23.0",
       "type": "build"
@@ -73,10 +64,6 @@
     },
     {
       "name": "p-memoize",
-      "type": "runtime"
-    },
-    {
-      "name": "picomatch",
       "type": "runtime"
     },
     {

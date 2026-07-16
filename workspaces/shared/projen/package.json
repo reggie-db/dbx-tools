@@ -13,8 +13,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
-    "@types/picomatch": "^4.0.3",
-    "picomatch": "^4.0.5",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
@@ -31,7 +29,6 @@
     "is-identifier": "^1",
     "openapi-typescript": "^7.13.0",
     "p-memoize": "^8.0.0",
-    "picomatch": "^4.0.5",
     "projen": "^0.101.4",
     "tsoa": "catalog:",
     "tsx": "^4.23.0",

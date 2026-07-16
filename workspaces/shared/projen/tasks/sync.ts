@@ -19,9 +19,9 @@ if (!process.argv.includes("--watch")) {
 } else {
   // Watch: one initial full synth to bring the tree up to date, then three focused
   // watchers under `concurrently`. The projenrc watcher is the intelligent stand-in
-  // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts`
-  // changes, while barrels/openapi keep generated OUTPUT fresh on source edits with
-  // no full synth. Touch `.projenrc.ts` to force a re-synth.
+  // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts` or
+  // a configured `syncResynthPaths` entry changes, while barrels/openapi keep generated
+  // OUTPUT fresh on source edits with no full synth.
   log.start("initial sync");
   runSynth({ post: true });
   log.success("synced - watching (Ctrl-C to stop)");

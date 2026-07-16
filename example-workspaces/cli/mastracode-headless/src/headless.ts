@@ -4,7 +4,7 @@
  *
  * Usage: `pnpm mc-headless -- "summarize src/"` (from this package directory)
  *
- * Interactive TUI: `pnpm exec mastracode`
+ * Interactive TUI: `pnpm mastracode`
  */
 import { createMastraCode, runMC } from "mastracode";
 

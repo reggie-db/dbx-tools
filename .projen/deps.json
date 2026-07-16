@@ -47,10 +47,6 @@
       "type": "build"
     },
     {
-      "name": "picomatch",
-      "type": "build"
-    },
-    {
       "name": "prettier",
       "type": "build"
     },

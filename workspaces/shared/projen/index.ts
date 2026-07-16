@@ -10,7 +10,6 @@ export * as generated from "./src/generated";
 export * as log from "./src/log";
 export * as mixin from "./src/mixin";
 export * as openapi from "./src/openapi";
-export * as packageModule from "./src/package";
 export * as pnpmWorkspace from "./src/pnpm-workspace";
 export * as project from "./src/project";
 export * as publish from "./src/publish";

@@ -6,10 +6,6 @@
       "type": "build"
     },
     {
-      "name": "picomatch",
-      "type": "build"
-    },
-    {
       "name": "tsx",
       "version": "^4.23.0",
       "type": "build"

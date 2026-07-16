@@ -49,10 +49,10 @@ export function toPathMatcher(
   ...inputs: readonly (PathMatchInput | null | undefined)[]
 ): PathMatcher {
   const tests = pathMatchTests(...inputs);
-  if (tests.length === 0) return predicate.toPredicate(() => false);
+  if (tests.length === 0) return predicate.create(() => false);
   return tests
     .slice(1)
-    .reduce<PathMatcher>((acc, test) => acc.or(test), predicate.toPredicate(tests[0]!));
+    .reduce<PathMatcher>((acc, test) => acc.or(test), predicate.create(tests[0]!));
 }
 
 if (import.meta.main) {

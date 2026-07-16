@@ -10,7 +10,7 @@ import { exec } from "@dbx-tools/shared-core";
 import { Component } from "projen";
 import { makeReadonly, makeWritable } from "./generated";
 import { logger } from "./log";
-import { applyTasks, taskScript, type DBXToolsNodeProject } from "./package";
+import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project";
 import { repoRoot, toPosix, workspacePackages } from "./workspace";
 
 /** Forced semver bump level when conventional-commit inference is overridden. */

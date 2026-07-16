@@ -10,8 +10,8 @@ A **projen-driven pnpm monorepo generator**. The reusable engine lives in
 engine and ships **`dbxtools`**. Both are dogfooded as normal auto-discovered
 packages (not special cases). The engine exports two projen project subclasses —
 **`DBXToolsNodeProject`** (the monorepo root) and **`DBXToolsTypeScriptProject`**
-(a package) — plus the **mixin** helpers (`tagMixin`/`packageMixin`/`fileMixin`)
-for per-package tweaks.
+(a package) — plus **mixin** helpers (`projectPredicate`/`withTag`/`inRelPath`,
+`mixin`/`fileMixin`) for per-package tweaks.
 
 - **`workspaces/`** — real content goes here.
 - **`example-workspaces/`** — the seed example packages this repo ships
@@ -49,17 +49,15 @@ for per-package tweaks.
   `workspacePackageTagPaths`, `defaultTagMixins`), which
   `extends` the component option bags directly — `DBXToolsConfigOptions` (`tags`)
   and `DBXToolsPNPMWorkspaceOptions` (`packages`/`catalog`/`allowBuilds`) — so those
-  are top-level options, not nested fields. Both implement `IDBXToolsNodeProject`
-  (the Node surface): `scope`/`packageIdentifier`/`packageNameFor` plus the config
+  are top-level options, not nested fields. Both implement the single
+  `DBXToolsProject` interface (`project.ts`; extends projen's `NodeProject`):
+  `scope`/`packageIdentifier`/`packageNameFor` plus the config
   COMPONENTS as fields (projen-style, like `project.eslint?.addRules(...)`) —
   `project.dbxToolsConfig` (implements
   `ITagging`: `tags` + `addTags`, distinct/order-preserving, read/written directly on
   `package.json` `dbxToolsConfig.tags` — never cached on a field) and
   `project.pnpmWorkspace` (implements `IPnpmWorkspace`:
   `addPackages`/`addCatalog`/`allowBuild`; ROOT-only, so `undefined` on a child).
-  `IDBXToolsNodeProject` extends the runtime-agnostic `IDBXToolsProject`, which is
-  deliberately minimal (just `dbxToolsConfig`) so a future non-Node project (e.g.
-  Python package discovery) can implement it.
   Call methods on those fields directly (`project.dbxToolsConfig.addTags(...)`), not
   via delegator methods on the project.
 - **`pnpm-workspace.yaml` is the source of truth**, emitted by the
@@ -89,7 +87,7 @@ for per-package tweaks.
   written to each package's `package.json` under **`dbxToolsConfig.tags`** (the
   per-package source of truth, surfaced post-synth as `workspacePackages()[].tags`)
   and read back via the `DBXToolsConfig` component (`pkg.dbxToolsConfig.tags`, the
-  basis a `packageMixin` dispatches on). No declaration needed — drop a `src/`
+  basis a `project.mixin(...)` dispatches on). No declaration needed — drop a `src/`
   folder, re-synth.
 - **A root may already hold in-tree subprojects.** If a discovered folder matches
   a subproject already attached to the root, it is NOT re-created — the resolved
@@ -124,21 +122,30 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   - `openapi` → generated, read-only clients (`openapi-fetch`, DOM libs)
     Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
     `document` in `shared`/`server` fails `tsc`; `process`/`node:*` in `ui` fails.
-- **Per-package behavior is MIXINS** (`mixins.ts`; `constructs` `IMixin`). A mixin
+- **Per-package behavior is MIXINS** (`mixin.ts`; `constructs` `IMixin`). A mixin
   is `{ supports(c), applyTo(c) }`, applied with the constructs-native
   `construct.with(...mixins)` — it runs each across the construct's whole subtree
-  (tree captured at call time), so a root-level `project.with(...)` reaches every
-  matching child. `tagMixin(tag, fn)` targets packages carrying `tag`;
-  `packageMixin(predicate, fn)` targets packages by any predicate (dispatch on
-  `pkg.dbxToolsConfig.tags` + `basename(pkg.outdir)`); `fileMixin(fn)` targets any generated
+  (tree captured at call time), so a root-level `project.with(...)` or
+  `project.mixin(...)` reaches every matching child. Package predicates live in
+  `project.ts` as fluent, callable `ProjectPredicate`s that narrow a construct to a
+  standard projen `Project` by default and to `DBXToolsProject` only once `.withTag`
+  is chained (tags live only on DBXTools packages, so the `.mixin` consumer is typed
+  to whichever the chain narrowed to): start one with
+  `projectPredicate("*/shared-core", ...)` (npm name glob via `match.toPathMatcher`),
+  `withTag(tag, ...tags)` (all tags required, `→ DBXToolsProject`), or
+  `inRelPath("workspaces", ...)` (root-relative folder prefix), then chain
+  `.withTag`/`.supports`/`.inRelPath` to refine and `.mixin(consumer)` to build the
+  mixin. They also compose with `.and()` / `.or()` from `@dbx-tools/shared-core`
+  `predicate`. `DBXToolsNodeProject.mixin(supports, applyTo)` is sugar over
+  `project.with(mixin(supports, applyTo))`. `fileMixin(fn)` targets any generated
   `FileBase`. The root applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
   `tags.ts`) during its own construction, selected by the `defaultTagMixins` option
   (omit = all, `false` = none, or a subset list) - e.g. the `server` mixin adds
   `express`/`tsoa` + `dev`/`start` tasks. Consumers apply their own AFTER
-  construction with `project.with(...)` (see `.projenrc.ts`), so user mixins run
+  construction with `project.mixin(...)` (see `.projenrc.ts`), so user mixins run
   after the defaults.
-- **Names**: `pkg.packageNameFor(relPath)` → `npmNameOf(scope, relPath)`
-  (`packages.ts`): normalized, lowercased, the root-relative path dash-joined as
+- **Names**: `pkg.packageNameFor(relPath)` → `PackageIdentifier.of(scope, relPath)`
+  (`project.ts`): normalized, lowercased, the root-relative path dash-joined as
   `@<scope>/<seg-seg-...>` (e.g. `workspaces/shared/core` → `@dbx-tools/shared-core`,
   `workspaces/cli/dbx-tools` → `@dbx-tools/cli-dbx-tools`). The `scope` option
   defaults to the resolved project `name`; the `name` option, if omitted, is
@@ -162,12 +169,11 @@ workspaces/
   shared/projen/                          # the projen engine (`@dbx-tools/shared-projen`)
     index.ts                              # generated barrel (public API surface)
     src/
-      project.ts                          # DBXToolsNode/TypeScriptProject + ITagging/IPnpmWorkspace + DBXToolsConfig + initDBXToolsProject
-      mixins.ts                           # tagMixin/packageMixin/fileMixin (mixin factories; tag table lives in tags.ts)
+      project.ts                          # DBXToolsProject + DBXToolsNode/TypeScriptProject + PackageIdentifier/naming, applyCompilerOptions/applyTasks, SHARED_COMPILER_OPTIONS, root init
+      mixin.ts                            # mixin() factory (tag table lives in tags.ts)
       pnpm-workspace.ts                   # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
       tags.ts                             # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
       workspace.ts                        # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
-      packages.ts                         # npmNameOf, applyCompilerOptions, applyTasks, addWorkspacePackageTags, SHARED_COMPILER_OPTIONS
       barrels.ts                          # barrelsby driver (root index.ts, header + read-only)
       watch.ts                            # generic file-watch util (watchLoop + watchRoots) the sync --watch task watchers forward to
       scaffold.ts                         # packageSetChanged() + runSynth({ post })
@@ -198,16 +204,19 @@ pnpm dbxtools clean          # remove generated files (read-only ones); interact
   `--watch` to `tasks/sync.ts`, which does ONE initial full synth, then runs three
   focused watchers under `concurrently` - each its own task script sharing the generic
   `watchLoop`/`watchRoots` (`watch.ts`), each keyed to the smallest input that can
-  invalidate its output: `tasks/projenrc.ts` (watches ONLY `.projenrc.ts`; on edit
-  runs a full re-synth + install - the intelligent stand-in for stock `projen --watch`,
-  which re-synths on ANY tree change), `tasks/barrels.ts --watch` (a source edit
-  rebuilds just that package's barrel), and `tasks/openapi.ts --watch` (a changed tsoa
-  controller regenerates the openapi packages). The concern-specific glue lives in the
-  task; `watch.ts` only owns the shared debounce/serialize/ignore-generated/SIGINT
-  machinery. Touch `.projenrc.ts` to force a re-synth for a structural change it
-  doesn't spell out (e.g. a new package folder). Stock `projen --watch` is deliberately
-  NOT used: it `fs.watch`es the whole repo recursively and re-synths (full post, so it
-  installs) on EVERY file change, so a mere source edit forced a full re-synth + install.
+  invalidate its output: `tasks/projenrc.ts` (watches `.projenrc.ts` plus any
+  `syncResynthPaths` from the root project option, persisted as
+  `dbxToolsConfig.syncResynthPaths`; on edit runs a full re-synth + install - the
+  intelligent stand-in for stock `projen --watch`, which re-synths on ANY tree change),
+  `tasks/barrels.ts --watch` (a source edit rebuilds just that package's barrel), and
+  `tasks/openapi.ts --watch` (a changed tsoa controller regenerates the openapi
+  packages). The concern-specific glue lives in the task; `watch.ts` only owns the
+  shared debounce/serialize/ignore-generated/SIGINT machinery. Touch `.projenrc.ts`
+  (or a listed `syncResynthPaths` file) to force a re-synth for a structural change
+  it doesn't spell out (e.g. a new package folder). Stock `projen --watch` is
+  deliberately NOT used: it `fs.watch`es the whole repo recursively and re-synths
+  (full post, so it installs) on EVERY file change, so a mere source edit forced a
+  full re-synth + install.
 - **`dbxtools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
   `pnpm init`, seed a minimal `pnpm-workspace.yaml` (so the very next step can
   approve `tsx`'s `esbuild` build script non-interactively), `pnpm add -D
@@ -223,10 +232,10 @@ projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
   installs, regenerates barrels via the post-synth component).
 - **`dbxtools sync --watch`** forwards to `projen sync --watch`, which does one
   initial full synth, then (via `concurrently`) runs the projenrc watcher alongside
-  the barrel + openapi watchers. The projenrc watcher re-synths (+install) ONLY when
-  `.projenrc.ts` changes; the barrel watcher rebuilds just the edited package's
-  barrel, and the openapi watcher regenerates the `openapi` packages when a tsoa
-  controller changes.
+  the barrel + openapi watchers. The projenrc watcher re-synths (+install) when
+  `.projenrc.ts` or a configured `syncResynthPaths` entry changes; the barrel watcher
+  rebuilds just the edited package's barrel, and the openapi watcher regenerates the
+  `openapi` packages when a tsoa controller changes.
 - **Barrels regenerate on every full (post) synth**: a post-synth projen `Component`
   (`GeneratedBarrels` in `project.ts`) runs on any `runSynth({ post: true })` - the
   plain `pnpm exec projen`, `sync`'s initial synth, and the projenrc watcher's
@@ -268,9 +277,8 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 - **The engine is dogfooded as a normal auto-discovered package**, not a hand-
   authored special case: it lives at `workspaces/cli/dbx-tools` (tag `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
-  `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` applies (via `project.with(...)`) a
-  `packageMixin` matching
-  `p.dbxToolsConfig.tags.includes("cli") && basename(p.outdir) === "dbx-tools"` that:
+  `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` applies (via `project.mixin(...)`) a
+  mixin matching `withTag("cli").supports("*/cli-dbx-tools")` that:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
   adds its bin (`p.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), depends on
   `@dbx-tools/shared-projen`, and bumps its tsconfig to ES2022 lib/target +
@@ -303,12 +311,12 @@ compile` (or `pnpm compile`) in its dir, or all of them with `pnpm -r compile`.
   _importing_ the engine (which the barrel pulls in) whenever a consumer's install
   of that tool was an unusual version with a narrower `exports` map.
 - Repo is `type: module`. Packages get a `module: ESNext` + `moduleResolution:
-bundler` overlay (`SHARED_COMPILER_OPTIONS` in `packages.ts`) because projen's
+bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   default `module: CommonJS` breaks the ESM sources' `import.meta`; `bundler`
   honors the `exports` map, so a bare `@dbx-tools/<pkg>` import resolves to that
   package's ROOT `index.ts` barrel — packages type-check against each other with
   no build step. Cross-package imports still need the workspace dep declared
-  (`p.addDeps("@dbx-tools/shared-core@workspace:*")` in a `packageMixin`) and MUST
+  (`p.addDeps("@dbx-tools/shared-core@workspace:*")` in a `project.mixin(...)`) and MUST
   use the package name (`@dbx-tools/shared-file-scan`), never a relative path into
   another package's `src/` (e.g. `../../../../shared/file-scan/src/find`).
 - Everything runs on portable Node: subprocesses use `execFileSync(process.execPath, …)`;

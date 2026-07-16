@@ -121,7 +121,7 @@ function namespaceBarrelExports(content: string): string {
     .map((line) => {
       const match = /^(export \* from )"(.+)"(;?)\s*$/.exec(line);
       if (!match) return line;
-      const modulePath = match[2];
+      const modulePath = match[2]!;
       const ns = modulePathToNamespace(modulePath);
       return `export * as ${ns} from "${modulePath}";`;
     })

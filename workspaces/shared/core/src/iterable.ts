@@ -11,6 +11,9 @@
 /** Lazy sequence over iterable source(s). See {@link sequence}. */
 export type Sequence<T> = SequenceImpl<T>;
 
+
+type SequenceSource<T> = Iterable<T> | ReadonlyMap<unknown, T> | OneOrMany<T> | null | undefined;
+
 /**
  * A non-scalar {@link Iterable} - one to treat as a collection of elements
  * rather than a scalar. {@link isContainer} narrows to this, excluding strings,
@@ -27,6 +30,13 @@ export type Container<T = unknown> = Iterable<T>;
  * emptiness check ({@link isEmpty}).
  */
 export type Collection<T> = ReadonlyArray<T> | ReadonlySet<T> | ReadonlyMap<unknown, T>;
+
+export type OneOrMany<T> = [T, ...T[]];
+
+export function isOneOrMany<T = unknown>(value: readonly T[]): value is OneOrMany<T> {
+  return value.length > 0;
+}
+
 
 /** A source accepted by a variadic op: a {@link Container} of `T`, or nothing. */
 type Source<T> = Container<T> | null | undefined;
@@ -63,6 +73,7 @@ export function isEmpty(collection: Collection<unknown>): boolean {
   return "size" in collection ? collection.size === 0 : collection.length === 0;
 }
 
+
 /**
  * Normalizes a source to an iterable of its `T` values, so Maps are treated
  * uniformly with arrays/sets: a {@link Map} yields its *values* (matching
@@ -96,6 +107,16 @@ export function isContainer<T = unknown>(value: unknown): value is Container<T> 
     typeof value !== "function" &&
     typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function"
   );
+}
+
+
+function sequenceSources<T>(...sources: SequenceSource<T>[]): Iterable<T>[] {
+  const sourceIterables: Iterable<T>[] = [];
+  for (const source of sources) {
+    if (source == null || (isCollection(source) && isEmpty(source))) continue;
+    sourceIterables.push(values(source));
+  }
+  return sourceIterables;
 }
 
 /**
@@ -306,7 +327,7 @@ export function group<T, G extends GroupPredicates<T>>(
   for (const value of sequence(...sources)) {
     const i = index++;
     for (const key of keys) {
-      if (predicates[key](value, i)) {
+      if (predicates[key]!(value, i)) {
         buckets.get(key)!.push(value);
         break;
       }
@@ -515,7 +536,7 @@ class SequenceImpl<T> {
       // beginning.
       const buffer = this.buffer!;
       let index = 0;
-      for (;;) {
+      for (; ;) {
         if (index < buffer.length) {
           yield buffer[index++]!;
           continue;
@@ -579,10 +600,10 @@ class SequenceImpl<T> {
    * @see {@link sequence}
    */
   join(
-    ...sources: readonly (Iterable<T> | ReadonlyMap<unknown, T> | null | undefined)[]
+    ...sources: readonly SequenceSource<T>[]
   ): Sequence<T> {
-    if (sources.length === 0) return this;
-    return sequence(this, ...sources);
+    const sourceIterables = sequenceSources(this, ...sources);
+    return sequenceSources.length === 0 ? this : sequence(...sourceIterables);
   }
 
   /** @see {@link take} */
@@ -682,30 +703,28 @@ const emptySequence: Sequence<never> = new SequenceImpl([], undefined, {
  * @param sources - Iterables to concatenate, in order (`Map` sources use values).
  */
 export function sequence<T>(
-  ...sources: readonly (Iterable<T> | ReadonlyMap<unknown, T> | null | undefined)[]
+  ...sources: readonly SequenceSource<T>[]
 ): Sequence<T> {
   // Skip nullish sources and known-empty collections; normalize the rest to
   // their values so a Map contributes values rather than [key, value] entries.
-  const sequenceSources: Iterable<T>[] = [];
-  for (const source of sources) {
-    if (source == null || (isCollection(source) && isEmpty(source))) continue;
-    sequenceSources.push(values(source));
-  }
-  if (sequenceSources.length === 0) return emptySequence as Sequence<T>;
+  const sourceIterables = sequenceSources(...sources);
+  if (sourceIterables.length === 0) return emptySequence as Sequence<T>;
   // Reuse an existing sequence as-is rather than re-wrapping it.
-  if (sequenceSources.length === 1) {
-    const only = sequenceSources[0]!;
+  if (sourceIterables.length === 1) {
+    const only = sourceIterables[0]!;
     return only instanceof SequenceImpl ? (only as Sequence<T>) : new SequenceImpl(only, undefined);
   }
   return new SequenceImpl(
     {
       *[Symbol.iterator]() {
-        for (const source of sequenceSources) yield* source;
+        for (const source of sourceIterables) yield* source;
       },
     },
     undefined,
   );
 }
+
+
 
 /**
  * Flattens a mix of single items and iterables into one lazy {@link Generator}.
@@ -731,3 +750,7 @@ export function* generator<T>(
     }
   }
 }
+
+
+
+

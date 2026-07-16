@@ -127,16 +127,16 @@ function buildPredicate<T, U extends T>(test: (value: T) => unknown): Predicate<
 /**
  * Wraps a type predicate while preserving its narrowed type.
  */
-export function toPredicate<T, U extends T>(
+export function create<T, U extends T>(
   predicate: TypePredicateFunction<T, U>,
 ): Predicate<T, U>;
 
 /**
  * Wraps an ordinary boolean or truthy predicate.
  */
-export function toPredicate<T>(predicate: PredicateInput<T>): Predicate<T, T>;
+export function create<T>(predicate: PredicateInput<T>): Predicate<T, T>;
 
-export function toPredicate<T, U extends T = T>(
+export function create<T, U extends T = T>(
   predicate: TypePredicateFunction<T, U> | PredicateInput<T>,
 ): Predicate<T, U> {
   return buildPredicate<T, U>(predicate);

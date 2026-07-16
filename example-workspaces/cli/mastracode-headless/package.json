@@ -1,12 +1,14 @@
 {
   "name": "@dbx-tools/cli-mastracode-headless",
   "bin": {
+    "mastracode": "./src/tui.ts",
     "mc-headless": "./src/headless.ts"
   },
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
     "default": "projen default",
+    "mastracode": "projen mastracode",
     "mc-headless": "projen mc-headless",
     "package": "projen package",
     "post-compile": "projen post-compile",
@@ -17,7 +19,6 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "picomatch": "^4.0.5",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },

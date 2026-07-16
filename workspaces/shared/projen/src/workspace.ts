@@ -325,6 +325,22 @@ function readManifest(dir: string): { name?: string; tags?: string[] } {
 }
 
 /**
+ * Extra repo-root paths that trigger a full re-synth during `sync --watch`, read from
+ * the root `package.json` `dbxToolsConfig.syncResynthPaths` (set via the
+ * {@link DBXToolsProjectOptions.syncResynthPaths} option at synth).
+ */
+export function syncResynthPaths(projectRoot: string = repoRoot): string[] {
+  try {
+    const m = JSON.parse(readFileSync(resolve(projectRoot, "package.json"), "utf8"));
+    const paths = m?.dbxToolsConfig?.syncResynthPaths;
+    if (!Array.isArray(paths)) return [];
+    return paths.map((p) => String(p).trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * The recorded workspace members from `pnpm-workspace.yaml` (the source of truth),
  * each augmented with the `name` + `tags` read back from its `package.json`. This is
  * what every post-synth command (barrels, watch, openapi) uses: the manifest is

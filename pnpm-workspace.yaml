@@ -42,3 +42,7 @@ allowBuilds:
 overrides:
   glob: ^13.0.0
   vscode-jsonrpc: 8.2.1
+peerDependencyRules:
+  allowedVersions:
+    zod: "4"
+    date-fns: "4"

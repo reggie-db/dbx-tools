@@ -16,7 +16,6 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "picomatch": "^4.0.5",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },

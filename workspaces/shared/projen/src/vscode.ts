@@ -42,7 +42,8 @@ export class DBXToolsVsCode extends Component {
         tasks: [
           {
             label: "sync",
-            detail: "projen sync --watch - concurrently: projenrc (.projenrc.ts re-synth) + barrels + openapi watchers",
+            detail:
+              "projen sync --watch - projenrc (.projenrc.ts + syncResynthPaths re-synth) + barrels + openapi watchers",
             type: "shell",
             command: "pnpm exec projen sync --watch",
             isBackground: true,
