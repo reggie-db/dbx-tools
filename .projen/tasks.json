@@ -95,6 +95,14 @@
       ],
       "condition": "git diff --exit-code > /dev/null"
     },
+    "codegen": {
+      "name": "codegen",
+      "steps": [
+        {
+          "exec": "tsx workspaces/shared/projen/tasks/codegen.ts"
+        }
+      ]
+    },
     "compile": {
       "name": "compile",
       "description": "Only compile",

@@ -541,6 +541,7 @@ function registerRootTasks(project: javascript.NodeProject): void {
   applyTasks(project, {
     barrels: { exec: taskScript(project, "barrels.ts") },
     openapi: { exec: taskScript(project, "openapi.ts") },
+    codegen: { exec: taskScript(project, "codegen.ts") },
     clean: { exec: taskScript(project, "clean.ts"), receiveArgs: true },
     // `receiveArgs` forwards `--watch`, so `pnpm exec projen sync --watch` syncs once
     // then starts the single file-scan watcher loop.

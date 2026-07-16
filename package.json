@@ -6,6 +6,7 @@
     "bump": "projen bump",
     "clean": "projen clean",
     "clobber": "projen clobber",
+    "codegen": "projen codegen",
     "compile": "projen compile",
     "dbxtools": "projen dbxtools",
     "default": "projen default",

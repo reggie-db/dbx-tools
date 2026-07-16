@@ -16,6 +16,7 @@ packages:
   - workspaces/shared/file-scan
   - workspaces/shared/model
   - workspaces/shared/projen
+  - workspaces/shared/sdk-model
 catalog:
   react: ^19.2.4
   react-dom: ^19.2.4
@@ -34,6 +35,7 @@ catalog:
   tsoa: ^6.6.0
   concurrently: ^10.0.3
   pnpm: ^11.0.6
+  "@databricks/sdk-experimental": ^0.17.0
   "@databricks/appkit": ^0.43.0
   "@databricks/appkit-ui": ^0.43.0
   mastracode: 0.30.0

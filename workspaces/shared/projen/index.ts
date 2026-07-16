@@ -4,6 +4,7 @@
 
 export * as barrels from "./src/barrels";
 export * as clean from "./src/clean";
+export * as codegen from "./src/codegen";
 export * as dbxToolsConfig from "./src/dbx-tools-config";
 export * as engineRoot from "./src/engine-root";
 export * as generated from "./src/generated";

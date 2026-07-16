@@ -30,6 +30,7 @@ if (!process.argv.includes("--watch")) {
       { command: `tsx "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
       { command: `tsx "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
       { command: `tsx "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
+      { command: `tsx "${taskPath("codegen.ts")}" --watch`, name: "codegen", prefixColor: "yellow" },
     ],
     { prefix: "name", killOthersOn: ["failure"] },
   );
