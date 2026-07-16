@@ -94,4 +94,3 @@ jspm_packages/
 **/*.lock
 !/.eslintrc.json
 !/.projenrc.ts
-!/.example.projenrc.ts

@@ -2,8 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as bin from "./src/bin";
-export * as collection from "./src/collection";
-export * as engine from "./src/engine";
-export * as log from "./src/log";
-export * as name from "./src/name";
+export * as bootstrap from "./src/bootstrap";
+export * as cli from "./src/cli";
+export * as pnpm from "./src/pnpm";
+export * as root from "./src/root";

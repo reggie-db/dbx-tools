@@ -2,13 +2,13 @@
  * Bootstrap a brand-new, completely empty folder into a working dbx-tools
  * workspace: no `package.json`, no projen, maybe no `pnpm` even installed.
  *
- * `pnpm` and `projen` are dependencies of `@dbx-tools/cli` itself, so once it is
- * resolvable (installed, or fetched transiently via `npx dbxtools`) both are
- * already sitting in `node_modules` - no global `npm install -g pnpm`, no PATH
- * lookup, no network access beyond what installing the engine already required.
- * {@link resolvePnpmArgv} in `../bin` finds pnpm's own CLI entry the same way
- * `./barrels.ts` resolves barrelsby's (`require.resolve`, run via `execFileSync`),
- * falling back to `npx pnpm` only if pnpm can't be resolved as a dependency.
+ * `pnpm` is a dependency of `@dbx-tools/shared-projen` itself, so once it is
+ * resolvable (installed, or fetched transiently via `npx`) it is already sitting
+ * in `node_modules` - no global `npm install -g pnpm`, no PATH lookup, no network
+ * access beyond what installing the engine already required.
+ * {@link resolvePnpmArgv} in `./pnpm` finds pnpm's own CLI entry the same way
+ * (`require.resolve`, run via `execFileSync`), falling back to `npx pnpm` only if
+ * pnpm can't be resolved as a dependency.
  *
  * Never scaffolds workspace-package folders or sample code - just enough for `pnpm exec projen`
  * (or `dbxtools sync`) to work from here on. Drop a
@@ -43,12 +43,9 @@ export function needsBootstrap(): boolean {
   return !existsSync(join(repoRoot, ".projenrc.ts"));
 }
 
-const PROJENRC_TEMPLATE = `import { project as dbx } from "@dbx-tools/cli";
+const PROJENRC_TEMPLATE = `import { DBXToolsNodeProject } from "@dbx-tools/shared-projen";
 
-// Constructs + configures the monorepo root (scans workspaces/ for packages),
-// then synthesizes it. Add packages by dropping a workspaces/<tag>/<name>/src
-// folder and re-running projen.
-const project = new dbx.DBXToolsNodeProject();
+const project = new DBXToolsNodeProject();
 project.synth();
 `;
 
@@ -71,11 +68,11 @@ allowBuilds:
  * write a minimal `.projenrc.ts` (only if one isn't already there), then run a
  * full synth.
  *
- * @param dbxToolsSpecifier - the `pnpm add` specifier for the engine itself.
- * Defaults to the published `@dbx-tools/cli` package; pass a `file:`/`link:`
+ * @param projenSpecifier - the `pnpm add` specifier for the engine itself.
+ * Defaults to the published `@dbx-tools/shared-projen` package; pass a `file:`/`link:`
  * path to test against a local, unpublished build.
  */
-export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
+export function bootstrapWorkspace(projenSpecifier = "@dbx-tools/shared-projen"): void {
   log.start(`bootstrapping an empty workspace in ${repoRoot}`);
 
   if (needsPackageJson()) {
@@ -89,7 +86,7 @@ export function bootstrapWorkspace(dbxToolsSpecifier = "@dbx-tools/cli"): void {
   // whatever a registry currently tags "latest", including an unstable prerelease
   // that breaks projen's `tsc`/`tsx` invocation. Matches the versions
   // `DBXToolsNodeProject` itself adds as root devDeps.
-  runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", dbxToolsSpecifier]);
+  runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", projenSpecifier]);
 
   const projenrc = join(repoRoot, ".projenrc.ts");
   if (!existsSync(projenrc)) {

@@ -24,17 +24,13 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/shared-projen",
+      "name": "@dbx-tools/shared-core",
       "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "commander",
       "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "consola",
       "type": "runtime"
     },
     {

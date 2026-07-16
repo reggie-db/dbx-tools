@@ -18,9 +18,9 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
-    "picomatch": "*",
+    "picomatch": "^4.0.5",
     "tsx": "^4.23.0",
-    "typescript": "*",
+    "typescript": "^5.9.3",
     "vite": "catalog:"
   },
   "dependencies": {

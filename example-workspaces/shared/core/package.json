@@ -24,7 +24,8 @@
   "types": "index.ts",
   "dbxToolsConfig": {
     "tags": [
-      "shared"
+      "shared",
+      "node"
     ]
   },
   "type": "module",

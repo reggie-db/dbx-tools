@@ -1,5 +1,5 @@
 /**
- * Shared consola logger for the projen engine and dbx-tools CLI.
+ * Shared consola logger for the projen engine.
  */
 import { createConsola, LogLevels, type LogType } from "consola";
 

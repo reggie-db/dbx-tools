@@ -37,7 +37,7 @@ import {
   typescript,
 } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
-import { resolveEnginePkgRoot } from "./engine-root";
+import { resolvePkgRoot } from "./engine-root";
 import { generateBarrels } from "./barrels";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
 import { DBXToolsRelease } from "./publish";
@@ -504,7 +504,7 @@ function resolveIdentity(options: { name?: string; scope?: string }): {
  * consumer already has for it rather than computing one.
  */
 function engineSelfDependency(project: javascript.NodeProject): string | undefined {
-  const enginePkgJson = join(resolveEnginePkgRoot(), "package.json");
+  const enginePkgJson = join(resolvePkgRoot(), "package.json");
   if (!toPosix(enginePkgJson).includes("/node_modules/")) return undefined;
   let name: string;
   let version: string;

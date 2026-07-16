@@ -16,9 +16,9 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "picomatch": "*",
+    "picomatch": "^4.0.5",
     "tsx": "^4.23.0",
-    "typescript": "*"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@clack/prompts": "catalog:",

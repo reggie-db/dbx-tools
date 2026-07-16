@@ -47,6 +47,15 @@ project.with(
     }
   }),
   packageMixin(
+    (p) => p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "core",
+    (p) => {
+      p.dbxToolsConfig.addTags("node");
+      if (p instanceof DBXToolsTypeScriptProject) {
+        p.tsconfig?.file.addOverride("compilerOptions.types", ["node"]);
+      }
+    },
+  ),
+  packageMixin(
     (p) => p.dbxToolsConfig.tags.includes("shared") && basename(p.outdir) === "projen",
     (p) => {
       p.dbxToolsConfig.addTags("node");
@@ -102,11 +111,10 @@ project.with(
       p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
       p.package.addField("exports", {
         ".": "./index.ts",
-        "./log": "./src/log.ts",
-        "./bin": "./src/bin.ts",
+        "./pnpm": "./src/pnpm.ts",
         "./package.json": "./package.json",
       });
-      p.addDeps("@dbx-tools/shared-projen@workspace:*", "consola", "pnpm");
+      p.addDeps("@dbx-tools/shared-core@workspace:*", "pnpm");
       if (p instanceof DBXToolsTypeScriptProject) {
         p.tsconfig?.file.addOverride("compilerOptions.target", "ES2022");
         p.tsconfig?.file.addOverride("compilerOptions.lib", ["ES2022"]);

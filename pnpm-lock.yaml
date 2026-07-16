@@ -254,7 +254,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  example-workspaces/shared/fun:
+  example-workspaces/shared/guru/fun:
     devDependencies:
       '@types/node':
         specifier: ^24.6.0
@@ -366,15 +366,12 @@ importers:
       '@clack/prompts':
         specifier: 'catalog:'
         version: 1.7.0
-      '@dbx-tools/shared-projen':
+      '@dbx-tools/shared-core':
         specifier: workspace:*
-        version: link:../../shared/projen
+        version: link:../../shared/core
       commander:
         specifier: 'catalog:'
         version: 15.0.0
-      consola:
-        specifier: ^3.4.2
-        version: 3.4.2
       pnpm:
         specifier: 'catalog:'
         version: 11.10.0
