@@ -166,6 +166,7 @@ projectApi.applyToProjects(project, { identifierName: "server-appkit-demo", tags
 projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "app" }, (p) => {
   p.package.addField("name", "@dbx-tools/demo-appkit-app");
   p.addDeps(
+    dep("@dbx-tools/shared-core"),
     dep("@dbx-tools/ui-appkit"),
     dep("@dbx-tools/ui-mastra"),
     "react-router-dom@catalog:",
@@ -175,6 +176,12 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
   // app (which owns the Tailwind build) must provide it.
   p.addDeps("tw-animate-css@catalog:");
 });
+
+// Force-track the hand-authored dotfiles a consumer needs: projen's default
+// `**/.*` ignore would otherwise drop them. `.npmrc` points installs at the
+// registry the `@dbx-tools/*` packages live on; `.env.example` is the config
+// template a user copies to `.env`.
+project.gitignore.include("/.npmrc", "/.env.example");
 
 // Gitignore all generated files so the committed demo is hand-authored source
 // only - a copied folder regenerates them via `dbxtools sync` / `pnpm install`.

@@ -1,14 +1,17 @@
 /**
  * Bootstrap a brand-new folder into a working dbx-tools workspace before projen runs.
  */
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { intro, outro } from "@clack/prompts";
 import { exec } from "@dbx-tools/core";
 import { resolvePnpmArgv, runPnpm } from "./pnpm";
 import { rootLabel } from "./root";
 
-const DEFAULT_PROJEN_SPECIFIER = "@dbx-tools/projen";
+// Pin to `@latest` explicitly: a bare `@dbx-tools/projen` can land on a stray
+// `0.0.0` (whose `^0.0.0` caret then can't reach any real release), leaving the
+// workspace on a stale engine. `@latest` always takes the newest published.
+const DEFAULT_PROJEN_SPECIFIER = "@dbx-tools/projen@latest";
 
 const PROJENRC_TEMPLATE = `import { DBXToolsNodeProject } from "@dbx-tools/projen";
 
@@ -50,7 +53,7 @@ export function bootstrapWorkspace(
     writeFileSync(projenrc, PROJENRC_TEMPLATE);
   }
 
-  runSynth(root);
+  runInitialSynth(root);
 
   runPnpm(["install", "--no-frozen-lockfile", "--force"], root);
   outro("Workspace ready - re-run dbxtools or add packages under workspaces/");
@@ -67,8 +70,15 @@ export function seedToolchain(
   root: string,
   projenSpecifier: string = DEFAULT_PROJEN_SPECIFIER,
 ): void {
-  if (!existsSync(join(root, "package.json"))) {
+  const manifestPath = join(root, "package.json");
+  if (!existsSync(manifestPath)) {
     runPnpm(["init"], root);
+    // pnpm 11 `init` writes `devEngines.packageManager: { name: "pnpm",
+    // onFail: "download" }`. Any npm-based tool later in the chain (an
+    // `npx`/dlx fallback) then refuses with EBADDEVENGINES because its own
+    // runner is npm, not pnpm. projen regenerates the whole manifest at synth
+    // anyway, so drop the block from this throwaway seed.
+    stripDevEngines(manifestPath);
   }
 
   const workspaceFile = join(root, "pnpm-workspace.yaml");
@@ -79,7 +89,25 @@ export function seedToolchain(
   runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", projenSpecifier], root);
 }
 
-function runSynth(root: string): void {
+/** Remove the `devEngines` block pnpm `init` seeds, so npm-based tooling doesn't reject the manifest. */
+function stripDevEngines(manifestPath: string): void {
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+    if (manifest.devEngines === undefined) return;
+    delete manifest.devEngines;
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  } catch {
+    // A malformed/absent manifest here just means the later `pnpm add` recreates it.
+  }
+}
+
+/**
+ * Run the initial synth by executing `.projenrc.ts` directly with tsx (with
+ * `PROJEN_DISABLE_POST` set), NOT `projen <task>`. Use right after seeding a
+ * fresh workspace: the projen TASKS (`sync`, `barrels`, ...) only exist once
+ * `.projenrc.ts` has run once, so `projen sync` can't be the bootstrapping step.
+ */
+export function runInitialSynth(root: string): void {
   const [command, ...prefix] = resolvePnpmArgv();
   exec.spawnSync(command, [...prefix, "exec", "tsx", ".projenrc.ts"], {
     cwd: root,
