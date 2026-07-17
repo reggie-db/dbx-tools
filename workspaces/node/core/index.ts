@@ -6,4 +6,4 @@ export * as exec from "./src/exec";
 export * as file from "./src/file";
 export * as project from "./src/project";
 export type { ExecStdio, LineHandler, StdioOption, ExecResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec";
-export type { ParsedCommand } from "./src/project";
+export type { ProjectContext } from "./src/project";

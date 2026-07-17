@@ -178,9 +178,9 @@ export function urlBuilder(): UrlBuilder;
  * urlBuilder({ url: "http://y" });    // http://y/
  * urlBuilder();                       // http://localhost/
  */
-export function urlBuilder(input?: UrlLike): UrlBuilder | null;
+export function urlBuilder(input?: UrlLike): UrlBuilder | undefined;
 
-export function urlBuilder(input?: UrlLike): UrlBuilder | null {
+export function urlBuilder(input?: UrlLike): UrlBuilder | undefined {
   if (input instanceof URL) {
     return new UrlBuilderImpl(input);
   }
@@ -210,7 +210,7 @@ export function urlBuilder(input?: UrlLike): UrlBuilder | null {
     return urlBuilder(defaultUrl());
   }
   const url = parseUrl(input);
-  return url ? urlBuilder(url) : null;
+  return url ? urlBuilder(url) : undefined;
 }
 
 /**
@@ -255,7 +255,7 @@ function parseUrl(input: string): URL | null {
   if (input && input.includes(URL_SCHEME_SEPARATOR)) {
     try {
       return new URL(input);
-    } catch {}
+    } catch { }
   }
   return null;
 }

@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { hash, net } from "@dbx-tools/shared-core";
 import { statSync as stat } from "./file";
 
+
 const ROOT_MARKERS = [
   ".projenrc.ts",
   ".projenrc.js",
@@ -14,9 +15,9 @@ const ROOT_MARKERS = [
 ] as const;
 
 /** A command's stdout, classified as a filesystem path and/or a URL. */
-export interface ParsedCommand {
-  /** Trimmed stdout, present when the command exited 0 with non-empty output. */
-  readonly output?: string;
+export interface ProjectContext {
+  readonly cwd: string;
+  readonly output: string
   /** `output` when it names something on disk. */
   readonly path?: string;
   /** `fs.stat` of {@link path}, when it exists. */
@@ -29,56 +30,69 @@ export interface ParsedCommand {
   readonly url?: net.UrlBuilder;
 }
 
-const EMPTY_PARSED: ParsedCommand = {};
 
 /**
  * because this is crucial do not use exec.spawnSync
  *
  * Run `command args` in `cwd` and classify its stdout: `path` + `pathStats` when
  * the output names something on disk, `url` (a {@link net.UrlBuilder}) when it
- * parses as a real network URL. Empty {@link ParsedCommand} on a non-zero exit
+ * parses as a real network URL. Empty {@link ProjectContext} on a non-zero exit
  * or empty output.
  */
-function parseCommand(command: string, args: string[], cwd: string): ParsedCommand {
+function projectContextCommandOutput(command: string, args: string[], cwd: string): ProjectContext {
   const result = spawnSync(command, args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
-  if (result.status !== 0) return EMPTY_PARSED;
   const output = result.stdout.toString().trim();
-  if (!output) return EMPTY_PARSED;
-  const pathStats = stat(output);
-  // Only an EXPLICIT `scheme://...` counts as a URL. `urlBuilder` otherwise
-  // synthesizes one (a bare `example.com` -> `https://…`, an absolute path ->
-  // `http://localhost/…`), which would mislabel directory outputs and bare
-  // tokens - so gate on the raw output already carrying a scheme + authority.
-  const builder = /^[a-z][a-z0-9+.-]*:\/\//i.test(output) ? net.urlBuilder(output) : null;
-  const url = builder && builder.scheme !== "file" && builder.hostname ? builder : undefined;
-  return { output, path: pathStats ? output : undefined, pathStats, url };
+  if (result.status === 0 && output) {
+    const pathStats = stat(output);
+    // Only an EXPLICIT `scheme://...` counts as a URL. `urlBuilder` otherwise
+    // synthesizes one (a bare `example.com` -> `https://…`, an absolute path ->
+    // `http://localhost/…`), which would mislabel directory outputs and bare
+    // tokens - so gate on the raw output already carrying a scheme + authority.
+    const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(output) ? net.urlBuilder(output) : undefined;
+    return { cwd, output, path: pathStats ? output : undefined, pathStats, url };
+  }
+  return { cwd, output };
 }
 
 /**
  * `parseCommand`, memoized per `(command, args, cwd)` - stores the whole
- * {@link ParsedCommand}. The cache key is a stable {@link hash.fnvHash} of that
+ * {@link ProjectContext}. The cache key is a stable {@link hash.fnvHash} of that
  * tuple (order-sensitive over `args`), so `cwd` is part of the key and a lookup
  * in another directory can't collide with the default-cwd entry.
  */
-const parsedCommandCache = new Map<string, ParsedCommand>();
+const parsedCommandCache = new Map<string, ProjectContext>();
 
-function cachedCommand(command: string, args: string[], cwd?: string): ParsedCommand {
-  const effectiveCwd = cwd ?? process.cwd();
-  const key = hash.fnvHash(command, args, effectiveCwd);
-  const hit = parsedCommandCache.get(key);
-  if (hit) return hit;
-  const result = parseCommand(command, args, effectiveCwd);
-  parsedCommandCache.set(key, result);
+function projectContextCommand(command: string, args: string[], cwd?: string): ProjectContext {
+  const processCwd = resolve(process.cwd());
+  let cacheEnabled: boolean
+  if (!cwd) {
+    cwd = processCwd;
+    cacheEnabled = true;
+  } else {
+    cwd = resolve(cwd);
+    if (cwd == processCwd) {
+      cacheEnabled = true;
+    } else {
+      cacheEnabled = false;
+    }
+  }
+  const cacheKey = cacheEnabled ? hash.fnvHash(command, args) : undefined;
+  const cacheHit = cacheKey ? parsedCommandCache.get(cacheKey) : undefined;
+  if (cacheHit?.cwd === cwd) { return cacheHit; }
+  const result = projectContextCommandOutput(command, args, cwd);
+  if (cacheKey) {
+    parsedCommandCache.set(cacheKey, result);
+  }
   return result;
 }
 
 function npmRoot(cwd?: string): string | undefined {
-  const parsed = cachedCommand("npm", ["prefix"], cwd);
+  const parsed = projectContextCommand("npm", ["prefix"], cwd);
   return parsed.pathStats?.isDirectory() ? parsed.path : undefined;
 }
 
 function gitRoot(cwd?: string): string | undefined {
-  const parsed = cachedCommand("git", ["rev-parse", "--show-toplevel"], cwd);
+  const parsed = projectContextCommand("git", ["rev-parse", "--show-toplevel"], cwd);
   return parsed.pathStats?.isDirectory() ? parsed.path : undefined;
 }
 
@@ -189,7 +203,7 @@ export function name(cwd: string = process.cwd()): string {
   const fromPackage = readPackageName(resolve(rootDir, "package.json"));
   if (fromPackage) return fromPackage;
 
-  const remote = cachedCommand("git", ["-C", rootDir, "remote", "get-url", "origin"], rootDir).output;
+  const remote = projectContextCommand("git", ["-C", rootDir, "remote", "get-url", "origin"], rootDir).output;
   const fromGit = remote ? parseGitRemote(remote) : undefined;
   if (fromGit) return fromGit;
 
@@ -202,7 +216,7 @@ export function name(cwd: string = process.cwd()): string {
  * `undefined` when `gh` is absent, unauthenticated, or the dir isn't a GH repo.
  */
 function repositoryUrlFromGh(cwd?: string): string | undefined {
-  const out = cachedCommand("gh", ["repo", "view", "--json", "url"], cwd).output;
+  const out = projectContextCommand("gh", ["repo", "view", "--json", "url"], cwd).output;
   if (!out) return undefined;
   try {
     return (JSON.parse(out) as { url?: string }).url?.trim() || undefined;
@@ -213,7 +227,7 @@ function repositoryUrlFromGh(cwd?: string): string | undefined {
 
 /** Resolve an ssh host alias (`~/.ssh/config`) to its effective `hostname` via `ssh -G`. */
 function resolveSshHostName(host: string, cwd?: string): string | undefined {
-  const line = cachedCommand("ssh", ["-G", host], cwd)
+  const line = projectContextCommand("ssh", ["-G", host], cwd)
     .output?.split("\n")
     .find((l) => /^hostname\s/i.test(l.trim()));
   const name = line?.trim().split(/\s+/)[1];
@@ -227,7 +241,7 @@ function resolveSshHostName(host: string, cwd?: string): string | undefined {
  * followed to its real hostname.
  */
 function repositoryUrlFromGit(cwd?: string): string | undefined {
-  const raw = cachedCommand("git", ["remote", "get-url", "origin"], cwd).output;
+  const raw = projectContextCommand("git", ["remote", "get-url", "origin"], cwd).output;
   if (!raw) return undefined;
 
   // Normalize the scheme to https at the string level first: the WHATWG `URL`
@@ -257,7 +271,7 @@ function repositoryUrlFromGit(cwd?: string): string | undefined {
  * The repo's canonical remote URL, or `undefined` when there is no git remote.
  * Tries `gh repo view` first (host-accurate, no parsing), then normalizes
  * `git remote get-url origin`. Both underlying commands are cached per `cwd` via
- * {@link cachedCommand}.
+ * {@link projectContextCommand}.
  *
  * @param cwd - directory to resolve from (defaults to `process.cwd()`).
  * @param format - `"https"` (default) yields `https://host/owner/repo`;
