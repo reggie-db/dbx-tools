@@ -97,6 +97,7 @@ genie-shared/…    (see genie family above)
 appkit-mastra-shared → genie-shared, model-shared
 appkit-mastra     → appkit-mastra-shared, genie, model, shared
 appkit-mastra-ui  → appkit-email-ui, appkit-mastra-shared, appkit-ui, genie-shared, shared
+zerobus           → shared (+ @databricks/zerobus-ingest-sdk)   ✅ DONE (as node-databricks-zerobus; cloud/workspace infra → node-databricks)
 cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 ```
 
@@ -121,7 +122,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `45ab168` | **Port `model-proxy` → `@dbx-tools/model-proxy`** (`workspaces/cli/model-proxy`, `cli`-tagged, ships the `model-proxy` bin). See "model-proxy" below. |
 | `e7065e1` | **READMEs are hand-written** (engine no longer seeds projen's `# replace this` SampleReadme; `initProject` drops the README component). Wrote real READMEs for all ported packages. **Port `appkit-email-shared` → `@dbx-tools/shared-email`** (browser-safe zod email contract). |
 | `867d4b3` | **Config subsystem + port `appkit-config`.** Added `config` (app.yaml/bundle/env resolution) to node-appkit and `name`/`resolveProjectRoots`/`parseGitRemote`/`stat` to node-core's `project`. (appkit-config first landed as its own package here.) |
-| (pending commit) | **Fold `appkit-config` into `node-appkit`** (it added no deps beyond `@databricks/appkit`, already present) + extract the env CLI to **`@dbx-tools/appkit-env`** (`cli/appkit-env`, `appkit-env` bin). Port `net` (URL/email/IP helpers) into shared-core. **Port `appkit-email` → `@dbx-tools/node-email`** (SMTP/outbox, markdown->HTML, sender policy, `send_email` Mastra tool, AppKit `email` plugin). See "node-email" below. |
+| `ea50ded` | **Fold `appkit-config` into `node-appkit`** (it added no deps beyond `@databricks/appkit`, already present) + extract the env CLI to **`@dbx-tools/appkit-env`** (`cli/appkit-env`, `appkit-env` bin). Port `net` (URL/email/IP helpers) into shared-core. **Port `appkit-email` → `@dbx-tools/node-email`** (SMTP/outbox, markdown->HTML, sender policy, `send_email` Mastra tool, AppKit `email` plugin). |
+| (pending commit) | **New `@dbx-tools/node-databricks`** (generic Databricks/cloud infra, no AppKit requirement: workspace URL/id + cloud provider/region + node DNS) + **port `zerobus` → `@dbx-tools/node-databricks-zerobus`**. See "node-databricks" below. |
 
 ### shared-core surface now available
 
@@ -394,8 +396,29 @@ namespace for schema values, types flat). New shared-core module `net` (ported
 from `-js net.browser.ts`) supplies `net.parseEmails` for the allow-list. New
 catalog pins: `marked`, `@mastra/core`. AppKit + Mastra are runtime deps.
 
+## `node-databricks` + `node-databricks-zerobus`
+
+New **`@dbx-tools/node-databricks`** (`workspaces/node/databricks`, `node`-tagged)
+holds generic Databricks/cloud infra that needs the SDK / DNS / cloud metadata
+but NOT the AppKit plugin runtime: `workspace` (getWorkspaceUrl/Id from the
+AppKit exec ctx when present, else a default `WorkspaceClient`, else env),
+`cloud` (provider/region detection via the AWS/GCP/Azure IP-range feeds +
+24h disk cache; ported from `-js cloud.ts`), `net` (node DNS `resolveHostIps` +
+`getPublicIp` over shared-core's browser-safe `net`), and `http`
+(`createFetchError` + header/cookie readers). Repoints the `-js commonUtils`/
+`netUtils`/`logUtils` surface onto shared-core (`error`/`hash`/`functionModule`/
+`log`/`net`) and node-core (`project.stat`).
+
+**`@dbx-tools/node-databricks-zerobus`** (ported from `-js zerobus`) is the thin
+Zerobus ingest wrapper (`createSdk` region-aware endpoint + `createStream`). It
+uses the Zerobus SDK directly and node-databricks for region resolution - no
+AppKit dep (per the "keep a package's heavy/specific dep out of node-appkit"
+rule).
+
 ## Later passes (not yet scoped)
 
+- **`appkit-mastra-shared` / `appkit-mastra`** — the Mastra agent layer (agents,
+  tool wiring). Next server-side item.
 - **`-ui` React packages** (`appkit-ui`, `appkit-email-ui`, `appkit-mastra-ui`) —
   need the `ui` tag + React; deliberately skipped in the server-side pass.
   These are the heaviest; scope each individually.

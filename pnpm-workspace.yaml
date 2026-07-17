@@ -16,6 +16,8 @@ packages:
   - workspaces/cli/model-proxy
   - workspaces/node/appkit
   - workspaces/node/core
+  - workspaces/node/databricks
+  - workspaces/node/databricks-zerobus
   - workspaces/node/email
   - workspaces/node/file-scan
   - workspaces/node/genie

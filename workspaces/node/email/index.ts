@@ -10,3 +10,7 @@ export * as plugin from "./src/plugin";
 export * as sender from "./src/sender";
 export * as tool from "./src/tool";
 export * as transport from "./src/transport";
+export type { SmtpConfig, EmailPluginConfig, ResolvedSmtpConfig, ResolvedFileConfig, ResolvedEmailConfig } from "./src/config";
+export type { EmailHtmlOptions } from "./src/email-html";
+export type { EmailToolOptions } from "./src/tool";
+export type { EmailRuntime } from "./src/transport";

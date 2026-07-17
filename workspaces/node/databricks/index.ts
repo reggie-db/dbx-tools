@@ -2,5 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as envExport from "./src/env-export";
-export type { EnvExportFormat } from "./src/env-export";
+export * as cloud from "./src/cloud";
+export * as http from "./src/http";
+export * as net from "./src/net";
+export * as workspace from "./src/workspace";

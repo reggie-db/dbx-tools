@@ -184,6 +184,26 @@ project.with(
     );
   }),
 
+  // node-databricks: generic Databricks/cloud infra with NO AppKit requirement -
+  // workspace URL/id resolution + cloud provider/region detection (fetches
+  // AWS/GCP/Azure IP-range feeds, DNS via node:dns, disk cache). Consumes
+  // node-appkit only for the optional execution-context client + node-core for
+  // fs stat; the SDK is a runtime dep.
+  mixin.mixin(pkg("*/node-databricks", "node"), (p) => {
+    p.addDeps(
+      "@dbx-tools/node-appkit@workspace:*",
+      "@dbx-tools/node-core@workspace:*",
+      "@databricks/sdk-experimental@catalog:",
+    );
+  }),
+
+  // node-databricks-zerobus: Zerobus streaming-ingest helpers. Uses the Zerobus
+  // SDK directly (no AppKit); resolves the region-aware endpoint via
+  // node-databricks (workspace URL/id + cloud location).
+  mixin.mixin(pkg("*/node-databricks-zerobus", "node"), (p) => {
+    p.addDeps("@dbx-tools/node-databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
+  }),
+
   // node-email: server-side email add-on - SMTP transport (nodemailer) / local
   // outbox, markdown->HTML rendering (marked + juice), on-behalf-of sender
   // derivation, the approval-gated `send_email` Mastra tool, and the AppKit

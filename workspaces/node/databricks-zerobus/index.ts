@@ -2,5 +2,4 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as envExport from "./src/env-export";
-export type { EnvExportFormat } from "./src/env-export";
+export * as zerobus from "./src/zerobus";

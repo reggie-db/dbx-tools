@@ -483,6 +483,53 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workspaces/node/databricks:
+    dependencies:
+      '@databricks/sdk-experimental':
+        specifier: 'catalog:'
+        version: 0.17.0
+      '@dbx-tools/node-appkit':
+        specifier: workspace:*
+        version: link:../appkit
+      '@dbx-tools/node-core':
+        specifier: workspace:*
+        version: link:../core
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  workspaces/node/databricks-zerobus:
+    dependencies:
+      '@databricks/zerobus-ingest-sdk':
+        specifier: ^1.1.0
+        version: 1.1.0(protobufjs@7.6.5)
+      '@dbx-tools/node-databricks':
+        specifier: workspace:*
+        version: link:../databricks
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   workspaces/node/email:
     dependencies:
       '@databricks/appkit':
@@ -1444,6 +1491,43 @@ packages:
   '@databricks/sdk-experimental@0.17.0':
     resolution: {integrity: sha512-dOJIt4F2nBk6HKObnv7Xbmy/qLYTy2835qhXSuW0Qw1QAXui9plmCet1KqG3yeQcMTyncWGbnhjGdQi8GEGQSA==}
     engines: {node: '>=22.0', npm: '>=10.0.0'}
+
+  '@databricks/zerobus-ingest-sdk-darwin-arm64@1.1.0':
+    resolution: {integrity: sha512-237DIWsNfOhADwl4/B44lzYDiTcaqBM80Oo6MR6YxrDqUsbotkKgFgNvao+jqLNe+zOYoJlhg0+SisCc8tM0dw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@databricks/zerobus-ingest-sdk-darwin-x64@1.1.0':
+    resolution: {integrity: sha512-NDhYi8PbuFKeiF1qLSGF+nvd+5cfTn0dS1zecSS6vZk0/oduP8HeWfP5zSg/w/qwdquv88ra8sWEY1aMKjXfBQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@databricks/zerobus-ingest-sdk-linux-arm64-gnu@1.1.0':
+    resolution: {integrity: sha512-wP5lIZIJMFl8D8Cr5RMheRKD60gUAR9i3nnYHMCwVQG4ryCBEJoXtZuXnFeKgcgatUmb5FGlDct1GPXBPUi9TQ==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@databricks/zerobus-ingest-sdk-linux-x64-gnu@1.1.0':
+    resolution: {integrity: sha512-sS4F5oDcdHYd0yZ7J2dsTU1yHW/XkOg7UKkS1yXobI0Q/0qJT7jti3Cq8NjAivU1sKMNxRTvvBo4b/2SNTrSpA==}
+    cpu: [x64]
+    os: [linux]
+
+  '@databricks/zerobus-ingest-sdk-win32-x64-msvc@1.1.0':
+    resolution: {integrity: sha512-Z6wJ58s6Qj3dP/Phva/pKIcbuRVyAyAEqnVBHvCuDQSrJqJfQs5IHamTB6fZ392FsJFFScc00pv8gKBVFp8/Mw==}
+    cpu: [x64]
+    os: [win32]
+
+  '@databricks/zerobus-ingest-sdk@1.1.0':
+    resolution: {integrity: sha512-j0PG4MDUZvxPMnRp+3/YtF937VXtCcxYcPG6xVMJOPUNjw7nCHjCfiAMkc2Im9jjXG5UNwvmGsyYt5riM/Bpwg==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      apache-arrow: ^18.0.0
+      protobufjs: ^7.0.0
+    peerDependenciesMeta:
+      apache-arrow:
+        optional: true
+      protobufjs:
+        optional: true
 
   '@date-fns/tz@1.5.0':
     resolution: {integrity: sha512-lwYN/vDPeNRULcepoE/LO2Pgx+7/RV+S9ARfbc9lr2DtGkOD7pAiruHvbR1RX3Qyf6ja47EWJDMsNK5vK08DJg==}
@@ -10762,6 +10846,30 @@ snapshots:
       semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
+
+  '@databricks/zerobus-ingest-sdk-darwin-arm64@1.1.0':
+    optional: true
+
+  '@databricks/zerobus-ingest-sdk-darwin-x64@1.1.0':
+    optional: true
+
+  '@databricks/zerobus-ingest-sdk-linux-arm64-gnu@1.1.0':
+    optional: true
+
+  '@databricks/zerobus-ingest-sdk-linux-x64-gnu@1.1.0':
+    optional: true
+
+  '@databricks/zerobus-ingest-sdk-win32-x64-msvc@1.1.0':
+    optional: true
+
+  '@databricks/zerobus-ingest-sdk@1.1.0(protobufjs@7.6.5)':
+    optionalDependencies:
+      '@databricks/zerobus-ingest-sdk-darwin-arm64': 1.1.0
+      '@databricks/zerobus-ingest-sdk-darwin-x64': 1.1.0
+      '@databricks/zerobus-ingest-sdk-linux-arm64-gnu': 1.1.0
+      '@databricks/zerobus-ingest-sdk-linux-x64-gnu': 1.1.0
+      '@databricks/zerobus-ingest-sdk-win32-x64-msvc': 1.1.0
+      protobufjs: 7.6.5
 
   '@date-fns/tz@1.5.0': {}
 
