@@ -96,6 +96,10 @@ function pageTitle(markdown, fallback) {
   return match?.[1]?.trim() || fallback;
 }
 
+function stripLeadingH1(markdown) {
+  return markdown.replace(/^#\s+.+?(?:\r?\n)+/, "");
+}
+
 function yamlString(value) {
   return JSON.stringify(value ?? "");
 }
@@ -164,7 +168,7 @@ function generatedPage(sourcePath, markdown, fallbackTitle, fromDir, mappings) {
       sourcePath,
     }) +
     generatedHeader(sourcePath) +
-    transformLinks(markdown, fromDir, mappings)
+    transformLinks(stripLeadingH1(markdown), fromDir, mappings)
   );
 }
 
@@ -176,8 +180,6 @@ function buildPackageIndex(packages) {
     })
     .join("\n");
   return [
-    "# Package Reference",
-    "",
     "These pages are generated from package READMEs. Edit the package README, then rerun the docs generator.",
     "",
     "| Package | Area | Summary |",
