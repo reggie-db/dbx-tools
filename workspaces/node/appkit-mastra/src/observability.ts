@@ -36,7 +36,7 @@ import { OtelBridge } from "@mastra/otel-bridge";
 
 import { TRACE_REQUEST_CONTEXT_KEYS } from "./config";
 import { log } from "@dbx-tools/shared-core";
-import { project } from "@dbx-tools/node-core";
+import { project } from "@dbx-tools/core";
 
 const logger = log.logger("mastra/observability");
 

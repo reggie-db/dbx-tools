@@ -24,8 +24,8 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
-    "@dbx-tools/node-core": "^0.0.0",
-    "@dbx-tools/node-path": "^0.0.0",
+    "@dbx-tools/core": "^0.0.0",
+    "@dbx-tools/path": "^0.0.0",
     "@dbx-tools/shared-core": "^0.0.0",
     "@typescript-eslint/typescript-estree": "^8",
     "commander": "^15.0.0",

@@ -12,7 +12,7 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
 import type { MastraAgentDefinition, MastraTools } from "./agents";
 import type { GenieSpacesConfig } from "./genie";
-import { appkit } from "@dbx-tools/node-appkit";
+import { appkit } from "@dbx-tools/appkit";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the

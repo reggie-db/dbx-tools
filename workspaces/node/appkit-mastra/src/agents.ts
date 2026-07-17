@@ -25,12 +25,12 @@ import type { MastraPluginConfig } from "./config";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie";
 import type { MemoryBuilder } from "./memory";
 import { buildModel } from "./model";
-import { fallback } from "@dbx-tools/node-model";
+import { fallback } from "@dbx-tools/model";
 import { ResultProcessor, stripStaleChartsProcessor } from "./processors";
 import { buildSummarizeTool } from "./summarize";
 import { createWorkspace } from "./workspaces";
 import { log, string } from "@dbx-tools/shared-core";
-import { plugin } from "@dbx-tools/node-appkit";
+import { plugin } from "@dbx-tools/appkit";
 
 /**
  * Tool record accepted by every Mastra `Agent.tools` field and by the
@@ -769,7 +769,7 @@ function buildPluginsMap(
  * Genie agent inherits the same model resolver / fallback
  * ladder the calling agents use.
  *
- * The Genie agent talks to Genie directly via `@dbx-tools/node-genie`
+ * The Genie agent talks to Genie directly via `@dbx-tools/genie`
  * (`genieEventChat`) and the workspace
  * `statementExecution.getStatement` API. AppKit's stock `genie`
  * plugin is honored only for its resource manifest and `spaces`

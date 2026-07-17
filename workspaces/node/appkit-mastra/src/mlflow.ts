@@ -20,7 +20,7 @@
 import { feedback } from "@dbx-tools/shared-mastra";
 import { databricksFetch, readResponseJson, readResponseText } from "./rest";
 import { async, error, log } from "@dbx-tools/shared-core";
-import { appkit } from "@dbx-tools/node-appkit";
+import { appkit } from "@dbx-tools/appkit";
 
 const logger = log.logger("mastra/mlflow");
 

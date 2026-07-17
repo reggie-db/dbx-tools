@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import type * as ts from "typescript";
-import { find } from "@dbx-tools/node-path";
+import { find } from "@dbx-tools/path";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated";
 import { log } from "@dbx-tools/shared-core";
 import { type WorkspacePackage, isModuleFile, repoRoot, workspacePackages } from "./workspace";

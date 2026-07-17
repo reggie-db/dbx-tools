@@ -4,7 +4,7 @@ import { Project } from "projen";
 import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project";
 import { toPosix } from "./workspace";
 import { relative } from "path";
-import { match } from "@dbx-tools/node-path";
+import { match } from "@dbx-tools/path";
 
 /** Guard: the construct is a projen {@link Project} - the base every builder here starts from. */
 function isProject(): Predicate<IConstruct, Project> {

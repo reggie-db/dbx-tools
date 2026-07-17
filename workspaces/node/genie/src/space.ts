@@ -12,7 +12,7 @@
  */
 
 import { error, log, string } from "@dbx-tools/shared-core";
-import { databricks } from "@dbx-tools/node-appkit";
+import { databricks } from "@dbx-tools/appkit";
 import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 

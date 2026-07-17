@@ -21,7 +21,7 @@
  * `writer` / `abortSignal` off `ctx`, so the tools are stateless
  * across requests and the central agent owns the loop.
  *
- * The tools talk to Genie directly via `@dbx-tools/node-genie`
+ * The tools talk to Genie directly via `@dbx-tools/genie`
  * (`genieEventChat`); statement-row fetching is delegated to
  * {@link fetchStatementData} from `./statement.js`, which wraps
  * the workspace `statementExecution.getStatement` API. AppKit's
@@ -37,10 +37,10 @@
 import { CacheManager, genie } from "@databricks/appkit";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 import { wire, type MastraWriter, type StartedEvent } from "@dbx-tools/shared-mastra";
-import { chat, space as genieSpace } from "@dbx-tools/node-genie";
+import { chat, space as genieSpace } from "@dbx-tools/genie";
 import { genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
 import { error, log, string } from "@dbx-tools/shared-core";
-import { plugin } from "@dbx-tools/node-appkit";
+import { plugin } from "@dbx-tools/appkit";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";

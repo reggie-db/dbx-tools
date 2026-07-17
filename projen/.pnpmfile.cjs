@@ -17,8 +17,8 @@ const path = require("node:path");
 
 const LINKS = {
   "@dbx-tools/shared-core": path.resolve(__dirname, "../workspaces/shared/core"),
-  "@dbx-tools/node-core": path.resolve(__dirname, "../workspaces/node/core"),
-  "@dbx-tools/node-path": path.resolve(__dirname, "../workspaces/node/path"),
+  "@dbx-tools/core": path.resolve(__dirname, "../workspaces/node/core"),
+  "@dbx-tools/path": path.resolve(__dirname, "../workspaces/node/path"),
 };
 
 function readPackage(pkg) {

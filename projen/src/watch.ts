@@ -1,7 +1,7 @@
 /**
  * Generic file-watch utility shared by the `sync --watch` task watchers.
  *
- * `watchLoop` wraps `@dbx-tools/node-path`'s chokidar watcher with the
+ * `watchLoop` wraps `@dbx-tools/path`'s chokidar watcher with the
  * behavior every dbx-tools watcher wants: it debounces bursts, serializes runs (a
  * change mid-run re-runs once afterwards), drops generated paths (barrels/manifests/
  * decls - reacting to our own output would loop), and shuts down on SIGINT. Callers
@@ -15,7 +15,7 @@
  * recompute it. {@link watchFiles} owns the chokidar wiring; this is thin glue.
  */
 import { isAbsolute, resolve } from "node:path";
-import { watch as fileScan } from "@dbx-tools/node-path";
+import { watch as fileScan } from "@dbx-tools/path";
 import { log } from "@dbx-tools/shared-core";
 import { isGeneratedFile, recordedRoots, repoRoot } from "./workspace";
 

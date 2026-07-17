@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
-    "@dbx-tools/node-core": "workspace:*",
+    "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:",
     "pnpm": "catalog:"

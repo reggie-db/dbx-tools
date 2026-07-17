@@ -14,7 +14,7 @@ import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { functionModule, iterable, log, string } from "@dbx-tools/shared-core";
-import { project } from "@dbx-tools/node-core";
+import { project } from "@dbx-tools/core";
 import { parse as parseYamlText } from "yaml";
 import { z } from "zod";
 

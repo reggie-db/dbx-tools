@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-email",
+  "name": "@dbx-tools/email",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",

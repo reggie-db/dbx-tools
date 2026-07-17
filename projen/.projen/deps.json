@@ -29,12 +29,12 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/node-core",
+      "name": "@dbx-tools/core",
       "version": "*",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/node-path",
+      "name": "@dbx-tools/path",
       "version": "*",
       "type": "runtime"
     },

@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-genie",
+  "name": "@dbx-tools/genie",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@databricks/sdk-experimental": "catalog:",
-    "@dbx-tools/node-appkit": "workspace:*",
+    "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-genie": "workspace:*"
   },

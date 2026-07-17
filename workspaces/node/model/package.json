@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-model",
+  "name": "@dbx-tools/model",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
-    "@dbx-tools/node-appkit": "workspace:*",
+    "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
     "fuse.js": "^7.4.2"

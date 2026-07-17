@@ -5,7 +5,7 @@ import {
   type TableProperties,
   type ZerobusStream,
 } from "@databricks/zerobus-ingest-sdk";
-import { workspace, cloud } from "@dbx-tools/node-databricks";
+import { workspace, cloud } from "@dbx-tools/databricks";
 
 export async function createSdk(): Promise<ZerobusSdk> {
   const workspaceUrl = await workspace.getWorkspaceUrl();

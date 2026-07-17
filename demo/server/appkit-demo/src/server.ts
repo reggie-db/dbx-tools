@@ -1,7 +1,7 @@
 import { genie, lakebase, server } from "@databricks/appkit";
-import { createApp } from "@dbx-tools/node-appkit";
-import { plugin as emailPlugin, tool as emailToolModule } from "@dbx-tools/node-email";
-import { agents, genie as mastraGenie, plugin as mastraPlugin } from "@dbx-tools/node-appkit-mastra";
+import { createApp } from "@dbx-tools/appkit";
+import { plugin as emailPlugin, tool as emailToolModule } from "@dbx-tools/email";
+import { agents, genie as mastraGenie, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -20,10 +20,10 @@ const clientDist = path.resolve(
   "../../../app/appkit-demo/dist",
 );
 
-// AppKit demo wiring for `@dbx-tools/node-appkit-mastra`.
+// AppKit demo wiring for `@dbx-tools/appkit-mastra`.
 //
 // `createAppAuto` here is the auto-configuring wrapper from
-// `@dbx-tools/node-appkit`, not AppKit's own. Because a `lakebase()`
+// `@dbx-tools/appkit`, not AppKit's own. Because a `lakebase()`
 // plugin is in the list, it runs `autopg()` BEFORE delegating to
 // AppKit's `createApp` - resolving LAKEBASE_ENDPOINT / PGHOST /
 // PGDATABASE via the Databricks Postgres REST API and writing them to
@@ -50,7 +50,7 @@ const clientDist = path.resolve(
 // tools (`ask_genie`, `get_statement`, `prepare_chart`,
 // `get_space_description`, `get_space_serialized`) the central
 // agent drives directly. The tools talk to Genie via
-// `@dbx-tools/node-genie` for streaming + `getStatement`-backed row
+// `@dbx-tools/genie` for streaming + `getStatement`-backed row
 // hydration; no inner Genie orchestrator agent.
 //
 // Assistant skills: `createAgent` defaults `workspace` to
@@ -115,7 +115,7 @@ const support = createAgent({
         schema: z.object({ city: z.string() }),
         execute: async ({ city }) => `Sunny in ${city}`,
       }),
-      // Approval-gated email tool from `@dbx-tools/node-email`. The
+      // Approval-gated email tool from `@dbx-tools/email`. The
       // model can call this freely; execution pauses until the user
       // clicks Approve in the chat UI, then the message is sent for
       // real over SMTP. The sender is derived from the on-behalf-of

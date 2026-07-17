@@ -157,9 +157,9 @@ project.with(
   // OPTIONAL peer so browser/test consumers that only touch `databricks.ts` needn't
   // install it. `config.ts` (app.yaml / bundle env resolution) needs zod + yaml
   // and depends on node-core for project-root discovery.
-  mixin.create(pkg("*/node-appkit", "node"), (p) => {
+  mixin.create(pkg("*/appkit", "node"), (p) => {
     p.addDeps(
-      "@dbx-tools/node-core@workspace:*",
+      "@dbx-tools/core@workspace:*",
       "@databricks/sdk-experimental@catalog:",
       "zod@catalog:",
       "yaml",
@@ -179,7 +179,7 @@ project.with(
     p.package.addField("publishConfig", { access: "public", provenance: true });
     p.package.addBin({ "appkit-env": "./bin/appkit-env.ts" });
     // exports: `.` + `./package.json` come from the `cli` tag default.
-    p.addDeps("@dbx-tools/node-appkit@workspace:*", "@databricks/appkit@catalog:");
+    p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
     applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
   }),
 
@@ -187,10 +187,10 @@ project.with(
   // Consumes the browser-safe shared-genie contracts, node-appkit's SDK glue,
   // and the SDK at runtime. AppKit is an OPTIONAL peer - the client resolver
   // lazy-imports it and falls back to env-var auth when it's absent.
-  mixin.create(pkg("*/node-genie", "node"), (p) => {
+  mixin.create(pkg("*/genie", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-genie@workspace:*",
-      "@dbx-tools/node-appkit@workspace:*",
+      "@dbx-tools/appkit@workspace:*",
       "@databricks/sdk-experimental@catalog:",
     );
     p.addPeerDeps("@databricks/appkit@catalog:");
@@ -202,10 +202,10 @@ project.with(
   // fuzzy name resolution, workspace-aware selection, offline fallback floor).
   // Consumes the browser-safe shared-model classifier + node-appkit's AppKit
   // glue. AppKit is a runtime dep here (CacheManager is used directly, not lazy).
-  mixin.create(pkg("*/node-model", "node"), (p) => {
+  mixin.create(pkg("*/model", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-model@workspace:*",
-      "@dbx-tools/node-appkit@workspace:*",
+      "@dbx-tools/appkit@workspace:*",
       "@databricks/appkit@catalog:",
       "fuse.js@^7.4.2",
     );
@@ -216,10 +216,10 @@ project.with(
   // AWS/GCP/Azure IP-range feeds, DNS via node:dns, disk cache). Consumes
   // node-appkit only for the optional execution-context client + node-core for
   // fs stat; the SDK is a runtime dep.
-  mixin.create(pkg("*/node-databricks", "node"), (p) => {
+  mixin.create(pkg("*/databricks", "node"), (p) => {
     p.addDeps(
-      "@dbx-tools/node-appkit@workspace:*",
-      "@dbx-tools/node-core@workspace:*",
+      "@dbx-tools/appkit@workspace:*",
+      "@dbx-tools/core@workspace:*",
       "@databricks/sdk-experimental@catalog:",
     );
   }),
@@ -227,8 +227,8 @@ project.with(
   // node-databricks-zerobus: Zerobus streaming-ingest helpers. Uses the Zerobus
   // SDK directly (no AppKit); resolves the region-aware endpoint via
   // node-databricks (workspace URL/id + cloud location).
-  mixin.create(pkg("*/node-databricks-zerobus", "node"), (p) => {
-    p.addDeps("@dbx-tools/node-databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
+  mixin.create(pkg("*/databricks-zerobus", "node"), (p) => {
+    p.addDeps("@dbx-tools/databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
   }),
 
   // node-email: server-side email add-on - SMTP transport (nodemailer) / local
@@ -236,7 +236,7 @@ project.with(
   // derivation, the approval-gated `send_email` Mastra tool, and the AppKit
   // `email` plugin. Consumes the browser-safe shared-email contract. AppKit +
   // Mastra are runtime deps.
-  mixin.create(pkg("*/node-email", "node"), (p) => {
+  mixin.create(pkg("*/email", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-email@workspace:*",
       "@databricks/appkit@catalog:",
@@ -253,16 +253,16 @@ project.with(
   // Express server. One package: nearly every module needs @mastra/core and the
   // plugin composes memory/mcp/observability/server together, so the heavy deps
   // (pg, fastembed, mcp, observability, express) can't be gated apart.
-  mixin.create(pkg("*/node-appkit-mastra", "node"), (p) => {
+  mixin.create(pkg("*/appkit-mastra", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-mastra@workspace:*",
       "@dbx-tools/shared-genie@workspace:*",
       "@dbx-tools/shared-model@workspace:*",
-      "@dbx-tools/node-genie@workspace:*",
-      "@dbx-tools/node-model@workspace:*",
-      "@dbx-tools/node-appkit@workspace:*",
-      "@dbx-tools/node-core@workspace:*",
-      "@dbx-tools/node-databricks@workspace:*",
+      "@dbx-tools/genie@workspace:*",
+      "@dbx-tools/model@workspace:*",
+      "@dbx-tools/appkit@workspace:*",
+      "@dbx-tools/core@workspace:*",
+      "@dbx-tools/databricks@workspace:*",
       "@databricks/sdk-experimental@catalog:",
       "@databricks/appkit@catalog:",
       "@mastra/core@catalog:",
@@ -287,9 +287,9 @@ project.with(
   // auto-applies). Pin explicit ranges: bare names resolve against the local
   // registry, which can return stale majors (e.g. minimatch@3 lacks the
   // `{ Minimatch }` ESM export the code imports, chokidar@1 predates the v4 API).
-  mixin.create(pkg("*/node-path", "node"), (p) => {
+  mixin.create(pkg("*/path", "node"), (p) => {
     p.addDeps(
-      "@dbx-tools/node-core@workspace:*",
+      "@dbx-tools/core@workspace:*",
       "glob@^10.5.0",
       "chokidar@^4.0.3",
       "minimatch@^10.2.5",
@@ -357,7 +357,7 @@ project.with(
       "./pnpm": "./src/pnpm.ts",
       "./package.json": "./package.json",
     });
-    p.addDeps("@dbx-tools/node-core@workspace:*", "pnpm");
+    p.addDeps("@dbx-tools/core@workspace:*", "pnpm");
     applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
   }),
 
@@ -372,7 +372,7 @@ project.with(
     p.package.addBin({ "model-proxy": "./bin/model-proxy.ts" });
     // exports: `.` + `./package.json` come from the `cli` tag default.
     p.addDeps(
-      "@dbx-tools/node-model@workspace:*",
+      "@dbx-tools/model@workspace:*",
       "@dbx-tools/shared-model@workspace:*",
       "@databricks/sdk-experimental@catalog:",
     );

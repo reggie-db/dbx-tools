@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-appkit-mastra",
+  "name": "@dbx-tools/appkit-mastra",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -21,11 +21,11 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@databricks/sdk-experimental": "catalog:",
-    "@dbx-tools/node-appkit": "workspace:*",
-    "@dbx-tools/node-core": "workspace:*",
-    "@dbx-tools/node-databricks": "workspace:*",
-    "@dbx-tools/node-genie": "workspace:*",
-    "@dbx-tools/node-model": "workspace:*",
+    "@dbx-tools/appkit": "workspace:*",
+    "@dbx-tools/core": "workspace:*",
+    "@dbx-tools/databricks": "workspace:*",
+    "@dbx-tools/genie": "workspace:*",
+    "@dbx-tools/model": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-genie": "workspace:*",
     "@dbx-tools/shared-mastra": "workspace:*",

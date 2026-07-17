@@ -3,7 +3,7 @@
  *
  * Wraps a single default-auth {@link WorkspaceClient} and exposes the three
  * things the proxy server needs: the workspace serving-endpoint list, fuzzy
- * name resolution (reusing `@dbx-tools/node-model`'s resolver so a loose
+ * name resolution (reusing `@dbx-tools/model`'s resolver so a loose
  * `"claude sonnet"` snaps to a real endpoint id), and a fresh set of auth
  * headers per upstream request.
  *
@@ -20,7 +20,7 @@
 
 import { log } from "@dbx-tools/shared-core";
 import { type ServingEndpointSummary } from "@dbx-tools/shared-model";
-import { serving, type ResolvedModel } from "@dbx-tools/node-model";
+import { serving, type ResolvedModel } from "@dbx-tools/model";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 
 import { INVOCATIONS_SUFFIX } from "./defaults";

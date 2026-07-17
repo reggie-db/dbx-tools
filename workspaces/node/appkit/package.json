@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-appkit",
+  "name": "@dbx-tools/appkit",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@databricks/sdk-experimental": "catalog:",
-    "@dbx-tools/node-core": "workspace:*",
+    "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "yaml": "^2.9.0",
     "zod": "catalog:"

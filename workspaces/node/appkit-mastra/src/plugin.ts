@@ -61,7 +61,7 @@ import {
   type MastraFeedbackRequest,
   type StatementData,
 } from "@dbx-tools/shared-mastra";
-import { serving as nodeServing } from "@dbx-tools/node-model";
+import { serving as nodeServing } from "@dbx-tools/model";
 import { type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents";
 import { fetchChart } from "./chart";
@@ -77,7 +77,7 @@ import { resolveServingConfig } from "./serving";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement";
 import { threadsRoute } from "./threads";
 import { error, log } from "@dbx-tools/shared-core";
-import { plugin } from "@dbx-tools/node-appkit";
+import { plugin } from "@dbx-tools/appkit";
 
 const GENIE_MANIFEST = plugin.data(genie).plugin.manifest;
 const LAKEBASE_MANIFEST = plugin.data(lakebase).plugin.manifest;
@@ -102,7 +102,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         // AppKit's `genie` plugin manifest. The Mastra plugin no
         // longer uses the genie plugin's tools at runtime - the
         // built-in Genie agent talks to Genie directly via
-        // `@dbx-tools/node-genie` - but reusing the manifest keeps the
+        // `@dbx-tools/genie` - but reusing the manifest keeps the
         // resource-binding shape identical to AppKit's so existing
         // `app.yaml` configs and `genie({ spaces })` wiring keep
         // working without change.

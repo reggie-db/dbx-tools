@@ -71,9 +71,9 @@ project.with(
     p.package.addField("main", "src/server.ts");
     p.package.addField("exports", { "./package.json": "./package.json" });
     p.addDeps(
-      dep("@dbx-tools/node-appkit"),
-      dep("@dbx-tools/node-appkit-mastra"),
-      dep("@dbx-tools/node-email"),
+      dep("@dbx-tools/appkit"),
+      dep("@dbx-tools/appkit-mastra"),
+      dep("@dbx-tools/email"),
       "@databricks/appkit@catalog:",
       "@databricks/sdk-experimental@catalog:",
       "@mastra/core@catalog:",

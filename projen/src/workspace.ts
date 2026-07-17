@@ -25,9 +25,9 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname, relative, resolve, sep } from "node:path";
-import { exec } from "@dbx-tools/node-core";
+import { exec } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
-import { find } from "@dbx-tools/node-path";
+import { find } from "@dbx-tools/path";
 import { parse } from "yaml";
 
 /** Trimmed stdout from a command, or undefined when the process fails or prints nothing. */
@@ -207,7 +207,7 @@ function packageOfMember(projectRoot: string, member: string): DiscoveredPackage
 
 /**
  * Package dirs under `rootAbs`, found with a single `find.findFiles` scan from
- * `@dbx-tools/node-path` for module files beneath any `src/`. A package is the
+ * `@dbx-tools/path` for module files beneath any `src/`. A package is the
  * folder that OWNS the `src/` - the segments before the FIRST `src/` - so a package's
  * own subfolders never become nested packages (outermost wins). Barrels/tests/decls
  * don't count (see {@link isModuleFile}), so a `src/` holding only an `index.ts`

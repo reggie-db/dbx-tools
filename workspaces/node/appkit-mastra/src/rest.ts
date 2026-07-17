@@ -1,4 +1,4 @@
-import { appkit } from "@dbx-tools/node-appkit";
+import { appkit } from "@dbx-tools/appkit";
 /**
  * Minimal authenticated Databricks REST helper. Pulls the workspace
  * host and a fresh bearer header off an OBO-scoped `WorkspaceClient`

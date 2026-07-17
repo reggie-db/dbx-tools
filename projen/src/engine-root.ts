@@ -7,7 +7,7 @@
  */
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { project } from "@dbx-tools/node-core";
+import { project } from "@dbx-tools/core";
 
 const ENGINE_PKG = "@dbx-tools/projen";
 

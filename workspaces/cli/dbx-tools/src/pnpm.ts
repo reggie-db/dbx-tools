@@ -3,7 +3,7 @@
  */
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { exec } from "@dbx-tools/node-core";
+import { exec } from "@dbx-tools/core";
 import { functionModule } from "@dbx-tools/shared-core";
 import { needsInstall } from "./root";
 

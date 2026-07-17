@@ -7,7 +7,7 @@
  * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
  */
 import { string, type OneOrMany } from "@dbx-tools/shared-core";
-import { ignore, match } from "@dbx-tools/node-path";
+import { ignore, match } from "@dbx-tools/path";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
@@ -307,6 +307,16 @@ export interface DBXToolsProjectOptions
    */
   readonly workspacePackageRoots?: readonly string[];
   /**
+   * Leading path segment(s) dropped from a discovered package's relative path
+   * before its npm name is derived, so a tier folder doesn't become a name
+   * prefix. E.g. with the default `"node"`, `workspaces/node/path` names as
+   * `@<scope>/path` instead of `@<scope>/node-path` (its `node` TAG still
+   * derives from the path). One or many segment names; a segment is only
+   * stripped when it is the FIRST segment of the relative path. Pass `[]` to
+   * disable. Defaults to `"node"`.
+   */
+  readonly omitRelativePrefix?: OneOrMany<string>;
+  /**
    * Maps a path token / relPath / glob to tag(s), unioned into a package's
    * path-derived tags. Defaults to an identity map over the known tag names; a
    * `""`/`"."` key tags the root.
@@ -457,8 +467,27 @@ class GeneratedSource extends Component {
   }
 }
 
-function packageNameFor(scope: string, relPath: string): string {
-  return PackageIdentifier.of(scope, relPath).packageName;
+/** Default leading path segment stripped from a package's name (not its tag). */
+const DEFAULT_OMIT_RELATIVE_PREFIX = ["node"];
+
+/** Normalize the {@link DBXToolsProjectOptions.omitRelativePrefix} option to a slug list. */
+function resolveOmitRelativePrefix(option: OneOrMany<string> | undefined): string[] {
+  const raw = option === undefined ? DEFAULT_OMIT_RELATIVE_PREFIX : option;
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list.map((segment) => string.toSlug(segment)).filter(Boolean);
+}
+
+/**
+ * Derive a package's npm name from its scope + relative path, dropping a leading
+ * `omitPrefixes` segment first (so a tier folder like `node/` doesn't become a
+ * name prefix). The full `relPath` is still used elsewhere for tags.
+ */
+function packageNameFor(scope: string, relPath: string, omitPrefixes: string[]): string {
+  const segments = relPath.split("/").filter(Boolean);
+  if (segments.length > 1 && omitPrefixes.includes(string.toSlug(segments[0]!))) {
+    segments.shift();
+  }
+  return PackageIdentifier.of(scope, segments.join("/")).packageName;
 }
 
 /**
@@ -675,6 +704,7 @@ function initProject(
   }
 
   const enabledTagMixins = resolveEnabledTagMixins(options.defaultTagMixins);
+  const omitPrefixes = resolveOmitRelativePrefix(options.omitRelativePrefix);
 
   // path token/relPath/glob -> tag(s). Default: identity over the enabled tag names;
   // any workspacePackageTagPaths entries AUGMENT that. A `""`/`"."` key tags the root.
@@ -706,7 +736,7 @@ function initProject(
     new DBXToolsTypeScriptProject({
       parent: project,
       outdir: p.memberPath,
-      name: packageNameFor(project.scope, p.relPath),
+      name: packageNameFor(project.scope, p.relPath, omitPrefixes),
       tags,
     });
   }

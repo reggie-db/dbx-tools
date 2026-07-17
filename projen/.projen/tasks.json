@@ -170,7 +170,7 @@
             "--peer",
             "--no-deprecated",
             "--dep=dev,prod,peer,optional",
-            "--filter=projen,ts-node,@dbx-tools/node-core,@dbx-tools/node-path,@dbx-tools/shared-core"
+            "--filter=projen,ts-node,@dbx-tools/core,@dbx-tools/path,@dbx-tools/shared-core"
           ]
         },
         {
@@ -186,8 +186,8 @@
             "ts-node",
             "typescript",
             "@clack/prompts",
-            "@dbx-tools/node-core",
-            "@dbx-tools/node-path",
+            "@dbx-tools/core",
+            "@dbx-tools/path",
             "@dbx-tools/shared-core",
             "@typescript-eslint/typescript-estree",
             "commander",

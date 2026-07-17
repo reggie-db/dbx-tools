@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-databricks-zerobus",
+  "name": "@dbx-tools/databricks-zerobus",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@databricks/zerobus-ingest-sdk": "^1.1.0",
-    "@dbx-tools/node-databricks": "workspace:*",
+    "@dbx-tools/databricks": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*"
   },
   "main": "index.ts",

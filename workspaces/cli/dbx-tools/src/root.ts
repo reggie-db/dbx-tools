@@ -3,7 +3,7 @@
  */
 import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { exec } from "@dbx-tools/node-core";
+import { exec } from "@dbx-tools/core";
 import { functionModule } from "@dbx-tools/shared-core";
 
 async function gitToplevel(): Promise<string | undefined> {

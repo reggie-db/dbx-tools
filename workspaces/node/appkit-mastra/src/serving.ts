@@ -1,16 +1,16 @@
 /**
- * Mastra-specific glue over the generic `@dbx-tools/node-model` toolkit.
+ * Mastra-specific glue over the generic `@dbx-tools/model` toolkit.
  *
  * The live `/serving-endpoints` catalogue access, fuzzy name
  * resolution, and class/fallback selection all live in
- * `@dbx-tools/node-model`; this module only adds what is specific to the
+ * `@dbx-tools/model`; this module only adds what is specific to the
  * Mastra plugin: pulling a per-request model override off an HTTP
  * request (header / query / body) and projecting the plugin config
  * onto the knobs `buildModel` and the `/models` route share.
  */
 
 import { override } from "@dbx-tools/shared-mastra";
-import { serving as nodeServing } from "@dbx-tools/node-model";
+import { serving as nodeServing } from "@dbx-tools/model";
 
 import type { MastraPluginConfig } from "./config";
 import { string } from "@dbx-tools/shared-core";
@@ -72,7 +72,7 @@ export function extractModelOverride(req: ModelOverrideRequest): string | null {
 
 /**
  * Read the fuzzy-resolution config knobs off the plugin config with
- * `@dbx-tools/node-model` defaults applied. Kept here so `buildModel` and
+ * `@dbx-tools/model` defaults applied. Kept here so `buildModel` and
  * the `/models` route agree on what "enabled" means.
  *
  * `fallbacks` is the priority-ordered list `resolveModel` walks first

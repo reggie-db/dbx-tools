@@ -13,7 +13,7 @@
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { find } from "@dbx-tools/node-path";
+import { find } from "@dbx-tools/path";
 import { type Project, YamlFile } from "projen";
 import YAML from "yaml";
 import { makeReadonly } from "./generated";

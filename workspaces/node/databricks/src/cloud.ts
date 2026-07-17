@@ -22,7 +22,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { error, functionModule, hash, http, log, net } from "@dbx-tools/shared-core";
-import { project } from "@dbx-tools/node-core";
+import { project } from "@dbx-tools/core";
 import { resolveHostIps } from "./net";
 
 const logger = log.logger("cloud");

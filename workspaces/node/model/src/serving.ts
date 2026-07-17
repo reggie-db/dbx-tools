@@ -26,7 +26,7 @@ import {
   type ModelProfile,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
-import { appkit } from "@dbx-tools/node-appkit";
+import { appkit } from "@dbx-tools/appkit";
 import { CacheManager } from "@databricks/appkit";
 import Fuse from "fuse.js";
 

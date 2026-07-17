@@ -43,8 +43,8 @@ const project = new typescript.TypeScriptProject({
   },
   deps: [
     "@clack/prompts@^1.7.0",
-    "@dbx-tools/node-core@*",
-    "@dbx-tools/node-path@*",
+    "@dbx-tools/core@*",
+    "@dbx-tools/path@*",
     "@dbx-tools/shared-core@*",
     "@typescript-eslint/typescript-estree@^8",
     "commander@^15.0.0",

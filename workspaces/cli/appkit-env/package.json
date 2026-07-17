@@ -22,7 +22,7 @@
   "dependencies": {
     "@clack/prompts": "catalog:",
     "@databricks/appkit": "catalog:",
-    "@dbx-tools/node-appkit": "workspace:*",
+    "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:"
   },

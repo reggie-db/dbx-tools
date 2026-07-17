@@ -25,9 +25,9 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@databricks/sdk-experimental": "catalog:",
-    "@dbx-tools/node-appkit": "^0.0.0",
-    "@dbx-tools/node-appkit-mastra": "^0.0.0",
-    "@dbx-tools/node-email": "^0.0.0",
+    "@dbx-tools/appkit": "^0.0.0",
+    "@dbx-tools/appkit-mastra": "^0.0.0",
+    "@dbx-tools/email": "^0.0.0",
     "@mastra/ai-sdk": "catalog:",
     "@mastra/core": "catalog:",
     "@mastra/express": "catalog:",

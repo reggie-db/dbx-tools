@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-databricks",
+  "name": "@dbx-tools/databricks",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -18,8 +18,8 @@
   },
   "dependencies": {
     "@databricks/sdk-experimental": "catalog:",
-    "@dbx-tools/node-appkit": "workspace:*",
-    "@dbx-tools/node-core": "workspace:*",
+    "@dbx-tools/appkit": "workspace:*",
+    "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*"
   },
   "main": "index.ts",

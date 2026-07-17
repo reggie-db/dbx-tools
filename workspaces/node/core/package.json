@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-core",
+  "name": "@dbx-tools/core",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",

@@ -10,7 +10,7 @@
  * This module only adds the Mastra-specific glue. The actual model
  * selection - listing the workspace catalogue and resolving an
  * explicit name / class / fallback chain to a real endpoint id - lives
- * in `@dbx-tools/node-model` ({@link selectModel}) so non-Mastra consumers
+ * in `@dbx-tools/model` ({@link selectModel}) so non-Mastra consumers
  * (e.g. a job that just needs a model name) can reuse it. Here we
  * assemble the explicit ask from Mastra's request context (the
  * per-request override under {@link MASTRA_MODEL_OVERRIDE_KEY}, the
@@ -22,7 +22,7 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { classes, resolve } from "@dbx-tools/node-model";
+import { classes, resolve } from "@dbx-tools/model";
 import { model } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";

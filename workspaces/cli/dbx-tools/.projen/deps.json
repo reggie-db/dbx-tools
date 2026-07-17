@@ -20,7 +20,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/node-core",
+      "name": "@dbx-tools/core",
       "version": "workspace:*",
       "type": "runtime"
     },

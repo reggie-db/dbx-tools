@@ -8,7 +8,7 @@
 
 import { Command, CommanderError } from "commander";
 import { log } from "@dbx-tools/shared-core";
-import { createApp } from "@dbx-tools/node-appkit";
+import { createApp } from "@dbx-tools/appkit";
 import {
   defaultEnvExportFormat,
   diffEnv,

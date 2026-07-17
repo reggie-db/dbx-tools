@@ -5,7 +5,7 @@
  */
 
 import { functionModule, net } from "@dbx-tools/shared-core";
-import { appkit } from "@dbx-tools/node-appkit";
+import { appkit } from "@dbx-tools/appkit";
 import { type Config, WorkspaceClient } from "@databricks/sdk-experimental";
 
 /** Databricks workspace ids are a 10-20 digit run embedded in the host. */
