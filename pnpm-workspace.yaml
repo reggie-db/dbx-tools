@@ -15,6 +15,7 @@ packages:
   - workspaces/cli/dbx-tools
   - workspaces/cli/model-proxy
   - workspaces/node/appkit
+  - workspaces/node/appkit-mastra
   - workspaces/node/core
   - workspaces/node/databricks
   - workspaces/node/databricks-zerobus
@@ -53,6 +54,15 @@ catalog:
   "@databricks/sdk-experimental": ^0.17.0
   marked: ^18.0.5
   "@mastra/core": ^1.47.0
+  "@mastra/ai-sdk": ^1.6.0
+  "@mastra/express": ^1.4.2
+  "@mastra/fastembed": ^1.2.0
+  "@mastra/mcp": ^1.12.0
+  "@mastra/memory": ^1.21.2
+  "@mastra/observability": ^1.15.2
+  "@mastra/otel-bridge": ^1.4.0
+  "@mastra/pg": ^1.14.2
+  "@opentelemetry/api": ^1.9.1
   mastracode: 0.30.0
 allowBuilds:
   esbuild: true

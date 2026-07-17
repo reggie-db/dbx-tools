@@ -21,9 +21,8 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { error, functionModule, hash, log, net } from "@dbx-tools/shared-core";
+import { error, functionModule, hash, http, log, net } from "@dbx-tools/shared-core";
 import { project } from "@dbx-tools/node-core";
-import { createFetchError } from "./http";
 import { resolveHostIps } from "./net";
 
 const logger = log.logger("cloud");
@@ -261,7 +260,7 @@ async function fetchText(url: string): Promise<string> {
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      throw await createFetchError(response, url);
+      throw await http.createFetchError(response, url);
     }
     const responseText = await response.text();
     await mkdir(dirname(tempPath), { recursive: true });

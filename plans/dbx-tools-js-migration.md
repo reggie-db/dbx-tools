@@ -94,8 +94,8 @@ appkit-ui         → shared   (React `ui` tag — deferred, skip -ui pass)
 appkit-email      → appkit-email-shared, shared   ✅ DONE (as node-email)
 appkit-email-ui   → appkit-email-shared, appkit-ui, shared
 genie-shared/…    (see genie family above)
-appkit-mastra-shared → genie-shared, model-shared
-appkit-mastra     → appkit-mastra-shared, genie, model, shared
+appkit-mastra-shared → genie-shared, model-shared   ✅ DONE (as shared-mastra)
+appkit-mastra     → appkit-mastra-shared, genie, model, shared   ✅ DONE (as node-appkit-mastra)
 appkit-mastra-ui  → appkit-email-ui, appkit-mastra-shared, appkit-ui, genie-shared, shared
 zerobus           → shared (+ @databricks/zerobus-ingest-sdk)   ✅ DONE (as node-databricks-zerobus; cloud/workspace infra → node-databricks)
 cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
@@ -123,7 +123,9 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `e7065e1` | **READMEs are hand-written** (engine no longer seeds projen's `# replace this` SampleReadme; `initProject` drops the README component). Wrote real READMEs for all ported packages. **Port `appkit-email-shared` → `@dbx-tools/shared-email`** (browser-safe zod email contract). |
 | `867d4b3` | **Config subsystem + port `appkit-config`.** Added `config` (app.yaml/bundle/env resolution) to node-appkit and `name`/`resolveProjectRoots`/`parseGitRemote`/`stat` to node-core's `project`. (appkit-config first landed as its own package here.) |
 | `ea50ded` | **Fold `appkit-config` into `node-appkit`** (it added no deps beyond `@databricks/appkit`, already present) + extract the env CLI to **`@dbx-tools/appkit-env`** (`cli/appkit-env`, `appkit-env` bin). Port `net` (URL/email/IP helpers) into shared-core. **Port `appkit-email` → `@dbx-tools/node-email`** (SMTP/outbox, markdown->HTML, sender policy, `send_email` Mastra tool, AppKit `email` plugin). |
-| (pending commit) | **New `@dbx-tools/node-databricks`** (generic Databricks/cloud infra, no AppKit requirement: workspace URL/id + cloud provider/region + node DNS) + **port `zerobus` → `@dbx-tools/node-databricks-zerobus`**. See "node-databricks" below. |
+| `7d05a94` | **New `@dbx-tools/node-databricks`** (generic Databricks/cloud infra, no AppKit requirement: workspace URL/id + cloud provider/region + node DNS) + **port `zerobus` → `@dbx-tools/node-databricks-zerobus`**. See "node-databricks" below. |
+| `8ca913f` | **Port `appkit-mastra-shared` → `@dbx-tools/shared-mastra`** (browser-safe wire contract; `protocol.ts` → `wire.ts`). |
+| (pending commit) | **Port `appkit-mastra` → `@dbx-tools/node-appkit-mastra`** (the full AppKit Mastra agent layer, one package). Added `net`/`http`/`token`/`error.errorContext` to shared-core along the way. **Server-side migration complete.** See "shared-mastra + node-appkit-mastra" below. |
 
 ### shared-core surface now available
 
@@ -415,14 +417,31 @@ uses the Zerobus SDK directly and node-databricks for region resolution - no
 AppKit dep (per the "keep a package's heavy/specific dep out of node-appkit"
 rule).
 
+## `shared-mastra` + `node-appkit-mastra`
+
+`shared-mastra` (browser-safe wire contract, marker grammar, routes; ported from
+`appkit-mastra-shared`, `protocol.ts` → `wire.ts`) and `node-appkit-mastra` (the
+full AppKit Mastra agent layer, ported from `appkit-mastra`: 24 modules -
+plugin/server/agents/model/genie/memory/mcp/observability/chart/history/threads/
+…). Kept as ONE package: nearly every module needs `@mastra/core` and the plugin
+composes memory/mcp/observability/server together, so the heavy deps (`pg`,
+`fastembed`, `mcp`, `observability`, `express`, `otel`) can't be gated apart.
+Named `node-appkit-mastra` (not `node-mastra`) because it's the AppKit-specific
+composition. Repoints the full `-js shared` util surface onto shared-core
+(`error`/`hash`/`functionModule`/`async`/`string`/`log`/`net`/`http`/`token`),
+node-appkit (`appkit`/`plugin`/`databricks`), node-core (`project`), and the new
+`node-genie`/`node-model` packages (values namespaced, types flat). New catalog
+pins for the `@mastra/*` + `@opentelemetry/api` stack. Also landed in shared-core
+along the way: `net` (URL/email/IP), `http` (headers/cookies/fetch-error),
+`token` (JWT scopes), and `error.errorContext` (HTTP-status/message classifier).
+
+**Server-side migration is complete.** Every non-UI `-js` package is ported.
+
 ## Later passes (not yet scoped)
 
-- **`appkit-mastra-shared` / `appkit-mastra`** — the Mastra agent layer (agents,
-  tool wiring). Next server-side item.
 - **`-ui` React packages** (`appkit-ui`, `appkit-email-ui`, `appkit-mastra-ui`) —
-  need the `ui` tag + React; deliberately skipped in the server-side pass.
-  These are the heaviest; scope each individually.
-- `appkit-email-shared` — small zod contract, easy, can slot in anytime.
+  need a `ui`-tagged React setup; deliberately skipped in the server-side pass.
+  These are the last remaining `-js` packages; scope each individually.
 
 ## How to verify a pass
 

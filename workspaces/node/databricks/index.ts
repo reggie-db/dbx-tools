@@ -3,8 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as cloud from "./src/cloud";
-export * as http from "./src/http";
 export * as net from "./src/net";
 export * as workspace from "./src/workspace";
 export type { CloudLocation } from "./src/cloud";
-export type { HeaderLike } from "./src/http";

@@ -6,9 +6,7 @@
  */
 
 import { lookup } from "node:dns/promises";
-import { functionModule, net } from "@dbx-tools/shared-core";
-
-import { createFetchError } from "./http";
+import { functionModule, http, net } from "@dbx-tools/shared-core";
 
 /**
  * This process's outbound public IP, cached for 5 minutes. Asks Cloudflare's
@@ -30,7 +28,7 @@ export const getPublicIp = functionModule.memoize(
     }
     const ipifyResponse = await fetch("https://api.ipify.org?format=json");
     if (!ipifyResponse.ok) {
-      throw await createFetchError(ipifyResponse);
+      throw await http.createFetchError(ipifyResponse);
     }
     const ipifyData = (await ipifyResponse.json()) as { ip?: string };
     const ip = ipifyData?.ip;

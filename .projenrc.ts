@@ -76,6 +76,15 @@ project.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
 // build on.
 project.pnpmWorkspace?.addCatalog("marked", "^18.0.5");
 project.pnpmWorkspace?.addCatalog("@mastra/core", "^1.47.0");
+project.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "^1.6.0");
+project.pnpmWorkspace?.addCatalog("@mastra/express", "^1.4.2");
+project.pnpmWorkspace?.addCatalog("@mastra/fastembed", "^1.2.0");
+project.pnpmWorkspace?.addCatalog("@mastra/mcp", "^1.12.0");
+project.pnpmWorkspace?.addCatalog("@mastra/memory", "^1.21.2");
+project.pnpmWorkspace?.addCatalog("@mastra/observability", "^1.15.2");
+project.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "^1.4.0");
+project.pnpmWorkspace?.addCatalog("@mastra/pg", "^1.14.2");
+project.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 
 
 // ---------------------------------------------------------------------------
@@ -219,6 +228,39 @@ project.with(
       "marked@catalog:",
     );
     p.addDevDeps("@types/nodemailer@^7", "@types/express@catalog:", "@types/json-schema@^7");
+  }),
+
+  // node-appkit-mastra: the AppKit Mastra agent layer - agents, memory, MCP, observability,
+  // the Genie/model/chart/history tooling, and the AppKit `mastra` plugin +
+  // Express server. One package: nearly every module needs @mastra/core and the
+  // plugin composes memory/mcp/observability/server together, so the heavy deps
+  // (pg, fastembed, mcp, observability, express) can't be gated apart.
+  mixin.mixin(pkg("*/node-appkit-mastra", "node"), (p) => {
+    p.addDeps(
+      "@dbx-tools/shared-mastra@workspace:*",
+      "@dbx-tools/shared-genie@workspace:*",
+      "@dbx-tools/shared-model@workspace:*",
+      "@dbx-tools/node-genie@workspace:*",
+      "@dbx-tools/node-model@workspace:*",
+      "@dbx-tools/node-appkit@workspace:*",
+      "@dbx-tools/node-core@workspace:*",
+      "@dbx-tools/node-databricks@workspace:*",
+      "@databricks/sdk-experimental@catalog:",
+      "@databricks/appkit@catalog:",
+      "@mastra/core@catalog:",
+      "@mastra/ai-sdk@catalog:",
+      "@mastra/express@catalog:",
+      "@mastra/fastembed@catalog:",
+      "@mastra/mcp@catalog:",
+      "@mastra/memory@catalog:",
+      "@mastra/observability@catalog:",
+      "@mastra/otel-bridge@catalog:",
+      "@mastra/pg@catalog:",
+      "@opentelemetry/api@catalog:",
+      "zod@catalog:",
+      "pg@^8.22.0",
+    );
+    p.addDevDeps("@types/express@catalog:", "@types/pg@^8");
   }),
 
   // node-file-scan: filesystem glob/watch package. It shells out (node-core
