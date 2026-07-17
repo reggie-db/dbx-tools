@@ -2,24 +2,158 @@
 
 Orientation for AI agents / new contributors. Read this first.
 
+## Canonical agent instructions
+
+This file is the canonical repo instruction set for Codex, Claude, Cursor, and
+other coding agents. Keep tool-specific files such as `CLAUDE.md` and Cursor
+rules as thin pointers back here so instructions do not drift.
+
+If an older section below conflicts with the current README/package state or the
+Databricks/AppKit positioning guidance near the top of this file, prefer the
+newer guidance and the current source tree.
+
+When you update docs, README positioning, or agent instructions:
+
+- Make the change in `AGENTS.md` first when it affects future-agent behavior.
+- Keep the root `README.md` focused on Databricks developer value, not internal
+  projen mechanics.
+- Put detailed monorepo/projen/generator instructions in
+  `workspaces/node/projen/README.md` and link to it from root docs instead of
+  repeating them.
+- If the user asks to commit/push as updates are made, commit a focused docs
+  change and push the active branch after validation.
+- Do not mention any predecessor repo or migration source in public docs. Treat
+  this repository as the continuation/current product.
+
 ## What this repo is
 
-A **projen-driven pnpm monorepo generator**. The reusable engine lives in
-**`@dbx-tools/shared-projen`** (`workspaces/shared/projen`); **`@dbx-tools/cli`**
-(`workspaces/cli/dbx-tools`) is the published CLI package that re-exports the
-engine and ships **`dbxtools`**. Both are dogfooded as normal auto-discovered
-packages (not special cases). The engine exports two projen project subclasses —
-**`DBXToolsNodeProject`** (the monorepo root) and **`DBXToolsTypeScriptProject`**
-(a package) — plus **mixin** helpers (the `predicate.hasName`/`predicate.hasTag`/`predicate.inRelPath`
-predicate namespace and the `mixin(predicate, consumer)` factory) for per-package tweaks.
+`dbx-tools` is primarily a set of companion packages for Databricks developers
+building Databricks Apps, AppKit backends, Mastra agents, Genie workflows, Model
+Serving integrations, approval-gated email flows, and AppKit-oriented React UI.
+
+The repo also includes a projen/pnpm workspace generator because the packages are
+dogfooded here, but that is contributor tooling, not the primary product story.
+Keep generator details in `workspaces/node/projen/README.md` and
+`workspaces/cli/dbx-tools/README.md`.
+
+Primary package areas:
+
+- `workspaces/node/appkit` and `workspaces/cli/appkit-env` — AppKit defaults,
+  Lakebase env/config resolution, execution-context helpers, plugin lookup, SDK
+  cancellation, and cache-schema provisioning.
+- `workspaces/node/appkit-mastra`, `workspaces/shared/mastra`, and
+  `workspaces/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
+  and the matching React chat UI.
+- `workspaces/node/genie` and `workspaces/shared/genie` — low-level Genie
+  drivers, typed async events, snapshot diffing, and browser-safe Genie
+  contracts.
+- `workspaces/node/model`, `workspaces/shared/model`, and
+  `workspaces/cli/model-proxy` — intent-based Model Serving endpoint selection,
+  shared schemas/classification, and local OpenAI-compatible proxying.
+- `workspaces/node/email`, `workspaces/shared/email`, and `workspaces/ui/email`
+  — approval-gated email tool/runtime, shared payload schemas, and React email
+  approval/compose surfaces.
+- `workspaces/ui/appkit` — AppKit UI/Tailwind/Vite foundation used by feature UI
+  packages.
+- `workspaces/node/databricks` and `workspaces/node/databricks-zerobus` —
+  workspace/cloud/Zerobus infrastructure helpers.
+- `workspaces/shared/core`, `workspaces/node/core`, and `workspaces/node/path`
+  — cross-runtime and Node utility foundations.
 
 - **`workspaces/`** — real content goes here.
-- **`example-workspaces/`** — the seed example packages this repo ships
-  (`cli/main`, `server/api`, `shared/core`, `shared/fun`, `shared/neat`, `ui/app`),
-  kept in a separate root so they stay visually distinct from anything you build.
+- **`example-workspaces/`** — seed/example packages when present. Do not make
+  root docs primarily about examples.
 
 > Local dir is `dbx-tools/`; the GitHub repo is `reggie-db/dbx-tools`
 > (default branch **`main`**).
+
+## README and docs rules
+
+The READMEs are the current source of truth and should be suitable to lift into a
+future docs site. Use an AppKit-docs-like structure:
+
+- short package description;
+- `Key features:` list;
+- explicit "why use this over native AppKit" section when the package overlaps
+  AppKit functionality;
+- quick-start/import examples using the actual exported package paths;
+- configuration/runtime behavior details;
+- module/subpath map;
+- links to adjacent packages instead of repeating their content.
+
+Root README rules:
+
+- Lead with features this repo brings to Databricks developers.
+- Explain that the packages augment Databricks/AppKit where native surfaces are
+  low-level, repetitive, or missing sensible defaults.
+- Include a "Relationship To Native AppKit" section.
+- Do not lead with projen, workspace discovery, generated files, barrels, mixins,
+  or package-scanning internals.
+- Link to `workspaces/node/projen/README.md` and
+  `workspaces/cli/dbx-tools/README.md` only under contributor/development
+  context.
+
+Package README rules:
+
+- Describe functionality achieved by importing the package, not just file names.
+- Include concrete examples and developer benefits.
+- Avoid repeating adjacent package docs; link instead.
+- Keep browser-safe shared packages framed as contracts/schemas/types, and Node
+  packages framed as runtime behavior.
+- For UI packages, document public subpaths such as `@dbx-tools/ui-mastra/react`
+  or `@dbx-tools/ui-appkit/vite`; do not use generated package-root namespaces
+  unless the package export map exposes them.
+- Do not publicly mention any predecessor repo, branch, or migration source.
+
+## Native AppKit overlap guidance
+
+Use native AppKit first when it already provides the needed surface. AppKit has
+first-party plugins and UI for Analytics, Genie, Files, Lakebase, Model Serving,
+Jobs, Vector Search, beta Agents, AppKit UI primitives, and standard plugin
+lifecycle behavior.
+
+When a `dbx-tools` package overlaps native AppKit, the README must explicitly say
+why to use this package anyway:
+
+- `@dbx-tools/node-appkit`: use when bootstrapping/config is the pain point:
+  Lakebase/Postgres env before plugin setup, layered config lookup, safe
+  execution context fallback, typed sibling plugin lookup, SDK cancellation, or
+  cache-schema grants.
+- `@dbx-tools/node-appkit-mastra`: use when the app wants Mastra's larger plugin
+  ecosystem, tool model, memory/storage, workflows, MCP support, and
+  `@mastra/client-js` stream shape while preserving AppKit OBO auth and AppKit
+  tool-provider plugins. Native AppKit Agents are the simpler choice when the
+  AppKit agent model is enough.
+- `@dbx-tools/ui-mastra`: use when the server is `node-appkit-mastra` and the UI
+  needs Mastra stream handling, approvals, thread sidebar, model picker,
+  feedback, exports, and `[chart:<id>]` / `[data:<id>]` embeds. Native AppKit UI
+  is enough for general components or native Genie/Serving hooks.
+- `@dbx-tools/node-genie`: use when Genie is one capability inside an agent or
+  custom backend and you need async iterators, snapshot diffing, typed events,
+  custom SSE/logging/tests, or chart/data planning. Native AppKit Genie is the
+  right choice for a standalone Genie chat plugin/UI.
+- `@dbx-tools/shared-genie`: use for browser-safe Genie schemas/event vocabulary
+  independent of AppKit transport.
+- `@dbx-tools/node-model`: use when endpoint choice is the problem: fuzzy human
+  names, capability classes (`chat-thinking`, `chat-balanced`, `chat-fast`,
+  `embedding`), class ceilings, cached enriched catalogues, model pickers, and
+  fallbacks. Native AppKit Serving is best when the endpoint alias is known.
+- `@dbx-tools/model-proxy`: use for local OpenAI-compatible clients and tools
+  that know `OPENAI_BASE_URL` but not AppKit.
+- `@dbx-tools/ui-appkit`: use as a stable foundation/re-export for dbx-tools UI
+  packages and hosts, not as a replacement for `@databricks/appkit-ui` in simple
+  app code.
+
+Concrete examples to preserve in docs:
+
+- Genie here can emit async semantic events and feed AI/chart/data planning,
+  rather than only providing a standalone chat route.
+- Mastra here brings a large plugin/support ecosystem while remaining mounted as
+  an AppKit plugin with Databricks OBO auth.
+- Model tooling here resolves intent to serving endpoint ids instead of forcing
+  every app to hard-code a serving endpoint alias.
+- Email here adds human approval, sender policy, SMTP/outbox behavior, and UI
+  surfaces around a Mastra tool.
 
 ## Vocabulary (important)
 
