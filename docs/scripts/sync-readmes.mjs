@@ -8,6 +8,19 @@ const docsContentRoot = path.join(sourceRoot, "src", "content", "docs");
 const publicRoot = path.join(sourceRoot, "public");
 const repoUrl = "https://github.com/reggie-db/dbx-tools";
 
+// Base path the site is served under. Must match `base` in the generated
+// astro.config.mjs. Starlight auto-prefixes this onto sidebar `link:` fields
+// and built assets, but NOT onto absolute links inside generated markdown
+// bodies or the plain-text llms files, so those go through `withBase`.
+const base = process.env.GITHUB_REPOSITORY?.endsWith("/dbx-tools") ? "/dbx-tools" : "";
+
+/** Prefix a site-absolute path (`/packages/x`) with the deployment {@link base}. */
+function withBase(sitePath) {
+  if (!sitePath.startsWith("/")) return sitePath;
+  if (base && (sitePath === base || sitePath.startsWith(`${base}/`))) return sitePath;
+  return `${base}${sitePath}`;
+}
+
 const rm = (p) => fs.rmSync(p, { recursive: true, force: true });
 const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
 const read = (p) => fs.readFileSync(p, "utf8");
@@ -142,7 +155,7 @@ function transformLinks(markdown, fromDir, mappings) {
       }
       const abs = path.resolve(fromDir, target);
       const docsTarget = localDocsTarget(abs, mappings);
-      if (docsTarget) return `${open}${docsTarget}${hash}${close}`;
+      if (docsTarget) return `${open}${withBase(docsTarget)}${hash}${close}`;
       const repoPath = posix(path.relative(root, abs));
       return `${open}${repoUrl}/blob/main/${repoPath}${hash}${close}`;
     },
@@ -176,7 +189,7 @@ function buildPackageIndex(packages) {
   const rows = packages
     .map((pkg) => {
       const summary = (firstParagraph(read(pkg.readme)) ?? "").replace(/\|/g, "\\|");
-      return `| [${pkg.name}](${docsPathForPackage(pkg)}) | ${groupTitle(pkg.group)} | ${summary} |`;
+      return `| [${pkg.name}](${withBase(docsPathForPackage(pkg))}) | ${groupTitle(pkg.group)} | ${summary} |`;
     })
     .join("\n");
   return [
@@ -221,15 +234,15 @@ function llms(packages) {
     "",
     "## Docs",
     "",
-    "- [Overview](/)",
-    "- [Package Reference](/packages/)",
+    `- [Overview](${withBase("/")})`,
+    `- [Package Reference](${withBase("/packages/")})`,
     "",
     "## Packages",
     "",
   ];
   for (const pkg of packages) {
     const summary = firstParagraph(read(pkg.readme)) ?? "";
-    lines.push(`- [${pkg.name}](${docsPathForPackage(pkg)}): ${summary}`);
+    lines.push(`- [${pkg.name}](${withBase(docsPathForPackage(pkg))}): ${summary}`);
   }
   lines.push("");
   return lines.join("\n");
@@ -370,6 +383,9 @@ function main() {
   write(path.join(sourceRoot, "src", "content.config.ts"), contentConfig());
   write(path.join(publicRoot, "llms.txt"), llms(packages));
   write(path.join(publicRoot, "llms-full.txt"), llmsFull(packages, mappings));
+  // Disable Jekyll on GitHub Pages so Astro's `_astro/` asset dir (underscore
+  // prefix) is served instead of stripped. Astro copies `public/*` to dist root.
+  write(path.join(publicRoot, ".nojekyll"), "");
   console.log(
     `Generated docs from ${packages.length} package READMEs into ${posix(path.relative(root, sourceRoot))}`,
   );
