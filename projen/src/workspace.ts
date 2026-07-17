@@ -31,7 +31,7 @@ import { find } from "@dbx-tools/path";
 import { parse } from "yaml";
 
 /** Trimmed stdout from a command, or undefined when the process fails or prints nothing. */
-function capturedStdout(command: string, args: string[]): string | undefined {
+export function capturedStdout(command: string, args: string[]): string | undefined {
   const result = exec.spawnSync(command, args, {
     stdout: "capture",
     stderr: "ignore",
@@ -65,56 +65,6 @@ export function projectName(): string {
     .filter(Boolean)
     .pop();
   return fromGit ?? basename(repoRoot);
-}
-
-/**
- * Resolve an ssh host alias to its effective `HostName` via `ssh -G` (so a
- * `~/.ssh/config` alias like `github-reggie-db` -> `github.com` is followed).
- * Returns `undefined` when ssh is unavailable or the host is not aliased.
- */
-function resolveSshHostName(host: string): string | undefined {
-  const out = capturedStdout("ssh", ["-G", host]);
-  const line = out?.split("\n").find((l) => /^hostname\s/i.test(l.trim()));
-  const name = line?.trim().split(/\s+/)[1];
-  return name && name !== host ? name : undefined;
-}
-
-/**
- * The repo's `remote.origin.url` normalized to the npm-canonical
- * `git+https://<host>/<owner>/<repo>.git` form, or `undefined` when there is no
- * git remote. scp-like (`git@host:owner/repo`), `ssh://`, `git://`, and embedded
- * credentials are all rewritten to `https`, and an ssh host alias is resolved to
- * its real hostname, so npm provenance can match the URL against the repository
- * the build ran in.
- */
-export function repositoryUrl(): string | undefined {
-  const raw = capturedStdout("git", [
-    "-C",
-    repoRoot,
-    "config",
-    "--get",
-    "remote.origin.url",
-  ])?.trim();
-  if (!raw) return undefined;
-
-  let url = raw.replace(/^git\+/, "");
-  // scp-like `git@host:owner/repo` -> `https://host/owner/repo`.
-  const scp = /^[^@]+@([^:]+):(.+)$/.exec(url);
-  if (scp) url = `https://${scp[1]}/${scp[2]}`;
-  // `ssh://user@host/...` and `git://host/...` -> `https://host/...`.
-  url = url.replace(/^ssh:\/\/[^@/]+@/, "https://").replace(/^(ssh|git):\/\//, "https://");
-  // Strip any embedded `user[:pass]@` credentials from an https URL.
-  url = url.replace(/^(https?:\/\/)[^@/]+@/, "$1");
-  url = url.replace(/\.git$/, "");
-
-  // Follow an ssh host alias (from ~/.ssh/config) to the true host, so the URL
-  // points at github.com rather than the local alias name.
-  const parts = /^(https?:\/\/)([^/]+)(\/.*)$/.exec(url);
-  if (parts) {
-    const realHost = resolveSshHostName(parts[2]!);
-    if (realHost) url = `${parts[1]}${realHost}${parts[3]}`;
-  }
-  return `git+${url}.git`;
 }
 
 const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);

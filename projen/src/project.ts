@@ -23,10 +23,11 @@ import { DBXToolsRootTsconfig } from "./tsconfig";
 import { ViteConfigFile } from "./vite";
 import { DBXToolsVsCode } from "./vscode";
 import {
+  capturedStdout,
   DEFAULT_WORKSPACE_PACKAGE_ROOTS,
   type DiscoveredPackage,
   projectName,
-  repositoryUrl,
+  repoRoot,
   scanPackages,
   toPosix,
 } from "./workspace";
@@ -137,18 +138,84 @@ function configureRootPackage(project: javascript.NodeProject): void {
   project.package.addField("private", true);
 }
 
-/**
- * Lazily-detected, normalized git remote URL (npm `git+https://.../repo.git`
- * form). `null` = not yet probed, `undefined` = probed but no remote. Cached so
- * the whole subtree shares one `git config` lookup.
- */
-let detectedRepositoryUrl: string | undefined | null = null;
+/** The detected repository: where it was probed from + the normalized remote URL. */
+interface DetectedRepository {
+  /** The working directory the detection ran in (`process.cwd()`). */
+  readonly cwd: string;
+  /** The repo root the URL was read from (git top-level / npm prefix). */
+  readonly path: string;
+  /**
+   * `remote.origin.url` normalized to npm's `git+https://host/owner/repo.git`
+   * form, or `undefined` when there is no git remote. scp-like / `ssh://` /
+   * `git://` / embedded-credential URLs are rewritten to https, and an ssh host
+   * alias (`~/.ssh/config`) is followed to its real hostname so npm provenance
+   * matches the repository the build ran in.
+   */
+  readonly url: string | undefined;
+}
 
-/** Resolve the repository URL: an explicit override wins, else the cached detection. */
-function resolveRepositoryUrl(override?: string): string | undefined {
-  if (override && override.length) return override;
-  if (detectedRepositoryUrl === null) detectedRepositoryUrl = repositoryUrl();
-  return detectedRepositoryUrl;
+/**
+ * Ask the GitHub CLI for the canonical repo URL - the easy path. `gh` already
+ * resolves the true host (no ssh-alias parsing) and prints a clean
+ * `https://github.com/owner/repo`. Returns `undefined` when `gh` is absent, not
+ * authenticated, or the dir isn't a GitHub repo, so the caller can fall back.
+ */
+function repoUrlFromGh(): string | undefined {
+  const out = capturedStdout("gh", ["repo", "view", "--json", "url"]);
+  if (!out) return undefined;
+  try {
+    const url = (JSON.parse(out) as { url?: string }).url;
+    return url ? `git+${url.replace(/\.git$/, "")}.git` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Fallback: normalize `git config remote.origin.url` to npm's
+ * `git+https://host/owner/repo.git`. scp-like / `ssh://` / `git://` /
+ * embedded-credential URLs are rewritten to https, and an ssh host alias
+ * (`~/.ssh/config`) is followed to its real hostname via `ssh -G`.
+ */
+function repoUrlFromGit(): string | undefined {
+  const raw = capturedStdout("git", ["-C", repoRoot, "config", "--get", "remote.origin.url"])?.trim();
+  if (!raw) return undefined;
+
+  let url = raw.replace(/^git\+/, "");
+  // scp-like `git@host:owner/repo` -> `https://host/owner/repo`.
+  const scp = /^[^@]+@([^:]+):(.+)$/.exec(url);
+  if (scp) url = `https://${scp[1]}/${scp[2]}`;
+  // `ssh://user@host/...` / `git://host/...` -> `https://host/...`, then drop
+  // any embedded `user[:pass]@` credentials and the trailing `.git`.
+  url = url
+    .replace(/^ssh:\/\/[^@/]+@/, "https://")
+    .replace(/^(ssh|git):\/\//, "https://")
+    .replace(/^(https?:\/\/)[^@/]+@/, "$1")
+    .replace(/\.git$/, "");
+  // Follow an ssh host alias to the true host (so `github-reggie-db` becomes
+  // `github.com`), via `ssh -G <host>`'s effective `hostname`.
+  const parts = /^(https?:\/\/)([^/]+)(\/.*)$/.exec(url);
+  if (parts) {
+    const hostLine = capturedStdout("ssh", ["-G", parts[2]!])
+      ?.split("\n")
+      .find((l) => /^hostname\s/i.test(l.trim()));
+    const realHost = hostLine?.trim().split(/\s+/)[1];
+    if (realHost && realHost !== parts[2]) url = `${parts[1]}${realHost}${parts[3]}`;
+  }
+  return `git+${url}.git`;
+}
+
+/**
+ * Detect the repository once for the whole subtree (memoized): the cache key is
+ * the tuple {@link DetectedRepository} - `cwd`, `path`, and the resolved `url`.
+ * Tries `gh repo view` first (easy + host-accurate), then falls back to
+ * normalizing the git remote; callers just read `.url`.
+ */
+let cachedRepository: DetectedRepository | undefined;
+function detectRepository(): DetectedRepository {
+  if (cachedRepository) return cachedRepository;
+  const url = repoUrlFromGh() ?? repoUrlFromGit();
+  return (cachedRepository = { cwd: process.cwd(), path: repoRoot, url });
 }
 
 /**
@@ -156,10 +223,10 @@ function resolveRepositoryUrl(override?: string): string | undefined {
  * published source (without it, publish fails with E422). A child also carries the
  * monorepo `directory` subpath (its path relative to the root); the root omits it.
  * No-op when no git remote is detected and no `repository` override was supplied.
- * The URL is auto-detected once from `remote.origin.url` (see {@link repositoryUrl}).
+ * The URL is auto-detected once (see {@link detectRepository}).
  */
 function applyRepository(project: javascript.NodeProject, override?: string): void {
-  const url = resolveRepositoryUrl(override);
+  const url = override && override.length ? override : detectRepository().url;
   if (!url) return;
   const root = project.parent ?? project;
   const directory = toPosix(relative(resolve(root.outdir), resolve(project.outdir)));
