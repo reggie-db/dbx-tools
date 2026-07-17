@@ -95,4 +95,14 @@ project.package.addField("exports", {
 // workspace) and the util-dep link hook.
 project.gitignore.include(".pnpmfile.cjs", "pnpm-workspace.yaml");
 
+// ...but keep those local-dev-only files OUT of the published tarball: the link
+// hook would misresolve deps for a real npm consumer, and the workspace marker
+// is meaningless downstream.
+project.npmignore?.exclude(
+  ".pnpmfile.cjs",
+  "pnpm-workspace.yaml",
+  ".projenrc.ts",
+  "projenrc/",
+);
+
 project.synth();

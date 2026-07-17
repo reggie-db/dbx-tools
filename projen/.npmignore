@@ -16,6 +16,10 @@ dist
 /.projenrc.js
 tsconfig.tsbuildinfo
 /projenrc/tsconfig.json
+.pnpmfile.cjs
+pnpm-workspace.yaml
+.projenrc.ts
+projenrc/
 /.gitattributes
 /.projenrc.ts
 /projenrc

@@ -16,6 +16,8 @@
  * root task first (see below); a normal consumer constructs, `with(...)`s, synths.
  */
 import { JsonFile, Project } from "projen";
+import { GithubWorkflow } from "projen/lib/github";
+import { JobPermission } from "projen/lib/github/workflows-model";
 import { mixin, project as projectApi, projectPredicate } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
@@ -453,6 +455,40 @@ project.with(
 project.addTask("dbxtools", {
   exec: "tsx workspaces/cli/dbx-tools/bin/dbxtools.ts",
   receiveArgs: true,
+});
+
+// ---------------------------------------------------------------------------
+// Release workflow for the standalone `@dbx-tools/projen` engine (in `projen/`)
+// ---------------------------------------------------------------------------
+// The engine is its own project with its own projen `release` machinery (bump /
+// changelog / `pnpm pack`), but GitHub Actions only runs workflows from the
+// REPO-ROOT `.github/`. So the engine's release workflow is emitted HERE,
+// alongside the root's own `release.yml`, under a distinct name + tag prefix
+// (`projen-v*`) so the two never collide. Push a `projen-v*` tag to publish.
+const projenRelease = new GithubWorkflow(project.github!, "projen-release");
+projenRelease.on({ push: { tags: ["projen-v*"] } });
+projenRelease.addJob("publish", {
+  runsOn: ["ubuntu-latest"],
+  permissions: { contents: JobPermission.READ },
+  defaults: { run: { workingDirectory: "projen" } },
+  env: { CI: "true" },
+  steps: [
+    { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
+    { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: "10.33.0" } },
+    {
+      name: "Setup Node.js",
+      uses: "actions/setup-node@v6",
+      with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
+    },
+    { name: "Install", run: "pnpm install --no-frozen-lockfile" },
+    // Bump to the pushed tag's version, typecheck, and `pnpm pack` into dist/js.
+    { name: "Release", run: "pnpm release" },
+    {
+      name: "Publish to npm",
+      run: "npm publish dist/js/*.tgz --access public",
+      env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
+    },
+  ],
 });
 
 project.synth();
