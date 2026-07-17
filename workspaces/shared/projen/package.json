@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
+    "@dbx-tools/node-core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-file-scan": "workspace:*",
     "@typescript-eslint/typescript-estree": "^8",

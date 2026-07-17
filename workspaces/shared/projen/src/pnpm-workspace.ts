@@ -25,7 +25,12 @@ import { toPosix } from "./workspace";
  */
 export type Catalog = Record<string, string>;
 
-/** Default pnpm `catalog:` versions, pinned to match `databricks apps init` (AppKit). */
+/**
+ * Default pnpm `catalog:` versions, pinned to match `databricks apps init`
+ * (AppKit). The `@databricks/*` packages are hardcoded engine defaults: this
+ * engine is steered toward Databricks, so AppKit + the experimental SDK are
+ * always available at `catalog:` without a per-repo override.
+ */
 const DEFAULT_CATALOG: Catalog = {
   react: "^19.2.4",
   "react-dom": "^19.2.4",
@@ -44,6 +49,9 @@ const DEFAULT_CATALOG: Catalog = {
   tsoa: "^6.6.0",
   concurrently: "^10.0.3",
   pnpm: "^11.0.6",
+  "@databricks/appkit": "^0.43.0",
+  "@databricks/appkit-ui": "^0.43.1",
+  "@databricks/sdk-experimental": "^0.17.0",
 };
 
 const FILE_PATH_PNPM_WORKSPACE = "pnpm-workspace.yaml";

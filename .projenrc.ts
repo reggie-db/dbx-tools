@@ -71,8 +71,6 @@ project.pnpmWorkspace?.allowBuild("geckodriver", false);
 project.pnpmWorkspace?.allowBuild("onnxruntime-node", false);
 project.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
 
-// Catalog entries specific to this repo's ported packages (not engine defaults).
-project.pnpmWorkspace?.addCatalog("@databricks/sdk-experimental", "^0.17.0");
 
 // ---------------------------------------------------------------------------
 // Per-package mixins
@@ -100,20 +98,27 @@ project.with(
     },
   ),
 
-  // shared-core: leans on node: builtins, so tag it node + type against node.
-  mixin.mixin(pkg("*/shared-core", "shared"), (p) => {
-    p.dbxToolsConfig.tags.push("node");
-    if (p instanceof projectApi.DBXToolsTypeScriptProject) {
-      p.tsconfig?.file.addOverride("compilerOptions.types", ["node"]);
-    }
+  // node-core: the Node-only half of the shared runtime (exec + project). Lives
+  // under workspaces/node/, so the `node` tag auto-applies (node types + ES2020
+  // lib, no DOM). shared-core stays browser-safe; anything needing child_process
+  // / fs / process depends on node-core instead.
+  mixin.mixin(pkg("*/node-core", "node"), (p) => {
+    p.addDeps("@dbx-tools/shared-core@workspace:*");
   }),
 
-  // shared-file-scan: filesystem glob/watch deps. Pin explicit ranges: bare names
-  // resolve against the local registry, which can return stale majors (e.g.
-  // minimatch@3 lacks the `{ Minimatch }` ESM export the code imports, chokidar@1
-  // predates the v4 API).
+  // shared-file-scan: filesystem glob/watch package. It shells out (node-core
+  // exec) and uses chokidar/glob, so it's node-tagged, not browser-safe. Pin
+  // explicit ranges: bare names resolve against the local registry, which can
+  // return stale majors (e.g. minimatch@3 lacks the `{ Minimatch }` ESM export
+  // the code imports, chokidar@1 predates the v4 API).
   mixin.mixin(pkg("*/shared-file-scan", "shared"), (p) => {
-    p.addDeps("glob@^10.5.0", "chokidar@^4.0.3", "minimatch@^10.2.5");
+    p.dbxToolsConfig.tags.push("node");
+    p.addDeps(
+      "@dbx-tools/node-core@workspace:*",
+      "glob@^10.5.0",
+      "chokidar@^4.0.3",
+      "minimatch@^10.2.5",
+    );
   }),
 
   // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
@@ -161,6 +166,7 @@ project.with(
       "@typescript-eslint/typescript-estree@^8",
       "typescript@catalog:",
       "is-identifier@^1",
+      "@dbx-tools/node-core@workspace:*",
       "@dbx-tools/shared-file-scan@workspace:*",
     );
     p.package.addField("exports", {
@@ -188,7 +194,7 @@ project.with(
       "./pnpm": "./src/pnpm.ts",
       "./package.json": "./package.json",
     });
-    p.addDeps("@dbx-tools/shared-core@workspace:*", "pnpm");
+    p.addDeps("@dbx-tools/shared-core@workspace:*", "@dbx-tools/node-core@workspace:*", "pnpm");
     applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
   }),
 );

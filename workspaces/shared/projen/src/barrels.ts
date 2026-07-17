@@ -22,7 +22,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { extname, join, relative } from "node:path";
-import { exec } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/node-core";
 import { find } from "@dbx-tools/shared-file-scan";
 import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";

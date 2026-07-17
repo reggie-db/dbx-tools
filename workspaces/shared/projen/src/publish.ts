@@ -6,7 +6,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative } from "node:path";
-import { exec } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/node-core";
 import { Component } from "projen";
 import { makeReadonly, makeWritable } from "./generated";
 import { logger } from "./log";

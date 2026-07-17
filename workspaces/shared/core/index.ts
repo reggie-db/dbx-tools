@@ -5,11 +5,9 @@
 export * as async from "./src/async";
 export * as equal from "./src/equal";
 export * as error from "./src/error";
-export * as exec from "./src/exec";
 export * as functionModule from "./src/function";
 export * as hash from "./src/hash";
 export * as iterable from "./src/iterable";
 export * as predicate from "./src/predicate";
-export * as project from "./src/project";
 export * as string from "./src/string";
 export * as value from "./src/value";

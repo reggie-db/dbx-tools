@@ -25,7 +25,8 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { basename, extname, relative, resolve, sep } from "node:path";
-import { exec, string } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/node-core";
+import { string } from "@dbx-tools/shared-core";
 import { find } from "@dbx-tools/shared-file-scan";
 import { parse } from "yaml";
 

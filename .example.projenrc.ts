@@ -9,10 +9,9 @@ import { mixin, project as projectApi, projectPredicate } from "@dbx-tools/proje
 
 const examples = projectPredicate.hasPath("example-workspaces");
 
-/** AppKit + Mastra Code catalog pins used only by the example packages below. */
+/** Mastra Code catalog pin used only by the example packages below. AppKit +
+ * sdk-experimental are engine defaults (see DEFAULT_CATALOG), so no pin here. */
 export function configureExampleCatalog(project: projectApi.DBXToolsNodeProject): void {
-  project.pnpmWorkspace?.addCatalog("@databricks/appkit", "^0.43.0");
-  project.pnpmWorkspace?.addCatalog("@databricks/appkit-ui", "^0.43.0");
   project.pnpmWorkspace?.addCatalog("mastracode", "0.30.0");
   // mastracode@0.4.0 imports `vscode-jsonrpc/node.js`; v9 exports only `./node`.
   project.pnpmWorkspace?.addOverride("overrides.vscode-jsonrpc", "8.2.1");

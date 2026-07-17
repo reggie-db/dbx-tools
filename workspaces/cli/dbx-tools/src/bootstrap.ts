@@ -4,7 +4,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { intro, outro } from "@clack/prompts";
-import { exec } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/node-core";
 import { resolvePnpmArgv, runPnpm } from "./pnpm";
 import { rootLabel } from "./root";
 

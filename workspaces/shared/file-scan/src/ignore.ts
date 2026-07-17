@@ -11,7 +11,8 @@
  *   and {@link watchFiles}.
  */
 
-import { exec, functionModule, iterable } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/node-core";
+import { functionModule, iterable } from "@dbx-tools/shared-core";
 import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match";
 import { directoryNamePattern, fileExtensionPattern } from "./pattern";
 

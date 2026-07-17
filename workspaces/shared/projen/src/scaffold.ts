@@ -8,7 +8,7 @@
  * and a full re-synth is needed - versus a content edit, where only barrels rebuild.
  */
 import { join } from "node:path";
-import { exec } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/node-core";
 import { recordedRoots, repoRoot, scanPackages, workspacePackages } from "./workspace";
 
 /** Member paths that currently exist on disk (scan of the recorded roots). */

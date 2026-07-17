@@ -69,7 +69,9 @@ export function toBoolean(value: unknown): boolean | undefined {
  * `false` in a browser where `process` is absent).
  */
 export function isDatabricksAppEnv(env?: Record<string, string | undefined>): boolean {
-  env ??= typeof process !== "undefined" && process.env ? process.env : undefined;
+  // Read `process.env` off `globalThis` so this stays browser-safe (no `node`
+  // types): `process` is absent in a browser, so the lookup yields undefined.
+  env ??= (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
   if (!env) {
     return false;
   }

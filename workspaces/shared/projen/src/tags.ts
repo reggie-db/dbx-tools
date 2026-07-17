@@ -20,10 +20,10 @@ import { applyCompilerOptions, applyTasks } from "./project";
 import * as projectPredicate from "./project-predicate";
 import { ViteConfigFile } from "./vite";
 
-/** Node compiler options: ES2020 lib + node types, deliberately no DOM. */
+/** Node compiler options: ES2022 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
-  target: "ES2020",
-  lib: ["ES2020"],
+  target: "ES2022",
+  lib: ["ES2022"],
   types: ["node"],
 };
 
@@ -31,12 +31,16 @@ const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
 const DOM_LIB = ["ES2022", "DOM", "DOM.Iterable"];
 
 /**
- * The agnostic floor every package gets at construction: ES2022 stdlib, no DOM, no
- * node types. Also the whole config the `shared` tag applies.
+ * The agnostic floor every package gets at construction: ES2022 stdlib plus the
+ * web-platform globals available in every JS runtime (browser, workers, Node 18+)
+ * via the `WebWorker` lib - `AbortController`/`AbortSignal`, `URL`, `crypto`, the
+ * timer functions, `fetch`, `TextEncoder`, etc. Deliberately NO `DOM` lib (no
+ * `document`/`window`) and no node types, so agnostic code stays isomorphic. Also
+ * the whole config the `shared` tag applies.
  */
 export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   target: "ES2022",
-  lib: ["ES2022"],
+  lib: ["ES2022", "WebWorker"],
   types: [],
 };
 

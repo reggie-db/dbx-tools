@@ -40,9 +40,16 @@ building block at a time, bottom of the dependency tree up.
 ## Conventions in the target repo
 
 - **shared-core** (`workspaces/shared/core` → `@dbx-tools/shared-core`):
-  dependency-free, node-tagged runtime helpers. Concern-split modules,
+  dependency-free, **browser-safe** runtime helpers (agnostic tag, `WebWorker`
+  lib — web-standard globals, no node types, no DOM). Concern-split modules,
   namespaced barrel (`export * as async/equal/error/hash/string/value/...`).
   Consumers write `string.toSlug(...)`, `error.errorMessage(...)`, etc.
+- **node-core** (`workspaces/node/core` → `@dbx-tools/node-core`): the Node-only
+  half of the shared runtime — `exec` (child_process) + `project` (fs/path repo
+  roots). Auto-tagged `node` (node types, ES2022 lib) by living under
+  `workspaces/node/`. Anything needing `child_process`/`fs`/`process` depends on
+  node-core; keep shared-core browser-safe. `async`/`hash`/`value` stay in
+  shared-core — they're isomorphic (web-standard `AbortSignal`/`URL`/`crypto`).
 - **Extensionless relative imports** (`./model`, not `./model.js`) — the repo
   uses `moduleResolution: bundler`. Strip `.js` from every ported import.
 - **Tests:** `node:test` + `node:assert/strict` (NOT `bun:test`/`expect`), run
@@ -88,7 +95,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `96b5357` | Port `model-shared` → `@dbx-tools/shared-model` (agnostic `[shared]`, zod). Tidy `.projenrc.ts` (extract `pkg()` + `applyRootDirTsconfig()` helpers, section headers, drop stray `console.log`). |
 | `cf4a75b` | Rename shared-model `protocol.ts` → `model.ts`; force-add its test. |
 | `8c94f10` | **Codegen subsystem + `shared-sdk-model`** — see below. |
-| (pending commit) | **Codegen on synth (drop task/watch) + port `genie-shared` → `@dbx-tools/shared-genie`** — see below. |
+| `6901ffa` | **Codegen on synth (drop task/watch) + port `genie-shared` → `@dbx-tools/shared-genie`** — see below. |
+| (pending commit) | **Browser-safe core split**: `exec`/`project` → new `@dbx-tools/node-core`; shared-core now agnostic (`WebWorker` lib); file-scan retagged `node`; AppKit + sdk-experimental hardcoded in `DEFAULT_CATALOG`. See "Resolved: browser-safe core split" below. |
 
 ### shared-core surface now available
 
@@ -184,23 +192,31 @@ Ported `-js genie-shared` → `@dbx-tools/shared-genie`, tag `[shared]`
   detector-output comparisons go through a local `equalPayload` helper that
   prunes `undefined` keys first.
 
-### ⚠️ Pre-existing rough edge: cross-package typecheck of shared-core source
+### ✅ Resolved: browser-safe core split (`node-core`) + isomorphic lib
 
-`shared-genie`'s own code type-checks clean, but `pnpm exec projen compile` in
-genie fails with ~32 errors — **all** inside `../core/src/*` (node-using modules
-like `exec`/`project`/`value`). Cause: source-first package resolution points
-`@dbx-tools/shared-core` at its `index.ts`, so a browser-safe (`shared`-tagged,
-`types: []`, no node lib) consumer type-checks core's node-dependent source
-under its own node-free tsconfig. **This is pre-existing, not introduced here:**
-`shared-file-scan` (already committed/DONE) imports core while `shared`-tagged
-and fails identically. `shared-model` dodges it only by not importing core;
-`shared-projen` dodges it by being `node`-tagged. Tests (via `tsx`) and runtime
-are unaffected — only whole-program `tsc --build` from a browser-safe core
-consumer trips. **Follow-up to consider (ask user):** either split core's
-node-only modules behind a `types`/`exports` subpath so browser consumers only
-see the agnostic surface, or wire TS project references + `types` so a `shared`
-consumer type-checks against core's emitted `.d.ts` (agnostic) rather than its
-source. Not blocking; deferred.
+The earlier rough edge — a browser-safe consumer type-checking core's
+node-dependent source under its own node-free tsconfig — is fixed by splitting
+core, not by references:
+
+- **`exec` + `project` → `@dbx-tools/node-core`** (`workspaces/node/core`,
+  auto-tagged `node`). These are the only genuinely Node-only core modules
+  (import `node:*`, use `Buffer`/`process.cwd()`/`import.meta.main`), and had
+  zero internal deps, so they extracted cleanly. Repointed all importers (cli,
+  projen, file-scan) — every one was already `node`-tagged.
+- **shared-core is now browser-safe** (dropped its `node` tag + `types:["node"]`
+  override). `async`/`hash`/`value` stayed — they're isomorphic (web-standard
+  `AbortSignal`/`URL`/`crypto`, guarded `process` read off `globalThis`).
+- **Agnostic tsconfig floor gained the `WebWorker` lib** (`AGNOSTIC_COMPILER_OPTIONS`
+  in `tags.ts`) so isomorphic code type-checks its web-platform globals without
+  DOM or node types. The `node` tag's lib was bumped ES2020 → ES2022 (Node 18+;
+  `exec` uses `Array.at`/`Error.cause`).
+- **file-scan** was retagged `node` (it shells out + uses chokidar/console) — it
+  had been mis-typed `shared` and silently failing whole-program compile.
+
+Result: `shared-core` and `shared-genie` (and every package) compile clean;
+38/38 genie tests pass. AppKit + sdk-experimental are now hardcoded engine
+defaults in `DEFAULT_CATALOG` (this repo is Databricks-steered), so the per-repo
+`addCatalog` overrides were dropped.
 
 ## ⏭ NEXT: port `genie` (server chat/space driver) → `@dbx-tools/…`
 

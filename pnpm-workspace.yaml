@@ -12,6 +12,7 @@ packages:
   - example-workspaces/ui/app
   - example-workspaces/ui/appkit-client
   - workspaces/cli/dbx-tools
+  - workspaces/node/core
   - workspaces/shared/core
   - workspaces/shared/file-scan
   - workspaces/shared/genie
@@ -36,9 +37,9 @@ catalog:
   tsoa: ^6.6.0
   concurrently: ^10.0.3
   pnpm: ^11.0.6
-  "@databricks/sdk-experimental": ^0.17.0
   "@databricks/appkit": ^0.43.0
-  "@databricks/appkit-ui": ^0.43.0
+  "@databricks/appkit-ui": ^0.43.1
+  "@databricks/sdk-experimental": ^0.17.0
   mastracode: 0.30.0
 allowBuilds:
   esbuild: true
