@@ -191,6 +191,24 @@ function pickAppResourceId(apps: Record<string, BundleApp>): string | undefined 
 }
 
 /**
+ * Resolve the effective value a `value_from`/`valueFrom` entry points at:
+ * the first present of the warehouse id, Genie space id, or Postgres
+ * endpoint/database/branch on the named resource. Shared by both the
+ * `app.yaml` and `bundle validate` flatteners, whose resource shapes match.
+ */
+function resolveResourceValue(
+  resource: z.infer<typeof bundleAppResourceSchema> | undefined,
+): string | undefined {
+  return (
+    resource?.sql_warehouse?.id ??
+    resource?.genie_space?.space_id ??
+    resource?.postgres?.endpoint ??
+    resource?.postgres?.database ??
+    resource?.postgres?.branch
+  );
+}
+
+/**
  * Flatten `env` entries from parsed `app.yaml` content. Literal `value` entries
  * are returned as-is; `valueFrom` entries resolve against the sibling
  * `resources` array when possible.
@@ -212,13 +230,7 @@ export function flattenAppYamlEnv(data: unknown): Record<string, string> {
       continue;
     }
     if (!entry.valueFrom) continue;
-    const resource = resourceByName.get(entry.valueFrom);
-    const resolved =
-      resource?.sql_warehouse?.id ??
-      resource?.genie_space?.space_id ??
-      resource?.postgres?.endpoint ??
-      resource?.postgres?.database ??
-      resource?.postgres?.branch;
+    const resolved = resolveResourceValue(resourceByName.get(entry.valueFrom));
     if (resolved) out[entry.name] = resolved;
   }
   return out;
@@ -255,13 +267,7 @@ export function flattenAppEnv(data: unknown): Record<string, string> {
       continue;
     }
     if (!entry.value_from) continue;
-    const resource = resourceByName.get(entry.value_from);
-    const resolved =
-      resource?.sql_warehouse?.id ??
-      resource?.genie_space?.space_id ??
-      resource?.postgres?.endpoint ??
-      resource?.postgres?.database ??
-      resource?.postgres?.branch;
+    const resolved = resolveResourceValue(resourceByName.get(entry.value_from));
     if (resolved) out[entry.name] = resolved;
   }
   return out;
