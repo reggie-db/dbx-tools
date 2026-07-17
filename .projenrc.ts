@@ -53,9 +53,9 @@ const project = new projectApi.DBXToolsNodeProject({
   releaseToNpm: true,
   workflowPackageCache: true,
   depsUpgrade: false,
-  // `@dbx-tools/projen` (the engine) lives in the standalone `dev-projen/`
+  // `@dbx-tools/projen` (the engine) lives in the standalone `projen/`
   // project, not this workspace; the repo `.pnpmfile.cjs` rewrites it to a
-  // `link:./dev-projen`. It stays a plain dep here so synth can resolve it.
+  // `link:./projen`. It stays a plain dep here so synth can resolve it.
   devDeps: ["concurrently", "@dbx-tools/shared-core@workspace:*", "@dbx-tools/projen@*"],
 });
 
@@ -338,7 +338,7 @@ project.with(
   }),
 
   // The projen engine (`@dbx-tools/projen`) is no longer a member of this
-  // workspace - it lives in the standalone `dev-projen/` project and is linked
+  // workspace - it lives in the standalone `projen/` project and is linked
   // in via the repo `.pnpmfile.cjs`. So there is no engine mixin here.
 
   // cli-dbx-tools: the published CLI, renamed to the bare scope @dbx-tools/cli.

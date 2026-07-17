@@ -8,7 +8,7 @@
       "name": "barrels",
       "steps": [
         {
-          "exec": "tsx dev-projen/tasks/barrels.ts"
+          "exec": "tsx projen/tasks/barrels.ts"
         }
       ]
     },
@@ -58,7 +58,7 @@
       "name": "clean",
       "steps": [
         {
-          "exec": "tsx dev-projen/tasks/clean.ts",
+          "exec": "tsx projen/tasks/clean.ts",
           "receiveArgs": true
         }
       ]
@@ -179,7 +179,7 @@
       "name": "openapi",
       "steps": [
         {
-          "exec": "tsx dev-projen/tasks/openapi.ts"
+          "exec": "tsx projen/tasks/openapi.ts"
         }
       ]
     },
@@ -188,7 +188,7 @@
       "description": "Creates the distribution package",
       "steps": [
         {
-          "exec": "tsx dev-projen/tasks/publish.ts --pack"
+          "exec": "tsx projen/tasks/publish.ts --pack"
         }
       ]
     },
@@ -205,7 +205,7 @@
       "description": "Bump version (default patch), commit, push branch, tag, and push tag",
       "steps": [
         {
-          "exec": "tsx dev-projen/tasks/publish.ts",
+          "exec": "tsx projen/tasks/publish.ts",
           "receiveArgs": true
         }
       ]
@@ -239,7 +239,7 @@
       "description": "CI: build and pack from the git tag that triggered the workflow",
       "steps": [
         {
-          "exec": "tsx dev-projen/tasks/publish.ts --ci"
+          "exec": "tsx projen/tasks/publish.ts --ci"
         }
       ]
     },
@@ -247,7 +247,7 @@
       "name": "sync",
       "steps": [
         {
-          "exec": "tsx dev-projen/tasks/sync.ts",
+          "exec": "tsx projen/tasks/sync.ts",
           "receiveArgs": true
         }
       ]

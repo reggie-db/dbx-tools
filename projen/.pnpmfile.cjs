@@ -2,7 +2,7 @@
  * Resolve the projen engine's `@dbx-tools/*` utility dependencies to the local
  * source under `../workspaces/` instead of a registry.
  *
- * `dev-projen` is a standalone project (NOT a member of the main pnpm
+ * `projen/` is a standalone project (NOT a member of the main pnpm
  * workspace), so pnpm can't see those packages as workspace siblings. This
  * `readPackage` hook rewrites the three utility deps to absolute `link:` paths
  * for EVERY package pnpm processes - including the linked source packages

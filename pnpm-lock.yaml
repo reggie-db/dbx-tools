@@ -127,15 +127,15 @@ catalogs:
 overrides:
   glob: ^13.0.0
 
-pnpmfileChecksum: sha256-KUdkQoOk8MGCi9xcb6O/ZAW2ya+vSj0FOsPClfQWPos=
+pnpmfileChecksum: sha256-FrJRCgQHFRZUxeXRdax+EjUNRq5kKm4BbRyK2x/hmFY=
 
 importers:
 
   .:
     devDependencies:
       '@dbx-tools/projen':
-        specifier: link:/Users/reggie.pierce/Projects/github-reggie-db/dbx-tools/dev-projen
-        version: link:dev-projen
+        specifier: link:/Users/reggie.pierce/Projects/github-reggie-db/dbx-tools/projen
+        version: link:projen
       '@dbx-tools/shared-core':
         specifier: workspace:*
         version: link:workspaces/shared/core
