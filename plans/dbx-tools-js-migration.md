@@ -42,13 +42,13 @@ building block at a time, bottom of the dependency tree up.
 - **shared-core** (`workspaces/shared/core` → `@dbx-tools/shared-core`):
   dependency-free, **browser-safe** runtime helpers (agnostic tag, `WebWorker`
   lib — web-standard globals, no node types, no DOM). Concern-split modules,
-  namespaced barrel (`export * as async/equal/error/hash/string/value/...`).
+  namespaced barrel (`export * as async/equal/error/hash/string/object/runtime/...`).
   Consumers write `string.toSlug(...)`, `error.errorMessage(...)`, etc.
 - **node-core** (`workspaces/node/core` → `@dbx-tools/node-core`): the Node-only
   half of the shared runtime — `exec` (child_process) + `project` (fs/path repo
   roots). Auto-tagged `node` (node types, ES2022 lib) by living under
   `workspaces/node/`. Anything needing `child_process`/`fs`/`process` depends on
-  node-core; keep shared-core browser-safe. `async`/`hash`/`value` stay in
+  node-core; keep shared-core browser-safe. `async`/`hash`/`object`/`runtime` stay in
   shared-core — they're isomorphic (web-standard `AbortSignal`/`URL`/`crypto`).
 - **shared-core is a universal base dep.** A blanket mixin in `.projenrc.ts`
   adds `@dbx-tools/shared-core@workspace:*` to EVERY workspace package (any tag,
@@ -117,10 +117,10 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 (errorMessage/errorMessages/errorNodes/toError), `hash`
 (fnvHash/fnvHashWithOptions/toBase32/id), `string`
 (tokenize/tokenizeWithOptions/toIdentifier/toSlug/toUniqueSlug/trimToNull/
-firstNonEmpty/escapeHtml/toDescription), `value`
-(isRecord/toBoolean/isDatabricksAppEnv/NameLike/NonFunctionKeys), plus
-pre-existing `exec`, `functionModule` (memoize), `iterable`, `predicate`,
-`project`.
+firstNonEmpty/escapeHtml/toDescription), `object`
+(isRecord/toBoolean/NameLike/NonFunctionKeys), `runtime` (isDatabricksAppEnv),
+`log` (logger/isLevelEnabled), plus `functionModule` (memoize), `iterable`,
+`predicate`. NOTE: `exec` + `project` moved to **node-core** (not shared-core).
 
 `-js`'s `commonUtils.*` / `stringUtils.*` map onto these: e.g.
 `commonUtils.errorMessage` → `error.errorMessage`,
@@ -217,7 +217,7 @@ core, not by references:
   zero internal deps, so they extracted cleanly. Repointed all importers (cli,
   projen, file-scan) — every one was already `node`-tagged.
 - **shared-core is now browser-safe** (dropped its `node` tag + `types:["node"]`
-  override). `async`/`hash`/`value` stayed — they're isomorphic (web-standard
+  override). `async`/`hash`/`object`/`runtime` stayed — they're isomorphic (web-standard
   `AbortSignal`/`URL`/`crypto`, guarded `process` read off `globalThis`).
 - **Agnostic tsconfig floor gained the `WebWorker` lib** (`AGNOSTIC_COMPILER_OPTIONS`
   in `tags.ts`) so isomorphic code type-checks its web-platform globals without

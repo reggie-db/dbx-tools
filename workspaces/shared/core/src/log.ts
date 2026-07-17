@@ -31,7 +31,7 @@
  */
 
 import { memoize } from "./function";
-import { type NameLike, toBoolean } from "./value";
+import { type NameLike, toBoolean } from "./object";
 
 /** `process`-shaped view off `globalThis`, so no node types are needed. */
 interface ProcessLike {
