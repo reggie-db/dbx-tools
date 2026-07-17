@@ -27,7 +27,11 @@ const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",
   defaultReleaseBranch: "main",
   packageManager: NodePackageManager.PNPM,
-  projenrcTs: true,
+  // The projenrc runner is wired to tsx below (not projen's default ts-node).
+  // This package is `type: module`, and `.projenrc.ts` does a directory import
+  // (`projen/lib/javascript`) that Node's ESM loader rejects under ts-node
+  // ("Directory import ... is not supported"); tsx resolves it fine.
+  projenrcTs: false,
   typescriptVersion: "^5.9.3",
   // Consumed as TypeScript source via tsx (its `main`/`exports` point at .ts),
   // so there is no build/emit step to wire and no jest/eslint ceremony.
@@ -126,5 +130,13 @@ project.addTask("bump", {
   receiveArgs: true,
   description: "Bump the release version (default patch), then commit, tag, and push it",
 });
+
+// Run `.projenrc.ts` through tsx instead of projen's default ts-node (see the
+// `projenrcTs: false` note above). tsx is already a devDep, so reset the default
+// task to a plain `tsx .projenrc.ts` exec - NOT the `npx -y -p tsx -c "..."`
+// wrapper `ProjenrcTs` emits (that exports `npm_config_call` into every nested
+// pnpm, which then dies parsing it). Same approach the engine uses on consumers.
+new typescript.ProjenrcTs(project, { runner: typescript.TypeScriptRunner.tsx() });
+project.defaultTask?.reset("tsx .projenrc.ts");
 
 project.synth();

@@ -54,6 +54,23 @@ export function needsInstall(root: string): boolean {
   return false;
 }
 
+/**
+ * True when the synth TOOLCHAIN isn't installed yet: no `node_modules`, or the
+ * dbx-tools engine / `projen` aren't resolvable under it. Distinct from a full
+ * bootstrap (which keys off a MISSING `.projenrc.ts`): here the projenrc exists
+ * but its dependencies don't - e.g. a copied project whose generated manifests
+ * and `node_modules` are gitignored. Seeding the toolchain (not scaffolding)
+ * makes it synth-ready without touching the hand-authored `.projenrc.ts`.
+ */
+export function needsToolchain(root: string): boolean {
+  const modules = join(root, "node_modules");
+  if (!existsSync(modules)) return true;
+  return (
+    !existsSync(join(modules, "projen")) ||
+    !existsSync(join(modules, "@dbx-tools", "projen"))
+  );
+}
+
 /** Async, memoized root lookup from the process cwd at first use. */
 export const workspaceRoot = functionModule.memoize(() => findWorkspaceRoot());
 

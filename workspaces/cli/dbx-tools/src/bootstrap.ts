@@ -23,11 +23,19 @@ allowBuilds:
 `;
 
 /**
- * Turn an empty folder into a functioning dbx-tools workspace: `pnpm init`, seed
+ * Turn a folder into a functioning dbx-tools workspace: `pnpm init`, seed
  * `pnpm-workspace.yaml`, add `projen`/`typescript`/`tsx` + the engine package,
  * write a minimal `.projenrc.ts`, synth once (with `PROJEN_DISABLE_POST`), then
  * install. Does not run barrels - run `dbxtools barrels` or a full projen synth
  * post-install to generate package barrels.
+ *
+ * Every step is idempotent and self-guarded, so this is safe to run against a
+ * folder that ALREADY has a hand-authored `.projenrc.ts` (and even a committed
+ * `package.json`) but is missing the installed toolchain - e.g. a freshly copied
+ * project whose generated files (including manifests) are gitignored. In that
+ * case `pnpm init` and the `.projenrc.ts` scaffold are skipped, but the engine +
+ * projen + tsx are (re)installed so the subsequent synth can regenerate
+ * everything. See {@link seedToolchain}.
  */
 export function bootstrapWorkspace(
   root: string,
@@ -35,16 +43,7 @@ export function bootstrapWorkspace(
 ): void {
   intro(`Bootstrapping dbx-tools workspace in ${rootLabel(root)}`);
 
-  if (!existsSync(join(root, "package.json"))) {
-    runPnpm(["init"], root);
-  }
-
-  const workspaceFile = join(root, "pnpm-workspace.yaml");
-  if (!existsSync(workspaceFile)) {
-    writeFileSync(workspaceFile, WORKSPACE_SEED);
-  }
-
-  runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", projenSpecifier], root);
+  seedToolchain(root, projenSpecifier);
 
   const projenrc = join(root, ".projenrc.ts");
   if (!existsSync(projenrc)) {
@@ -55,6 +54,29 @@ export function bootstrapWorkspace(
 
   runPnpm(["install", "--no-frozen-lockfile", "--force"], root);
   outro("Workspace ready - re-run dbxtools or add packages under workspaces/");
+}
+
+/**
+ * Install the toolchain a synth needs (`projen`, `typescript`, `tsx`, and the
+ * dbx-tools engine), seeding a `package.json` and `pnpm-workspace.yaml` first
+ * when absent. Idempotent: run it whenever the engine is missing, so a copied
+ * project with a `.projenrc.ts` but no `node_modules`/manifests can be brought
+ * up to a synth-ready state without full bootstrapping.
+ */
+export function seedToolchain(
+  root: string,
+  projenSpecifier: string = DEFAULT_PROJEN_SPECIFIER,
+): void {
+  if (!existsSync(join(root, "package.json"))) {
+    runPnpm(["init"], root);
+  }
+
+  const workspaceFile = join(root, "pnpm-workspace.yaml");
+  if (!existsSync(workspaceFile)) {
+    writeFileSync(workspaceFile, WORKSPACE_SEED);
+  }
+
+  runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", projenSpecifier], root);
 }
 
 function runSynth(root: string): void {

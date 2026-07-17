@@ -727,6 +727,10 @@ function initProject(
     project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
   }
 
+  // Newer projen auto-creates a `pnpm-workspace.yaml` for a pnpm NodeProject;
+  // drop it first so our own `DBXToolsPNPMWorkspace` (the source of truth) can
+  // claim the path without projen's "already a file under pnpm-workspace.yaml".
+  project.tryRemoveFile("pnpm-workspace.yaml");
   project.pnpmWorkspace = new DBXToolsPNPMWorkspace(project, options);
   project.rootTsconfig = new DBXToolsRootTsconfig(project);
   project.vsCode = new DBXToolsVsCode(project);

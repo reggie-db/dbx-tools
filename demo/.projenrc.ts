@@ -15,9 +15,65 @@
  * model picker, history, and threads - comes from the `@dbx-tools/*` packages;
  * the code here is just wiring.
  */
+import * as path from "node:path";
+import { Component, type Project } from "projen";
 import { project as projectApi } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
+
+/**
+ * Gitignore every projen-GENERATED (read-only) file across the demo tree -
+ * including the root/package manifests - so the committed demo carries only
+ * hand-authored source. This shows the full `dbxtools sync` story: copy the
+ * folder, run `dbxtools sync`, and EVERYTHING generated (package.json,
+ * pnpm-workspace.yaml, tsconfigs, `.projen/*`, vite config, barrels, ...) is
+ * regenerated from `.projenrc.ts` locally rather than shipped. `dbxtools sync`
+ * bootstraps even an otherwise-empty folder (pnpm init + seed the workspace),
+ * so nothing generated needs to be committed.
+ *
+ * Runs at preSynthesize (after every file/subproject exists) and walks the whole
+ * subtree, adding each read-only file's project-relative path to that project's
+ * own `.gitignore`.
+ */
+class IgnoreGeneratedFiles extends Component {
+  public override preSynthesize(): void {
+    const root = this.project.root;
+    // Write every ignore to the ROOT `.gitignore` (with paths relative to the
+    // root) rather than each child's own file. git applies the root's ignores
+    // tree-wide, and this sidesteps the engine's child-`.gitignore` drop logic
+    // (an empty child gitignore is removed at presynth, which raced with adding
+    // to it here and left some child files un-ignored).
+    root.gitignore.removePatterns("!/package.json");
+    for (const p of allProjects(root)) {
+      const prefix = relativePosix(root.outdir, p.outdir);
+      // `package.json` is projen-generated but kept WRITABLE (readonly === false)
+      // on a project root, so the readonly walk below misses it. Ignore it
+      // explicitly - `dbxtools sync` regenerates it (bootstrapping even an empty
+      // folder), so nothing generated needs to be committed.
+      root.gitignore.addPatterns(joinPosix(prefix, "package.json"));
+      for (const file of p.files) {
+        if (file.readonly) root.gitignore.addPatterns(joinPosix(prefix, file.path));
+      }
+    }
+  }
+}
+
+/** The project and every subproject beneath it, depth-first. */
+function* allProjects(project: Project): Generator<Project> {
+  yield project;
+  for (const sub of project.subprojects) yield* allProjects(sub);
+}
+
+/** Root-anchored (`/a/b`) gitignore path for a project file, POSIX-separated. */
+function joinPosix(prefix: string, file: string): string {
+  const rel = prefix ? `${prefix}/${file}` : file;
+  return `/${rel.replace(/\\/g, "/")}`;
+}
+
+/** `to` relative to `from`, POSIX-separated (empty when equal). */
+function relativePosix(from: string, to: string): string {
+  return path.relative(from, to).replace(/\\/g, "/");
+}
 
 const project = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/demo`,
@@ -30,6 +86,12 @@ const project = new projectApi.DBXToolsNodeProject({
   github: false,
   release: false,
   depsUpgrade: false,
+  // Track the latest published engine (any version) rather than a pinned
+  // `^0.0.0`. `engineSelfDependency` reuses whatever specifier the consumer
+  // already declares for `@dbx-tools/projen`, so declaring `*` here keeps the
+  // demo on the newest engine on the registry - matching how the feature deps
+  // below use `@*`.
+  devDeps: ["@dbx-tools/projen@*"],
 });
 
 // Runtime deps the Mastra agent framework + email add-on pull in. The
@@ -113,5 +175,9 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
   // app (which owns the Tailwind build) must provide it.
   p.addDeps("tw-animate-css@catalog:");
 });
+
+// Gitignore all generated files so the committed demo is hand-authored source
+// only - a copied folder regenerates them via `dbxtools sync` / `pnpm install`.
+new IgnoreGeneratedFiles(project);
 
 project.synth();
