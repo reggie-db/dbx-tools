@@ -16,6 +16,17 @@
  * `<pkg>/index.ts`, deepen paths (`./x` -> `./src/x`), then rewrite each line to
  * `export * as <name> from "./src/x"` (camelCase namespace from path segments;
  * invalid identifiers suffixed with `Module`).
+ *
+ * On top of the namespace lines, every TYPE export that is UNIQUE across the
+ * package (declared in exactly one module) is also HOISTED to the barrel's top
+ * level via `export type { ... }`, so consumers can write `GenieMessage` instead
+ * of `genieModel.GenieMessage`. Values (functions, classes, consts, enums) are
+ * NOT hoisted - they keep the module namespace (`string.toSlug(...)`), which
+ * keeps runtime call sites explicitly namespaced. A type declared by two or more
+ * modules is ambiguous and stays namespace-only; `export type { ... }` is
+ * required under `isolatedModules`. Names a hand-authored `exports.ts` declares
+ * are never hoisted (that file wins).
+ *
  * The result gets an optional caller {@link BarrelModifier}, then a do-not-edit
  * header + read-only bit (see `./generated`).
  */
@@ -27,13 +38,8 @@ import { find } from "@dbx-tools/shared-file-scan";
 import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
 import { logger } from "./log";
-import {
-  escapeRegExp,
-  isModuleFile,
-  repoRoot,
-  toPosix,
-  workspacePackages,
-} from "./workspace";
+import { moduleExports } from "./module-exports";
+import { escapeRegExp, isModuleFile, repoRoot, toPosix, workspacePackages } from "./workspace";
 
 const log = logger.withTag("projen:barrels");
 const require = createRequire(import.meta.url);
@@ -55,7 +61,8 @@ const EXPORT_STATEMENT_TYPES = new Set([
 ]);
 
 // Lazy so importing this module during synth does not require the parser yet.
-let parseFn: ((code: string, options?: Record<string, unknown>) => { body: { type: string }[] }) | undefined;
+let parseFn:
+  ((code: string, options?: Record<string, unknown>) => { body: { type: string }[] }) | undefined;
 function parseModuleExports(code: string, file: string): { body: { type: string }[] } {
   parseFn ??= require("@typescript-eslint/typescript-estree").parse;
   const ext = extname(file).toLowerCase();
@@ -78,7 +85,9 @@ function hasExport(file: string): boolean {
   }
 
   try {
-    return parseModuleExports(source, file).body.some((stmt) => EXPORT_STATEMENT_TYPES.has(stmt.type));
+    return parseModuleExports(source, file).body.some((stmt) =>
+      EXPORT_STATEMENT_TYPES.has(stmt.type),
+    );
   } catch {
     return false;
   }
@@ -110,10 +119,10 @@ function modulePathToNamespace(modulePath: string): string {
     segments.length === 1
       ? segments[0]!
       : segments[0]! +
-      segments
-        .slice(1)
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-        .join("");
+        segments
+          .slice(1)
+          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+          .join("");
   if (!isIdentifier(name)) {
     name = `${name}Module`;
   }
@@ -132,6 +141,74 @@ function namespaceBarrelExports(content: string): string {
       return `export * as ${ns} from "${modulePath}";`;
     })
     .join("\n");
+}
+
+/** A `./src/x` module path parsed out of a generated `export * as <ns>` line. */
+function namespaceLines(content: string): { ns: string; modulePath: string }[] {
+  const out: { ns: string; modulePath: string }[] = [];
+  for (const line of content.split("\n")) {
+    const match = /^export \* as (\w+) from "(\.\/src\/.+)";\s*$/.exec(line);
+    if (match) out.push({ ns: match[1]!, modulePath: match[2]! });
+  }
+  return out;
+}
+
+/**
+ * Append hoisted top-level `export type { ... }` re-exports for every TYPE
+ * export that is UNIQUE across the package's modules. Values are never hoisted
+ * (they keep the module namespace). A type declared by two or more modules is
+ * ambiguous and left namespace-only. `suppress` names (a hand-authored
+ * `exports.ts` surface) are never hoisted so that file stays authoritative.
+ */
+function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<string>): string {
+  const namespaces = namespaceLines(content);
+  if (namespaces.length === 0) return content;
+
+  // A hoisted name must never collide with a generated `export * as <ns>`
+  // namespace (e.g. a `mixin.ts` exporting a `mixin` value alongside the
+  // `export * as mixin` line), so treat every namespace id as suppressed too.
+  const blocked = new Set<string>(suppress);
+  for (const { ns } of namespaces) blocked.add(ns);
+
+  // Only TYPE exports are hoisted, so uniqueness is tallied over types alone:
+  // name -> { count, owning module }, to find types declared in exactly one module.
+  const seen = new Map<string, { count: number; modulePath: string }>();
+  const perModule = new Map<string, string[]>();
+  for (const { modulePath } of namespaces) {
+    const abs = join(pkgDir, modulePath.replace(/^\.\//, ""));
+    const typeNames = moduleExports(withTsExt(abs))
+      .filter((e) => e.isType)
+      .map((e) => e.name);
+    perModule.set(modulePath, typeNames);
+    for (const name of typeNames) {
+      const prior = seen.get(name);
+      if (prior) prior.count += 1;
+      else seen.set(name, { count: 1, modulePath });
+    }
+  }
+
+  const lines: string[] = [];
+  for (const { modulePath } of namespaces) {
+    const types: string[] = [];
+    for (const name of perModule.get(modulePath) ?? []) {
+      if (blocked.has(name)) continue;
+      const entry = seen.get(name);
+      // Unique across the package AND this is the module that owns it.
+      if (!entry || entry.count !== 1 || entry.modulePath !== modulePath) continue;
+      types.push(name);
+    }
+    if (types.length) lines.push(`export type { ${types.join(", ")} } from "${modulePath}";`);
+  }
+  if (lines.length === 0) return content;
+  return `${content.replace(/\n+$/, "")}\n${lines.join("\n")}\n`;
+}
+
+/** Resolve a barrel module path (`./src/x`, extensionless) to its on-disk `.ts(x)` file. */
+function withTsExt(absNoExt: string): string {
+  for (const ext of [".ts", ".tsx", ".mts", ".cts"]) {
+    if (existsSync(absNoExt + ext)) return absNoExt + ext;
+  }
+  return `${absNoExt}.ts`;
 }
 
 /** Hand-authored override barrel: a sibling of the generated `index.ts`. */
@@ -263,6 +340,11 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   );
   rmSync(tmpBarrel, { force: true });
   if (modifier) content = modifier(content, { packageDir: pkgDir });
+  // Hoist package-unique named exports to the top level. Names a hand-authored
+  // `exports.ts` declares are suppressed so that file stays authoritative.
+  const customPath = join(pkgDir, CUSTOM_EXPORTS_FILE);
+  const suppress = existsSync(customPath) ? customExportNames(customPath) : new Set<string>();
+  content = hoistUniqueExports(content, pkgDir, suppress);
   // A sibling `exports.ts` overrides/extends the generated barrel and wins on conflict.
   content = mergeCustomExports(content, pkgDir);
 

@@ -4,3 +4,4 @@
 
 export * as client from "./src/client";
 export * as schema from "./src/schema";
+export type { paths, webhooks, components, $defs, operations } from "./src/schema";

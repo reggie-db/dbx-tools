@@ -49,6 +49,9 @@ const DEFAULT_CATALOG: Catalog = {
   tsoa: "^6.6.0",
   concurrently: "^10.0.3",
   pnpm: "^11.0.6",
+  // Optional logger: shared-core's `log` module lazy-imports it and degrades to
+  // a console fallback when it's absent, so consumers can leave it uninstalled.
+  consola: "^3.4.2",
   "@databricks/appkit": "^0.43.0",
   "@databricks/appkit-ui": "^0.43.1",
   "@databricks/sdk-experimental": "^0.17.0",

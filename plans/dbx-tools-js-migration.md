@@ -66,13 +66,13 @@ building block at a time, bottom of the dependency tree up.
 ## `-js` internal dependency tree (bottom-up order)
 
 ```
-shared            LEAF   ✅ DONE (folded into shared-core)
+shared            LEAF   ✅ DONE (browser-safe half → shared-core; node half → node-core; log + logger in core)
 sdk-shared        LEAF   ✅ DONE (as shared-sdk-model, via new codegen subsystem)
 model-shared      LEAF   ✅ DONE (as shared-model)
 appkit-email-shared LEAF        (zod contract, feature-specific — not started)
 genie-shared      → sdk-shared, shared   ✅ DONE (as shared-genie)
-genie             → genie-shared, shared (+ @databricks/sdk-experimental)   ⏭  NEXT (server driver, big)
-model             → model-shared, shared
+genie             → genie-shared, shared (+ @databricks/sdk-experimental)   ✅ DONE (as node-genie; SDK glue → node-appkit)
+model             → model-shared, shared   ⏭  NEXT
 model-proxy       → model, shared
 appkit-config     → shared
 appkit-ui         → shared
@@ -96,7 +96,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `cf4a75b` | Rename shared-model `protocol.ts` → `model.ts`; force-add its test. |
 | `8c94f10` | **Codegen subsystem + `shared-sdk-model`** — see below. |
 | `6901ffa` | **Codegen on synth (drop task/watch) + port `genie-shared` → `@dbx-tools/shared-genie`** — see below. |
-| (pending commit) | **Browser-safe core split**: `exec`/`project` → new `@dbx-tools/node-core`; shared-core now agnostic (`WebWorker` lib); file-scan retagged `node`; AppKit + sdk-experimental hardcoded in `DEFAULT_CATALOG`. See "Resolved: browser-safe core split" below. |
+| `0d8e6c1` | **Browser-safe core split**: `exec`/`project` → new `@dbx-tools/node-core`; shared-core now agnostic (`WebWorker` lib); file-scan retagged `node`; AppKit + sdk-experimental hardcoded in `DEFAULT_CATALOG`. See "Resolved: browser-safe core split" below. |
+| (pending commit) | **Barrel type-hoisting + `log` in core + `node-appkit` + port `genie` server → `@dbx-tools/node-genie`.** See "Barrel type-hoisting", "node-appkit", and "node-genie" below. |
 
 ### shared-core surface now available
 
@@ -218,22 +219,67 @@ Result: `shared-core` and `shared-genie` (and every package) compile clean;
 defaults in `DEFAULT_CATALOG` (this repo is Databricks-steered), so the per-repo
 `addCatalog` overrides were dropped.
 
-## ⏭ NEXT: port `genie` (server chat/space driver) → `@dbx-tools/…`
+## Barrel type-hoisting (NEW — pending commit)
 
-The server-side driver that consumes `shared-genie`. Bigger: needs
-`@databricks/sdk-experimental` at **runtime** (WorkspaceClient) and pulls
-`apiUtils`/`logUtils`/`commonUtils` from `-js shared` that are NOT in shared-core
-yet — so it forces a shared-core server-surface expansion first. Likely
-`node`-tagged. Scope with the user before starting; consider whether
-`apiUtils`/`logUtils` land in shared-core (node-tagged additions) or a new
-server-shared package. The `chat.ts`/`poll-chat.ts` tests in `-js genie/test`
-port alongside it (the pure event tests already moved to shared-genie).
+The barrel generator now HOISTS type exports to each package's top level, on top
+of the `export * as <ns>` namespace lines. A TYPE (interface / type alias /
+`export type`) that is UNIQUE across the package (declared in exactly one module)
+is re-emitted as `export type { X } from "./src/mod"`, so consumers write
+`GenieMessage` instead of `genieModel.GenieMessage`. Rules:
+
+- **Types only.** Values (functions, classes, consts, enums) are NOT hoisted -
+  they keep the module namespace (`string.toSlug(...)`), so runtime call sites
+  stay explicitly namespaced. (Per user direction.)
+- **Unique only.** A type name declared by 2+ modules is ambiguous → namespace-only.
+- **No namespace collisions.** A type whose name equals a generated namespace id
+  (e.g. a `mixin` value's module) is left namespace-only.
+- **`export type { ... }`** is required under `isolatedModules` (TS1205).
+- A hand-authored `exports.ts` still wins; names it declares aren't hoisted.
+
+Implementation: `workspaces/shared/projen/src/module-exports.ts` extracts a
+module's own named exports via **oxc-parser** (fast, TS-aware; `exportKind`
+distinguishes type vs value, declaration kinds tag interfaces/aliases).
+Overloaded functions are de-duped per module. `barrels.ts` tallies type-name
+uniqueness across the package's modules and appends the `export type { ... }`
+lines. Engine dep added: **`oxc-parser`**. Existing consumers were rewritten to
+the flat type form (`iterable.OneOrMany` → `OneOrMany`, `predicate.Predicate` →
+`Predicate`, `async.PollContext` → `PollContext`, etc.), keeping namespaces only
+for value calls.
+
+## `log` in shared-core (NEW — pending commit)
+
+Ported `-js shared/log.ts` → `shared-core/src/log.ts` — the one logger the whole
+monorepo shares (`log.logger("tag")`, `log.isLevelEnabled`). Browser-safe:
+`process` / `Bun` / `window` reached through `globalThis` and guarded; consola
+and `node:util` load lazily (console fallback covers their absence). consola is
+an **optional peer** of shared-core (`peerDependenciesMeta.optional`), pinned via
+the hardcoded `DEFAULT_CATALOG` `consola` entry.
+
+## `node-appkit` (NEW — pending commit)
+
+`@dbx-tools/node-appkit` (`workspaces/node/appkit`, `node`-tagged) — the base for
+Node-side AppKit + experimental-SDK helpers. Houses `context.ts`: the SDK
+`Context`/`AbortSignal` adapter (`toContext`, `ContextLike`) ported from `-js`
+`apiUtils`, using shared-core `async.tieAbortSignal`. The SDK is a runtime dep
+here so the browser-safe shared-core stays SDK-free. (Only the cancellation glue
+genie needs was ported; `errorContext`/`getWorkspaceUrl`/`getWorkspaceId` were
+left for a later pass.)
+
+## `node-genie` (NEW — pending commit) — server chat/space driver
+
+Ported `-js genie` → `@dbx-tools/node-genie` (`workspaces/node/genie`,
+`node`-tagged): `chat.ts` (`genieChat` low-level poll stream + `genieEventChat`
+event stream) and `space.ts` (`getGenieSpace` + `genieSampleQuestions`). Import
+repoints: `logUtils.logger` → `log.logger`; `apiUtils.toContext`/`ContextLike` →
+node-appkit `context.*`; `commonUtils.poll`/`PollContext` → `async.poll` /
+flat `PollContext`; `commonUtils.errorMessage` → `error.errorMessage`;
+`stringUtils.firstNonEmpty` → `string.firstNonEmpty`; genie-shared values via the
+`genieModel`/`event` namespaces, types flat. `@databricks/appkit` is an OPTIONAL
+peer (lazy-imported; env-var auth fallback). The `-js` `chat.ts`/`poll-chat.ts`
+runtime smoke tests were NOT ported (they hit a live workspace).
 
 ## Later passes (not yet scoped)
 
-- `genie` (server chat driver) — forces porting `apiUtils`/`logUtils` (+ the
-  appkit context helpers) from `-js shared` into shared-core's server surface,
-  and taking `@databricks/sdk-experimental` as a runtime dep. Big.
 - `model` / `model-proxy` — server model resolution/ranking + local OpenAI proxy.
 - `appkit-*` family — needs `@databricks/appkit` (peer), React (`ui` tag), Mastra.
   These are the heaviest; scope each individually.

@@ -4,3 +4,4 @@
 
 export * as exec from "./src/exec";
 export * as project from "./src/project";
+export type { ExecStdio, LineHandler, StdioOption, ExecResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec";

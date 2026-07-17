@@ -6,7 +6,7 @@
  * {@link DBXToolsNodeProject} (monorepo root) and {@link DBXToolsTypeScriptProject}
  * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
  */
-import { iterable, string } from "@dbx-tools/shared-core";
+import { string, type OneOrMany } from "@dbx-tools/shared-core";
 import { ignore, match } from "@dbx-tools/shared-file-scan";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -112,7 +112,7 @@ export class PackageIdentifier {
    * segment is tokenized with {@link string.tokenize}, so nested folders
    * split into their own dash-joined name parts.
    */
-  static of(...names: iterable.OneOrMany<string>): PackageIdentifier {
+  static of(...names: OneOrMany<string>): PackageIdentifier {
     const segments = names.flatMap((part) => part.split("/")).filter(Boolean);
     const scope = segments.length ? string.toSlug(segments[0]!) : "";
     const nameParts = [

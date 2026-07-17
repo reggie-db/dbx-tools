@@ -28,6 +28,7 @@
     "constructs": "^10.0.0",
     "is-identifier": "^1",
     "openapi-typescript": "^7.13.0",
+    "oxc-parser": "^0.90.0",
     "p-memoize": "^8.0.0",
     "projen": "^0.101.4",
     "ts-to-zod": "^5.1.0",

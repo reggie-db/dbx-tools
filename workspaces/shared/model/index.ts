@@ -4,3 +4,5 @@
 
 export * as classify from "./src/classify";
 export * as model from "./src/model";
+export type { FamilyClass } from "./src/classify";
+export type { ModelProfile, ServingEndpointSummary, ModelQuery, RankedModel } from "./src/model";

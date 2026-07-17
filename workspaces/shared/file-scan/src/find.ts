@@ -1,4 +1,4 @@
-import { iterable } from "@dbx-tools/shared-core";
+import { iterable, type Sequence } from "@dbx-tools/shared-core";
 import { globIterateSync, IgnoreLike, type GlobOptionsWithFileTypesUnset } from "glob";
 import { ignorePathMatcher } from "./ignore";
 import { PathMatcher, PathMatchInput, pathMatchTests, toPathMatcher } from "./match";
@@ -22,10 +22,7 @@ export interface FileFindOptions
  * in which case only that predicate applies). The ignore list mirrors what
  * {@link watchFiles} feeds through its matchers.
  */
-export function findFiles(
-  pattern: string | string[],
-  options?: FileFindOptions,
-): iterable.Sequence<string> {
+export function findFiles(pattern: string | string[], options?: FileFindOptions): Sequence<string> {
   return iterable.sequence(globIterateSync(pattern, toGlobOptions(options)));
 }
 

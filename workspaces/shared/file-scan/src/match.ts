@@ -1,19 +1,24 @@
 /**
  * Path matching and predicate composition for file scanning and watching.
  *
- * {@link toPathMatcher} compiles globs into {@link predicate.Predicate} values from
+ * {@link toPathMatcher} compiles globs into {@link Predicate} values from
  * shared-core (`and` / `or` / `negate`) for use by {@link findFiles} and
  * {@link watchFiles}.
  */
 
-import { iterable, predicate } from "@dbx-tools/shared-core";
+import {
+  iterable,
+  predicate,
+  type Predicate,
+  type PredicateFunction,
+} from "@dbx-tools/shared-core";
 import { Minimatch } from "minimatch";
 import { ignorePathMatcher } from "./ignore";
 
-export type PathMatchPredicate = predicate.PredicateFunction<string>;
+export type PathMatchPredicate = PredicateFunction<string>;
 
 /** A composable path test (`true` == match). */
-export type PathMatcher = predicate.Predicate<string>;
+export type PathMatcher = Predicate<string>;
 
 /**
  * Anything {@link toPathMatcher} accepts: a glob string (compiled with

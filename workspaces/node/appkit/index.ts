@@ -2,6 +2,5 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as greetingController from "./src/greetingController";
-export * as server from "./src/server";
-export type { Greeting } from "./src/greetingController";
+export * as context from "./src/context";
+export type { ContextLike } from "./src/context";

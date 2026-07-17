@@ -5,7 +5,7 @@
  * compose the `predicate.hasName` / `predicate.hasTag` / `predicate.inRelPath`
  * builders from `./project`.
  */
-import type { predicate } from "@dbx-tools/shared-core";
+import type { Predicate } from "@dbx-tools/shared-core";
 import type { IConstruct, IMixin as ConstructsMixin } from "constructs";
 
 export type { ConstructsMixin };
@@ -13,11 +13,11 @@ export type { ConstructsMixin };
 /**
  * Builds a {@link ConstructsMixin} from `supports` and `applyTo` callbacks.
  *
- * When `supports` is a type guard (`construct is U`) or a {@link predicate.Predicate},
+ * When `supports` is a type guard (`construct is U`) or a {@link Predicate},
  * `applyTo` receives the narrowed `U`.
  */
 export function mixin<U extends IConstruct>(
-  supports: predicate.Predicate<IConstruct, U>,
+  supports: Predicate<IConstruct, U>,
   applyTo: (construct: U) => void,
 ): ConstructsMixin;
 

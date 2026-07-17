@@ -13,7 +13,7 @@ catalogs:
       specifier: ^0.43.0
       version: 0.43.1
     '@databricks/appkit-ui':
-      specifier: ^0.43.0
+      specifier: ^0.43.1
       version: 0.43.1
     '@databricks/sdk-experimental':
       specifier: ^0.17.0
@@ -36,6 +36,9 @@ catalogs:
     commander:
       specifier: ^15.0.0
       version: 15.0.0
+    consola:
+      specifier: ^3.4.2
+      version: 3.4.2
     express:
       specifier: ^5.1.0
       version: 5.2.1
@@ -368,6 +371,25 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workspaces/node/appkit:
+    dependencies:
+      '@databricks/sdk-experimental':
+        specifier: 'catalog:'
+        version: 0.17.0
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   workspaces/node/core:
     dependencies:
       '@dbx-tools/shared-core':
@@ -384,11 +406,42 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workspaces/node/genie:
+    dependencies:
+      '@databricks/sdk-experimental':
+        specifier: 'catalog:'
+        version: 0.17.0
+      '@dbx-tools/node-appkit':
+        specifier: workspace:*
+        version: link:../appkit
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+      '@dbx-tools/shared-genie':
+        specifier: workspace:*
+        version: link:../../shared/genie
+    devDependencies:
+      '@databricks/appkit':
+        specifier: 'catalog:'
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   workspaces/shared/core:
     devDependencies:
       '@types/node':
         specifier: ^24.6.0
         version: 24.13.3
+      consola:
+        specifier: 'catalog:'
+        version: 3.4.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -500,6 +553,9 @@ importers:
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
+      oxc-parser:
+        specifier: ^0.90.0
+        version: 0.90.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
       p-memoize:
         specifier: ^8.0.0
         version: 8.0.0
@@ -2532,9 +2588,107 @@ packages:
     peerDependencies:
       '@opentelemetry/api': ^1.1.0
 
+  '@oxc-parser/binding-android-arm64@0.90.0':
+    resolution: {integrity: sha512-0po5R8DKsMujj9COlJxzonn/BhnXN4ZTN8+L3D5J3nTYkEhL06yLwgZCxAHWwqO85mfQvfMFiInVjcLeJWwXhQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+
+  '@oxc-parser/binding-darwin-arm64@0.90.0':
+    resolution: {integrity: sha512-TbO8qXB0KbgRdja2UsDeIW7KMFYE5guWXucXR8fZ5W9O9RQMZmGRNQpFgoQ4gd0bvItka8E5XimP7EI79NQXSw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@oxc-parser/binding-darwin-x64@0.90.0':
+    resolution: {integrity: sha512-MOUs6wdlwbjdI32z+DfEAjBL/ds7TA5uDRTlzajkRtgtpTJoIdNrvSyG7ndRK4pW72pohQhX5GSRSjKkeoaEMg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [darwin]
+
+  '@oxc-parser/binding-freebsd-x64@0.90.0':
+    resolution: {integrity: sha512-sBXVswFVSCQnxr4iKgHyF8D3E3lpvlgZhwK2jfhsO8sfEkETeAQUtuHixN6IH7KVAX7YpdeXQy0UT9mUbvuCIw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@oxc-parser/binding-linux-arm-gnueabihf@0.90.0':
+    resolution: {integrity: sha512-teB+KYJU/9BfkHA5wY0S5OTwcmVogltq+ycRIxUEQ6oyXYqlDHZHIrSDbQjtlxwSn4fbZu9cL58K0eQ9XNRHkg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@oxc-parser/binding-linux-arm-musleabihf@0.90.0':
+    resolution: {integrity: sha512-HIQNBFxMWMqKWARJUj5lzX19jN9CFjMBjS3fji98xvPGixk712fL7YXmV7E1V6Wx+iRJcGwH/UrZBVTT28MWqA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@oxc-parser/binding-linux-arm64-gnu@0.90.0':
+    resolution: {integrity: sha512-06l5M3U8fj/V1pscAU6Rqh4YdCD5NqLxIZRZFFq4+8Bm3oeGMaZK0LxWYaqNUMWBaaF7dHpdP8GwLxGdFJ6UvA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-parser/binding-linux-arm64-musl@0.90.0':
+    resolution: {integrity: sha512-tvUIddTl8I9MDDzvsF3tII4zj0obyMyKemp4LrrqZsBCwrq8Dwh9gH7OCdv3bA2f42xI0/wIAYanleJQD1SDUA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@oxc-parser/binding-linux-riscv64-gnu@0.90.0':
+    resolution: {integrity: sha512-Dh81QQbBX9V1FOpc/9MOuWxWeSrDJ271xCW93JScuiMP7zK0KtgFA4UGCYzzMBukIcGa0F22uSkLGrflllkTTg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-parser/binding-linux-s390x-gnu@0.90.0':
+    resolution: {integrity: sha512-YxRkh2Ze8l/qfuMk2A6MQVQBtdDcuFJ30JKMH7WDLlUdHKIvHaND1LxqSaATES2k3p+CUd7CsVpJcGQh4jq5Pw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [s390x]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-parser/binding-linux-x64-gnu@0.90.0':
+    resolution: {integrity: sha512-0uQTO5UDcQcSucFoiLBAP0YQpDMLGnkLX1PsQaaArXubJcPq0AhB5QHesYNCFvFyHb7f1cdr62nVX6pTuY6isw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-parser/binding-linux-x64-musl@0.90.0':
+    resolution: {integrity: sha512-dA7O+xYmSTaYvfhFePDc1mhE98Brb5cyc+Gqc4KvDLc2aejLDk4GpMVKle1kqOt8F01DI0OnRqNLrzkYW7tDww==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@oxc-parser/binding-wasm32-wasi@0.90.0':
+    resolution: {integrity: sha512-eqJUW+dRkzgpiY3Sdcr4rMyANYCxTyYH69V074ftoIWNTvWU30dWCkpV/kUNbsn3uivjdJH9nQhxHG29putZSw==}
+    engines: {node: '>=14.0.0'}
+    cpu: [wasm32]
+
+  '@oxc-parser/binding-win32-arm64-msvc@0.90.0':
+    resolution: {integrity: sha512-nDQeb/KdTkNe2tYw6cc8xs222hg6KSA8T9HwJfKXdWhkmbIxm6TRob2HLtaJSrnX21n+Sv5u675POc17Jy5ANQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+
+  '@oxc-parser/binding-win32-x64-msvc@0.90.0':
+    resolution: {integrity: sha512-/suQV2+qhl6RT/19Zej6jVWYa6KauXkNLjnC4PDiA0QZj25B8JbYdnXqkIstet3whSFWDYXF/Fhzuz0cpC8BZg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
+
   '@oxc-project/runtime@0.92.0':
     resolution: {integrity: sha512-Z7x2dZOmznihvdvCvLKMl+nswtOSVxS2H2ocar+U9xx6iMfTp0VGIrX6a4xB1v80IwOPC7dT1LXIJrY70Xu3Jw==}
     engines: {node: ^20.19.0 || >=22.12.0}
+
+  '@oxc-project/types@0.90.0':
+    resolution: {integrity: sha512-fWvaufWUcLtm/OBKcNmxUkR0kQW5ZKAF0t03BXPqdzpxmnVCmSKzvUDRCOKnSagSfNzG/3ZdKpComH3GMy881g==}
 
   '@oxc-project/types@0.93.0':
     resolution: {integrity: sha512-yNtwmWZIBtJsMr5TEfoZFDxIWV6OdScOpza/f5YxbqUMJk+j6QX3Cf3jgZShGEFYWQJ5j9mJ6jM0tZHu2J9Yrg==}
@@ -7414,6 +7568,10 @@ packages:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
     engines: {node: '>= 0.4'}
 
+  oxc-parser@0.90.0:
+    resolution: {integrity: sha512-EdLFy70OU/V9mhyUwrsx+ohH+HcOuxCjmMktSnz6RI5dgATAHO7qTfRTbyjcMdzeZUXUI4ep2g16sFPNFPeDlQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+
   p-event@6.0.1:
     resolution: {integrity: sha512-Q6Bekk5wpzW5qIyUP4gdMEujObYstZl6DMMOSenwBvV0BlE5LkDwkjs5yHbZmdCEq2o4RJx4tE1vwxFVf2FG1w==}
     engines: {node: '>=16.17'}
@@ -12217,7 +12375,59 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/core': 2.9.0(@opentelemetry/api@1.9.0)
 
+  '@oxc-parser/binding-android-arm64@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-darwin-arm64@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-darwin-x64@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-freebsd-x64@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-arm-gnueabihf@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-arm-musleabihf@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-arm64-gnu@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-arm64-musl@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-riscv64-gnu@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-s390x-gnu@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-x64-gnu@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-linux-x64-musl@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-wasm32-wasi@0.90.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
+    dependencies:
+      '@napi-rs/wasm-runtime': 1.1.6(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
+    optional: true
+
+  '@oxc-parser/binding-win32-arm64-msvc@0.90.0':
+    optional: true
+
+  '@oxc-parser/binding-win32-x64-msvc@0.90.0':
+    optional: true
+
   '@oxc-project/runtime@0.92.0': {}
+
+  '@oxc-project/types@0.90.0': {}
 
   '@oxc-project/types@0.93.0': {}
 
@@ -17509,6 +17719,29 @@ snapshots:
       get-intrinsic: 1.3.0
       object-keys: 1.1.1
       safe-push-apply: 1.0.0
+
+  oxc-parser@0.90.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0):
+    dependencies:
+      '@oxc-project/types': 0.90.0
+    optionalDependencies:
+      '@oxc-parser/binding-android-arm64': 0.90.0
+      '@oxc-parser/binding-darwin-arm64': 0.90.0
+      '@oxc-parser/binding-darwin-x64': 0.90.0
+      '@oxc-parser/binding-freebsd-x64': 0.90.0
+      '@oxc-parser/binding-linux-arm-gnueabihf': 0.90.0
+      '@oxc-parser/binding-linux-arm-musleabihf': 0.90.0
+      '@oxc-parser/binding-linux-arm64-gnu': 0.90.0
+      '@oxc-parser/binding-linux-arm64-musl': 0.90.0
+      '@oxc-parser/binding-linux-riscv64-gnu': 0.90.0
+      '@oxc-parser/binding-linux-s390x-gnu': 0.90.0
+      '@oxc-parser/binding-linux-x64-gnu': 0.90.0
+      '@oxc-parser/binding-linux-x64-musl': 0.90.0
+      '@oxc-parser/binding-wasm32-wasi': 0.90.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@oxc-parser/binding-win32-arm64-msvc': 0.90.0
+      '@oxc-parser/binding-win32-x64-msvc': 0.90.0
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
 
   p-event@6.0.1:
     dependencies:

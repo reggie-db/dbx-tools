@@ -98,12 +98,46 @@ project.with(
     },
   ),
 
+  // shared-core: the browser-safe base every package builds on. consola is an
+  // OPTIONAL peer: the `log` module lazy-imports it and degrades to a console
+  // fallback when it's absent, so consumers may leave it uninstalled. Version
+  // tracks the hardcoded DEFAULT_CATALOG entry.
+  mixin.mixin(pkg("*/shared-core", "shared"), (p) => {
+    p.addPeerDeps("consola@catalog:");
+    p.package.addField("peerDependenciesMeta", { consola: { optional: true } });
+    // Present for local dev/typecheck; consumers opt in via the catalog.
+    p.addDevDeps("consola@catalog:");
+  }),
+
   // node-core: the Node-only half of the shared runtime (exec + project). Lives
-  // under workspaces/node/, so the `node` tag auto-applies (node types + ES2020
+  // under workspaces/node/, so the `node` tag auto-applies (node types + ES2022
   // lib, no DOM). shared-core stays browser-safe; anything needing child_process
   // / fs / process depends on node-core instead.
   mixin.mixin(pkg("*/node-core", "node"), (p) => {
     p.addDeps("@dbx-tools/shared-core@workspace:*");
+  }),
+
+  // node-appkit: the base for Node-side AppKit + experimental-SDK helpers.
+  // Houses the SDK Context/AbortSignal adapter so the browser-safe shared-core
+  // stays SDK-free. The Databricks SDK is a runtime dep here.
+  mixin.mixin(pkg("*/node-appkit", "node"), (p) => {
+    p.addDeps("@dbx-tools/shared-core@workspace:*", "@databricks/sdk-experimental@catalog:");
+  }),
+
+  // node-genie: the server-side Genie driver (live chat + space metadata).
+  // Consumes the browser-safe shared-genie contracts, node-appkit's SDK glue,
+  // and the SDK at runtime. AppKit is an OPTIONAL peer - the client resolver
+  // lazy-imports it and falls back to env-var auth when it's absent.
+  mixin.mixin(pkg("*/node-genie", "node"), (p) => {
+    p.addDeps(
+      "@dbx-tools/shared-core@workspace:*",
+      "@dbx-tools/shared-genie@workspace:*",
+      "@dbx-tools/node-appkit@workspace:*",
+      "@databricks/sdk-experimental@catalog:",
+    );
+    p.addPeerDeps("@databricks/appkit@catalog:");
+    p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
+    p.addDevDeps("@databricks/appkit@catalog:");
   }),
 
   // shared-file-scan: filesystem glob/watch package. It shells out (node-core
@@ -164,6 +198,7 @@ project.with(
       "@clack/prompts",
       "consola",
       "@typescript-eslint/typescript-estree@^8",
+      "oxc-parser@^0.90.0",
       "typescript@catalog:",
       "is-identifier@^1",
       "@dbx-tools/node-core@workspace:*",

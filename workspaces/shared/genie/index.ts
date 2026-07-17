@@ -4,3 +4,4 @@
 
 export * as event from "./src/event";
 export * as genieModel from "./src/genie-model";
+export type { MessageStatus, GenieThoughtType, GenieThought, KnownAttachmentType, AttachmentType, GenieQueryAttachment, GenieAttachment, GenieMessage, GenieResponse, GenieSpace, TerminalStatus, GenieChatLocation, QuestionEvent, MessageEvent, StatusEvent, AttachmentEvent, ThinkingEvent, TextEvent, QueryEvent, StatementEvent, RowsEvent, SuggestedQuestionsEvent, ResultEvent, GenieChatEvent, GenieChatEventType, GenieChatEventFields } from "./src/genie-model";

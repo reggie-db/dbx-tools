@@ -64,6 +64,11 @@
       "type": "runtime"
     },
     {
+      "name": "oxc-parser",
+      "version": "^0.90.0",
+      "type": "runtime"
+    },
+    {
       "name": "p-memoize",
       "type": "runtime"
     },
