@@ -21,6 +21,24 @@ Key features:
 - Lakebase cache-schema provisioning for deployments where the app identity must
   be granted access before persistent cache initialization.
 
+## Why Not Just AppKit?
+
+Use native AppKit directly when your app can read its required env vars before
+`createApp()` and does not need extra setup around plugin exports or config
+sources.
+
+Use this package when the friction is around bootstrapping and reuse:
+
+- AppKit plugins read Lakebase/Postgres env during initialization; this package
+  resolves and applies those values before setup.
+- AppKit exposes request context inside AppKit handlers; these helpers make code
+  safe to call from scripts, tests, and background jobs too.
+- AppKit plugin instances are generic; the lookup helpers keep sibling-plugin
+  access typed and errors actionable.
+- AppKit does not own your local CLI flags, bundle validation output, or
+  `app.yaml`; `config.resolveConfigValue()` gives setup scripts one resolution
+  path across those sources.
+
 ## Create An Auto-Configured App
 
 `createApp.createApp` is a drop-in wrapper around AppKit `createApp`. It runs

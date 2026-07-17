@@ -25,6 +25,26 @@ Key features:
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
+## Why Not Just AppKit Serving?
+
+Native AppKit's Model Serving plugin is the right choice when you already know
+the endpoint alias you want. It gives you authenticated invoke/stream routes,
+OBO execution, generated endpoint types, request-body filtering, and frontend
+hooks.
+
+Use this package before or beside that layer when the hard part is choosing the
+endpoint:
+
+- resolve loose human input such as `"sonnet"` or `"fast"` against the live
+  workspace catalogue;
+- group endpoints into capability classes like `chat-thinking`, `chat-balanced`,
+  `chat-fast`, and `embedding`;
+- enforce class ceilings so a caller can degrade to smaller models without
+  escalating to a larger one;
+- build model pickers and debug routes from a cached, enriched endpoint list;
+- keep local agents and CLIs working with a static fallback when catalogue
+  access is unavailable.
+
 ## Select One Model
 
 ```ts

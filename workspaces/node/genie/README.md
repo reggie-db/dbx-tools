@@ -24,6 +24,26 @@ Key features:
   CLI tools.
 - Fetches Genie space metadata and starter questions for UI suggestions.
 
+## Why Not Just AppKit Genie?
+
+Native AppKit's Genie plugin is the right choice for a standalone Genie chat
+experience: it provides named space aliases, SSE status updates, conversation
+history replay, query result fetching, OBO execution, and the AppKit UI
+`GenieChat` component.
+
+Use this package when Genie is one capability inside a larger agent or custom
+backend:
+
+- You want a low-level async iterator rather than an AppKit HTTP route.
+- You want raw message snapshots or a normalized event stream that can be fed
+  into Mastra writer events, logs, tests, or custom SSE endpoints.
+- You need to diff snapshots and emit only newly observed thinking, SQL, rows,
+  result, and error events.
+- You want to combine Genie answers with agent-side chart planning, statement
+  row fetches, or durable thread storage owned elsewhere.
+- You need the same driver to work inside AppKit with OBO auth and outside
+  AppKit from scripts using normal Databricks SDK auth.
+
 ## Stream Semantic Events
 
 ```ts

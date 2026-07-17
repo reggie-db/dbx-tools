@@ -28,6 +28,24 @@ Key features:
 - Export menu for print/PDF and Markdown, resolving charts and tables so
   exported conversations remain useful offline.
 
+## Why Not Just AppKit UI?
+
+Use native `@databricks/appkit-ui` when you need its general primitives, Genie
+chat component, or Model Serving hooks directly against native AppKit plugins.
+
+Use this package when the server is
+[`@dbx-tools/node-appkit-mastra`](../../node/appkit-mastra) and the UI needs to
+understand Mastra-specific behavior:
+
+- `@mastra/client-js` agent streaming plus the plugin's custom history, threads,
+  models, suggestions, feedback, chart, and statement routes.
+- Suspended `requireApproval` tool calls and resumed approve/deny streams.
+- Genie writer events rendered as inline tool progress, not just a terminal
+  answer.
+- `[chart:<id>]` and `[data:<id>]` assistant markers rendered as ECharts charts
+  and sortable tables.
+- Conversation export that resolves those embeds into Markdown or print/PDF.
+
 ## Add The Styles
 
 ```css

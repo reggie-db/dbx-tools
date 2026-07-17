@@ -21,6 +21,20 @@ Key features:
   and `OPENAI_MODEL` into a child process.
 - Programmatic Express app/server creation for tests and custom developer tools.
 
+## Why Not Just AppKit Serving?
+
+Use native AppKit Serving routes inside a Databricks App. They preserve AppKit's
+plugin lifecycle, OBO request context, generated types, and React hooks.
+
+Use this proxy for local tools that already speak the OpenAI API shape and know
+nothing about AppKit:
+
+- terminal chat clients and IDE integrations that only accept `OPENAI_BASE_URL`;
+- local experiments where Databricks SDK auth should mint the upstream token;
+- loose model names resolved through `@dbx-tools/node-model`;
+- test harnesses that need an Express server with Databricks-backed `/v1/*`
+  routes.
+
 ## Run The Proxy
 
 ```sh

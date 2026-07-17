@@ -9,6 +9,30 @@ making common app patterns more cumbersome than they need to be. The packages in
 this repo add opinionated defaults, shared schemas, AppKit plugins, UI helpers,
 and local developer tools while staying close to Databricks' own APIs.
 
+## Relationship To Native AppKit
+
+Use native AppKit first when it already gives you the exact surface you need.
+AppKit has strong built-in plugins for Analytics, Genie, Files, Lakebase, Model
+Serving, Jobs, Vector Search, and beta Agents, plus React UI primitives and
+hooks. `dbx-tools` is not a fork of that platform and should not replace AppKit
+for straightforward cases.
+
+Use these packages when the native surface gets repetitive or narrow for a real
+app:
+
+- you need Databricks defaults before AppKit plugins initialize, such as
+  Lakebase env discovery or layered config resolution;
+- you want Mastra's agent runtime, storage, tools, MCP, and broader ecosystem
+  while still running inside AppKit with OBO auth and Databricks plugin tools;
+- you want Genie output as typed async events that an agent or custom UI can
+  consume, enrich, and turn into chart/data embeds;
+- you want model selection by intent (`"sonnet"`, `"chat-fast"`) rather than
+  wiring every app to one serving endpoint alias;
+- you need local OpenAI-compatible development tooling on top of Databricks
+  Model Serving;
+- you need reusable UI surfaces for Mastra chat or human-approved email rather
+  than a one-off component in each app.
+
 ## What This Adds
 
 - **AppKit app defaults** — auto-configure Lakebase/Postgres env, resolve config

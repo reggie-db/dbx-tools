@@ -17,6 +17,13 @@ Key features:
 - One place to evolve UI build assumptions for feature packages such as
   [`@dbx-tools/ui-email`](../email) and [`@dbx-tools/ui-mastra`](../mastra).
 
+## Why Not Just AppKit UI?
+
+Use `@databricks/appkit-ui` directly in app code when you only need AppKit's
+components and hooks. This package exists for dbx-tools feature packages and
+hosts that want one stable import path for AppKit primitives, React/Tailwind Vite
+setup, Streamdown/shiki styling, and Tailwind source registration.
+
 ## Configure Vite
 
 ```ts

@@ -18,6 +18,19 @@ Key features:
 - Browser-safe types that allow clients to validate Genie payloads without
   bundling Databricks SDK runtime code.
 
+## Why Not Just AppKit Genie Types?
+
+Use AppKit's Genie plugin and UI types when you are building directly against
+the native AppKit Genie routes. Use this package when you need a browser-safe
+event vocabulary independent of AppKit transport:
+
+- validating raw Genie messages captured from the Databricks SDK;
+- replaying persisted snapshots into semantic events;
+- sharing a flat event union between `@dbx-tools/node-genie`,
+  `@dbx-tools/node-appkit-mastra`, and custom UI/tests;
+- detecting attachment/status shapes that are present on the live wire but not
+  always convenient in generated SDK types.
+
 ## Validate Genie Wire Payloads
 
 ```ts

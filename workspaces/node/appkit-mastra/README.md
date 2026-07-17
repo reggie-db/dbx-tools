@@ -26,6 +26,27 @@ Key features:
 - Operational surfaces: model-list routes, feedback routes, MCP exposure,
   scoped API gating, tracing, and MLflow feedback are bundled with the plugin.
 
+## Why Not Just AppKit Agents?
+
+Native AppKit includes a beta Agents plugin with markdown and TypeScript agent
+definitions, AppKit tool-provider integration, streaming chat, thread
+management, cancellation, and HITL approval. Use it when you want the AppKit
+agent model and do not need a separate agent framework.
+
+Use this package when you specifically want Mastra inside AppKit:
+
+- Mastra's larger plugin/tool ecosystem, MCP support, memory/storage model,
+  workflow primitives, and `@mastra/client-js` stream shape.
+- AppKit toolkits as Mastra tools, so Analytics, Files, Genie, and other AppKit
+  ToolProvider plugins stay available without rewriting them.
+- Genie as an agent tool that emits typed progress events, result metadata, and
+  delayed chart/data markers into the same assistant turn.
+- A paired React client in [`@dbx-tools/ui-mastra`](../../ui/mastra) with model
+  picking, thread sidebar, approvals, feedback, exports, and inline embeds.
+- Per-request model override and fuzzy endpoint resolution through
+  [`@dbx-tools/node-model`](../model), instead of binding every agent to a fixed
+  endpoint name.
+
 ## Quick Start
 
 ```ts
