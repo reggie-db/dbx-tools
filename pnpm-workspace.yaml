@@ -14,6 +14,7 @@ packages:
   - workspaces/cli/dbx-tools
   - workspaces/cli/model-proxy
   - workspaces/node/appkit
+  - workspaces/node/appkit-config
   - workspaces/node/core
   - workspaces/node/file-scan
   - workspaces/node/genie

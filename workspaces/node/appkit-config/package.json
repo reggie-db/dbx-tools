@@ -1,5 +1,9 @@
 {
-  "name": "@dbx-tools/node-appkit",
+  "name": "@dbx-tools/node-appkit-config",
+  "bin": {
+    "appkit-config-env": "./bin/appkit-config-env.ts",
+    "appkit-config-env.ts": "bin/appkit-config-env.ts"
+  },
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -12,20 +16,16 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@databricks/appkit": "catalog:",
     "@types/node": "catalog:",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
-  "peerDependencies": {
-    "@databricks/appkit": "catalog:"
-  },
   "dependencies": {
-    "@databricks/sdk-experimental": "catalog:",
+    "@databricks/appkit": "catalog:",
+    "@dbx-tools/node-appkit": "workspace:*",
     "@dbx-tools/node-core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
-    "yaml": "^2.9.0",
-    "zod": "catalog:"
+    "commander": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -36,11 +36,6 @@
   "exports": {
     ".": "./index.ts",
     "./package.json": "./package.json"
-  },
-  "peerDependenciesMeta": {
-    "@databricks/appkit": {
-      "optional": true
-    }
   },
   "dbxToolsConfig": {
     "tags": [

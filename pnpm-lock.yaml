@@ -407,13 +407,50 @@ importers:
       '@databricks/sdk-experimental':
         specifier: 'catalog:'
         version: 0.17.0
+      '@dbx-tools/node-core':
+        specifier: workspace:*
+        version: link:../core
       '@dbx-tools/shared-core':
         specifier: workspace:*
         version: link:../../shared/core
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
     devDependencies:
       '@databricks/appkit':
         specifier: 'catalog:'
         version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  workspaces/node/appkit-config:
+    dependencies:
+      '@databricks/appkit':
+        specifier: 'catalog:'
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+      '@dbx-tools/node-appkit':
+        specifier: workspace:*
+        version: link:../appkit
+      '@dbx-tools/node-core':
+        specifier: workspace:*
+        version: link:../core
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+      commander:
+        specifier: 'catalog:'
+        version: 15.0.0
+    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3

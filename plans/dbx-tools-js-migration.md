@@ -89,8 +89,8 @@ genie-shared      → sdk-shared, shared   ✅ DONE (as shared-genie)
 genie             → genie-shared, shared (+ @databricks/sdk-experimental)   ✅ DONE (as node-genie; SDK glue → node-appkit)
 model             → model-shared, shared   ✅ DONE (as node-model; AppKit glue → node-appkit)
 model-proxy       → model, shared   ✅ DONE (as cli/model-proxy → @dbx-tools/model-proxy)
-appkit-config     → shared   ⏭  NEXT
-appkit-ui         → shared
+appkit-config     → shared   ✅ DONE (as node-appkit-config; config subsystem → node-appkit/node-core)
+appkit-ui         → shared   (React `ui` tag — deferred, skip -ui pass)
 appkit-email      → appkit-email-shared, shared
 appkit-email-ui   → appkit-email-shared, appkit-ui, shared
 genie-shared/…    (see genie family above)
@@ -119,7 +119,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `2be03d0` | Fold `deepEqual`/`DeepEqualComparator` into `object.ts`; drop `equal.ts`. |
 | `c11c842` | **Port `model` server → `@dbx-tools/node-model`** + reorganize node-appkit into `databricks.ts` (SDK glue: `toContext`/`ContextLike`/`isAppEnv`) / `appkit.ts` (execution context: `WorkspaceClientLike`/`tryGetExecutionContext`/`ensureInitialized`) / `plugin.ts` (plugin lookup: `data`/`instance`/`require`). Moved `isDatabricksAppEnv` out of shared-core `runtime.ts` → `databricks.isAppEnv` (Node-only). See "node-model" below. |
 | `45ab168` | **Port `model-proxy` → `@dbx-tools/model-proxy`** (`workspaces/cli/model-proxy`, `cli`-tagged, ships the `model-proxy` bin). See "model-proxy" below. |
-| (pending commit) | **READMEs are hand-written** (engine no longer seeds projen's `# replace this` SampleReadme; `initProject` drops the README component). Wrote real READMEs for all ported packages. **Port `appkit-email-shared` → `@dbx-tools/shared-email`** (browser-safe zod email contract). |
+| `e7065e1` | **READMEs are hand-written** (engine no longer seeds projen's `# replace this` SampleReadme; `initProject` drops the README component). Wrote real READMEs for all ported packages. **Port `appkit-email-shared` → `@dbx-tools/shared-email`** (browser-safe zod email contract). |
+| (pending commit) | **Config subsystem + port `appkit-config` → `@dbx-tools/node-appkit-config`.** Added `config` (app.yaml/bundle/env resolution) to node-appkit and `name`/`resolveProjectRoots`/`parseGitRemote`/`stat` to node-core's `project`. See "node-appkit config" + "node-appkit-config" below. |
 
 ### shared-core surface now available
 
@@ -353,9 +354,34 @@ Ported `-js appkit-email-shared` → `@dbx-tools/shared-email`
 `email.emailMessageSchema` (types hoisted flat: `EmailMessage`, `EmailResult`,
 `EmailAttachment`, `EmailSenders`). Unblocks the `appkit-email` sender later.
 
+## `node-appkit-config` — AppKit auto-configuration
+
+Ported `-js appkit-config` → `@dbx-tools/node-appkit-config` (`workspaces/node/`,
+`node`-tagged; ships the `appkit-config-env` bin). A drop-in `createApp` that
+resolves Lakebase Postgres (env / config / Lakebase Autoscaling REST API, with
+reverse-lookup / pick / auto-create) and grants the AppKit cache schema before
+delegating to AppKit's `createApp`. Modules: `create-app`, `lakebase-resolver`,
+`pgaddress` (pure, copied verbatim), `provision`, `env-export` (pure).
+
+The config-resolution subsystem it needed landed as agreed:
+- **node-appkit `config.ts`** — `resolveConfigValue` + `app.yaml`/bundle-validate
+  readers + env flatten. Deps: zod + `yaml` (light; `app.yaml` is a
+  Databricks-app concept). `Bun.YAML.parse` → the `yaml` package.
+- **node-core `project.ts`** — added `name` / `resolveProjectRoots` /
+  `parseGitRemote` / `stat` alongside the existing sync `root`. The `-js` async
+  `name`/`resolveProjectRoots` became sync (they only shell out via spawnSync),
+  so `await projectUtils.name()` → `project.name()`.
+
+Repoints: `configUtils.resolveConfigValue` → node-appkit `config` (aliased
+`appConfig` to avoid clashing with `config` params); `projectUtils.name` →
+node-core `project.name`; `logUtils`→`log`, `commonUtils.errorMessage`→`error`,
+`commonUtils.isDatabricksAppEnv`→`databricks.isAppEnv`, `stringUtils`→`string`.
+`@databricks/appkit` is a runtime dep (wraps `createApp`/`createLakebasePool`).
+
 ## Later passes (not yet scoped)
 
-- `appkit-*` family — needs `@databricks/appkit` (peer), React (`ui` tag), Mastra.
+- **`-ui` React packages** (`appkit-ui`, `appkit-email-ui`, `appkit-mastra-ui`) —
+  need the `ui` tag + React; deliberately skipped in the server-side pass.
   These are the heaviest; scope each individually.
 - `appkit-email-shared` — small zod contract, easy, can slot in anytime.
 

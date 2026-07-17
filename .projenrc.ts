@@ -118,13 +118,39 @@ project.with(
   // Houses the SDK Context/AbortSignal adapter so the browser-safe shared-core
   // stays SDK-free. The Databricks SDK is a runtime dep here; `@databricks/appkit`
   // (used by `plugin.ts` for the execution-context + plugin-lookup helpers) is an
-  // OPTIONAL peer so browser/test consumers that only touch `context.ts` needn't
-  // install it.
+  // OPTIONAL peer so browser/test consumers that only touch `databricks.ts` needn't
+  // install it. `config.ts` (app.yaml / bundle env resolution) needs zod + yaml
+  // and depends on node-core for project-root discovery.
   mixin.mixin(pkg("*/node-appkit", "node"), (p) => {
-    p.addDeps("@databricks/sdk-experimental@catalog:");
+    p.addDeps(
+      "@dbx-tools/node-core@workspace:*",
+      "@databricks/sdk-experimental@catalog:",
+      "zod@catalog:",
+      "yaml",
+    );
     p.addPeerDeps("@databricks/appkit@catalog:");
     p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
     p.addDevDeps("@databricks/appkit@catalog:");
+  }),
+
+  // node-appkit-config: AppKit auto-configuration (drop-in createApp that
+  // resolves Lakebase Postgres + cache-schema grants first). Requires
+  // @databricks/appkit at runtime (it wraps createApp / createLakebasePool). The
+  // `appkit-config-env` bin uses commander. Consumes node-appkit's config
+  // resolver + node-core project helpers.
+  mixin.mixin(pkg("*/node-appkit-config", "node"), (p) => {
+    p.package.addBin({ "appkit-config-env": "./bin/appkit-config-env.ts" });
+    p.package.addField("exports", {
+      ".": "./index.ts",
+      "./package.json": "./package.json",
+    });
+    p.addDeps(
+      "@dbx-tools/node-appkit@workspace:*",
+      "@dbx-tools/node-core@workspace:*",
+      "@databricks/appkit@catalog:",
+      "commander@catalog:",
+    );
+    applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
   }),
 
   // node-genie: the server-side Genie driver (live chat + space metadata).

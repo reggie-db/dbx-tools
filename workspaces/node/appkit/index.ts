@@ -3,8 +3,10 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as appkit from "./src/appkit";
+export * as config from "./src/config";
 export * as databricks from "./src/databricks";
 export * as plugin from "./src/plugin";
 export type { ExecutionContextLike, WorkspaceClientLike } from "./src/appkit";
+export type { BundleValidateJson, ConfigFile, ConfigSource, ConfigMapValue, ResolveConfigValueOptions } from "./src/config";
 export type { ContextLike } from "./src/databricks";
 export type { PluginContextLike } from "./src/plugin";
