@@ -2,7 +2,7 @@
   "name": "@dbx-tools/core",
   "repository": {
     "type": "git",
-    "url": "git+https://github-reggie-db/reggie-db/dbx-tools.git",
+    "url": "git+https://github.com/reggie-db/dbx-tools.git",
     "directory": "workspaces/node/core"
   },
   "scripts": {

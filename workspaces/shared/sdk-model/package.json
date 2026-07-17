@@ -2,7 +2,7 @@
   "name": "@dbx-tools/shared-sdk-model",
   "repository": {
     "type": "git",
-    "url": "git+https://github-reggie-db/reggie-db/dbx-tools.git",
+    "url": "git+https://github.com/reggie-db/dbx-tools.git",
     "directory": "workspaces/shared/sdk-model"
   },
   "scripts": {
