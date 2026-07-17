@@ -196,6 +196,90 @@ function commandOutput(command: string, args: string[], cwd: string): string | u
   return result.stdout.toString().trim() || undefined;
 }
 
+/** Per-cwd cache for {@link repositoryUrl} (mirrors {@link rootDirectoryDefaultCache}). */
+const repositoryUrlCache = new Map<string, { cwd: string; url?: string }>();
+
+/**
+ * Ask the GitHub CLI for the canonical repo URL - the easy path. `gh` already
+ * resolves the true host (no ssh-alias parsing) and prints a clean
+ * `https://github.com/owner/repo`. `undefined` when `gh` is absent, not
+ * authenticated, or the dir isn't a GitHub repo.
+ */
+function repositoryUrlFromGh(cwd: string): string | undefined {
+  const out = commandOutput("gh", ["repo", "view", "--json", "url"], cwd);
+  if (!out) return undefined;
+  try {
+    return (JSON.parse(out) as { url?: string }).url?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Resolve an ssh host alias (`~/.ssh/config`) to its effective `hostname` via `ssh -G`. */
+function resolveSshHostName(host: string, cwd: string): string | undefined {
+  const line = commandOutput("ssh", ["-G", host], cwd)
+    ?.split("\n")
+    .find((l) => /^hostname\s/i.test(l.trim()));
+  const name = line?.trim().split(/\s+/)[1];
+  return name && name !== host ? name : undefined;
+}
+
+/**
+ * Fallback: normalize `git remote get-url origin` to a plain
+ * `https://host/owner/repo` URL. scp-like / `ssh://` / `git://` /
+ * embedded-credential forms are rewritten to https, and an ssh host alias is
+ * followed to its real hostname.
+ */
+function repositoryUrlFromGit(cwd: string): string | undefined {
+  const raw = commandOutput("git", ["remote", "get-url", "origin"], cwd);
+  if (!raw) return undefined;
+
+  let url = raw.replace(/^git\+/, "");
+  // scp-like `git@host:owner/repo` -> `https://host/owner/repo`.
+  const scp = /^[^@]+@([^:]+):(.+)$/.exec(url);
+  if (scp) url = `https://${scp[1]}/${scp[2]}`;
+  // `ssh://user@host/...` / `git://host/...` -> `https://host/...`, then drop any
+  // embedded `user[:pass]@` credentials and the trailing `.git`.
+  url = url
+    .replace(/^ssh:\/\/[^@/]+@/, "https://")
+    .replace(/^(ssh|git):\/\//, "https://")
+    .replace(/^(https?:\/\/)[^@/]+@/, "$1")
+    .replace(/\.git$/, "");
+  // Follow an ssh host alias to the true host (so `github-reggie-db` -> `github.com`).
+  const parts = /^(https?:\/\/)([^/]+)(\/.*)$/.exec(url);
+  if (parts) {
+    const realHost = resolveSshHostName(parts[2]!, cwd);
+    if (realHost) url = `${parts[1]}${realHost}${parts[3]}`;
+  }
+  return url;
+}
+
+/**
+ * The repo's canonical remote URL, or `undefined` when there is no git remote.
+ * Tries `gh repo view` first (host-accurate, no parsing), then normalizes
+ * `git remote get-url origin`. Result is cached per `cwd`.
+ *
+ * @param cwd - directory to resolve from (defaults to `process.cwd()`).
+ * @param format - `"https"` (default) yields `https://host/owner/repo`;
+ *   `"npm"` yields npm's `git+https://host/owner/repo.git` form (for a
+ *   `package.json` `repository.url` that passes npm provenance).
+ */
+export function repositoryUrl(
+  cwd: string = process.cwd(),
+  format: "https" | "npm" = "https",
+): string | undefined {
+  const cached = repositoryUrlCache.get(cwd);
+  let https: string | undefined;
+  if (cached && cached.cwd === cwd) {
+    https = cached.url;
+  } else {
+    https = repositoryUrlFromGh(cwd) ?? repositoryUrlFromGit(cwd);
+    repositoryUrlCache.set(cwd, { cwd, url: https });
+  }
+  if (!https) return undefined;
+  return format === "npm" ? `git+${https.replace(/\.git$/, "")}.git` : https;
+}
+
 function readPackageName(pkgPath: string): string | undefined {
   if (!statPath(pkgPath)?.isFile()) return undefined;
   try {
@@ -211,4 +295,6 @@ if (import.meta.main) {
   console.log("repo root:", gitRoot());
   console.log("package root:", root());
   console.log("project name:", name());
+  console.log("repository url:", repositoryUrl());
+  console.log("repository url (npm):", repositoryUrl(process.cwd(), "npm"));
 }

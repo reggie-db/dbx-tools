@@ -31,7 +31,7 @@ import { find } from "@dbx-tools/path";
 import { parse } from "yaml";
 
 /** Trimmed stdout from a command, or undefined when the process fails or prints nothing. */
-export function capturedStdout(command: string, args: string[]): string | undefined {
+function capturedStdout(command: string, args: string[]): string | undefined {
   const result = exec.spawnSync(command, args, {
     stdout: "capture",
     stderr: "ignore",
