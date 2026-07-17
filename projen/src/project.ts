@@ -17,7 +17,7 @@ import { generateCodegen } from "./codegen";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config";
 import { resolvePkgRoot } from "./engine-root";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
-import { DBXToolsRelease } from "./publish";
+import { DBXToolsRelease } from "./release";
 import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, type WorkspaceTag } from "./tags";
 import { DBXToolsRootTsconfig } from "./tsconfig";
 import { ViteConfigFile } from "./vite";
@@ -231,13 +231,13 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     devDeps: ["@types/node@^24.6.0"],
     ...(isRoot
       ? {
-          prettier: true,
-          prettierOptions: {
-            settings: PRETTIER_SETTINGS,
-            ignoreFile: true,
-            ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns()] },
-          },
-        }
+        prettier: true,
+        prettierOptions: {
+          settings: PRETTIER_SETTINGS,
+          ignoreFile: true,
+          ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns()] },
+        },
+      }
       : {}),
     ...options,
     ...copiedGitIgnoreOptions(options),
@@ -293,9 +293,9 @@ const DEV_DEPS_ROOT: string[] = ["tsx@^4.23.0", "typescript@^5.9.3"];
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export interface DBXToolsProjectOptions
   extends
-    Partial<javascript.NodeProjectOptions>,
-    DBXToolsConfigOptions,
-    DBXToolsPNPMWorkspaceOptions {
+  Partial<javascript.NodeProjectOptions>,
+  DBXToolsConfigOptions,
+  DBXToolsPNPMWorkspaceOptions {
   /**
    * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
    * the (resolved) project name; a leading `@` is optional.
@@ -390,8 +390,7 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
  */
 export class DBXToolsTypeScriptProject
   extends typescript.TypeScriptProject
-  implements DBXToolsProject
-{
+  implements DBXToolsProject {
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
   pnpmWorkspace?: DBXToolsPNPMWorkspace;

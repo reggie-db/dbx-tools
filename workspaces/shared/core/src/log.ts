@@ -378,3 +378,8 @@ export function logger(loggerName: NameLike | string | undefined): Logger {
   const name = extractLoggerName(loggerName);
   return createLogger(name);
 }
+
+
+if (import.meta.main) {
+
+}

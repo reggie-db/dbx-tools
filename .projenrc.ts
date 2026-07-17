@@ -350,7 +350,7 @@ project.with(
   // Ships the `dbxtools` bin and compiles index.ts + bin/ outside src/.
   // (shared-core comes from the blanket base-dep mixin above.)
   mixin.create(pkg("*/cli-dbx-tools", "cli"), (p) => {
-    p.package.addField("name", SCOPE);
+    p.package.addField("name", `@${SCOPE}/cli`);
     p.package.file.readonly = false;
     p.package.addField("publishConfig", {
       access: "public",
@@ -477,7 +477,8 @@ const projenRelease = new GithubWorkflow(project.github!, "projen-release");
 projenRelease.on({ push: { tags: ["projen-v*"] } });
 projenRelease.addJob("publish", {
   runsOn: ["ubuntu-latest"],
-  permissions: { contents: JobPermission.READ },
+  // `id-token: write` lets npm mint the OIDC token for provenance attestation.
+  permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
   defaults: { run: { workingDirectory: "projen" } },
   env: { CI: "true" },
   steps: [
@@ -519,7 +520,8 @@ const release = new GithubWorkflow(project.github!, "release");
 release.on({ push: { tags: ["v*"] } });
 release.addJob("publish", {
   runsOn: ["ubuntu-latest"],
-  permissions: { contents: JobPermission.READ },
+  // `id-token: write` lets npm mint the OIDC token for provenance attestation.
+  permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
   env: { CI: "true" },
   steps: [
     { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
