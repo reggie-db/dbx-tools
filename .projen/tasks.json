@@ -38,21 +38,13 @@
     },
     "bump": {
       "name": "bump",
-      "description": "Bumps version based on latest git tag and generates a changelog entry",
-      "env": {
-        "OUTFILE": "package.json",
-        "CHANGELOG": "dist/changelog.md",
-        "BUMPFILE": "dist/version.txt",
-        "RELEASETAG": "dist/releasetag.txt",
-        "RELEASE_TAG_PREFIX": "",
-        "BUMP_PACKAGE": "commit-and-tag-version@^12"
-      },
+      "description": "Bump the release version (default patch), then commit, tag, and push it",
       "steps": [
         {
-          "builtin": "release/bump-version"
+          "exec": "tsx projen/tasks/bump.ts --prefix v",
+          "receiveArgs": true
         }
-      ],
-      "condition": "git log --oneline -1 | grep -qv \"chore(release):\""
+      ]
     },
     "clean": {
       "name": "clean",
@@ -97,12 +89,7 @@
     },
     "compile": {
       "name": "compile",
-      "description": "Only compile",
-      "steps": [
-        {
-          "exec": "pnpm -r compile"
-        }
-      ]
+      "description": "Only compile"
     },
     "dbxtools": {
       "name": "dbxtools",
@@ -188,7 +175,19 @@
       "description": "Creates the distribution package",
       "steps": [
         {
-          "exec": "tsx projen/tasks/publish.ts --pack"
+          "execArgs": [
+            "mkdir",
+            "-p",
+            "dist/js"
+          ]
+        },
+        {
+          "execArgs": [
+            "pnpm",
+            "pack",
+            "--pack-destination",
+            "dist/js"
+          ]
         }
       ]
     },
@@ -199,49 +198,6 @@
     "pre-compile": {
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
-    },
-    "publish": {
-      "name": "publish",
-      "description": "Bump version (default patch), commit, push branch, tag, and push tag",
-      "steps": [
-        {
-          "exec": "tsx projen/tasks/publish.ts",
-          "receiveArgs": true
-        }
-      ]
-    },
-    "release": {
-      "name": "release",
-      "description": "Prepare a release from \"main\" branch",
-      "env": {
-        "RELEASE": "true"
-      },
-      "steps": [
-        {
-          "exec": "rm -fr dist"
-        },
-        {
-          "spawn": "bump"
-        },
-        {
-          "spawn": "build"
-        },
-        {
-          "spawn": "unbump"
-        },
-        {
-          "exec": "git diff --ignore-space-at-eol --exit-code"
-        }
-      ]
-    },
-    "release:tag": {
-      "name": "release:tag",
-      "description": "CI: build and pack from the git tag that triggered the workflow",
-      "steps": [
-        {
-          "exec": "tsx projen/tasks/publish.ts --ci"
-        }
-      ]
     },
     "sync": {
       "name": "sync",
@@ -258,23 +214,6 @@
       "steps": [
         {
           "spawn": "eslint"
-        }
-      ]
-    },
-    "unbump": {
-      "name": "unbump",
-      "description": "Restores version to 0.0.0",
-      "env": {
-        "OUTFILE": "package.json",
-        "CHANGELOG": "dist/changelog.md",
-        "BUMPFILE": "dist/version.txt",
-        "RELEASETAG": "dist/releasetag.txt",
-        "RELEASE_TAG_PREFIX": "",
-        "BUMP_PACKAGE": "commit-and-tag-version@^12"
-      },
-      "steps": [
-        {
-          "builtin": "release/reset-version"
         }
       ]
     }

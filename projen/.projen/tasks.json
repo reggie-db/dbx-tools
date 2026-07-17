@@ -30,21 +30,13 @@
     },
     "bump": {
       "name": "bump",
-      "description": "Bumps version based on latest git tag and generates a changelog entry",
-      "env": {
-        "OUTFILE": "package.json",
-        "CHANGELOG": "dist/changelog.md",
-        "BUMPFILE": "dist/version.txt",
-        "RELEASETAG": "dist/releasetag.txt",
-        "RELEASE_TAG_PREFIX": "projen-v",
-        "BUMP_PACKAGE": "commit-and-tag-version@^12"
-      },
+      "description": "Bump the release version (default patch), then commit, tag, and push it",
       "steps": [
         {
-          "builtin": "release/bump-version"
+          "exec": "tsx tasks/bump.ts --prefix projen-v",
+          "receiveArgs": true
         }
-      ],
-      "condition": "git log --oneline -1 | grep -qv \"chore(release):\""
+      ]
     },
     "clobber": {
       "name": "clobber",
@@ -167,51 +159,9 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
     },
-    "release": {
-      "name": "release",
-      "description": "Prepare a release from \"main\" branch",
-      "env": {
-        "RELEASE": "true",
-        "RELEASE_TAG_PREFIX": "projen-v"
-      },
-      "steps": [
-        {
-          "exec": "rm -fr dist"
-        },
-        {
-          "spawn": "bump"
-        },
-        {
-          "spawn": "build"
-        },
-        {
-          "spawn": "unbump"
-        },
-        {
-          "exec": "git diff --ignore-space-at-eol --exit-code"
-        }
-      ]
-    },
     "test": {
       "name": "test",
       "description": "Run tests"
-    },
-    "unbump": {
-      "name": "unbump",
-      "description": "Restores version to 0.0.0",
-      "env": {
-        "OUTFILE": "package.json",
-        "CHANGELOG": "dist/changelog.md",
-        "BUMPFILE": "dist/version.txt",
-        "RELEASETAG": "dist/releasetag.txt",
-        "RELEASE_TAG_PREFIX": "projen-v",
-        "BUMP_PACKAGE": "commit-and-tag-version@^12"
-      },
-      "steps": [
-        {
-          "builtin": "release/reset-version"
-        }
-      ]
     },
     "upgrade": {
       "name": "upgrade",
@@ -241,7 +191,6 @@
             "pnpm",
             "update",
             "@types/node",
-            "commit-and-tag-version",
             "constructs",
             "projen",
             "ts-node",

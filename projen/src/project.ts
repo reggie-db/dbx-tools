@@ -753,7 +753,12 @@ function initProject(
   }
 
   new GeneratedSource(project);
-  if (project.release) new DBXToolsRelease(project as DBXToolsNodeProject);
+  // The `bump` task (compute next version + commit + tag + push) is useful on
+  // any root; the actual publish is a tag-triggered GitHub workflow the caller
+  // authors. Independent of projen's own `release` component.
+  new DBXToolsRelease(project as DBXToolsNodeProject, {
+    tagPrefix: options.releaseTagPrefix,
+  });
 }
 
 /**
