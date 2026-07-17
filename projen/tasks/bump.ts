@@ -192,10 +192,8 @@ program
       }
 
       // Local registry (e.g. verdaccio): publish AFTER the tag push so the
-      // GitHub release still owns the public registry. `pnpm -r publish` reads
-      // each package's version (bumped on disk above) and rewrites `workspace:*`
-      // sibling pins to it; from a single-package project it just publishes that
-      // one package. Needs the bumped version on disk, so skip under `--no-version`.
+      // GitHub release still owns the public registry. Skipped under
+      // `--no-version` (nothing bumped to publish).
       const localRegistry = resolveLocalRegistry(opts.localRegistry)
       const publishToLocalRegistry = opts.version && localRegistry;
       if (opts.version === false && localRegistry) {
@@ -203,14 +201,43 @@ program
       }
       if (publishToLocalRegistry) {
         logger.info(`publishing ${version} to local registry ${localRegistry}`);
+        const runInRepo = (command: string, args: string[]) =>
+          exec.spawnSync(command, args, {
+            cwd: process.cwd(),
+            stdout: "inherit",
+            stderr: "inherit",
+            stdin: "ignore",
+            check: true,
+          });
+        // Each workspace package keeps `version: 0.0.0` on disk (projen owns the
+        // manifest); the root bump above only touched the root. Mirror the CI
+        // `release` workflow: stamp the release version on EVERY package (they're
+        // projen-readonly, so unlock first) so `pnpm -r publish` publishes them
+        // as `version` (and rewrites `workspace:*` sibling pins to it) instead of
+        // `0.0.0`. No restore needed - the next `projen` synth rewrites these
+        // manifests back to `0.0.0`; the release version lives in the git tag.
+        runInRepo("chmod", ["-R", "u+w", "."]);
+        runInRepo("pnpm", [
+          "-r",
+          "exec",
+          "npm",
+          "version",
+          version,
+          "--no-git-tag-version",
+          "--allow-same-version",
+        ]);
         // Provenance is opt-in (see `.projenrc.ts`): the generated
         // `publishConfig` omits it, so local (verdaccio) publishes never try to
         // attest. CI turns it on with `npm_config_provenance=true`.
-        exec.spawnSync(
-          "pnpm",
-          ["-r", "publish", "--registry", localRegistry, "--no-git-checks", "--access", "public"],
-          { cwd: process.cwd(), stdout: "inherit", stderr: "inherit", stdin: "ignore", check: true },
-        );
+        runInRepo("pnpm", [
+          "-r",
+          "publish",
+          "--registry",
+          localRegistry,
+          "--no-git-checks",
+          "--access",
+          "public",
+        ]);
         logger.success(`published ${version} to ${localRegistry}`);
       }
     },
