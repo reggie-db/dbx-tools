@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-appkit",
+  "name": "@dbx-tools/node-model",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -12,17 +12,16 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@databricks/appkit": "catalog:",
     "@types/node": "catalog:",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
-  "peerDependencies": {
-    "@databricks/appkit": "catalog:"
-  },
   "dependencies": {
-    "@databricks/sdk-experimental": "catalog:",
-    "@dbx-tools/shared-core": "workspace:*"
+    "@databricks/appkit": "catalog:",
+    "@dbx-tools/node-appkit": "workspace:*",
+    "@dbx-tools/shared-core": "workspace:*",
+    "@dbx-tools/shared-model": "workspace:*",
+    "fuse.js": "^7.4.2"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -33,11 +32,6 @@
   "exports": {
     ".": "./index.ts",
     "./package.json": "./package.json"
-  },
-  "peerDependenciesMeta": {
-    "@databricks/appkit": {
-      "optional": true
-    }
   },
   "dbxToolsConfig": {
     "tags": [

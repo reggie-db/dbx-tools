@@ -10,7 +10,6 @@ export * as iterable from "./src/iterable";
 export * as log from "./src/log";
 export * as object from "./src/object";
 export * as predicate from "./src/predicate";
-export * as runtime from "./src/runtime";
 export * as string from "./src/string";
 export type { PollContext, PollProducer, PollOptions } from "./src/async";
 export type { MemoizeOptions } from "./src/function";

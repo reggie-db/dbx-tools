@@ -16,6 +16,7 @@ packages:
   - workspaces/node/core
   - workspaces/node/file-scan
   - workspaces/node/genie
+  - workspaces/node/model
   - workspaces/node/projen
   - workspaces/shared/core
   - workspaces/shared/genie

@@ -1,17 +1,48 @@
 /**
- * Databricks SDK cancellation glue: adapt WHATWG cancellation
+ * Generic Databricks SDK glue (no AppKit): adapt WHATWG cancellation
  * (`AbortSignal` / `AbortController`) into the SDK's `Context` /
  * `CancellationToken` shapes so a single `AbortController` can drive every
- * in-flight SDK call.
+ * in-flight SDK call, plus Databricks runtime-environment detection.
  *
- * Server-only: leans on the Databricks SDK `Context`. Lives in node-appkit
- * (the base for Node-side AppKit + experimental-SDK helpers) so the
- * browser-safe shared-core stays SDK-free.
+ * Server-only: leans on the Databricks SDK `Context`. Lives in node-appkit so
+ * the browser-safe shared-core stays SDK-free.
  */
 
 import { async } from "@dbx-tools/shared-core";
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
+
+/**
+ * Detect the Databricks App runtime from environment shape: requires a
+ * non-empty `DATABRICKS_APP_NAME`, a `DATABRICKS_HOST` that parses as an
+ * `http`/`https` URL, and a `DATABRICKS_APP_PORT` that is a valid TCP port.
+ * Reads `process.env` when no `env` is passed.
+ */
+export function isAppEnv(env: Record<string, string | undefined> = process.env): boolean {
+  const appName = env.DATABRICKS_APP_NAME?.trim();
+  const host = env.DATABRICKS_HOST?.trim();
+  const port = env.DATABRICKS_APP_PORT?.trim();
+
+  if (!appName || !host || !port) {
+    return false;
+  }
+
+  try {
+    const url = new URL(host);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+
+  const portNumber = Number(port);
+  if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
+    return false;
+  }
+
+  return true;
+}
 
 /** Either an SDK `Context` or a WHATWG `AbortSignal`. */
 export type ContextLike = Context | AbortSignal;

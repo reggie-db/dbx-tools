@@ -20,7 +20,7 @@
  */
 
 import { async, log, type PollContext } from "@dbx-tools/shared-core";
-import { context } from "@dbx-tools/node-appkit";
+import { databricks } from "@dbx-tools/node-appkit";
 import { event, genieModel, type GenieChatEvent, type GenieMessage } from "@dbx-tools/shared-genie";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 
@@ -67,10 +67,10 @@ export interface GenieChatOptions {
   pollIntervalMs?: number;
   /**
    * External cancellation. Accepts a WHATWG `AbortSignal` or a fully-built SDK
-   * `Context` (see `context.ContextLike`). Aborting it cancels every in-flight
+   * `Context` (see `databricks.ContextLike`). Aborting it cancels every in-flight
    * SDK call and the next inter-poll sleep.
    */
-  context?: context.ContextLike;
+  context?: databricks.ContextLike;
 }
 
 /* ----------------------- low-level: genieChat ----------------------- */
@@ -123,9 +123,9 @@ export async function* genieChat(
     const client = await getWorkspaceClient(options);
     // Build the SDK Context ONCE. Building it inside the poll producer would
     // re-attach an abort listener to `options.context` on every poll iteration
-    // (via `context.toContext` -> `async.tieAbortSignal`), eventually tripping
+    // (via `databricks.toContext` -> `async.tieAbortSignal`), eventually tripping
     // Node's `MaxListenersExceededWarning`.
-    const ctx = context.toContext(controller, options?.context);
+    const ctx = databricks.toContext(controller, options?.context);
     let conversationId = options?.conversationId;
     let messageId: string | undefined;
 

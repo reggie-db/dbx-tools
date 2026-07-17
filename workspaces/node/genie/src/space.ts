@@ -12,7 +12,7 @@
  */
 
 import { error, log, string } from "@dbx-tools/shared-core";
-import { context } from "@dbx-tools/node-appkit";
+import { databricks } from "@dbx-tools/node-appkit";
 import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 
@@ -34,9 +34,9 @@ export interface GetGenieSpaceOptions {
   serialized?: boolean;
   /**
    * External cancellation. Accepts a WHATWG `AbortSignal` or a fully-built SDK
-   * `Context` (see `context.ContextLike`).
+   * `Context` (see `databricks.ContextLike`).
    */
-  context?: context.ContextLike;
+  context?: databricks.ContextLike;
 }
 
 /**
@@ -52,7 +52,7 @@ export async function getGenieSpace(
 ): Promise<GenieSpace> {
   const client = options?.workspaceClient ?? new WorkspaceClient({});
   const serialized = options?.serialized !== false;
-  const ctx = options?.context ? context.toContext(options.context) : undefined;
+  const ctx = options?.context ? databricks.toContext(options.context) : undefined;
   const raw = await client.apiClient.request(
     {
       path: `/api/2.0/genie/spaces/${encodeURIComponent(spaceId)}`,

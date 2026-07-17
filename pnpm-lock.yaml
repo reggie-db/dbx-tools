@@ -380,6 +380,9 @@ importers:
         specifier: workspace:*
         version: link:../../shared/core
     devDependencies:
+      '@databricks/appkit':
+        specifier: 'catalog:'
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -452,6 +455,34 @@ importers:
       '@databricks/appkit':
         specifier: 'catalog:'
         version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  workspaces/node/model:
+    dependencies:
+      '@databricks/appkit':
+        specifier: 'catalog:'
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+      '@dbx-tools/node-appkit':
+        specifier: workspace:*
+        version: link:../appkit
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+      '@dbx-tools/shared-model':
+        specifier: workspace:*
+        version: link:../../shared/model
+      fuse.js:
+        specifier: ^7.4.2
+        version: 7.4.2
+    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -6173,6 +6204,10 @@ packages:
   functions-have-names@1.2.3:
     resolution: {integrity: sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==}
 
+  fuse.js@7.4.2:
+    resolution: {integrity: sha512-LVbzjD4WA6UP5B1UnP8wuaXJiLnqMdM/E4fiJXTJ5haJ5b/MBNsK29h2fm6swEoQaVQjvYFWKLE2RanyZIoRVQ==}
+    engines: {node: '>=10'}
+
   gaxios@7.1.3:
     resolution: {integrity: sha512-YGGyuEdVIjqxkxVH1pUTMY/XtmmsApXrCVv5EU25iX6inEPbV+VakJfLealkBtJN69AQmh1eGOdCl9Sm1UP6XQ==}
     engines: {node: '>=18'}
@@ -11618,7 +11653,7 @@ snapshots:
 
   '@opentelemetry/api-logs@0.219.0':
     dependencies:
-      '@opentelemetry/api': 1.9.0
+      '@opentelemetry/api': 1.9.1
 
   '@opentelemetry/api@1.9.0': {}
 
@@ -15990,6 +16025,8 @@ snapshots:
       is-document.all: 1.0.0
 
   functions-have-names@1.2.3: {}
+
+  fuse.js@7.4.2: {}
 
   gaxios@7.1.3:
     dependencies:

@@ -116,9 +116,15 @@ project.with(
 
   // node-appkit: the base for Node-side AppKit + experimental-SDK helpers.
   // Houses the SDK Context/AbortSignal adapter so the browser-safe shared-core
-  // stays SDK-free. The Databricks SDK is a runtime dep here.
+  // stays SDK-free. The Databricks SDK is a runtime dep here; `@databricks/appkit`
+  // (used by `plugin.ts` for the execution-context + plugin-lookup helpers) is an
+  // OPTIONAL peer so browser/test consumers that only touch `context.ts` needn't
+  // install it.
   mixin.mixin(pkg("*/node-appkit", "node"), (p) => {
     p.addDeps("@databricks/sdk-experimental@catalog:");
+    p.addPeerDeps("@databricks/appkit@catalog:");
+    p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
+    p.addDevDeps("@databricks/appkit@catalog:");
   }),
 
   // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -134,6 +140,19 @@ project.with(
     p.addPeerDeps("@databricks/appkit@catalog:");
     p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
     p.addDevDeps("@databricks/appkit@catalog:");
+  }),
+
+  // node-model: the server-side model resolver (cached Model Serving listing +
+  // fuzzy name resolution, workspace-aware selection, offline fallback floor).
+  // Consumes the browser-safe shared-model classifier + node-appkit's AppKit
+  // glue. AppKit is a runtime dep here (CacheManager is used directly, not lazy).
+  mixin.mixin(pkg("*/node-model", "node"), (p) => {
+    p.addDeps(
+      "@dbx-tools/shared-model@workspace:*",
+      "@dbx-tools/node-appkit@workspace:*",
+      "@databricks/appkit@catalog:",
+      "fuse.js@^7.4.2",
+    );
   }),
 
   // node-file-scan: filesystem glob/watch package. It shells out (node-core

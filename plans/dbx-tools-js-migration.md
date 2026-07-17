@@ -82,8 +82,8 @@ model-shared      LEAF   ✅ DONE (as shared-model)
 appkit-email-shared LEAF        (zod contract, feature-specific — not started)
 genie-shared      → sdk-shared, shared   ✅ DONE (as shared-genie)
 genie             → genie-shared, shared (+ @databricks/sdk-experimental)   ✅ DONE (as node-genie; SDK glue → node-appkit)
-model             → model-shared, shared   ⏭  NEXT
-model-proxy       → model, shared
+model             → model-shared, shared   ✅ DONE (as node-model; AppKit glue → node-appkit)
+model-proxy       → model, shared   ⏭  NEXT
 appkit-config     → shared
 appkit-ui         → shared
 appkit-email      → appkit-email-shared, shared
@@ -109,7 +109,10 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `0d8e6c1` | **Browser-safe core split**: `exec`/`project` → new `@dbx-tools/node-core`; shared-core now agnostic (`WebWorker` lib); file-scan retagged `node`; AppKit + sdk-experimental hardcoded in `DEFAULT_CATALOG`. See "Resolved: browser-safe core split" below. |
 | `f64806a` | **Barrel type-hoisting + `log` in core + `node-appkit` + port `genie` server → `@dbx-tools/node-genie`.** See "Barrel type-hoisting", "node-appkit", and "node-genie" below. |
 | `0616cd7` | **Move `file-scan` under `workspaces/node/`**: `@dbx-tools/shared-file-scan` → `@dbx-tools/node-file-scan` (path now matches its `node` nature). |
-| (pending commit) | **shared-core is a universal base dep** (added to every workspace package via the blanket mixin, any tag) + **move `projen` engine under `workspaces/node/`** (`@dbx-tools/projen`, `node`-tagged by path). Fixed stale `@dbx-tools/shared-projen` name refs in the CLI bootstrap + engine-root (published name is `@dbx-tools/projen`). |
+| `f660b77` | **shared-core is a universal base dep** (added to every workspace package via the blanket mixin, any tag) + **move `projen` engine under `workspaces/node/`** (`@dbx-tools/projen`, `node`-tagged by path). Fixed stale `@dbx-tools/shared-projen` name refs in the CLI bootstrap + engine-root (published name is `@dbx-tools/projen`). |
+| `1a30148` | Split shared-core `value.ts` → `object.ts` (isRecord/toBoolean/NameLike/NonFunctionKeys) + `runtime.ts` (isDatabricksAppEnv). |
+| `2be03d0` | Fold `deepEqual`/`DeepEqualComparator` into `object.ts`; drop `equal.ts`. |
+| (pending commit) | **Port `model` server → `@dbx-tools/node-model`** + reorganize node-appkit into `databricks.ts` (SDK glue: `toContext`/`ContextLike`/`isAppEnv`) / `appkit.ts` (execution context: `WorkspaceClientLike`/`tryGetExecutionContext`/`ensureInitialized`) / `plugin.ts` (plugin lookup: `data`/`instance`/`require`). Moved `isDatabricksAppEnv` out of shared-core `runtime.ts` → `databricks.isAppEnv` (Node-only). See "node-model" below. |
 
 ### shared-core surface now available
 
@@ -118,9 +121,10 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 (fnvHash/fnvHashWithOptions/toBase32/id), `string`
 (tokenize/tokenizeWithOptions/toIdentifier/toSlug/toUniqueSlug/trimToNull/
 firstNonEmpty/escapeHtml/toDescription), `object`
-(isRecord/toBoolean/deepEqual/NameLike/NonFunctionKeys/DeepEqualComparator), `runtime` (isDatabricksAppEnv),
+(isRecord/toBoolean/deepEqual/NameLike/NonFunctionKeys/DeepEqualComparator),
 `log` (logger/isLevelEnabled), plus `functionModule` (memoize), `iterable`,
-`predicate`. NOTE: `exec` + `project` moved to **node-core** (not shared-core).
+`predicate`. NOTE: `exec` + `project` moved to **node-core**; `isDatabricksAppEnv`
+moved to **node-appkit** (`databricks.isAppEnv`) — neither is in shared-core.
 
 `-js`'s `commonUtils.*` / `stringUtils.*` map onto these: e.g.
 `commonUtils.errorMessage` → `error.errorMessage`,
@@ -271,32 +275,56 @@ and `node:util` load lazily (console fallback covers their absence). consola is
 an **optional peer** of shared-core (`peerDependenciesMeta.optional`), pinned via
 the hardcoded `DEFAULT_CATALOG` `consola` entry.
 
-## `node-appkit` (NEW — pending commit)
+## `node-appkit` — Node-side Databricks/AppKit glue
 
 `@dbx-tools/node-appkit` (`workspaces/node/appkit`, `node`-tagged) — the base for
-Node-side AppKit + experimental-SDK helpers. Houses `context.ts`: the SDK
-`Context`/`AbortSignal` adapter (`toContext`, `ContextLike`) ported from `-js`
-`apiUtils`, using shared-core `async.tieAbortSignal`. The SDK is a runtime dep
-here so the browser-safe shared-core stays SDK-free. (Only the cancellation glue
-genie needs was ported; `errorContext`/`getWorkspaceUrl`/`getWorkspaceId` were
-left for a later pass.)
+Node-side Databricks + AppKit helpers. Three modules with clear scopes:
 
-## `node-genie` (NEW — pending commit) — server chat/space driver
+- **`databricks.ts`** — generic Databricks SDK glue, NO AppKit. The
+  `Context`/`AbortSignal` cancellation adapter (`toContext`, `ContextLike`) built
+  on shared-core `async.tieAbortSignal`, plus `isAppEnv` (Databricks App
+  env-shape detection, moved out of shared-core). `@databricks/sdk-experimental`
+  is a runtime dep here so the browser-safe shared-core stays SDK-free.
+- **`appkit.ts`** — generic AppKit runtime: `WorkspaceClientLike` /
+  `ExecutionContextLike` types + `tryGetExecutionContext` / `ensureInitialized`.
+- **`plugin.ts`** — AppKit plugin lookup only: `data` / `instance` / `require` +
+  `PluginContextLike`.
+
+`@databricks/appkit` is an OPTIONAL peer (only `appkit.ts`/`plugin.ts` need it;
+`databricks.ts` consumers needn't install it).
+
+## `node-genie` — server chat/space driver
 
 Ported `-js genie` → `@dbx-tools/node-genie` (`workspaces/node/genie`,
 `node`-tagged): `chat.ts` (`genieChat` low-level poll stream + `genieEventChat`
 event stream) and `space.ts` (`getGenieSpace` + `genieSampleQuestions`). Import
 repoints: `logUtils.logger` → `log.logger`; `apiUtils.toContext`/`ContextLike` →
-node-appkit `context.*`; `commonUtils.poll`/`PollContext` → `async.poll` /
+node-appkit `databricks.*`; `commonUtils.poll`/`PollContext` → `async.poll` /
 flat `PollContext`; `commonUtils.errorMessage` → `error.errorMessage`;
 `stringUtils.firstNonEmpty` → `string.firstNonEmpty`; genie-shared values via the
 `genieModel`/`event` namespaces, types flat. `@databricks/appkit` is an OPTIONAL
 peer (lazy-imported; env-var auth fallback). The `-js` `chat.ts`/`poll-chat.ts`
 runtime smoke tests were NOT ported (they hit a live workspace).
 
+## `node-model` — server model resolver
+
+Ported `-js model` → `@dbx-tools/node-model` (`workspaces/node/model`,
+`node`-tagged): `classes.ts` (chat-class ordering + `parseModelClass` /
+`classesAtOrBelow`), `fallback.ts` (offline static floor), `serving.ts` (cached
+`/serving-endpoints` listing via AppKit `CacheManager` + `fuse.js` fuzzy resolve
++ embedding-dimension probe), `resolve.ts` (`rankModels` / `resolveModel` /
+`selectModel`). Repoints: `commonUtils.errorMessage` → `error.errorMessage`;
+`logUtils.logger` → `log.logger`; `stringUtils.tokenizeWithOptions` →
+`string.tokenizeWithOptions`; `appkitUtils.WorkspaceClientLike` →
+node-appkit `appkit.WorkspaceClientLike`; shared-model values via `model.*` /
+`classify.*` namespaces, types flat. New dep `fuse.js`; `@databricks/appkit` is a
+RUNTIME dep here (CacheManager is used directly, not lazy). Ported the two pure
+tests (`classes.test.ts` + `resolve.test.ts`, 25 cases) to `node:test`;
+force-added past the `.test.*` gitignore.
+
 ## Later passes (not yet scoped)
 
-- `model` / `model-proxy` — server model resolution/ranking + local OpenAI proxy.
+- `model-proxy` — local OpenAI-compatible proxy over node-model.
 - `appkit-*` family — needs `@databricks/appkit` (peer), React (`ui` tag), Mastra.
   These are the heaviest; scope each individually.
 - `appkit-email-shared` — small zod contract, easy, can slot in anytime.

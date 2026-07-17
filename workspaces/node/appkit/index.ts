@@ -2,5 +2,9 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as context from "./src/context";
-export type { ContextLike } from "./src/context";
+export * as appkit from "./src/appkit";
+export * as databricks from "./src/databricks";
+export * as plugin from "./src/plugin";
+export type { ExecutionContextLike, WorkspaceClientLike } from "./src/appkit";
+export type { ContextLike } from "./src/databricks";
+export type { PluginContextLike } from "./src/plugin";
