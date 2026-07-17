@@ -15,6 +15,7 @@ import {
   log,
   net,
   object,
+  brand,
   string,
 } from "@dbx-tools/shared-core";
 ```
@@ -36,6 +37,24 @@ Key features:
   logging helpers that avoid Node-only dependencies.
 - Namespace exports that make utility call sites explicit without creating a
   grab-bag default import.
+- A Zod-backed `BrandContext` contract with dbx tools defaults, JSON Schema
+  output, and prompt serialization for browser, library, and LLM consumers.
+
+## Brand Context
+
+```ts
+import { brand } from "@dbx-tools/shared-core";
+
+const context = brand.parseBrandContext({ name: "Acme Data" });
+const jsonSchema = brand.brandContextJsonSchema();
+const instructions = brand.brandContextPrompt(context);
+```
+
+`BrandContextSchema` validates identity, theme-aware assets, colors,
+typography, links, audience, and voice. Every field has a dbx tools default, so
+an empty object is a complete context. Use [`@dbx-tools/core`](../../node/core)
+to discover and read YAML/JSON files, and
+[`@dbx-tools/ui-branding`](../../ui/branding) to apply the same context to a UI.
 
 ## Async Control
 
@@ -217,3 +236,4 @@ without paying formatting cost when disabled.
 - `token` - JWT payload and scope readers.
 - `functionModule` - memoization.
 - `log` - tagged leveled logging.
+- `brand` - Zod schema, defaults, JSON Schema, and LLM prompt serialization.

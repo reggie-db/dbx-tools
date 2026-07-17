@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { brand } from "../../workspaces/node/core/index.ts";
 
 const root = process.cwd();
 const sourceRoot = path.join(root, ".docs-build", "site");
 const docsContentRoot = path.join(sourceRoot, "src", "content", "docs");
 const publicRoot = path.join(sourceRoot, "public");
 const repoUrl = "https://github.com/reggie-db/dbx-tools";
+const brandFile = path.join(root, "branding", "brand.yaml");
+const brandContext = await brand.loadBrandContextFile(brandFile);
 
 // Base path the site is served under. Must match `base` in the generated
 // astro.config.mjs. Starlight auto-prefixes this onto sidebar `link:` fields
@@ -228,14 +231,16 @@ function nav(packages) {
 
 function llms(packages) {
   const lines = [
-    "# dbx-tools",
+    `# ${brandContext.name}`,
     "",
-    "> Companion packages for Databricks developers building AppKit, Mastra, Genie, Model Serving, email, and UI integrations.",
+    `> ${brandContext.description}`,
     "",
     "## Docs",
     "",
     `- [Overview](${withBase("/")})`,
     `- [Package Reference](${withBase("/packages/")})`,
+    `- [Brand Context](${withBase("/brand.json")})`,
+    `- [Brand Context JSON Schema](${withBase("/brand.schema.json")})`,
     "",
     "## Packages",
     "",
@@ -249,7 +254,10 @@ function llms(packages) {
 }
 
 function llmsFull(packages, mappings) {
-  const parts = [transformLinks(read(path.join(root, "README.md")), root, mappings)];
+  const parts = [
+    brand.brandContextPrompt(brandContext),
+    transformLinks(read(path.join(root, "README.md")), root, mappings),
+  ];
   for (const pkg of packages) {
     parts.push(transformLinks(read(pkg.readme), pkg.dir, mappings));
   }
@@ -301,11 +309,17 @@ export default defineConfig({
   base: process.env.GITHUB_REPOSITORY?.endsWith("/dbx-tools") ? "/dbx-tools" : "/",
   integrations: [
     starlight({
-      title: "dbx-tools",
-      description:
-        "Companion packages for Databricks developers building AppKit, Mastra, Genie, Model Serving, email, and UI integrations.",
+      title: ${JSON.stringify(brandContext.name)},
+      description: ${JSON.stringify(brandContext.description)},
+      logo: {
+        light: "./src/assets/brand-logo-light.svg",
+        dark: "./src/assets/brand-logo-dark.svg",
+        replacesTitle: true,
+      },
+      favicon: ${JSON.stringify(withBase("/brand-favicon.svg"))},
+      customCss: ["./src/styles/brand.css"],
       sidebar: generatedNav.sidebar,
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/reggie-db/dbx-tools" }],
+      social: [{ icon: "github", label: "GitHub", href: ${JSON.stringify(brandContext.links.repository ?? repoUrl)} }],
       editLink: {
         baseUrl: "https://github.com/reggie-db/dbx-tools/edit/main/",
       },
@@ -314,6 +328,63 @@ export default defineConfig({
   ],
 });
 `;
+}
+
+function brandCss() {
+  const { colors, typography } = brandContext;
+  return `:root {
+  --dbx-brand-primary: ${colors.primary};
+  --dbx-brand-primary-hover: ${colors.primaryHover};
+  --dbx-brand-accent: ${colors.accent};
+  --dbx-brand-foreground: ${colors.foreground};
+  --dbx-brand-background: ${colors.background};
+  --dbx-brand-surface: ${colors.surface};
+  --dbx-brand-muted: ${colors.muted};
+  --dbx-brand-border: ${colors.border};
+  --sl-font: ${typography.sans};
+  --sl-font-mono: ${typography.mono};
+  --sl-color-accent-low: color-mix(in srgb, ${colors.primary} 14%, ${colors.background});
+  --sl-color-accent: ${colors.primary};
+  --sl-color-accent-high: ${colors.primaryHover};
+}
+
+:root[data-theme="dark"] {
+  --sl-color-accent-low: color-mix(in srgb, ${colors.primary} 18%, ${colors.foreground});
+  --sl-color-accent: ${colors.primary};
+  --sl-color-accent-high: #ffffff;
+}
+
+.site-title img {
+  width: auto;
+  height: 2rem;
+}
+
+a:not([class]) {
+  text-decoration-color: color-mix(in srgb, ${colors.accent} 65%, transparent);
+}
+`;
+}
+
+function syncBrandAssets() {
+  const assetRoot = path.join(sourceRoot, "src", "assets");
+  const copyAsset = (source, destination) => {
+    const resolved = brand.resolveBrandAssetPath(brandFile, source);
+    mkdir(path.dirname(destination));
+    fs.copyFileSync(resolved, destination);
+  };
+
+  copyAsset(brandContext.assets.logo.light, path.join(assetRoot, "brand-logo-light.svg"));
+  copyAsset(
+    brandContext.assets.logo.dark ?? brandContext.assets.logo.light,
+    path.join(assetRoot, "brand-logo-dark.svg"),
+  );
+  copyAsset(brandContext.assets.favicon, path.join(publicRoot, "brand-favicon.svg"));
+  write(path.join(sourceRoot, "src", "styles", "brand.css"), brandCss());
+  write(path.join(publicRoot, "brand.json"), `${JSON.stringify(brandContext, null, 2)}\n`);
+  write(
+    path.join(publicRoot, "brand.schema.json"),
+    `${JSON.stringify(brand.brandContextJsonSchema(), null, 2)}\n`,
+  );
 }
 
 function docsWorkspaceYaml() {
@@ -381,6 +452,7 @@ function main() {
   write(path.join(sourceRoot, "pnpm-workspace.yaml"), docsWorkspaceYaml());
   write(path.join(sourceRoot, "astro.config.mjs"), astroConfig());
   write(path.join(sourceRoot, "src", "content.config.ts"), contentConfig());
+  syncBrandAssets();
   write(path.join(publicRoot, "llms.txt"), llms(packages));
   write(path.join(publicRoot, "llms-full.txt"), llmsFull(packages, mappings));
   // Disable Jekyll on GitHub Pages so Astro's `_astro/` asset dir (underscore

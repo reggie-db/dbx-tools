@@ -15,6 +15,21 @@ Key features:
 - Workspace/project root discovery from package-manager files, git metadata, and
   the current working directory.
 - Safe filesystem stat and project naming helpers for CLIs and projen synth.
+- YAML/JSON brand-context discovery and loading with shared Zod validation.
+
+## Load Brand Context
+
+```ts
+import { brand } from "@dbx-tools/core";
+
+const context = await brand.loadBrandContext();
+```
+
+`loadBrandContext()` searches known npm/git project roots for
+`branding/brand.yaml`, `.yml`, or `.json`, followed by equivalent root-level
+files. Missing files return the complete dbx tools default context; malformed
+files fail validation. Use `loadBrandContextFile(path)` for an explicit file and
+`resolveBrandAssetPath(path, asset)` for relative asset references.
 
 ## Run Commands
 
@@ -80,3 +95,4 @@ basename. `project.stat()` returns `undefined` instead of throwing.
 - `exec` - async/sync process spawning, stdio handling, abort wiring, and shlex.
 - `project` - root discovery, project naming, git-remote parsing, and safe
   filesystem stat.
+- `brand` - YAML/JSON discovery, parsing, validation, and asset path resolution.

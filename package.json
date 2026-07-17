@@ -39,7 +39,8 @@
     "prettier": "^3.9.4",
     "projen": "^0.101.4",
     "tsx": "^4.23.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "zod": "catalog:"
   },
   "pnpm": {},
   "license": "UNLICENSED",

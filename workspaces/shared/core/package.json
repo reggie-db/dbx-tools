@@ -25,6 +25,9 @@
   "peerDependencies": {
     "consola": "catalog:"
   },
+  "dependencies": {
+    "zod": "catalog:"
+  },
   "main": "index.ts",
   "license": "UNLICENSED",
   "publishConfig": {

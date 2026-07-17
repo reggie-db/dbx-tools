@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" role="img" aria-labelledby="title description">
+  <title id="title">dbx tools</title>
+  <desc id="description">dbx tools logo for dark surfaces.</desc>
+  <g transform="translate(4 4)">
+    <rect width="64" height="64" rx="12" fill="#0B2026"/>
+    <g shape-rendering="crispEdges">
+      <path d="M4 28h8v8H4zm8 0h8v16h-8zm8-8h8v16h-8zm8 8h8v8h-8zm8-8h8v16h-8zm8 8h8v16h-8zm8 0h4v8h-4z" fill="#FF3621"/>
+      <path d="M4 28h8v8H4zm52 0h4v8h-4z" fill="#FF5A46"/>
+      <path d="M28 28h8v8h-8z" fill="#FF8974"/>
+    </g>
+  </g>
+  <text x="84" y="47" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="32" font-weight="700" letter-spacing="0" fill="#F6F7F8">dbx <tspan fill="#FF5A46">tools</tspan></text>
+</svg>

@@ -20,6 +20,7 @@ packages:
   - workspaces/shared/model
   - workspaces/shared/sdk-model
   - workspaces/ui/appkit
+  - workspaces/ui/branding
   - workspaces/ui/email
   - workspaces/ui/mastra
 catalog:

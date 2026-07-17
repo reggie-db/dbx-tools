@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
       - name: Generate docs from READMEs
-        run: node docs/scripts/sync-readmes.mjs
+        run: pnpm exec tsx docs/scripts/sync-readmes.mjs
       - name: Install docs dependencies
         run: pnpm --dir .docs-build/site install --lockfile=false
       - name: Generate TypeScript API docs

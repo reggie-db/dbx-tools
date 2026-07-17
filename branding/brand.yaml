@@ -1,0 +1,47 @@
+schemaVersion: "1"
+name: dbx tools
+shortName: dbx
+tagline: Practical tools for Databricks builders.
+description: Companion packages for Databricks developers building apps, agents, data workflows, and reusable UI.
+assets:
+  icon:
+    light: ./assets/icon-light.svg
+    dark: ./assets/icon-dark.svg
+  logo:
+    light: ./assets/logo-light.svg
+    dark: ./assets/logo-dark.svg
+  favicon: ./assets/icon-light.svg
+colors:
+  primary: "#FF3621"
+  primaryHover: "#D92D18"
+  accent: "#00A972"
+  foreground: "#0B2026"
+  background: "#FFFFFF"
+  surface: "#F6F7F8"
+  muted: "#5F6B70"
+  border: "#DCE2E5"
+typography:
+  sans: Inter, ui-sans-serif, system-ui, sans-serif
+  mono: ui-monospace, SFMono-Regular, Menlo, monospace
+voice:
+  audience:
+    - Databricks developers
+    - application engineers
+    - AI agents
+  tone:
+    - direct
+    - practical
+    - technical
+    - approachable
+  principles:
+    - Lead with the useful outcome.
+    - Prefer concrete examples and accurate technical language.
+    - Keep product claims specific and defensible.
+  avoid:
+    - unsupported superlatives
+    - vague AI claims
+    - unnecessary jargon
+links:
+  website: https://reggie-db.github.io/dbx-tools/
+  repository: https://github.com/reggie-db/dbx-tools
+  documentation: https://reggie-db.github.io/dbx-tools/

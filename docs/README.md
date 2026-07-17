@@ -18,7 +18,7 @@ Source of truth:
 Start locally while editing content:
 
 ```sh
-node docs/scripts/sync-readmes.mjs
+pnpm exec tsx docs/scripts/sync-readmes.mjs
 pnpm --dir .docs-build/site install --lockfile=false
 node docs/scripts/generate-api-docs.mjs
 pnpm --dir .docs-build/site dev
@@ -27,7 +27,7 @@ pnpm --dir .docs-build/site dev
 Build and preview locally with search:
 
 ```sh
-node docs/scripts/sync-readmes.mjs
+pnpm exec tsx docs/scripts/sync-readmes.mjs
 pnpm --dir .docs-build/site install --lockfile=false
 node docs/scripts/generate-api-docs.mjs
 pnpm --dir .docs-build/site build
@@ -37,7 +37,7 @@ pnpm --dir .docs-build/site exec astro preview --host 127.0.0.1
 Build locally:
 
 ```sh
-node docs/scripts/sync-readmes.mjs
+pnpm exec tsx docs/scripts/sync-readmes.mjs
 pnpm --dir .docs-build/site install --lockfile=false
 node docs/scripts/generate-api-docs.mjs
 pnpm --dir .docs-build/site build

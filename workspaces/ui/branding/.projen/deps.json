@@ -6,7 +6,12 @@
       "type": "build"
     },
     {
-      "name": "consola",
+      "name": "@types/react-dom",
+      "version": "catalog:",
+      "type": "build"
+    },
+    {
+      "name": "@types/react",
       "version": "catalog:",
       "type": "build"
     },
@@ -20,12 +25,17 @@
       "type": "build"
     },
     {
-      "name": "consola",
-      "version": "catalog:",
-      "type": "peer"
+      "name": "@dbx-tools/shared-core",
+      "version": "workspace:*",
+      "type": "runtime"
     },
     {
-      "name": "zod",
+      "name": "react-dom",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "react",
       "version": "catalog:",
       "type": "runtime"
     }

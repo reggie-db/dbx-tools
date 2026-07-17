@@ -57,6 +57,9 @@ app:
 - **Shared browser-safe contracts** — keep UI, server, tests, and tools aligned
   with zod schemas for Mastra routes, Genie events, model lookup, email payloads,
   and selected Databricks SDK shapes.
+- **Reusable brand context** — validate one YAML or JSON source for product
+  names, assets, colors, typography, and LLM writing voice, then consume it from
+  Node, React, browser helpers, or generated JSON Schema.
 - **Databricks infrastructure helpers** — resolve workspace identity, cloud
   region, public IPs, Zerobus endpoints, and Databricks SDK cancellation without
   binding every package to AppKit.
@@ -126,6 +129,7 @@ export function App() {
 | Local model proxy           | [`@dbx-tools/model-proxy`](workspaces/cli/model-proxy)                                                                                               |
 | Email workflows             | [`@dbx-tools/email`](workspaces/node/email), [`@dbx-tools/shared-email`](workspaces/shared/email), [`@dbx-tools/ui-email`](workspaces/ui/email) |
 | React/AppKit UI             | [`@dbx-tools/ui-appkit`](workspaces/ui/appkit), [`@dbx-tools/ui-mastra`](workspaces/ui/mastra), [`@dbx-tools/ui-email`](workspaces/ui/email)         |
+| Brand context and assets    | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/core`](workspaces/node/core), [`@dbx-tools/ui-branding`](workspaces/ui/branding) |
 | Databricks infrastructure   | [`@dbx-tools/databricks`](workspaces/node/databricks), [`@dbx-tools/databricks-zerobus`](workspaces/node/databricks-zerobus)               |
 | Shared utilities            | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/core`](workspaces/node/core), [`@dbx-tools/path`](workspaces/node/path)   |
 | SDK-derived schemas         | [`@dbx-tools/shared-sdk-model`](workspaces/shared/sdk-model)                                                                                         |
@@ -133,6 +137,22 @@ export function App() {
 Read the package README for each feature area. They are written as the
 package-level source of truth: key features, import examples, configuration or
 runtime behavior, module maps, and links to adjacent packages.
+
+### Load One Brand File
+
+The root [`branding/brand.yaml`](branding/brand.yaml) is the canonical dbx tools
+context and points at the reusable SVG assets beside it. The same schema accepts
+JSON.
+
+```ts
+import { brand } from "@dbx-tools/core";
+
+const brandContext = await brand.loadBrandContext();
+```
+
+Use `brand.BrandContextSchema` from `@dbx-tools/shared-core` in browser-safe
+code or structured LLM tools. Use `@dbx-tools/ui-branding/react` and
+`@dbx-tools/ui-branding/browser` to render or apply the resulting context.
 
 ## Common Workflows
 

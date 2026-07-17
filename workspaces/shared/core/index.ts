@@ -3,6 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as async from "./src/async";
+export * as brand from "./src/brand";
 export * as error from "./src/error";
 export * as functionModule from "./src/function";
 export * as hash from "./src/hash";
@@ -14,6 +15,7 @@ export * as predicate from "./src/predicate";
 export * as string from "./src/string";
 export * as token from "./src/token";
 export type { PollContext, PollProducer, PollOptions } from "./src/async";
+export type { BrandContext, BrandContextInput, BrandAssetSet } from "./src/brand";
 export type { ErrorContext } from "./src/error";
 export type { MemoizeOptions } from "./src/function";
 export type { HeaderLike } from "./src/http";

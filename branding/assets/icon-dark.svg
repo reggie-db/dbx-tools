@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title description">
+  <title id="title">dbx tools icon</title>
+  <desc id="description">Pixel tool mark in dbx tools lava red on a dark surface.</desc>
+  <rect width="64" height="64" rx="12" fill="#0B2026"/>
+  <g shape-rendering="crispEdges">
+    <path d="M4 28h8v8H4zm8 0h8v16h-8zm8-8h8v16h-8zm8 8h8v8h-8zm8-8h8v16h-8zm8 8h8v16h-8zm8 0h4v8h-4z" fill="#FF3621"/>
+    <path d="M4 28h8v8H4zm52 0h4v8h-4z" fill="#FF5A46"/>
+    <path d="M28 28h8v8h-8z" fill="#FF8974"/>
+  </g>
+</svg>

@@ -1,0 +1,12 @@
+:root {
+  --brand-color-primary: #ff3621;
+  --brand-color-primary-hover: #d92d18;
+  --brand-color-accent: #00a972;
+  --brand-color-foreground: #0b2026;
+  --brand-color-background: #ffffff;
+  --brand-color-surface: #f6f7f8;
+  --brand-color-muted: #5f6b70;
+  --brand-color-border: #dce2e5;
+  --brand-font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --brand-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

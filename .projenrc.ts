@@ -56,7 +56,14 @@ const root = new projectApi.DBXToolsNodeProject({
   // `@dbx-tools/projen` (the engine) lives in the standalone `projen/`
   // project, not this workspace; the repo `.pnpmfile.cjs` rewrites it to a
   // `link:./projen`. It stays a plain dep here so synth can resolve it.
-  devDeps: ["concurrently", "@dbx-tools/shared-core@workspace:*", "@dbx-tools/projen@*"],
+  devDeps: [
+    "concurrently",
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/projen@*",
+    // shared-core's public brand namespace is Zod-backed and is loaded while
+    // this projen definition evaluates through the workspace dependency.
+    "zod@catalog:",
+  ],
 });
 
 // ---------------------------------------------------------------------------
@@ -141,6 +148,7 @@ project.applyToProjects(root, { path: "workspaces/**", identifierName: "!shared-
 // fallback when it's absent, so consumers may leave it uninstalled. Version
 // tracks the hardcoded DEFAULT_CATALOG entry.
 project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" }, (p) => {
+  p.addDeps("zod@catalog:");
   p.addPeerDeps("consola@catalog:");
   p.package.addField("peerDependenciesMeta", { consola: { optional: true } });
   // Present for local dev/typecheck; consumers opt in via the catalog.
@@ -152,6 +160,9 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // lib, no DOM). shared-core stays browser-safe; anything needing child_process
 // / fs / process depends on node-core instead. (shared-core is added by the
 // blanket base-dep mixin above, so this package needs no rule of its own.)
+project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
+  p.addDeps("yaml");
+});
 
 // node-appkit: the base for Node-side AppKit + experimental-SDK helpers.
 // Houses the SDK Context/AbortSignal adapter so the browser-safe shared-core
@@ -391,6 +402,21 @@ project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) =
   p.addDevDeps("vite@catalog:");
   // Adds `./vite` on top of the `ui` tag's `./react` + `./styles.css` default.
   projectApi.addExports(p, { "./vite": "./src/vite.ts" });
+});
+
+// ui-branding: portable SVG/data assets plus framework-agnostic browser helpers
+// and React bindings over shared-core's BrandContext. The root branding folder
+// is canonical; pre-compile regenerates the package copies and data URLs.
+project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p) => {
+  projectApi.addExports(p, {
+    "./browser": "./src/browser.ts",
+    "./assets": "./src/generated/assets.ts",
+    "./assets/icon-light.svg": "./src/generated/icon-light.svg",
+    "./assets/icon-dark.svg": "./src/generated/icon-dark.svg",
+    "./assets/logo-light.svg": "./src/generated/logo-light.svg",
+    "./assets/logo-dark.svg": "./src/generated/logo-dark.svg",
+  });
+  p.tasks.tryFind("pre-compile")?.exec("node ../../../branding/generate-package-assets.mjs");
 });
 
 // ui-email: the React surface for the email add-on - an Approve/Deny approval
