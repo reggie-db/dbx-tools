@@ -42,7 +42,7 @@ building block at a time, bottom of the dependency tree up.
 - **shared-core** (`workspaces/shared/core` → `@dbx-tools/shared-core`):
   dependency-free, **browser-safe** runtime helpers (agnostic tag, `WebWorker`
   lib — web-standard globals, no node types, no DOM). Concern-split modules,
-  namespaced barrel (`export * as async/equal/error/hash/string/object/runtime/...`).
+  namespaced barrel (`export * as async/error/hash/string/object/runtime/...`).
   Consumers write `string.toSlug(...)`, `error.errorMessage(...)`, etc.
 - **node-core** (`workspaces/node/core` → `@dbx-tools/node-core`): the Node-only
   half of the shared runtime — `exec` (child_process) + `project` (fs/path repo
@@ -113,12 +113,12 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 
 ### shared-core surface now available
 
-`async` (poll/sleep/tieAbortSignal), `equal` (deepEqual + comparator), `error`
+`async` (poll/sleep/tieAbortSignal), `error`
 (errorMessage/errorMessages/errorNodes/toError), `hash`
 (fnvHash/fnvHashWithOptions/toBase32/id), `string`
 (tokenize/tokenizeWithOptions/toIdentifier/toSlug/toUniqueSlug/trimToNull/
 firstNonEmpty/escapeHtml/toDescription), `object`
-(isRecord/toBoolean/NameLike/NonFunctionKeys), `runtime` (isDatabricksAppEnv),
+(isRecord/toBoolean/deepEqual/NameLike/NonFunctionKeys/DeepEqualComparator), `runtime` (isDatabricksAppEnv),
 `log` (logger/isLevelEnabled), plus `functionModule` (memoize), `iterable`,
 `predicate`. NOTE: `exec` + `project` moved to **node-core** (not shared-core).
 

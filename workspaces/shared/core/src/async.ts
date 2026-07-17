@@ -4,7 +4,7 @@
  * {@link poll} generator. Dependency-free; `poll`'s `"distinct"` filter
  * uses the local {@link deepEqual}.
  */
-import { deepEqual } from "./equal";
+import { deepEqual } from "./object";
 
 /**
  * Per-iteration context handed to {@link PollProducer} and the

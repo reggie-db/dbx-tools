@@ -3,7 +3,6 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as async from "./src/async";
-export * as equal from "./src/equal";
 export * as error from "./src/error";
 export * as functionModule from "./src/function";
 export * as hash from "./src/hash";
@@ -14,10 +13,9 @@ export * as predicate from "./src/predicate";
 export * as runtime from "./src/runtime";
 export * as string from "./src/string";
 export type { PollContext, PollProducer, PollOptions } from "./src/async";
-export type { DeepEqualComparator } from "./src/equal";
 export type { MemoizeOptions } from "./src/function";
 export type { Sequence, Container, Collection, OneOrMany } from "./src/iterable";
 export type { LogLevel, Logger } from "./src/log";
-export type { NameLike, NonFunctionKeys } from "./src/object";
+export type { NameLike, NonFunctionKeys, DeepEqualComparator } from "./src/object";
 export type { PredicateFunction, TypePredicateFunction, PredicateInput, Predicate } from "./src/predicate";
 export type { TokenizeOptions, KeyOptions, IdentifierOptions, Description } from "./src/string";
