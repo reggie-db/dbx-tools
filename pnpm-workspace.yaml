@@ -26,6 +26,7 @@ packages:
   - workspaces/shared/core
   - workspaces/shared/email
   - workspaces/shared/genie
+  - workspaces/shared/mastra
   - workspaces/shared/model
   - workspaces/shared/sdk-model
 catalog:

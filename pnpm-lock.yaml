@@ -777,6 +777,31 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workspaces/shared/mastra:
+    dependencies:
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../core
+      '@dbx-tools/shared-genie':
+        specifier: workspace:*
+        version: link:../genie
+      '@dbx-tools/shared-model':
+        specifier: workspace:*
+        version: link:../model
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.6.0
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   workspaces/shared/model:
     dependencies:
       '@dbx-tools/shared-core':
