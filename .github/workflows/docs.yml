@@ -37,8 +37,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Generate docs from READMEs
         run: node docs/scripts/sync-readmes.mjs
+      - name: Install docs dependencies
+        run: pnpm --dir .docs-build/site install --lockfile=false
+      - name: Generate TypeScript API docs
+        run: node docs/scripts/generate-api-docs.mjs
       - name: Build docs
-        run: pnpm dlx vitepress@1.6.4 build .docs-build/site --config docs/vitepress.config.mts
+        run: pnpm --dir .docs-build/site build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

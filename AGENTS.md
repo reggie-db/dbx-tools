@@ -25,7 +25,8 @@ When you update docs, README positioning, or agent instructions:
 - Do not mention any predecessor repo or migration source in public docs. Treat
   this repository as the continuation/current product.
 - Do not hand-maintain a second docs tree. The GitHub Pages site is generated
-  from root/package READMEs by `docs/scripts/sync-readmes.mjs`.
+  from root/package READMEs by `docs/scripts/sync-readmes.mjs`, with generated
+  TypeScript API pages from `docs/scripts/generate-api-docs.mjs`.
 
 ## What this repo is
 
@@ -110,10 +111,12 @@ Package README rules:
 Docs site rules:
 
 - Source of truth is `README.md` plus `workspaces/**/README.md`.
-- `docs/scripts/sync-readmes.mjs` generates `.docs-build/site`.
-- `docs/vitepress.config.mts` builds that generated tree with VitePress.
+- `docs/scripts/sync-readmes.mjs` generates the Starlight site under
+  `.docs-build/site`.
+- `docs/scripts/generate-api-docs.mjs` generates TypeDoc Markdown into the same
+  Starlight content tree from package `index.ts` exports.
 - `.github/workflows/docs.yml` builds and deploys GitHub Pages from generated
-  README content.
+  README and API content.
 - Generated files under `.docs-build/` are build artifacts; never commit them.
 - If navigation is wrong, update the generator. If prose is wrong, update the
   source README.

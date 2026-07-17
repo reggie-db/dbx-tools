@@ -4,6 +4,8 @@ import path from "node:path";
 
 const root = process.cwd();
 const sourceRoot = path.join(root, ".docs-build", "site");
+const docsContentRoot = path.join(sourceRoot, "src", "content", "docs");
+const publicRoot = path.join(sourceRoot, "public");
 const repoUrl = "https://github.com/reggie-db/dbx-tools";
 
 const rm = (p) => fs.rmSync(p, { recursive: true, force: true });
@@ -89,6 +91,27 @@ function docsPathForPackage(pkg) {
   return `/packages/${pkg.slug}`;
 }
 
+function pageTitle(markdown, fallback) {
+  const match = markdown.match(/^#\s+(.+?)\s*$/m);
+  return match?.[1]?.trim() || fallback;
+}
+
+function yamlString(value) {
+  return JSON.stringify(value ?? "");
+}
+
+function frontmatter({ title, description, sourcePath }) {
+  return `${[
+    "---",
+    `title: ${yamlString(title)}`,
+    description ? `description: ${yamlString(description)}` : undefined,
+    `source: ${yamlString(posix(path.relative(root, sourcePath)))}`,
+    "---",
+  ]
+    .filter(Boolean)
+    .join("\n")}\n\n`;
+}
+
 function localDocsTarget(absTarget, mappings) {
   const clean = absTarget.replace(/[/\\]$/, "");
   const statTarget = fs.existsSync(clean) ? clean : undefined;
@@ -133,6 +156,18 @@ function generatedHeader(sourcePath) {
   ].join("\n");
 }
 
+function generatedPage(sourcePath, markdown, fallbackTitle, fromDir, mappings) {
+  return (
+    frontmatter({
+      title: pageTitle(markdown, fallbackTitle),
+      description: firstParagraph(markdown),
+      sourcePath,
+    }) +
+    generatedHeader(sourcePath) +
+    transformLinks(markdown, fromDir, mappings)
+  );
+}
+
 function buildPackageIndex(packages) {
   const rows = packages
     .map((pkg) => {
@@ -163,19 +198,15 @@ function nav(packages) {
     groups.set(pkg.group, items);
   }
   const sidebar = [
-    { text: "Overview", link: "/" },
-    { text: "Package Reference", link: "/packages/" },
+    { label: "Overview", link: "/" },
+    { label: "Package Reference", link: "/packages/" },
+    { label: "API Reference", link: "/api/" },
     ...[...groups.entries()].map(([group, items]) => ({
-      text: groupTitle(group),
-      items,
+      label: groupTitle(group),
+      items: items.map((item) => ({ label: item.text, link: item.link })),
     })),
   ];
   return {
-    nav: [
-      { text: "Overview", link: "/" },
-      { text: "Packages", link: "/packages/" },
-      { text: "GitHub", link: repoUrl },
-    ],
     sidebar,
   };
 }
@@ -210,6 +241,93 @@ function llmsFull(packages, mappings) {
   return parts.join("\n\n---\n\n");
 }
 
+function docsPackageJson() {
+  return `${JSON.stringify(
+    {
+      private: true,
+      type: "module",
+      scripts: {
+        dev: "astro dev --host 127.0.0.1",
+        build: "astro build",
+      },
+      dependencies: {
+        "@astrojs/starlight": "^0.41.0",
+        astro: "^7.0.0",
+        typedoc: "^0.28.20",
+        "typedoc-plugin-markdown": "^4.12.0",
+      },
+      devDependencies: {},
+      pnpm: {
+        onlyBuiltDependencies: ["esbuild", "sharp"],
+      },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function astroConfig() {
+  return `// @ts-check
+import fs from "node:fs";
+import path from "node:path";
+import starlight from "@astrojs/starlight";
+import { defineConfig } from "astro/config";
+
+const docsRoot = process.cwd();
+const repoRoot = path.resolve(docsRoot, "..", "..");
+const navPath = path.join(docsRoot, "nav.json");
+const generatedNav = fs.existsSync(navPath)
+  ? JSON.parse(fs.readFileSync(navPath, "utf8"))
+  : { sidebar: [] };
+
+export default defineConfig({
+  outDir: path.join(repoRoot, ".docs-build", "dist"),
+  site: "https://reggie-db.github.io",
+  base: process.env.GITHUB_REPOSITORY?.endsWith("/dbx-tools") ? "/dbx-tools" : "/",
+  integrations: [
+    starlight({
+      title: "dbx-tools",
+      description:
+        "Companion packages for Databricks developers building AppKit, Mastra, Genie, Model Serving, email, and UI integrations.",
+      sidebar: generatedNav.sidebar,
+      social: [{ icon: "github", label: "GitHub", href: "https://github.com/reggie-db/dbx-tools" }],
+      editLink: {
+        baseUrl: "https://github.com/reggie-db/dbx-tools/edit/main/",
+      },
+      pagefind: true,
+    }),
+  ],
+});
+`;
+}
+
+function docsWorkspaceYaml() {
+  return [
+    "packages: []",
+    "onlyBuiltDependencies:",
+    "  - esbuild",
+    "  - sharp",
+    "allowBuilds:",
+    "  esbuild: true",
+    "  sharp: true",
+    "",
+  ].join("\n");
+}
+
+function contentConfig() {
+  return `import { defineCollection } from "astro:content";
+import { docsLoader } from "@astrojs/starlight/loaders";
+import { docsSchema } from "@astrojs/starlight/schema";
+
+export const collections = {
+  docs: defineCollection({
+    loader: docsLoader(),
+    schema: docsSchema(),
+  }),
+};
+`;
+}
+
 function main() {
   const packages = discoverPackages();
   const mappings = { byDir: new Map() };
@@ -218,28 +336,38 @@ function main() {
   }
 
   rm(sourceRoot);
-  mkdir(path.join(sourceRoot, ".vitepress"));
+  mkdir(docsContentRoot);
 
   const rootReadme = path.join(root, "README.md");
   write(
-    path.join(sourceRoot, "index.md"),
-    generatedHeader(rootReadme) + transformLinks(read(rootReadme), root, mappings),
+    path.join(docsContentRoot, "index.md"),
+    generatedPage(rootReadme, read(rootReadme), "dbx-tools", root, mappings),
   );
-  write(path.join(sourceRoot, "packages", "index.md"), buildPackageIndex(packages));
+  write(
+    path.join(docsContentRoot, "packages", "index.md"),
+    frontmatter({
+      title: "Package Reference",
+      description: "Package-level documentation generated from dbx-tools README files.",
+      sourcePath: rootReadme,
+    }) +
+      generatedHeader(rootReadme) +
+      buildPackageIndex(packages),
+  );
 
   for (const pkg of packages) {
     write(
-      path.join(sourceRoot, "packages", `${pkg.slug}.md`),
-      generatedHeader(pkg.readme) + transformLinks(read(pkg.readme), pkg.dir, mappings),
+      path.join(docsContentRoot, "packages", `${pkg.slug}.md`),
+      generatedPage(pkg.readme, read(pkg.readme), pkg.name, pkg.dir, mappings),
     );
   }
 
-  write(
-    path.join(sourceRoot, ".vitepress", "nav.json"),
-    `${JSON.stringify(nav(packages), null, 2)}\n`,
-  );
-  write(path.join(sourceRoot, "llms.txt"), llms(packages));
-  write(path.join(sourceRoot, "llms-full.txt"), llmsFull(packages, mappings));
+  write(path.join(sourceRoot, "nav.json"), `${JSON.stringify(nav(packages), null, 2)}\n`);
+  write(path.join(sourceRoot, "package.json"), docsPackageJson());
+  write(path.join(sourceRoot, "pnpm-workspace.yaml"), docsWorkspaceYaml());
+  write(path.join(sourceRoot, "astro.config.mjs"), astroConfig());
+  write(path.join(sourceRoot, "src", "content.config.ts"), contentConfig());
+  write(path.join(publicRoot, "llms.txt"), llms(packages));
+  write(path.join(publicRoot, "llms-full.txt"), llmsFull(packages, mappings));
   console.log(
     `Generated docs from ${packages.length} package READMEs into ${posix(path.relative(root, sourceRoot))}`,
   );
