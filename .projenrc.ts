@@ -47,6 +47,13 @@ const project = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
   workspacePackageRoots: ["workspaces", "example-workspaces"],
+  // The two example `ui/*` packages are full browser apps (they ship an
+  // `index.html`), so they take the `app` tag (vite build/dev/preview) on top
+  // of the `ui` component surface their path already grants.
+  workspacePackageTagPaths: {
+    "example-workspaces/ui/app": ["app"],
+    "example-workspaces/ui/appkit-client": ["app"],
+  },
   syncResynthPaths: [".example.projenrc.ts"],
   github: true,
   buildWorkflow: true,
@@ -85,6 +92,25 @@ project.pnpmWorkspace?.addCatalog("@mastra/observability", "^1.15.2");
 project.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "^1.4.0");
 project.pnpmWorkspace?.addCatalog("@mastra/pg", "^1.14.2");
 project.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
+
+// Catalog pins for the React `ui` add-on stack (AppKit UI kit + Tailwind v4 +
+// the Mastra chat-UI deps). These only load in ui-tagged (browser) packages.
+// (`@databricks/appkit-ui` is already an engine DEFAULT_CATALOG entry;
+// `@mastra/ai-sdk` is pinned above.)
+project.pnpmWorkspace?.addCatalog("@tailwindcss/vite", "^4.3.1");
+project.pnpmWorkspace?.addCatalog("tailwindcss", "^4.3.2");
+project.pnpmWorkspace?.addCatalog("tw-animate-css", "^1.4.0");
+project.pnpmWorkspace?.addCatalog("lucide-react", "^0.554.0");
+project.pnpmWorkspace?.addCatalog("react-router-dom", "^7.6.2");
+project.pnpmWorkspace?.addCatalog("streamdown", "^2.5.0");
+project.pnpmWorkspace?.addCatalog("@mastra/client-js", "^1.28.0");
+project.pnpmWorkspace?.addCatalog("@tanstack/react-table", "^8.21.3");
+project.pnpmWorkspace?.addCatalog("ai", "^5.0.0");
+project.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
+project.pnpmWorkspace?.addCatalog("echarts-for-react", "^3.0.2");
+project.pnpmWorkspace?.addCatalog("shiki", "^3.0.0");
+project.pnpmWorkspace?.addCatalog("sql-formatter", "^15.6.9");
+project.pnpmWorkspace?.addCatalog("nanoid", "^5.1.6");
 
 
 // ---------------------------------------------------------------------------
@@ -392,6 +418,30 @@ project.with(
       "@databricks/sdk-experimental@catalog:",
     );
     applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
+  }),
+
+  // ui-appkit: the shared React UI base for the feature UI packages. Re-exports
+  // AppKit's UI kit (`@databricks/appkit-ui/react`), the default Vite plugins
+  // (React + Tailwind v4), and the shared stylesheet. `ui`-tagged (React + vite
+  // + jsx come from the ui tag). Subpath exports match the -js layout.
+  mixin.mixin(pkg("*/ui-appkit", "ui"), (p) => {
+    p.addDeps(
+      "@databricks/appkit-ui@catalog:",
+      "@tailwindcss/vite@catalog:",
+      "@vitejs/plugin-react@catalog:",
+      "tailwindcss@catalog:",
+      "streamdown@catalog:",
+    );
+    // Ships a Vite plugin preset (`./vite`), so it needs vite + the React
+    // plugin as real deps - the `ui` tag is a component library and no longer
+    // carries the vite toolchain (that moved to the `app` tag).
+    p.addDevDeps("vite@catalog:");
+    p.package.addField("exports", {
+      "./react": "./src/react/index.ts",
+      "./vite": "./src/vite.ts",
+      "./styles.css": "./src/styles.css",
+      "./package.json": "./package.json",
+    });
   }),
 );
 

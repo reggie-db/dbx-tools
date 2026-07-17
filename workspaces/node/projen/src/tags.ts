@@ -52,7 +52,24 @@ export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
  * or a subset list; unselected packages fall back to {@link AGNOSTIC_COMPILER_OPTIONS}).
  */
 export const WORKSPACE_TAG_MIXINS = {
+  // `ui`: a React COMPONENT LIBRARY (source-first, consumed by apps) - modeled
+  // on `@databricks/appkit-ui`. React + DOM lib + JSX, and the default `tsc`
+  // compile (typecheck). No vite app build / index.html: a full browser app is an
+  // `app`-tagged package (see below) that layers vite on top.
   ui: mixin(projectPredicate.hasTag("ui"), (p) => {
+    p.addDeps("react@catalog:", "react-dom@catalog:");
+    p.addDevDeps("@types/react@catalog:", "@types/react-dom@catalog:");
+    applyCompilerOptions(p, {
+      target: "ES2022",
+      lib: [...DOM_LIB],
+      jsx: javascript.TypeScriptJsxMode.REACT_JSX,
+    });
+  }),
+  // `app`: a full browser app built + served by Vite (needs an `index.html`
+  // entry). Self-contained React app: React + DOM lib + JSX + the vite toolchain
+  // and app tasks (`dev`/`build`/`preview`). `build` resets the compile task, so
+  // `compile` bundles with vite rather than `tsc`.
+  app: mixin(projectPredicate.hasTag("app"), (p) => {
     p.addDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps(
       "vite@catalog:",
