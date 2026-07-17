@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dbx.tools — Terminal / Prompt-Cursor logo concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --coral:#FF7A5C;        /* iPhone Coral — hero */
+    --coral-deep:#E85C42;   /* primary stroke on light */
+    --coral-dark:#C6412A;   /* accents */
+    --coral-tint:#FFE4DC;   /* light tint */
+    --coral-bright:#FF9E86; /* dark-mode accent */
+    --ink:#0a0a0a;
+    --paper:#ffffff;
+    --line:#eceae8;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:#faf9f8;color:#1a1a1a;
+    font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:56px 28px 96px}
+  header.hero{margin-bottom:44px}
+  .kicker{
+    font-family:'DM Mono',monospace;font-size:13px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--coral-deep);margin:0 0 14px
+  }
+  h1{font-size:40px;font-weight:700;letter-spacing:-1.2px;margin:0 0 12px}
+  .lede{font-size:17px;line-height:1.6;color:#555;max-width:680px;margin:0}
+  .lede code{font-family:'DM Mono',monospace;background:var(--coral-tint);color:var(--coral-dark);padding:1px 6px;border-radius:5px;font-size:14px}
+
+  /* palette chips */
+  .palette{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0 0}
+  .chip{border:1px solid var(--line);border-radius:12px;overflow:hidden;width:112px;background:#fff}
+  .chip .sw{height:52px}
+  .chip .meta{padding:8px 10px}
+  .chip .nm{font-size:12px;font-weight:700}
+  .chip .hex{font-family:'DM Mono',monospace;font-size:11px;color:#777}
+
+  .concept{margin-top:40px;border:1px solid var(--line);border-radius:20px;background:#fff;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .concept > .head{padding:22px 26px 4px}
+  .badge{display:inline-block;font-family:'DM Mono',monospace;font-size:12px;color:#fff;background:var(--coral-deep);padding:3px 9px;border-radius:999px;letter-spacing:.03em}
+  .concept h2{font-size:23px;font-weight:700;letter-spacing:-.4px;margin:12px 0 6px}
+  .rationale{font-size:15px;line-height:1.58;color:#555;max-width:760px;margin:0 0 4px}
+  .stash{font-size:14px;line-height:1.55;color:var(--coral-dark);margin:10px 0 0;padding:10px 14px;background:var(--coral-tint);border-radius:10px;max-width:760px}
+  .stash b{color:var(--coral-dark)}
+
+  /* the two-up light/dark stage */
+  .stage{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:20px;border-top:1px solid var(--line)}
+  .pane{padding:34px 26px}
+  .pane.light{background:#fff}
+  .pane.dark{background:var(--ink)}
+  .pane .tag{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 22px}
+  .pane.light .tag{color:#aaa}
+  .pane.dark .tag{color:#666}
+
+  .lockrow{display:flex;align-items:center;min-height:74px;margin-bottom:26px}
+  .lockrow img{height:56px;width:auto}
+
+  .sizes{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap}
+  .sizeitem{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .sizeitem img{display:block}
+  .sizeitem .cap{font-family:'DM Mono',monospace;font-size:10px;color:#999}
+  .pane.dark .sizeitem .cap{color:#777}
+
+  footer{margin-top:56px;padding-top:26px;border-top:1px solid var(--line);color:#888;font-size:13px}
+  footer code{font-family:'DM Mono',monospace}
+  @media(max-width:720px){.stage{grid-template-columns:1fr}h1{font-size:31px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <p class="kicker">dbx.tools · branding phase 1 · lane 2 of N</p>
+    <h1>Terminal / Prompt-Cursor logo concepts</h1>
+    <p class="lede">
+      Four marks built from developer-terminal motifs — the <code>&gt;_</code> prompt, a blinking cursor
+      block, <code>&lt;/&gt;</code> code brackets, and a terminal window. Clean geometric sans wordmark
+      (DM Sans, à la Databricks) in a warm iPhone-<em>Coral</em> palette. Each mark hides an
+      <b>extremely subtle mustache</b> — invisible until you know, delightful once you do.
+    </p>
+
+    <div class="palette">
+      <div class="chip"><div class="sw" style="background:#FF7A5C"></div><div class="meta"><div class="nm">Coral</div><div class="hex">#FF7A5C</div></div></div>
+      <div class="chip"><div class="sw" style="background:#E85C42"></div><div class="meta"><div class="nm">Coral Deep</div><div class="hex">#E85C42</div></div></div>
+      <div class="chip"><div class="sw" style="background:#C6412A"></div><div class="meta"><div class="nm">Coral Dark</div><div class="hex">#C6412A</div></div></div>
+      <div class="chip"><div class="sw" style="background:#FF9E86"></div><div class="meta"><div class="nm">Coral Bright</div><div class="hex">#FF9E86</div></div></div>
+      <div class="chip"><div class="sw" style="background:#FFE4DC"></div><div class="meta"><div class="nm">Coral Tint</div><div class="hex">#FFE4DC</div></div></div>
+    </div>
+  </header>
+
+  <!-- CONCEPT 1 -->
+  <section class="concept">
+    <div class="head">
+      <span class="badge">concept 01 · prompt</span>
+      <h2>The <code style="font-family:'DM Mono',monospace">&gt;_</code> Prompt</h2>
+      <p class="rationale">The universal shell prompt, reduced to its essence: an open chevron and a
+        resting cursor. The most instantly-legible “this is a terminal” signal, and the strongest
+        favicon of the set.</p>
+      <p class="stash">🥸 <b>Mustache:</b> the two arms of the <code>&gt;</code> are gently <em>waxed</em> —
+        curved outward like a groomed handlebar meeting at the point (the philtrum). Reads as a crisp
+        chevron; only on a second look is it a tiny mustache.</p>
+    </div>
+    <div class="stage">
+      <div class="pane light">
+        <p class="tag">Light</p>
+        <div class="lockrow"><img src="concept-1-lockup-light.svg" alt="dbx.tools prompt lockup, light"></div>
+        <div class="sizes">
+          <div class="sizeitem"><img src="concept-1-icon-light.svg" width="88" height="88" alt=""><span class="cap">88</span></div>
+          <div class="sizeitem"><img src="concept-1-icon-light.svg" width="48" height="48" alt=""><span class="cap">48</span></div>
+          <div class="sizeitem"><img src="concept-1-icon-light.svg" width="32" height="32" alt=""><span class="cap">32</span></div>
+          <div class="sizeitem"><img src="concept-1-icon-light.svg" width="16" height="16" alt=""><span class="cap">16</span></div>
+        </div>
+      </div>
+      <div class="pane dark">
+        <p class="tag">Dark</p>
+        <div class="lockrow"><img src="concept-1-lockup-dark.svg" alt="dbx.tools prompt lockup, dark"></div>
+        <div class="sizes">
+          <div class="sizeitem"><img src="concept-1-icon-dark.svg" width="88" height="88" alt=""><span class="cap">88</span></div>
+          <div class="sizeitem"><img src="concept-1-icon-dark.svg" width="48" height="48" alt=""><span class="cap">48</span></div>
+          <div class="sizeitem"><img src="concept-1-icon-dark.svg" width="32" height="32" alt=""><span class="cap">32</span></div>
+          <div class="sizeitem"><img src="concept-1-icon-dark.svg" width="16" height="16" alt=""><span class="cap">16</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCEPT 2 -->
+  <section class="concept">
+    <div class="head">
+      <span class="badge">concept 02 · cursor</span>
+      <h2>The Cursor Block</h2>
+      <p class="rationale">A solid blinking cursor resting on the command line — the beat of an active
+        session. The most abstract and monogram-like of the set; the tall block pairs naturally with
+        the ascenders of the wordmark.</p>
+      <p class="stash">🥸 <b>Mustache:</b> the command-line baseline isn’t flat — its two tips flick
+        <em>upward</em> a couple of pixels, a barely-there handlebar under the cursor. Looks like a
+        cursor on a line; it’s quietly a face.</p>
+    </div>
+    <div class="stage">
+      <div class="pane light">
+        <p class="tag">Light</p>
+        <div class="lockrow"><img src="concept-2-lockup-light.svg" alt="dbx.tools cursor lockup, light"></div>
+        <div class="sizes">
+          <div class="sizeitem"><img src="concept-2-icon-light.svg" width="88" height="88" alt=""><span class="cap">88</span></div>
+          <div class="sizeitem"><img src="concept-2-icon-light.svg" width="48" height="48" alt=""><span class="cap">48</span></div>
+          <div class="sizeitem"><img src="concept-2-icon-light.svg" width="32" height="32" alt=""><span class="cap">32</span></div>
+          <div class="sizeitem"><img src="concept-2-icon-light.svg" width="16" height="16" alt=""><span class="cap">16</span></div>
+        </div>
+      </div>
+      <div class="pane dark">
+        <p class="tag">Dark</p>
+        <div class="lockrow"><img src="concept-2-lockup-dark.svg" alt="dbx.tools cursor lockup, dark"></div>
+        <div class="sizes">
+          <div class="sizeitem"><img src="concept-2-icon-dark.svg" width="88" height="88" alt=""><span class="cap">88</span></div>
+          <div class="sizeitem"><img src="concept-2-icon-dark.svg" width="48" height="48" alt=""><span class="cap">48</span></div>
+          <div class="sizeitem"><img src="concept-2-icon-dark.svg" width="32" height="32" alt=""><span class="cap">32</span></div>
+          <div class="sizeitem"><img src="concept-2-icon-dark.svg" width="16" height="16" alt=""><span class="cap">16</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCEPT 3 -->
+  <section class="concept">
+    <div class="head">
+      <span class="badge">concept 03 · brackets</span>
+      <h2>The <code style="font-family:'DM Mono',monospace">&lt;/&gt;</code> Code Brackets</h2>
+      <p class="rationale">The “this is code” glyph, dressed in coral. Two chevrons split by a slash —
+        symmetrical, energetic, and unmistakably about software tooling. Strong horizontal balance
+        beside the wordmark.</p>
+      <p class="stash">🥸 <b>Mustache:</b> read the two chevrons as the halves of a handlebar and the
+        angled <code>/</code> becomes the nose-and-philtrum parting them down the middle. It’s a code
+        tag first; a face on the second glance.</p>
+    </div>
+    <div class="stage">
+      <div class="pane light">
+        <p class="tag">Light</p>
+        <div class="lockrow"><img src="concept-3-lockup-light.svg" alt="dbx.tools brackets lockup, light"></div>
+        <div class="sizes">
+          <div class="sizeitem"><img src="concept-3-icon-light.svg" width="88" height="88" alt=""><span class="cap">88</span></div>
+          <div class="sizeitem"><img src="concept-3-icon-light.svg" width="48" height="48" alt=""><span class="cap">48</span></div>
+          <div class="sizeitem"><img src="concept-3-icon-light.svg" width="32" height="32" alt=""><span class="cap">32</span></div>
+          <div class="sizeitem"><img src="concept-3-icon-light.svg" width="16" height="16" alt=""><span class="cap">16</span></div>
+        </div>
+      </div>
+      <div class="pane dark">
+        <p class="tag">Dark</p>
+        <div class="lockrow"><img src="concept-3-lockup-dark.svg" alt="dbx.tools brackets lockup, dark"></div>
+        <div class="sizes">
+          <div class="sizeitem"><img src="concept-3-icon-dark.svg" width="88" height="88" alt=""><span class="cap">88</span></div>
+          <div class="sizeitem"><img src="concept-3-icon-dark.svg" width="48" height="48" alt=""><span class="cap">48</span></div>
+          <div class="sizeitem"><img src="concept-3-icon-dark.svg" width="32" height="32" alt=""><span class="cap">32</span></div>
+          <div class="sizeitem"><img src="concept-3-icon-dark.svg" width="16" height="16" alt=""><span class="cap">16</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCEPT 4 -->
+  <section class="concept">
+    <div class="head">
+      <span class="badge">concept 04 · window</span>
+      <h2>The Terminal Window</h2>
+      <p class="rationale">The whole environment in one glyph: a rounded window, a title bar, and a
+        live <code>&gt;_</code> prompt inside. The most “product” of the set — an app-icon shape that
+        still nods to the command line.</p>
+      <p class="stash">🥸 <b>Mustache:</b> the prompt <code>&gt;</code> inside the window has the same
+        waxed, curling arms as Concept 01 — a mustache tucked behind the glass. Doubly hidden: you
+        have to notice the prompt first, then the mustache within it.</p>
+    </div>
+    <div class="stage">
+      <div class="pane light">
+        <p class="tag">Light</p>
+        <div class="lockrow"><img src="concept-4-lockup-light.svg" alt="dbx.tools window lockup, light"></div>
+        <div class="sizes">
+          <div class="sizeitem"><img src="concept-4-icon-light.svg" width="88" height="88" alt=""><span class="cap">88</span></div>
+          <div class="sizeitem"><img src="concept-4-icon-light.svg" width="48" height="48" alt=""><span class="cap">48</span></div>
+          <div class="sizeitem"><img src="concept-4-icon-light.svg" width="32" height="32" alt=""><span class="cap">32</span></div>
+          <div class="sizeitem"><img src="concept-4-icon-light.svg" width="16" height="16" alt=""><span class="cap">16</span></div>
+        </div>
+      </div>
+      <div class="pane dark">
+        <p class="tag">Dark</p>
+        <div class="lockrow"><img src="concept-4-lockup-dark.svg" alt="dbx.tools window lockup, dark"></div>
+        <div class="sizes">
+          <div class="sizeitem"><img src="concept-4-icon-dark.svg" width="88" height="88" alt=""><span class="cap">88</span></div>
+          <div class="sizeitem"><img src="concept-4-icon-dark.svg" width="48" height="48" alt=""><span class="cap">48</span></div>
+          <div class="sizeitem"><img src="concept-4-icon-dark.svg" width="32" height="32" alt=""><span class="cap">32</span></div>
+          <div class="sizeitem"><img src="concept-4-icon-dark.svg" width="16" height="16" alt=""><span class="cap">16</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Wordmark: <b>DM Sans</b> 700 (fallback <code>Inter → system-ui</code>). Palette anchored to iPhone
+    “Coral”. All marks are hand-authored SVG · terminal/prompt-cursor lane · phase 1 concepts only.
+  </footer>
+</div>
+</body>
+</html>

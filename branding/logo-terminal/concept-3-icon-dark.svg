@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="dbx.tools code brackets mark">
+  <!-- Concept 3 (dark mode): </> code brackets. Chevrons = the two mustache halves; slash = philtrum. -->
+  <g fill="none" stroke="#FF7A5C" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 22 L11 33 L22 42"/>
+    <path d="M42 22 L53 33 L42 42"/>
+    <path d="M36 18 L28 46" stroke="#FF9E86"/>
+  </g>
+</svg>

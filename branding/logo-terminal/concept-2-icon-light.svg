@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="dbx.tools cursor block mark">
+  <!-- Concept 2: Block cursor on a command-line baseline.
+       Mustache = the baseline underline, whose tips lift almost imperceptibly like a waxed handlebar. -->
+  <!-- blinking cursor block -->
+  <rect x="26" y="15" width="12" height="27" rx="2.5" fill="#E85C42"/>
+  <!-- prompt baseline with a very subtle upward flick at each tip (the hidden mustache) -->
+  <path d="M15 49 Q16 46 20 46 L44 46 Q48 46 49 49"
+        fill="none" stroke="#C6412A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

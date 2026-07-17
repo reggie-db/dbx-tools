@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="310" height="72" viewBox="0 0 310 72" role="img" aria-label="dbx.tools logo">
+  <g fill="none" stroke="#FF7A5C" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 24 L12 36 L22 46"/>
+    <path d="M42 24 L52 36 L42 46"/>
+    <path d="M36 20 L28 50" stroke="#FF9E86"/>
+  </g>
+  <text x="74" y="47" font-family="'DM Sans','Inter',system-ui,-apple-system,'Segoe UI',sans-serif"
+        font-size="34" font-weight="700" letter-spacing="-1">
+    <tspan fill="#F5F5F5">dbx</tspan><tspan fill="#FF7A5C">.tools</tspan>
+  </text>
+</svg>

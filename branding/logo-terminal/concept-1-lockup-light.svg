@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="72" viewBox="0 0 300 72" role="img" aria-label="dbx.tools logo">
+  <!-- Concept 1 lockup: >_ prompt icon + wordmark -->
+  <g fill="none" stroke="#E85C42" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 20 Q30 26 36 36 Q30 46 17 52"/>
+    <path d="M44 52 H55" stroke="#C6412A"/>
+  </g>
+  <text x="78" y="47" font-family="'DM Sans','Inter',system-ui,-apple-system,'Segoe UI',sans-serif"
+        font-size="34" font-weight="700" letter-spacing="-1">
+    <tspan fill="#1A1A1A">dbx</tspan><tspan fill="#E85C42">.tools</tspan>
+  </text>
+</svg>
