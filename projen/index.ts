@@ -1,0 +1,34 @@
+// Public API of @dbx-tools/projen: the projen engine (project classes, tags,
+// mixins, predicates, and the generator utilities). Hand-authored barrel.
+export * as barrels from "./src/barrels";
+export * as clean from "./src/clean";
+export * as codegen from "./src/codegen";
+export * as dbxToolsConfig from "./src/dbx-tools-config";
+export * as engineRoot from "./src/engine-root";
+export * as generated from "./src/generated";
+export * as mixin from "./src/mixin";
+export * as moduleExports from "./src/module-exports";
+export * as openapi from "./src/openapi";
+export * as pnpmWorkspace from "./src/pnpm-workspace";
+export * as project from "./src/project";
+export * as projectPredicate from "./src/project-predicate";
+export * as publish from "./src/publish";
+export * as scaffold from "./src/scaffold";
+export * as tags from "./src/tags";
+export * as tsconfig from "./src/tsconfig";
+export * as vite from "./src/vite";
+export * as vscode from "./src/vscode";
+export * as watch from "./src/watch";
+export * as workspace from "./src/workspace";
+export type { BarrelModifier } from "./src/barrels";
+export type { DBXToolsConfigOptions } from "./src/dbx-tools-config";
+export type { HeaderOpts } from "./src/generated";
+export type { ConstructsMixin } from "./src/mixin";
+export type { ModuleExport } from "./src/module-exports";
+export type { Catalog, PnpmWorkspaceConfig, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace";
+export type { DBXToolsProject, DBXToolsProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project";
+export type { BumpLevel } from "./src/publish";
+export type { WorkspaceTag } from "./src/tags";
+export type { ViteConfigFileOptions } from "./src/vite";
+export type { IgnoreGroupOptions } from "./src/watch";
+export type { WorkspacePackage } from "./src/workspace";

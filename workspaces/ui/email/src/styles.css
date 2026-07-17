@@ -1,0 +1,20 @@
+/*
+ * @dbx-tools/ui-email stylesheet.
+ *
+ * Import once from the host app's Tailwind entry, after Tailwind and
+ * your AppKit-UI theme:
+ *
+ *   @import "tailwindcss";
+ *   @import "@databricks/appkit-ui/styles.css";
+ *   @import "@dbx-tools/ui-email/styles.css";
+ *
+ * Defines NO design tokens - the email preview styles exclusively with
+ * AppKit semantic tokens and inherits the host app's theme.
+ *
+ * Pulls shared Streamdown / shiki styling from `@dbx-tools/ui-appkit` and
+ * registers this package's React components with Tailwind via `@source`.
+ */
+
+@import "@dbx-tools/ui-appkit/styles.css";
+
+@source "./react";

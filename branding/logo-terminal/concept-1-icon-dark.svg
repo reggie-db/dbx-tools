@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="dbx.tools terminal prompt mark">
+  <!-- Concept 1 (dark mode): >_ Prompt. Mustache = the gently waxed arms of the > chevron. -->
+  <g fill="none" stroke="#FF7A5C" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 16 Q30 22 36 32 Q30 42 17 48"/>
+    <path d="M44 48 H55" stroke="#FF9E86"/>
+  </g>
+</svg>

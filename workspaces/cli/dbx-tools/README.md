@@ -1,47 +1,74 @@
-# @dbx-tools/cli
+# dbx-tools
 
-A [projen](https://projen.io)-driven **pnpm monorepo generator**. Exports the
-`DBXToolsNodeProject` / `DBXToolsTypeScriptProject` project subclasses and ships
-the `dbxtools` CLI. Drop a `src`-bearing folder under `workspaces/<tag>/<name>`
-and it is configured, type-checked, and barrelled automatically - or bootstrap a
-brand-new empty folder from nothing with `dbxtools sync`.
+CLI package for the dbx-tools projen workspace engine.
 
-## Install
+Run the `dbxtools` command to bootstrap a repo, synthesize generated files,
+rebuild barrels, generate OpenAPI clients, or clean generated output. Import the
+package modules when custom tooling needs the same root detection, pnpm
+delegation, or CLI program behavior.
+
+Key features:
+
+- `sync` bootstrap path for empty folders plus normal projen synthesis for
+  existing workspaces.
+- Focused `--watch` loop for projenrc changes, barrel generation, and OpenAPI
+  generation.
+- Standalone barrel and OpenAPI commands for post-synth workflows.
+- Generated-file cleanup with an interactive or non-interactive mode.
+- Importable CLI/root/pnpm helpers for tests and thin wrapper commands.
+
+## Bootstrap Or Sync A Workspace
 
 ```sh
-pnpm add -D @dbx-tools/cli projen typescript tsx
+dbxtools sync
+dbxtools sync --watch
 ```
 
-## Usage
+In an empty folder, `sync` creates the minimum pnpm/projen structure needed for
+`@dbx-tools/projen`. In an existing workspace, it runs projen and the post-synth
+generators. `--watch` starts focused watchers for structural changes, barrels,
+and OpenAPI generation.
+
+## Generate Barrels And OpenAPI Clients
+
+```sh
+dbxtools barrels
+dbxtools openapi
+```
+
+`barrels` rebuilds package-root `index.ts` files from exported modules under
+`src/`. `openapi` scans tsoa controllers and writes generated OpenAPI packages.
+
+## Clean Generated Output
+
+```sh
+dbxtools clean
+dbxtools clean -y
+```
+
+`clean` removes generated read-only files and can also remove install output. Use
+it before debugging synthesis drift or validating that the repo can regenerate
+from source.
+
+## Use The CLI Internals
 
 ```ts
-// .projenrc.ts
-import { DBXToolsNodeProject, packageMixin } from "@dbx-tools/cli";
+import { cli, root, pnpm } from "dbx-tools";
 
-const project = new DBXToolsNodeProject();
-
-// Per-package tweaks are constructs mixins, applied across the subtree after the
-// built-in tag mixins the root already applied during construction.
-project.with(
-  packageMixin(
-    (p) => p.dbxToolsConfig.tags.includes("ui"),
-    (p) => p.addDeps("@dbx-tools/shared-core@workspace:*"),
-  ),
-);
-project.synth();
+await cli.runCli(["sync"]);
+const workspaceRoot = await root.findWorkspaceRoot();
+pnpm.runProjen(["barrels"], workspaceRoot);
 ```
 
-Then `pnpm exec projen` to synthesize, or `pnpm dbxtools sync --watch` to keep
-the tree in sync while editing.
+Importing internals is mainly useful for tests or wrapper scripts; most users
+should run the `dbxtools` bin.
 
-## CLI
+## Modules
 
-```sh
-dbxtools sync [--watch]   # bootstrap/re-synth the workspace; --watch keeps it in sync
-dbxtools barrels          # rebuild every package's root index.ts barrel
-dbxtools openapi          # generate openapi packages from tsoa controllers
-dbxtools clean [-y]       # remove generated files + node_modules (interactive picker)
-```
+- `cli` - Commander entrypoint and `runCli()`.
+- `bootstrap` - empty-workspace bootstrap.
+- `root` - workspace-root detection and bootstrap/install checks.
+- `pnpm` - pnpm/projen command resolution and delegation.
 
-See the [repository README and AGENTS.md](https://github.com/reggie-db/dbx-tools)
-for the full model (tags, mixins, discovery, and the generated file contract).
+The reusable project classes and generators live in
+[`@dbx-tools/projen`](../../node/projen).

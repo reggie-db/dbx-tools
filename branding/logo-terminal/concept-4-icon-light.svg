@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="dbx.tools terminal window mark">
+  <!-- Concept 4: Terminal window. A rounded window with a title bar.
+       Mustache = the two prompt strokes inside: a > chevron whose arms curl like a handlebar,
+       sitting above the blinking cursor. Reads first as a terminal, then as a mustache. -->
+  <!-- window frame -->
+  <rect x="8" y="12" width="48" height="40" rx="7" fill="none" stroke="#E85C42" stroke-width="5"/>
+  <!-- title bar divider -->
+  <path d="M8 24 H56" stroke="#F2A493" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- traffic-light dot -->
+  <circle cx="15.5" cy="18" r="2" fill="#C6412A"/>
+  <!-- prompt: handlebar > chevron (the subtle mustache) -->
+  <path d="M18 32 Q27 35 31 40 Q27 45 18 48" fill="none" stroke="#E85C42"
+        stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- blinking cursor -->
+  <rect x="37" y="44" width="9" height="4.5" rx="2.25" fill="#C6412A"/>
+</svg>

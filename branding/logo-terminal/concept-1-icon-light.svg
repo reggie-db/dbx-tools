@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="dbx.tools terminal prompt mark">
+  <!-- Concept 1: >_ Prompt. Mustache = the gently curved (waxed) arms of the > chevron.
+       The point of the > is the philtrum; the two arms are the mustache halves. -->
+  <g fill="none" stroke="#E85C42" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <!-- chevron with subtly curved arms (subtle handlebar) -->
+    <path d="M17 16 Q30 22 36 32 Q30 42 17 48"/>
+    <!-- blinking cursor -->
+    <path d="M44 48 H55" stroke="#C6412A"/>
+  </g>
+</svg>

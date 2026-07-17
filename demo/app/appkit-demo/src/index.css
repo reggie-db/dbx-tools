@@ -1,0 +1,15 @@
+@import "@databricks/appkit-ui/styles.css";
+@import "@dbx-tools/ui-appkit/styles.css";
+/* Feature UI styles: Streamdown base, Tailwind `@source`, shiki shim. */
+@import "@dbx-tools/ui-mastra/styles.css";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}

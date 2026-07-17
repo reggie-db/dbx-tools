@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="310" height="72" viewBox="0 0 310 72" role="img" aria-label="dbx.tools logo">
+  <!-- Concept 3 lockup: </> code brackets icon + wordmark -->
+  <g fill="none" stroke="#E85C42" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 24 L12 36 L22 46"/>
+    <path d="M42 24 L52 36 L42 46"/>
+    <path d="M36 20 L28 50" stroke="#C6412A"/>
+  </g>
+  <text x="74" y="47" font-family="'DM Sans','Inter',system-ui,-apple-system,'Segoe UI',sans-serif"
+        font-size="34" font-weight="700" letter-spacing="-1">
+    <tspan fill="#1A1A1A">dbx</tspan><tspan fill="#E85C42">.tools</tspan>
+  </text>
+</svg>
