@@ -219,6 +219,29 @@ export function applyExports(
   pkg.package.addField("exports", exports);
 }
 
+/**
+ * MERGE extra subpaths onto a package's existing `exports` map (later keys win),
+ * preserving whatever a tag default already set. Use when a package just ADDS a
+ * subpath - e.g. the CLI tag's `.` + `./package.json` default plus dbx-tools'
+ * `./pnpm` - so the two common entries need not be re-listed. Contrast with
+ * {@link applyExports}, which replaces the whole field.
+ *
+ * New subpaths are inserted before the conventional trailing `./package.json`
+ * entry when present, so ordering stays `.` -> subpaths -> `./package.json`.
+ */
+export function addExports(
+  pkg: javascript.NodeProject,
+  exports: Record<string, string>,
+): void {
+  const current = (pkg.package.manifest.exports ?? {}) as Record<string, string>;
+  const { "./package.json": packageJson, ...rest } = current;
+  pkg.package.addField("exports", {
+    ...rest,
+    ...exports,
+    ...(packageJson !== undefined ? { "./package.json": packageJson } : {}),
+  });
+}
+
 /** ESM compiler options every Node package shares regardless of tag. */
 const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   module: "ESNext",

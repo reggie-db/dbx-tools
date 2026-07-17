@@ -45,8 +45,8 @@
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",
-    "./vite": "./src/vite.ts",
     "./styles.css": "./src/styles.css",
+    "./vite": "./src/vite.ts",
     "./package.json": "./package.json"
   },
   "dbxToolsConfig": {

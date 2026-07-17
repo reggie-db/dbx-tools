@@ -350,11 +350,8 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
   p.package.addField("name", `@${SCOPE}/cli`);
   p.package.file.readonly = false;
   p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
-  p.package.addField("exports", {
-    ".": "./index.ts",
-    "./pnpm": "./src/pnpm.ts",
-    "./package.json": "./package.json",
-  });
+  // Adds `./pnpm` on top of the `cli` tag's `.` + `./package.json` default.
+  projectApi.addExports(p, { "./pnpm": "./src/pnpm.ts" });
   p.addDeps("@dbx-tools/core@workspace:*", "pnpm");
   applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
 });
@@ -392,14 +389,8 @@ project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) =
   // plugin as real deps - the `ui` tag is a component library and no longer
   // carries the vite toolchain (that moved to the `app` tag).
   p.addDevDeps("vite@catalog:");
-  // Adds `./vite` on top of the `ui` tag's `./react` + `./styles.css` default;
-  // the whole map is re-declared since it deviates from the tag surface.
-  p.package.addField("exports", {
-    "./react": "./src/react/index.ts",
-    "./vite": "./src/vite.ts",
-    "./styles.css": "./src/styles.css",
-    "./package.json": "./package.json",
-  });
+  // Adds `./vite` on top of the `ui` tag's `./react` + `./styles.css` default.
+  projectApi.addExports(p, { "./vite": "./src/vite.ts" });
 });
 
 // ui-email: the React surface for the email add-on - an Approve/Deny approval
