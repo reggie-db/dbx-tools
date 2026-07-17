@@ -48,6 +48,12 @@ interface BunLike {
 const globalProcess = (globalThis as { process?: ProcessLike }).process;
 const globalBun = (globalThis as { Bun?: BunLike }).Bun;
 
+/** Node `process.stderr` when writable, else `undefined` (stable for the process). */
+const globalProcessStdErr =
+  globalProcess && typeof globalProcess.stderr?.write === "function"
+    ? globalProcess.stderr
+    : undefined;
+
 const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 const LOG_LEVEL_RANK = Object.fromEntries(
   LOG_LEVELS.map((level, index) => [level, index]),
@@ -102,14 +108,18 @@ type LoggerFactory = (name?: string) => Logger;
  *
  * Builds one `createConsola` instance (badge off, level `verbose`) whose
  * reporter calls {@link shouldEmit} on `logObj.type` before delegating to
- * consola's default reporters. In Node, when `processStdErr` is set,
+ * consola's default reporters. In Node, when `globalProcessStdErr` is set,
  * recognized {@link LogLevel} types are redirected to stderr for that write.
  * Tags use `withTag` (rendered `[name]`, not merged into args).
+ *
+ * Memoized: the dynamic `consola` import, env checks, and `createConsola`
+ * setup (plus the import/throw fallback) run once; later calls share the one
+ * resolved factory (or the one resolved `undefined`). A rejection is evicted
+ * by {@link memoize} so a later call retries.
  */
-async function createConsolaLoggerFactory(
-  globalProcessStdErr: any,
-): Promise<LoggerFactory | undefined> {
-  const consolaDisabled = toBoolean(globalProcess?.env?.LOG_CONSOLA_DISABLED);
+const createConsolaLoggerFactory = memoize(
+  async (): Promise<LoggerFactory | undefined> => {
+    const consolaDisabled = toBoolean(globalProcess?.env?.LOG_CONSOLA_DISABLED);
   if (!consolaDisabled) {
     try {
       const { consola, createConsola, LogLevels } = await import("consola");
@@ -147,7 +157,7 @@ async function createConsolaLoggerFactory(
     }
   }
   return undefined;
-}
+});
 
 /**
  * Console {@link LoggerFactory}; always succeeds.
@@ -236,12 +246,8 @@ async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<Log
  * chosen factory with a resolved tag. Env toggles are read only during init.
  */
 const createLogger: LoggerFactory = await (async () => {
-  const globalProcessStdErr =
-    globalProcess && typeof globalProcess.stderr?.write === "function"
-      ? globalProcess.stderr
-      : undefined;
   return (
-    (await createConsolaLoggerFactory(globalProcessStdErr)) ??
+    (await createConsolaLoggerFactory()) ??
     (await createConsoleLoggerFactory(globalProcessStdErr))
   );
 })();
@@ -377,9 +383,4 @@ function extractLoggerName(loggerName: NameLike | string | undefined): string | 
 export function logger(loggerName: NameLike | string | undefined): Logger {
   const name = extractLoggerName(loggerName);
   return createLogger(name);
-}
-
-
-if (import.meta.main) {
-
 }
