@@ -64,6 +64,6 @@ if (import.meta.main) {
   const matcher = ignorePathMatcher({ test: true })
     .negate()
     .and(...pathMatchTests("**/cool.ts", "**/wow.ts"));
-  console.log(matcher("workspaces/shared/file-scan/src/cool.ts"));
-  console.log(matcher("workspaces/shared/file-scan/.src/cool.ts"));
+  console.log(matcher("workspaces/node/file-scan/src/cool.ts"));
+  console.log(matcher("workspaces/node/file-scan/.src/cool.ts"));
 }

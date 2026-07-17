@@ -23,7 +23,7 @@
  */
 import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import { find } from "@dbx-tools/shared-file-scan";
+import { find } from "@dbx-tools/node-file-scan";
 import { isReadonly, makeWritable } from "./generated";
 import { repoRoot, toPosix } from "./workspace";
 

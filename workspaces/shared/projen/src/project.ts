@@ -7,7 +7,7 @@
  * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
  */
 import { string, type OneOrMany } from "@dbx-tools/shared-core";
-import { ignore, match } from "@dbx-tools/shared-file-scan";
+import { ignore, match } from "@dbx-tools/node-file-scan";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";

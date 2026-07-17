@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/shared-file-scan",
+  "name": "@dbx-tools/node-file-scan",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -12,13 +12,12 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/node": "^24.6.0",
+    "@types/node": "catalog:",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@dbx-tools/node-core": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*",
     "chokidar": "^4.0.3",
     "glob": "^10.5.0",
     "minimatch": "^10.2.5"
@@ -35,7 +34,6 @@
   },
   "dbxToolsConfig": {
     "tags": [
-      "shared",
       "node"
     ]
   },

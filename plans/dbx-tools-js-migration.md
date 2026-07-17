@@ -97,7 +97,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `8c94f10` | **Codegen subsystem + `shared-sdk-model`** — see below. |
 | `6901ffa` | **Codegen on synth (drop task/watch) + port `genie-shared` → `@dbx-tools/shared-genie`** — see below. |
 | `0d8e6c1` | **Browser-safe core split**: `exec`/`project` → new `@dbx-tools/node-core`; shared-core now agnostic (`WebWorker` lib); file-scan retagged `node`; AppKit + sdk-experimental hardcoded in `DEFAULT_CATALOG`. See "Resolved: browser-safe core split" below. |
-| (pending commit) | **Barrel type-hoisting + `log` in core + `node-appkit` + port `genie` server → `@dbx-tools/node-genie`.** See "Barrel type-hoisting", "node-appkit", and "node-genie" below. |
+| `f64806a` | **Barrel type-hoisting + `log` in core + `node-appkit` + port `genie` server → `@dbx-tools/node-genie`.** See "Barrel type-hoisting", "node-appkit", and "node-genie" below. |
+| (pending commit) | **Move `file-scan` under `workspaces/node/`**: `@dbx-tools/shared-file-scan` → `@dbx-tools/node-file-scan` (path now matches its `node` nature). |
 
 ### shared-core surface now available
 
@@ -212,7 +213,11 @@ core, not by references:
   DOM or node types. The `node` tag's lib was bumped ES2020 → ES2022 (Node 18+;
   `exec` uses `Array.at`/`Error.cause`).
 - **file-scan** was retagged `node` (it shells out + uses chokidar/console) — it
-  had been mis-typed `shared` and silently failing whole-program compile.
+  had been mis-typed `shared` and silently failing whole-program compile. In the
+  pending commit it also MOVED to `workspaces/node/file-scan` and was renamed
+  `@dbx-tools/shared-file-scan` → `@dbx-tools/node-file-scan` so its path matches
+  its `node` nature (the `node` tag auto-applies; only the projen engine consumes
+  it, so the repoint was contained).
 
 Result: `shared-core` and `shared-genie` (and every package) compile clean;
 38/38 genie tests pass. AppKit + sdk-experimental are now hardcoded engine

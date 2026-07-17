@@ -24,12 +24,12 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/shared-core",
+      "name": "@dbx-tools/node-file-scan",
       "version": "workspace:*",
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/shared-file-scan",
+      "name": "@dbx-tools/shared-core",
       "version": "workspace:*",
       "type": "runtime"
     },

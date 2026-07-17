@@ -10,8 +10,7 @@
     "inlineSourceMap": true,
     "inlineSources": true,
     "lib": [
-      "ES2022",
-      "WebWorker"
+      "ES2022"
     ],
     "module": "ESNext",
     "noEmitOnError": false,
@@ -27,7 +26,9 @@
     "strictPropertyInitialization": true,
     "stripInternal": true,
     "target": "ES2022",
-    "types": [],
+    "types": [
+      "node"
+    ],
     "moduleResolution": "bundler",
     "skipLibCheck": true
   },

@@ -8,8 +8,3 @@ export * as match from "./src/match";
 export * as pattern from "./src/pattern";
 export * as scan from "./src/scan";
 export * as watch from "./src/watch";
-export type { FileFindOptions } from "./src/find";
-export type { IgnorePatternOptions } from "./src/ignore";
-export type { PathMatchPredicate, PathMatcher, PathMatchInput } from "./src/match";
-export type { FileScanOptions, FileScanIgnoreOptions } from "./src/scan";
-export type { FileWatchOptions } from "./src/watch";
