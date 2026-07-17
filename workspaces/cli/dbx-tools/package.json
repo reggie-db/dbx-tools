@@ -1,5 +1,10 @@
 {
   "name": "@dbx-tools/cli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github-reggie-db/reggie-db/dbx-tools.git",
+    "directory": "workspaces/cli/dbx-tools"
+  },
   "bin": {
     "dbxtools": "./bin/dbxtools.ts",
     "dbxtools.ts": "bin/dbxtools.ts"

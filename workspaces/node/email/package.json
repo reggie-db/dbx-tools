@@ -1,5 +1,10 @@
 {
   "name": "@dbx-tools/email",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github-reggie-db/reggie-db/dbx-tools.git",
+    "directory": "workspaces/node/email"
+  },
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",

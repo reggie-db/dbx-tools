@@ -1,5 +1,10 @@
 {
   "name": "@dbx-tools/appkit-mastra",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github-reggie-db/reggie-db/dbx-tools.git",
+    "directory": "workspaces/node/appkit-mastra"
+  },
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",

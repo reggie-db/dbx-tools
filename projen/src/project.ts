@@ -26,6 +26,7 @@ import {
   DEFAULT_WORKSPACE_PACKAGE_ROOTS,
   type DiscoveredPackage,
   projectName,
+  repositoryUrl,
   scanPackages,
   toPosix,
 } from "./workspace";
@@ -134,6 +135,39 @@ export function identifier(project: Project): PackageIdentifier {
 function configureRootPackage(project: javascript.NodeProject): void {
   project.package.addField("type", "module");
   project.package.addField("private", true);
+}
+
+/**
+ * Lazily-detected, normalized git remote URL (npm `git+https://.../repo.git`
+ * form). `null` = not yet probed, `undefined` = probed but no remote. Cached so
+ * the whole subtree shares one `git config` lookup.
+ */
+let detectedRepositoryUrl: string | undefined | null = null;
+
+/** Resolve the repository URL: an explicit override wins, else the cached detection. */
+function resolveRepositoryUrl(override?: string): string | undefined {
+  if (override && override.length) return override;
+  if (detectedRepositoryUrl === null) detectedRepositoryUrl = repositoryUrl();
+  return detectedRepositoryUrl;
+}
+
+/**
+ * Stamp `repository` on a package's manifest so npm provenance can validate the
+ * published source (without it, publish fails with E422). A child also carries the
+ * monorepo `directory` subpath (its path relative to the root); the root omits it.
+ * No-op when no git remote is detected and no `repository` override was supplied.
+ * The URL is auto-detected once from `remote.origin.url` (see {@link repositoryUrl}).
+ */
+function applyRepository(project: javascript.NodeProject, override?: string): void {
+  const url = resolveRepositoryUrl(override);
+  if (!url) return;
+  const root = project.parent ?? project;
+  const directory = toPosix(relative(resolve(root.outdir), resolve(project.outdir)));
+  project.package.addField("repository", {
+    type: "git",
+    url,
+    ...(directory ? { directory } : {}),
+  });
 }
 
 /** Inherit a parent's package manager, else pnpm. */
@@ -608,6 +642,9 @@ function initProject(
 
   if (project.parent) {
     project.package.file.readonly = true;
+    // Stamp `repository` (with this package's `directory` subpath) so a published
+    // package passes npm provenance validation.
+    applyRepository(project, options.repository);
     // Only a ROOT configures the workspace; a child just swaps its default-laden
     // `.gitignore` for a fresh one that carries package-specific patterns only.
     swapChildGitignore(project, options);
@@ -637,6 +674,8 @@ function initProject(
   if (selfDep) project.addDevDeps(selfDep);
   project.addDevDeps(...DEV_DEPS_ROOT);
   configureRootPackage(project);
+  // Root carries the bare `repository` (no `directory`); children add their subpath.
+  applyRepository(project, options.repository);
 
   if (options.syncResynthPaths?.length) {
     project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];

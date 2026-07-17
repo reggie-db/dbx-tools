@@ -67,6 +67,35 @@ export function projectName(): string {
   return fromGit ?? basename(repoRoot);
 }
 
+/**
+ * The repo's `remote.origin.url` normalized to the npm-canonical
+ * `git+https://<host>/<owner>/<repo>.git` form, or `undefined` when there is no
+ * git remote. scp-like (`git@host:owner/repo`), `ssh://`, `git://`, and embedded
+ * credentials are all rewritten to `https` so npm provenance can match the URL
+ * against the repository the build ran in.
+ */
+export function repositoryUrl(): string | undefined {
+  const raw = capturedStdout("git", [
+    "-C",
+    repoRoot,
+    "config",
+    "--get",
+    "remote.origin.url",
+  ])?.trim();
+  if (!raw) return undefined;
+
+  let url = raw.replace(/^git\+/, "");
+  // scp-like `git@host:owner/repo` -> `https://host/owner/repo`.
+  const scp = /^[^@]+@([^:]+):(.+)$/.exec(url);
+  if (scp) url = `https://${scp[1]}/${scp[2]}`;
+  // `ssh://user@host/...` and `git://host/...` -> `https://host/...`.
+  url = url.replace(/^ssh:\/\/[^@/]+@/, "https://").replace(/^(ssh|git):\/\//, "https://");
+  // Strip any embedded `user[:pass]@` credentials from an https URL.
+  url = url.replace(/^(https?:\/\/)[^@/]+@/, "$1");
+  url = url.replace(/\.git$/, "");
+  return `git+${url}.git`;
+}
+
 const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 /** Glob for module files under any `src/`, built from {@link MODULE_EXTS} exts. */

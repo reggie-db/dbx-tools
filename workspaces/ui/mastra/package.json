@@ -1,5 +1,10 @@
 {
   "name": "@dbx-tools/ui-mastra",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github-reggie-db/reggie-db/dbx-tools.git",
+    "directory": "workspaces/ui/mastra"
+  },
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",

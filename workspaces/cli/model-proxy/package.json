@@ -1,5 +1,10 @@
 {
   "name": "@dbx-tools/model-proxy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github-reggie-db/reggie-db/dbx-tools.git",
+    "directory": "workspaces/cli/model-proxy"
+  },
   "bin": {
     "model-proxy": "./bin/model-proxy.ts"
   },

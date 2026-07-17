@@ -1,5 +1,10 @@
 {
   "name": "@dbx-tools/shared-genie",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github-reggie-db/reggie-db/dbx-tools.git",
+    "directory": "workspaces/shared/genie"
+  },
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
