@@ -2,12 +2,13 @@
  * projen definition. `new DBXToolsNodeProject(...)` constructs the monorepo root
  * and, from its `workspacePackageRoots`, scans + attaches a
  * `DBXToolsTypeScriptProject` per `src`-bearing package folder at any depth under
- * `workspaces/` (real content) and `example-workspaces/` (the seed examples this repo
- * ships, kept separate). The engine itself is dogfooded as a normal auto-discovered `cli`
+ * `workspaces/`. The engine itself is dogfooded as a normal auto-discovered `cli`
  * package at `workspaces/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
  * it from the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
  *
- * Example-workspace mixins live in `.example.projenrc.ts`.
+ * The runnable sample app lives in its own standalone project under `demo/` (its
+ * own `demo/.projenrc.ts` + nested pnpm workspace, consuming the published
+ * `@dbx-tools/*` packages) - it is NOT part of this synth.
  *
  * Per-package tweaks are MIXINS applied with `project.mixin(...)` (constructs-
  * native, across the subtree; the built-in tag mixins already ran during
@@ -15,12 +16,11 @@
  * root task first (see below); a normal consumer constructs, `with(...)`s, synths.
  */
 import { JsonFile, Project } from "projen";
-import { applyExampleWorkspaces } from "./.example.projenrc";
 import { mixin, project as projectApi, projectPredicate } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
 
-/** Only real content under `workspaces/` (not the `example-workspaces/` seeds). */
+/** Every package under `workspaces/`. */
 const workspaces = projectPredicate.hasPath("workspaces");
 
 /** A workspace package selected by npm-name glob + a required tag. */
@@ -46,15 +46,7 @@ function applyRootDirTsconfig(p: Project, ...includes: string[]): void {
 const project = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
-  workspacePackageRoots: ["workspaces", "example-workspaces"],
-  // The two example `ui/*` packages are full browser apps (they ship an
-  // `index.html`), so they take the `app` tag (vite build/dev/preview) on top
-  // of the `ui` component surface their path already grants.
-  workspacePackageTagPaths: {
-    "example-workspaces/ui/app": ["app"],
-    "example-workspaces/ui/appkit-client": ["app"],
-  },
-  syncResynthPaths: [".example.projenrc.ts"],
+  workspacePackageRoots: ["workspaces"],
   github: true,
   buildWorkflow: true,
   release: true,
@@ -117,14 +109,14 @@ project.pnpmWorkspace?.addCatalog("nanoid", "^5.1.6");
 // Per-package mixins
 // ---------------------------------------------------------------------------
 project.with(
-  // Root's own tsconfig: compile the projenrc entrypoints alongside the packages.
+  // Root's own tsconfig: compile the projenrc entrypoint alongside the packages.
   mixin.create(
     (file): file is JsonFile =>
       file instanceof JsonFile &&
       file.path === "tsconfig.json" &&
       file.project === project,
     (file) => {
-      file.addOverride("include", [".projenrc.ts", ".example.projenrc.ts"]);
+      file.addOverride("include", [".projenrc.ts"]);
     },
   ),
 
@@ -483,8 +475,6 @@ project.with(
     // tag's component-library default.
   }),
 );
-
-applyExampleWorkspaces(project);
 
 project.addTask("dbxtools", {
   exec: "tsx workspaces/cli/dbx-tools/bin/dbxtools.ts",

@@ -31,7 +31,7 @@
       "typescript": {
         "project": [
           "tsconfig.json",
-          "workspaces/**/tsconfig.json"
+          "./**/tsconfig.json"
         ],
         "alwaysTryTypes": true
       }
@@ -43,8 +43,8 @@
     "node_modules/",
     "*.generated.ts",
     "coverage",
-    "workspaces/openapi/**",
-    "workspaces/**/index.ts",
+    "./openapi/**",
+    "./**/index.ts",
     "**/vite.config.ts"
   ],
   "rules": {

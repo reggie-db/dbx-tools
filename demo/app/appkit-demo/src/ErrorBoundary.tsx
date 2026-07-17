@@ -1,0 +1,85 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@dbx-tools/ui-appkit/react";
+import { error as errorUtil, log } from "@dbx-tools/shared-core";
+import type { ReactNode } from "react";
+import React, { Component } from "react";
+
+const logger = log.logger("client/error-boundary");
+
+interface Props {
+  children: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: React.ErrorInfo | null;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    return { hasError: true, error };
+  }
+
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    logger.error("caught", {
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+    });
+    this.setState({
+      error,
+      errorInfo,
+    });
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-background p-4">
+          <Card className="max-w-2xl mx-auto mt-8">
+            <CardHeader>
+              <CardTitle className="text-destructive">Application Error</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">Error Message:</h3>
+                  <pre className="bg-muted p-3 rounded text-sm overflow-auto">
+                    {errorUtil.errorMessage(this.state.error)}
+                  </pre>
+                </div>
+                {this.state.errorInfo && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Component Stack:</h3>
+                    <pre className="bg-muted p-3 rounded text-sm overflow-auto">
+                      {this.state.errorInfo.componentStack}
+                    </pre>
+                  </div>
+                )}
+                {this.state.error?.stack && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Stack Trace:</h3>
+                    <pre className="bg-muted p-3 rounded text-sm overflow-auto max-h-96">
+                      {this.state.error.stack}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}

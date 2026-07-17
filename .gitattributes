@@ -18,8 +18,6 @@
 /.vscode/extensions.json linguist-generated linguist-language=JSON-with-Comments
 /.vscode/settings.json linguist-generated
 /.vscode/tasks.json linguist-generated
-/example-workspaces/**/index.ts linguist-generated
-/example-workspaces/openapi/** linguist-generated
 /package.json linguist-generated
 /pnpm-lock.yaml linguist-generated
 /pnpm-workspace.yaml linguist-generated
