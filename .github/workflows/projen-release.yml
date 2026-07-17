@@ -31,8 +31,12 @@ jobs:
           registry-url: https://registry.npmjs.org
       - name: Install
         run: pnpm install --no-frozen-lockfile
-      - name: Release
-        run: pnpm release
+      - name: Set version from tag
+        run: |-
+          chmod u+w package.json
+          npm version "${GITHUB_REF_NAME#projen-v}" --no-git-tag-version --allow-same-version
+      - name: Pack
+        run: pnpm pack --pack-destination dist/js
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

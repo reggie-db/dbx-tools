@@ -460,11 +460,16 @@ project.addTask("dbxtools", {
 // ---------------------------------------------------------------------------
 // Release workflow for the standalone `@dbx-tools/projen` engine (in `projen/`)
 // ---------------------------------------------------------------------------
-// The engine is its own project with its own projen `release` machinery (bump /
-// changelog / `pnpm pack`), but GitHub Actions only runs workflows from the
-// REPO-ROOT `.github/`. So the engine's release workflow is emitted HERE,
-// alongside the root's own `release.yml`, under a distinct name + tag prefix
-// (`projen-v*`) so the two never collide. Push a `projen-v*` tag to publish.
+// The engine is its own project with its own projen `release` machinery, but
+// GitHub Actions only runs workflows from the REPO-ROOT `.github/`. So the
+// engine's release workflow is emitted HERE, alongside the root's own
+// `release.yml`, under a distinct name + tag prefix (`projen-v*`) so the two
+// never collide.
+//
+// Tag-driven, like the root: the pushed tag IS the version. Push
+// `projen-v1.2.3` and the workflow publishes `@dbx-tools/projen@1.2.3` (it sets
+// package.json to the tag's version, then packs + publishes) - no bump math, so
+// the published version always matches the tag.
 const projenRelease = new GithubWorkflow(project.github!, "projen-release");
 projenRelease.on({ push: { tags: ["projen-v*"] } });
 projenRelease.addJob("publish", {
@@ -481,8 +486,16 @@ projenRelease.addJob("publish", {
       with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
     },
     { name: "Install", run: "pnpm install --no-frozen-lockfile" },
-    // Bump to the pushed tag's version, typecheck, and `pnpm pack` into dist/js.
-    { name: "Release", run: "pnpm release" },
+    // The pushed tag is the version: `projen-v1.2.3` -> `1.2.3`. package.json is
+    // projen-generated read-only, so unlock it before `npm version` rewrites it.
+    {
+      name: "Set version from tag",
+      run: [
+        "chmod u+w package.json",
+        'npm version "${GITHUB_REF_NAME#projen-v}" --no-git-tag-version --allow-same-version',
+      ].join("\n"),
+    },
+    { name: "Pack", run: "pnpm pack --pack-destination dist/js" },
     {
       name: "Publish to npm",
       run: "npm publish dist/js/*.tgz --access public",
