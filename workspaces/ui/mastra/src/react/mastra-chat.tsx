@@ -1,28 +1,28 @@
 import {
-  MLFLOW_TRACE_ID_HEADER,
+  feedback,
   type MastraThread,
-} from "@dbx-tools/appkit-mastra-shared";
-import { commonUtils, logUtils } from "@dbx-tools/shared";
+} from "@dbx-tools/shared-mastra";
+import { error as errorUtil, log } from "@dbx-tools/shared-core";
 import type { UIMessage } from "ai";
 import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { exportChat, type EmbedResolver, type ExportFormat } from "../lib/export.js";
+import { exportChat, type EmbedResolver, type ExportFormat } from "../support/export";
 import {
   useMastraClient,
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,
-} from "../lib/mastra-client.js";
-import type { MastraStreamResponse } from "../lib/mastra-stream.js";
+} from "../support/mastra-client";
+import type { MastraStreamResponse } from "../support/mastra-stream";
 import {
   createThreadSession,
   DEFAULT_THREAD_SESSION_KEY,
   isSessionRunning,
   sessionKey,
   type ThreadSession,
-} from "../lib/thread-sessions.js";
-import { ChatView } from "./chat-view.js";
-import { dedupeSuggestions } from "./suggestions.js";
+} from "../support/thread-sessions";
+import { ChatView } from "./chat-view";
+import { dedupeSuggestions } from "./suggestions";
 import type {
   ApprovalDecision,
   ChatViewProps,
@@ -31,7 +31,7 @@ import type {
   ThreadSummary,
   ToolEvent,
   ToolProgress,
-} from "./types.js";
+} from "./types";
 
 // Self-contained drop-in chat. `useMastraChat` drives the conversation
 // over `@mastra/client-js`: `agent.stream()` returns a Response
@@ -54,7 +54,7 @@ import type {
 // the top lazy-loads and prepends the next older page, with `ChatView`
 // preserving the visual scroll position across the prepend.
 
-const log = logUtils.logger("appkit-mastra-ui/chat");
+const logger = log.logger("ui-mastra/chat");
 
 const HISTORY_PAGE_SIZE = 20;
 
@@ -152,7 +152,7 @@ const storeStoredSidebarOpen = (key: string, open: boolean): void => {
 const readMlflowTraceId = (stream: unknown): string | undefined => {
   const headers = (stream as { headers?: { get?: (name: string) => string | null } })
     ?.headers;
-  const raw = headers?.get?.(MLFLOW_TRACE_ID_HEADER);
+  const raw = headers?.get?.(feedback.MLFLOW_TRACE_ID_HEADER);
   return raw?.trim() || undefined;
 };
 
@@ -576,7 +576,7 @@ export const useMastraChat = (
                   typeof toolName !== "string" ||
                   !approvalRunId
                 ) {
-                  log.warn("malformed tool-call-approval chunk", {
+                  logger.warn("malformed tool-call-approval chunk", {
                     toolCallId,
                     toolName,
                     hasRunId: Boolean(approvalRunId),
@@ -727,12 +727,12 @@ export const useMastraChat = (
         }
       } catch (caught) {
         if (getSession(threadId).runToken !== token) return;
-        log.error("stream error", {
-          error: commonUtils.errorMessage(caught),
+        logger.error("stream error", {
+          error: errorUtil.errorMessage(caught),
         });
         updateSession(threadId, (session) => ({
           ...session,
-          error: commonUtils.toError(caught),
+          error: errorUtil.toError(caught),
           status: "error",
           abortController:
             session.abortController === controller ? null : session.abortController,
@@ -796,7 +796,7 @@ export const useMastraChat = (
       const assistantId = session.assistantId;
       const runId = decisionRunId ?? session.runId;
       if (!runId || !assistantId) {
-        log.warn("approval missing runId or assistantId, cannot resume", {
+        logger.warn("approval missing runId or assistantId, cannot resume", {
           tool: toolName,
           toolCallId,
           hasRunId: Boolean(runId),
@@ -820,7 +820,7 @@ export const useMastraChat = (
           },
         };
       });
-      log.info(decision.approved ? "approved" : "denied", {
+      logger.info(decision.approved ? "approved" : "denied", {
         tool: toolName,
         toolCallId,
         runId,
@@ -878,10 +878,10 @@ export const useMastraChat = (
     const threadId = activeKey;
     try {
       const result = await mastraClient.clearHistory({ agentId });
-      log.info("history cleared", { cleared: result.cleared });
+      logger.info("history cleared", { cleared: result.cleared });
     } catch (error) {
-      log.error("history clear error", {
-        error: commonUtils.errorMessage(error),
+      logger.error("history clear error", {
+        error: errorUtil.errorMessage(error),
       });
     }
     const session = getSession(threadId);
@@ -932,11 +932,11 @@ export const useMastraChat = (
     async (threadId: string) => {
       try {
         const result = await mastraClient.removeThread(threadId, { agentId });
-        log.info("thread deleted", { threadId, deleted: result.deleted });
+        logger.info("thread deleted", { threadId, deleted: result.deleted });
       } catch (error) {
-        log.error("thread delete error", {
+        logger.error("thread delete error", {
           threadId,
-          error: commonUtils.errorMessage(error),
+          error: errorUtil.errorMessage(error),
         });
       }
       const session = sessionsRef.current.get(threadId);
@@ -983,11 +983,11 @@ export const useMastraChat = (
       );
       try {
         await mastraClient.renameThread(threadId, title, { agentId });
-        log.info("thread renamed", { threadId });
+        logger.info("thread renamed", { threadId });
       } catch (error) {
-        log.error("thread rename error", {
+        logger.error("thread rename error", {
           threadId,
-          error: commonUtils.errorMessage(error),
+          error: errorUtil.errorMessage(error),
         });
         setRenamedThreads((prev) => {
           if (!(threadId in prev)) return prev;
@@ -1067,8 +1067,8 @@ export const useMastraChat = (
       })
       .catch((error: unknown) => {
         if (cancelled || (error as { name?: string }).name === "AbortError") return;
-        log.error("history load error", {
-          error: commonUtils.errorMessage(error),
+        logger.error("history load error", {
+          error: errorUtil.errorMessage(error),
         });
         updateSession(threadId, (current) => ({ ...current, hasMoreHistory: false }));
       })
@@ -1104,9 +1104,9 @@ export const useMastraChat = (
         }));
       })
       .catch((error: unknown) => {
-        log.error("history load-more error", {
+        logger.error("history load-more error", {
           page,
-          error: commonUtils.errorMessage(error),
+          error: errorUtil.errorMessage(error),
         });
         updateSession(threadId, (current) => ({
           ...current,
@@ -1153,9 +1153,9 @@ export const useMastraChat = (
           userLabel: exportUserLabel,
         });
       } catch (error) {
-        log.error("conversation export error", {
+        logger.error("conversation export error", {
           format,
-          error: commonUtils.errorMessage(error),
+          error: errorUtil.errorMessage(error),
         });
       }
     },
@@ -1173,9 +1173,9 @@ export const useMastraChat = (
           userLabel: exportUserLabel,
         });
       } catch (error) {
-        log.error("message export error", {
+        logger.error("message export error", {
           format,
-          error: commonUtils.errorMessage(error),
+          error: errorUtil.errorMessage(error),
         });
       }
     },
@@ -1211,14 +1211,14 @@ export const useMastraChat = (
           ...(submission.comment ? { comment: submission.comment } : {}),
         });
         if (!result.ok) {
-          log.warn("feedback not recorded (trace may still be exporting)", {
+          logger.warn("feedback not recorded (trace may still be exporting)", {
             traceId,
           });
         }
       } catch (error) {
-        log.error("feedback error", {
+        logger.error("feedback error", {
           traceId,
-          error: commonUtils.errorMessage(error),
+          error: errorUtil.errorMessage(error),
         });
       }
     },

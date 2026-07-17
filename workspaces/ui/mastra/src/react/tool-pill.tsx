@@ -4,11 +4,11 @@ import {
   CollapsibleTrigger,
   Spinner,
   cn,
-} from "@databricks/appkit-ui/react";
-import { humanizeStatus } from "@dbx-tools/genie-shared";
+} from "@dbx-tools/ui-appkit/react";
+import { genieModel } from "@dbx-tools/shared-genie";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
-import { SqlBlock, ToolMarkdown } from "./markdown.js";
-import type { ToolEvent, ToolProgress } from "./types.js";
+import { SqlBlock, ToolMarkdown } from "./markdown";
+import type { ToolEvent, ToolProgress } from "./types";
 
 // Consolidated tool-session pill and its Genie progress detail view:
 // groups the wire events one assistant turn produced into per-sub-call
@@ -54,7 +54,7 @@ const runningLabelFor = (event: ToolEvent): string => {
     .reverse()
     .find((p): p is Extract<ToolProgress, { type: "status" }> => p.type === "status");
   return latest
-    ? capitalizeFirst(humanizeStatus(latest.status))
+    ? capitalizeFirst(genieModel.humanizeStatus(latest.status))
     : `Calling ${humanizeToolName(event.toolName)}`;
 };
 

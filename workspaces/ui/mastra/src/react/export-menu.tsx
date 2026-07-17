@@ -7,9 +7,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@databricks/appkit-ui/react";
+} from "@dbx-tools/ui-appkit/react";
 import { DownloadIcon } from "lucide-react";
-import type { ExportFormat } from "../lib/export.js";
+import type { ExportFormat } from "../support/export";
 
 // Shared export affordance: a download button that opens a small menu of
 // output formats. Reused for both the whole-conversation export (header,

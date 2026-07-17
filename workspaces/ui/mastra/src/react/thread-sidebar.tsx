@@ -6,8 +6,8 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@databricks/appkit-ui/react";
-import { MASTRA_THREAD_TITLE_MAX } from "@dbx-tools/appkit-mastra-shared";
+} from "@dbx-tools/ui-appkit/react";
+import { wire } from "@dbx-tools/shared-mastra";
 import {
   Loader2Icon,
   MessageSquarePlusIcon,
@@ -16,7 +16,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useState } from "react";
-import type { ThreadSummary } from "./types.js";
+import type { ThreadSummary } from "./types";
 
 // Presentational conversation list. Renders the threads a resource owns
 // so the user can switch between them, start a new one, rename one, and
@@ -173,7 +173,7 @@ export const ThreadSidebar = ({
                         // eslint-disable-next-line jsx-a11y/no-autofocus -- focus the field the user just opened
                         autoFocus
                         value={draftTitle}
-                        maxLength={MASTRA_THREAD_TITLE_MAX}
+                        maxLength={wire.MASTRA_THREAD_TITLE_MAX}
                         aria-label="Conversation name"
                         onChange={(e) => setDraftTitle(e.target.value)}
                         onKeyDown={(e) => {

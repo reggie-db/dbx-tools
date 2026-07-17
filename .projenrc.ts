@@ -454,6 +454,34 @@ project.with(
     // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
     // tag's component-library default.
   }),
+
+  // ui-mastra: the full Mastra chat UI - the self-contained `MastraChat`
+  // drop-in and its `useMastraChat` driver, the controlled `ChatView` shell, the
+  // `MastraPluginClient` + hooks (model catalogue, history paging, suggestions,
+  // inline chart/statement embeds), markdown + data-grid + chart rendering, and
+  // conversation-thread management. Consumes the browser-safe wire contracts
+  // (shared-mastra/genie/model) and renders through ui-appkit's UI kit. `ui`-tagged.
+  mixin.create(pkg("*/ui-mastra", "ui"), (p) => {
+    p.addDeps(
+      "@dbx-tools/shared-mastra@workspace:*",
+      "@dbx-tools/shared-genie@workspace:*",
+      "@dbx-tools/shared-model@workspace:*",
+      "@dbx-tools/ui-appkit@workspace:*",
+      "@mastra/client-js@catalog:",
+      "@tanstack/react-table@catalog:",
+      "ai@catalog:",
+      "echarts@catalog:",
+      "echarts-for-react@catalog:",
+      "lucide-react@catalog:",
+      "marked@catalog:",
+      "nanoid@catalog:",
+      "shiki@catalog:",
+      "sql-formatter@catalog:",
+      "streamdown@catalog:",
+    );
+    // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
+    // tag's component-library default.
+  }),
 );
 
 applyExampleWorkspaces(project);

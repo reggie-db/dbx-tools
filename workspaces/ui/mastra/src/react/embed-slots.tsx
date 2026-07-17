@@ -1,17 +1,15 @@
-import { Spinner } from "@databricks/appkit-ui/react";
+import { Spinner } from "@dbx-tools/ui-appkit/react";
 import {
-  isUuid,
-  parseMarkers,
-  stripIncompleteMarkerTail,
+  marker as markers,
   type ParsedMarker,
-} from "@dbx-tools/appkit-mastra-shared";
+} from "@dbx-tools/shared-mastra";
 import ReactECharts from "echarts-for-react";
 import { ClockIcon } from "lucide-react";
 import { useMemo } from "react";
-import { normalizeChartOption } from "../lib/chart-option.js";
-import { useChartFetch, useStatementFetch } from "../lib/mastra-client.js";
-import { DataGrid, humanizeLabel } from "./data-grid.js";
-import { AssistantMarkdown } from "./markdown.js";
+import { normalizeChartOption } from "../support/chart-option";
+import { useChartFetch, useStatementFetch } from "../support/mastra-client";
+import { DataGrid, humanizeLabel } from "./data-grid";
+import { AssistantMarkdown } from "./markdown";
 
 // Inline embed slots: chart / data tables resolved from `[chart:<id>]`
 // and `[data:<id>]` markers in the assistant's prose, plus the splitter
@@ -175,7 +173,7 @@ type RenderSegment =
  * resolves to a slot.
  */
 const markerSegment = (marker: ParsedMarker): RenderSegment => {
-  if (!isUuid(marker.id)) return { kind: "text", text: "" };
+  if (!markers.isUuid(marker.id)) return { kind: "text", text: "" };
   switch (marker.type) {
     case "chart":
       return { kind: "chart", chartId: marker.id };
@@ -192,7 +190,7 @@ const splitTextWithEmbeds = (text: string): RenderSegment[] => {
   // `parseMarkers` yields hits in source order with no overlaps (one
   // regex pass), so the spans splice in directly - no sort or
   // overlap guard needed.
-  for (const marker of parseMarkers(text)) {
+  for (const marker of markers.parseMarkers(text)) {
     if (marker.start > lastIdx) {
       segments.push({ kind: "text", text: text.slice(lastIdx, marker.start) });
     }
@@ -236,7 +234,7 @@ export const MarkdownWithEmbeds = ({
   text: string;
   streaming?: boolean;
 }) => {
-  const segments = splitTextWithEmbeds(stripIncompleteMarkerTail(text));
+  const segments = splitTextWithEmbeds(markers.stripIncompleteMarkerTail(text));
   return (
     <>
       {segments.map((seg, i) => {

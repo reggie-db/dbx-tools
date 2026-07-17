@@ -11,18 +11,18 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
-} from "@databricks/appkit-ui/react";
+} from "@dbx-tools/ui-appkit/react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { format as formatSql } from "sql-formatter";
 import { Streamdown } from "streamdown";
-import { createShikiPlugin, highlightToHtml } from "../lib/shiki-plugin.js";
+import { createShikiPlugin, highlightToHtml } from "../support/shiki-plugin";
 import {
   DataGrid,
   TABLE_WRAPPER_CLASSES,
   colorizeDelta,
   type DataRow,
-} from "./data-grid.js";
+} from "./data-grid";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
 // wired with shiki highlighting and AppKit table primitives, plus the

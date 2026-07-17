@@ -11,8 +11,8 @@ import {
   TableHeader,
   TableRow,
   cn,
-} from "@databricks/appkit-ui/react";
-import { stringUtils } from "@dbx-tools/shared";
+} from "@dbx-tools/ui-appkit/react";
+import { string } from "@dbx-tools/shared-core";
 import {
   flexRender,
   getCoreRowModel,
@@ -82,10 +82,10 @@ export function renderDataCell(value: unknown): React.ReactNode {
  */
 export function humanizeLabel(
   value: string,
-  options?: stringUtils.TokenizeOptions,
+  options?: string.TokenizeOptions,
 ): string {
   const tokens = [
-    ...stringUtils.tokenizeWithOptions(
+    ...string.tokenizeWithOptions(
       { lowerCase: true, capitalize: true, ...options },
       value,
     ),

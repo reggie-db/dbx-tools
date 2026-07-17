@@ -11,7 +11,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@databricks/appkit-ui/react";
+} from "@dbx-tools/ui-appkit/react";
 import type { UIMessage } from "ai";
 import {
   CheckIcon,
@@ -24,12 +24,12 @@ import {
   XIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { MarkdownWithEmbeds } from "./embed-slots.js";
-import { ExportMenu } from "./export-menu.js";
-import { FeedbackControls } from "./feedback-controls.js";
-import { SuggestionPills } from "./suggestion-pills.js";
-import { collectSuggestions } from "./suggestions.js";
-import { ToolSessionPill, humanizeToolName } from "./tool-pill.js";
+import { MarkdownWithEmbeds } from "./embed-slots";
+import { ExportMenu } from "./export-menu";
+import { FeedbackControls } from "./feedback-controls";
+import { SuggestionPills } from "./suggestion-pills";
+import { collectSuggestions } from "./suggestions";
+import { ToolSessionPill, humanizeToolName } from "./tool-pill";
 import type {
   ApprovalDecision,
   ChatStatus,
@@ -38,7 +38,7 @@ import type {
   FeedbackValue,
   PendingApproval,
   ToolEvent,
-} from "./types.js";
+} from "./types";
 
 // User / assistant message bubbles plus the inline approval card and
 // the helpers that surface approval-gated tool calls out of a message's

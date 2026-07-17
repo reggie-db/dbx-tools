@@ -23,8 +23,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
   cn,
-} from "@databricks/appkit-ui/react";
-import { commonUtils } from "@dbx-tools/shared";
+} from "@dbx-tools/ui-appkit/react";
+import { error as errorUtil } from "@dbx-tools/shared-core";
 import {
   ArrowDownIcon,
   MessageSquareIcon,
@@ -36,11 +36,11 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AssistantBubble, UserBubble } from "./bubbles.js";
-import { ExportMenu } from "./export-menu.js";
-import { SuggestionPills } from "./suggestion-pills.js";
-import { ThreadSidebar } from "./thread-sidebar.js";
-import type { ChatViewProps } from "./types.js";
+import { AssistantBubble, UserBubble } from "./bubbles";
+import { ExportMenu } from "./export-menu";
+import { SuggestionPills } from "./suggestion-pills";
+import { ThreadSidebar } from "./thread-sidebar";
+import type { ChatViewProps } from "./types";
 
 // Controlled, presentational chat shell: the scroll container, header
 // (model picker + clear), empty state, transcript of message bubbles,
@@ -477,7 +477,7 @@ export const ChatView = ({
                         <AlertTitle>Something went wrong</AlertTitle>
                         <AlertDescription>
                           {error
-                            ? commonUtils.errorMessage(error)
+                            ? errorUtil.errorMessage(error)
                             : "The assistant ran into an error. Please try again."}
                         </AlertDescription>
                       </Alert>

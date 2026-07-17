@@ -1,4 +1,4 @@
-import type { ToolEvent, ToolProgress } from "./types.js";
+import type { ToolEvent, ToolProgress } from "./types";
 
 // Suggested follow-up question extraction: dedupe + cap the
 // `suggested_questions` events Genie tools emit so the assistant

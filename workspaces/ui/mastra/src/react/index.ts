@@ -1,4 +1,4 @@
-// Public surface of @dbx-tools/appkit-mastra-ui/react.
+// Public surface of @dbx-tools/ui-mastra/react.
 //
 // - `MastraChat` / `useMastraChat`: the self-contained drop-in (and its
 //   headless driver) that wire themselves from the Mastra plugin config.
@@ -19,13 +19,13 @@ export {
   useMastraSuggestions,
   useMastraThreads,
   useStatementFetch,
-} from "../lib/mastra-client.js";
-export type { ByIdFetchState } from "../lib/mastra-client.js";
-export { ChatView } from "./chat-view.js";
-export { ExportMenu } from "./export-menu.js";
-export { MastraChat, useMastraChat } from "./mastra-chat.js";
-export type { MastraChatProps, UseMastraChatOptions } from "./mastra-chat.js";
-export { ThreadSidebar } from "./thread-sidebar.js";
+} from "../support/mastra-client";
+export type { ByIdFetchState } from "../support/mastra-client";
+export { ChatView } from "./chat-view";
+export { ExportMenu } from "./export-menu";
+export { MastraChat, useMastraChat } from "./mastra-chat";
+export type { MastraChatProps, UseMastraChatOptions } from "./mastra-chat";
+export { ThreadSidebar } from "./thread-sidebar";
 export type {
   ApprovalDecision,
   ChatModelOption,
@@ -39,4 +39,4 @@ export type {
   ThreadSummary,
   ToolEvent,
   ToolProgress,
-} from "./types.js";
+} from "./types";
