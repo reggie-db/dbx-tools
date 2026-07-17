@@ -450,6 +450,27 @@ export function findContainingCidr<T extends Cidr>(
 }
 
 /**
+ * Whether `input`'s host is a loopback address - `localhost`, an IPv4
+ * `127.0.0.0/8` address, or IPv6 `::1` - i.e. a service running on this
+ * machine (e.g. a local registry). Accepts anything {@link urlBuilder}
+ * coerces (a URL string, `URL`, or `{ url }`); returns `false` when the
+ * input has no resolvable host.
+ *
+ * @example
+ * isLoopbackHost("http://localhost:4873"); // true
+ * isLoopbackHost("http://127.0.0.1");       // true
+ * isLoopbackHost("https://registry.npmjs.org"); // false
+ */
+export function isLoopbackHost(input: UrlLike): boolean {
+  const host = urlBuilder(input)?.hostname;
+  if (!host) return false;
+  if (host === "localhost") return true;
+  // `URL` brackets an IPv6 host (`[::1]`); strip them before parsing.
+  const ip = host.replace(/^\[|\]$/g, "");
+  return ipInCidr(ip, "127.0.0.0/8") || ipInCidr(ip, "::1/128");
+}
+
+/**
  * Network mask for `prefix` leading bits of a `bits`-wide address as a
  * `bigint`: the top `prefix` bits set, the low host bits cleared.
  * `prefix === 0` yields `0n` (matches everything); `prefix === bits`

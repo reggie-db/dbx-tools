@@ -33,7 +33,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command, Option } from "commander";
 import { exec, project } from "@dbx-tools/core";
-import { log } from "@dbx-tools/shared-core";
+import { log, net } from "@dbx-tools/shared-core";
 
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;
@@ -95,7 +95,7 @@ function resolveLocalRegistry(value: string): string | undefined {
   if (!trimmed || trimmed.toLowerCase() === "false") return undefined;
   if (trimmed.toLowerCase() === "auto") {
     const registry = project.npmRegistry();
-    return registry && project.isLoopbackHost(registry) ? registry.href : undefined;
+    return registry && net.isLoopbackHost(registry) ? registry.href : undefined;
   }
   return trimmed;
 }

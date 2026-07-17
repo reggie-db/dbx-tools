@@ -298,20 +298,6 @@ export function npmRegistry(cwd?: string): net.UrlBuilder | undefined {
   return trimmed && trimmed !== "undefined" ? (net.urlBuilder(trimmed) ?? undefined) : undefined;
 }
 
-/**
- * Whether `url`'s host is a loopback address - `localhost`, `127.0.0.0/8`, or
- * `::1` - i.e. a registry/service running on this machine (e.g. a local
- * verdaccio). Accepts anything {@link net.urlBuilder} coerces.
- */
-export function isLoopbackHost(url: net.UrlLike): boolean {
-  const host = net.urlBuilder(url)?.hostname;
-  if (!host) return false;
-  if (host === "localhost") return true;
-  // `URL` wraps an IPv6 host in brackets (`[::1]`); strip them for parseIp.
-  const ip = host.replace(/^\[|\]$/g, "");
-  return net.ipInCidr(ip, "127.0.0.0/8") || net.ipInCidr(ip, "::1/128");
-}
-
 function readPackageName(pkgPath: string): string | undefined {
   if (!stat(pkgPath)?.isFile()) return undefined;
   try {
