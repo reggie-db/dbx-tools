@@ -17,8 +17,10 @@ export function snapshotEnv(env: NodeJS.ProcessEnv = process.env): Record<string
 }
 
 /**
- * Keys whose values were added or changed between snapshots. Omits keys
- * that became empty or were removed.
+ * Keys whose values were added, changed, or cleared between snapshots. A key
+ * that went from a non-blank value to blank/removed is emitted with an empty
+ * value so it can be unset. Keys that were already blank/absent and stayed that
+ * way are omitted.
  */
 export function diffEnv(
   before: Record<string, string>,
@@ -27,9 +29,10 @@ export function diffEnv(
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   const out: Record<string, string> = {};
   for (const key of [...keys].sort()) {
-    const prev = before[key];
-    const next = after[key];
-    if (next && next !== prev) {
+    // Treat a removed key as blank so a non-blank -> blank/removed transition is a delta.
+    const prev = before[key] ?? "";
+    const next = after[key] ?? "";
+    if (next !== prev) {
       out[key] = next;
     }
   }

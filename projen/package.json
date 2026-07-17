@@ -2,6 +2,7 @@
   "name": "@dbx-tools/projen",
   "scripts": {
     "build": "projen build",
+    "bump": "projen bump",
     "clobber": "projen clobber",
     "compile": "projen compile",
     "default": "projen default",
@@ -10,13 +11,16 @@
     "post-compile": "projen post-compile",
     "post-upgrade": "projen post-upgrade",
     "pre-compile": "projen pre-compile",
+    "release": "projen release",
     "test": "projen test",
+    "unbump": "projen unbump",
     "upgrade": "projen upgrade",
     "watch": "projen watch",
     "projen": "projen"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
+    "commit-and-tag-version": "^12",
     "constructs": "^10.0.0",
     "projen": "^0.101.6",
     "ts-node": "^10.9.2",
