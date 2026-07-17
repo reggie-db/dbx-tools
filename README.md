@@ -28,8 +28,8 @@ and local developer tools while staying close to Databricks' own APIs.
 - **Approval-gated email workflows** — give agents a `send_email` tool that
   suspends for human approval, supports SMTP or local outbox mode, derives safe
   senders, and renders Markdown email.
-- **Reusable React surfaces** — provide AppKit/Tailwind/Vite foundations plus
-  email approval, preview, compose, and Markdown body components.
+- **Reusable React surfaces** — provide AppKit/Tailwind/Vite foundations, a
+  Mastra chat UI, email approval, preview, compose, and Markdown body components.
 - **Shared browser-safe contracts** — keep UI, server, tests, and tools aligned
   with zod schemas for Mastra routes, Genie events, model lookup, email payloads,
   and selected Databricks SDK shapes.
@@ -81,6 +81,16 @@ That single plugin registration can provide agent streaming routes, model
 resolution, Genie-backed data tools, durable Lakebase storage, chat history,
 thread management, feedback, and MCP exposure.
 
+Use `@dbx-tools/ui-mastra` on the client side for the matching chat UI:
+
+```tsx
+import { MastraChat } from "@dbx-tools/ui-mastra/react";
+
+export function App() {
+  return <MastraChat agentId="analyst" enableThreads showModelPicker />;
+}
+```
+
 ## Feature Packages
 
 | Use case                    | Packages                                                                                                                                             |
@@ -91,7 +101,7 @@ thread management, feedback, and MCP exposure.
 | Model Serving selection     | [`@dbx-tools/node-model`](workspaces/node/model), [`@dbx-tools/shared-model`](workspaces/shared/model)                                               |
 | Local model proxy           | [`@dbx-tools/model-proxy`](workspaces/cli/model-proxy)                                                                                               |
 | Email workflows             | [`@dbx-tools/node-email`](workspaces/node/email), [`@dbx-tools/shared-email`](workspaces/shared/email), [`@dbx-tools/ui-email`](workspaces/ui/email) |
-| React/AppKit UI foundation  | [`@dbx-tools/ui-appkit`](workspaces/ui/appkit)                                                                                                       |
+| React/AppKit UI             | [`@dbx-tools/ui-appkit`](workspaces/ui/appkit), [`@dbx-tools/ui-mastra`](workspaces/ui/mastra), [`@dbx-tools/ui-email`](workspaces/ui/email)         |
 | Databricks infrastructure   | [`@dbx-tools/node-databricks`](workspaces/node/databricks), [`@dbx-tools/node-databricks-zerobus`](workspaces/node/databricks-zerobus)               |
 | Shared utilities            | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/node-core`](workspaces/node/core), [`@dbx-tools/node-path`](workspaces/node/path)   |
 | SDK-derived schemas         | [`@dbx-tools/shared-sdk-model`](workspaces/shared/sdk-model)                                                                                         |

@@ -464,11 +464,6 @@ along the way: `net` (URL/email/IP), `http` (headers/cookies/fetch-error),
 - **API extraction** — evaluate TypeDoc or API Extractor for generated API
   reference pages, but keep narrative usage docs in READMEs so GitHub, npm, and
   the docs site all share the same prose.
-- **UI package export maps** — `@dbx-tools/ui-appkit` and `@dbx-tools/ui-email`
-  declare `./react` subpaths that point at `src/react/index.ts`, but those
-  subpath barrels are not present in the current tree. Either generate the React
-  subpath barrels or update the export maps and docs to the package-root
-  namespace shape before publishing.
 - **Examples as docs fixtures** — keep example README pages short, but link each
   example to the production package concept it exercises (`cli`, `server`,
   `openapi`, `ui`, AppKit server/client).

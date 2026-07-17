@@ -10,19 +10,21 @@ token paint shim for streamed markdown/code output.
 Key features:
 
 - Shared Vite plugin factory for React and Tailwind v4.
+- Stable `@dbx-tools/ui-appkit/react` re-export of AppKit's React component
+  primitives for feature packages.
 - AppKit UI stylesheet import path for host applications and feature packages.
 - Streamdown/code-block styling used by streaming chat and Markdown surfaces.
 - One place to evolve UI build assumptions for feature packages such as
-  [`@dbx-tools/ui-email`](../email).
+  [`@dbx-tools/ui-email`](../email) and [`@dbx-tools/ui-mastra`](../mastra).
 
 ## Configure Vite
 
 ```ts
-import { vite } from "@dbx-tools/ui-appkit";
+import { appkitUiVitePlugins } from "@dbx-tools/ui-appkit/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: vite.appkitUiVitePlugins(),
+  plugins: appkitUiVitePlugins(),
 });
 ```
 
@@ -54,7 +56,9 @@ look for:
 
 ## Module
 
-- `vite` - `appkitUiVitePlugins()` for React + Tailwind v4 Vite projects.
+- `./vite` - `appkitUiVitePlugins()` for React + Tailwind v4 Vite projects.
+- `./react` - AppKit React UI kit re-export for feature packages and hosts.
+- `./styles.css` - Tailwind/Streamdown/shiki base stylesheet.
 
-This package currently exports build/style foundation only. App-specific React
-components should live in feature UI packages that import this foundation.
+App-specific React components should live in feature UI packages that import this
+foundation.

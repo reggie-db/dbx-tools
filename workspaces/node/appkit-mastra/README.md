@@ -369,4 +369,5 @@ client that talks to these routes.
 Browser-facing wire types are in
 [`@dbx-tools/shared-mastra`](../../shared/mastra). Genie event contracts are in
 [`@dbx-tools/shared-genie`](../../shared/genie). Model request/result contracts
-are in [`@dbx-tools/shared-model`](../../shared/model).
+are in [`@dbx-tools/shared-model`](../../shared/model). The matching React chat
+surface is [`@dbx-tools/ui-mastra`](../../ui/mastra).

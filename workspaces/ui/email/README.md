@@ -32,12 +32,12 @@ components for Tailwind classes. Import it once from the app's global CSS entry.
 ## Render A Send Approval
 
 ```tsx
-import { reactEmailApprovalCard } from "@dbx-tools/ui-email";
+import { EmailApprovalCard } from "@dbx-tools/ui-email/react";
 import { email } from "@dbx-tools/shared-email";
 
 const draft = email.emailMessageSchema.parse(toolCall.args);
 
-<reactEmailApprovalCard.EmailApprovalCard
+<EmailApprovalCard
   email={draft}
   pending={pending}
   onApprove={() => addToolResult({ toolCallId: toolCall.id, result: { approved: true } })}
@@ -56,9 +56,9 @@ tool resumes only after the host app records the user's decision.
 ## Preview A Draft Inline
 
 ```tsx
-import { reactEmailApprovalCard } from "@dbx-tools/ui-email";
+import { EmailPreview } from "@dbx-tools/ui-email/react";
 
-<reactEmailApprovalCard.EmailPreview email={draft} />;
+<EmailPreview email={draft} />;
 ```
 
 Use `EmailPreview` when a page needs a compact read-only summary without action
@@ -67,9 +67,9 @@ buttons, such as a review queue, audit log, or test harness.
 ## Provide A Compose View
 
 ```tsx
-import { reactEmailCompose } from "@dbx-tools/ui-email";
+import { EmailComposeView } from "@dbx-tools/ui-email/react";
 
-<reactEmailCompose.EmailComposeView
+<EmailComposeView
   senders={senderOptions.senders}
   defaultFrom={senderOptions.defaultSender}
   onSend={(message, from) => sendEmail(message, from)}
@@ -84,9 +84,9 @@ server package.
 ## Render A Markdown Body
 
 ```tsx
-import { reactEmailBody } from "@dbx-tools/ui-email";
+import { EmailBody } from "@dbx-tools/ui-email/react";
 
-<reactEmailBody.EmailBody className="text-sm">{message.body}</reactEmailBody.EmailBody>;
+<EmailBody className="text-sm">{message.body}</EmailBody>;
 ```
 
 `EmailBody` uses Streamdown to render compact Markdown for email text. It is
@@ -96,11 +96,11 @@ and after submission.
 ## Reuse Field Helpers
 
 ```ts
-import { reactFields } from "@dbx-tools/ui-email";
+import { attachmentNames, joinAddresses, parseAddresses } from "@dbx-tools/ui-email/react";
 
-const to = reactFields.parseAddresses("alice@example.com; bob@example.com");
-const label = reactFields.joinAddresses(to);
-const files = reactFields.attachmentNames(message.attachments);
+const to = parseAddresses("alice@example.com; bob@example.com");
+const label = joinAddresses(to);
+const files = attachmentNames(message.attachments);
 ```
 
 The helpers keep free-text recipient parsing and attachment labels consistent
@@ -108,12 +108,10 @@ across approval, compose, and custom UI surfaces.
 
 ## Modules
 
-- `reactEmailApprovalCard` - `EmailPreview`, `EmailApprovalCard`, and
-  approval-card prop types.
-- `reactEmailCompose` - `EmailComposeView` and compose prop types.
-- `reactEmailBody` - compact Markdown body renderer.
-- `reactFields` - address parsing, display helpers, attachment labels, and the
-  `EmailDraft` type.
+- `./react` - `EmailPreview`, `EmailApprovalCard`, `EmailComposeView`,
+  `EmailBody`, address/attachment helpers, shared email message types, and prop
+  types.
+- `./styles.css` - Tailwind/AppKit style entrypoint for the email components.
 
 Pair this package with [`@dbx-tools/node-email`](../../node/email) for SMTP or
 outbox delivery, and with [`@dbx-tools/shared-email`](../../shared/email) for
