@@ -92,6 +92,16 @@ project.package.addField("exports", {
   "./package.json": "./package.json",
 });
 
+// This package ships SOURCE (its `main`/`exports`/task scripts all point at
+// `.ts`, run via tsx), so the published tarball must contain the TypeScript, not
+// the compiled `lib/`. A `files` allowlist is the idiomatic, self-contained way
+// to say exactly that - it takes precedence over projen's generated `.npmignore`
+// (which excludes `/src/`), so `index.ts` (re-exports `./src/*`), the `src/`
+// modules, and the `tasks/` scripts a consumer runs as `tsx <engine>/tasks/*.ts`
+// are all present. Without it the published `index.ts` imports a missing
+// `./src/barrels` and synth dies with ERR_MODULE_NOT_FOUND.
+project.package.addField("files", ["index.ts", "src", "tasks"]);
+
 // Track the hand-authored files projen's default dotfile ignore would drop:
 // the pnpm workspace root marker (keeps this project isolated from the parent
 // workspace) and the util-dep link hook.
