@@ -71,6 +71,12 @@ project.pnpmWorkspace?.allowBuild("geckodriver", false);
 project.pnpmWorkspace?.allowBuild("onnxruntime-node", false);
 project.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
 
+// Catalog pins for the app add-on runtime deps (not engine toolchain): the
+// email add-on's markdown renderer and the Mastra agent framework the tools
+// build on.
+project.pnpmWorkspace?.addCatalog("marked", "^18.0.5");
+project.pnpmWorkspace?.addCatalog("@mastra/core", "^1.47.0");
+
 
 // ---------------------------------------------------------------------------
 // Per-package mixins
@@ -133,23 +139,20 @@ project.with(
     p.addDevDeps("@databricks/appkit@catalog:");
   }),
 
-  // node-appkit-config: AppKit auto-configuration (drop-in createApp that
-  // resolves Lakebase Postgres + cache-schema grants first). Requires
-  // @databricks/appkit at runtime (it wraps createApp / createLakebasePool). The
-  // `appkit-config-env` bin uses commander. Consumes node-appkit's config
-  // resolver + node-core project helpers.
-  mixin.mixin(pkg("*/node-appkit-config", "node"), (p) => {
-    p.package.addBin({ "appkit-config-env": "./bin/appkit-config-env.ts" });
+  // cli-appkit-env: the `appkit-env` CLI - run AppKit auto-config (node-appkit's
+  // `createApp.autoConfigure`) and print the env vars it added/changed as
+  // eval-able shell / windows / json output. `cli`-tagged (commander from the
+  // cli tag).
+  mixin.mixin(pkg("*/cli-appkit-env", "cli"), (p) => {
+    p.package.addField("name", projectApi.identifier(p.root).withName("appkit-env").packageName);
+    p.package.file.readonly = false;
+    p.package.addField("publishConfig", { access: "public", provenance: true });
+    p.package.addBin({ "appkit-env": "./bin/appkit-env.ts" });
     p.package.addField("exports", {
       ".": "./index.ts",
       "./package.json": "./package.json",
     });
-    p.addDeps(
-      "@dbx-tools/node-appkit@workspace:*",
-      "@dbx-tools/node-core@workspace:*",
-      "@databricks/appkit@catalog:",
-      "commander@catalog:",
-    );
+    p.addDeps("@dbx-tools/node-appkit@workspace:*", "@databricks/appkit@catalog:");
     applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
   }),
 
@@ -179,6 +182,23 @@ project.with(
       "@databricks/appkit@catalog:",
       "fuse.js@^7.4.2",
     );
+  }),
+
+  // node-email: server-side email add-on - SMTP transport (nodemailer) / local
+  // outbox, markdown->HTML rendering (marked + juice), on-behalf-of sender
+  // derivation, the approval-gated `send_email` Mastra tool, and the AppKit
+  // `email` plugin. Consumes the browser-safe shared-email contract. AppKit +
+  // Mastra are runtime deps.
+  mixin.mixin(pkg("*/node-email", "node"), (p) => {
+    p.addDeps(
+      "@dbx-tools/shared-email@workspace:*",
+      "@databricks/appkit@catalog:",
+      "@mastra/core@catalog:",
+      "nodemailer@^7.0.13",
+      "juice@^12.1.1",
+      "marked@catalog:",
+    );
+    p.addDevDeps("@types/nodemailer@^7", "@types/express@catalog:", "@types/json-schema@^7");
   }),
 
   // node-file-scan: filesystem glob/watch package. It shells out (node-core

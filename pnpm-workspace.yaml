@@ -11,11 +11,12 @@ packages:
   - example-workspaces/shared/neat
   - example-workspaces/ui/app
   - example-workspaces/ui/appkit-client
+  - workspaces/cli/appkit-env
   - workspaces/cli/dbx-tools
   - workspaces/cli/model-proxy
   - workspaces/node/appkit
-  - workspaces/node/appkit-config
   - workspaces/node/core
+  - workspaces/node/email
   - workspaces/node/file-scan
   - workspaces/node/genie
   - workspaces/node/model
@@ -47,6 +48,8 @@ catalog:
   "@databricks/appkit": ^0.43.0
   "@databricks/appkit-ui": ^0.43.1
   "@databricks/sdk-experimental": ^0.17.0
+  marked: ^18.0.5
+  "@mastra/core": ^1.47.0
   mastracode: 0.30.0
 allowBuilds:
   esbuild: true

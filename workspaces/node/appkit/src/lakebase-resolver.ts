@@ -34,7 +34,7 @@
  */
 
 import { log, string } from "@dbx-tools/shared-core";
-import { config as appConfig } from "@dbx-tools/node-appkit";
+import { resolveConfigValue } from "./config";
 import { project } from "@dbx-tools/node-core";
 import { getWorkspaceClient } from "@databricks/appkit";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -170,9 +170,9 @@ interface Operation {
 export async function readLakebaseInputs(
   config?: LakebaseResolverInputs,
 ): Promise<LakebaseResolverInputs> {
-  const rawAddress = config?.endpoint ?? (await appConfig.resolveConfigValue("LAKEBASE_ENDPOINT"));
+  const rawAddress = config?.endpoint ?? (await resolveConfigValue("LAKEBASE_ENDPOINT"));
   const parsed = parseAddress(rawAddress);
-  const portEnv = await appConfig.resolveConfigValue("PGPORT");
+  const portEnv = await resolveConfigValue("PGPORT");
   return {
     project: config?.project ?? parsed.project,
     branch: config?.branch ?? parsed.branch,
@@ -180,13 +180,12 @@ export async function readLakebaseInputs(
     // bare hostnames set `host` instead and leave `endpoint` undefined
     // until the REST resolver fills it in.
     endpoint: parsed.endpoint,
-    database:
-      config?.database ?? (await appConfig.resolveConfigValue("PGDATABASE")) ?? parsed.database,
-    host: config?.host ?? (await appConfig.resolveConfigValue("PGHOST")) ?? parsed.host,
+    database: config?.database ?? (await resolveConfigValue("PGDATABASE")) ?? parsed.database,
+    host: config?.host ?? (await resolveConfigValue("PGHOST")) ?? parsed.host,
     port: config?.port ?? (portEnv ? Number.parseInt(portEnv, 10) : undefined) ?? parsed.port,
     sslMode:
       config?.sslMode ??
-      ((await appConfig.resolveConfigValue("PGSSLMODE")) as SslMode | undefined) ??
+      ((await resolveConfigValue("PGSSLMODE")) as SslMode | undefined) ??
       parsed.sslMode,
     autoCreate: config?.autoCreate,
   };

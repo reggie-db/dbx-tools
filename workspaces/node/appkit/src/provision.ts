@@ -22,7 +22,7 @@
 import { error, type log } from "@dbx-tools/shared-core";
 import { createLakebasePool, getWorkspaceClient } from "@databricks/appkit";
 
-import { databricks } from "@dbx-tools/node-appkit";
+import { isAppEnv } from "./databricks";
 
 /** AppKit persistent-cache schema (see AppKit's `PersistentStorage`). */
 const CACHE_SCHEMA = "appkit";
@@ -69,7 +69,7 @@ export async function provisionCacheSchema(
   logger: log.Logger,
   role: string | undefined,
 ): Promise<void> {
-  if (databricks.isAppEnv()) {
+  if (isAppEnv()) {
     logger.debug("autopg: skip cache provisioning (inside a Databricks App)");
     return;
   }

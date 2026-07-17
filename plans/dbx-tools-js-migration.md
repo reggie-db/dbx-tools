@@ -89,9 +89,9 @@ genie-shared      → sdk-shared, shared   ✅ DONE (as shared-genie)
 genie             → genie-shared, shared (+ @databricks/sdk-experimental)   ✅ DONE (as node-genie; SDK glue → node-appkit)
 model             → model-shared, shared   ✅ DONE (as node-model; AppKit glue → node-appkit)
 model-proxy       → model, shared   ✅ DONE (as cli/model-proxy → @dbx-tools/model-proxy)
-appkit-config     → shared   ✅ DONE (as node-appkit-config; config subsystem → node-appkit/node-core)
+appkit-config     → shared   ✅ DONE (folded into node-appkit: config + createApp/lakebase auto-config; `appkit-env` CLI)
 appkit-ui         → shared   (React `ui` tag — deferred, skip -ui pass)
-appkit-email      → appkit-email-shared, shared
+appkit-email      → appkit-email-shared, shared   ✅ DONE (as node-email)
 appkit-email-ui   → appkit-email-shared, appkit-ui, shared
 genie-shared/…    (see genie family above)
 appkit-mastra-shared → genie-shared, model-shared
@@ -120,7 +120,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `c11c842` | **Port `model` server → `@dbx-tools/node-model`** + reorganize node-appkit into `databricks.ts` (SDK glue: `toContext`/`ContextLike`/`isAppEnv`) / `appkit.ts` (execution context: `WorkspaceClientLike`/`tryGetExecutionContext`/`ensureInitialized`) / `plugin.ts` (plugin lookup: `data`/`instance`/`require`). Moved `isDatabricksAppEnv` out of shared-core `runtime.ts` → `databricks.isAppEnv` (Node-only). See "node-model" below. |
 | `45ab168` | **Port `model-proxy` → `@dbx-tools/model-proxy`** (`workspaces/cli/model-proxy`, `cli`-tagged, ships the `model-proxy` bin). See "model-proxy" below. |
 | `e7065e1` | **READMEs are hand-written** (engine no longer seeds projen's `# replace this` SampleReadme; `initProject` drops the README component). Wrote real READMEs for all ported packages. **Port `appkit-email-shared` → `@dbx-tools/shared-email`** (browser-safe zod email contract). |
-| (pending commit) | **Config subsystem + port `appkit-config` → `@dbx-tools/node-appkit-config`.** Added `config` (app.yaml/bundle/env resolution) to node-appkit and `name`/`resolveProjectRoots`/`parseGitRemote`/`stat` to node-core's `project`. See "node-appkit config" + "node-appkit-config" below. |
+| `867d4b3` | **Config subsystem + port `appkit-config`.** Added `config` (app.yaml/bundle/env resolution) to node-appkit and `name`/`resolveProjectRoots`/`parseGitRemote`/`stat` to node-core's `project`. (appkit-config first landed as its own package here.) |
+| (pending commit) | **Fold `appkit-config` into `node-appkit`** (it added no deps beyond `@databricks/appkit`, already present) + extract the env CLI to **`@dbx-tools/appkit-env`** (`cli/appkit-env`, `appkit-env` bin). Port `net` (URL/email/IP helpers) into shared-core. **Port `appkit-email` → `@dbx-tools/node-email`** (SMTP/outbox, markdown->HTML, sender policy, `send_email` Mastra tool, AppKit `email` plugin). See "node-email" below. |
 
 ### shared-core surface now available
 
@@ -130,9 +131,10 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 (tokenize/tokenizeWithOptions/toIdentifier/toSlug/toUniqueSlug/trimToNull/
 firstNonEmpty/escapeHtml/toDescription), `object`
 (isRecord/toBoolean/deepEqual/NameLike/NonFunctionKeys/DeepEqualComparator),
-`log` (logger/isLevelEnabled), plus `functionModule` (memoize), `iterable`,
-`predicate`. NOTE: `exec` + `project` moved to **node-core**; `isDatabricksAppEnv`
-moved to **node-appkit** (`databricks.isAppEnv`) — neither is in shared-core.
+`log` (logger/isLevelEnabled), `net` (urlBuilder/parseEmails/isEmail/parseIp/
+parseCidr/ipInCidr), plus `functionModule` (memoize), `iterable`, `predicate`.
+NOTE: `exec` + `project` moved to **node-core**; `isDatabricksAppEnv` moved to
+**node-appkit** (`databricks.isAppEnv`) — neither is in shared-core.
 
 `-js`'s `commonUtils.*` / `stringUtils.*` map onto these: e.g.
 `commonUtils.errorMessage` → `error.errorMessage`,
@@ -354,29 +356,43 @@ Ported `-js appkit-email-shared` → `@dbx-tools/shared-email`
 `email.emailMessageSchema` (types hoisted flat: `EmailMessage`, `EmailResult`,
 `EmailAttachment`, `EmailSenders`). Unblocks the `appkit-email` sender later.
 
-## `node-appkit-config` — AppKit auto-configuration
+## `appkit-config` — folded into `node-appkit`
 
-Ported `-js appkit-config` → `@dbx-tools/node-appkit-config` (`workspaces/node/`,
-`node`-tagged; ships the `appkit-config-env` bin). A drop-in `createApp` that
-resolves Lakebase Postgres (env / config / Lakebase Autoscaling REST API, with
-reverse-lookup / pick / auto-create) and grants the AppKit cache schema before
-delegating to AppKit's `createApp`. Modules: `create-app`, `lakebase-resolver`,
-`pgaddress` (pure, copied verbatim), `provision`, `env-export` (pure).
+Ported `-js appkit-config` and folded it into **node-appkit** (it added no deps
+beyond `@databricks/appkit`, which node-appkit already carries — per the "don't
+split a package that adds no deps" rule). The auto-config surface is now the
+`createApp` module of node-appkit (`create-app`, `lakebase-resolver`,
+`pgaddress`, `provision`): a drop-in `createApp` that resolves Lakebase Postgres
+(env / config / Lakebase Autoscaling REST, with reverse-lookup / pick /
+auto-create) and grants the AppKit cache schema before delegating to AppKit's
+`createApp`.
 
-The config-resolution subsystem it needed landed as agreed:
+The env CLI was extracted to its own `cli` package **`@dbx-tools/appkit-env`**
+(`cli/appkit-env`, `appkit-env` bin) — `env-export.ts` (pure) + a commander bin
+that runs `createApp.autoConfigure` and prints the env diff as shell/windows/json.
+
+The config-resolution subsystem it needed landed as:
 - **node-appkit `config.ts`** — `resolveConfigValue` + `app.yaml`/bundle-validate
-  readers + env flatten. Deps: zod + `yaml` (light; `app.yaml` is a
-  Databricks-app concept). `Bun.YAML.parse` → the `yaml` package.
+  readers + env flatten (zod + `yaml`; `Bun.YAML.parse` → the `yaml` package).
 - **node-core `project.ts`** — added `name` / `resolveProjectRoots` /
-  `parseGitRemote` / `stat` alongside the existing sync `root`. The `-js` async
-  `name`/`resolveProjectRoots` became sync (they only shell out via spawnSync),
-  so `await projectUtils.name()` → `project.name()`.
+  `parseGitRemote` / `stat` alongside the existing sync `root` (sync, spawnSync).
 
-Repoints: `configUtils.resolveConfigValue` → node-appkit `config` (aliased
-`appConfig` to avoid clashing with `config` params); `projectUtils.name` →
-node-core `project.name`; `logUtils`→`log`, `commonUtils.errorMessage`→`error`,
-`commonUtils.isDatabricksAppEnv`→`databricks.isAppEnv`, `stringUtils`→`string`.
-`@databricks/appkit` is a runtime dep (wraps `createApp`/`createLakebasePool`).
+Repoints: `configUtils.resolveConfigValue` → sibling `./config`
+(`resolveConfigValue`); `projectUtils.name` → node-core `project.name`;
+`logUtils`→`log`, `commonUtils.errorMessage`→`error`,
+`commonUtils.isDatabricksAppEnv`→`isAppEnv`, `stringUtils`→`string`.
+
+## `node-email` — server-side email add-on
+
+Ported `-js appkit-email` → `@dbx-tools/node-email` (`workspaces/node/email`,
+`node`-tagged). SMTP transport (nodemailer) with a local file-outbox fallback,
+markdown→HTML rendering (`marked` + `juice` inlining), on-behalf-of sender
+derivation + allow-list policy, the approval-gated `send_email` Mastra tool, and
+the AppKit `email` plugin. Consumes the browser-safe
+[`shared-email`](#shared-email--email-wire-contract) contract (`email.*`
+namespace for schema values, types flat). New shared-core module `net` (ported
+from `-js net.browser.ts`) supplies `net.parseEmails` for the allow-list. New
+catalog pins: `marked`, `@mastra/core`. AppKit + Mastra are runtime deps.
 
 ## Later passes (not yet scoped)
 

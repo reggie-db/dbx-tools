@@ -1,15 +1,14 @@
 #!/usr/bin/env -S npx tsx
 /**
- * Print env vars added or changed by {@link autoConfigure}.
- *
- * Snapshots `process.env`, runs auto-config, diffs, and writes eval-able
- * `export` / `set` lines (or JSON) to stdout.
+ * `appkit-env`: run AppKit auto-config and print the env vars it added or
+ * changed. Snapshots `process.env`, runs auto-config, diffs, and writes
+ * eval-able `export` / `set` lines (or JSON) to stdout - e.g.
+ * `eval "$(appkit-env)"` to load a resolved Lakebase connection into your shell.
  */
 
 import { Command, CommanderError } from "commander";
-
 import { log } from "@dbx-tools/shared-core";
-import { autoConfigure } from "../src/create-app";
+import { createApp } from "@dbx-tools/node-appkit";
 import {
   defaultEnvExportFormat,
   diffEnv,
@@ -18,10 +17,10 @@ import {
   snapshotEnv,
 } from "../src/env-export";
 
-const logger = log.logger("appkit-config-env");
+const logger = log.logger("appkit-env");
 
 const program = new Command()
-  .name("appkit-config-env")
+  .name("appkit-env")
   .description("Run AppKit auto-config and print new/changed env vars.")
   .option(
     "-f, --format <format>",
@@ -36,7 +35,7 @@ const program = new Command()
     const format = opts.format ? parseEnvExportFormat(opts.format) : defaultEnvExportFormat();
     logger.debug("Snapshotting env vars");
     const before = snapshotEnv();
-    await autoConfigure({ autoConfigure: true });
+    await createApp.autoConfigure({ autoConfigure: true });
     const changes = diffEnv(before, snapshotEnv());
 
     process.stdout.write(formatEnvExport(changes, format));

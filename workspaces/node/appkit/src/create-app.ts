@@ -7,7 +7,7 @@
  * preserved:
  *
  * ```ts
- * import { createApp } from "@dbx-tools/node-appkit-config";
+ * import { createApp } from "@dbx-tools/node-appkit";
  * import { lakebase, server } from "@databricks/appkit";
  *
  * await createApp({ plugins: [server(), lakebase()] });
