@@ -157,7 +157,7 @@ program
       const tag = `${opts.prefix}${version}`;
       logger.info(
         `bump ${base.join(".")} -> ${version} (${opts.level}); tag ${tag}` +
-          `${remote ? "" : " [no remote tag]"}`,
+        `${remote ? "" : " [no remote tag]"}`,
       );
 
       const push = opts.push && opts.publish;
@@ -196,11 +196,12 @@ program
       // each package's version (bumped on disk above) and rewrites `workspace:*`
       // sibling pins to it; from a single-package project it just publishes that
       // one package. Needs the bumped version on disk, so skip under `--no-version`.
-      const localRegistry = opts.version ? resolveLocalRegistry(opts.localRegistry) : undefined;
-      if (opts.version === false && resolveLocalRegistry(opts.localRegistry)) {
+      const localRegistry = resolveLocalRegistry(opts.localRegistry)
+      const publishToLocalRegistry = opts.version && localRegistry;
+      if (opts.version === false && localRegistry) {
         logger.info("skipped local publish (--no-version left package.json unbumped)");
       }
-      if (localRegistry) {
+      if (publishToLocalRegistry) {
         logger.info(`publishing ${version} to local registry ${localRegistry}`);
         exec.spawnSync(
           "pnpm",
