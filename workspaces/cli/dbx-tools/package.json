@@ -6,8 +6,7 @@
     "directory": "workspaces/cli/dbx-tools"
   },
   "bin": {
-    "dbxtools": "./bin/dbxtools.ts",
-    "dbxtools.ts": "bin/dbxtools.ts"
+    "dbxtools": "./bin/dbxtools.ts"
   },
   "scripts": {
     "build": "projen build",
