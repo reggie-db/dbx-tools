@@ -1,10 +1,13 @@
 /**
- * Barrel generator, driven by barrelsby.
+ * Barrel generator.
  *
  * For every package it writes a single `index.ts` **at the package root** (above
- * `src/`) that namespace-re-exports every module under `src/`, subject to two rules:
+ * `src/`) that namespace-re-exports every module under `src/`, subject to a few
+ * rules (see {@link isExcluded}):
  *   1. a file/folder whose name starts with `_` is private and never barrelled;
- *   2. only files that actually contain an `export` are re-exported.
+ *   2. test / `.d.ts` files are skipped;
+ *   3. a `src/**​/index.ts` is a hand-authored subpath entry, not a module;
+ *   4. only files that actually contain an `export` are re-exported.
  *
  * A hand-authored `exports.ts` sitting next to the generated `index.ts` (a Vite-style
  * override) is spliced in last and wins: its exports are appended, and any generated
@@ -12,10 +15,9 @@
  * takes priority. This keeps the barrel auto-generated while letting you add or
  * override individual exports.
  *
- * barrelsby emits flat `export * from "./x"` lines; we relocate the barrel to
- * `<pkg>/index.ts`, deepen paths (`./x` -> `./src/x`), then rewrite each line to
- * `export * as <name> from "./src/x"` (camelCase namespace from path segments;
- * invalid identifiers suffixed with `Module`).
+ * Each eligible module becomes `export * as <name> from "./src/x"` (camelCase
+ * namespace from its path segments; invalid identifiers suffixed with `Module`),
+ * sorted by module path.
  *
  * On top of the namespace lines, every TYPE export that is UNIQUE across the
  * package (declared in exactly one module) is also HOISTED to the barrel's top
@@ -32,24 +34,38 @@
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { extname, join, relative } from "node:path";
-import { exec } from "@dbx-tools/node-core";
+import { extname, join } from "node:path";
 import { find } from "@dbx-tools/node-path";
 import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
-import { log } from "@dbx-tools/shared-core";
 import { moduleExports } from "./module-exports";
-import { escapeRegExp, isModuleFile, repoRoot, toPosix, workspacePackages } from "./workspace";
+import { isModuleFile, toPosix, workspacePackages } from "./workspace";
 
-const logger = log.logger("projen:barrels");
 const require = createRequire(import.meta.url);
 
-// barrelsby is CLI-only (its package `main` is missing), so run its bin with node.
-// Resolved lazily (not at module load) so importing this module during synth does
-// not require barrelsby to be installed yet.
-let barrelsbyCli: string | undefined;
-function barrelsbyBin(): string {
-  return (barrelsbyCli ??= require.resolve("barrelsby/bin/cli.js"));
+/**
+ * A `src`-relative posix path excluded from the root barrel:
+ *   1. any path segment starting with `_` (private module or folder);
+ *   2. a test / spec file;
+ *   3. a `.d.ts` declaration;
+ *   4. a `src/**​/index.ts` - a hand-authored subpath entry (e.g. `src/react/index.ts`
+ *      behind a package's `./react` export), not a module to namespace into the barrel.
+ */
+function isExcluded(relPath: string): boolean {
+  return (
+    /(^|\/)_/.test(relPath) ||
+    /\.(test|spec)\./.test(relPath) ||
+    /\.d\.ts$/.test(relPath) ||
+    /(^|\/)index\.ts$/.test(relPath)
+  );
+}
+
+/** Module file extension, for stripping to an extensionless module path. */
+const MODULE_EXT_RE = /\.(tsx?|jsx?|mts|cts)$/;
+
+/** True for a TypeScript source file (preferred over a compiled `.js` sibling). */
+function isSourceExt(file: string): boolean {
+  return /\.(tsx?|mts|cts)$/.test(file);
 }
 
 /** Top-level statement types that make a file a re-exportable module. */
@@ -102,7 +118,7 @@ export type BarrelModifier = (content: string, ctx: { readonly packageDir: strin
  * is what lets {@link generateForPackage} skip the rewrite when nothing changed.
  */
 const BARREL_HEADER: HeaderOpts = {
-  tool: "projen watch (barrelsby)",
+  tool: "projen watch",
   source: "the exporting modules in ./src",
 };
 
@@ -127,20 +143,6 @@ function modulePathToNamespace(modulePath: string): string {
     name = `${name}Module`;
   }
   return name;
-}
-
-/** Rewrite flat barrelsby `export * from` lines as `export * as <ns> from`. */
-function namespaceBarrelExports(content: string): string {
-  return content
-    .split("\n")
-    .map((line) => {
-      const match = /^(export \* from )"(.+)"(;?)\s*$/.exec(line);
-      if (!match) return line;
-      const modulePath = match[2]!;
-      const ns = modulePathToNamespace(modulePath);
-      return `export * as ${ns} from "${modulePath}";`;
-    })
-    .join("\n");
 }
 
 /** A `./src/x` module path parsed out of a generated `export * as <ns>` line. */
@@ -275,58 +277,37 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   if (!existsSync(srcDir)) return 0;
 
   const rootBarrel = join(pkgDir, "index.ts");
-  const tmpBarrel = join(srcDir, "index.ts");
   // Snapshot the current barrel so we can tell a real change (module added/removed/
-  // renamed) from an edit *inside* an already-exported module, which leaves the flat
-  // `export * from "./src/x"` list - and therefore this file - byte-for-byte identical.
+  // renamed) from an edit *inside* an already-exported module, which leaves the
+  // `export * as … from "./src/x"` list - and therefore this file - byte-for-byte
+  // identical.
   const before = existsSync(rootBarrel) ? readFileSync(rootBarrel, "utf8") : undefined;
 
-  // Rule 2: src files with no export are excluded by exact (tail-anchored) path.
-  // find.findFiles yields paths relative to `srcDir` (its cwd) already, so they map
-  // straight to the barrelsby exclude regex; `hasExport` parses each file via
+  // The re-exportable module set under `src/`: every source file that actually
+  // exports something, minus the private / test / declaration files and any
+  // `src/**/index.ts` (those are hand-authored subpath entries behind a package's
+  // `./sub` export, not modules to namespace into the root barrel). `findFiles`
+  // yields posix paths relative to `srcDir`; `hasExport` parses each via
   // typescript-estree and needs the absolute path.
-  const noExport = [...find.findFiles("**/*", { cwd: srcDir })]
+  const candidates = [...find.findFiles("**/*", { cwd: srcDir })]
+    .map(toPosix)
     .filter(isModuleFile)
-    .filter((f) => !hasExport(join(srcDir, f)))
-    .map((f) => `${escapeRegExp(toPosix(f))}$`);
+    .filter((f) => !isExcluded(f))
+    .filter((f) => hasExport(join(srcDir, f)));
 
-  // Unlock the read-only barrels so barrelsby's --delete / our rewrite can run.
-  makeWritable(rootBarrel);
-  makeWritable(tmpBarrel);
-
-  const excludes = [
-    "(^|/)_", // rule 1: any path segment starting with `_`
-    "\\.(test|spec)\\.", // test files
-    "\\.d\\.ts$", // declaration files
-    ...noExport,
-  ];
-  const args = [
-    barrelsbyBin(),
-    "--directory",
-    srcDir,
-    "--location",
-    "top", // one barrel at the src root...
-    "--structure",
-    "flat", // ...flat `export * from "./x"` for the whole subtree
-    "--delete", // remove the stale barrel first
-    "--noHeader", // we add our own do-not-edit header when stamping
-    ...excludes.flatMap((e) => ["--exclude", e]),
-  ];
-  const result = exec.spawnSync(process.execPath, args, {
-    cwd: repoRoot,
-    stdout: "ignore",
-    stderr: "capture",
-    stdin: "ignore",
-  });
-  if (result.exitCode !== 0) {
-    logger.error(`barrelsby failed for ${toPosix(relative(repoRoot, srcDir))}`, result.stderr);
-    throw new Error(
-      `barrelsby failed for ${toPosix(relative(repoRoot, srcDir))}${result.stderr ? `: ${result.stderr}` : ""}`,
-    );
+  // Collapse each extensionless module path to one entry, preferring a TypeScript
+  // source over a sibling compiled artifact (`math.ts` wins over a committed
+  // `math.js`), so a module is barrelled exactly once. Then sort by module path.
+  const byModulePath = new Map<string, string>();
+  for (const f of candidates) {
+    const stem = f.replace(MODULE_EXT_RE, "");
+    const existing = byModulePath.get(stem);
+    if (!existing || (!isSourceExt(existing) && isSourceExt(f))) byModulePath.set(stem, f);
   }
+  const modulePaths = [...byModulePath.keys()].sort((a, b) => a.localeCompare(b));
 
   // No eligible modules -> no barrel: drop any stale root barrel and bail.
-  if (!existsSync(tmpBarrel)) {
+  if (modulePaths.length === 0) {
     if (existsSync(rootBarrel)) {
       makeWritable(rootBarrel);
       rmSync(rootBarrel, { force: true });
@@ -334,11 +315,17 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
     return 0;
   }
 
-  // Relocate src/index.ts -> <pkg>/index.ts, deepen paths, namespace each export.
-  let content = namespaceBarrelExports(
-    readFileSync(tmpBarrel, "utf8").replace(/from "\.\//g, 'from "./src/'),
-  );
-  rmSync(tmpBarrel, { force: true });
+  // Unlock the read-only barrel so the rewrite below can replace it.
+  makeWritable(rootBarrel);
+
+  // `./src/<path-without-ext>` namespaced by its path segments (camelCase; invalid
+  // identifiers suffixed with `Module`).
+  let content = modulePaths
+    .map((stem) => {
+      const modulePath = `./src/${stem}`;
+      return `export * as ${modulePathToNamespace(modulePath)} from "${modulePath}";`;
+    })
+    .join("\n");
   if (modifier) content = modifier(content, { packageDir: pkgDir });
   // Hoist package-unique named exports to the top level. Names a hand-authored
   // `exports.ts` declares are suppressed so that file stays authoritative.
@@ -348,10 +335,11 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   // A sibling `exports.ts` overrides/extends the generated barrel and wins on conflict.
   content = mergeCustomExports(content, pkgDir);
 
-  // barrelsby regenerates on every source edit, but the barrel only *changes* when
-  // its set of exporting modules does. If the stamped result matches what's already
-  // on disk, restore the read-only bit we cleared above and report no change (0) -
-  // this is what keeps the watcher quiet on ordinary in-file edits.
+  // The barrel only *changes* when its set of exporting modules does. If the
+  // stamped result matches what's already on disk, restore the read-only bit we
+  // cleared above and report no change (0) - this keeps the watcher quiet on
+  // ordinary in-file edits (which leave the export * as … list identical).
+  content = `${content.replace(/\n+$/, "")}\n`;
   const next = `${header(BARREL_HEADER)}\n${content}`;
   if (before === next) {
     makeReadonly(rootBarrel);

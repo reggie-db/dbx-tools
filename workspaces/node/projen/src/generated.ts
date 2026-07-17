@@ -1,12 +1,12 @@
 /**
  * Read-only / do-not-edit helpers for generated output projen does not own as a
- * native `FileBase`: barrels barrelsby writes, openapi artifacts, and any other
+ * native `FileBase`: the barrels we write, openapi artifacts, and any other
  * toolchain file stamped via {@link stampGenerated}.
  *
  * projen already writes its own generated files read-only with a marker; these give
  * barrels and other watch-time output the same contract - a do-not-edit header and a
  * read-only (0o444) bit. Rewriting one therefore goes through {@link makeWritable}
- * first (barrelsby's `--delete`), then {@link stampGenerated}.
+ * first, then {@link stampGenerated}.
  */
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 
@@ -25,7 +25,7 @@ export function makeReadonly(file: string): void {
 
 /**
  * True if the file exists and has no owner-write bit. This is the toolchain's
- * generated-file signal: everything projen and barrelsby write is set read-only
+ * generated-file signal: everything projen and the barrel generator write is set read-only
  * (see {@link makeReadonly}), while hand-authored source stays writable - so a
  * read-only file under the repo (outside vendor/build dirs) is a generated file.
  */
@@ -38,7 +38,7 @@ export function isReadonly(file: string): boolean {
 }
 
 export interface HeaderOpts {
-  /** What produced the file, e.g. `"projen watch (barrelsby)"`. */
+  /** What produced the file, e.g. `"projen watch"`. */
   readonly tool: string;
   /** What the file is derived from, e.g. `"the exporting modules beside it"`. */
   readonly source?: string;
@@ -54,7 +54,7 @@ export function header(opts: HeaderOpts): string {
 
 /**
  * Prepend the do-not-edit header to a file some tool just wrote (e.g. a
- * barrelsby-generated `index.ts`), then set it read-only. Idempotent.
+ * generated barrel `index.ts`), then set it read-only. Idempotent.
  */
 export function stampGenerated(file: string, opts: HeaderOpts): void {
   makeWritable(file);

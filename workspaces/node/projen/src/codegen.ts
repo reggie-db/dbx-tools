@@ -5,8 +5,8 @@
  * field and turns the listed upstream `.d.ts` inputs into read-only `src/`
  * modules of zod schemas plus matching inferred TypeScript types. Each input
  * emits one `src/<name>.ts` (schemas + `export type X = z.infer<typeof
- * xSchema>` lines); barrelsby then namespaces it into the package's root
- * barrel like any other `src/` module (`sdkModel.dashboards.genieMessageSchema`).
+ * xSchema>` lines); the barrel generator then namespaces it into the package's
+ * root barrel like any other `src/` module (`sdkModel.dashboards.genieMessageSchema`).
  *
  * The single source of truth for "which packages get generated content, from
  * which inputs" is each consumer's own `package.json`:

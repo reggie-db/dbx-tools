@@ -354,7 +354,6 @@ project.with(
     p.addDeps(
       "projen",
       "constructs",
-      "barrelsby",
       "openapi-typescript",
       "tsoa",
       "ts-to-zod",
@@ -439,6 +438,25 @@ project.with(
     p.package.addField("exports", {
       "./react": "./src/react/index.ts",
       "./vite": "./src/vite.ts",
+      "./styles.css": "./src/styles.css",
+      "./package.json": "./package.json",
+    });
+  }),
+
+  // ui-email: the React surface for the email add-on - an Approve/Deny approval
+  // card for the `send_email` tool, its read-only field preview, and a standard
+  // editable compose view. Presentational; consumes the browser-safe
+  // shared-email wire contract and renders through ui-appkit's UI kit + the
+  // shared Markdown/Tailwind styling. `ui`-tagged (React + jsx from the ui tag).
+  mixin.mixin(pkg("*/ui-email", "ui"), (p) => {
+    p.addDeps(
+      "@dbx-tools/shared-email@workspace:*",
+      "@dbx-tools/ui-appkit@workspace:*",
+      "lucide-react@catalog:",
+      "streamdown@catalog:",
+    );
+    p.package.addField("exports", {
+      "./react": "./src/react/index.ts",
       "./styles.css": "./src/styles.css",
       "./package.json": "./package.json",
     });

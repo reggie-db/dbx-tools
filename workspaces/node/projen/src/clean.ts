@@ -6,7 +6,7 @@
  * `tasks/clean.ts`, which forwards to these functions.
  *
  * "Generated" is detected structurally, not by a hardcoded list: every file this
- * toolchain writes is set READ-ONLY (projen's own config + the barrelsby barrels; see
+ * toolchain writes is set READ-ONLY (projen's own config + the generated barrels; see
  * {@link isReadonly}), while every hand-authored source stays writable. So a read-only
  * file under the repo is a clean target - EXCEPT anything inside a dot-prefixed folder
  * (`.projen`, `.vscode`, `.git`, ...) and `.gitignore` itself, which clean always leaves

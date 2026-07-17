@@ -31,6 +31,7 @@ packages:
   - workspaces/shared/model
   - workspaces/shared/sdk-model
   - workspaces/ui/appkit
+  - workspaces/ui/email
 catalog:
   react: ^19.2.4
   react-dom: ^19.2.4

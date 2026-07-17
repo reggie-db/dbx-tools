@@ -631,7 +631,7 @@ function initProject(
     tsconfigPath: "./tsconfig.json",
   });
   // Generated read-only outputs (barrels, openapi clients, vite configs). ESLint
-  // --fix cannot rewrite them; they are stamped by barrelsby / dbxtools / projen.
+  // --fix cannot rewrite them; they are stamped by the barrel generator / dbxtools / projen.
   for (const root of roots) {
     eslint.addIgnorePattern(`${root}/openapi/**`);
     eslint.addIgnorePattern(`${root}/**/index.ts`);
