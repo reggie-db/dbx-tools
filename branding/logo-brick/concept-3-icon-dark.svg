@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">dbx.tools concept 3 icon dark</title>
+  <desc id="desc">Pixel brick tool glyph icon in coral for dark backgrounds.</desc>
+  <rect width="64" height="64" rx="14" fill="#0A0A0A"/>
+  <g shape-rendering="crispEdges">
+    <rect x="15" y="12" width="8" height="8" rx="1" fill="#FFB09E"/><rect x="24" y="12" width="8" height="8" rx="1" fill="#FF7A5C"/><rect x="42" y="12" width="8" height="8" rx="1" fill="#F86C5A"/>
+    <rect x="15" y="21" width="8" height="8" rx="1" fill="#FF7A5C"/><rect x="33" y="21" width="8" height="8" rx="1" fill="#FF9A84"/><rect x="42" y="21" width="8" height="8" rx="1" fill="#FF7A5C"/>
+    <rect x="24" y="30" width="8" height="8" rx="1" fill="#FF7A5C"/><rect x="33" y="30" width="8" height="8" rx="1" fill="#F86C5A"/>
+    <rect x="15" y="39" width="8" height="8" rx="1" fill="#FF7A5C"/><rect x="24" y="39" width="8" height="8" rx="1" fill="#FF9A84"/>
+    <rect x="6" y="48" width="8" height="8" rx="1" fill="#F86C5A"/><rect x="15" y="48" width="8" height="8" rx="1" fill="#FF7A5C"/>
+    <rect x="29" y="22" width="3" height="2" rx="1" fill="#0A0A0A"/><rect x="34" y="22" width="3" height="2" rx="1" fill="#0A0A0A"/>
+  </g>
+</svg>

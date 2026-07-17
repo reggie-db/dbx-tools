@@ -1,0 +1,11 @@
+---
+description: dbx-tools repository instructions for Cursor agents
+alwaysApply: true
+---
+
+Read `AGENTS.md` first. It is the canonical instruction file for this repo and
+covers documentation positioning, native AppKit overlap guidance, generated-file
+rules, and contributor workflow.
+
+Do not duplicate long-lived instructions in Cursor rules; update `AGENTS.md`
+instead.
