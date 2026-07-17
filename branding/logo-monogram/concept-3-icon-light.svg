@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="dbx monogram">
+  <!-- Concept 3 - "Bracket Mustache" - LIGHT MODE.
+       A terminal-prompt aesthetic. Two mirrored chevrons frame a coral prompt
+       dot. Rotated so each chevron's tips flick upward: to a coder it reads
+       >_< brackets around a cursor, but the paired chevrons + dot form a small
+       centred, upturned mustache. -->
+  <rect width="64" height="64" rx="14" fill="#FFF1ED"/>
+  <g fill="none" stroke="#E85C42" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- left half of mustache: dips at inner end, tip flicks up at outer end -->
+    <polyline points="14,26 22,36 30,33"/>
+    <!-- right half (mirror) -->
+    <polyline points="50,26 42,36 34,33"/>
+  </g>
+  <!-- prompt / domain dot: the mustache's centre knot -->
+  <circle cx="32" cy="34" r="3.4" fill="#FF7A5C"/>
+  <!-- cursor underscore, reinforcing the terminal read -->
+  <rect x="24" y="46" width="16" height="3.4" rx="1.7" fill="#FF7A5C"/>
+</svg>

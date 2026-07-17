@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="dbx monogram">
+  <!-- Concept 4 - "Ligature x" - LIGHT MODE.
+       A solid coral tile with a knockout 'x'. The x is not two straight strokes
+       but two gently bowed strokes; where they cross, the lower pair sweeps
+       outward and up, so the bottom half of the x silhouettes a subtle mustache.
+       The knockout centre gap doubles as the mustache's philtrum. -->
+  <defs>
+    <mask id="c4x-l">
+      <rect width="64" height="64" fill="#fff"/>
+      <!-- bowed x strokes cut out of the tile -->
+      <g fill="none" stroke="#000" stroke-width="6.5" stroke-linecap="round">
+        <path d="M20 18 Q26 26 32 30 Q40 35 46 46"/>
+        <path d="M44 18 Q38 26 32 30 Q24 35 18 46"/>
+      </g>
+      <!-- domain dot knocked out at the mustache philtrum -->
+      <circle cx="32" cy="38" r="2.6" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#FF7A5C" mask="url(#c4x-l)"/>
+</svg>

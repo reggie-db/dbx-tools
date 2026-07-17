@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 72" width="300" height="72" role="img" aria-label="dbx.tools">
+  <!-- Concept 4 - "Ligature x" - horizontal lockup - LIGHT MODE. -->
+  <defs>
+    <mask id="c4x-ll">
+      <rect width="64" height="64" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-width="6.5" stroke-linecap="round">
+        <path d="M20 18 Q26 26 32 30 Q40 35 46 46"/>
+        <path d="M44 18 Q38 26 32 30 Q24 35 18 46"/>
+      </g>
+      <circle cx="32" cy="38" r="2.6" fill="#000"/>
+    </mask>
+  </defs>
+  <g transform="translate(4,4)">
+    <rect width="64" height="64" rx="14" fill="#FF7A5C" mask="url(#c4x-ll)"/>
+  </g>
+  <g font-family="'DM Sans','Inter','Helvetica Neue',Arial,sans-serif" font-weight="600">
+    <text x="86" y="47" font-size="34" fill="#1a1a1a" letter-spacing="-0.5">dbx</text>
+    <circle cx="164" cy="43" r="4" fill="#FF7A5C"/>
+    <text x="174" y="47" font-size="34" fill="#8a8a8a" letter-spacing="-0.5">tools</text>
+  </g>
+</svg>

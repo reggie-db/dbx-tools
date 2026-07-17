@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dbx.tools — Logo Concepts (Monogram / Wordmark lane)</title>
+<style>
+  :root{
+    --coral:#FF7A5C; --coral-dark:#E85C42; --coral-tint:#FFD9CE;
+    --ink:#1a1a1a; --muted:#6b6b6b; --line:#ececec;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:'DM Sans','Inter','Helvetica Neue',Arial,sans-serif;
+    color:var(--ink); background:#fafafa; -webkit-font-smoothing:antialiased;
+  }
+  header{
+    padding:48px 40px 28px; border-bottom:1px solid var(--line); background:#fff;
+  }
+  header h1{margin:0 0 6px; font-size:26px; letter-spacing:-0.5px}
+  header p{margin:0; color:var(--muted); max-width:760px; line-height:1.5}
+  .palette{display:flex; gap:10px; margin-top:20px; flex-wrap:wrap}
+  .sw{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted)}
+  .chip{width:22px; height:22px; border-radius:6px; border:1px solid rgba(0,0,0,.08)}
+  main{padding:32px 40px 80px; max-width:1200px; margin:0 auto}
+  .concept{
+    background:#fff; border:1px solid var(--line); border-radius:16px;
+    margin-bottom:28px; overflow:hidden;
+  }
+  .concept > .head{padding:22px 26px 6px}
+  .concept h2{margin:0 0 4px; font-size:18px; letter-spacing:-0.3px}
+  .concept h2 span{color:var(--coral-dark); font-weight:700}
+  .concept .rat{margin:0; color:var(--muted); font-size:13.5px; line-height:1.5; max-width:820px}
+  .concept .stache{
+    display:inline-block; margin-top:8px; font-size:12px; font-weight:600;
+    color:var(--coral-dark); background:var(--coral-tint); padding:3px 10px; border-radius:20px;
+  }
+  .grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:0; border-top:1px solid var(--line);
+    margin-top:16px;
+  }
+  .cell{padding:26px 26px 30px}
+  .cell.light{background:#ffffff}
+  .cell.dark{background:#0a0a0a; color:#bdbdbd}
+  .cell .mode{
+    font-size:11px; letter-spacing:.12em; text-transform:uppercase; font-weight:700;
+    opacity:.6; margin-bottom:18px;
+  }
+  .row{display:flex; align-items:center; gap:30px; flex-wrap:wrap}
+  .lockup img{height:56px; display:block}
+  .sizes{display:flex; align-items:flex-end; gap:18px; margin-top:26px}
+  .sizes .s{display:flex; flex-direction:column; align-items:center; gap:7px}
+  .sizes .s span{font-size:10px; opacity:.55}
+  .sizes img{display:block; image-rendering:auto}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  footer{padding:24px 40px 60px; color:var(--muted); font-size:12.5px; text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>dbx.tools — Logo Concepts</h1>
+  <p><strong>Monogram / Wordmark lane.</strong> Typographic identity for a set of
+  open-source-style developer tools for Databricks. Nerdy, clean, geometric —
+  adjacent to the Databricks type feel (DM&nbsp;Sans / Inter) without copying it.
+  Every mark hides an <em>extremely subtle</em> mustache. Coral palette below.</p>
+  <div class="palette">
+    <div class="sw"><span class="chip" style="background:#FF7A5C"></span>Primary coral #FF7A5C</div>
+    <div class="sw"><span class="chip" style="background:#E85C42"></span>Dark coral #E85C42</div>
+    <div class="sw"><span class="chip" style="background:#FFD9CE"></span>Light tint #FFD9CE</div>
+    <div class="sw"><span class="chip" style="background:#0a0a0a"></span>Ink #0a0a0a</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- CONCEPT 1 -->
+  <section class="concept">
+    <div class="head">
+      <h2>Concept 1 · <span>The x Mustache</span></h2>
+      <p class="rat">A tight, confident <code>x</code> lettermark. The two strokes
+      extend past the crossing point and curl upward at the baseline — the waxed
+      tips of a mustache. Reads as a clean, modern <code>x</code> at a glance.</p>
+      <div class="stache">🥸 Mustache: the upward-curling tips of the x strokes; the dot is the centre stud.</div>
+    </div>
+    <div class="grid">
+      <div class="cell light">
+        <div class="mode">Light background</div>
+        <div class="row">
+          <span class="lockup"><img src="concept-1-lockup-light.svg" alt="dbx.tools lockup light"></span>
+          <img src="concept-1-icon-light.svg" width="56" height="56" alt="icon">
+        </div>
+        <div class="sizes">
+          <div class="s"><img src="concept-1-icon-light.svg" width="16" height="16"><span>16</span></div>
+          <div class="s"><img src="concept-1-icon-light.svg" width="32" height="32"><span>32</span></div>
+          <div class="s"><img src="concept-1-icon-light.svg" width="48" height="48"><span>48</span></div>
+          <div class="s"><img src="concept-1-icon-light.svg" width="96" height="96"><span>96</span></div>
+        </div>
+      </div>
+      <div class="cell dark">
+        <div class="mode">Dark background</div>
+        <div class="row">
+          <span class="lockup"><img src="concept-1-lockup-dark.svg" alt="dbx.tools lockup dark"></span>
+          <img src="concept-1-icon-dark.svg" width="56" height="56" alt="icon">
+        </div>
+        <div class="sizes">
+          <div class="s"><img src="concept-1-icon-dark.svg" width="16" height="16"><span>16</span></div>
+          <div class="s"><img src="concept-1-icon-dark.svg" width="32" height="32"><span>32</span></div>
+          <div class="s"><img src="concept-1-icon-dark.svg" width="48" height="48"><span>48</span></div>
+          <div class="s"><img src="concept-1-icon-dark.svg" width="96" height="96"><span>96</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCEPT 2 -->
+  <section class="concept">
+    <div class="head">
+      <h2>Concept 2 · <span>The Dot Curl</span></h2>
+      <p class="rat">The <code>x</code> lettermark sits above a thin coral swash
+      that reads as a domain underline. The <code>.</code> separator lives in the
+      swash. Elegant, editorial — the dot-as-accent leads the eye.</p>
+      <div class="stache">🥸 Mustache: the underline swash dips in the centre and flicks up at both tips.</div>
+    </div>
+    <div class="grid">
+      <div class="cell light">
+        <div class="mode">Light background</div>
+        <div class="row">
+          <span class="lockup"><img src="concept-2-lockup-light.svg" alt="dbx.tools lockup light"></span>
+          <img src="concept-2-icon-light.svg" width="56" height="56" alt="icon">
+        </div>
+        <div class="sizes">
+          <div class="s"><img src="concept-2-icon-light.svg" width="16" height="16"><span>16</span></div>
+          <div class="s"><img src="concept-2-icon-light.svg" width="32" height="32"><span>32</span></div>
+          <div class="s"><img src="concept-2-icon-light.svg" width="48" height="48"><span>48</span></div>
+          <div class="s"><img src="concept-2-icon-light.svg" width="96" height="96"><span>96</span></div>
+        </div>
+      </div>
+      <div class="cell dark">
+        <div class="mode">Dark background</div>
+        <div class="row">
+          <span class="lockup"><img src="concept-2-lockup-dark.svg" alt="dbx.tools lockup dark"></span>
+          <img src="concept-2-icon-dark.svg" width="56" height="56" alt="icon">
+        </div>
+        <div class="sizes">
+          <div class="s"><img src="concept-2-icon-dark.svg" width="16" height="16"><span>16</span></div>
+          <div class="s"><img src="concept-2-icon-dark.svg" width="32" height="32"><span>32</span></div>
+          <div class="s"><img src="concept-2-icon-dark.svg" width="48" height="48"><span>48</span></div>
+          <div class="s"><img src="concept-2-icon-dark.svg" width="96" height="96"><span>96</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCEPT 3 -->
+  <section class="concept">
+    <div class="head">
+      <h2>Concept 3 · <span>Bracket Mustache</span></h2>
+      <p class="rat">The most overtly "dev" option: a terminal / CLI aesthetic.
+      Two mirrored chevrons frame a coral prompt dot, with a cursor underscore.
+      Reads as <code>&gt;_&lt;</code> code brackets around a cursor.</p>
+      <div class="stache">🥸 Mustache: the two chevrons flick up at their outer tips; the prompt dot is the knot between them.</div>
+    </div>
+    <div class="grid">
+      <div class="cell light">
+        <div class="mode">Light background</div>
+        <div class="row">
+          <span class="lockup"><img src="concept-3-lockup-light.svg" alt="dbx.tools lockup light"></span>
+          <img src="concept-3-icon-light.svg" width="56" height="56" alt="icon">
+        </div>
+        <div class="sizes">
+          <div class="s"><img src="concept-3-icon-light.svg" width="16" height="16"><span>16</span></div>
+          <div class="s"><img src="concept-3-icon-light.svg" width="32" height="32"><span>32</span></div>
+          <div class="s"><img src="concept-3-icon-light.svg" width="48" height="48"><span>48</span></div>
+          <div class="s"><img src="concept-3-icon-light.svg" width="96" height="96"><span>96</span></div>
+        </div>
+      </div>
+      <div class="cell dark">
+        <div class="mode">Dark background</div>
+        <div class="row">
+          <span class="lockup"><img src="concept-3-lockup-dark.svg" alt="dbx.tools lockup dark"></span>
+          <img src="concept-3-icon-dark.svg" width="56" height="56" alt="icon">
+        </div>
+        <div class="sizes">
+          <div class="s"><img src="concept-3-icon-dark.svg" width="16" height="16"><span>16</span></div>
+          <div class="s"><img src="concept-3-icon-dark.svg" width="32" height="32"><span>32</span></div>
+          <div class="s"><img src="concept-3-icon-dark.svg" width="48" height="48"><span>48</span></div>
+          <div class="s"><img src="concept-3-icon-dark.svg" width="96" height="96"><span>96</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCEPT 4 -->
+  <section class="concept">
+    <div class="head">
+      <h2>Concept 4 · <span>Ligature x</span></h2>
+      <p class="rat">The most solid / app-icon-ready option: a filled coral tile
+      with a knocked-out <code>x</code>. The strokes are gently bowed rather than
+      straight, so the lower half of the <code>x</code> silhouettes a mustache in
+      the negative space. Scales cleanly to a favicon.</p>
+      <div class="stache">🥸 Mustache: the bowed lower strokes of the knockout x sweep out and up; the centre gap is the philtrum.</div>
+    </div>
+    <div class="grid">
+      <div class="cell light">
+        <div class="mode">Light background</div>
+        <div class="row">
+          <span class="lockup"><img src="concept-4-lockup-light.svg" alt="dbx.tools lockup light"></span>
+          <img src="concept-4-icon-light.svg" width="56" height="56" alt="icon">
+        </div>
+        <div class="sizes">
+          <div class="s"><img src="concept-4-icon-light.svg" width="16" height="16"><span>16</span></div>
+          <div class="s"><img src="concept-4-icon-light.svg" width="32" height="32"><span>32</span></div>
+          <div class="s"><img src="concept-4-icon-light.svg" width="48" height="48"><span>48</span></div>
+          <div class="s"><img src="concept-4-icon-light.svg" width="96" height="96"><span>96</span></div>
+        </div>
+      </div>
+      <div class="cell dark">
+        <div class="mode">Dark background</div>
+        <div class="row">
+          <span class="lockup"><img src="concept-4-lockup-dark.svg" alt="dbx.tools lockup dark"></span>
+          <img src="concept-4-icon-dark.svg" width="56" height="56" alt="icon">
+        </div>
+        <div class="sizes">
+          <div class="s"><img src="concept-4-icon-dark.svg" width="16" height="16"><span>16</span></div>
+          <div class="s"><img src="concept-4-icon-dark.svg" width="32" height="32"><span>32</span></div>
+          <div class="s"><img src="concept-4-icon-dark.svg" width="48" height="48"><span>48</span></div>
+          <div class="s"><img src="concept-4-icon-dark.svg" width="96" height="96"><span>96</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+<footer>dbx.tools branding — phase 1 logo concepts · Monogram / Wordmark lane · coral #FF7A5C</footer>
+</body>
+</html>
