@@ -43,7 +43,7 @@
   },
   "pnpm": {},
   "license": "UNLICENSED",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "packageManager": "pnpm@10.33.0",
   "type": "module",
   "private": true,

@@ -181,7 +181,6 @@ project.with(
   mixin.create(pkg("*/cli-appkit-env", "cli"), (p) => {
     p.package.addField("name", projectApi.identifier(p.root).withName("appkit-env").packageName);
     p.package.file.readonly = false;
-    p.package.addField("publishConfig", { access: "public", provenance: true });
     p.package.addBin({ "appkit-env": "./bin/appkit-env.ts" });
     // exports: `.` + `./package.json` come from the `cli` tag default.
     p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
@@ -352,10 +351,6 @@ project.with(
   mixin.create(pkg("*/cli-dbx-tools", "cli"), (p) => {
     p.package.addField("name", `@${SCOPE}/cli`);
     p.package.file.readonly = false;
-    p.package.addField("publishConfig", {
-      access: "public",
-      provenance: true,
-    });
     p.package.addBin({ dbxtools: "./bin/dbxtools.ts" });
     p.package.addField("exports", {
       ".": "./index.ts",
@@ -373,7 +368,6 @@ project.with(
   mixin.create(pkg("*/cli-model-proxy", "cli"), (p) => {
     p.package.addField("name", projectApi.identifier(p.root).withName("model-proxy").packageName);
     p.package.file.readonly = false;
-    p.package.addField("publishConfig", { access: "public", provenance: true });
     p.package.addBin({ "model-proxy": "./bin/model-proxy.ts" });
     // exports: `.` + `./package.json` come from the `cli` tag default.
     p.addDeps(
@@ -508,48 +502,8 @@ projenRelease.addJob("publish", {
   ],
 });
 
-// ---------------------------------------------------------------------------
-// Release workflow for the @dbx-tools/* workspace packages
-// ---------------------------------------------------------------------------
-// Tag-driven, same model as `projen-release`: push `v1.2.3` and every
-// publishable workspace package is published to npm at 1.2.3. `pnpm -r publish`
-// skips `private` packages and honors each package's `publishConfig`; setting
-// the version on every package first makes the pushed tag the published version
-// (no bump math). Cut a tag with `pnpm exec projen bump` (see the `bump` task).
-const release = new GithubWorkflow(project.github!, "release");
-release.on({ push: { tags: ["v*"] } });
-release.addJob("publish", {
-  runsOn: ["ubuntu-latest"],
-  // `id-token: write` lets npm mint the OIDC token for provenance attestation.
-  permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
-  env: { CI: "true" },
-  steps: [
-    { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
-    { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: "10.33.0" } },
-    {
-      name: "Setup Node.js",
-      uses: "actions/setup-node@v6",
-      with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
-    },
-    { name: "Install", run: "pnpm install --no-frozen-lockfile" },
-    // The pushed tag is the version: `v1.2.3` -> `1.2.3`. Set it on every
-    // package (manifests are projen-readonly, so unlock them first).
-    {
-      name: "Set version from tag",
-      run: [
-        'VERSION="${GITHUB_REF_NAME#v}"',
-        "chmod -R u+w . || true",
-        'pnpm -r exec npm version "$VERSION" --no-git-tag-version --allow-same-version',
-      ].join("\n"),
-    },
-    {
-      name: "Publish to npm",
-      // `pnpm -r publish` publishes every non-private workspace package,
-      // rewriting `workspace:*` deps to the published version.
-      run: "pnpm -r publish --no-git-checks --access public",
-      env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
-    },
-  ],
-});
+// The tag-driven `release` workflow for the `@dbx-tools/*` workspace packages
+// (push `v1.2.3` -> publish every package at 1.2.3, provenance enabled in CI) is
+// authored by the engine's `DBXToolsRelease` component - see `projen/src/release.ts`.
 
 project.synth();

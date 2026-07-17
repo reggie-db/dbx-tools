@@ -92,5 +92,5 @@ jspm_packages/
 **/*.lock
 !/.eslintrc.json
 !/.github/workflows/projen-release.yml
-!/.github/workflows/release.yml
 !/.projenrc.ts
+!/.github/workflows/release.yml

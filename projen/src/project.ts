@@ -159,6 +159,19 @@ function applyRepository(project: javascript.NodeProject, override?: string): vo
   });
 }
 
+/**
+ * Stamp the standard `publishConfig` on a child package's manifest so
+ * `pnpm -r publish` publishes it under public npm access. Provenance is
+ * intentionally NOT set here: pnpm honors `publishConfig.provenance` over any
+ * CLI flag / env var / .npmrc, so a hardcoded `true` would break local
+ * (verdaccio) publishes, which have no CI OIDC provider (`provider: null`).
+ * Provenance is enabled per-run in CI via `npm_config_provenance=true` (see
+ * {@link DBXToolsRelease}).
+ */
+function applyPublishConfig(project: javascript.NodeProject): void {
+  project.package.addField("publishConfig", { access: "public" });
+}
+
 /** Inherit a parent's package manager, else pnpm. */
 function inheritedPackageManager(
   parent: javascript.NodeProject | undefined,
@@ -634,6 +647,12 @@ function initProject(
     // Stamp `repository` (with this package's `directory` subpath) so a published
     // package passes npm provenance validation.
     applyRepository(project, options.repository);
+    // Every child is a publishable workspace package: publish under public
+    // access. Provenance is deliberately omitted so LOCAL publishes (e.g. a
+    // verdaccio) work without a CI OIDC provider; the tag-driven `release`
+    // workflow opts in via `npm_config_provenance=true` (see DBXToolsRelease).
+    // A `private` package still sets this but `pnpm -r publish` skips it.
+    applyPublishConfig(project);
     // Only a ROOT configures the workspace; a child just swaps its default-laden
     // `.gitignore` for a fresh one that carries package-specific patterns only.
     swapChildGitignore(project, options);

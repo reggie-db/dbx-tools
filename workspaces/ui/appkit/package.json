@@ -36,6 +36,9 @@
   },
   "main": "index.ts",
   "license": "UNLICENSED",
+  "publishConfig": {
+    "access": "public"
+  },
   "version": "0.0.0",
   "packageManager": "pnpm@10.33.0",
   "types": "index.ts",

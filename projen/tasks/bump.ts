@@ -203,22 +203,13 @@ program
       }
       if (publishToLocalRegistry) {
         logger.info(`publishing ${version} to local registry ${localRegistry}`);
+        // Provenance is opt-in (see `.projenrc.ts`): the generated
+        // `publishConfig` omits it, so local (verdaccio) publishes never try to
+        // attest. CI turns it on with `npm_config_provenance=true`.
         exec.spawnSync(
           "pnpm",
           ["-r", "publish", "--registry", localRegistry, "--no-git-checks", "--access", "public"],
-          {
-            cwd: process.cwd(),
-            stdout: "inherit",
-            stderr: "inherit",
-            stdin: "ignore",
-            check: true,
-            // pnpm has no `--no-provenance` flag and applies each package's
-            // `publishConfig.provenance: true` regardless of CLI args. Local
-            // (verdaccio) publishes have no CI OIDC provider, so provenance
-            // attestation fails with `provider: null`. The npm config env var
-            // overrides `publishConfig`; disable it for the local publish only.
-            env: { ...process.env, npm_config_provenance: "false" },
-          },
+          { cwd: process.cwd(), stdout: "inherit", stderr: "inherit", stdin: "ignore", check: true },
         );
         logger.success(`published ${version} to ${localRegistry}`);
       }
