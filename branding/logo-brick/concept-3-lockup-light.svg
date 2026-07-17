@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 72" role="img" aria-labelledby="title desc">
+  <title id="title">dbx.tools concept 3 lockup light</title>
+  <desc id="desc">Horizontal lockup with pixel brick tool glyph icon and dbx.tools wordmark.</desc>
+  <rect width="260" height="72" rx="18" fill="#FFFFFF"/>
+  <g transform="translate(8 4)"><rect width="64" height="64" rx="14" fill="#FFF7F4"/><g shape-rendering="crispEdges"><rect x="15" y="12" width="8" height="8" rx="1" fill="#FF9A84"/><rect x="24" y="12" width="8" height="8" rx="1" fill="#F86C5A"/><rect x="42" y="12" width="8" height="8" rx="1" fill="#C94E44"/><rect x="15" y="21" width="8" height="8" rx="1" fill="#F86C5A"/><rect x="33" y="21" width="8" height="8" rx="1" fill="#FF7A5C"/><rect x="42" y="21" width="8" height="8" rx="1" fill="#F86C5A"/><rect x="24" y="30" width="8" height="8" rx="1" fill="#F86C5A"/><rect x="33" y="30" width="8" height="8" rx="1" fill="#C94E44"/><rect x="15" y="39" width="8" height="8" rx="1" fill="#F86C5A"/><rect x="24" y="39" width="8" height="8" rx="1" fill="#FF7A5C"/><rect x="6" y="48" width="8" height="8" rx="1" fill="#C94E44"/><rect x="15" y="48" width="8" height="8" rx="1" fill="#F86C5A"/><rect x="29" y="22" width="3" height="2" rx="1" fill="#FFF7F4"/><rect x="34" y="22" width="3" height="2" rx="1" fill="#FFF7F4"/></g></g>
+  <text x="88" y="44" font-family="'DM Sans', Inter, ui-sans-serif, system-ui, sans-serif" font-size="28" font-weight="700" letter-spacing="-0.8" fill="#171717">dbx<tspan fill="#F86C5A">.tools</tspan></text>
+</svg>
