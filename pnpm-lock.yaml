@@ -371,6 +371,37 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workspaces/cli/model-proxy:
+    dependencies:
+      '@clack/prompts':
+        specifier: 'catalog:'
+        version: 1.7.0
+      '@databricks/sdk-experimental':
+        specifier: 'catalog:'
+        version: 0.17.0
+      '@dbx-tools/node-model':
+        specifier: workspace:*
+        version: link:../../node/model
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+      '@dbx-tools/shared-model':
+        specifier: workspace:*
+        version: link:../../shared/model
+      commander:
+        specifier: 'catalog:'
+        version: 15.0.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   workspaces/node/appkit:
     dependencies:
       '@databricks/sdk-experimental':

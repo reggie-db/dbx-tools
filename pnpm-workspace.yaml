@@ -12,6 +12,7 @@ packages:
   - example-workspaces/ui/app
   - example-workspaces/ui/appkit-client
   - workspaces/cli/dbx-tools
+  - workspaces/cli/model-proxy
   - workspaces/node/appkit
   - workspaces/node/core
   - workspaces/node/file-scan

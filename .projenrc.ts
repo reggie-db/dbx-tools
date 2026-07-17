@@ -246,6 +246,27 @@ project.with(
     p.addDeps("@dbx-tools/node-core@workspace:*", "pnpm");
     applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
   }),
+
+  // cli-model-proxy: local OpenAI-compatible proxy in front of Databricks Model
+  // Serving. `cli`-tagged (commander comes from the cli tag). Reuses node-model's
+  // resolver + shared-model contracts; the SDK is a runtime dep for auth/host.
+  // Ships the `model-proxy` bin and compiles index.ts + bin/ outside src/.
+  mixin.mixin(pkg("*/cli-model-proxy", "cli"), (p) => {
+    p.package.addField("name", projectApi.identifier(p.root).withName("model-proxy").packageName);
+    p.package.file.readonly = false;
+    p.package.addField("publishConfig", { access: "public", provenance: true });
+    p.package.addBin({ "model-proxy": "./bin/model-proxy.ts" });
+    p.package.addField("exports", {
+      ".": "./index.ts",
+      "./package.json": "./package.json",
+    });
+    p.addDeps(
+      "@dbx-tools/node-model@workspace:*",
+      "@dbx-tools/shared-model@workspace:*",
+      "@databricks/sdk-experimental@catalog:",
+    );
+    applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
+  }),
 );
 
 applyExampleWorkspaces(project);
