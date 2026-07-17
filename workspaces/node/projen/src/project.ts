@@ -168,6 +168,19 @@ export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, T
   }
 }
 
+/**
+ * Set a package's `exports` subpath map (whole-field replace, so a later mixin
+ * that supplies a fuller surface wins over a tag default). Lets the `cli` / `ui`
+ * / `app` tags carry their standard export layout and a package only re-declare
+ * `exports` when it deviates.
+ */
+export function applyExports(
+  pkg: javascript.NodeProject,
+  exports: Record<string, string>,
+): void {
+  pkg.package.addField("exports", exports);
+}
+
 /** ESM compiler options every Node package shares regardless of tag. */
 const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
   module: "ESNext",

@@ -183,10 +183,7 @@ project.with(
     p.package.file.readonly = false;
     p.package.addField("publishConfig", { access: "public", provenance: true });
     p.package.addBin({ "appkit-env": "./bin/appkit-env.ts" });
-    p.package.addField("exports", {
-      ".": "./index.ts",
-      "./package.json": "./package.json",
-    });
+    // exports: `.` + `./package.json` come from the `cli` tag default.
     p.addDeps("@dbx-tools/node-appkit@workspace:*", "@databricks/appkit@catalog:");
     applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
   }),
@@ -407,10 +404,7 @@ project.with(
     p.package.file.readonly = false;
     p.package.addField("publishConfig", { access: "public", provenance: true });
     p.package.addBin({ "model-proxy": "./bin/model-proxy.ts" });
-    p.package.addField("exports", {
-      ".": "./index.ts",
-      "./package.json": "./package.json",
-    });
+    // exports: `.` + `./package.json` come from the `cli` tag default.
     p.addDeps(
       "@dbx-tools/node-model@workspace:*",
       "@dbx-tools/shared-model@workspace:*",
@@ -435,6 +429,8 @@ project.with(
     // plugin as real deps - the `ui` tag is a component library and no longer
     // carries the vite toolchain (that moved to the `app` tag).
     p.addDevDeps("vite@catalog:");
+    // Adds `./vite` on top of the `ui` tag's `./react` + `./styles.css` default;
+    // the whole map is re-declared since it deviates from the tag surface.
     p.package.addField("exports", {
       "./react": "./src/react/index.ts",
       "./vite": "./src/vite.ts",
@@ -455,11 +451,8 @@ project.with(
       "lucide-react@catalog:",
       "streamdown@catalog:",
     );
-    p.package.addField("exports", {
-      "./react": "./src/react/index.ts",
-      "./styles.css": "./src/styles.css",
-      "./package.json": "./package.json",
-    });
+    // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
+    // tag's component-library default.
   }),
 );
 

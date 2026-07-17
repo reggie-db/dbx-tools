@@ -16,7 +16,7 @@
 import type { IMixin as ConstructsMixin } from "constructs";
 import { javascript } from "projen";
 import { mixin } from "./mixin";
-import { applyCompilerOptions, applyTasks } from "./project";
+import { applyCompilerOptions, applyExports, applyTasks } from "./project";
 import * as projectPredicate from "./project-predicate";
 import { ViteConfigFile } from "./vite";
 
@@ -64,6 +64,15 @@ export const WORKSPACE_TAG_MIXINS = {
       lib: [...DOM_LIB],
       jsx: javascript.TypeScriptJsxMode.REACT_JSX,
     });
+    // A component library's standard subpath surface: `./react` (components),
+    // `./styles.css` (Tailwind entry), and `./package.json`. A package that
+    // ships more (e.g. ui-appkit's `./vite` preset) overrides this in its own
+    // mixin; an `app`-tagged package replaces it with a `.` root (see below).
+    applyExports(p, {
+      "./react": "./src/react/index.ts",
+      "./styles.css": "./src/styles.css",
+      "./package.json": "./package.json",
+    });
   }),
   // `app`: a full browser app built + served by Vite (needs an `index.html`
   // entry). Self-contained React app: React + DOM lib + JSX + the vite toolchain
@@ -89,11 +98,24 @@ export const WORKSPACE_TAG_MIXINS = {
       preview: { exec: "vite preview" },
     });
     new ViteConfigFile(p);
+    // An app has a single root entry, not a component library's subpaths - so it
+    // replaces the `ui` tag's `./react`/`./styles.css` surface with a `.` root.
+    applyExports(p, {
+      ".": "./index.ts",
+      "./package.json": "./package.json",
+    });
   }),
   cli: mixin(projectPredicate.hasTag("cli"), (p) => {
     p.addDeps("commander@catalog:", "@clack/prompts@catalog:");
     p.addDevDeps("@types/node@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
+    // A CLI's standard surface: a `.` root entry plus `./package.json`. A CLI
+    // that also exports a helper module (e.g. dbx-tools' `./pnpm`) overrides
+    // this in its own mixin.
+    applyExports(p, {
+      ".": "./index.ts",
+      "./package.json": "./package.json",
+    });
   }),
   server: mixin(projectPredicate.hasTag("server"), (p) => {
     // A Node/Express service. tsoa's decorators (@Route/@Get/...) also drive
