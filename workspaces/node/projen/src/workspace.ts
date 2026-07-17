@@ -155,7 +155,7 @@ export class DiscoveredPackage {
     readonly root: string,
     /** Path segments relative to `root`, e.g. `["ui", "app"]`. */
     readonly relSegments: readonly string[],
-  ) { }
+  ) {}
 
   /** Posix path relative to the root, e.g. `ui/app`. */
   get relPath(): string {

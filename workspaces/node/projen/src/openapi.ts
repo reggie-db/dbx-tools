@@ -24,15 +24,10 @@ import { join } from "node:path";
 import type * as ts from "typescript";
 import { find } from "@dbx-tools/node-file-scan";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated";
-import { logger } from "./log";
-import {
-  type WorkspacePackage,
-  isModuleFile,
-  repoRoot,
-  workspacePackages,
-} from "./workspace";
+import { log } from "@dbx-tools/shared-core";
+import { type WorkspacePackage, isModuleFile, repoRoot, workspacePackages } from "./workspace";
 
-const log = logger.withTag("projen:openapi");
+const logger = log.logger("projen:openapi");
 
 /** The tag (and folder) the generated openapi client packages are written under. */
 const OPENAPI_TAG = "openapi";
@@ -83,7 +78,7 @@ export function isTsoaController(path: string): boolean {
 export async function generateOpenapi(): Promise<string[]> {
   const pkgs = controllerPackages();
   if (pkgs.length === 0) {
-    log.info("no tsoa controllers found in any server/node package");
+    logger.info("no tsoa controllers found in any server/node package");
     return [];
   }
 
@@ -152,7 +147,7 @@ export async function generateOpenapi(): Promise<string[]> {
     });
 
     written.push(outDir);
-    log.success(`openapi/${leaf} (from ${p.relPath})`);
+    logger.success(`openapi/${leaf} (from ${p.relPath})`);
   }
   return written;
 }

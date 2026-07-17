@@ -1,11 +1,11 @@
 #!/usr/bin/env -S npx tsx
 import { sep } from "node:path";
 import { generateBarrels } from "../src/barrels";
-import { logger, pluralize } from "../src/log";
+import { log, string } from "@dbx-tools/shared-core";
 import { watchLoop, watchRoots } from "../src/watch";
 import { workspacePackages } from "../src/workspace";
 
-const log = logger.withTag("projen:barrels");
+const logger = log.logger("projen:barrels");
 
 /** The recorded package dir that owns `abs`, if any (for a targeted barrel rebuild). */
 function ownerPackageDir(abs: string, pkgDirs: string[]): string | undefined {
@@ -24,9 +24,11 @@ if (process.argv.includes("--watch")) {
       if (owner) dirs.add(owner);
     }
     const n = generateBarrels(dirs.size ? { dirs: [...dirs] } : {});
-    if (n) log.success(`rebuilt ${pluralize(n, "barrel")}`);
+    if (n) logger.success(`rebuilt ${string.pluralize(n, "barrel")}`);
   });
 } else {
   const n = generateBarrels();
-  log.success(n === 0 ? "barrels already up to date" : `updated ${pluralize(n, "barrel")}`);
+  logger.success(
+    n === 0 ? "barrels already up to date" : `updated ${string.pluralize(n, "barrel")}`,
+  );
 }

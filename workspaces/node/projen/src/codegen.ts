@@ -48,10 +48,10 @@ import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import type * as ts from "typescript";
 import { header, isReadonly, makeReadonly, makeWritable } from "./generated";
-import { logger } from "./log";
+import { log } from "@dbx-tools/shared-core";
 import { repoRoot, workspacePackages } from "./workspace";
 
-const log = logger.withTag("projen:codegen");
+const logger = log.logger("projen:codegen");
 
 /** Do-not-edit banner stamped on every generated codegen module. */
 const HEADER = header({
@@ -295,7 +295,7 @@ function generatePackage(
     });
     if (errors.length) {
       warnings += errors.length;
-      for (const err of errors) log.warn(`  ! ${err}`);
+      for (const err of errors) logger.warn(`  ! ${err}`);
     }
 
     // ts-to-zod adds an import line only when the source references external
@@ -310,7 +310,7 @@ function generatePackage(
     makeReadonly(outPath);
   }
 
-  log.success(
+  logger.success(
     `${basename(dir)}: ${parsed.length} module(s)` + (warnings ? ` (${warnings} warning(s))` : ""),
   );
   return dir;
@@ -327,7 +327,7 @@ export function generateCodegen(): string[] {
     .filter((t): t is { dir: string; inputs: string[] } => t.inputs !== undefined);
 
   if (targets.length === 0) {
-    log.info("no workspace packages declare a `codegen` field");
+    logger.info("no workspace packages declare a `codegen` field");
     return [];
   }
 

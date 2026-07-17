@@ -1,11 +1,11 @@
 #!/usr/bin/env -S npx tsx
 import { resolve } from "node:path";
-import { logger } from "../src/log";
+import { log } from "@dbx-tools/shared-core";
 import { runSynth } from "../src/scaffold";
 import { watchLoop } from "../src/watch";
 import { repoRoot, syncResynthPaths } from "../src/workspace";
 
-const log = logger.withTag("projen:projenrc");
+const logger = log.logger("projen:projenrc");
 
 /** Repo-root paths that drive a full re-synth when they change during `sync --watch`. */
 function resynthWatchPaths(): string[] {
@@ -30,9 +30,9 @@ watchLoop(
   "projenrc",
   WATCH_PATHS,
   () => {
-    log.start("projenrc changed - re-synthesizing (+install)");
+    logger.start("projenrc changed - re-synthesizing (+install)");
     runSynth({ post: true });
-    log.success("re-synth complete");
+    logger.success("re-synth complete");
   },
   { dot: false },
 );

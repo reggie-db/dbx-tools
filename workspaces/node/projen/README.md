@@ -30,4 +30,4 @@ p.synth();
 - Runs `dbxtools codegen` (ts-to-zod) and barrels in the post-synth pass.
 - Owns `pnpm-workspace.yaml` (members + catalog + build allowlist).
 
-Subpath exports: `@dbx-tools/projen` (main), `./log`, `./engine-root`.
+Subpath exports: `@dbx-tools/projen` (main), `./engine-root`.

@@ -346,7 +346,6 @@ project.with(
     );
     p.package.addField("exports", {
       ".": "./index.ts",
-      "./log": "./src/log.ts",
       "./engine-root": "./src/engine-root.ts",
       "./package.json": "./package.json",
     });

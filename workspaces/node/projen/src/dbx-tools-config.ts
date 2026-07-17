@@ -16,29 +16,32 @@ export interface DBXToolsConfigOptions {
   readonly tags?: string[];
 }
 
-
 function readDBXToolsConfig(pkg: javascript.NodePackage): Record<string, unknown> {
-  const isRecord = (value: unknown): value is Record<string, unknown> => value != null && typeof value === "object" && !Array.isArray(value);
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value != null && typeof value === "object" && !Array.isArray(value);
   try {
     const manifest = pkg.manifest as unknown;
     if (isRecord(manifest)) {
-      const config = manifest[DBX_TOOLS_CONFIG_KEY]
+      const config = manifest[DBX_TOOLS_CONFIG_KEY];
       if (isRecord(config)) {
         return config;
       }
     }
-  } catch { }
+  } catch {}
   return {};
 }
 
 function loadConfig(dbxToolsConfig: DBXToolsConfig, pkg: javascript.NodePackage) {
-  const { tags, ...config } = readDBXToolsConfig(pkg)
-  if (Array.isArray(tags)) iterable.sequence(tags).filter((v: unknown) => typeof v === "string").forEach((v: string) => dbxToolsConfig.tags.push(v));
+  const { tags, ...config } = readDBXToolsConfig(pkg);
+  if (Array.isArray(tags))
+    iterable
+      .sequence(tags)
+      .filter((v: unknown) => typeof v === "string")
+      .forEach((v: string) => dbxToolsConfig.tags.push(v));
   Object.entries(config).forEach(([key, value]) => {
     dbxToolsConfig[key] = value;
   });
 }
-
 
 /**
  * Owns a package's in-memory `dbxToolsConfig` object. Callers mutate it with
@@ -76,6 +79,6 @@ export class DBXToolsConfig extends Component {
     if (iterable.isEmpty(dataRecord, { recursive: true })) {
       dataRecord = undefined;
     }
-    this.project.package.addField(DBX_TOOLS_CONFIG_KEY, dataRecord)
+    this.project.package.addField(DBX_TOOLS_CONFIG_KEY, dataRecord);
   }
 }

@@ -1,10 +1,10 @@
 #!/usr/bin/env -S npx tsx
 import { fileURLToPath } from "node:url";
 import concurrently from "concurrently";
-import { logger } from "../src/log";
+import { log } from "@dbx-tools/shared-core";
 import { runSynth } from "../src/scaffold";
 
-const log = logger.withTag("projen:sync");
+const logger = log.logger("projen:sync");
 
 /** Absolute path to a sibling task script, so `concurrently`'s cwd doesn't matter. */
 function taskPath(script: string): string {
@@ -13,18 +13,18 @@ function taskPath(script: string): string {
 
 if (!process.argv.includes("--watch")) {
   // One-shot: full synth (+install + barrels via the post-synth component).
-  log.start("synthesizing");
+  logger.start("synthesizing");
   runSynth({ post: true });
-  log.success("synced");
+  logger.success("synced");
 } else {
   // Watch: one initial full synth to bring the tree up to date, then three focused
   // watchers under `concurrently`. The projenrc watcher is the intelligent stand-in
   // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts` or
   // a configured `syncResynthPaths` entry changes, while barrels/openapi keep generated
   // OUTPUT fresh on source edits with no full synth.
-  log.start("initial sync");
+  logger.start("initial sync");
   runSynth({ post: true });
-  log.success("synced - watching (Ctrl-C to stop)");
+  logger.success("synced - watching (Ctrl-C to stop)");
   const { result } = concurrently(
     [
       { command: `tsx "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },

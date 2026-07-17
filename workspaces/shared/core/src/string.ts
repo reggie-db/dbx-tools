@@ -472,3 +472,12 @@ function renderMap(node: Record<string, Description>, pad: string): string {
   }
   return parts.join("\n\n");
 }
+
+/**
+ * Format a count with its noun, pluralizing (naive `+s`) unless the count is 1:
+ * `pluralize(1, "barrel")` -> `"1 barrel"`, `pluralize(3, "barrel")` ->
+ * `"3 barrels"`. Collapses the `${n} noun${n === 1 ? "" : "s"}` idiom.
+ */
+export function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}

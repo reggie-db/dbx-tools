@@ -1,10 +1,10 @@
 #!/usr/bin/env -S npx tsx
 import { relative } from "node:path";
 import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean";
-import { logger, pluralize } from "../src/log";
+import { log, string } from "@dbx-tools/shared-core";
 import { repoRoot, toPosix } from "../src/workspace";
 
-const log = logger.withTag("projen:clean");
+const logger = log.logger("projen:clean");
 const yes = process.argv.includes("-y") || process.argv.includes("--yes");
 
 const files = listGeneratedFiles();
@@ -12,7 +12,7 @@ const nodeModules = listNodeModulesDirs();
 const targets = [...files, ...nodeModules];
 
 if (targets.length === 0) {
-  log.success("nothing to remove (no generated files or node_modules)");
+  logger.success("nothing to remove (no generated files or node_modules)");
   process.exit(0);
 }
 
@@ -23,14 +23,14 @@ const regenHint = (removedNodeModules: boolean): string =>
 
 if (yes) {
   const n = removePaths(targets);
-  log.success(
-    `removed ${pluralize(n, "path")} (${files.length} generated + ${nodeModules.length} node_modules) - ${regenHint(nodeModules.length > 0)}`,
+  logger.success(
+    `removed ${string.pluralize(n, "path")} (${files.length} generated + ${nodeModules.length} node_modules) - ${regenHint(nodeModules.length > 0)}`,
   );
   process.exit(0);
 }
 
 if (!process.stdin.isTTY) {
-  log.warn(
+  logger.warn(
     `non-interactive shell: re-run with -y to remove all ${targets.length} paths (${files.length} generated + ${nodeModules.length} node_modules), or run in a terminal to pick`,
   );
   process.exit(1);
@@ -64,4 +64,4 @@ if (picked.length === 0) {
 
 const removedNodeModules = picked.some((p) => nodeModules.includes(p));
 const n = removePaths(picked);
-clack.outro(`removed ${pluralize(n, "path")} - ${regenHint(removedNodeModules)}`);
+clack.outro(`removed ${string.pluralize(n, "path")} - ${regenHint(removedNodeModules)}`);

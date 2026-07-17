@@ -86,6 +86,11 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 
 export type Logger = {
   [K in LogLevel]: (...args: any[]) => void;
+} & {
+  /** Success message (consola `success`; falls back to `info`-level output). */
+  success: (...args: any[]) => void;
+  /** Start / in-progress message (consola `start`; falls back to `info`-level output). */
+  start: (...args: any[]) => void;
 };
 
 /** `(name?) => Logger` sink constructor returned by the init-time factory chain. */
@@ -193,8 +198,7 @@ async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<Log
 
   const factory = (name?: string) => {
     const prefixFormatter = createFormatter(name, globalProcessStdErr, resetColorsPrefix);
-
-    return Object.fromEntries(
+    const logger = Object.fromEntries(
       LOG_LEVELS.map((level) => {
         const { prefix, colors, resetColors } = prefixFormatter(level);
         const emitter = (...args: any[]) => {
@@ -216,6 +220,10 @@ async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<Log
         return [level, emitter];
       }),
     ) as Logger;
+    // consola sugar the console fallback doesn't have natively - route to info.
+    logger.success = logger.info;
+    logger.start = logger.info;
+    return logger;
   };
   const defaultFactory = memoize(factory);
   return (name?: string) => (name ? factory(name) : defaultFactory());

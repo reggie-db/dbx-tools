@@ -1,11 +1,11 @@
 #!/usr/bin/env -S npx tsx
 import { generateBarrels } from "../src/barrels";
-import { logger, pluralize } from "../src/log";
+import { log, string } from "@dbx-tools/shared-core";
 import { generateOpenapi, isTsoaController } from "../src/openapi";
 import { runSynth } from "../src/scaffold";
 import { watchLoop, watchRoots } from "../src/watch";
 
-const log = logger.withTag("projen:openapi");
+const logger = log.logger("projen:openapi");
 
 if (process.argv.includes("--watch")) {
   // Watch the package roots; a changed tsoa controller regenerates the openapi
@@ -16,7 +16,7 @@ if (process.argv.includes("--watch")) {
     const dirs = await generateOpenapi();
     if (dirs.length) {
       generateBarrels({ dirs });
-      log.success(`regenerated openapi (${pluralize(dirs.length, "package")})`);
+      logger.success(`regenerated openapi (${string.pluralize(dirs.length, "package")})`);
     }
   });
 } else {

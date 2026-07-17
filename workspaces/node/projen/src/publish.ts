@@ -9,7 +9,7 @@ import { join, relative } from "node:path";
 import { exec } from "@dbx-tools/node-core";
 import { Component } from "projen";
 import { makeReadonly, makeWritable } from "./generated";
-import { logger } from "./log";
+import { log } from "@dbx-tools/shared-core";
 import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project";
 import { repoRoot, toPosix, workspacePackages } from "./workspace";
 
@@ -18,7 +18,7 @@ export type BumpLevel = "patch" | "minor" | "major";
 
 type PublishManifest = { private?: boolean; publishConfig?: unknown };
 
-const log = logger.withTag("projen:publish");
+const logger = log.logger("projen:publish");
 
 const FORCE_BUMP_HINT = "use --increment minor or --increment major for a larger bump";
 
@@ -168,7 +168,9 @@ export function publish(
     if (!version) throw new Error("dist/version.txt is empty after bump");
     const latestTag = latestReleaseTag();
     if (latestTag && versionFromTag(latestTag) === version) {
-      log.info(`nothing to release: ${latestTag} is already the latest tag (${FORCE_BUMP_HINT})`);
+      logger.info(
+        `nothing to release: ${latestTag} is already the latest tag (${FORCE_BUMP_HINT})`,
+      );
       return;
     }
     syncPublishVersion(publishRelPath);

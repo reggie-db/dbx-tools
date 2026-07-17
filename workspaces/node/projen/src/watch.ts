@@ -16,14 +16,16 @@
  */
 import { isAbsolute, resolve } from "node:path";
 import { watch as fileScan } from "@dbx-tools/node-file-scan";
-import { logger } from "./log";
+import { log } from "@dbx-tools/shared-core";
 import { isGeneratedFile, recordedRoots, repoRoot } from "./workspace";
 
-const log = logger.withTag("projen:watch");
+const logger = log.logger("projen:watch");
 const DEBOUNCE_MS = 250;
 
 /** file-scan's built-in ignore-group toggles (`{ dot, temp, test, lock, defaults }`). */
-export type IgnoreGroupOptions = NonNullable<Parameters<typeof fileScan.watchFiles>[1]>["ignoreOptions"];
+export type IgnoreGroupOptions = NonNullable<
+  Parameters<typeof fileScan.watchFiles>[1]
+>["ignoreOptions"];
 
 /** The workspace package roots (absolute), where every watchable source file lives. */
 export function watchRoots(): string[] {
@@ -74,7 +76,7 @@ export function watchLoop(
     try {
       if (relevant.length) await onBatch(relevant);
     } catch (err) {
-      log.error(`${tag} cycle failed:`, err instanceof Error ? err.message : err);
+      logger.error(`${tag} cycle failed:`, err instanceof Error ? err.message : err);
     } finally {
       running = false;
       if (rerun) {
@@ -95,8 +97,8 @@ export function watchLoop(
     clearTimeout(timer);
     timer = setTimeout(() => void flush(), DEBOUNCE_MS);
   });
-  watcher.on("error", (err) => log.error(`${tag} watcher error:`, err));
-  watcher.on("ready", () => log.info(`${tag}: watching for changes … (Ctrl-C to stop)`));
+  watcher.on("error", (err) => logger.error(`${tag} watcher error:`, err));
+  watcher.on("ready", () => logger.info(`${tag}: watching for changes … (Ctrl-C to stop)`));
 
   process.on("SIGINT", () => {
     void watcher.close();

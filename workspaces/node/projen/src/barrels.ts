@@ -37,11 +37,11 @@ import { exec } from "@dbx-tools/node-core";
 import { find } from "@dbx-tools/node-file-scan";
 import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
-import { logger } from "./log";
+import { log } from "@dbx-tools/shared-core";
 import { moduleExports } from "./module-exports";
 import { escapeRegExp, isModuleFile, repoRoot, toPosix, workspacePackages } from "./workspace";
 
-const log = logger.withTag("projen:barrels");
+const logger = log.logger("projen:barrels");
 const require = createRequire(import.meta.url);
 
 // barrelsby is CLI-only (its package `main` is missing), so run its bin with node.
@@ -319,7 +319,7 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
     stdin: "ignore",
   });
   if (result.exitCode !== 0) {
-    log.error(`barrelsby failed for ${toPosix(relative(repoRoot, srcDir))}`, result.stderr);
+    logger.error(`barrelsby failed for ${toPosix(relative(repoRoot, srcDir))}`, result.stderr);
     throw new Error(
       `barrelsby failed for ${toPosix(relative(repoRoot, srcDir))}${result.stderr ? `: ${result.stderr}` : ""}`,
     );

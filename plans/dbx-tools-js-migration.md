@@ -133,12 +133,16 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 (errorMessage/errorMessages/errorNodes/toError), `hash`
 (fnvHash/fnvHashWithOptions/toBase32/id), `string`
 (tokenize/tokenizeWithOptions/toIdentifier/toSlug/toUniqueSlug/trimToNull/
-firstNonEmpty/escapeHtml/toDescription), `object`
+firstNonEmpty/escapeHtml/toDescription/pluralize), `object`
 (isRecord/toBoolean/deepEqual/NameLike/NonFunctionKeys/DeepEqualComparator),
-`log` (logger/isLevelEnabled), `net` (urlBuilder/parseEmails/isEmail/parseIp/
-parseCidr/ipInCidr), plus `functionModule` (memoize), `iterable`, `predicate`.
-NOTE: `exec` + `project` moved to **node-core**; `isDatabricksAppEnv` moved to
-**node-appkit** (`databricks.isAppEnv`) — neither is in shared-core.
+`log` (logger/isLevelEnabled; `Logger` has debug/info/warn/error + `success`/
+`start` consola sugar), `net` (urlBuilder/parseEmails/isEmail/parseIp/parseCidr/
+ipInCidr), `http`, `token`, `error.errorContext`, plus `functionModule`
+(memoize), `iterable`, `predicate`. NOTE: `exec` + `project` moved to
+**node-core**; `isDatabricksAppEnv` moved to **node-appkit**
+(`databricks.isAppEnv`) — neither is in shared-core. The **projen engine uses
+shared-core `log`** (its own `log.ts` was deleted); `pluralize` moved to
+shared-core `string`.
 
 `-js`'s `commonUtils.*` / `stringUtils.*` map onto these: e.g.
 `commonUtils.errorMessage` → `error.errorMessage`,
