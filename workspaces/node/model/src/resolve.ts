@@ -25,6 +25,7 @@ import {
   type RankedModel,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
+import { object } from "@dbx-tools/shared-core";
 
 import { CHAT_CLASS_ORDER, classesAtOrBelow, MODEL_CLASS_ORDER } from "./classes";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback";
@@ -240,10 +241,9 @@ export function resolveModel(
   if (top) return { modelId: top.endpoint.name, source };
 
   // Live catalogue yielded nothing in range: walk the static floor.
-  const floor =
-    input.modelClass !== undefined
-      ? dedupe([...modelsForClass(input.modelClass), ...FALLBACK_MODEL_IDS])
-      : dedupe([...(input.fallbacks ?? []), ...FALLBACK_MODEL_IDS]);
+  const floorSource =
+    input.modelClass !== undefined ? modelsForClass(input.modelClass) : (input.fallbacks ?? []);
+  const floor = object.sequence(floorSource).concat(FALLBACK_MODEL_IDS).distinct().toArray();
   return { modelId: pickFirstAvailable(floor, endpoints), source };
 }
 
@@ -255,11 +255,6 @@ function buildQuery(input: ResolveModelInput, search: string | undefined): Model
     ...(input.threshold !== undefined ? { threshold: input.threshold } : {}),
     limit: 1,
   };
-}
-
-/** Drop duplicate ids while preserving first-seen order. */
-function dedupe(ids: readonly string[]): string[] {
-  return [...new Set(ids)];
 }
 
 /**

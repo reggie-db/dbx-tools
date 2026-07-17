@@ -5,7 +5,7 @@ Browser-safe model-selection contract and classifier.
 Import this package when UI code, route handlers, tools, or tests need to
 validate model lookup requests, type ranked model responses, or classify serving
 endpoints without talking to Databricks. Live workspace listing and fuzzy
-resolution live in [`@dbx-tools/node-model`](../../node/model).
+resolution live in [`@dbx-tools/model`](../../node/model).
 
 Key features:
 
@@ -78,4 +78,4 @@ landed in a class before the live workspace scores are available.
   classification.
 
 Server-side selection, cache, and fuzzy endpoint matching are in
-[`@dbx-tools/node-model`](../../node/model).
+[`@dbx-tools/model`](../../node/model).

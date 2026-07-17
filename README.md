@@ -74,7 +74,7 @@ For AppKit apps, the most common entrypoint is the Mastra plugin:
 
 ```ts
 import { analytics, createApp, lakebase, server } from "@databricks/appkit";
-import { agents, genie, plugin } from "@dbx-tools/node-appkit-mastra";
+import { agents, genie, plugin } from "@dbx-tools/appkit-mastra";
 
 const analyst = agents.createAgent({
   name: "analyst",
@@ -119,15 +119,15 @@ export function App() {
 
 | Use case                    | Packages                                                                                                                                             |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AppKit defaults             | [`@dbx-tools/node-appkit`](workspaces/node/appkit), [`@dbx-tools/appkit-env`](workspaces/cli/appkit-env)                                             |
-| AppKit-hosted agents        | [`@dbx-tools/node-appkit-mastra`](workspaces/node/appkit-mastra), [`@dbx-tools/shared-mastra`](workspaces/shared/mastra)                             |
-| Genie streaming and schemas | [`@dbx-tools/node-genie`](workspaces/node/genie), [`@dbx-tools/shared-genie`](workspaces/shared/genie)                                               |
-| Model Serving selection     | [`@dbx-tools/node-model`](workspaces/node/model), [`@dbx-tools/shared-model`](workspaces/shared/model)                                               |
+| AppKit defaults             | [`@dbx-tools/appkit`](workspaces/node/appkit), [`@dbx-tools/appkit-env`](workspaces/cli/appkit-env)                                             |
+| AppKit-hosted agents        | [`@dbx-tools/appkit-mastra`](workspaces/node/appkit-mastra), [`@dbx-tools/shared-mastra`](workspaces/shared/mastra)                             |
+| Genie streaming and schemas | [`@dbx-tools/genie`](workspaces/node/genie), [`@dbx-tools/shared-genie`](workspaces/shared/genie)                                               |
+| Model Serving selection     | [`@dbx-tools/model`](workspaces/node/model), [`@dbx-tools/shared-model`](workspaces/shared/model)                                               |
 | Local model proxy           | [`@dbx-tools/model-proxy`](workspaces/cli/model-proxy)                                                                                               |
-| Email workflows             | [`@dbx-tools/node-email`](workspaces/node/email), [`@dbx-tools/shared-email`](workspaces/shared/email), [`@dbx-tools/ui-email`](workspaces/ui/email) |
+| Email workflows             | [`@dbx-tools/email`](workspaces/node/email), [`@dbx-tools/shared-email`](workspaces/shared/email), [`@dbx-tools/ui-email`](workspaces/ui/email) |
 | React/AppKit UI             | [`@dbx-tools/ui-appkit`](workspaces/ui/appkit), [`@dbx-tools/ui-mastra`](workspaces/ui/mastra), [`@dbx-tools/ui-email`](workspaces/ui/email)         |
-| Databricks infrastructure   | [`@dbx-tools/node-databricks`](workspaces/node/databricks), [`@dbx-tools/node-databricks-zerobus`](workspaces/node/databricks-zerobus)               |
-| Shared utilities            | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/node-core`](workspaces/node/core), [`@dbx-tools/node-path`](workspaces/node/path)   |
+| Databricks infrastructure   | [`@dbx-tools/databricks`](workspaces/node/databricks), [`@dbx-tools/databricks-zerobus`](workspaces/node/databricks-zerobus)               |
+| Shared utilities            | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/core`](workspaces/node/core), [`@dbx-tools/path`](workspaces/node/path)   |
 | SDK-derived schemas         | [`@dbx-tools/shared-sdk-model`](workspaces/shared/sdk-model)                                                                                         |
 
 Read the package README for each feature area. They are written as the
@@ -138,14 +138,14 @@ runtime behavior, module maps, and links to adjacent packages.
 
 ### Add AppKit Defaults
 
-Use [`@dbx-tools/node-appkit`](workspaces/node/appkit) when an AppKit backend
+Use [`@dbx-tools/appkit`](workspaces/node/appkit) when an AppKit backend
 needs the setup code you would otherwise repeat in every app: Lakebase env
 resolution, config lookup, Databricks SDK cancellation bridging, execution
 context fallback, and typed sibling plugin access.
 
 ```ts
 import { lakebase, server } from "@databricks/appkit";
-import { createApp } from "@dbx-tools/node-appkit";
+import { createApp } from "@dbx-tools/appkit";
 
 await createApp.createApp({
   plugins: [server(), lakebase()],
@@ -154,12 +154,12 @@ await createApp.createApp({
 
 ### Resolve Models By Intent
 
-Use [`@dbx-tools/node-model`](workspaces/node/model) when a UI, agent, or CLI
+Use [`@dbx-tools/model`](workspaces/node/model) when a UI, agent, or CLI
 should ask for a model by capability or loose name instead of hard-coding a
 serving endpoint id.
 
 ```ts
-import { resolve } from "@dbx-tools/node-model";
+import { resolve } from "@dbx-tools/model";
 
 const selected = await resolve.selectModel(client, host, {
   explicit: "claude sonnet",
@@ -181,12 +181,12 @@ Then point the client at `http://127.0.0.1:4000/v1`.
 
 ### Require Human Approval For Email
 
-Use [`@dbx-tools/node-email`](workspaces/node/email) with
+Use [`@dbx-tools/email`](workspaces/node/email) with
 [`@dbx-tools/ui-email`](workspaces/ui/email) when an agent should draft email but
 not send it until a user approves the suspended tool call.
 
 ```ts
-import { plugin as emailPlugin, tool as emailTool } from "@dbx-tools/node-email";
+import { plugin as emailPlugin, tool as emailTool } from "@dbx-tools/email";
 
 const agent = agents.createAgent({
   instructions: "Draft emails, then wait for approval before sending.",
@@ -204,7 +204,7 @@ This repository uses a small internal workspace generator so package metadata,
 barrels, generated schemas, and examples stay consistent. That tooling is not
 the main product surface of the repo, but it is documented for contributors:
 
-- [`@dbx-tools/projen`](workspaces/node/projen) documents the projen engine,
+- [`@dbx-tools/projen`](projen) documents the projen engine,
   workspace discovery, generated files, mixins, OpenAPI generation, and codegen.
 - [`dbx-tools`](workspaces/cli/dbx-tools) documents the contributor CLI.
 

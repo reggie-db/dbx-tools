@@ -12,18 +12,14 @@
  */
 
 import type { EmailMessage } from "@dbx-tools/shared-email";
+import { string } from "@dbx-tools/shared-core";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { renderEmailHtml } from "./email-html";
 
 /** Filesystem-safe slug of the subject for the file name. */
 function subjectSlug(subject: string): string {
-  const slug = subject
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return (slug || "email").slice(0, 48);
+  return string.toSlugWithOptions({ maxLength: 48 }, subject) || "email";
 }
 
 /** The envelope rows shown above the body in the preview file. */

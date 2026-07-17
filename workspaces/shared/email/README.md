@@ -4,7 +4,7 @@ Browser-safe email schemas and inferred types.
 
 Import this package when a UI, Mastra tool schema, server route, or test needs
 to validate the same email payloads that
-[`@dbx-tools/node-email`](../../node/email) sends.
+[`@dbx-tools/email`](../../node/email) sends.
 
 Key features:
 

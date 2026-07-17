@@ -18,7 +18,7 @@ When you update docs, README positioning, or agent instructions:
 - Keep the root `README.md` focused on Databricks developer value, not internal
   projen mechanics.
 - Put detailed monorepo/projen/generator instructions in
-  `workspaces/node/projen/README.md` and link to it from root docs instead of
+  `projen/README.md` and link to it from root docs instead of
   repeating them.
 - If the user asks to commit/push as updates are made, commit a focused docs
   change and push the active branch after validation.
@@ -36,7 +36,7 @@ Serving integrations, approval-gated email flows, and AppKit-oriented React UI.
 
 The repo also includes a projen/pnpm workspace generator because the packages are
 dogfooded here, but that is contributor tooling, not the primary product story.
-Keep generator details in `workspaces/node/projen/README.md` and
+Keep generator details in `projen/README.md` and
 `workspaces/cli/dbx-tools/README.md`.
 
 Primary package areas:
@@ -92,7 +92,7 @@ Root README rules:
 - Include a "Relationship To Native AppKit" section.
 - Do not lead with projen, workspace discovery, generated files, barrels, mixins,
   or package-scanning internals.
-- Link to `workspaces/node/projen/README.md` and
+- Link to `projen/README.md` and
   `workspaces/cli/dbx-tools/README.md` only under contributor/development
   context.
 
@@ -131,11 +131,11 @@ lifecycle behavior.
 When a `dbx-tools` package overlaps native AppKit, the README must explicitly say
 why to use this package anyway:
 
-- `@dbx-tools/node-appkit`: use when bootstrapping/config is the pain point:
+- `@dbx-tools/appkit`: use when bootstrapping/config is the pain point:
   Lakebase/Postgres env before plugin setup, layered config lookup, safe
   execution context fallback, typed sibling plugin lookup, SDK cancellation, or
   cache-schema grants.
-- `@dbx-tools/node-appkit-mastra`: use when the app wants Mastra's larger plugin
+- `@dbx-tools/appkit-mastra`: use when the app wants Mastra's larger plugin
   ecosystem, tool model, memory/storage, workflows, MCP support, and
   `@mastra/client-js` stream shape while preserving AppKit OBO auth and AppKit
   tool-provider plugins. Native AppKit Agents are the simpler choice when the
@@ -144,13 +144,13 @@ why to use this package anyway:
   needs Mastra stream handling, approvals, thread sidebar, model picker,
   feedback, exports, and `[chart:<id>]` / `[data:<id>]` embeds. Native AppKit UI
   is enough for general components or native Genie/Serving hooks.
-- `@dbx-tools/node-genie`: use when Genie is one capability inside an agent or
+- `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need async iterators, snapshot diffing, typed events,
   custom SSE/logging/tests, or chart/data planning. Native AppKit Genie is the
   right choice for a standalone Genie chat plugin/UI.
 - `@dbx-tools/shared-genie`: use for browser-safe Genie schemas/event vocabulary
   independent of AppKit transport.
-- `@dbx-tools/node-model`: use when endpoint choice is the problem: fuzzy human
+- `@dbx-tools/model`: use when endpoint choice is the problem: fuzzy human
   names, capability classes (`chat-thinking`, `chat-balanced`, `chat-fast`,
   `embedding`), class ceilings, cached enriched catalogues, model pickers, and
   fallbacks. Native AppKit Serving is best when the endpoint alias is known.
@@ -309,29 +309,30 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
 ```
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbxtools root task
 workspaces/
-  cli/dbx-tools/                          # the CLI package (`dbx-tools` / `@dbx-tools/cli`)
+  cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbxtools` bin)
     bin/dbxtools.ts                       # commander entry: sync | barrels | openapi | clean
-    bin/publish.ts                        # projen release tasks (pack / publish / CI)
-    index.ts                              # CLI helpers + re-export of `@dbx-tools/shared-projen`
-    src/
-      bin.ts, log.ts                      # pnpm/bin resolution + consola logger (CLI runtime)
-      engine.ts                           # re-export barrel for the projen engine public API
-      name.ts, collection.ts              # other CLI helpers
-  shared/projen/                          # the projen engine (`@dbx-tools/shared-projen`)
     index.ts                              # generated barrel (public API surface)
     src/
-      project.ts                          # DBXToolsProject + DBXToolsNode/TypeScriptProject + PackageIdentifier/naming, applyCompilerOptions/applyTasks, SHARED_COMPILER_OPTIONS, root init
-      mixin.ts                            # mixin() factory (tag table lives in tags.ts)
-      pnpm-workspace.ts                   # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
-      tags.ts                             # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
-      workspace.ts                        # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
-      barrels.ts                          # barrelsby driver (root index.ts, header + read-only)
-      watch.ts                            # generic file-watch util (watchLoop + watchRoots) the sync --watch task watchers forward to
-      scaffold.ts                         # packageSetChanged() + runSynth({ post })
       bootstrap.ts                        # bootstraps a COMPLETELY EMPTY folder (see Commands)
-      openapi.ts                          # openapi generator (tsoa controllers -> spec + client)
-      clean.ts, generated.ts, files.ts, vite.ts
+      cli.ts, pnpm.ts, root.ts            # CLI runtime helpers (bin/pnpm resolution, root init)
   openapi/<name>/                        # generated from tsoa controllers, same root as the source
+projen/                                   # the projen engine (`@dbx-tools/projen`), top-level, NOT a workspace member
+  index.ts                                # generated barrel (public API surface)
+  src/
+    project.ts                            # DBXToolsProject + DBXToolsNode/TypeScriptProject + PackageIdentifier/naming, applyCompilerOptions/applyTasks, SHARED_COMPILER_OPTIONS, root init
+    project-predicate.ts                  # predicate namespace (hasName/hasTag/inRelPath, .and/.or/.negate)
+    mixin.ts                              # mixin() factory (tag table lives in tags.ts)
+    pnpm-workspace.ts                     # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
+    tags.ts                               # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
+    workspace.ts                          # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
+    barrels.ts                            # barrelsby driver (root index.ts, header + read-only)
+    codegen.ts, module-exports.ts         # ts-to-zod codegen + exports-map generation
+    watch.ts                              # generic file-watch util (watchLoop + watchRoots) the sync --watch task watchers forward to
+    scaffold.ts                           # packageSetChanged() + runSynth({ post })
+    release.ts                            # DBXToolsRelease: bump task + tag-driven publish workflow
+    openapi.ts                            # openapi generator (tsoa controllers -> spec + client)
+    clean.ts, generated.ts, tsconfig.ts, vite.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
+  tasks/                                  # projen task scripts (bump, sync, barrels, openapi, projenrc, clean)
 example-workspaces/
   cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ ui/app/   # seed examples, each a real subproject
 ```
@@ -432,12 +433,12 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   mixin matching `predicate.hasName("*/cli-dbx-tools").and(predicate.hasTag("cli"))` that:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
   adds its bin (`p.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), depends on
-  `@dbx-tools/shared-projen`, and bumps its tsconfig to ES2022 lib/target +
+  `@dbx-tools/projen`, and bumps its tsconfig to ES2022 lib/target +
   `rootDir: "."` - extra includes for `index.ts`/`bin/**/*.ts` (the `cli` tag's
   defaults are ES2020 + `src/**/*.ts` only, which doesn't cover code outside
-  `src/`). The projen engine itself lives in `workspaces/shared/projen`
-  (`@dbx-tools/shared-projen`); a `shared`/`projen` mixin adds its deps
-  (`projen`, `constructs`, `barrelsby`, `@dbx-tools/shared-file-scan`, ...).
+  `src/`). The projen engine itself lives in `projen`
+  (`@dbx-tools/projen`); a `shared`/`projen` mixin adds its deps
+  (`projen`, `constructs`, `barrelsby`, `@dbx-tools/path`, ...).
 - **The root keeps the engine itself resolvable across synths** via
   `engineSelfDependency()` (`project.ts`): resolves the `@dbx-tools/cli`
   package (`dbx-tools`) via `require.resolve` when installed; if that
@@ -468,8 +469,8 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   package's ROOT `index.ts` barrel — packages type-check against each other with
   no build step. Cross-package imports still need the workspace dep declared
   (`p.addDeps("@dbx-tools/shared-core@workspace:*")` in a `project.mixin(...)`) and MUST
-  use the package name (`@dbx-tools/shared-file-scan`), never a relative path into
-  another package's `src/` (e.g. `../../../../shared/file-scan/src/find`).
+  use the package name (`@dbx-tools/path`), never a relative path into
+  another package's `src/` (e.g. `../../../../node/path/src/find`).
 - Everything runs on portable Node: subprocesses use `execFileSync(process.execPath, …)`;
   read-only is `fs.chmodSync` (Node maps it to the Windows read-only attribute).
   `bootstrap.ts` resolves `pnpm`'s own CLI the same way (`require.resolve`, not a

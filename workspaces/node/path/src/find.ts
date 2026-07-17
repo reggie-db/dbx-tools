@@ -1,4 +1,4 @@
-import { iterable, type Sequence } from "@dbx-tools/shared-core";
+import { object, type Sequence } from "@dbx-tools/shared-core";
 import { globIterateSync, IgnoreLike, type GlobOptionsWithFileTypesUnset } from "glob";
 import { ignorePathMatcher } from "./ignore";
 import { PathMatcher, PathMatchInput, pathMatchTests, toPathMatcher } from "./match";
@@ -23,7 +23,7 @@ export interface FileFindOptions
  * {@link watchFiles} feeds through its matchers.
  */
 export function findFiles(pattern: string | string[], options?: FileFindOptions): Sequence<string> {
-  return iterable.sequence(globIterateSync(pattern, toGlobOptions(options)));
+  return object.sequence(globIterateSync(pattern, toGlobOptions(options)));
 }
 
 function toGlobOptions(options: FileFindOptions | undefined): GlobOptionsWithFileTypesUnset {

@@ -29,7 +29,7 @@ import { fallback } from "@dbx-tools/model";
 import { ResultProcessor, stripStaleChartsProcessor } from "./processors";
 import { buildSummarizeTool } from "./summarize";
 import { createWorkspace } from "./workspaces";
-import { log, string } from "@dbx-tools/shared-core";
+import { log, object, string } from "@dbx-tools/shared-core";
 import { plugin } from "@dbx-tools/appkit";
 
 /**
@@ -528,12 +528,12 @@ export async function buildAgents(opts: {
  */
 export function approvalGatedToolIds(tools: MastraTools): string[] {
   if (!tools || typeof tools !== "object") return [];
-  const ids: string[] = [];
-  for (const [key, tool] of Object.entries(tools)) {
-    if (!isApprovalGatedTool(tool)) continue;
-    ids.push(resolveToolId(tool, key));
-  }
-  return ids;
+  return [
+    ...object
+      .sequence(Object.entries(tools))
+      .filter(([, tool]) => isApprovalGatedTool(tool))
+      .map(([key, tool]) => resolveToolId(tool, key)),
+  ];
 }
 
 /** True when a Mastra / AI SDK tool pauses for human approval before execute. */

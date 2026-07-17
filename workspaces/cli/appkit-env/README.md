@@ -3,13 +3,13 @@
 CLI and formatting helpers for exporting AppKit auto-configuration results.
 
 Use the `appkit-env` bin when a shell or process manager needs the Lakebase /
-AppKit environment that [`@dbx-tools/node-appkit`](../../node/appkit) would
+AppKit environment that [`@dbx-tools/appkit`](../../node/appkit) would
 resolve before `createApp()`.
 
 Key features:
 
 - Runs the same AppKit auto-configuration path used by
-  [`@dbx-tools/node-appkit`](../../node/appkit).
+  [`@dbx-tools/appkit`](../../node/appkit).
 - Emits only variables that changed during auto-configuration.
 - Supports shell `export`, JSON, and Windows `set` output formats.
 - Provides importable env snapshot/diff/format helpers for tests and wrapper
@@ -60,4 +60,4 @@ that want the same output formats without invoking the bin.
   `formatEnvExport()`, and `parseEnvExportFormat()`.
 
 Auto-config itself lives in
-[`@dbx-tools/node-appkit`](../../node/appkit).
+[`@dbx-tools/appkit`](../../node/appkit).

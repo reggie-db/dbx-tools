@@ -5,7 +5,7 @@ Browser-safe contract for the AppKit Mastra plugin.
 Import this package when a client, test, or server route needs the same route
 constants, header names, embed-marker parsing, feedback schemas, thread
 selection fields, and Mastra response schemas used by
-[`@dbx-tools/node-appkit-mastra`](../../node/appkit-mastra).
+[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra).
 
 Key features:
 
@@ -114,4 +114,4 @@ chart/data result shapes consumed by embed renderers.
 - `thread` - thread id header/query constants.
 
 Server-side implementation is in
-[`@dbx-tools/node-appkit-mastra`](../../node/appkit-mastra).
+[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra).

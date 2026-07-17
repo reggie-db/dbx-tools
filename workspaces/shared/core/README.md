@@ -12,7 +12,6 @@ import {
   error,
   hash,
   http,
-  iterable,
   log,
   net,
   object,
@@ -20,8 +19,8 @@ import {
 } from "@dbx-tools/shared-core";
 ```
 
-Node-only helpers live in [`@dbx-tools/node-core`](../../node/core). AppKit and
-Databricks SDK helpers live in [`@dbx-tools/node-appkit`](../../node/appkit).
+Node-only helpers live in [`@dbx-tools/core`](../../node/core). AppKit and
+Databricks SDK helpers live in [`@dbx-tools/appkit`](../../node/appkit).
 
 Key features:
 
@@ -33,7 +32,7 @@ Key features:
   and generated names.
 - String normalization helpers for slugs, identifiers, unique labels, and prompt
   descriptions.
-- Object, predicate, iterable, HTTP, cookie, network, token, memoization, and
+- Object/iterable, predicate, HTTP, cookie, network, token, memoization, and
   logging helpers that avoid Node-only dependencies.
 - Namespace exports that make utility call sites explicit without creating a
   grab-bag default import.
@@ -120,14 +119,14 @@ short-circuits. `predicate.create()` returns composable predicates with `and`,
 ## Iterables
 
 ```ts
-const names = iterable
+const names = object
   .sequence(packages)
   .map((p) => p.name)
   .filter(Boolean)
   .distinct()
   .toArray();
 
-const grouped = iterable.group(packages, {
+const grouped = object.group(packages, {
   node: (p) => p.tags.includes("node"),
   ui: (p) => p.tags.includes("ui"),
 });
@@ -210,8 +209,8 @@ without paying formatting cost when disabled.
 - `hash` - ids, FNV hashes, and base32 encoding.
 - `string` - tokenization, slugs, identifiers, descriptions, pluralization, and
   HTML escaping.
-- `object` - record checks, boolean coercion, deep equality, and shape types.
-- `iterable` - lazy sequence transforms and collection helpers.
+- `object` - record checks, boolean coercion, deep equality, shape types, and
+  lazy sequence transforms + collection helpers.
 - `predicate` - composable boolean/type predicates.
 - `http` - header iteration, cookie parsing, and fetch error creation.
 - `net` - URL building, email parsing, path matching, IP/CIDR helpers.

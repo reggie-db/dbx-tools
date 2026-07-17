@@ -6,7 +6,7 @@ Import this package when a Databricks App needs to render model-drafted email,
 collect a human approval decision, or provide a standalone compose form using
 the same message contract as [`@dbx-tools/shared-email`](../../shared/email).
 Server-side sending and AppKit routes live in
-[`@dbx-tools/node-email`](../../node/email).
+[`@dbx-tools/email`](../../node/email).
 
 Key features:
 
@@ -113,6 +113,6 @@ across approval, compose, and custom UI surfaces.
   types.
 - `./styles.css` - Tailwind/AppKit style entrypoint for the email components.
 
-Pair this package with [`@dbx-tools/node-email`](../../node/email) for SMTP or
+Pair this package with [`@dbx-tools/email`](../../node/email) for SMTP or
 outbox delivery, and with [`@dbx-tools/shared-email`](../../shared/email) for
 schema validation in client/server boundaries.

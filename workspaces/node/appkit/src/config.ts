@@ -13,7 +13,7 @@
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
-import { functionModule, iterable, log, string } from "@dbx-tools/shared-core";
+import { functionModule, object, log, string } from "@dbx-tools/shared-core";
 import { file, project } from "@dbx-tools/core";
 import { parse as parseYamlText } from "yaml";
 import { z } from "zod";
@@ -122,10 +122,10 @@ export interface ResolveConfigValueOptions {
 const bundleDefault = functionModule.memoize(() => loadBundle(process.cwd()));
 const appYamlDefault = functionModule.memoize(() => loadAppYaml(process.cwd()));
 
-function envKeysForName(name: string): iterable.Sequence<string> {
+function envKeysForName(name: string): object.Sequence<string> {
   const trimmed = name.trim();
   if (!trimmed) {
-    return iterable.sequence();
+    return object.sequence();
   }
   const keys = (function* () {
     const modifiers: (((value: string) => string) | null)[] = [
@@ -137,7 +137,7 @@ function envKeysForName(name: string): iterable.Sequence<string> {
       yield modifier ? modifier(trimmed) : trimmed;
     }
   })();
-  return iterable.sequence(keys).cache().filter(Boolean).distinct();
+  return object.sequence(keys).cache().filter(Boolean).distinct();
 }
 
 function readEnv(keys: Iterable<string>): string | undefined {

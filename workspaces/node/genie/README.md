@@ -1,4 +1,4 @@
-# @dbx-tools/node-genie
+# @dbx-tools/genie
 
 Server-side Databricks Genie chat drivers.
 
@@ -47,7 +47,7 @@ backend:
 ## Stream Semantic Events
 
 ```ts
-import { chat } from "@dbx-tools/node-genie";
+import { chat } from "@dbx-tools/genie";
 
 for await (const event of chat.genieEventChat(spaceId, "Top stores by revenue?")) {
   switch (event.type) {
@@ -75,7 +75,7 @@ message.
 ## Stream Raw Message Snapshots
 
 ```ts
-import { chat } from "@dbx-tools/node-genie";
+import { chat } from "@dbx-tools/genie";
 
 for await (const message of chat.genieChat(spaceId, "Top stores by revenue?")) {
   renderSnapshot(message);
@@ -113,7 +113,7 @@ conversation id back into this driver when a turn continues.
 
 ```ts
 import { WorkspaceClient } from "@databricks/sdk-experimental";
-import { chat } from "@dbx-tools/node-genie";
+import { chat } from "@dbx-tools/genie";
 
 await chat.genieEventChat(spaceId, content, {
   workspaceClient: new WorkspaceClient({ profile: "dev" }),
@@ -132,7 +132,7 @@ the polling sleep.
 ## Read Space Metadata And Starter Questions
 
 ```ts
-import { space } from "@dbx-tools/node-genie";
+import { space } from "@dbx-tools/genie";
 
 const genieSpace = await space.getGenieSpace(spaceId);
 const questions = space.genieSampleQuestions(genieSpace);
@@ -158,5 +158,5 @@ questions and returns `[]` when none are configured.
 - `space` - `getGenieSpace()` and `genieSampleQuestions()`.
 
 The AppKit-Mastra package builds its Genie tools on top of this driver; see
-[`@dbx-tools/node-appkit-mastra`](../appkit-mastra) for the agent-level
+[`@dbx-tools/appkit-mastra`](../appkit-mastra) for the agent-level
 workflow.

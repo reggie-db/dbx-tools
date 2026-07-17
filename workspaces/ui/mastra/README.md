@@ -3,7 +3,7 @@
 React chat UI for the AppKit-Mastra plugin.
 
 Import this package when a Databricks App needs a production-ready chat surface
-for [`@dbx-tools/node-appkit-mastra`](../../node/appkit-mastra): streaming
+for [`@dbx-tools/appkit-mastra`](../../node/appkit-mastra): streaming
 assistant responses, model selection, Genie progress events, inline charts/data
 tables, tool approvals, conversation history, thread management, export, and
 MLflow feedback.
@@ -34,7 +34,7 @@ Use native `@databricks/appkit-ui` when you need its general primitives, Genie
 chat component, or Model Serving hooks directly against native AppKit plugins.
 
 Use this package when the server is
-[`@dbx-tools/node-appkit-mastra`](../../node/appkit-mastra) and the UI needs to
+[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra) and the UI needs to
 understand Mastra-specific behavior:
 
 - `@mastra/client-js` agent streaming plus the plugin's custom history, threads,
@@ -154,7 +154,7 @@ suggestions, thread lists, chart fetches, and statement-data fetches.
 ## Approvals, Embeds, And Feedback
 
 The UI understands the extra events produced by
-[`@dbx-tools/node-appkit-mastra`](../../node/appkit-mastra):
+[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra):
 
 - `tool-call-approval` chunks become inline approval cards and call
   `approve-tool-call` / `decline-tool-call` when the user decides.
@@ -193,6 +193,6 @@ skipped so old transcripts still export cleanly.
   `FeedbackSubmission`, and related UI contract types.
 
 Server-side routes and event production live in
-[`@dbx-tools/node-appkit-mastra`](../../node/appkit-mastra). Browser-safe route,
+[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra). Browser-safe route,
 marker, feedback, and wire schemas live in
 [`@dbx-tools/shared-mastra`](../../shared/mastra).

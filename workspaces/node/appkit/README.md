@@ -1,4 +1,4 @@
-# @dbx-tools/node-appkit
+# @dbx-tools/appkit
 
 Node-side helpers for Databricks AppKit apps.
 
@@ -47,7 +47,7 @@ environment variables before plugin setup runs.
 
 ```ts
 import { lakebase, server } from "@databricks/appkit";
-import { createApp } from "@dbx-tools/node-appkit";
+import { createApp } from "@dbx-tools/appkit";
 
 await createApp.createApp({
   plugins: [server(), lakebase()],
@@ -67,7 +67,7 @@ Databricks Asset Bundle validation, and deployed Apps.
 Use the lower-level functions when you need to inspect or customize the result:
 
 ```ts
-import { lakebaseResolver } from "@dbx-tools/node-appkit";
+import { lakebaseResolver } from "@dbx-tools/appkit";
 
 const resolved = await lakebaseResolver.resolveLakebaseConnection({
   endpoint: process.env.LAKEBASE_ENDPOINT,
@@ -83,7 +83,7 @@ lakebaseResolver.applyLakebaseToEnv(resolved);
 Databricks Asset Bundle validation output, and `app.yaml` env entries.
 
 ```ts
-import { config } from "@dbx-tools/node-appkit";
+import { config } from "@dbx-tools/appkit";
 
 const warehouseId = await config.resolveConfigValue("SQL_WAREHOUSE_ID", {
   cli: { SQL_WAREHOUSE_ID: flags.warehouse },
@@ -102,7 +102,7 @@ Lakebase hosts, and partial inputs. It gives the resolver a common shape without
 requiring users to remember one canonical format.
 
 ```ts
-import { pgaddress } from "@dbx-tools/node-appkit";
+import { pgaddress } from "@dbx-tools/appkit";
 
 pgaddress.parseAddress(
   "postgresql://user@ep-foo.database.azuredatabricks.net/databricks_postgres?sslmode=require",
@@ -119,7 +119,7 @@ code is running under AppKit, and `undefined` elsewhere. That lets libraries
 preserve OBO auth in apps while still working from scripts.
 
 ```ts
-import { appkit } from "@dbx-tools/node-appkit";
+import { appkit } from "@dbx-tools/appkit";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 
 const client = appkit.tryGetExecutionContext()?.client ?? new WorkspaceClient({});
@@ -134,7 +134,7 @@ Databricks SDK calls accept a `Context`. Many app and web APIs use
 `AbortSignal`. `databricks.toContext()` bridges the two.
 
 ```ts
-import { databricks } from "@dbx-tools/node-appkit";
+import { databricks } from "@dbx-tools/appkit";
 
 const context = databricks.toContext(request.signal);
 await client.apiClient.request({
@@ -157,7 +157,7 @@ errors when a required plugin is missing.
 
 ```ts
 import { lakebase } from "@databricks/appkit";
-import { plugin } from "@dbx-tools/node-appkit";
+import { plugin } from "@dbx-tools/appkit";
 
 const lake = plugin.instance(this.context, lakebase);
 const pool = lake?.exports().pool;
@@ -175,7 +175,7 @@ the Postgres role that will run the app. Use it after Lakebase connection env ha
 been resolved and before AppKit initializes its persistent cache.
 
 ```ts
-import { provision } from "@dbx-tools/node-appkit";
+import { provision } from "@dbx-tools/appkit";
 import { log } from "@dbx-tools/shared-core";
 
 await provision.provisionCacheSchema(
@@ -198,4 +198,4 @@ await provision.provisionCacheSchema(
 
 The shell-facing wrapper for auto-config is
 [`@dbx-tools/appkit-env`](../../cli/appkit-env). Higher-level agent composition
-is in [`@dbx-tools/node-appkit-mastra`](../appkit-mastra).
+is in [`@dbx-tools/appkit-mastra`](../appkit-mastra).

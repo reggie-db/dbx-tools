@@ -7,7 +7,7 @@
  */
 
 import {
-  iterable,
+  object,
   predicate,
   type Predicate,
   type PredicateFunction,
@@ -39,7 +39,7 @@ function toTest(pattern: PathMatchInput): PathMatchPredicate {
 export function pathMatchTests(
   ...inputs: readonly (PathMatchInput | null | undefined)[]
 ): readonly PathMatchPredicate[] {
-  return iterable.sequence(inputs).nonNull().map(toTest).toArray();
+  return object.sequence(inputs).nonNull().map(toTest).toArray();
 }
 
 /**

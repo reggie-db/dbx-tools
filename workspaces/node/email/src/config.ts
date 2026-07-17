@@ -22,6 +22,7 @@
  */
 import type { BasePluginConfig } from "@databricks/appkit";
 import type { JSONSchema7 } from "json-schema";
+import { object } from "@dbx-tools/shared-core";
 import { resolve } from "node:path";
 import { parseAllowedSenders } from "./sender";
 
@@ -149,15 +150,12 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
 /** Parse the `SMTP_SECURE` env / config flag, defaulting to `port === 465`. */
 function resolveSecure(flag: boolean | undefined, port: number): boolean {
   if (typeof flag === "boolean") return flag;
-  const env = process.env["SMTP_SECURE"];
-  if (env !== undefined) return /^(1|true|yes)$/i.test(env.trim());
-  return port === 465;
+  return object.toBoolean(process.env["SMTP_SECURE"]) ?? port === 465;
 }
 
 /** Whether `EMAIL_OUTBOX_MODE` explicitly opts into the file/outbox fallback. */
 function isOutboxModeEnabled(): boolean {
-  const env = process.env["EMAIL_OUTBOX_MODE"];
-  return env !== undefined && /^(1|true|yes)$/i.test(env.trim());
+  return object.toBoolean(process.env["EMAIL_OUTBOX_MODE"]) ?? false;
 }
 
 const SMTP_REQUIRED_FIELDS = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"] as const;

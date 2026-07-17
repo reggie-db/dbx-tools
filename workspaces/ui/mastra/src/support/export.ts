@@ -402,12 +402,7 @@ const escapeHtml = string.escapeHtml;
 
 /** Turn a title into a safe, lowercase filename stem. */
 function slugify(value: string): string {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return slug || "conversation";
+  return string.toSlugWithOptions({ maxLength: 60 }, value) || "conversation";
 }
 
 /** Trigger a browser download of an in-memory text file. */

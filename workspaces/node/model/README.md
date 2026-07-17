@@ -1,4 +1,4 @@
-# @dbx-tools/node-model
+# @dbx-tools/model
 
 Workspace-aware Databricks Model Serving selection.
 
@@ -49,7 +49,7 @@ endpoint:
 
 ```ts
 import { WorkspaceClient } from "@databricks/sdk-experimental";
-import { resolve } from "@dbx-tools/node-model";
+import { resolve } from "@dbx-tools/model";
 
 const client = new WorkspaceClient({});
 const host = String(await client.config.getHost());
@@ -72,7 +72,7 @@ so operators can tell whether a request used the intended model policy.
 ## Build A Model Picker
 
 ```ts
-import { resolve } from "@dbx-tools/node-model";
+import { resolve } from "@dbx-tools/model";
 
 const ranked = await resolve.searchModels(client, host, {
   search: "opus",
@@ -91,7 +91,7 @@ When you already have endpoint summaries, use the pure resolver functions from
 `resolve` and `serving` without another workspace call:
 
 ```ts
-import { resolve, serving } from "@dbx-tools/node-model";
+import { resolve, serving } from "@dbx-tools/model";
 
 const endpoints = await serving.listServingEndpoints(client, host);
 const ranked = resolve.rankModels(endpoints, { search: "sonnet", limit: 3 });
@@ -108,7 +108,7 @@ when the requested class is `embedding`.
 ## List And Cache Serving Endpoints
 
 ```ts
-import { serving } from "@dbx-tools/node-model";
+import { serving } from "@dbx-tools/model";
 
 const endpoints = await serving.listServingEndpoints(client, host, {
   ttlMs: 5 * 60_000,
@@ -140,7 +140,7 @@ exact endpoint ids.
 ## Use Static Fallbacks
 
 ```ts
-import { classes, fallback } from "@dbx-tools/node-model";
+import { classes, fallback } from "@dbx-tools/model";
 import { model } from "@dbx-tools/shared-model";
 
 const cls = classes.parseModelClass("chat-fast") ?? model.ModelClass.ChatFast;
@@ -161,5 +161,5 @@ policy decisions; fallbacks are a last resort.
 - `fallback` - static fallback model ids per class.
 
 The AppKit-Mastra integration uses this package through
-[`@dbx-tools/node-appkit-mastra`](../appkit-mastra); the local OpenAI-compatible
+[`@dbx-tools/appkit-mastra`](../appkit-mastra); the local OpenAI-compatible
 gateway uses it through [`@dbx-tools/model-proxy`](../../cli/model-proxy).

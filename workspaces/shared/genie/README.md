@@ -5,7 +5,7 @@ Browser-safe Genie schemas, event vocabulary, and snapshot diff helpers.
 Import this package when a UI, test, or server component needs to validate Genie
 wire payloads or derive high-level events from raw Genie message snapshots
 without importing the Databricks SDK. The Node driver that calls Genie is
-[`@dbx-tools/node-genie`](../../node/genie).
+[`@dbx-tools/genie`](../../node/genie).
 
 Key features:
 
@@ -26,8 +26,8 @@ event vocabulary independent of AppKit transport:
 
 - validating raw Genie messages captured from the Databricks SDK;
 - replaying persisted snapshots into semantic events;
-- sharing a flat event union between `@dbx-tools/node-genie`,
-  `@dbx-tools/node-appkit-mastra`, and custom UI/tests;
+- sharing a flat event union between `@dbx-tools/genie`,
+  `@dbx-tools/appkit-mastra`, and custom UI/tests;
 - detecting attachment/status shapes that are present on the live wire but not
   always convenient in generated SDK types.
 
@@ -110,4 +110,4 @@ detectors when a test needs to assert one specific behavior.
 - `event` - event detector factory, individual detectors, and
   `eventsFromMessage()`.
 
-Server-side streaming is in [`@dbx-tools/node-genie`](../../node/genie).
+Server-side streaming is in [`@dbx-tools/genie`](../../node/genie).

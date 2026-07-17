@@ -11,7 +11,7 @@
  * for it.
  */
 
-import { error, log, string } from "@dbx-tools/shared-core";
+import { error, log, object, string } from "@dbx-tools/shared-core";
 import { databricks } from "@dbx-tools/appkit";
 import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
@@ -101,13 +101,11 @@ export function genieSampleQuestions(space: GenieSpace): string[] {
     ?.sample_questions;
   if (!Array.isArray(sampleQuestions)) return [];
 
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const entry of sampleQuestions as SerializedSampleQuestion[]) {
-    const text = string.firstNonEmpty(entry?.question);
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    out.push(text);
-  }
-  return out;
+  return [
+    ...object
+      .sequence(sampleQuestions as SerializedSampleQuestion[])
+      .map((entry) => string.firstNonEmpty(entry?.question))
+      .nonNull()
+      .distinct(),
+  ];
 }

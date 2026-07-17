@@ -1,4 +1,4 @@
-# @dbx-tools/node-databricks
+# @dbx-tools/databricks
 
 Generic Node-side Databricks workspace and cloud infrastructure helpers.
 
@@ -19,7 +19,7 @@ Key features:
 ## Resolve Workspace Identity
 
 ```ts
-import { workspace } from "@dbx-tools/node-databricks";
+import { workspace } from "@dbx-tools/databricks";
 
 const url = await workspace.getWorkspaceUrl();
 const id = await workspace.getWorkspaceId();
@@ -33,7 +33,7 @@ script.
 ## Detect Cloud Provider And Region
 
 ```ts
-import { cloud } from "@dbx-tools/node-databricks";
+import { cloud } from "@dbx-tools/databricks";
 
 const location = await cloud.resolveCloudLocation("https://adb-123.azuredatabricks.net");
 ```
@@ -49,7 +49,7 @@ developer diagnostics, not for security policy decisions.
 ## Resolve Network Details
 
 ```ts
-import { net } from "@dbx-tools/node-databricks";
+import { net } from "@dbx-tools/databricks";
 
 const ips = await net.resolveHostIps("https://example.cloud.databricks.com");
 const publicIp = await net.getPublicIp();
@@ -66,4 +66,4 @@ short-lived reuse.
 - `net` - DNS A/AAAA resolution and outbound public-IP discovery.
 
 Zerobus endpoint construction builds on these helpers in
-[`@dbx-tools/node-databricks-zerobus`](../databricks-zerobus).
+[`@dbx-tools/databricks-zerobus`](../databricks-zerobus).

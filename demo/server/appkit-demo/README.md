@@ -6,18 +6,18 @@ backend.
 
 ## What it wires
 
-- `createApp` from [`@dbx-tools/node-appkit`](../../../workspaces/node/appkit) —
+- `createApp` from [`@dbx-tools/appkit`](../../../workspaces/node/appkit) —
   the auto-configuring wrapper that resolves Lakebase/Postgres env before the
   plugins run, then delegates to AppKit's `createApp`.
 - `mastra(...)` from
-  [`@dbx-tools/node-appkit-mastra`](../../../workspaces/node/appkit-mastra) — the
+  [`@dbx-tools/appkit-mastra`](../../../workspaces/node/appkit-mastra) — the
   Mastra agent as an AppKit plugin: OBO auth, Lakebase-backed storage/memory,
   workspace skills, model selection, history, threads, and scoped routes.
 - `genie()` + `plugins.genie?.toolkit()` — the agent drives the Genie space
   (`ask_genie`, `get_statement`, `prepare_chart`, …) for SQL-backed answers with
   streaming progress and inline charts.
 - `email()` + `emailTool()` from
-  [`@dbx-tools/node-email`](../../../workspaces/node/email) — an approval-gated
+  [`@dbx-tools/email`](../../../workspaces/node/email) — an approval-gated
   `send_email` tool: the model can call it, but the send suspends until the user
   approves it in the chat UI.
 - `lakebase()` (AppKit) — backs Mastra Memory.

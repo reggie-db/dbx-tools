@@ -20,6 +20,7 @@
  * It only fills gaps: any field the spec already sets (an explicit
  * `axisLabel.formatter`, `nameLocation`, etc.) is preserved.
  */
+import { object } from "@dbx-tools/shared-core";
 
 /** Compact SI formatter shared across every value-axis tick. */
 const COMPACT_NUMBER = new Intl.NumberFormat("en-US", {
@@ -40,8 +41,7 @@ function compactAxisLabel(value: number): string {
 /** A permissive record view of an option node we patch field-by-field. */
 type Obj = Record<string, unknown>;
 
-const isObj = (v: unknown): v is Obj =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+const isObj = object.isRecord;
 
 /** True when `title` (object or array) carries any non-empty `text`. */
 function hasTitleText(title: unknown): boolean {

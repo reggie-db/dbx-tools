@@ -1,4 +1,4 @@
-# @dbx-tools/node-appkit-mastra
+# @dbx-tools/appkit-mastra
 
 AppKit plugin and server-side toolkit for hosting Mastra agents inside a
 Databricks App.
@@ -44,14 +44,14 @@ Use this package when you specifically want Mastra inside AppKit:
 - A paired React client in [`@dbx-tools/ui-mastra`](../../ui/mastra) with model
   picking, thread sidebar, approvals, feedback, exports, and inline embeds.
 - Per-request model override and fuzzy endpoint resolution through
-  [`@dbx-tools/node-model`](../model), instead of binding every agent to a fixed
+  [`@dbx-tools/model`](../model), instead of binding every agent to a fixed
   endpoint name.
 
 ## Quick Start
 
 ```ts
 import { analytics, createApp, lakebase, server } from "@databricks/appkit";
-import { agents, genie, plugin } from "@dbx-tools/node-appkit-mastra";
+import { agents, genie, plugin } from "@dbx-tools/appkit-mastra";
 import { z } from "zod";
 
 const analyst = agents.createAgent({
@@ -254,7 +254,7 @@ inline large tables or wait for chart planning before continuing its answer.
 ## Model Selection
 
 `model.buildModel()` adapts the generic resolver from
-[`@dbx-tools/node-model`](../model) to Mastra. It resolves the model per request,
+[`@dbx-tools/model`](../model) to Mastra. It resolves the model per request,
 so OBO identity and request-specific overrides stay isolated.
 
 Model priority is:

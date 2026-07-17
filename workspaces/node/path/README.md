@@ -1,4 +1,4 @@
-# @dbx-tools/node-path
+# @dbx-tools/path
 
 Node filesystem path toolkit for discovery, matching, ignoring, scanning, and
 watching.
@@ -19,7 +19,7 @@ Key features:
 ## Find Files
 
 ```ts
-import { find, ignore } from "@dbx-tools/node-path";
+import { find, ignore } from "@dbx-tools/path";
 
 const files = find
   .findFiles(["workspaces/**/src/**/*.ts"], {
@@ -38,7 +38,7 @@ should agree with package discovery, barrel generation, or cleanup logic.
 ## Compile Matchers
 
 ```ts
-import { match } from "@dbx-tools/node-path";
+import { match } from "@dbx-tools/path";
 
 const isTest = match.toPathMatcher("**/*.test.ts");
 if (isTest("workspaces/shared/model/test/classify.test.ts")) {
@@ -53,7 +53,7 @@ tests.
 ## Reuse Ignore Rules
 
 ```ts
-import { ignore } from "@dbx-tools/node-path";
+import { ignore } from "@dbx-tools/path";
 
 const matcher = ignore.ignorePathMatcher({
   generated: true,
@@ -68,7 +68,7 @@ generated files, build output, VCS metadata, and package-manager output.
 ## Scan Workspace Packages
 
 ```ts
-import { scan } from "@dbx-tools/node-path";
+import { scan } from "@dbx-tools/path";
 
 const options: scan.FileScanOptions = {
   roots: ["workspaces", "example-workspaces"],
@@ -83,7 +83,7 @@ like synthesis does.
 ## Watch Files
 
 ```ts
-import { watch } from "@dbx-tools/node-path";
+import { watch } from "@dbx-tools/path";
 
 const watcher = watch.watchFiles(["workspaces/**/src/**/*.ts"], {
   ignoreInitial: true,
@@ -98,7 +98,7 @@ used by the rest of the repo tooling.
 ## Build Patterns
 
 ```ts
-import { pattern } from "@dbx-tools/node-path";
+import { pattern } from "@dbx-tools/path";
 
 const nodeModulesPattern = pattern.directoryNamePattern("node_modules");
 const tsPattern = pattern.fileExtensionPattern("ts");
@@ -116,4 +116,4 @@ Pattern helpers keep generated glob fragments escaped and consistent.
 - `pattern` - escaped directory-name and extension glob fragments.
 
 The projen engine uses this package in
-[`@dbx-tools/projen`](../projen).
+[`@dbx-tools/projen`](../../../projen).

@@ -1,4 +1,4 @@
-# @dbx-tools/node-email
+# @dbx-tools/email
 
 Server-side email runtime, Mastra tool, and AppKit plugin.
 
@@ -24,8 +24,8 @@ Key features:
 
 ```ts
 import { createApp, lakebase, server } from "@databricks/appkit";
-import { plugin as emailPlugin, tool as emailTool } from "@dbx-tools/node-email";
-import { agents, plugin as mastraPlugin } from "@dbx-tools/node-appkit-mastra";
+import { plugin as emailPlugin, tool as emailTool } from "@dbx-tools/email";
+import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
 
 const support = agents.createAgent({
   instructions: "Draft emails, but wait for approval before sending.",
@@ -56,7 +56,7 @@ approval card and compose components.
 ## Send Without An Agent
 
 ```ts
-import { transport } from "@dbx-tools/node-email";
+import { transport } from "@dbx-tools/email";
 
 const result = await transport.sendEmail(
   {
@@ -76,7 +76,7 @@ involved. The same resolved runtime is used by the AppKit plugin and tool.
 ## Resolve SMTP Or Outbox Mode
 
 ```ts
-import { config, transport } from "@dbx-tools/node-email";
+import { config, transport } from "@dbx-tools/email";
 
 const resolved = config.resolveEmailConfig({
   smtp: { host: "smtp.example.com", user: "apikey", password: secret },
@@ -115,7 +115,7 @@ shown, the server can still derive the sender from the active user and config.
 ## Derive And Restrict Senders
 
 ```ts
-import { sender } from "@dbx-tools/node-email";
+import { sender } from "@dbx-tools/email";
 
 const from = sender.resolveSenderAddress({
   userEmail: "alice@databricks.com",
@@ -132,7 +132,7 @@ current user, which is what the AppKit plugin exposes to clients.
 ## Render Markdown Email
 
 ```ts
-import { emailHtml, markdown } from "@dbx-tools/node-email";
+import { emailHtml, markdown } from "@dbx-tools/email";
 
 const html = emailHtml.renderEmailHtml({
   subject: "Incident update",
@@ -147,7 +147,7 @@ the rendered body in the package layout and inlines CSS for mail clients.
 ## Use The Outbox In Tests
 
 ```ts
-import { outbox } from "@dbx-tools/node-email";
+import { outbox } from "@dbx-tools/email";
 
 await outbox.writeOutboxEmail({
   dir: "tmp/email-outbox",

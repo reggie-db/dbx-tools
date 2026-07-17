@@ -4,7 +4,7 @@
  * Values are read and written on the component's object; each write flushes the
  * record to the manifest through `project.package.addField`.
  */
-import { iterable } from "@dbx-tools/shared-core";
+import { object } from "@dbx-tools/shared-core";
 import { Component, javascript } from "projen";
 
 /** `package.json` field name for the dbx-tools config object. */
@@ -34,7 +34,7 @@ function readDBXToolsConfig(pkg: javascript.NodePackage): Record<string, unknown
 function loadConfig(dbxToolsConfig: DBXToolsConfig, pkg: javascript.NodePackage) {
   const { tags, ...config } = readDBXToolsConfig(pkg);
   if (Array.isArray(tags))
-    iterable
+    object
       .sequence(tags)
       .filter((v: unknown) => typeof v === "string")
       .forEach((v: string) => dbxToolsConfig.tags.push(v));
@@ -70,13 +70,13 @@ export class DBXToolsConfig extends Component {
       if (this.inheritedKeys.has(key)) continue;
       dataRecord[key] = value;
     }
-    dataRecord.tags = iterable.sequence(this.tags).distinct().toArray();
+    dataRecord.tags = object.sequence(this.tags).distinct().toArray();
     return dataRecord;
   }
 
   preSynthesize(): void {
     let dataRecord: Record<string, unknown> | undefined = this.data();
-    if (iterable.isEmpty(dataRecord, { recursive: true })) {
+    if (object.isEmpty(dataRecord, { recursive: true })) {
       dataRecord = undefined;
     }
     this.project.package.addField(DBX_TOOLS_CONFIG_KEY, dataRecord);

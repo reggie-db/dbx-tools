@@ -12,7 +12,7 @@
  */
 
 import { exec } from "@dbx-tools/core";
-import { functionModule, iterable, type Sequence } from "@dbx-tools/shared-core";
+import { functionModule, object, type Sequence } from "@dbx-tools/shared-core";
 import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match";
 import { directoryNamePattern, fileExtensionPattern } from "./pattern";
 
@@ -171,7 +171,7 @@ function ignoreMatchPredicates(
  * @param options - Group toggles; omitted flags default to enabled.
  */
 export function ignorePatterns(options?: IgnorePatternOptions): Sequence<string> {
-  return iterable.sequence(ignoreMatchPredicates(options)).flatMap(Object.keys).distinct();
+  return object.sequence(ignoreMatchPredicates(options)).flatMap(Object.keys).distinct();
 }
 
 /**

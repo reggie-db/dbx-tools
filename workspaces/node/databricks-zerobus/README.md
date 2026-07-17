@@ -1,4 +1,4 @@
-# @dbx-tools/node-databricks-zerobus
+# @dbx-tools/databricks-zerobus
 
 Region-aware Zerobus ingest helpers for Databricks workspaces.
 
@@ -8,7 +8,7 @@ an ingest stream without hand-building the region-specific Zerobus endpoint.
 Key features:
 
 - Databricks workspace URL/id discovery through
-  [`@dbx-tools/node-databricks`](../databricks).
+  [`@dbx-tools/databricks`](../databricks).
 - Cloud/region-aware Zerobus endpoint construction.
 - Credential lookup with Zerobus-prefixed env vars and Databricks client-id
   fallbacks.
@@ -18,13 +18,13 @@ Key features:
 ## Create A Zerobus SDK Client
 
 ```ts
-import { zerobus } from "@dbx-tools/node-databricks-zerobus";
+import { zerobus } from "@dbx-tools/databricks-zerobus";
 
 const sdk = await zerobus.createSdk();
 ```
 
 `createSdk()` resolves the current Databricks workspace URL/id, detects its cloud
-region through [`@dbx-tools/node-databricks`](../databricks), and constructs the
+region through [`@dbx-tools/databricks`](../databricks), and constructs the
 Zerobus endpoint for that region.
 
 ## Open An Ingest Stream
@@ -52,4 +52,4 @@ client and stream endpoint, then leaves ingestion semantics to Zerobus.
 - `zerobus` - `createSdk()` and `createStream()`.
 
 This package has no AppKit dependency. Workspace and cloud detection are
-delegated to [`@dbx-tools/node-databricks`](../databricks).
+delegated to [`@dbx-tools/databricks`](../databricks).

@@ -36,7 +36,7 @@ export interface EmailToolOptions {
  *
  * @example
  * ```ts
- * import { emailTool } from "@dbx-tools/appkit-email";
+ * import { emailTool } from "@dbx-tools/email";
  * import { createAgent } from "@dbx-tools/appkit-mastra";
  *
  * const support = createAgent({

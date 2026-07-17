@@ -1,4 +1,4 @@
-# @dbx-tools/node-core
+# @dbx-tools/core
 
 Node-only core helpers for process execution and project discovery.
 
@@ -19,7 +19,7 @@ Key features:
 ## Run Commands
 
 ```ts
-import { exec } from "@dbx-tools/node-core";
+import { exec } from "@dbx-tools/core";
 
 const result = await exec.spawn("git", ["status", "--short"], {
   stdout: "capture",
@@ -64,7 +64,7 @@ Prefer explicit argv arrays when possible.
 ## Discover Project Roots
 
 ```ts
-import { project } from "@dbx-tools/node-core";
+import { project } from "@dbx-tools/core";
 
 const root = project.root();
 const name = project.name();

@@ -28,7 +28,7 @@ import {
   type MastraPluginConfig,
   type User,
 } from "./config";
-import { http, log, string, token } from "@dbx-tools/shared-core";
+import { http, log, object, string, token } from "@dbx-tools/shared-core";
 import { extractModelOverride, MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving";
 /**
  * OpenTelemetry's sentinel for "no valid trace" - 32 zero hex chars.
@@ -150,14 +150,15 @@ export class MastraServer extends MastraServerExpress {
    * {@link MASTRA_SCOPES_KEY} for workspace mount gating.
    */
   configureRequestContextScopes(req: express.Request, requestContext: RequestContext) {
-    const scopes = new Set<string>();
-    for (const scope of token.getAccessTokenScopes(req)) {
-      scopes.add(scope);
-    }
-    for (const scope of token.getAccessTokenScopes(req, "authorization")) {
-      scopes.add(scope);
-    }
-    requestContext.set(MASTRA_SCOPES_KEY, [...scopes]);
+    const scopes = [
+      ...object
+        .sequence(
+          token.getAccessTokenScopes(req),
+          token.getAccessTokenScopes(req, "authorization"),
+        )
+        .distinct(),
+    ];
+    requestContext.set(MASTRA_SCOPES_KEY, scopes);
   }
 
   /**

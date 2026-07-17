@@ -15,7 +15,7 @@ Key features:
 - Databricks SDK auth, including profile selection, token refresh, and workspace
   host resolution.
 - Fuzzy model names and model-class requests powered by
-  [`@dbx-tools/node-model`](../../node/model).
+  [`@dbx-tools/model`](../../node/model).
 - Optional local API-key enforcement for loopback safety.
 - One-shot terminal chat mode that injects `OPENAI_BASE_URL`, `OPENAI_API_KEY`,
   and `OPENAI_MODEL` into a child process.
@@ -31,7 +31,7 @@ nothing about AppKit:
 
 - terminal chat clients and IDE integrations that only accept `OPENAI_BASE_URL`;
 - local experiments where Databricks SDK auth should mint the upstream token;
-- loose model names resolved through `@dbx-tools/node-model`;
+- loose model names resolved through `@dbx-tools/model`;
 - test harnesses that need an Express server with Databricks-backed `/v1/*`
   routes.
 
@@ -112,7 +112,7 @@ Use this when tests or local developer tools need a managed proxy lifecycle.
 ## How Requests Flow
 
 1. `backend.DatabricksBackend` reads the OpenAI request body and resolves
-   `body.model` through [`@dbx-tools/node-model`](../../node/model).
+   `body.model` through [`@dbx-tools/model`](../../node/model).
 2. The Databricks SDK supplies a fresh authorization header for the workspace.
 3. The proxy forwards the body to the resolved serving endpoint's
    `/invocations` route.
@@ -130,4 +130,4 @@ the useful work is auth and endpoint resolution.
 - `defaults` - bind host, port, and invocation path constants.
 
 Endpoint ranking and fuzzy matching come from
-[`@dbx-tools/node-model`](../../node/model).
+[`@dbx-tools/model`](../../node/model).

@@ -1,4 +1,4 @@
-import { iterable, predicate, type OneOrMany, type Predicate } from "@dbx-tools/shared-core";
+import { object, predicate, type OneOrMany, type Predicate } from "@dbx-tools/shared-core";
 import { IConstruct } from "constructs";
 import { Project } from "projen";
 import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project";
@@ -23,7 +23,7 @@ function isDBXToolsProject(): Predicate<IConstruct, DBXToolsProject> {
  * unscoped name.
  */
 export function hasName(...patterns: OneOrMany<string>): Predicate<IConstruct, Project> {
-  const matchers = iterable
+  const matchers = object
     .sequence(patterns)
     .map((pattern) => match.toPathMatcher(pattern))
     .cache();
@@ -52,7 +52,7 @@ export function hasTag(...tags: OneOrMany<string>): Predicate<IConstruct, DBXToo
 export function hasPath(...pathPattern: OneOrMany<string>): Predicate<IConstruct, Project> {
   // Match the path itself AND anything beneath it (`p/**`), so `hasPath("workspaces")`
   // scopes to every package under `workspaces/`, not just one sitting exactly there.
-  const matchers = iterable
+  const matchers = object
     .sequence(pathPattern)
     .map((p) => match.toPathMatcher(p, `${p}/**`))
     .cache();

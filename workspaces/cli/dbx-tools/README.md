@@ -71,4 +71,4 @@ should run the `dbxtools` bin.
 - `pnpm` - pnpm/projen command resolution and delegation.
 
 The reusable project classes and generators live in
-[`@dbx-tools/projen`](../../node/projen).
+[`@dbx-tools/projen`](../../../projen).
