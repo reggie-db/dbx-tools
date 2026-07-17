@@ -14,7 +14,7 @@ import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { functionModule, iterable, log, string } from "@dbx-tools/shared-core";
-import { project } from "@dbx-tools/core";
+import { file, project } from "@dbx-tools/core";
 import { parse as parseYamlText } from "yaml";
 import { z } from "zod";
 
@@ -325,7 +325,7 @@ function resolveConfigFile(cwd: string, configFile: string): string | undefined 
   if (isAppEnv()) return undefined;
   for (const rootDir of project.resolveProjectRoots(cwd)) {
     const bundlePath = resolve(rootDir, configFile);
-    if (project.stat(bundlePath)?.isFile()) return bundlePath;
+    if (file.statSync(bundlePath)?.isFile()) return bundlePath;
   }
   return undefined;
 }

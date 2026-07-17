@@ -22,7 +22,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { error, functionModule, hash, http, log, net } from "@dbx-tools/shared-core";
-import { project } from "@dbx-tools/core";
+import { file } from "@dbx-tools/core";
 import { resolveHostIps } from "./net";
 
 const logger = log.logger("cloud");
@@ -279,5 +279,5 @@ async function fetchText(url: string): Promise<string> {
 
 /** Birth time of `path`, or `undefined` when it doesn't exist yet. */
 async function getCreated(path: string): Promise<Date | undefined> {
-  return (await project.stat(path))?.birthtime;
+  return (await file.statSync(path))?.birthtime;
 }
