@@ -220,7 +220,11 @@ pnpm format
 
 ## Documentation
 
-The READMEs are the current package-level source of truth and are shaped so they
-can later be lifted into a generated docs site. The continuation plan in
+The READMEs are the current package-level source of truth. The GitHub Pages site
+is generated from those README files, so package docs are not maintained twice.
+See [`docs/README.md`](docs/README.md) for the local build command and Pages
+workflow.
+
+The continuation plan in
 [`plans/appkit-companion-continuation.md`](plans/appkit-companion-continuation.md)
-tracks the remaining documentation-site and package-follow-up work.
+tracks remaining package-follow-up work.

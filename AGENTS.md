@@ -24,6 +24,8 @@ When you update docs, README positioning, or agent instructions:
   change and push the active branch after validation.
 - Do not mention any predecessor repo or migration source in public docs. Treat
   this repository as the continuation/current product.
+- Do not hand-maintain a second docs tree. The GitHub Pages site is generated
+  from root/package READMEs by `docs/scripts/sync-readmes.mjs`.
 
 ## What this repo is
 
@@ -104,6 +106,17 @@ Package README rules:
   or `@dbx-tools/ui-appkit/vite`; do not use generated package-root namespaces
   unless the package export map exposes them.
 - Do not publicly mention any predecessor repo, branch, or migration source.
+
+Docs site rules:
+
+- Source of truth is `README.md` plus `workspaces/**/README.md`.
+- `docs/scripts/sync-readmes.mjs` generates `.docs-build/site`.
+- `docs/vitepress.config.mts` builds that generated tree with VitePress.
+- `.github/workflows/docs.yml` builds and deploys GitHub Pages from generated
+  README content.
+- Generated files under `.docs-build/` are build artifacts; never commit them.
+- If navigation is wrong, update the generator. If prose is wrong, update the
+  source README.
 
 ## Native AppKit overlap guidance
 
