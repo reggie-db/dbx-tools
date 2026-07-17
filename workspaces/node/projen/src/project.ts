@@ -560,6 +560,11 @@ function initProject(
   project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
   options: DBXToolsProjectOptions,
 ): void {
+  // projen's GithubProject seeds a `# replace this` SampleReadme on every
+  // project. READMEs are hand-written and owned outside projen, so drop the
+  // generated one (and never mark it read-only) - both root and child.
+  project.tryRemoveFile("README.md");
+
   if (project.parent) {
     project.package.file.readonly = true;
     // Only a ROOT configures the workspace; a child just swaps its default-laden

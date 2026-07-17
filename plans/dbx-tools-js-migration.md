@@ -68,6 +68,11 @@ building block at a time, bottom of the dependency tree up.
   `shared-model` already do this.
 - **Prettier:** 2-space, double quotes, semicolons, trailing commas, width 100.
   Run `npx prettier --write` on ported files before committing.
+- **READMEs are hand-written, not generated.** The engine's `initProject` drops
+  projen's `# replace this` SampleReadme component, so a package `README.md` is
+  owned entirely outside projen (never read-only, never overwritten on synth).
+  Write a real one per package (source intro from the `-js` README); do it at the
+  END of a package's port to avoid churn mid-step.
 - **Scope preservation:** `PackageIdentifier.of` names packages from folder
   paths. The leading scope segment goes through `string.toSlug` (round-trips
   `dbx-tools` intact); later path segments through `string.tokenize`. Do NOT
@@ -79,7 +84,7 @@ building block at a time, bottom of the dependency tree up.
 shared            LEAF   ✅ DONE (browser-safe half → shared-core; node half → node-core; log + logger in core)
 sdk-shared        LEAF   ✅ DONE (as shared-sdk-model, via new codegen subsystem)
 model-shared      LEAF   ✅ DONE (as shared-model)
-appkit-email-shared LEAF        (zod contract, feature-specific — not started)
+appkit-email-shared LEAF   ✅ DONE (as shared-email)
 genie-shared      → sdk-shared, shared   ✅ DONE (as shared-genie)
 genie             → genie-shared, shared (+ @databricks/sdk-experimental)   ✅ DONE (as node-genie; SDK glue → node-appkit)
 model             → model-shared, shared   ✅ DONE (as node-model; AppKit glue → node-appkit)
@@ -113,7 +118,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `1a30148` | Split shared-core `value.ts` → `object.ts` (isRecord/toBoolean/NameLike/NonFunctionKeys) + `runtime.ts` (isDatabricksAppEnv). |
 | `2be03d0` | Fold `deepEqual`/`DeepEqualComparator` into `object.ts`; drop `equal.ts`. |
 | `c11c842` | **Port `model` server → `@dbx-tools/node-model`** + reorganize node-appkit into `databricks.ts` (SDK glue: `toContext`/`ContextLike`/`isAppEnv`) / `appkit.ts` (execution context: `WorkspaceClientLike`/`tryGetExecutionContext`/`ensureInitialized`) / `plugin.ts` (plugin lookup: `data`/`instance`/`require`). Moved `isDatabricksAppEnv` out of shared-core `runtime.ts` → `databricks.isAppEnv` (Node-only). See "node-model" below. |
-| (pending commit) | **Port `model-proxy` → `@dbx-tools/model-proxy`** (`workspaces/cli/model-proxy`, `cli`-tagged, ships the `model-proxy` bin). See "model-proxy" below. |
+| `45ab168` | **Port `model-proxy` → `@dbx-tools/model-proxy`** (`workspaces/cli/model-proxy`, `cli`-tagged, ships the `model-proxy` bin). See "model-proxy" below. |
+| (pending commit) | **READMEs are hand-written** (engine no longer seeds projen's `# replace this` SampleReadme; `initProject` drops the README component). Wrote real READMEs for all ported packages. **Port `appkit-email-shared` → `@dbx-tools/shared-email`** (browser-safe zod email contract). |
 
 ### shared-core surface now available
 
@@ -338,6 +344,14 @@ Repoints: `@dbx-tools/model` → node-model (`serving.*` values + flat
 → `log.logger`; `commonUtils.errorMessage` → `error.errorMessage`. `commander`
 comes from the `cli` tag; the SDK is a runtime dep. Ships the `model-proxy` bin;
 `--help` verified. `-js` had no tests here.
+
+## `shared-email` — email wire contract
+
+Ported `-js appkit-email-shared` → `@dbx-tools/shared-email`
+(`workspaces/shared/email`, `shared`-tagged, zod-only, browser-safe). Renamed
+`protocol.ts` → `email.ts` per the naming rule, so the barrel reads
+`email.emailMessageSchema` (types hoisted flat: `EmailMessage`, `EmailResult`,
+`EmailAttachment`, `EmailSenders`). Unblocks the `appkit-email` sender later.
 
 ## Later passes (not yet scoped)
 

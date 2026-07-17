@@ -20,6 +20,7 @@ packages:
   - workspaces/node/model
   - workspaces/node/projen
   - workspaces/shared/core
+  - workspaces/shared/email
   - workspaces/shared/genie
   - workspaces/shared/model
   - workspaces/shared/sdk-model
