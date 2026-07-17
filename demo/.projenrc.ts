@@ -15,13 +15,9 @@
  * model picker, history, and threads - comes from the `@dbx-tools/*` packages;
  * the code here is just wiring.
  */
-import { mixin, project as projectApi, projectPredicate } from "@dbx-tools/projen";
+import { project as projectApi } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
-
-/** A demo package selected by npm-name glob + required tag. */
-const pkg = (name: string, tag: string) =>
-  projectPredicate.hasName(name).and(projectPredicate.hasTag(tag));
 
 const project = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/demo`,
@@ -60,64 +56,62 @@ project.pnpmWorkspace?.addCatalog("react-router-dom", "^7.6.2");
 // pin a real range once the packages are on public npm.
 const dep = (name: string) => `${name}@*`;
 
-project.with(
-  // server/appkit-demo: the AppKit server. `server` tag supplies express + tsx
-  // dev/start; add the feature packages it mounts and their peer runtime deps.
-  mixin.create(pkg("*/server-appkit-demo", "server"), (p) => {
-    p.package.addField("name", "@dbx-tools/demo-appkit-server");
-    // A private runnable app, not an importable library: the entry is
-    // `src/server.ts` (run by the `server` tag's dev/start tasks), so drop the
-    // default root `index.ts` main/exports surface.
-    p.package.addField("main", "src/server.ts");
-    p.package.addField("exports", { "./package.json": "./package.json" });
-    p.addDeps(
-      dep("@dbx-tools/appkit"),
-      dep("@dbx-tools/appkit-mastra"),
-      dep("@dbx-tools/email"),
-      "@databricks/appkit@catalog:",
-      "@databricks/sdk-experimental@catalog:",
-      "@mastra/core@catalog:",
-      "@mastra/ai-sdk@catalog:",
-      "@mastra/express@catalog:",
-      "@mastra/fastembed@catalog:",
-      "@mastra/mcp@catalog:",
-      "@mastra/memory@catalog:",
-      "@mastra/observability@catalog:",
-      "@mastra/otel-bridge@catalog:",
-      "@mastra/pg@catalog:",
-      "@opentelemetry/api@catalog:",
-      "marked@catalog:",
-      "zod@catalog:",
-      "pg@^8.22.0",
-      "nodemailer@^7.0.13",
-      "juice@^12.1.1",
-      "fuse.js@^7.4.2",
-    );
-    // The `@dbx-tools/*` packages ship TypeScript source (consumed via their
-    // `source`/`.ts` entry), so type-checking the server also checks their
-    // imported source - which needs these ambient `@types` present here.
-    p.addDevDeps(
-      "@types/nodemailer@^7",
-      "@types/pg@^8",
-      "@types/json-schema@^7",
-    );
-  }),
+// server/appkit-demo: the AppKit server. `server` tag supplies express + tsx
+// dev/start; add the feature packages it mounts and their peer runtime deps.
+projectApi.applyToProjects(project, { identifierName: "server-appkit-demo", tags: "server" }, (p) => {
+  p.package.addField("name", "@dbx-tools/demo-appkit-server");
+  // A private runnable app, not an importable library: the entry is
+  // `src/server.ts` (run by the `server` tag's dev/start tasks), so drop the
+  // default root `index.ts` main/exports surface.
+  p.package.addField("main", "src/server.ts");
+  p.package.addField("exports", { "./package.json": "./package.json" });
+  p.addDeps(
+    dep("@dbx-tools/appkit"),
+    dep("@dbx-tools/appkit-mastra"),
+    dep("@dbx-tools/email"),
+    "@databricks/appkit@catalog:",
+    "@databricks/sdk-experimental@catalog:",
+    "@mastra/core@catalog:",
+    "@mastra/ai-sdk@catalog:",
+    "@mastra/express@catalog:",
+    "@mastra/fastembed@catalog:",
+    "@mastra/mcp@catalog:",
+    "@mastra/memory@catalog:",
+    "@mastra/observability@catalog:",
+    "@mastra/otel-bridge@catalog:",
+    "@mastra/pg@catalog:",
+    "@opentelemetry/api@catalog:",
+    "marked@catalog:",
+    "zod@catalog:",
+    "pg@^8.22.0",
+    "nodemailer@^7.0.13",
+    "juice@^12.1.1",
+    "fuse.js@^7.4.2",
+  );
+  // The `@dbx-tools/*` packages ship TypeScript source (consumed via their
+  // `source`/`.ts` entry), so type-checking the server also checks their
+  // imported source - which needs these ambient `@types` present here.
+  p.addDevDeps(
+    "@types/nodemailer@^7",
+    "@types/pg@^8",
+    "@types/json-schema@^7",
+  );
+});
 
-  // app/appkit-demo: the React client. `app` tag supplies react + vite +
-  // `vite.config.ts`; add the UI packages and Tailwind (loaded via the
-  // `vite.config.override.js`).
-  mixin.create(pkg("*/app-appkit-demo", "app"), (p) => {
-    p.package.addField("name", "@dbx-tools/demo-appkit-app");
-    p.addDeps(
-      dep("@dbx-tools/ui-appkit"),
-      dep("@dbx-tools/ui-mastra"),
-      "react-router-dom@catalog:",
-    );
-    p.addDevDeps("@tailwindcss/vite@catalog:", "tailwindcss@catalog:");
-    // `@databricks/appkit-ui`'s stylesheet `@import`s `tw-animate-css`, so the
-    // app (which owns the Tailwind build) must provide it.
-    p.addDeps("tw-animate-css@catalog:");
-  }),
-);
+// app/appkit-demo: the React client. `app` tag supplies react + vite +
+// `vite.config.ts`; add the UI packages and Tailwind (loaded via the
+// `vite.config.override.js`).
+projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "app" }, (p) => {
+  p.package.addField("name", "@dbx-tools/demo-appkit-app");
+  p.addDeps(
+    dep("@dbx-tools/ui-appkit"),
+    dep("@dbx-tools/ui-mastra"),
+    "react-router-dom@catalog:",
+  );
+  p.addDevDeps("@tailwindcss/vite@catalog:", "tailwindcss@catalog:");
+  // `@databricks/appkit-ui`'s stylesheet `@import`s `tw-animate-css`, so the
+  // app (which owns the Tailwind build) must provide it.
+  p.addDeps("tw-animate-css@catalog:");
+});
 
 project.synth();

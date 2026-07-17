@@ -8,7 +8,7 @@
  * reserved for the npm `@scope/` in package names.)
  *
  * Mixin factories live in {@link ./mixin}; package predicates live in {@link ./project}
- * ({@link projectPredicate.hasTag}, {@link projectPredicate.hasName}).
+ * ({@link projectPredicate.hasTag}, {@link projectPredicate.hasIdentifierPackageName}).
  * The per-tag table is {@link WORKSPACE_TAG_MIXINS}. Apply with the constructs-native `project.with(...)`
  * across the subtree; the root applies built-in tag mixins during construction and
  * callers add their own afterward.

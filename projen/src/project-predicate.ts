@@ -1,36 +1,84 @@
-import { object, predicate, type OneOrMany, type Predicate } from "@dbx-tools/shared-core";
+import { object, predicate, Sequence, type OneOrMany, type Predicate } from "@dbx-tools/shared-core";
 import { IConstruct } from "constructs";
 import { Project } from "projen";
 import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project";
 import { toPosix } from "./workspace";
 import { relative } from "path";
-import { match } from "@dbx-tools/path";
+import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
+import { project } from "..";
 
 /** Guard: the construct is a projen {@link Project} - the base every builder here starts from. */
-function isProject(): Predicate<IConstruct, Project> {
+export function isProject(): Predicate<IConstruct, Project> {
   return predicate.create((c: IConstruct): c is Project => c instanceof Project);
 }
 
-function isDBXToolsProject(): Predicate<IConstruct, DBXToolsProject> {
+/** Guard: the construct is a {@link DBXToolsProject} (a DBXTools Node or TypeScript project). */
+export function isDBXToolsProject(): Predicate<IConstruct, DBXToolsProject> {
   return isProject().and(
     (project): project is DBXToolsProject =>
       project instanceof DBXToolsNodeProject || project instanceof DBXToolsTypeScriptProject,
   );
 }
+
 /**
- * Matches projects whose npm name matches any glob in `patterns` (e.g. `*\/shared-core`,
- * `@dbx-tools/*`, `shared-*`): each glob is tested against both the full `@scope/name` and the
- * unscoped name.
+ * Compile each glob/predicate input to a {@link PathMatchPredicate} once, cached
+ * so the returned {@link Sequence} is re-iterable across every project tested by
+ * the resulting predicate.
  */
-export function hasName(...patterns: OneOrMany<string>): Predicate<IConstruct, Project> {
-  const matchers = object
-    .sequence(patterns)
-    .map((pattern) => match.toPathMatcher(pattern))
+function projectMatchers(...inputs: OneOrMany<PathMatchInput>): Sequence<PathMatchPredicate> {
+  return object
+    .sequence(inputs)
+    .map((input) => match.toPathMatcher(input))
     .cache();
-  return isProject().and((project) => {
-    return matchers.some((matcher) => matcher(project.name));
+}
+
+
+
+
+
+/**
+ * Matches projects whose raw projen {@link Project.name} matches every glob in
+ * `patterns` (e.g. `@dbx-tools/ui-mastra`, `*-mastra`). Tests `project.name`
+ * verbatim, without normalizing through {@link PackageIdentifier} - use the
+ * `hasIdentifier*` variants to match the parsed scope/name instead.
+ */
+export function hasName(...patterns: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
+  const matchers = projectMatchers(...patterns);
+  return isProject().and((p) => matchers.every((matcher) => matcher(p.name)));
+}
+
+/**
+ * Matches projects whose parsed npm name matches every glob in `patterns` (e.g.
+ * `*\/shared-core`, `@dbx-tools/*`): tested against the full `@scope/name` from
+ * {@link PackageIdentifier}.
+ */
+export function hasIdentifierPackageName(...patterns: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
+  const matchers = projectMatchers(...patterns);
+  return isProject().and((p) => {
+    const packageName = project.identifier(p).packageName;
+    return matchers.every((matcher) => matcher(packageName));
   });
 }
+
+/** Matches projects whose parsed unscoped name (from {@link PackageIdentifier}) matches every glob. */
+export function hasIdentifierName(...patterns: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
+  const matchers = projectMatchers(...patterns);
+  return isProject().and((p) => {
+    const name = project.identifier(p).name;
+    return matchers.every((matcher) => matcher(name));
+  });
+}
+
+/** Matches projects whose parsed npm scope (from {@link PackageIdentifier}) matches every glob. */
+export function hasIdentifierScope(...patterns: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
+  const matchers = projectMatchers(...patterns);
+  return isProject().and((p) => {
+    const scope = project.identifier(p).scope;
+    return scope && matchers.every((matcher) => matcher(scope));
+  });
+}
+
+
 
 /**
  * Matches DBXTools packages carrying every listed tag (`dbxToolsConfig.tags`), narrowing
@@ -39,23 +87,21 @@ export function hasName(...patterns: OneOrMany<string>): Predicate<IConstruct, P
  * as any name/path filter (or last when chaining) - a later non-tag `.and` re-widens to
  * {@link Project} and drops the narrowing.
  */
-export function hasTag(...tags: OneOrMany<string>): Predicate<IConstruct, DBXToolsProject> {
+export function hasTag(...tags: OneOrMany<PathMatchInput>): Predicate<IConstruct, DBXToolsProject> {
+  const matchers = projectMatchers(...tags);
   return isDBXToolsProject().and((project) =>
-    tags.every((tag) => project.dbxToolsConfig.tags.includes(tag)),
+    matchers.every((matcher) => project.dbxToolsConfig.tags.some((tag) => matcher(tag))),
   );
 }
 
 /**
- * Matches projects whose folder (relative to the tree root) is at/under any `prefix` - the usual
- * base for scoping mixins to one workspace root (e.g. `predicate.inRelPath("workspaces")`).
+ * Matches projects whose folder (relative to the tree root) matches any glob in
+ * `pathPattern`. Globs are matched verbatim, so scope to a subtree with an
+ * explicit pattern - e.g. `hasPath("workspaces/**")` for every package under
+ * `workspaces/`.
  */
-export function hasPath(...pathPattern: OneOrMany<string>): Predicate<IConstruct, Project> {
-  // Match the path itself AND anything beneath it (`p/**`), so `hasPath("workspaces")`
-  // scopes to every package under `workspaces/`, not just one sitting exactly there.
-  const matchers = object
-    .sequence(pathPattern)
-    .map((p) => match.toPathMatcher(p, `${p}/**`))
-    .cache();
+export function hasPath(...pathPattern: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
+  const matchers = projectMatchers(...pathPattern);
   return isProject().and((project) => {
     const relativePath = toPosix(relative(project.root.outdir, project.outdir));
     return matchers.some((matcher) => matcher(relativePath));

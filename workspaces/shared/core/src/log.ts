@@ -48,8 +48,15 @@ interface BunLike {
 const globalProcess = (globalThis as { process?: ProcessLike }).process;
 const globalBun = (globalThis as { Bun?: BunLike }).Bun;
 
-/** Node `process.stderr` when writable, else `undefined` (stable for the process). */
-const globalProcessStdErr =
+/**
+ * Node `process.stderr` when writable, else `undefined` (stable for the
+ * process). Typed loosely (`any`) because it is handed to consola's
+ * `ctx.options.stdout` (a `WriteStream`) and to the console fallback's
+ * `.write`, neither of which our structural {@link ProcessLike} shape satisfies
+ * nominally.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const globalProcessStdErr: any =
   globalProcess && typeof globalProcess.stderr?.write === "function"
     ? globalProcess.stderr
     : undefined;

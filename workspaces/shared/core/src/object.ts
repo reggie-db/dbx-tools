@@ -56,6 +56,9 @@ type GroupValue<T, P> = P extends (value: any, ...rest: any[]) => value is infer
 /** A map of group name -> predicate, as accepted by {@link group}. */
 type GroupPredicates<T> = Record<string, (value: T, index: number) => boolean>;
 
+
+
+
 /**
  * Type guard for a {@link Collection}: an {@link Array}, {@link Set}, or
  * {@link Map}. Narrows `value` so its element/value type is treated as `T`.
@@ -519,6 +522,10 @@ export function at<T>(index: number, ...sources: readonly Source<T>[]): T | unde
     if (i++ === index) return value;
   }
   return undefined;
+}
+
+export function toOneOrMany<T>(input: (T | OneOrMany<T>)): OneOrMany<T> {
+  return Array.isArray(input) ? input : [input];
 }
 
 /**

@@ -6,8 +6,8 @@
  * {@link DBXToolsNodeProject} (monorepo root) and {@link DBXToolsTypeScriptProject}
  * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
  */
-import { string, type OneOrMany } from "@dbx-tools/shared-core";
-import { ignore, match } from "@dbx-tools/path";
+import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
+import { ignore, match, PathMatchInput } from "@dbx-tools/path";
 import { project as coreProject } from "@dbx-tools/core";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -31,6 +31,8 @@ import {
   scanPackages,
   toPosix,
 } from "./workspace";
+import { mixin, projectPredicate } from "..";
+import { IConstruct } from "constructs";
 
 /**
  * The dbx-tools project surface, backed by projen's Node toolchain. A single
@@ -887,4 +889,106 @@ function* projects(project: Project): Generator<Project> {
   for (const sub of project.subprojects) {
     yield* projects(sub);
   }
+}
+
+
+/**
+ * Filters selecting which projects an {@link applyToProjects} call runs its
+ * callback(s) on. All provided filters are AND-ed; every string value is a glob
+ * (or list of globs) matched by the corresponding {@link projectPredicate}
+ * helper - prefix a glob with `!` to negate it. Omitted filters impose no
+ * constraint.
+ */
+export interface ApplyToProjectsOptions {
+  /**
+   * Include non-DBXTools projects (plain projen `Project`s) in the selection.
+   * Defaults to `false` - only {@link DBXToolsProject}s match, so the callback
+   * receives the richer type.
+   */
+  includeNonDBXToolsProjects?: boolean;
+  /** Include tree ROOT projects (those with no parent). Defaults to `false` (children only). */
+  includeRoots?: boolean;
+  /** Match the raw projen {@link Project.name} verbatim ({@link projectPredicate.hasName}). */
+  name?: PathMatchInput | OneOrMany<PathMatchInput>;
+  /** Match the parsed full npm name `@scope/name` ({@link projectPredicate.hasIdentifierPackageName}). */
+  identifierPackageName?: PathMatchInput | OneOrMany<PathMatchInput>;
+  /** Match the parsed npm scope ({@link projectPredicate.hasIdentifierScope}). */
+  identifierScope?: PathMatchInput | OneOrMany<PathMatchInput>;
+  /** Match the parsed unscoped name ({@link projectPredicate.hasIdentifierName}). */
+  identifierName?: PathMatchInput | OneOrMany<PathMatchInput>;
+  /** Match every listed tag on `dbxToolsConfig.tags` ({@link projectPredicate.hasTag}). */
+  tags?: PathMatchInput | OneOrMany<PathMatchInput>;
+  /** Match the folder path relative to the tree root ({@link projectPredicate.hasPath}). */
+  path?: PathMatchInput | OneOrMany<PathMatchInput>;
+}
+
+/** {@link ApplyToProjectsOptions} for the default DBXTools-only selection (callback gets {@link DBXToolsProject}). */
+type ApplyToDBXToolsProjectsOptions =
+  Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
+    includeNonDBXToolsProjects?: false;
+  };
+
+/** {@link ApplyToProjectsOptions} opting into all projen projects (callback gets the base {@link Project}). */
+type ApplyToAllProjectsOptions =
+  Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
+    includeNonDBXToolsProjects: true;
+  };
+
+/**
+ * Run one or more callbacks against every project in `construct`'s subtree that
+ * matches the given {@link ApplyToProjectsOptions} filters - the ergonomic
+ * front-end to authoring a {@link mixin} by hand. Internally builds one AND-ed
+ * predicate from the options and applies it via `construct.with(...)`.
+ *
+ * Call with just callback(s) to match every DBXTools child project, or pass an
+ * options object first to narrow by name/scope/tag/path. With
+ * `includeNonDBXToolsProjects: true` the callbacks receive the base
+ * {@link Project}; otherwise they receive the narrowed {@link DBXToolsProject}.
+ *
+ * @example
+ * // Add a dep to one package selected by unscoped name + tag:
+ * applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) => {
+ *   p.addDeps("echarts@catalog:");
+ * });
+ * @example
+ * // Every workspace child except shared-core (negated glob):
+ * applyToProjects(root, { path: "workspaces/**", identifierName: "!shared-core" }, (p) => {
+ *   p.addDeps("@dbx-tools/shared-core@workspace:*");
+ * });
+ */
+export function applyToProjects(construct: IConstruct,
+  ...args:
+    | [ApplyToDBXToolsProjectsOptions, ...OneOrMany<(project: DBXToolsProject) => void>]
+    | OneOrMany<(project: DBXToolsProject) => void>
+): void
+
+export function applyToProjects(construct: IConstruct,
+  ...args:
+    | [ApplyToAllProjectsOptions, ...OneOrMany<(project: Project) => void>]
+): void
+
+export function applyToProjects<P extends Project>(construct: IConstruct,
+  ...args:
+    | [ApplyToProjectsOptions, ...OneOrMany<(project: P) => void>]
+    | OneOrMany<(project: P) => void>
+): void {
+  const [first, ...rest] = args;
+  const hasOptions = typeof first !== "function";
+  const options = hasOptions ? first as ApplyToProjectsOptions : undefined
+  const callbacks = (
+    hasOptions ? rest : args
+  ) as OneOrMany<(project: Project) => void>;
+  let pred = projectPredicate.isProject()
+  if (!options?.includeNonDBXToolsProjects) pred = pred.and(projectPredicate.isDBXToolsProject());
+  if (!options?.includeRoots) pred = pred.and((p) => p.parent != null);
+  if (options?.identifierPackageName) pred = pred.and(projectPredicate.hasIdentifierPackageName(...object.toOneOrMany(options.identifierPackageName)));
+  if (options?.name) pred = pred.and(projectPredicate.hasName(...object.toOneOrMany(options.name)));
+  if (options?.identifierScope) pred = pred.and(projectPredicate.hasIdentifierScope(...object.toOneOrMany(options.identifierScope)));
+  if (options?.identifierName) pred = pred.and(projectPredicate.hasIdentifierName(...object.toOneOrMany(options.identifierName)));
+  if (options?.tags) pred = pred.and(projectPredicate.hasTag(...object.toOneOrMany(options.tags)));
+  if (options?.path) pred = pred.and(projectPredicate.hasPath(...object.toOneOrMany(options.path)));
+  const projectMixin = mixin.create(pred, (p) => {
+    callbacks.forEach((callback) => callback(p as Project));
+  })
+  construct.with(projectMixin);
 }
