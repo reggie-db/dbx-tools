@@ -287,6 +287,11 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     licensed: false,
     entrypoint: "",
     depsUpgrade: false,
+    // Bins are declared explicitly via `p.package.addBin(...)`. projen's default
+    // auto-detection scans the `bin/` dir and adds every EXECUTABLE file keyed by
+    // its filename, so an executable `bin/dbxtools.ts` becomes a spurious second
+    // bin named `dbxtools.ts` (breaking `pnpm dlx` with ERR_PNPM_DLX_MULTIPLE_BINS).
+    autoDetectBin: false,
     peerDependencyOptions: { pinnedDevDependency: false },
     addPackageManagerToDevEngines: false,
     devDeps: ["@types/node@^24.6.0"],

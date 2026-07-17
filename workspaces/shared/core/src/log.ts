@@ -129,7 +129,7 @@ const createConsolaLoggerFactory = memoize(
     const consolaDisabled = toBoolean(globalProcess?.env?.LOG_CONSOLA_DISABLED);
   if (!consolaDisabled) {
     try {
-      const { consola, createConsola, LogLevels } = await import("consola");
+      const { consola, createConsola, LogLevels } = await import(/* @vite-ignore */ "consola");
       const defaultOptions = consola.options;
       const createConsolaOptions = {
         ...consola.options,
@@ -160,7 +160,13 @@ const createConsolaLoggerFactory = memoize(
         return name ? consolaLogger.withTag(name) : consolaLogger;
       };
     } catch (error) {
-      console.trace("Consola is not available, fallback to console", error);
+      // consola is an OPTIONAL peer - not having it installed is the EXPECTED
+      // path (the module degrades to the console fallback), so this is not an
+      // error. Note it only at debug level, and without a stack trace (the
+      // message, not `console.trace`, so a missing optional dep stays quiet).
+      if (isLevelEnabled("debug")) {
+        console.debug("consola not available; using console fallback:", String(error));
+      }
     }
   }
   return undefined;
@@ -179,7 +185,9 @@ async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<Log
   // Indirect specifier so this browser-safe module doesn't statically pull in
   // node types: `node:util` is optional (the JSON fallback covers its absence).
   const nodeUtil = "node:util";
-  const utils: { inspect?: any } | undefined = await import(nodeUtil).catch(() => undefined);
+  const utils: { inspect?: any } | undefined = await import(/* @vite-ignore */ nodeUtil).catch(
+    () => undefined,
+  );
   const bunInspect =
     globalBun !== undefined && !toBoolean(globalBun.env?.LOG_BUN_CONSOLE_DISABLED)
       ? globalBun.inspect
