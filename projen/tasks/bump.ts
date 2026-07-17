@@ -1,7 +1,8 @@
 #!/usr/bin/env -S npx tsx
 /**
- * `projen bump` - compute the next release version, then (by default) commit,
- * tag, and push it. Pushing the tag is what triggers the release workflow.
+ * `projen bump` - synth, compute the next release version, then (by default)
+ * commit, tag, and push it. Pushing the tag is what triggers the release
+ * workflow.
  *
  * The next version is derived from the HIGHER of:
  *   - the latest published git tag matching `<prefix><semver>` (fetched from
@@ -10,10 +11,11 @@
  * then incremented by `--level` (patch | minor | major; default patch).
  *
  * Flags (all default ON; negate with the `--no-` form, per commander):
+ *   --synth   / --no-synth     run `projen` (synth) first so the tree is current
  *   --version / --no-version   write the bumped version into package.json
- *   --commit  / --no-commit    commit the version change
+ *   --commit  / --no-commit    commit the release (staged with `git add -A`)
  *   --tag     / --no-tag       create the `<prefix><version>` git tag
- *   --push    / --no-push      push the branch + tag to origin
+ *   --push    / --no-push      push the CURRENT branch + tag to origin
  *
  * `--publish` / `--no-publish` is an alias for `--push` (pushing the tag is
  * what publishes). The tag prefix comes from `--prefix` (default `v`).
@@ -80,8 +82,9 @@ program
   .addOption(new Option("-l, --level <level>", "semver increment").choices([...LEVELS]).default("patch"))
   .option("--prefix <prefix>", "git tag prefix", "v")
   // Declared in the `--no-` form so commander creates a boolean that defaults to
-  // `true` and is turned off by `--no-version` / `--no-commit` / ... (the
-  // positive `--version` etc. also work and are no-ops on the default).
+  // `true` and is turned off by `--no-synth` / `--no-version` / ... (the
+  // positive `--synth` etc. also work and are no-ops on the default).
+  .option("--no-synth", "do not run `projen` (synth) before bumping")
   .option("--no-version", "do not write the bumped version into package.json")
   .option("--no-commit", "do not commit the version change")
   .option("--no-tag", "do not create the git tag")
@@ -92,6 +95,7 @@ program
     (opts: {
       level: Level;
       prefix: string;
+      synth: boolean;
       version: boolean;
       commit: boolean;
       tag: boolean;
@@ -100,6 +104,19 @@ program
     }) => {
       const pkgPath = resolve(process.cwd(), "package.json");
       if (!existsSync(pkgPath)) throw new Error(`no package.json in ${process.cwd()}`);
+
+      // Synth first so the release commit captures an up-to-date tree (generated
+      // manifests, workspace file, tasks, ...) rather than a stale one.
+      if (opts.synth) {
+        logger.info("synthesizing (projen)");
+        exec.spawnSync("pnpm", ["exec", "projen"], {
+          cwd: process.cwd(),
+          stdout: "inherit",
+          stderr: "inherit",
+          stdin: "ignore",
+          check: true,
+        });
+      }
 
       // Base = higher of the latest remote tag and the local package version.
       const local = readPackageVersion(pkgPath);
@@ -122,9 +139,13 @@ program
         logger.info(`wrote version ${version} to package.json`);
       }
 
-      if (opts.commit && opts.version) {
-        git(["add", "package.json"]);
-        git(["commit", "-m", `chore(release): ${version}`]);
+      if (opts.commit) {
+        // Stage the whole tree so the release commit captures the version bump
+        // plus anything synth regenerated. Skip the commit when nothing changed.
+        git(["add", "-A"]);
+        const staged = git(["diff", "--cached", "--name-only"], true);
+        if (staged) git(["commit", "-m", `chore(release): ${version}`]);
+        else logger.info("nothing to commit");
       }
 
       if (opts.tag) {
