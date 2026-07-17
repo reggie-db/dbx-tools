@@ -9,6 +9,28 @@ import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
 import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project";
 
+/**
+ * A standalone project that lives in a repo SUBDIRECTORY but is NOT a member of
+ * this pnpm workspace (e.g. the `@dbx-tools/projen` engine in `projen/`), yet
+ * still needs a release workflow. GitHub Actions only runs workflows from the
+ * REPO-ROOT `.github/`, so the workflow for such a project is authored here,
+ * alongside the root's own `release` workflow, under a distinct name + tag
+ * prefix so the two never collide. Tag-driven and pack-based: push
+ * `<tagPrefix>1.2.3` and the single package in `directory` is published at 1.2.3
+ * via `npm pack` + `npm publish`.
+ */
+export interface StandaloneRelease {
+  /** Workflow name (and `.github/workflows/<name>.yml` file). E.g. `projen-release`. */
+  readonly name: string;
+  /** Repo-relative directory of the standalone project. E.g. `projen`. */
+  readonly directory: string;
+  /**
+   * Git tag prefix that triggers this release, disjoint from the root's `v*`
+   * (e.g. `projen-v`). The pushed tag IS the published version.
+   */
+  readonly tagPrefix: string;
+}
+
 /** Options for {@link DBXToolsRelease}. */
 export interface DBXToolsReleaseOptions {
   /**
@@ -17,6 +39,13 @@ export interface DBXToolsReleaseOptions {
    * in the same repo on disjoint tag namespaces. Defaults to `v`.
    */
   readonly tagPrefix?: string;
+  /**
+   * Standalone in-repo projects (NOT workspace members) that each get their own
+   * tag-driven release workflow authored alongside the root's - see
+   * {@link StandaloneRelease}. Authored only when the project has a GitHub
+   * component. Defaults to none.
+   */
+  readonly standaloneReleases?: readonly StandaloneRelease[];
 }
 
 /**
@@ -39,10 +68,12 @@ export interface DBXToolsReleaseOptions {
  */
 export class DBXToolsRelease extends Component {
   private readonly tagPrefix: string;
+  private readonly standaloneReleases: readonly StandaloneRelease[];
 
   constructor(project: DBXToolsNodeProject, options: DBXToolsReleaseOptions = {}) {
     super(project);
     this.tagPrefix = options.tagPrefix ?? "v";
+    this.standaloneReleases = options.standaloneReleases ?? [];
   }
 
   public override preSynthesize(): void {
@@ -56,9 +87,14 @@ export class DBXToolsRelease extends Component {
       },
     });
 
-    // Author the tag-driven publish workflow only when GitHub is enabled - the
-    // workflow lives in `.github/`, which requires projen's GitHub component.
-    if (project.github) this.authorReleaseWorkflow(project);
+    // Author the tag-driven publish workflows only when GitHub is enabled - they
+    // live in `.github/`, which requires projen's GitHub component.
+    if (project.github) {
+      this.authorReleaseWorkflow(project);
+      for (const standalone of this.standaloneReleases) {
+        this.authorStandaloneReleaseWorkflow(project, standalone);
+      }
+    }
   }
 
   /**
@@ -105,6 +141,53 @@ export class DBXToolsRelease extends Component {
             NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
             npm_config_provenance: "true",
           },
+        },
+      ],
+    });
+  }
+
+  /**
+   * Emit a {@link StandaloneRelease}'s workflow: push `<prefix>1.2.3` and the
+   * single package in `directory` (a non-workspace-member project) is published
+   * at 1.2.3 via `npm pack` + `npm publish`. Its `package.json` is
+   * projen-generated read-only, so it is unlocked before `npm version` rewrites
+   * it. No bump math - the pushed tag IS the published version.
+   */
+  private authorStandaloneReleaseWorkflow(
+    project: DBXToolsNodeProject,
+    { name, directory, tagPrefix }: StandaloneRelease,
+  ): void {
+    const workflow = new GithubWorkflow(project.github!, name);
+    workflow.on({ push: { tags: [`${tagPrefix}*`] } });
+    workflow.addJob("publish", {
+      runsOn: ["ubuntu-latest"],
+      // `id-token: write` lets npm mint the OIDC token for provenance attestation.
+      permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+      defaults: { run: { workingDirectory: directory } },
+      env: { CI: "true" },
+      steps: [
+        { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
+        { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: "10.33.0" } },
+        {
+          name: "Setup Node.js",
+          uses: "actions/setup-node@v6",
+          with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
+        },
+        { name: "Install", run: "pnpm install --no-frozen-lockfile" },
+        // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. package.json
+        // is projen-generated read-only, so unlock it before `npm version` writes.
+        {
+          name: "Set version from tag",
+          run: [
+            "chmod u+w package.json",
+            `npm version "\${GITHUB_REF_NAME#${tagPrefix}}" --no-git-tag-version --allow-same-version`,
+          ].join("\n"),
+        },
+        { name: "Pack", run: "pnpm pack --pack-destination dist/js" },
+        {
+          name: "Publish to npm",
+          run: "npm publish dist/js/*.tgz --access public",
+          env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
         },
       ],
     });

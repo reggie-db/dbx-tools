@@ -16,8 +16,6 @@
  * root task first (see below); a normal consumer constructs, `with(...)`s, synths.
  */
 import { JsonFile, Project } from "projen";
-import { GithubWorkflow } from "projen/lib/github";
-import { JobPermission } from "projen/lib/github/workflows-model";
 import { mixin, project, project as projectApi } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
@@ -49,6 +47,10 @@ const root = new projectApi.DBXToolsNodeProject({
   // below - the same model as the standalone `projen/` project.
   release: false,
   releaseTagPrefix: "v",
+  // The standalone `@dbx-tools/projen` engine lives in `projen/` (not a
+  // workspace member) and releases on its own `projen-v*` tag prefix; the engine
+  // authors its `projen-release` workflow alongside the root's `release`.
+  standaloneReleases: [{ name: "projen-release", directory: "projen", tagPrefix: "projen-v" }],
   workflowPackageCache: true,
   depsUpgrade: false,
   // `@dbx-tools/projen` (the engine) lives in the standalone `projen/`
@@ -449,56 +451,10 @@ root.addTask("dbxtools", {
   receiveArgs: true,
 });
 
-// ---------------------------------------------------------------------------
-// Release workflow for the standalone `@dbx-tools/projen` engine (in `projen/`)
-// ---------------------------------------------------------------------------
-// The engine is its own project with its own projen `release` machinery, but
-// GitHub Actions only runs workflows from the REPO-ROOT `.github/`. So the
-// engine's release workflow is emitted HERE, alongside the root's own
-// `release.yml`, under a distinct name + tag prefix (`projen-v*`) so the two
-// never collide.
-//
-// Tag-driven, like the root: the pushed tag IS the version. Push
-// `projen-v1.2.3` and the workflow publishes `@dbx-tools/projen@1.2.3` (it sets
-// package.json to the tag's version, then packs + publishes) - no bump math, so
-// the published version always matches the tag.
-const projenRelease = new GithubWorkflow(root.github!, "projen-release");
-projenRelease.on({ push: { tags: ["projen-v*"] } });
-projenRelease.addJob("publish", {
-  runsOn: ["ubuntu-latest"],
-  // `id-token: write` lets npm mint the OIDC token for provenance attestation.
-  permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
-  defaults: { run: { workingDirectory: "projen" } },
-  env: { CI: "true" },
-  steps: [
-    { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
-    { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: "10.33.0" } },
-    {
-      name: "Setup Node.js",
-      uses: "actions/setup-node@v6",
-      with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
-    },
-    { name: "Install", run: "pnpm install --no-frozen-lockfile" },
-    // The pushed tag is the version: `projen-v1.2.3` -> `1.2.3`. package.json is
-    // projen-generated read-only, so unlock it before `npm version` rewrites it.
-    {
-      name: "Set version from tag",
-      run: [
-        "chmod u+w package.json",
-        'npm version "${GITHUB_REF_NAME#projen-v}" --no-git-tag-version --allow-same-version',
-      ].join("\n"),
-    },
-    { name: "Pack", run: "pnpm pack --pack-destination dist/js" },
-    {
-      name: "Publish to npm",
-      run: "npm publish dist/js/*.tgz --access public",
-      env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
-    },
-  ],
-});
-
-// The tag-driven `release` workflow for the `@dbx-tools/*` workspace packages
-// (push `v1.2.3` -> publish every package at 1.2.3, provenance enabled in CI) is
-// authored by the engine's `DBXToolsRelease` component - see `projen/src/release.ts`.
+// Both tag-driven release workflows are authored by the engine's
+// `DBXToolsRelease` component (see `projen/src/release.ts`):
+//   - `release` (`v*`): publishes every `@dbx-tools/*` workspace package.
+//   - `projen-release` (`projen-v*`): publishes the standalone `@dbx-tools/projen`
+//     engine in `projen/`, declared via the `standaloneReleases` root option above.
 
 root.synth();

@@ -27,7 +27,7 @@ export type { ConstructsMixin } from "./src/mixin";
 export type { ModuleExport } from "./src/module-exports";
 export type { Catalog, PnpmWorkspaceConfig, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace";
 export type { DBXToolsProject, DBXToolsProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project";
-export type { DBXToolsReleaseOptions } from "./src/release";
+export type { DBXToolsReleaseOptions, StandaloneRelease } from "./src/release";
 export type { WorkspaceTag } from "./src/tags";
 export type { ViteConfigFileOptions } from "./src/vite";
 export type { IgnoreGroupOptions } from "./src/watch";

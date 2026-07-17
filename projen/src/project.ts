@@ -18,7 +18,7 @@ import { generateCodegen } from "./codegen";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config";
 import { resolvePkgRoot } from "./engine-root";
 import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
-import { DBXToolsRelease } from "./release";
+import { DBXToolsRelease, type StandaloneRelease } from "./release";
 import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, type WorkspaceTag } from "./tags";
 import { DBXToolsRootTsconfig } from "./tsconfig";
 import { ViteConfigFile } from "./vite";
@@ -371,6 +371,14 @@ export interface DBXToolsProjectOptions
    * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
    */
   readonly syncResynthPaths?: readonly string[];
+  /**
+   * Standalone in-repo projects (NOT workspace members) that each get their own
+   * tag-driven release workflow authored alongside the root's `release`
+   * workflow - see {@link StandaloneRelease}. Use for a project that lives in a
+   * repo subdirectory but releases on its own tag prefix (e.g. the
+   * `@dbx-tools/projen` engine in `projen/`, tagged `projen-v*`).
+   */
+  readonly standaloneReleases?: readonly StandaloneRelease[];
 }
 
 /** Options for {@link DBXToolsTypeScriptProject} (a package, or a compiling root). */
@@ -806,6 +814,7 @@ function initProject(
   // authors. Independent of projen's own `release` component.
   new DBXToolsRelease(project as DBXToolsNodeProject, {
     tagPrefix: options.releaseTagPrefix,
+    standaloneReleases: options.standaloneReleases,
   });
 }
 
