@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "@dbx-tools/projen",
-      "version": "workspace:*",
+      "version": "*",
       "type": "build"
     },
     {

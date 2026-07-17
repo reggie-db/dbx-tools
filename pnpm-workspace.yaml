@@ -13,7 +13,6 @@ packages:
   - workspaces/node/genie
   - workspaces/node/model
   - workspaces/node/path
-  - workspaces/node/projen
   - workspaces/shared/core
   - workspaces/shared/email
   - workspaces/shared/genie

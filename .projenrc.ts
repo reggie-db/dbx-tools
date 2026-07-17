@@ -53,7 +53,10 @@ const project = new projectApi.DBXToolsNodeProject({
   releaseToNpm: true,
   workflowPackageCache: true,
   depsUpgrade: false,
-  devDeps: ["concurrently", "@dbx-tools/shared-core@workspace:*", "@dbx-tools/projen@workspace:*"],
+  // `@dbx-tools/projen` (the engine) lives in the standalone `dev-projen/`
+  // project, not this workspace; the repo `.pnpmfile.cjs` rewrites it to a
+  // `link:./dev-projen`. It stays a plain dep here so synth can resolve it.
+  devDeps: ["concurrently", "@dbx-tools/shared-core@workspace:*", "@dbx-tools/projen@*"],
 });
 
 // ---------------------------------------------------------------------------
@@ -334,38 +337,9 @@ project.with(
     p.addDeps("zod@catalog:", "@dbx-tools/shared-sdk-model@workspace:*");
   }),
 
-  // node-projen: the projen engine, renamed to @dbx-tools/projen. Lives under
-  // workspaces/node/ (it uses node: builtins, tsx, child_process), so the `node`
-  // tag auto-applies. Carries the engine's toolchain deps, exports its subpath
-  // entrypoints, and compiles index.ts + tasks/ outside src/.
-  mixin.create(pkg("*/node-projen", "node"), (p) => {
-    p.package.addField("name", projectApi.identifier(p.root).withName("projen").packageName);
-    p.addDeps(
-      "projen",
-      "constructs",
-      "openapi-typescript",
-      "tsoa",
-      "ts-to-zod",
-      "yaml",
-      "tsx",
-      "p-memoize",
-      "commander",
-      "@clack/prompts",
-      "consola",
-      "@typescript-eslint/typescript-estree@^8",
-      "oxc-parser@^0.90.0",
-      "typescript@catalog:",
-      "is-identifier@^1",
-      "@dbx-tools/node-core@workspace:*",
-      "@dbx-tools/node-path@workspace:*",
-    );
-    p.package.addField("exports", {
-      ".": "./index.ts",
-      "./engine-root": "./src/engine-root.ts",
-      "./package.json": "./package.json",
-    });
-    applyRootDirTsconfig(p, "index.ts", "tasks/**/*.ts");
-  }),
+  // The projen engine (`@dbx-tools/projen`) is no longer a member of this
+  // workspace - it lives in the standalone `dev-projen/` project and is linked
+  // in via the repo `.pnpmfile.cjs`. So there is no engine mixin here.
 
   // cli-dbx-tools: the published CLI, renamed to the bare scope @dbx-tools/cli.
   // Ships the `dbxtools` bin and compiles index.ts + bin/ outside src/.
