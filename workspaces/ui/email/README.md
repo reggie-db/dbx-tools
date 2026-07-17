@@ -8,6 +8,17 @@ the same message contract as [`@dbx-tools/shared-email`](../../shared/email).
 Server-side sending and AppKit routes live in
 [`@dbx-tools/node-email`](../../node/email).
 
+Key features:
+
+- Approval card for suspended `send_email` tool calls.
+- Read-only draft preview for review queues, chat transcripts, and test pages.
+- Standalone compose form that emits shared `EmailMessage` payloads.
+- Compact Markdown body renderer shared across preview and compose surfaces.
+- Recipient parsing, address display, and attachment-label helpers that mirror
+  server expectations.
+- Styles wired to the AppKit UI/Tailwind foundation so host apps do not need a
+  separate email component theme.
+
 ## Add The Styles
 
 ```css
@@ -37,6 +48,10 @@ const draft = email.emailMessageSchema.parse(toolCall.args);
 `EmailApprovalCard` is the chat-facing component for the `send_email` tool. It
 renders the draft fields, Markdown body, attachment names, and Approve/Deny
 actions while leaving tool-call state and transport decisions to the host app.
+
+Wire `onApprove` and `onDeny` to the chat framework's tool-result mechanism.
+The component deliberately does not call the email API itself; the server-side
+tool resumes only after the host app records the user's decision.
 
 ## Preview A Draft Inline
 

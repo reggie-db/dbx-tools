@@ -39,10 +39,6 @@
       "type": "runtime"
     },
     {
-      "name": "barrelsby",
-      "type": "runtime"
-    },
-    {
       "name": "commander",
       "type": "runtime"
     },

@@ -1,15 +1,14 @@
-# dbx-tools-js → dbx-tools migration plan
+# AppKit companion continuation plan
 
-Folding the `dbx-tools-js` monorepo (Bun + tsdown + changesets AppKit add-ons)
-into this repo (`dbx-tools`, a projen-driven pnpm monorepo generator), one
-building block at a time, bottom of the dependency tree up.
+Continuing the AppKit companion package work inside this projen-driven pnpm
+monorepo. The target shape is a set of focused `@dbx-tools/*` packages that
+augment Databricks AppKit while keeping runtime boundaries clear:
+browser-safe contracts in `workspaces/shared`, Node/AppKit integrations in
+`workspaces/node`, CLIs in `workspaces/cli`, and React/Vite foundations in
+`workspaces/ui`.
 
-- **Session for handoff:** `3cc495b5-0b97-4cc2-89b9-ba31f9f945d7`
-  (resume with `claude --resume 3cc495b5-0b97-4cc2-89b9-ba31f9f945d7`, or pick
-  up on another local agent using this id).
-- **Working branch:** `fold-js-shared-into-core`
-- **Source repo:** `~/Projects/github-reggie-db/dbx-tools-js`
-- **Target repo:** `~/Projects/github-reggie-db/dbx-tools`
+This file tracks completed package work, current conventions, and follow-up
+items needed to make the repo easier to publish, document, and maintain.
 
 ## Guiding principles (from the user)
 
@@ -19,9 +18,9 @@ building block at a time, bottom of the dependency tree up.
    auto-discovers it, generates `package.json`/`tsconfig`/barrel. Per-package
    deps/config go through a mixin in `.projenrc.ts`.
 2. **Copy piece by piece, limit new dependencies, omit what's not needed.** A
-   lot of `-js` code was project-structuring (its `cli` package: workspace
-   walk, package.json writing, release scaffolding) — that's superseded by
-   projen and must NOT be copied.
+   lot of historical code was project-structuring (workspace walk,
+   package.json writing, release scaffolding) — that's superseded by projen and
+   must NOT be copied.
 3. **Ask before design decisions.** Package boundaries, where something lands,
    new deps, naming — surface these rather than guessing.
 4. **Reuse ported utilities.** When a helper lands (e.g. `string.toSlug`), use
@@ -34,8 +33,8 @@ building block at a time, bottom of the dependency tree up.
    "no longer used"). No `@deprecated` shims — just remove, or ask.
 7. **Generated files are read-only + carry a do-not-edit header.** Written into
    `src/` so barrelsby picks them up like any other module.
-8. **Always commit AND push every edit** (including in-flight parallel edits).
-   Branch off `main` first (already done: `fold-js-shared-into-core`).
+8. **Always commit AND push every edit** when working in a commit-oriented
+   session.
 
 ## Conventions in the target repo
 
@@ -71,16 +70,16 @@ building block at a time, bottom of the dependency tree up.
 - **Prettier:** 2-space, double quotes, semicolons, trailing commas, width 100.
   Run `npx prettier --write` on ported files before committing.
 - **READMEs are hand-written, not generated.** The engine's `initProject` drops
-  projen's `# replace this` SampleReadme component, so a package `README.md` is
+  projen's `sample README placeholder` SampleReadme component, so a package `README.md` is
   owned entirely outside projen (never read-only, never overwritten on synth).
-  Write a real one per package (source intro from the `-js` README); do it at the
-  END of a package's port to avoid churn mid-step.
+  Write a real one per package from current behavior in code and adjacent package
+  READMEs; do it at the end of a package pass to avoid churn mid-step.
 - **Scope preservation:** `PackageIdentifier.of` names packages from folder
   paths. The leading scope segment goes through `string.toSlug` (round-trips
   `dbx-tools` intact); later path segments through `string.tokenize`. Do NOT
   reintroduce a path-preserving `toSlugParts`.
 
-## `-js` internal dependency tree (bottom-up order)
+## Package dependency tree (bottom-up order)
 
 ```
 shared            LEAF   ✅ DONE (browser-safe half → shared-core; node half → node-core; log + logger in core)
@@ -103,33 +102,33 @@ zerobus           → shared (+ @databricks/zerobus-ingest-sdk)   ✅ DONE (as n
 cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 ```
 
-## Completed work (commits on `fold-js-shared-into-core`)
+## Completed work
 
-| Commit | What |
-|---|---|
-| `383e1b4` | Port `-js shared` helpers → shared-core (`async`, `equal`, `error`, `hash`, `value`, `string`). Skipped `memoize`/`iterable` (already present). `poll`'s `distinct` uses a new dependency-free `deepEqual` (with optional comparator). |
-| `cb57991`, `9730812` | Remove duplicate slug logic; package naming now uses shared-core `string.tokenize`/`toSlug`. Deleted `toSlugParts`/`toNameParts`. |
-| `8a69baa` | Fix shared mixin self-dependency + negated-guard narrowing in `predicate.ts`. |
-| `96b5357` | Port `model-shared` → `@dbx-tools/shared-model` (agnostic `[shared]`, zod). Tidy `.projenrc.ts` (extract `pkg()` + `applyRootDirTsconfig()` helpers, section headers, drop stray `console.log`). |
-| `cf4a75b` | Rename shared-model `protocol.ts` → `model.ts`; force-add its test. |
-| `8c94f10` | **Codegen subsystem + `shared-sdk-model`** — see below. |
-| `6901ffa` | **Codegen on synth (drop task/watch) + port `genie-shared` → `@dbx-tools/shared-genie`** — see below. |
-| `0d8e6c1` | **Browser-safe core split**: `exec`/`project` → new `@dbx-tools/node-core`; shared-core now agnostic (`WebWorker` lib); file-scan retagged `node`; AppKit + sdk-experimental hardcoded in `DEFAULT_CATALOG`. See "Resolved: browser-safe core split" below. |
-| `f64806a` | **Barrel type-hoisting + `log` in core + `node-appkit` + port `genie` server → `@dbx-tools/node-genie`.** See "Barrel type-hoisting", "node-appkit", and "node-genie" below. |
-| `0616cd7` | **Move `file-scan` under `workspaces/node/`**: `@dbx-tools/shared-file-scan` → `@dbx-tools/node-file-scan` (path now matches its `node` nature). |
-| `f660b77` | **shared-core is a universal base dep** (added to every workspace package via the blanket mixin, any tag) + **move `projen` engine under `workspaces/node/`** (`@dbx-tools/projen`, `node`-tagged by path). Fixed stale `@dbx-tools/shared-projen` name refs in the CLI bootstrap + engine-root (published name is `@dbx-tools/projen`). |
-| `1a30148` | Split shared-core `value.ts` → `object.ts` (isRecord/toBoolean/NameLike/NonFunctionKeys) + `runtime.ts` (isDatabricksAppEnv). |
-| `2be03d0` | Fold `deepEqual`/`DeepEqualComparator` into `object.ts`; drop `equal.ts`. |
-| `c11c842` | **Port `model` server → `@dbx-tools/node-model`** + reorganize node-appkit into `databricks.ts` (SDK glue: `toContext`/`ContextLike`/`isAppEnv`) / `appkit.ts` (execution context: `WorkspaceClientLike`/`tryGetExecutionContext`/`ensureInitialized`) / `plugin.ts` (plugin lookup: `data`/`instance`/`require`). Moved `isDatabricksAppEnv` out of shared-core `runtime.ts` → `databricks.isAppEnv` (Node-only). See "node-model" below. |
-| `45ab168` | **Port `model-proxy` → `@dbx-tools/model-proxy`** (`workspaces/cli/model-proxy`, `cli`-tagged, ships the `model-proxy` bin). See "model-proxy" below. |
-| `e7065e1` | **READMEs are hand-written** (engine no longer seeds projen's `# replace this` SampleReadme; `initProject` drops the README component). Wrote real READMEs for all ported packages. **Port `appkit-email-shared` → `@dbx-tools/shared-email`** (browser-safe zod email contract). |
-| `867d4b3` | **Config subsystem + port `appkit-config`.** Added `config` (app.yaml/bundle/env resolution) to node-appkit and `name`/`resolveProjectRoots`/`parseGitRemote`/`stat` to node-core's `project`. (appkit-config first landed as its own package here.) |
-| `ea50ded` | **Fold `appkit-config` into `node-appkit`** (it added no deps beyond `@databricks/appkit`, already present) + extract the env CLI to **`@dbx-tools/appkit-env`** (`cli/appkit-env`, `appkit-env` bin). Port `net` (URL/email/IP helpers) into shared-core. **Port `appkit-email` → `@dbx-tools/node-email`** (SMTP/outbox, markdown->HTML, sender policy, `send_email` Mastra tool, AppKit `email` plugin). |
-| `7d05a94` | **New `@dbx-tools/node-databricks`** (generic Databricks/cloud infra, no AppKit requirement: workspace URL/id + cloud provider/region + node DNS) + **port `zerobus` → `@dbx-tools/node-databricks-zerobus`**. See "node-databricks" below. |
-| `8ca913f` | **Port `appkit-mastra-shared` → `@dbx-tools/shared-mastra`** (browser-safe wire contract; `protocol.ts` → `wire.ts`). |
-| `9e60173` | **Port `appkit-mastra` → `@dbx-tools/node-appkit-mastra`** (the full AppKit Mastra agent layer, one package). Added `net`/`http`/`token`/`error.errorContext` to shared-core along the way. **Server-side migration complete.** See "shared-mastra + node-appkit-mastra" below. |
-| `3b4fbe7` | **projen engine uses shared-core `log`**; deleted its own `log.ts`. Added `success`/`start` to shared-core `Logger`; moved `pluralize` → shared-core `string`. |
-| (pending commit) | **Rename `node-file-scan` → `@dbx-tools/node-path`** (`workspaces/node/path`). It's the path toolkit (find/match/ignore/scan/watch), not just file matching. Only the projen engine consumed it. |
+| Commit               | What                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `383e1b4`            | Port `shared` helpers → shared-core (`async`, `equal`, `error`, `hash`, `value`, `string`). Skipped `memoize`/`iterable` (already present). `poll`'s `distinct` uses a new dependency-free `deepEqual` (with optional comparator).                                                                                                                                                                                                         |
+| `cb57991`, `9730812` | Remove duplicate slug logic; package naming now uses shared-core `string.tokenize`/`toSlug`. Deleted `toSlugParts`/`toNameParts`.                                                                                                                                                                                                                                                                                                          |
+| `8a69baa`            | Fix shared mixin self-dependency + negated-guard narrowing in `predicate.ts`.                                                                                                                                                                                                                                                                                                                                                              |
+| `96b5357`            | Port `model-shared` → `@dbx-tools/shared-model` (agnostic `[shared]`, zod). Tidy `.projenrc.ts` (extract `pkg()` + `applyRootDirTsconfig()` helpers, section headers, drop stray `console.log`).                                                                                                                                                                                                                                           |
+| `cf4a75b`            | Rename shared-model `protocol.ts` → `model.ts`; force-add its test.                                                                                                                                                                                                                                                                                                                                                                        |
+| `8c94f10`            | **Codegen subsystem + `shared-sdk-model`** — see below.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `6901ffa`            | **Codegen on synth (drop task/watch) + port `genie-shared` → `@dbx-tools/shared-genie`** — see below.                                                                                                                                                                                                                                                                                                                                      |
+| `0d8e6c1`            | **Browser-safe core split**: `exec`/`project` → new `@dbx-tools/node-core`; shared-core now agnostic (`WebWorker` lib); file-scan retagged `node`; AppKit + sdk-experimental hardcoded in `DEFAULT_CATALOG`. See "Resolved: browser-safe core split" below.                                                                                                                                                                                |
+| `f64806a`            | **Barrel type-hoisting + `log` in core + `node-appkit` + port `genie` server → `@dbx-tools/node-genie`.** See "Barrel type-hoisting", "node-appkit", and "node-genie" below.                                                                                                                                                                                                                                                               |
+| `0616cd7`            | **Move the path toolkit under `workspaces/node/`**. The current package is `@dbx-tools/node-path`, covering find, match, ignore, scan, and watch helpers.                                                                                                                                                                                                                                                                                  |
+| `f660b77`            | **shared-core is a universal base dep** (added to every workspace package via the blanket mixin, any tag) + **move `projen` engine under `workspaces/node/`** (`@dbx-tools/projen`, `node`-tagged by path).                                                                                                                                                                                                                                |
+| `1a30148`            | Split shared-core `value.ts` → `object.ts` (isRecord/toBoolean/NameLike/NonFunctionKeys) + `runtime.ts` (isDatabricksAppEnv).                                                                                                                                                                                                                                                                                                              |
+| `2be03d0`            | Fold `deepEqual`/`DeepEqualComparator` into `object.ts`; drop `equal.ts`.                                                                                                                                                                                                                                                                                                                                                                  |
+| `c11c842`            | **Port `model` server → `@dbx-tools/node-model`** + reorganize node-appkit into `databricks.ts` (SDK glue: `toContext`/`ContextLike`/`isAppEnv`) / `appkit.ts` (execution context: `WorkspaceClientLike`/`tryGetExecutionContext`/`ensureInitialized`) / `plugin.ts` (plugin lookup: `data`/`instance`/`require`). Moved `isDatabricksAppEnv` out of shared-core `runtime.ts` → `databricks.isAppEnv` (Node-only). See "node-model" below. |
+| `45ab168`            | **Port `model-proxy` → `@dbx-tools/model-proxy`** (`workspaces/cli/model-proxy`, `cli`-tagged, ships the `model-proxy` bin). See "model-proxy" below.                                                                                                                                                                                                                                                                                      |
+| `e7065e1`            | **READMEs are hand-written** (engine no longer seeds projen's `sample README placeholder` SampleReadme; `initProject` drops the README component). Wrote real READMEs for all ported packages. **Port `appkit-email-shared` → `@dbx-tools/shared-email`** (browser-safe zod email contract).                                                                                                                                               |
+| `867d4b3`            | **Config subsystem + port `appkit-config`.** Added `config` (app.yaml/bundle/env resolution) to node-appkit and `name`/`resolveProjectRoots`/`parseGitRemote`/`stat` to node-core's `project`. (appkit-config first landed as its own package here.)                                                                                                                                                                                       |
+| `ea50ded`            | **Fold `appkit-config` into `node-appkit`** (it added no deps beyond `@databricks/appkit`, already present) + extract the env CLI to **`@dbx-tools/appkit-env`** (`cli/appkit-env`, `appkit-env` bin). Port `net` (URL/email/IP helpers) into shared-core. **Port `appkit-email` → `@dbx-tools/node-email`** (SMTP/outbox, markdown->HTML, sender policy, `send_email` Mastra tool, AppKit `email` plugin).                                |
+| `7d05a94`            | **New `@dbx-tools/node-databricks`** (generic Databricks/cloud infra, no AppKit requirement: workspace URL/id + cloud provider/region + node DNS) + **port `zerobus` → `@dbx-tools/node-databricks-zerobus`**. See "node-databricks" below.                                                                                                                                                                                                |
+| `8ca913f`            | **Port `appkit-mastra-shared` → `@dbx-tools/shared-mastra`** (browser-safe wire contract; `protocol.ts` → `wire.ts`).                                                                                                                                                                                                                                                                                                                      |
+| `9e60173`            | **Port `appkit-mastra` → `@dbx-tools/node-appkit-mastra`** (the full AppKit Mastra agent layer, one package). Added `net`/`http`/`token`/`error.errorContext` to shared-core along the way. **Server-side migration complete.** See "shared-mastra + node-appkit-mastra" below.                                                                                                                                                            |
+| `3b4fbe7`            | **projen engine uses shared-core `log`**; deleted its own `log.ts`. Added `success`/`start` to shared-core `Logger`; moved `pluralize` → shared-core `string`.                                                                                                                                                                                                                                                                             |
+| (pending commit)     | **Rename `node-file-scan` → `@dbx-tools/node-path`** (`workspaces/node/path`). It's the path toolkit (find/match/ignore/scan/watch), not just file matching. Only the projen engine consumed it.                                                                                                                                                                                                                                           |
 
 ### shared-core surface now available
 
@@ -148,16 +147,17 @@ ipInCidr), `http`, `token`, `error.errorContext`, plus `functionModule`
 shared-core `log`** (its own `log.ts` was deleted); `pluralize` moved to
 shared-core `string`.
 
-`-js`'s `commonUtils.*` / `stringUtils.*` map onto these: e.g.
+Historical `commonUtils.*` / `stringUtils.*` helpers map onto these: e.g.
 `commonUtils.errorMessage` → `error.errorMessage`,
 `stringUtils.tokenizeWithOptions` → `string.tokenizeWithOptions`,
 `commonUtils.poll` → `async.poll`, `commonUtils.fnvHash` → `hash.fnvHash`.
 
 ## Codegen subsystem (commit `8c94f10`; refined to synth-time in the pending commit)
 
-Ported `-js`'s `dbxtools codegen` into the projen engine.
+Codegen now lives in the projen engine.
 
 Files:
+
 - `workspaces/node/projen/src/codegen.ts` — `generateCodegen()`. Scans
   `workspacePackages()` for a `package.json` `codegen.inputs` field, runs each
   `.d.ts` through `stripImports` (TS compiler API drops imports, rewrites
@@ -200,31 +200,31 @@ manual stub is needed going forward.
 - `src/dashboards.ts` is fully generated (read-only). Barrel:
   `export * as dashboards`. Consumers use
   `dashboards.genieMessageSchema` etc.
-- Replaces `-js`'s `sdk-shared`. The 5 schemas `genie-shared` needs are all
+- Replaces the older SDK schema package. The 5 schemas `genie-shared` needs are all
   present: `genieSpaceSchema`, `messageStatusSchema`, `genieQueryAttachmentSchema`,
   `genieAttachmentSchema`, `genieMessageSchema` (+ `MessageStatus` type).
 
 ## `shared-genie` (NEW — pending commit)
 
-Ported `-js genie-shared` → `@dbx-tools/shared-genie`, tag `[shared]`
+Ported `original genie-shared` → `@dbx-tools/shared-genie`, tag `[shared]`
 (browser-safe zod contracts + event vocabulary + detectors). Server-side `genie`
 (chat/space driver) is a separate, larger follow-up — see NEXT.
 
-- `src/genie-model.ts` ← `-js genie-shared/src/protocol.ts`. Renamed per the
+- `src/genie-model.ts` ← `original genie-shared/src/protocol.ts`. Renamed per the
   naming rule so the barrel reads `genieModel.GenieMessageSchema`. SDK schemas
   imported via **option (a)**: `import { dashboards } from
-  "@dbx-tools/shared-sdk-model"`, then destructure-alias the 5 it extends
+"@dbx-tools/shared-sdk-model"`, then destructure-alias the 5 it extends
   (`const { genieMessageSchema: SDKGenieMessageSchema, ... } = dashboards`), and
   `export type MessageStatus = dashboards.MessageStatus`. Keeps the generated
   sdk-model barrel clean (no hand-written flat re-export).
-- `src/event.ts` ← `-js genie-shared/src/event.ts`. Import repointed
+- `src/event.ts` ← `original genie-shared/src/event.ts`. Import repointed
   `./protocol.js` → `./genie-model`.
 - Shared helper repoint: `stringUtils.tokenizeWithOptions` →
   `string.tokenizeWithOptions` (`import { string } from "@dbx-tools/shared-core"`).
 - Mixin: `pkg("*/shared-genie", "shared")` adds `zod@catalog:` +
   `@dbx-tools/shared-sdk-model@workspace:*` (shared-core is free via the blanket
   shared mixin).
-- **Test:** ported `-js genie/test/event.test.ts` → `test/event.test.ts` on
+- **Test:** ported `original genie/test/event.test.ts` → `test/event.test.ts` on
   `node:test` + `node:assert/strict` (force-added past the `.test.*` gitignore).
   38 tests pass. One porting nuance: `node:assert` `deepEqual` is strict about
   present-but-`undefined` keys where Bun's `toEqual` ignored them, so exact
@@ -249,12 +249,9 @@ core, not by references:
   in `tags.ts`) so isomorphic code type-checks its web-platform globals without
   DOM or node types. The `node` tag's lib was bumped ES2020 → ES2022 (Node 18+;
   `exec` uses `Array.at`/`Error.cause`).
-- **file-scan** was retagged `node` (it shells out + uses chokidar/console) — it
-  had been mis-typed `shared` and silently failing whole-program compile. In the
-  pending commit it also MOVED to `workspaces/node/file-scan` and was renamed
-  `@dbx-tools/shared-file-scan` → `@dbx-tools/node-file-scan` so its path matches
-  its `node` nature (the `node` tag auto-applies; only the projen engine consumes
-  it, so the repoint was contained).
+- **Path tooling** was retagged `node` because it shells out and uses
+  chokidar/console. The current package is `@dbx-tools/node-path`; only the
+  projen engine consumes it, so the repoint was contained.
 
 Result: `shared-core` and `shared-genie` (and every package) compile clean;
 38/38 genie tests pass. AppKit + sdk-experimental are now hardcoded engine
@@ -290,7 +287,7 @@ for value calls.
 
 ## `log` in shared-core (NEW — pending commit)
 
-Ported `-js shared/log.ts` → `shared-core/src/log.ts` — the one logger the whole
+Ported `shared/log.ts` → `shared-core/src/log.ts` — the one logger the whole
 monorepo shares (`log.logger("tag")`, `log.isLevelEnabled`). Browser-safe:
 `process` / `Bun` / `window` reached through `globalThis` and guarded; consola
 and `node:util` load lazily (console fallback covers their absence). consola is
@@ -317,7 +314,7 @@ Node-side Databricks + AppKit helpers. Three modules with clear scopes:
 
 ## `node-genie` — server chat/space driver
 
-Ported `-js genie` → `@dbx-tools/node-genie` (`workspaces/node/genie`,
+Ported `original genie` → `@dbx-tools/node-genie` (`workspaces/node/genie`,
 `node`-tagged): `chat.ts` (`genieChat` low-level poll stream + `genieEventChat`
 event stream) and `space.ts` (`getGenieSpace` + `genieSampleQuestions`). Import
 repoints: `logUtils.logger` → `log.logger`; `apiUtils.toContext`/`ContextLike` →
@@ -325,44 +322,45 @@ node-appkit `databricks.*`; `commonUtils.poll`/`PollContext` → `async.poll` /
 flat `PollContext`; `commonUtils.errorMessage` → `error.errorMessage`;
 `stringUtils.firstNonEmpty` → `string.firstNonEmpty`; genie-shared values via the
 `genieModel`/`event` namespaces, types flat. `@databricks/appkit` is an OPTIONAL
-peer (lazy-imported; env-var auth fallback). The `-js` `chat.ts`/`poll-chat.ts`
+peer (lazy-imported; env-var auth fallback). The `chat.ts` / `poll-chat.ts`
 runtime smoke tests were NOT ported (they hit a live workspace).
 
 ## `node-model` — server model resolver
 
-Ported `-js model` → `@dbx-tools/node-model` (`workspaces/node/model`,
+Ported `original model` → `@dbx-tools/node-model` (`workspaces/node/model`,
 `node`-tagged): `classes.ts` (chat-class ordering + `parseModelClass` /
 `classesAtOrBelow`), `fallback.ts` (offline static floor), `serving.ts` (cached
 `/serving-endpoints` listing via AppKit `CacheManager` + `fuse.js` fuzzy resolve
-+ embedding-dimension probe), `resolve.ts` (`rankModels` / `resolveModel` /
-`selectModel`). Repoints: `commonUtils.errorMessage` → `error.errorMessage`;
-`logUtils.logger` → `log.logger`; `stringUtils.tokenizeWithOptions` →
-`string.tokenizeWithOptions`; `appkitUtils.WorkspaceClientLike` →
-node-appkit `appkit.WorkspaceClientLike`; shared-model values via `model.*` /
-`classify.*` namespaces, types flat. New dep `fuse.js`; `@databricks/appkit` is a
-RUNTIME dep here (CacheManager is used directly, not lazy). Ported the two pure
-tests (`classes.test.ts` + `resolve.test.ts`, 25 cases) to `node:test`;
-force-added past the `.test.*` gitignore.
+
+- embedding-dimension probe), `resolve.ts` (`rankModels` / `resolveModel` /
+  `selectModel`). Repoints: `commonUtils.errorMessage` → `error.errorMessage`;
+  `logUtils.logger` → `log.logger`; `stringUtils.tokenizeWithOptions` →
+  `string.tokenizeWithOptions`; `appkitUtils.WorkspaceClientLike` →
+  node-appkit `appkit.WorkspaceClientLike`; shared-model values via `model.*` /
+  `classify.*` namespaces, types flat. New dep `fuse.js`; `@databricks/appkit` is a
+  RUNTIME dep here (CacheManager is used directly, not lazy). Ported the two pure
+  tests (`classes.test.ts` + `resolve.test.ts`, 25 cases) to `node:test`;
+  force-added past the `.test.*` gitignore.
 
 ## `model-proxy` — local OpenAI-compatible proxy (CLI)
 
-Ported `-js model-proxy` → `@dbx-tools/model-proxy` (`workspaces/cli/model-proxy`,
+Ported `original model-proxy` → `@dbx-tools/model-proxy` (`workspaces/cli/model-proxy`,
 `cli`-tagged — the first non-engine CLI package). A loopback OpenAI-compatible
 proxy in front of Databricks Model Serving: `backend.ts` (default-auth
 WorkspaceClient + fuzzy resolve via node-model + per-request auth headers),
 `server.ts` (thin `node:http` pass-through to `<endpoint>/invocations`, streams
 SSE/JSON back), `defaults.ts`, and `cli.ts` (commander `serve`/`chat`/`models`/
-`resolve`). Split the `-js` all-in-one `cli.ts` into an exported `buildProgram`
+`resolve`). Split the all-in-one `cli.ts` into an exported `buildProgram`
 /`runCli` in `src/cli.ts` + a thin `bin/model-proxy.ts` (mirrors cli-dbx-tools).
 Repoints: `@dbx-tools/model` → node-model (`serving.*` values + flat
 `ResolvedModel`; `ServingEndpointSummary` from shared-model); `logUtils.logger`
 → `log.logger`; `commonUtils.errorMessage` → `error.errorMessage`. `commander`
 comes from the `cli` tag; the SDK is a runtime dep. Ships the `model-proxy` bin;
-`--help` verified. `-js` had no tests here.
+`--help` verified. No tests existed for this surface yet.
 
 ## `shared-email` — email wire contract
 
-Ported `-js appkit-email-shared` → `@dbx-tools/shared-email`
+Ported `original appkit-email-shared` → `@dbx-tools/shared-email`
 (`workspaces/shared/email`, `shared`-tagged, zod-only, browser-safe). Renamed
 `protocol.ts` → `email.ts` per the naming rule, so the barrel reads
 `email.emailMessageSchema` (types hoisted flat: `EmailMessage`, `EmailResult`,
@@ -370,7 +368,7 @@ Ported `-js appkit-email-shared` → `@dbx-tools/shared-email`
 
 ## `appkit-config` — folded into `node-appkit`
 
-Ported `-js appkit-config` and folded it into **node-appkit** (it added no deps
+Ported `original appkit-config` and folded it into **node-appkit** (it added no deps
 beyond `@databricks/appkit`, which node-appkit already carries — per the "don't
 split a package that adds no deps" rule). The auto-config surface is now the
 `createApp` module of node-appkit (`create-app`, `lakebase-resolver`,
@@ -384,6 +382,7 @@ The env CLI was extracted to its own `cli` package **`@dbx-tools/appkit-env`**
 that runs `createApp.autoConfigure` and prints the env diff as shell/windows/json.
 
 The config-resolution subsystem it needed landed as:
+
 - **node-appkit `config.ts`** — `resolveConfigValue` + `app.yaml`/bundle-validate
   readers + env flatten (zod + `yaml`; `Bun.YAML.parse` → the `yaml` package).
 - **node-core `project.ts`** — added `name` / `resolveProjectRoots` /
@@ -396,14 +395,14 @@ Repoints: `configUtils.resolveConfigValue` → sibling `./config`
 
 ## `node-email` — server-side email add-on
 
-Ported `-js appkit-email` → `@dbx-tools/node-email` (`workspaces/node/email`,
+Ported `original appkit-email` → `@dbx-tools/node-email` (`workspaces/node/email`,
 `node`-tagged). SMTP transport (nodemailer) with a local file-outbox fallback,
 markdown→HTML rendering (`marked` + `juice` inlining), on-behalf-of sender
 derivation + allow-list policy, the approval-gated `send_email` Mastra tool, and
 the AppKit `email` plugin. Consumes the browser-safe
 [`shared-email`](#shared-email--email-wire-contract) contract (`email.*`
 namespace for schema values, types flat). New shared-core module `net` (ported
-from `-js net.browser.ts`) supplies `net.parseEmails` for the allow-list. New
+from `original net.browser.ts`) supplies `net.parseEmails` for the allow-list. New
 catalog pins: `marked`, `@mastra/core`. AppKit + Mastra are runtime deps.
 
 ## `node-databricks` + `node-databricks-zerobus`
@@ -413,13 +412,13 @@ holds generic Databricks/cloud infra that needs the SDK / DNS / cloud metadata
 but NOT the AppKit plugin runtime: `workspace` (getWorkspaceUrl/Id from the
 AppKit exec ctx when present, else a default `WorkspaceClient`, else env),
 `cloud` (provider/region detection via the AWS/GCP/Azure IP-range feeds +
-24h disk cache; ported from `-js cloud.ts`), `net` (node DNS `resolveHostIps` +
+24h disk cache; ported from `original cloud.ts`), `net` (node DNS `resolveHostIps` +
 `getPublicIp` over shared-core's browser-safe `net`), and `http`
-(`createFetchError` + header/cookie readers). Repoints the `-js commonUtils`/
+(`createFetchError` + header/cookie readers). Repoints the `original commonUtils`/
 `netUtils`/`logUtils` surface onto shared-core (`error`/`hash`/`functionModule`/
 `log`/`net`) and node-core (`project.stat`).
 
-**`@dbx-tools/node-databricks-zerobus`** (ported from `-js zerobus`) is the thin
+**`@dbx-tools/node-databricks-zerobus`** (ported from `original zerobus`) is the thin
 Zerobus ingest wrapper (`createSdk` region-aware endpoint + `createStream`). It
 uses the Zerobus SDK directly and node-databricks for region resolution - no
 AppKit dep (per the "keep a package's heavy/specific dep out of node-appkit"
@@ -434,8 +433,8 @@ plugin/server/agents/model/genie/memory/mcp/observability/chart/history/threads/
 …). Kept as ONE package: nearly every module needs `@mastra/core` and the plugin
 composes memory/mcp/observability/server together, so the heavy deps (`pg`,
 `fastembed`, `mcp`, `observability`, `express`, `otel`) can't be gated apart.
-Named `node-appkit-mastra` (not `node-mastra`) because it's the AppKit-specific
-composition. Repoints the full `-js shared` util surface onto shared-core
+Named `node-appkit-mastra` because it's the AppKit-specific composition.
+Repoints the full shared util surface onto shared-core
 (`error`/`hash`/`functionModule`/`async`/`string`/`log`/`net`/`http`/`token`),
 node-appkit (`appkit`/`plugin`/`databricks`), node-core (`project`), and the new
 `node-genie`/`node-model` packages (values namespaced, types flat). New catalog
@@ -443,13 +442,36 @@ pins for the `@mastra/*` + `@opentelemetry/api` stack. Also landed in shared-cor
 along the way: `net` (URL/email/IP), `http` (headers/cookies/fetch-error),
 `token` (JWT scopes), and `error.errorContext` (HTTP-status/message classifier).
 
-**Server-side migration is complete.** Every non-UI `-js` package is ported.
+**Server-side migration is complete.** Every non-UI package is in place.
 
 ## Later passes (not yet scoped)
 
-- **`-ui` React packages** (`appkit-ui`, `appkit-email-ui`, `appkit-mastra-ui`) —
+- **React UI packages** (`ui-appkit`, email UI, Mastra UI) —
   need a `ui`-tagged React setup; deliberately skipped in the server-side pass.
-  These are the last remaining `-js` packages; scope each individually.
+  Scope each package individually and keep shared contracts in `workspaces/shared`.
+- **Documentation site** — turn the package READMEs into a generated docs site
+  with one source of truth. Keep package READMEs as the canonical package pages.
+  Add front matter or a lightweight manifest only if the static-site generator
+  needs nav metadata. Generate package navigation from `pnpm-workspace.yaml` and
+  `package.json` names/tags instead of maintaining a second package list. Include
+  an `llms.txt`/`llms-full.txt` output for agent-readable package docs. Preserve
+  AppKit-style page shape: introduction, prerequisites or install, quick start,
+  key features, configuration or runtime behavior, programmatic access,
+  module/API map, adjacent packages, and examples.
+- **Docs lint/check** — add a docs validation task that checks every workspace
+  package has a README, no README contains placeholder text, links to local
+  packages resolve, and package names in README headings match `package.json`.
+- **API extraction** — evaluate TypeDoc or API Extractor for generated API
+  reference pages, but keep narrative usage docs in READMEs so GitHub, npm, and
+  the docs site all share the same prose.
+- **UI package export maps** — `@dbx-tools/ui-appkit` and `@dbx-tools/ui-email`
+  declare `./react` subpaths that point at `src/react/index.ts`, but those
+  subpath barrels are not present in the current tree. Either generate the React
+  subpath barrels or update the export maps and docs to the package-root
+  namespace shape before publishing.
+- **Examples as docs fixtures** — keep example README pages short, but link each
+  example to the production package concept it exercises (`cli`, `server`,
+  `openapi`, `ui`, AppKit server/client).
 
 ## How to verify a pass
 

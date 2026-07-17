@@ -118,7 +118,7 @@ project.pnpmWorkspace?.addCatalog("nanoid", "^5.1.6");
 // ---------------------------------------------------------------------------
 project.with(
   // Root's own tsconfig: compile the projenrc entrypoints alongside the packages.
-  mixin.mixin(
+  mixin.create(
     (file): file is JsonFile =>
       file instanceof JsonFile &&
       file.path === "tsconfig.json" &&
@@ -131,7 +131,7 @@ project.with(
   // shared-core is the light, browser-safe base: EVERY workspace package (except
   // shared-core itself) gets it automatically, regardless of tag. When in doubt,
   // reach for shared-core - so the per-package mixins below never add it.
-  mixin.mixin(
+  mixin.create(
     workspaces.and(projectPredicate.hasName("@dbx-tools/shared-core").negate()),
     (p) => {
       p.addDeps("@dbx-tools/shared-core@workspace:*");
@@ -142,7 +142,7 @@ project.with(
   // OPTIONAL peer: the `log` module lazy-imports it and degrades to a console
   // fallback when it's absent, so consumers may leave it uninstalled. Version
   // tracks the hardcoded DEFAULT_CATALOG entry.
-  mixin.mixin(pkg("*/shared-core", "shared"), (p) => {
+  mixin.create(pkg("*/shared-core", "shared"), (p) => {
     p.addPeerDeps("consola@catalog:");
     p.package.addField("peerDependenciesMeta", { consola: { optional: true } });
     // Present for local dev/typecheck; consumers opt in via the catalog.
@@ -162,7 +162,7 @@ project.with(
   // OPTIONAL peer so browser/test consumers that only touch `databricks.ts` needn't
   // install it. `config.ts` (app.yaml / bundle env resolution) needs zod + yaml
   // and depends on node-core for project-root discovery.
-  mixin.mixin(pkg("*/node-appkit", "node"), (p) => {
+  mixin.create(pkg("*/node-appkit", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/node-core@workspace:*",
       "@databricks/sdk-experimental@catalog:",
@@ -178,7 +178,7 @@ project.with(
   // `createApp.autoConfigure`) and print the env vars it added/changed as
   // eval-able shell / windows / json output. `cli`-tagged (commander from the
   // cli tag).
-  mixin.mixin(pkg("*/cli-appkit-env", "cli"), (p) => {
+  mixin.create(pkg("*/cli-appkit-env", "cli"), (p) => {
     p.package.addField("name", projectApi.identifier(p.root).withName("appkit-env").packageName);
     p.package.file.readonly = false;
     p.package.addField("publishConfig", { access: "public", provenance: true });
@@ -192,7 +192,7 @@ project.with(
   // Consumes the browser-safe shared-genie contracts, node-appkit's SDK glue,
   // and the SDK at runtime. AppKit is an OPTIONAL peer - the client resolver
   // lazy-imports it and falls back to env-var auth when it's absent.
-  mixin.mixin(pkg("*/node-genie", "node"), (p) => {
+  mixin.create(pkg("*/node-genie", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-genie@workspace:*",
       "@dbx-tools/node-appkit@workspace:*",
@@ -207,7 +207,7 @@ project.with(
   // fuzzy name resolution, workspace-aware selection, offline fallback floor).
   // Consumes the browser-safe shared-model classifier + node-appkit's AppKit
   // glue. AppKit is a runtime dep here (CacheManager is used directly, not lazy).
-  mixin.mixin(pkg("*/node-model", "node"), (p) => {
+  mixin.create(pkg("*/node-model", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-model@workspace:*",
       "@dbx-tools/node-appkit@workspace:*",
@@ -221,7 +221,7 @@ project.with(
   // AWS/GCP/Azure IP-range feeds, DNS via node:dns, disk cache). Consumes
   // node-appkit only for the optional execution-context client + node-core for
   // fs stat; the SDK is a runtime dep.
-  mixin.mixin(pkg("*/node-databricks", "node"), (p) => {
+  mixin.create(pkg("*/node-databricks", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/node-appkit@workspace:*",
       "@dbx-tools/node-core@workspace:*",
@@ -232,7 +232,7 @@ project.with(
   // node-databricks-zerobus: Zerobus streaming-ingest helpers. Uses the Zerobus
   // SDK directly (no AppKit); resolves the region-aware endpoint via
   // node-databricks (workspace URL/id + cloud location).
-  mixin.mixin(pkg("*/node-databricks-zerobus", "node"), (p) => {
+  mixin.create(pkg("*/node-databricks-zerobus", "node"), (p) => {
     p.addDeps("@dbx-tools/node-databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
   }),
 
@@ -241,7 +241,7 @@ project.with(
   // derivation, the approval-gated `send_email` Mastra tool, and the AppKit
   // `email` plugin. Consumes the browser-safe shared-email contract. AppKit +
   // Mastra are runtime deps.
-  mixin.mixin(pkg("*/node-email", "node"), (p) => {
+  mixin.create(pkg("*/node-email", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-email@workspace:*",
       "@databricks/appkit@catalog:",
@@ -258,7 +258,7 @@ project.with(
   // Express server. One package: nearly every module needs @mastra/core and the
   // plugin composes memory/mcp/observability/server together, so the heavy deps
   // (pg, fastembed, mcp, observability, express) can't be gated apart.
-  mixin.mixin(pkg("*/node-appkit-mastra", "node"), (p) => {
+  mixin.create(pkg("*/node-appkit-mastra", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-mastra@workspace:*",
       "@dbx-tools/shared-genie@workspace:*",
@@ -292,7 +292,7 @@ project.with(
   // auto-applies). Pin explicit ranges: bare names resolve against the local
   // registry, which can return stale majors (e.g. minimatch@3 lacks the
   // `{ Minimatch }` ESM export the code imports, chokidar@1 predates the v4 API).
-  mixin.mixin(pkg("*/node-path", "node"), (p) => {
+  mixin.create(pkg("*/node-path", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/node-core@workspace:*",
       "glob@^10.5.0",
@@ -302,21 +302,21 @@ project.with(
   }),
 
   // shared-model: browser-safe zod wire contracts + pure endpoint classifier.
-  mixin.mixin(pkg("*/shared-model", "shared"), (p) => {
+  mixin.create(pkg("*/shared-model", "shared"), (p) => {
     p.addDeps("zod@catalog:");
   }),
 
   // shared-email: browser-safe zod wire contract for the email add-on (message
   // + result + sender options). Pure zod, shared by the server sender, Mastra
   // tool, and React approval UI.
-  mixin.mixin(pkg("*/shared-email", "shared"), (p) => {
+  mixin.create(pkg("*/shared-email", "shared"), (p) => {
     p.addDeps("zod@catalog:");
   }),
 
   // shared-mastra: browser-safe wire contract + embed-marker grammar + route
   // segments for the Mastra add-on's clientConfig surface. Pure zod; extends
   // the genie + model wire schemas.
-  mixin.mixin(pkg("*/shared-mastra", "shared"), (p) => {
+  mixin.create(pkg("*/shared-mastra", "shared"), (p) => {
     p.addDeps(
       "zod@catalog:",
       "@dbx-tools/shared-genie@workspace:*",
@@ -328,7 +328,7 @@ project.with(
   // Databricks SDK .d.ts. The generated modules only need zod at runtime; the
   // SDK is a devDep (codegen reads its declarations). The `codegen.inputs`
   // manifest field drives which upstream .d.ts is generated.
-  mixin.mixin(pkg("*/shared-sdk-model", "shared"), (p) => {
+  mixin.create(pkg("*/shared-sdk-model", "shared"), (p) => {
     p.addDeps("zod@catalog:");
     p.addDevDeps("@databricks/sdk-experimental@catalog:");
     p.package.addField("codegen", {
@@ -338,7 +338,7 @@ project.with(
 
   // shared-genie: browser-safe Genie wire contracts (zod schemas that extend the
   // generated SDK shapes) + the high-level chat event vocabulary and detectors.
-  mixin.mixin(pkg("*/shared-genie", "shared"), (p) => {
+  mixin.create(pkg("*/shared-genie", "shared"), (p) => {
     p.addDeps("zod@catalog:", "@dbx-tools/shared-sdk-model@workspace:*");
   }),
 
@@ -346,7 +346,7 @@ project.with(
   // workspaces/node/ (it uses node: builtins, tsx, child_process), so the `node`
   // tag auto-applies. Carries the engine's toolchain deps, exports its subpath
   // entrypoints, and compiles index.ts + tasks/ outside src/.
-  mixin.mixin(pkg("*/node-projen", "node"), (p) => {
+  mixin.create(pkg("*/node-projen", "node"), (p) => {
     p.package.addField("name", projectApi.identifier(p.root).withName("projen").packageName);
     p.addDeps(
       "projen",
@@ -378,7 +378,7 @@ project.with(
   // cli-dbx-tools: the published CLI, renamed to the bare scope @dbx-tools/cli.
   // Ships the `dbxtools` bin and compiles index.ts + bin/ outside src/.
   // (shared-core comes from the blanket base-dep mixin above.)
-  mixin.mixin(pkg("*/cli-dbx-tools", "cli"), (p) => {
+  mixin.create(pkg("*/cli-dbx-tools", "cli"), (p) => {
     p.package.addField("name", SCOPE);
     p.package.file.readonly = false;
     p.package.addField("publishConfig", {
@@ -399,7 +399,7 @@ project.with(
   // Serving. `cli`-tagged (commander comes from the cli tag). Reuses node-model's
   // resolver + shared-model contracts; the SDK is a runtime dep for auth/host.
   // Ships the `model-proxy` bin and compiles index.ts + bin/ outside src/.
-  mixin.mixin(pkg("*/cli-model-proxy", "cli"), (p) => {
+  mixin.create(pkg("*/cli-model-proxy", "cli"), (p) => {
     p.package.addField("name", projectApi.identifier(p.root).withName("model-proxy").packageName);
     p.package.file.readonly = false;
     p.package.addField("publishConfig", { access: "public", provenance: true });
@@ -417,7 +417,7 @@ project.with(
   // AppKit's UI kit (`@databricks/appkit-ui/react`), the default Vite plugins
   // (React + Tailwind v4), and the shared stylesheet. `ui`-tagged (React + vite
   // + jsx come from the ui tag). Subpath exports match the -js layout.
-  mixin.mixin(pkg("*/ui-appkit", "ui"), (p) => {
+  mixin.create(pkg("*/ui-appkit", "ui"), (p) => {
     p.addDeps(
       "@databricks/appkit-ui@catalog:",
       "@tailwindcss/vite@catalog:",
@@ -444,7 +444,7 @@ project.with(
   // editable compose view. Presentational; consumes the browser-safe
   // shared-email wire contract and renders through ui-appkit's UI kit + the
   // shared Markdown/Tailwind styling. `ui`-tagged (React + jsx from the ui tag).
-  mixin.mixin(pkg("*/ui-email", "ui"), (p) => {
+  mixin.create(pkg("*/ui-email", "ui"), (p) => {
     p.addDeps(
       "@dbx-tools/shared-email@workspace:*",
       "@dbx-tools/ui-appkit@workspace:*",

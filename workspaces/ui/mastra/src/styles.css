@@ -1,0 +1,22 @@
+/*
+ * @dbx-tools/appkit-mastra-ui stylesheet.
+ *
+ * Import once from the host app's Tailwind entry, after Tailwind and
+ * your AppKit-UI theme:
+ *
+ *   @import "tailwindcss";
+ *   @import "@databricks/appkit-ui/styles.css";
+ *   @import "@dbx-tools/appkit-mastra-ui/styles.css";
+ *
+ * This file deliberately defines NO core design tokens (`--background`,
+ * `--primary`, `--success`, ...). The chat UI styles exclusively with
+ * AppKit semantic tokens, so it inherits whatever theme the host app
+ * provides and restyles to match the surrounding brand for free.
+ *
+ * Pulls shared Streamdown / shiki styling from `@dbx-tools/appkit-ui` and
+ * registers this package's React components with Tailwind via `@source`.
+ */
+
+@import "@dbx-tools/appkit-ui/styles.css";
+
+@source "./react";

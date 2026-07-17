@@ -16,22 +16,22 @@ export type { ConstructsMixin };
  * When `supports` is a type guard (`construct is U`) or a {@link Predicate},
  * `applyTo` receives the narrowed `U`.
  */
-export function mixin<U extends IConstruct>(
+export function create<U extends IConstruct>(
   supports: Predicate<IConstruct, U>,
   applyTo: (construct: U) => void,
 ): ConstructsMixin;
 
-export function mixin<U extends IConstruct>(
+export function create<U extends IConstruct>(
   supports: (construct: IConstruct) => construct is U,
   applyTo: (construct: U) => void,
 ): ConstructsMixin;
 
-export function mixin(
+export function create(
   supports: (construct: IConstruct) => boolean,
   applyTo: (construct: IConstruct) => void,
 ): ConstructsMixin;
 
-export function mixin(
+export function create(
   supports: (construct: IConstruct) => boolean,
   applyTo: (construct: IConstruct) => void,
 ): ConstructsMixin {

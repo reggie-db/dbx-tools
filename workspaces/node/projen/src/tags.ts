@@ -15,7 +15,7 @@
  */
 import type { IMixin as ConstructsMixin } from "constructs";
 import { javascript } from "projen";
-import { mixin } from "./mixin";
+import { create } from "./mixin";
 import { applyCompilerOptions, applyExports, applyTasks } from "./project";
 import * as projectPredicate from "./project-predicate";
 import { ViteConfigFile } from "./vite";
@@ -56,7 +56,7 @@ export const WORKSPACE_TAG_MIXINS = {
   // on `@databricks/appkit-ui`. React + DOM lib + JSX, and the default `tsc`
   // compile (typecheck). No vite app build / index.html: a full browser app is an
   // `app`-tagged package (see below) that layers vite on top.
-  ui: mixin(projectPredicate.hasTag("ui"), (p) => {
+  ui: create(projectPredicate.hasTag("ui"), (p) => {
     p.addDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps("@types/react@catalog:", "@types/react-dom@catalog:");
     applyCompilerOptions(p, {
@@ -78,7 +78,7 @@ export const WORKSPACE_TAG_MIXINS = {
   // entry). Self-contained React app: React + DOM lib + JSX + the vite toolchain
   // and app tasks (`dev`/`build`/`preview`). `build` resets the compile task, so
   // `compile` bundles with vite rather than `tsc`.
-  app: mixin(projectPredicate.hasTag("app"), (p) => {
+  app: create(projectPredicate.hasTag("app"), (p) => {
     p.addDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps(
       "vite@catalog:",
@@ -105,7 +105,7 @@ export const WORKSPACE_TAG_MIXINS = {
       "./package.json": "./package.json",
     });
   }),
-  cli: mixin(projectPredicate.hasTag("cli"), (p) => {
+  cli: create(projectPredicate.hasTag("cli"), (p) => {
     p.addDeps("commander@catalog:", "@clack/prompts@catalog:");
     p.addDevDeps("@types/node@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
@@ -117,7 +117,7 @@ export const WORKSPACE_TAG_MIXINS = {
       "./package.json": "./package.json",
     });
   }),
-  server: mixin(projectPredicate.hasTag("server"), (p) => {
+  server: create(projectPredicate.hasTag("server"), (p) => {
     // A Node/Express service. tsoa's decorators (@Route/@Get/...) also drive
     // `dbxtools openapi` (spec + client); experimentalDecorators lets them
     // type-check. `dev`/`start` run the app's `src/server.ts` with tsx.
@@ -132,14 +132,14 @@ export const WORKSPACE_TAG_MIXINS = {
       start: { exec: "tsx src/server.ts" },
     });
   }),
-  node: mixin(projectPredicate.hasTag("node"), (p) => {
+  node: create(projectPredicate.hasTag("node"), (p) => {
     p.addDevDeps("@types/node@catalog:");
     applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
   }),
-  shared: mixin(projectPredicate.hasTag("shared"), (p) => {
+  shared: create(projectPredicate.hasTag("shared"), (p) => {
     applyCompilerOptions(p, AGNOSTIC_COMPILER_OPTIONS);
   }),
-  openapi: mixin(projectPredicate.hasTag("openapi"), (p) => {
+  openapi: create(projectPredicate.hasTag("openapi"), (p) => {
     p.addDeps("openapi-fetch@catalog:");
     applyCompilerOptions(p, { target: "ES2022", lib: [...DOM_LIB], types: [] });
   }),
