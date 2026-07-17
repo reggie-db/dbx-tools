@@ -263,12 +263,13 @@ project.with(
     p.addDevDeps("@types/express@catalog:", "@types/pg@^8");
   }),
 
-  // node-file-scan: filesystem glob/watch package. It shells out (node-core
-  // exec) and uses chokidar/glob, so it lives under workspaces/node/ (the `node`
-  // tag auto-applies). Pin explicit ranges: bare names resolve against the local
+  // node-path: filesystem path helpers - glob find, ignore rules, path
+  // matching, package scan, and watch. It shells out (node-core exec) and uses
+  // chokidar/glob, so it lives under workspaces/node/ (the `node` tag
+  // auto-applies). Pin explicit ranges: bare names resolve against the local
   // registry, which can return stale majors (e.g. minimatch@3 lacks the
   // `{ Minimatch }` ESM export the code imports, chokidar@1 predates the v4 API).
-  mixin.mixin(pkg("*/node-file-scan", "node"), (p) => {
+  mixin.mixin(pkg("*/node-path", "node"), (p) => {
     p.addDeps(
       "@dbx-tools/node-core@workspace:*",
       "glob@^10.5.0",
@@ -342,7 +343,7 @@ project.with(
       "typescript@catalog:",
       "is-identifier@^1",
       "@dbx-tools/node-core@workspace:*",
-      "@dbx-tools/node-file-scan@workspace:*",
+      "@dbx-tools/node-path@workspace:*",
     );
     p.package.addField("exports", {
       ".": "./index.ts",

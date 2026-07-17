@@ -19,7 +19,7 @@
   "dependencies": {
     "@clack/prompts": "^1.7.0",
     "@dbx-tools/node-core": "workspace:*",
-    "@dbx-tools/node-file-scan": "workspace:*",
+    "@dbx-tools/node-path": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@typescript-eslint/typescript-estree": "^8",
     "barrelsby": "^2.8.1",

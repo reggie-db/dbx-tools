@@ -1,7 +1,7 @@
 /**
  * Generic file-watch utility shared by the `sync --watch` task watchers.
  *
- * `watchLoop` wraps `@dbx-tools/node-file-scan`'s chokidar watcher with the
+ * `watchLoop` wraps `@dbx-tools/node-path`'s chokidar watcher with the
  * behavior every dbx-tools watcher wants: it debounces bursts, serializes runs (a
  * change mid-run re-runs once afterwards), drops generated paths (barrels/manifests/
  * decls - reacting to our own output would loop), and shuts down on SIGINT. Callers
@@ -15,14 +15,14 @@
  * recompute it. {@link watchFiles} owns the chokidar wiring; this is thin glue.
  */
 import { isAbsolute, resolve } from "node:path";
-import { watch as fileScan } from "@dbx-tools/node-file-scan";
+import { watch as fileScan } from "@dbx-tools/node-path";
 import { log } from "@dbx-tools/shared-core";
 import { isGeneratedFile, recordedRoots, repoRoot } from "./workspace";
 
 const logger = log.logger("projen:watch");
 const DEBOUNCE_MS = 250;
 
-/** file-scan's built-in ignore-group toggles (`{ dot, temp, test, lock, defaults }`). */
+/** node-path's built-in ignore-group toggles (`{ dot, temp, test, lock, defaults }`). */
 export type IgnoreGroupOptions = NonNullable<
   Parameters<typeof fileScan.watchFiles>[1]
 >["ignoreOptions"];
@@ -47,7 +47,7 @@ function ignoredPath(path: string): boolean {
  * changed paths. Runs are serialized (a change during a run re-runs once afterwards);
  * watches until SIGINT.
  *
- * `ignoreOptions` toggles file-scan's built-in ignore groups for this watcher only
+ * `ignoreOptions` toggles node-path's built-in ignore groups for this watcher only
  * (e.g. the projenrc watcher passes `{ dot: false }` so its lone dotfile target,
  * `.projenrc.ts`, isn't pruned by the default dotfile group and left with nothing to
  * watch - which would let the process exit immediately).

@@ -688,34 +688,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  workspaces/node/file-scan:
-    dependencies:
-      '@dbx-tools/node-core':
-        specifier: workspace:*
-        version: link:../core
-      '@dbx-tools/shared-core':
-        specifier: workspace:*
-        version: link:../../shared/core
-      chokidar:
-        specifier: ^4.0.3
-        version: 4.0.3
-      glob:
-        specifier: ^10.5.0
-        version: 10.5.0
-      minimatch:
-        specifier: ^10.2.5
-        version: 10.2.5
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.13.3
-      tsx:
-        specifier: ^4.23.0
-        version: 4.23.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   workspaces/node/genie:
     dependencies:
       '@databricks/sdk-experimental':
@@ -772,6 +744,34 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workspaces/node/path:
+    dependencies:
+      '@dbx-tools/node-core':
+        specifier: workspace:*
+        version: link:../core
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+      chokidar:
+        specifier: ^4.0.3
+        version: 4.0.3
+      glob:
+        specifier: ^10.5.0
+        version: 10.5.0
+      minimatch:
+        specifier: ^10.2.5
+        version: 10.2.5
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   workspaces/node/projen:
     dependencies:
       '@clack/prompts':
@@ -780,9 +780,9 @@ importers:
       '@dbx-tools/node-core':
         specifier: workspace:*
         version: link:../core
-      '@dbx-tools/node-file-scan':
+      '@dbx-tools/node-path':
         specifier: workspace:*
-        version: link:../file-scan
+        version: link:../path
       '@dbx-tools/shared-core':
         specifier: workspace:*
         version: link:../../shared/core

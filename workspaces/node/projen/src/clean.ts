@@ -23,7 +23,7 @@
  */
 import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import { find } from "@dbx-tools/node-file-scan";
+import { find } from "@dbx-tools/node-path";
 import { isReadonly, makeWritable } from "./generated";
 import { repoRoot, toPosix } from "./workspace";
 
@@ -36,7 +36,7 @@ const CLEAN_SKIP_FILES: ReadonlySet<string> = new Set([".gitignore"]);
 
 /**
  * Every generated (read-only) file in the workspace, as absolute paths sorted by
- * repo-relative posix path. Skips vendor/build/VCS dirs via file-scan's built-in
+ * repo-relative posix path. Skips vendor/build/VCS dirs via node-path's built-in
  * ignores AND every dot-prefixed folder (`.projen`, `.vscode`, `.github`, ...), and
  * {@link CLEAN_SKIP_FILES} entry (`.gitignore`).
  */

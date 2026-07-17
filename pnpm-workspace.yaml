@@ -20,9 +20,9 @@ packages:
   - workspaces/node/databricks
   - workspaces/node/databricks-zerobus
   - workspaces/node/email
-  - workspaces/node/file-scan
   - workspaces/node/genie
   - workspaces/node/model
+  - workspaces/node/path
   - workspaces/node/projen
   - workspaces/shared/core
   - workspaces/shared/email

@@ -7,7 +7,7 @@
  * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
  */
 import { string, type OneOrMany } from "@dbx-tools/shared-core";
-import { ignore, match } from "@dbx-tools/node-file-scan";
+import { ignore, match } from "@dbx-tools/node-path";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
@@ -531,7 +531,7 @@ function registerRootTasks(project: javascript.NodeProject): void {
     openapi: { exec: taskScript(project, "openapi.ts") },
     clean: { exec: taskScript(project, "clean.ts"), receiveArgs: true },
     // `receiveArgs` forwards `--watch`, so `pnpm exec projen sync --watch` syncs once
-    // then starts the single file-scan watcher loop.
+    // then starts the single node-path watcher loop.
     sync: { exec: taskScript(project, "sync.ts"), receiveArgs: true },
   });
 }

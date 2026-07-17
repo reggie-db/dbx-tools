@@ -57,9 +57,11 @@ building block at a time, bottom of the dependency tree up.
 - **`workspaces/node/` = Node-tagged tier, `workspaces/shared/` = browser-safe.**
   A package's folder path drives its tag: put anything that touches `node:*` /
   `child_process` / a Node-only dep under `workspaces/node/` (auto-tags `node`).
-  Node-tagged packages: `node-core`, `node-appkit`, `node-file-scan`,
-  `node-genie`, `projen` (the engine). Browser-safe (`shared`): `shared-core`,
-  `shared-genie`, `shared-model`, `shared-sdk-model`.
+  Node-tagged packages: `node-core`, `node-appkit`, `node-appkit-mastra`,
+  `node-databricks`, `node-databricks-zerobus`, `node-email`, `node-genie`,
+  `node-model`, `node-path`, `projen` (the engine). Browser-safe (`shared`):
+  `shared-core`, `shared-email`, `shared-genie`, `shared-mastra`, `shared-model`,
+  `shared-sdk-model`.
 - **Extensionless relative imports** (`./model`, not `./model.js`) — the repo
   uses `moduleResolution: bundler`. Strip `.js` from every ported import.
 - **Tests:** `node:test` + `node:assert/strict` (NOT `bun:test`/`expect`), run
@@ -125,7 +127,9 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `ea50ded` | **Fold `appkit-config` into `node-appkit`** (it added no deps beyond `@databricks/appkit`, already present) + extract the env CLI to **`@dbx-tools/appkit-env`** (`cli/appkit-env`, `appkit-env` bin). Port `net` (URL/email/IP helpers) into shared-core. **Port `appkit-email` → `@dbx-tools/node-email`** (SMTP/outbox, markdown->HTML, sender policy, `send_email` Mastra tool, AppKit `email` plugin). |
 | `7d05a94` | **New `@dbx-tools/node-databricks`** (generic Databricks/cloud infra, no AppKit requirement: workspace URL/id + cloud provider/region + node DNS) + **port `zerobus` → `@dbx-tools/node-databricks-zerobus`**. See "node-databricks" below. |
 | `8ca913f` | **Port `appkit-mastra-shared` → `@dbx-tools/shared-mastra`** (browser-safe wire contract; `protocol.ts` → `wire.ts`). |
-| (pending commit) | **Port `appkit-mastra` → `@dbx-tools/node-appkit-mastra`** (the full AppKit Mastra agent layer, one package). Added `net`/`http`/`token`/`error.errorContext` to shared-core along the way. **Server-side migration complete.** See "shared-mastra + node-appkit-mastra" below. |
+| `9e60173` | **Port `appkit-mastra` → `@dbx-tools/node-appkit-mastra`** (the full AppKit Mastra agent layer, one package). Added `net`/`http`/`token`/`error.errorContext` to shared-core along the way. **Server-side migration complete.** See "shared-mastra + node-appkit-mastra" below. |
+| `3b4fbe7` | **projen engine uses shared-core `log`**; deleted its own `log.ts`. Added `success`/`start` to shared-core `Logger`; moved `pluralize` → shared-core `string`. |
+| (pending commit) | **Rename `node-file-scan` → `@dbx-tools/node-path`** (`workspaces/node/path`). It's the path toolkit (find/match/ignore/scan/watch), not just file matching. Only the projen engine consumed it. |
 
 ### shared-core surface now available
 

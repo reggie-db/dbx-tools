@@ -24,7 +24,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/node-file-scan",
+      "name": "@dbx-tools/node-path",
       "version": "workspace:*",
       "type": "runtime"
     },

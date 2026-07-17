@@ -1,5 +1,5 @@
 {
-  "name": "@dbx-tools/node-file-scan",
+  "name": "@dbx-tools/node-path",
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
