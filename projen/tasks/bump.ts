@@ -19,11 +19,20 @@
  *
  * `--publish` / `--no-publish` is an alias for `--push` (pushing the tag is
  * what publishes). The tag prefix comes from `--prefix` (default `v`).
+ *
+ * `--local-registry <value>` publishes the just-tagged version to a LOCAL
+ * registry (e.g. a verdaccio) right after the git tag is pushed - so a local
+ * `pnpm run bump` both fires the GitHub release (public npm) and populates your
+ * local registry. Values:
+ *   - `auto` (default): publish only when `npm config get registry` is a
+ *     loopback host (`localhost` / `127.0.0.0/8` / `::1`); otherwise skip.
+ *   - `false`: never publish locally.
+ *   - a URL: always publish to that registry.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command, Option } from "commander";
-import { exec } from "@dbx-tools/core";
+import { exec, project } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("projen:bump");
@@ -76,6 +85,21 @@ function readPackageVersion(pkgPath: string): [number, number, number] {
   return parseSemver(pkg.version ?? "") ?? [0, 0, 0];
 }
 
+/**
+ * Resolve the `--local-registry` value to a registry URL to publish to, or
+ * `undefined` to skip. `false` skips; a URL is used as-is; `auto` uses the
+ * active npm registry only when it is a loopback host (a local verdaccio etc.).
+ */
+function resolveLocalRegistry(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === "false") return undefined;
+  if (trimmed.toLowerCase() === "auto") {
+    const registry = project.npmRegistry();
+    return registry && project.isLoopbackHost(registry) ? registry.href : undefined;
+  }
+  return trimmed;
+}
+
 const program = new Command();
 program
   .description("Bump the release version, then commit, tag, and push it")
@@ -91,6 +115,11 @@ program
   .option("--no-push", "do not push the branch and tag to origin")
   // `--publish` is a friendlier alias for `--push` (pushing the tag publishes).
   .option("--no-publish", "alias for --no-push")
+  .option(
+    "--local-registry <value>",
+    "publish locally after the tag push: 'auto' (only a loopback npm registry), 'false', or a registry URL",
+    "auto",
+  )
   .action(
     (opts: {
       level: Level;
@@ -101,6 +130,7 @@ program
       tag: boolean;
       push: boolean;
       publish: boolean;
+      localRegistry: string;
     }) => {
       const pkgPath = resolve(process.cwd(), "package.json");
       if (!existsSync(pkgPath)) throw new Error(`no package.json in ${process.cwd()}`);
@@ -159,6 +189,25 @@ program
         logger.success(`pushed ${opts.tag ? tag : "HEAD"} to origin`);
       } else {
         logger.info("skipped push (--no-push / --no-publish)");
+      }
+
+      // Local registry (e.g. verdaccio): publish AFTER the tag push so the
+      // GitHub release still owns the public registry. `pnpm -r publish` reads
+      // each package's version (bumped on disk above) and rewrites `workspace:*`
+      // sibling pins to it; from a single-package project it just publishes that
+      // one package. Needs the bumped version on disk, so skip under `--no-version`.
+      const localRegistry = opts.version ? resolveLocalRegistry(opts.localRegistry) : undefined;
+      if (opts.version === false && resolveLocalRegistry(opts.localRegistry)) {
+        logger.info("skipped local publish (--no-version left package.json unbumped)");
+      }
+      if (localRegistry) {
+        logger.info(`publishing ${version} to local registry ${localRegistry}`);
+        exec.spawnSync(
+          "pnpm",
+          ["-r", "publish", "--registry", localRegistry, "--no-git-checks", "--access", "public"],
+          { cwd: process.cwd(), stdout: "inherit", stderr: "inherit", stdin: "ignore", check: true },
+        );
+        logger.success(`published ${version} to ${localRegistry}`);
       }
     },
   );
