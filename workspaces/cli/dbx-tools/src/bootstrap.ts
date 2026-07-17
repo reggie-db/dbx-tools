@@ -8,9 +8,9 @@ import { exec } from "@dbx-tools/node-core";
 import { resolvePnpmArgv, runPnpm } from "./pnpm";
 import { rootLabel } from "./root";
 
-const DEFAULT_PROJEN_SPECIFIER = "@dbx-tools/shared-projen";
+const DEFAULT_PROJEN_SPECIFIER = "@dbx-tools/projen";
 
-const PROJENRC_TEMPLATE = `import { DBXToolsNodeProject } from "@dbx-tools/shared-projen";
+const PROJENRC_TEMPLATE = `import { DBXToolsNodeProject } from "@dbx-tools/projen";
 
 const project = new DBXToolsNodeProject();
 project.synth();

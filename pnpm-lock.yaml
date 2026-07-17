@@ -76,7 +76,7 @@ importers:
     devDependencies:
       '@dbx-tools/projen':
         specifier: workspace:*
-        version: link:workspaces/shared/projen
+        version: link:workspaces/node/projen
       '@dbx-tools/shared-core':
         specifier: workspace:*
         version: link:workspaces/shared/core
@@ -411,6 +411,9 @@ importers:
       '@dbx-tools/node-core':
         specifier: workspace:*
         version: link:../core
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
       chokidar:
         specifier: ^4.0.3
         version: 4.0.3
@@ -458,6 +461,70 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  workspaces/node/projen:
+    dependencies:
+      '@clack/prompts':
+        specifier: ^1.7.0
+        version: 1.7.0
+      '@dbx-tools/node-core':
+        specifier: workspace:*
+        version: link:../core
+      '@dbx-tools/node-file-scan':
+        specifier: workspace:*
+        version: link:../file-scan
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+      '@typescript-eslint/typescript-estree':
+        specifier: ^8
+        version: 8.63.0(typescript@5.9.3)
+      barrelsby:
+        specifier: ^2.8.1
+        version: 2.8.1
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
+      consola:
+        specifier: ^3.4.2
+        version: 3.4.2
+      constructs:
+        specifier: ^10.6.0
+        version: 10.6.0
+      is-identifier:
+        specifier: ^1
+        version: 1.1.0
+      openapi-typescript:
+        specifier: ^7.13.0
+        version: 7.13.0(typescript@5.9.3)
+      oxc-parser:
+        specifier: ^0.90.0
+        version: 0.90.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      p-memoize:
+        specifier: ^8.0.0
+        version: 8.0.0
+      projen:
+        specifier: ^0.101.6
+        version: 0.101.6(constructs@10.6.0)
+      ts-to-zod:
+        specifier: ^5.1.0
+        version: 5.1.0
+      tsoa:
+        specifier: ^6.6.0
+        version: 6.6.0
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
 
   workspaces/shared/core:
     devDependencies:
@@ -514,70 +581,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-
-  workspaces/shared/projen:
-    dependencies:
-      '@clack/prompts':
-        specifier: ^1.7.0
-        version: 1.7.0
-      '@dbx-tools/node-core':
-        specifier: workspace:*
-        version: link:../../node/core
-      '@dbx-tools/node-file-scan':
-        specifier: workspace:*
-        version: link:../../node/file-scan
-      '@dbx-tools/shared-core':
-        specifier: workspace:*
-        version: link:../core
-      '@typescript-eslint/typescript-estree':
-        specifier: ^8
-        version: 8.63.0(typescript@5.9.3)
-      barrelsby:
-        specifier: ^2.8.1
-        version: 2.8.1
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
-      consola:
-        specifier: ^3.4.2
-        version: 3.4.2
-      constructs:
-        specifier: ^10.0.0
-        version: 10.6.0
-      is-identifier:
-        specifier: ^1
-        version: 1.1.0
-      openapi-typescript:
-        specifier: ^7.13.0
-        version: 7.13.0(typescript@5.9.3)
-      oxc-parser:
-        specifier: ^0.90.0
-        version: 0.90.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
-      p-memoize:
-        specifier: ^8.0.0
-        version: 8.0.0
-      projen:
-        specifier: ^0.101.4
-        version: 0.101.6(constructs@10.6.0)
-      ts-to-zod:
-        specifier: ^5.1.0
-        version: 5.1.0
-      tsoa:
-        specifier: 'catalog:'
-        version: 6.6.0
-      tsx:
-        specifier: ^4.23.0
-        version: 4.23.0
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@types/node':
-        specifier: ^24.6.0
-        version: 24.13.3
 
   workspaces/shared/sdk-model:
     dependencies:

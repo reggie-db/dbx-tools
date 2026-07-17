@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "@types/node",
-      "version": "^24.6.0",
+      "version": "catalog:",
       "type": "build"
     },
     {

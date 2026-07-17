@@ -12,7 +12,7 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/node": "^24.6.0",
+    "@types/node": "catalog:",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
@@ -25,14 +25,14 @@
     "barrelsby": "^2.8.1",
     "commander": "^15.0.0",
     "consola": "^3.4.2",
-    "constructs": "^10.0.0",
+    "constructs": "^10.6.0",
     "is-identifier": "^1",
     "openapi-typescript": "^7.13.0",
     "oxc-parser": "^0.90.0",
     "p-memoize": "^8.0.0",
-    "projen": "^0.101.4",
+    "projen": "^0.101.6",
     "ts-to-zod": "^5.1.0",
-    "tsoa": "catalog:",
+    "tsoa": "^6.6.0",
     "tsx": "^4.23.0",
     "typescript": "catalog:",
     "yaml": "^2.9.0"
@@ -51,7 +51,6 @@
   },
   "dbxToolsConfig": {
     "tags": [
-      "shared",
       "node"
     ]
   },

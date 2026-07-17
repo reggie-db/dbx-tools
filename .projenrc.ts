@@ -87,12 +87,11 @@ project.with(
     },
   ),
 
-  // Every shared workspace package (except shared-core itself) depends on shared-core.
-  // This is why the per-package mixins below no longer add it explicitly.
+  // shared-core is the light, browser-safe base: EVERY workspace package (except
+  // shared-core itself) gets it automatically, regardless of tag. When in doubt,
+  // reach for shared-core - so the per-package mixins below never add it.
   mixin.mixin(
-    workspaces
-      .and(projectPredicate.hasName("@dbx-tools/shared-core").negate())
-      .and(projectPredicate.hasTag("shared")),
+    workspaces.and(projectPredicate.hasName("@dbx-tools/shared-core").negate()),
     (p) => {
       p.addDeps("@dbx-tools/shared-core@workspace:*");
     },
@@ -112,16 +111,14 @@ project.with(
   // node-core: the Node-only half of the shared runtime (exec + project). Lives
   // under workspaces/node/, so the `node` tag auto-applies (node types + ES2022
   // lib, no DOM). shared-core stays browser-safe; anything needing child_process
-  // / fs / process depends on node-core instead.
-  mixin.mixin(pkg("*/node-core", "node"), (p) => {
-    p.addDeps("@dbx-tools/shared-core@workspace:*");
-  }),
+  // / fs / process depends on node-core instead. (shared-core is added by the
+  // blanket base-dep mixin above, so this package needs no mixin of its own.)
 
   // node-appkit: the base for Node-side AppKit + experimental-SDK helpers.
   // Houses the SDK Context/AbortSignal adapter so the browser-safe shared-core
   // stays SDK-free. The Databricks SDK is a runtime dep here.
   mixin.mixin(pkg("*/node-appkit", "node"), (p) => {
-    p.addDeps("@dbx-tools/shared-core@workspace:*", "@databricks/sdk-experimental@catalog:");
+    p.addDeps("@databricks/sdk-experimental@catalog:");
   }),
 
   // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -130,7 +127,6 @@ project.with(
   // lazy-imports it and falls back to env-var auth when it's absent.
   mixin.mixin(pkg("*/node-genie", "node"), (p) => {
     p.addDeps(
-      "@dbx-tools/shared-core@workspace:*",
       "@dbx-tools/shared-genie@workspace:*",
       "@dbx-tools/node-appkit@workspace:*",
       "@databricks/sdk-experimental@catalog:",
@@ -177,12 +173,12 @@ project.with(
     p.addDeps("zod@catalog:", "@dbx-tools/shared-sdk-model@workspace:*");
   }),
 
-  // shared-projen: the projen engine, renamed to @dbx-tools/projen. Node-tagged,
-  // carries the engine's toolchain deps, exports its subpath entrypoints, and
-  // compiles index.ts + tasks/ outside src/.
-  mixin.mixin(pkg("*/shared-projen", "shared"), (p) => {
+  // node-projen: the projen engine, renamed to @dbx-tools/projen. Lives under
+  // workspaces/node/ (it uses node: builtins, tsx, child_process), so the `node`
+  // tag auto-applies. Carries the engine's toolchain deps, exports its subpath
+  // entrypoints, and compiles index.ts + tasks/ outside src/.
+  mixin.mixin(pkg("*/node-projen", "node"), (p) => {
     p.package.addField("name", projectApi.identifier(p.root).withName("projen").packageName);
-    p.dbxToolsConfig.tags.push("node");
     p.addDeps(
       "projen",
       "constructs",
@@ -213,8 +209,8 @@ project.with(
   }),
 
   // cli-dbx-tools: the published CLI, renamed to the bare scope @dbx-tools/cli.
-  // Tagged `cli` (not `shared`), so it adds its own shared-core dep. Ships the
-  // `dbxtools` bin and compiles index.ts + bin/ outside src/.
+  // Ships the `dbxtools` bin and compiles index.ts + bin/ outside src/.
+  // (shared-core comes from the blanket base-dep mixin above.)
   mixin.mixin(pkg("*/cli-dbx-tools", "cli"), (p) => {
     p.package.addField("name", SCOPE);
     p.package.file.readonly = false;
@@ -228,7 +224,7 @@ project.with(
       "./pnpm": "./src/pnpm.ts",
       "./package.json": "./package.json",
     });
-    p.addDeps("@dbx-tools/shared-core@workspace:*", "@dbx-tools/node-core@workspace:*", "pnpm");
+    p.addDeps("@dbx-tools/node-core@workspace:*", "pnpm");
     applyRootDirTsconfig(p, "index.ts", "bin/**/*.ts");
   }),
 );

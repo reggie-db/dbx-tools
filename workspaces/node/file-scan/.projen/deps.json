@@ -20,6 +20,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-core",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "chokidar",
       "version": "^4.0.3",
       "type": "runtime"

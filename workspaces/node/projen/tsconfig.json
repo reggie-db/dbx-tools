@@ -26,7 +26,9 @@
     "strictPropertyInitialization": true,
     "stripInternal": true,
     "target": "ES2022",
-    "types": [],
+    "types": [
+      "node"
+    ],
     "moduleResolution": "bundler",
     "skipLibCheck": true
   },

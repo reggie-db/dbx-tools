@@ -50,6 +50,16 @@ building block at a time, bottom of the dependency tree up.
   `workspaces/node/`. Anything needing `child_process`/`fs`/`process` depends on
   node-core; keep shared-core browser-safe. `async`/`hash`/`value` stay in
   shared-core — they're isomorphic (web-standard `AbortSignal`/`URL`/`crypto`).
+- **shared-core is a universal base dep.** A blanket mixin in `.projenrc.ts`
+  adds `@dbx-tools/shared-core@workspace:*` to EVERY workspace package (any tag,
+  except shared-core itself), so per-package mixins never declare it. It's light
+  and browser-safe — when in doubt, reach for shared-core.
+- **`workspaces/node/` = Node-tagged tier, `workspaces/shared/` = browser-safe.**
+  A package's folder path drives its tag: put anything that touches `node:*` /
+  `child_process` / a Node-only dep under `workspaces/node/` (auto-tags `node`).
+  Node-tagged packages: `node-core`, `node-appkit`, `node-file-scan`,
+  `node-genie`, `projen` (the engine). Browser-safe (`shared`): `shared-core`,
+  `shared-genie`, `shared-model`, `shared-sdk-model`.
 - **Extensionless relative imports** (`./model`, not `./model.js`) — the repo
   uses `moduleResolution: bundler`. Strip `.js` from every ported import.
 - **Tests:** `node:test` + `node:assert/strict` (NOT `bun:test`/`expect`), run
@@ -98,7 +108,8 @@ cli               LEAF   ⛔ SUPERSEDED by projen — do NOT port
 | `6901ffa` | **Codegen on synth (drop task/watch) + port `genie-shared` → `@dbx-tools/shared-genie`** — see below. |
 | `0d8e6c1` | **Browser-safe core split**: `exec`/`project` → new `@dbx-tools/node-core`; shared-core now agnostic (`WebWorker` lib); file-scan retagged `node`; AppKit + sdk-experimental hardcoded in `DEFAULT_CATALOG`. See "Resolved: browser-safe core split" below. |
 | `f64806a` | **Barrel type-hoisting + `log` in core + `node-appkit` + port `genie` server → `@dbx-tools/node-genie`.** See "Barrel type-hoisting", "node-appkit", and "node-genie" below. |
-| (pending commit) | **Move `file-scan` under `workspaces/node/`**: `@dbx-tools/shared-file-scan` → `@dbx-tools/node-file-scan` (path now matches its `node` nature). |
+| `0616cd7` | **Move `file-scan` under `workspaces/node/`**: `@dbx-tools/shared-file-scan` → `@dbx-tools/node-file-scan` (path now matches its `node` nature). |
+| (pending commit) | **shared-core is a universal base dep** (added to every workspace package via the blanket mixin, any tag) + **move `projen` engine under `workspaces/node/`** (`@dbx-tools/projen`, `node`-tagged by path). Fixed stale `@dbx-tools/shared-projen` name refs in the CLI bootstrap + engine-root (published name is `@dbx-tools/projen`). |
 
 ### shared-core surface now available
 
@@ -121,7 +132,7 @@ pre-existing `exec`, `functionModule` (memoize), `iterable`, `predicate`,
 Ported `-js`'s `dbxtools codegen` into the projen engine.
 
 Files:
-- `workspaces/shared/projen/src/codegen.ts` — `generateCodegen()`. Scans
+- `workspaces/node/projen/src/codegen.ts` — `generateCodegen()`. Scans
   `workspacePackages()` for a `package.json` `codegen.inputs` field, runs each
   `.d.ts` through `stripImports` (TS compiler API drops imports, rewrites
   imported type refs → `unknown`) + `preprocess` (export-promote, JSDoc →
@@ -134,7 +145,7 @@ Files:
   every synth's `postSynthesize` pass (after `NodeProject`'s own install, so
   `node_modules/...` inputs resolve; before barrels, so a freshly generated
   module gets namespaced in the same pass).
-- `.projenrc.ts` — `ts-to-zod` in the `shared-projen` engine deps;
+- `.projenrc.ts` — `ts-to-zod` in the projen engine deps;
   `@databricks/sdk-experimental` catalog entry; the `shared-sdk-model` mixin
   (zod dep, SDK devDep, `codegen.inputs` field).
 
@@ -241,7 +252,7 @@ is re-emitted as `export type { X } from "./src/mod"`, so consumers write
 - **`export type { ... }`** is required under `isolatedModules` (TS1205).
 - A hand-authored `exports.ts` still wins; names it declares aren't hoisted.
 
-Implementation: `workspaces/shared/projen/src/module-exports.ts` extracts a
+Implementation: `workspaces/node/projen/src/module-exports.ts` extracts a
 module's own named exports via **oxc-parser** (fast, TS-aware; `exportKind`
 distinguishes type vs value, declaration kinds tag interfaces/aliases).
 Overloaded functions are de-duped per module. `barrels.ts` tallies type-name
