@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { Stats } from "node:fs";
 import { readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { net } from "@dbx-tools/shared-core";
+import { hash, net } from "@dbx-tools/shared-core";
 import { statSync as stat } from "./file";
 
 const ROOT_MARKERS = [
@@ -56,22 +56,19 @@ function parseCommand(command: string, args: string[], cwd: string): ParsedComma
 
 /**
  * `parseCommand`, memoized per `(command, args, cwd)` - stores the whole
- * {@link ParsedCommand}. Only caches when `cwd` is (or defaults to)
- * `process.cwd()`, so a one-off lookup in another directory isn't cached under
- * the wrong key.
+ * {@link ParsedCommand}. The cache key is a stable {@link hash.fnvHash} of that
+ * tuple (order-sensitive over `args`), so `cwd` is part of the key and a lookup
+ * in another directory can't collide with the default-cwd entry.
  */
-const parsedCommandCache = new Map<string, { cwd: string; result: ParsedCommand }>();
+const parsedCommandCache = new Map<string, ParsedCommand>();
 
 function cachedCommand(command: string, args: string[], cwd?: string): ParsedCommand {
   const effectiveCwd = cwd ?? process.cwd();
-  const cache = cwd === undefined || cwd === process.cwd();
-  const key = [command, ...args].join("\0");
-  if (cache) {
-    const hit = parsedCommandCache.get(key);
-    if (hit && hit.cwd === effectiveCwd) return hit.result;
-  }
+  const key = hash.fnvHash(command, args, effectiveCwd);
+  const hit = parsedCommandCache.get(key);
+  if (hit) return hit;
   const result = parseCommand(command, args, effectiveCwd);
-  if (cache) parsedCommandCache.set(key, { cwd: effectiveCwd, result });
+  parsedCommandCache.set(key, result);
   return result;
 }
 
