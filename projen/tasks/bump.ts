@@ -205,7 +205,7 @@ program
         logger.info(`publishing ${version} to local registry ${localRegistry}`);
         exec.spawnSync(
           "pnpm",
-          ["-r", "publish", "--registry", localRegistry, "--no-git-checks", "--access", "public"],
+          ["-r", "publish", "--registry", localRegistry, "--no-git-checks", "--access", "public", "--provenance=false"],
           { cwd: process.cwd(), stdout: "inherit", stderr: "inherit", stdin: "ignore", check: true },
         );
         logger.success(`published ${version} to ${localRegistry}`);
