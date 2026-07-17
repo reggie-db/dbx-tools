@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="dbx.tools monogram">
+  <!-- Concept 1 - "The x Mustache" - DARK MODE (for near-black backgrounds). -->
+  <rect width="64" height="64" rx="14" fill="#0a0a0a"/>
+  <g fill="none" stroke="#FF7A5C" stroke-width="5.5" stroke-linecap="round">
+    <path d="M20 19 L44 43 Q47.5 46.5 50 43"/>
+    <path d="M44 19 L20 43 Q16.5 46.5 14 43"/>
+  </g>
+  <circle cx="32" cy="50" r="3.2" fill="#FFD9CE"/>
+</svg>

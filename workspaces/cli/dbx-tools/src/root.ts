@@ -3,7 +3,8 @@
  */
 import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { exec, functionModule } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/core";
+import { functionModule } from "@dbx-tools/shared-core";
 
 async function gitToplevel(): Promise<string | undefined> {
   const { exitCode, stdout } = await exec.spawn("git", ["rev-parse", "--show-toplevel"], {

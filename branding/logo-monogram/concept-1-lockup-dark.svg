@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 72" width="300" height="72" role="img" aria-label="dbx.tools">
+  <!-- Concept 1 - "The x Mustache" - horizontal lockup - DARK MODE. -->
+  <rect x="4" y="4" width="64" height="64" rx="14" fill="#0a0a0a"/>
+  <g fill="none" stroke="#FF7A5C" stroke-width="5.5" stroke-linecap="round" transform="translate(4,4)">
+    <path d="M20 19 L44 43 Q47.5 46.5 50 43"/>
+    <path d="M44 19 L20 43 Q16.5 46.5 14 43"/>
+  </g>
+  <circle cx="36" cy="54" r="3.2" fill="#FFD9CE"/>
+  <g font-family="'DM Sans','Inter','Helvetica Neue',Arial,sans-serif" font-weight="600">
+    <text x="86" y="47" font-size="34" fill="#f5f5f5" letter-spacing="-0.5">dbx</text>
+    <circle cx="164" cy="43" r="4" fill="#FF7A5C"/>
+    <text x="174" y="47" font-size="34" fill="#8a8a8a" letter-spacing="-0.5">tools</text>
+  </g>
+</svg>

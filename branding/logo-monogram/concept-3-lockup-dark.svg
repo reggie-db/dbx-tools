@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" width="320" height="72" role="img" aria-label="dbx.tools">
+  <!-- Concept 3 - "Bracket Mustache" - horizontal lockup - DARK MODE. -->
+  <rect x="4" y="4" width="64" height="64" rx="14" fill="#0a0a0a"/>
+  <g transform="translate(4,4)">
+    <g fill="none" stroke="#FF7A5C" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="14,26 22,36 30,33"/>
+      <polyline points="50,26 42,36 34,33"/>
+    </g>
+    <circle cx="32" cy="34" r="3.4" fill="#FFD9CE"/>
+    <rect x="24" y="46" width="16" height="3.4" rx="1.7" fill="#FFD9CE"/>
+  </g>
+  <g font-family="'DM Sans','Inter','Helvetica Neue',Arial,sans-serif" font-weight="600">
+    <text x="86" y="47" font-size="34" fill="#f5f5f5" letter-spacing="-0.5">dbx</text>
+    <g fill="none" stroke="#FF7A5C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="158,38 163,43 168,41"/>
+      <polyline points="186,38 181,43 176,41"/>
+    </g>
+    <circle cx="172" cy="43" r="3.4" fill="#FF7A5C"/>
+    <text x="192" y="47" font-size="34" fill="#8a8a8a" letter-spacing="-0.5">tools</text>
+  </g>
+</svg>
