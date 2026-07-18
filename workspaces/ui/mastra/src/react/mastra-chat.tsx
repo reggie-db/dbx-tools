@@ -19,7 +19,9 @@ import type { MastraStreamResponse } from "../support/mastra-stream";
 import {
   createThreadSession,
   DEFAULT_THREAD_SESSION_KEY,
+  enqueueSteer,
   isSessionRunning,
+  removeSteer as removeSteerFromQueue,
   sessionKey,
   terminateRunningToolEvents,
   type ThreadSession,
@@ -409,6 +411,11 @@ export const useMastraChat = (
   const historyInFlightRef = useRef(false);
   const feedbackByMessageRef = useRef<Record<string, MessageFeedback>>({});
   feedbackByMessageRef.current = activeSession.feedbackByMessage;
+  // Drains the next queued steer when a turn ends. Held in a ref because it
+  // closes over `runStream`, which is defined below and itself calls
+  // `driveStream` (which invokes this) - the ref breaks that cycle without a
+  // stale-closure hazard (assigned each render, same pattern as `loadMoreRef`).
+  const drainQueueRef = useRef<(threadId: string) => void>(() => {});
 
   const writeMessages = useCallback(
     (threadId: string, next: UIMessage[]) => {
@@ -732,6 +739,8 @@ export const useMastraChat = (
         });
         if (getSession(threadId).runToken === token) {
           refreshThreadsSoon();
+          // Turn finished on its own: start the oldest queued steer, if any.
+          drainQueueRef.current(threadId);
         }
       } catch (caught) {
         if (getSession(threadId).runToken !== token) return;
@@ -784,6 +793,22 @@ export const useMastraChat = (
     },
     [driveStream, mastraClient, agentId, updateSession],
   );
+
+  // Start the oldest queued steer as the next turn (FIFO drain). Called from
+  // `driveStream` when a turn ends normally; a no-op when the queue is empty.
+  // Kept behind `drainQueueRef` so `driveStream` can reach it without a
+  // definition cycle.
+  drainQueueRef.current = (threadId: string) => {
+    const queued = getSession(threadId).queuedSteers;
+    if (queued.length === 0) return;
+    const [head] = queued;
+    updateSession(threadId, (session) => ({
+      ...session,
+      queuedSteers: removeSteerFromQueue(session.queuedSteers, head.id),
+    }));
+    const { next } = appendUserMessage(threadId, head.text);
+    void runStream(threadId, next);
+  };
 
   // Cancel a thread's in-flight run. Defaults to the active thread (the
   // composer stop button), but takes an explicit thread id so the sidebar
@@ -901,24 +926,57 @@ export const useMastraChat = (
     [activeThreadId, getSession, noteThreadActivity, updateSession, writeMessages],
   );
 
-  // Send a message, steering the active thread. Submitting while a turn is
-  // already streaming is a "send now": it interrupts the live run and starts a
-  // fresh turn that includes the new message, immediately. `runStream` /
-  // `driveStream` supersede the prior run (abort + runToken bump + settle any
-  // running tool pills), so the interrupted turn stops cleanly and the new one
-  // takes over. An idle submit just starts a turn.
+  // Send a message on the active thread. Submitting while a turn is already
+  // streaming ENQUEUES the message as a steer (it waits, no interrupt) - the
+  // queue drains oldest-first when the turn ends, or the user fires one early
+  // with `sendSteerNow`. An idle submit starts a turn right away.
   const sendMessage = useCallback<ChatViewProps["sendMessage"]>(
     (message) => {
       const text = message.text ?? "";
       if (!text) return;
       const threadId = activeKey;
-      const { before, next } = appendUserMessage(threadId, text);
-      if (isSessionRunning(before)) {
-        logger.info("steer:interrupt", { threadId });
+      if (isSessionRunning(getSession(threadId))) {
+        updateSession(threadId, (session) => ({
+          ...session,
+          queuedSteers: enqueueSteer(session.queuedSteers, { id: nanoid(), text }),
+        }));
+        return;
       }
+      const { next } = appendUserMessage(threadId, text);
       void runStream(threadId, next);
     },
-    [appendUserMessage, runStream, activeKey],
+    [appendUserMessage, runStream, activeKey, getSession, updateSession],
+  );
+
+  // Fire a queued steer immediately, out of order: remove it from the queue,
+  // append it, and start a turn. `runStream`/`driveStream` supersede any
+  // in-flight run (abort + runToken bump + settle running pills), so this
+  // interrupts the current turn and sends the chosen steer now.
+  const sendSteerNow = useCallback(
+    (steerId: string) => {
+      const threadId = activeKey;
+      const steer = getSession(threadId).queuedSteers.find((s) => s.id === steerId);
+      if (!steer) return;
+      updateSession(threadId, (session) => ({
+        ...session,
+        queuedSteers: removeSteerFromQueue(session.queuedSteers, steerId),
+      }));
+      logger.info("steer:send-now", { threadId });
+      const { next } = appendUserMessage(threadId, steer.text);
+      void runStream(threadId, next);
+    },
+    [activeKey, appendUserMessage, getSession, runStream, updateSession],
+  );
+
+  // Drop a queued steer without sending it.
+  const removeSteer = useCallback(
+    (steerId: string) => {
+      updateSession(activeKey, (session) => ({
+        ...session,
+        queuedSteers: removeSteerFromQueue(session.queuedSteers, steerId),
+      }));
+    },
+    [activeKey, updateSession],
   );
 
   /**
@@ -1383,6 +1441,9 @@ export const useMastraChat = (
     status: activeSession.status,
     error: activeSession.error,
     sendMessage,
+    queuedSteers: activeSession.queuedSteers,
+    onSendSteerNow: sendSteerNow,
+    onRemoveSteer: removeSteer,
     regenerate,
     onStop: stop,
     suggestions,

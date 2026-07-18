@@ -144,9 +144,10 @@ why to use this package anyway:
   needs Mastra stream handling, approvals, thread sidebar, model picker,
   feedback, exports, `[chart:<id>]` / `[data:<id>]` embeds, or the features the
   native AppKit chat surface lacks: CONCURRENT multi-thread streaming (run many
-  conversations at once, switch freely, cancel any one), and mid-turn STEERING
-  ("send now" interrupts the live run and restarts with the new message).
-  Native AppKit UI is enough for general components or native Genie/Serving hooks.
+  conversations at once, switch freely, cancel any one), and a mid-turn STEERING
+  QUEUE (submit while running to enqueue; queue drains oldest-first, or send any
+  item now to interrupt). Native AppKit UI is enough for general components or
+  native Genie/Serving hooks.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need async iterators, snapshot diffing, typed events,
   custom SSE/logging/tests, or chart/data planning. Native AppKit Genie is the
@@ -566,10 +567,15 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   client routing (the old `setThreadId`/`setModelOverride` header mutation was
   removed) so concurrent runs never collide. Cancel is thread-addressed
   (`stop(threadId?)`), exposed to the drawer as `onCancelThread`. Mid-turn
-  steering is "send now": `sendMessage` on a running thread interrupts the live
-  run and starts a fresh turn including the new message (`runStream` /
-  `driveStream` supersede via abort + `runToken` bump). True mid-run message
-  queueing (Mastra's experimental `queue-message` / `deliver`) was NOT used —
-  the agent didn't fold queued messages into the live turn, so interrupt-and-
-  restart is the reliable model. Cancelling / superseding a run settles stuck
-  `running` tool pills via `terminateRunningToolEvents` (thread-sessions.ts).
+  steering is a QUEUE, not a single action: `sendMessage` on a running thread
+  pushes a `QueuedSteer` onto `session.queuedSteers` (no interrupt); the queue
+  drains oldest-first when the turn ends (auto-start in `driveStream`'s success
+  path via `drainQueueRef`, which breaks the `driveStream`↔`runStream` cycle),
+  and `onSendSteerNow(id)` fires any item early by interrupting the current run
+  (`runStream`/`driveStream` supersede via abort + `runToken` bump), while
+  `onRemoveSteer(id)` drops one. Queue helpers (`enqueueSteer`/`removeSteer`) are
+  pure + unit-tested in thread-sessions.ts. True mid-run message delivery
+  (Mastra's experimental `queue-message` / `deliver`) was NOT used — the agent
+  didn't fold queued messages into the live turn, so enqueue + interrupt-restart
+  is the reliable model. Cancelling / superseding a run settles stuck `running`
+  tool pills via `terminateRunningToolEvents` (thread-sessions.ts).

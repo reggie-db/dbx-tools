@@ -41,6 +41,14 @@ export type ToolProgress = GenieWriterEvent;
  */
 export type ChatModelOption = { name: string; displayName?: string };
 
+/**
+ * A steer message submitted while a turn was already streaming. It waits in a
+ * per-thread queue until the running turn ends (auto-sent oldest-first) or the
+ * user fires it early with "send now". `id` is a stable key for rendering /
+ * removal.
+ */
+export type QueuedSteer = { id: string; text: string };
+
 /** Thumbs reaction a user can leave on an assistant turn. */
 export type FeedbackValue = "up" | "down";
 
@@ -91,10 +99,23 @@ export type ChatViewProps = {
   error?: Error | null;
   /**
    * Send a message on the active thread. Submitting while a turn is streaming
-   * is a "send now": it interrupts the in-flight run and starts a fresh turn
-   * including this message immediately.
+   * ENQUEUES the message as a steer (it waits, no interrupt); the queue drains
+   * oldest-first when the turn ends. An idle submit starts a turn immediately.
    */
   sendMessage: (message: { text: string }) => void;
+  /**
+   * Steers submitted mid-turn that are waiting to run (oldest first). When
+   * non-empty the composer shows them as chips above the input, each with a
+   * "send now" and a remove action.
+   */
+  queuedSteers?: QueuedSteer[];
+  /**
+   * Fire a queued steer immediately, out of order: interrupt the current turn
+   * and start a fresh turn with that steer (removing it from the queue).
+   */
+  onSendSteerNow?: (steerId: string) => void;
+  /** Drop a queued steer without sending it. */
+  onRemoveSteer?: (steerId: string) => void;
   regenerate?: () => void;
   /**
    * Abort the in-flight response. When provided and the chat is running

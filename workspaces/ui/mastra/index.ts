@@ -25,7 +25,7 @@ export type { DataRow } from "./src/react/data-grid";
 export type { UseMastraChatOptions, MastraChatProps } from "./src/react/mastra-chat";
 export type { SuggestionPillsProps } from "./src/react/suggestion-pills";
 export type { ThreadSidebarProps } from "./src/react/thread-sidebar";
-export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types";
+export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, QueuedSteer, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types";
 export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from "./src/support/export";
 export type { ByIdFetchState } from "./src/support/mastra-client";
 export type { MastraStreamChunk, MastraStreamResponse } from "./src/support/mastra-stream";

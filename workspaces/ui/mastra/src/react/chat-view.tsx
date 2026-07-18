@@ -38,10 +38,12 @@ import {
   MessageSquareIcon,
   PanelLeftIcon,
   RefreshCwIcon,
+  SendHorizontalIcon,
   SendIcon,
   SquareIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  XIcon,
 } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles";
@@ -100,6 +102,9 @@ export const ChatView = ({
   status,
   error,
   sendMessage,
+  queuedSteers = [],
+  onSendSteerNow,
+  onRemoveSteer,
   regenerate,
   onStop,
   className,
@@ -623,6 +628,56 @@ export const ChatView = ({
             onSubmit={handleSubmit}
             className="mx-auto w-full max-w-4xl px-3 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6"
           >
+            {queuedSteers.length > 0 && (
+              // Steers submitted while the turn is running, waiting to send.
+              // They drain oldest-first when the turn ends; each can be fired
+              // now (interrupts) or removed.
+              <div className="mb-2 flex flex-col gap-1">
+                {queuedSteers.map((steer) => (
+                  <div
+                    key={steer.id}
+                    className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2 py-1 text-xs"
+                  >
+                    <span className="text-muted-foreground">Queued</span>
+                    <span className="min-w-0 flex-1 truncate">{steer.text}</span>
+                    {onSendSteerNow && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-6 shrink-0"
+                            onClick={() => onSendSteerNow(steer.id)}
+                            aria-label="Send now (interrupts current turn)"
+                          >
+                            <SendHorizontalIcon className="size-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Send now — interrupts</TooltipContent>
+                      </Tooltip>
+                    )}
+                    {onRemoveSteer && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-6 shrink-0"
+                            onClick={() => onRemoveSteer(steer.id)}
+                            aria-label="Remove queued message"
+                          >
+                            <XIcon className="size-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Remove</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             <InputGroup className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md">
               <InputGroupTextarea
                 ref={textareaRef}

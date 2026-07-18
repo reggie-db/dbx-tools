@@ -3,8 +3,11 @@ import type {
   ChatStatus,
   MessageFeedback,
   PendingApproval,
+  QueuedSteer,
   ToolEvent,
 } from "../react/types";
+
+export type { QueuedSteer } from "../react/types";
 
 /** Session-scoped transcript + stream state for one conversation thread. */
 export type ThreadSession = {
@@ -22,6 +25,8 @@ export type ThreadSession = {
   hasMoreHistory: boolean;
   historyPage: number;
   lastUserText: string | null;
+  /** Steers submitted mid-turn, waiting to run (oldest first). */
+  queuedSteers: QueuedSteer[];
 };
 
 /** Map key for the classic single-thread chat (no explicit thread id). */
@@ -43,11 +48,25 @@ export function createThreadSession(): ThreadSession {
     hasMoreHistory: false,
     historyPage: 0,
     lastUserText: null,
+    queuedSteers: [],
   };
 }
 
 export function isSessionRunning(session: ThreadSession): boolean {
   return session.status === "submitted" || session.status === "streaming";
+}
+
+/** Append a steer to the queue (oldest first). Returns a new array. */
+export function enqueueSteer(
+  queue: QueuedSteer[],
+  steer: QueuedSteer,
+): QueuedSteer[] {
+  return [...queue, steer];
+}
+
+/** Remove the steer with `id` from the queue. Returns a new array. */
+export function removeSteer(queue: QueuedSteer[], id: string): QueuedSteer[] {
+  return queue.filter((steer) => steer.id !== id);
 }
 
 /**
