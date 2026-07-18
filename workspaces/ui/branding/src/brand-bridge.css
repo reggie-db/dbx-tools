@@ -1,0 +1,35 @@
+/*
+ * Brand -> AppKit token bridge.
+ *
+ * Remaps the AppKit / shadcn semantic tokens the dbx-tools UI components
+ * actually style off (`--primary`, `--ring`, `--accent`, `--sidebar-*`,
+ * `--font-*`) onto the portable `--brand-color-*` / `--brand-font-*` custom
+ * properties that `applyBrandContext()` writes. This is the "tag selector":
+ * scoped to `:root[data-brand]`, it is completely INERT until a brand is
+ * applied to the document (which sets the `data-brand` attribute), so
+ * importing it never disturbs default AppKit.
+ *
+ * Import once via `@dbx-tools/ui-appkit/styles.css` (the shared UI base every
+ * feature UI package pulls in), so the bridge travels with every dbx-tools UI
+ * component automatically.
+ *
+ * Scope note: `:root[data-brand]` has higher specificity (0,2,0) than AppKit's
+ * `:root` and `.dark` (both 0,1,0), so these win regardless of source order.
+ *
+ * Deliberately identity-only: it does NOT remap neutrals (`--background`,
+ * `--foreground`, `--card`, `--muted`, `--border`). The brand context carries a
+ * single light palette, so remapping neutrals would break dark mode; leaving
+ * them to AppKit keeps light AND dark themes working while the brand's identity
+ * colors + fonts come through.
+ */
+:root[data-brand] {
+  --primary: var(--brand-color-primary);
+  --primary-foreground: var(--brand-color-background);
+  --ring: var(--brand-color-primary);
+  --accent: var(--brand-color-accent);
+  --sidebar-primary: var(--brand-color-primary);
+  --sidebar-primary-foreground: var(--brand-color-background);
+  --sidebar-ring: var(--brand-color-primary);
+  --font-sans: var(--brand-font-sans);
+  --font-mono: var(--brand-font-mono);
+}

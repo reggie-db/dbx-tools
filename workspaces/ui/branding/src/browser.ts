@@ -49,6 +49,10 @@ export function applyBrandContext(
   for (const [name, value] of Object.entries(brandCssVariables(context))) {
     root?.style.setProperty(name, value);
   }
+  // Detection flag for the `brand-bridge.css` tag selector: setting
+  // `data-brand` activates the `:root[data-brand]` token remap. Until a
+  // brand is applied the bridge is inert, so default AppKit is untouched.
+  root?.setAttribute("data-brand", context.name);
 
   if (documentRef && options.updateTitle !== false) documentRef.title = context.name;
   if (!documentRef || options.updateFavicon === false) return;

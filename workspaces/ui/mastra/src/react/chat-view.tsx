@@ -63,6 +63,30 @@ const TOP_LOAD_MORE_THRESHOLD_PX = 120;
  */
 const DEFAULT_MODEL_VALUE = "__default__";
 
+/** Tailwind's `md` breakpoint (px). Below this the sidebar becomes a drawer. */
+const MOBILE_BREAKPOINT_PX = 768;
+
+/**
+ * `true` on a phone-width viewport (< {@link MOBILE_BREAKPOINT_PX}). Tracks
+ * `matchMedia` so the layout switches live on resize/rotate. SSR-safe: defaults
+ * to `false` (desktop) when `window` is unavailable.
+ */
+const useIsMobile = (): boolean => {
+  const query = `(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`;
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setIsMobile(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+  return isMobile;
+};
+
 export const ChatView = ({
   messages,
   status,
@@ -101,6 +125,8 @@ export const ChatView = ({
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  // Composer textarea, auto-grown with its content up to the CSS `max-h`.
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   // Mirror `isAtBottom` into a ref so the ResizeObserver below (created
   // per transcript mount, not per render) reads the latest value
@@ -194,6 +220,16 @@ export const ChatView = ({
     });
   };
 
+  // Grow the composer with its content (up to the textarea's CSS `max-h`,
+  // after which it scrolls internally), then shrink back as text is removed.
+  // Runs on every `input` change so paste / multi-line typing feels native.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
+
   // A turn is in flight from the moment the run opens (`submitted`)
   // until the server signals done (`ready`/`error`). Used to gate new
   // submissions and to swap the composer's Send button for Stop.
@@ -208,6 +244,15 @@ export const ChatView = ({
     if (!text) return;
     sendMessage({ text });
     setInput("");
+    // Sending is an explicit "I want to see the response" action, so
+    // re-pin to the bottom even if the user had scrolled up. Without this
+    // the freshly-appended user turn + waiting row can leave `isAtBottom`
+    // false, suppressing auto-scroll and forcing a manual scroll down.
+    setIsAtBottom(true);
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
   };
 
   const lastMessage = messages.at(-1);
@@ -233,7 +278,18 @@ export const ChatView = ({
       ? "Working..."
       : "Composing response...";
 
-  const showModelPicker = Boolean(models && models.length > 0 && onModelChange);
+  // Model display is intent-driven, not load-driven: as soon as the host
+  // wires `onModelChange` we reserve the row and show the current model,
+  // so it never "pops in" once the async catalogue lands. It renders as a
+  // clickable picker only when there's an actual choice (models loaded),
+  // otherwise as static text.
+  const showModelDisplay = Boolean(onModelChange);
+  const modelChangeable = Boolean(models && models.length > 0);
+  // Label the current model by its human-readable name when the catalogue
+  // carries one (`displayName`), falling back to the raw endpoint id, then
+  // to "Server default" when no model is pinned.
+  const currentModelLabel =
+    models?.find((m) => m.name === model)?.displayName || model || "Server default";
   const showClear = Boolean(onClear);
   const showExport = Boolean(onExportConversation);
   // The conversation sidebar turns on once the host wires both the
@@ -244,12 +300,35 @@ export const ChatView = ({
   // open flag. Defaults to open.
   const showSidebar = Boolean(threads && onSelectThread);
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(true);
-  const sidebarOpen = sidebarOpenProp ?? internalSidebarOpen;
-  const toggleSidebar = () => {
+  // Desktop inline-sidebar open state (persisted by the driver when it
+  // supplies `sidebarOpen`/`onToggleSidebar`, else a session-only flag).
+  const desktopSidebarOpen = sidebarOpenProp ?? internalSidebarOpen;
+  const toggleDesktopSidebar = () => {
     if (onToggleSidebar) onToggleSidebar();
     else setInternalSidebarOpen((open) => !open);
   };
-  const showHeader = showModelPicker || showClear || showSidebar || showExport;
+  // Are we on a phone-width viewport (< md / 768px)? Drives whether the
+  // sidebar renders inline (desktop) or as an overlay drawer (mobile), and
+  // which open-state the header toggle flips.
+  const isMobile = useIsMobile();
+  // Mobile drawer is a SESSION-only, default-closed state so a persisted
+  // "open" desktop preference never auto-opens the drawer over the chat on a
+  // phone. Reset closed whenever we drop back to a mobile viewport.
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  useEffect(() => {
+    if (!isMobile) setMobileDrawerOpen(false);
+  }, [isMobile]);
+  // Unified state/handlers the render + header use, resolved by viewport.
+  const sidebarOpen = isMobile ? mobileDrawerOpen : desktopSidebarOpen;
+  const toggleSidebar = () => {
+    if (isMobile) setMobileDrawerOpen((open) => !open);
+    else toggleDesktopSidebar();
+  };
+  // Top bar carries only the sidebar toggle + Clear now; the model picker and
+  // export live in a toolbar row just above the composer (Janna-style), closer
+  // to where the user is typing.
+  const showHeader = showClear || showSidebar;
+  const showComposerToolbar = showModelDisplay || showExport;
 
   // Local "in-flight" + confirm latch for the clear button so the
   // user can't double-fire the DELETE and so a stray click doesn't
@@ -283,29 +362,77 @@ export const ChatView = ({
        * with the message column regardless of whether a scrollbar is
        * showing.
        */}
-      <div className={cn("flex h-full", className)}>
-        {showSidebar && sidebarOpen && (
-          <ThreadSidebar
-            threads={threads ?? []}
-            {...(activeThreadId ? { activeThreadId } : {})}
-            streamingThreadIds={streamingThreadIds}
-            isLoading={isLoadingThreads}
-            onSelect={(id) => onSelectThread?.(id)}
-            {...(onNewThread ? { onNew: onNewThread } : {})}
-            {...(onDeleteThread ? { onDelete: onDeleteThread } : {})}
-            {...(onRenameThread ? { onRename: onRenameThread } : {})}
-            onHide={toggleSidebar}
-          />
-        )}
-        <div className="flex h-full min-w-0 flex-1 flex-col py-0 md:py-6">
+      <div className={cn("flex h-full min-h-0", className)}>
+        {showSidebar &&
+          (isMobile ? (
+            /*
+             * Mobile: a fixed overlay drawer with a tap-to-close backdrop, so
+             * the conversation list never eats horizontal space from the chat
+             * on a phone. Selecting a thread / starting a new one closes it so
+             * the transcript comes back into view. Session-only + default
+             * closed (see `mobileDrawerOpen`).
+             */
+            mobileDrawerOpen && (
+              <div className="fixed inset-0 z-40 flex">
+                <div
+                  className="absolute inset-0 bg-black/50"
+                  onClick={toggleSidebar}
+                  aria-hidden="true"
+                />
+                <ThreadSidebar
+                  threads={threads ?? []}
+                  {...(activeThreadId ? { activeThreadId } : {})}
+                  streamingThreadIds={streamingThreadIds}
+                  isLoading={isLoadingThreads}
+                  onSelect={(id) => {
+                    onSelectThread?.(id);
+                    toggleSidebar();
+                  }}
+                  {...(onNewThread
+                    ? {
+                        onNew: () => {
+                          onNewThread();
+                          toggleSidebar();
+                        },
+                      }
+                    : {})}
+                  {...(onDeleteThread ? { onDelete: onDeleteThread } : {})}
+                  {...(onRenameThread ? { onRename: onRenameThread } : {})}
+                  onHide={toggleSidebar}
+                  className="relative z-10 w-[85vw] max-w-xs shadow-xl"
+                />
+              </div>
+            )
+          ) : (
+            /*
+             * Desktop: an inline flex child sharing the row with the chat
+             * column, using the persisted open/hide preference.
+             */
+            desktopSidebarOpen && (
+              <ThreadSidebar
+                threads={threads ?? []}
+                {...(activeThreadId ? { activeThreadId } : {})}
+                streamingThreadIds={streamingThreadIds}
+                isLoading={isLoadingThreads}
+                onSelect={(id) => onSelectThread?.(id)}
+                {...(onNewThread ? { onNew: onNewThread } : {})}
+                {...(onDeleteThread ? { onDelete: onDeleteThread } : {})}
+                {...(onRenameThread ? { onRename: onRenameThread } : {})}
+                onHide={toggleSidebar}
+              />
+            )
+          ))}
+        <div className="flex h-full min-w-0 flex-1 flex-col">
           {showHeader && (
-            <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 pb-2 pt-1 text-xs text-muted-foreground md:px-6">
-              <div className="flex items-center gap-2">
+            <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-2 px-3 pb-2 pt-1 text-xs text-muted-foreground md:gap-3 md:px-6">
+              <div className="flex shrink-0 items-center gap-2">
                 {/*
-                 * The hide control lives on the sidebar itself; the header
-                 * only offers a "show" toggle while the sidebar is collapsed.
+                 * Sidebar toggle. On mobile it's a persistent hamburger (the
+                 * overlay drawer has no always-visible hide button). On desktop
+                 * the panel hides itself, so the header only needs a "show"
+                 * affordance while the inline sidebar is collapsed.
                  */}
-                {showSidebar && !sidebarOpen && (
+                {showSidebar && (isMobile || !desktopSidebarOpen) && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -313,47 +440,18 @@ export const ChatView = ({
                         variant="ghost"
                         size="icon-sm"
                         onClick={toggleSidebar}
-                        aria-label="Show conversations"
+                        aria-label={sidebarOpen ? "Hide conversations" : "Show conversations"}
                       >
                         <PanelLeftIcon className="size-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Show conversations</TooltipContent>
+                    <TooltipContent>
+                      {sidebarOpen ? "Hide conversations" : "Show conversations"}
+                    </TooltipContent>
                   </Tooltip>
                 )}
               </div>
-              <div className="flex items-center gap-3">
-                {showModelPicker && (
-                  <div className="flex items-center gap-2">
-                    <span>Model</span>
-                    <Select
-                      value={model ? model : DEFAULT_MODEL_VALUE}
-                      onValueChange={(v) =>
-                        onModelChange?.(v === DEFAULT_MODEL_VALUE ? "" : v)
-                      }
-                    >
-                      <SelectTrigger size="sm" className="w-[260px]">
-                        <SelectValue placeholder="Server default" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={DEFAULT_MODEL_VALUE}>
-                          Server default
-                        </SelectItem>
-                        {models!.map((m) => (
-                          <SelectItem key={m.name} value={m.name}>
-                            {m.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                {showExport && (
-                  <ExportMenu
-                    onExport={(format) => void onExportConversation?.(format)}
-                    tooltip="Export conversation"
-                  />
-                )}
+              <div className="flex min-w-0 items-center justify-end gap-2 md:gap-3">
                 {showClear && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -397,7 +495,7 @@ export const ChatView = ({
             <div
               ref={scrollRef}
               onScroll={handleScroll}
-              className="flex-1 overflow-y-auto [scrollbar-gutter:stable]"
+              className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]"
             >
               {messages.length === 0 && !isLoadingHistory ? (
                 <Empty className="mx-auto h-full w-full max-w-4xl px-4 md:px-6">
@@ -499,7 +597,7 @@ export const ChatView = ({
               )}
             </div>
             {!isAtBottom && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-4 mx-auto flex w-full max-w-4xl justify-end px-4 md:px-6">
+              <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 mx-auto flex w-full max-w-4xl justify-end px-4 md:px-6">
                 <Button
                   type="button"
                   variant="outline"
@@ -523,10 +621,11 @@ export const ChatView = ({
 
           <form
             onSubmit={handleSubmit}
-            className="mx-auto w-full max-w-4xl px-4 pb-4 pt-2 md:px-6"
+            className="mx-auto w-full max-w-4xl px-3 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-6"
           >
-            <InputGroup>
+            <InputGroup className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md">
               <InputGroupTextarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -537,6 +636,7 @@ export const ChatView = ({
                 }}
                 placeholder="Send a message..."
                 rows={1}
+                className="max-h-48 text-base md:text-sm"
               />
               <InputGroupAddon align="inline-end">
                 {isRunning && onStop ? (
@@ -566,6 +666,44 @@ export const ChatView = ({
                 )}
               </InputGroupAddon>
             </InputGroup>
+            {showComposerToolbar && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                {showModelDisplay &&
+                  (modelChangeable ? (
+                    <Select
+                      value={model ? model : DEFAULT_MODEL_VALUE}
+                      onValueChange={(v) =>
+                        onModelChange?.(v === DEFAULT_MODEL_VALUE ? "" : v)
+                      }
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="h-7 w-auto max-w-[200px] gap-1 rounded-full px-2.5 text-xs [&_svg]:size-3"
+                      >
+                        <SelectValue placeholder="Server default" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={DEFAULT_MODEL_VALUE}>Server default</SelectItem>
+                        {models!.map((m) => (
+                          <SelectItem key={m.name} value={m.name}>
+                            {m.displayName || m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="max-w-[200px] truncate px-2.5 text-xs text-muted-foreground">
+                      {currentModelLabel}
+                    </span>
+                  ))}
+                {showExport && (
+                  <ExportMenu
+                    onExport={(format) => void onExportConversation?.(format)}
+                    tooltip="Export conversation"
+                  />
+                )}
+              </div>
+            )}
           </form>
         </div>
       </div>

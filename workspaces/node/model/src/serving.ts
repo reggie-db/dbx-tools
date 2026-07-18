@@ -22,6 +22,7 @@
 import { error, log, string } from "@dbx-tools/shared-core";
 import {
   classify,
+  display,
   model,
   type ModelProfile,
   type ServingEndpointSummary,
@@ -124,6 +125,9 @@ export async function listServingEndpointsUncached(
     const profile = extractProfile(ep);
     out.push({
       name: ep.name,
+      // Prefer a Databricks-provided human name (a display-name tag or an
+      // external-model name); else derive a title-cased label from the id.
+      displayName: display.toModelDisplayName(ep.name, providedDisplayName(ep)),
       ...(ep.task !== undefined ? { task: ep.task } : {}),
       ...(ep.state?.ready !== undefined ? { state: String(ep.state.ready) } : {}),
       ...(ep.description !== undefined ? { description: ep.description } : {}),
@@ -131,6 +135,30 @@ export async function listServingEndpointsUncached(
     });
   }
   return out;
+}
+
+/**
+ * Pull a Databricks-provided human name off a serving endpoint, if any:
+ * a `display_name` / `displayName` / `name` tag first, then an
+ * external-model `name` from the served-entity config. Returns `null`
+ * when the endpoint carries no explicit name (the common case for
+ * Foundation Model API endpoints), so the caller falls back to deriving
+ * one from the id.
+ */
+function providedDisplayName(ep: {
+  tags?: Array<{ key: string; value?: string }>;
+  config?: { served_entities?: Array<{ external_model?: { name?: string } }> };
+}): string | null {
+  const tag = ep.tags?.find(
+    (t) => t.key === "display_name" || t.key === "displayName" || t.key === "name",
+  );
+  const fromTag = string.trimToNull(tag?.value);
+  if (fromTag) return fromTag;
+  for (const entity of ep.config?.served_entities ?? []) {
+    const external = string.trimToNull(entity.external_model?.name);
+    if (external) return external;
+  }
+  return null;
 }
 
 async function fetchEndpoints(client: WorkspaceClientLike): Promise<ServingEndpointSummary[]> {

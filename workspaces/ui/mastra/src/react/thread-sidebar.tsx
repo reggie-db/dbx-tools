@@ -111,7 +111,7 @@ export const ThreadSidebar = ({
   return (
     <div
       className={cn(
-        "flex h-full w-64 shrink-0 flex-col border-r border-border bg-muted/30",
+        "flex h-full w-64 shrink-0 flex-col border-r border-border bg-background",
         className,
       )}
     >

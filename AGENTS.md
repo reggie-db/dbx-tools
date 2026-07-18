@@ -159,6 +159,12 @@ why to use this package anyway:
 - `@dbx-tools/ui-appkit`: use as a stable foundation/re-export for dbx-tools UI
   packages and hosts, not as a replacement for `@databricks/appkit-ui` in simple
   app code.
+- `@dbx-tools/ui-branding`: use to theme dbx-tools/AppKit UI to a brand — a
+  `BrandProvider`/`BrandIcon`/`BrandLogo` React surface plus the
+  `[data-brand]` token bridge that re-skins AppKit's semantic tokens from a
+  portable `BrandContext`. Inert until a brand is applied, so it never gets in
+  the way of default AppKit. Not a replacement for AppKit's own theming when the
+  default palette is fine.
 
 Concrete examples to preserve in docs:
 
@@ -496,3 +502,28 @@ api`'s controllers generate `example-workspaces/openapi/api`), not a hardcoded
 openapi` / a watched controller edit needs them). The openapi watcher (started by
   `projen sync --watch`, under `concurrently`) regenerates it automatically when a
   controller changes.
+- **Brand theming is a `[data-brand]` token bridge, opt-in by detection.**
+  `@dbx-tools/ui-branding` writes portable `--brand-color-*` / `--brand-font-*`
+  CSS vars, but the UI components style off AppKit's shadcn semantic tokens
+  (`--primary`, `--ring`, `--sidebar-primary`, ...). The bridge that connects
+  them is `ui-branding/src/brand-bridge.css`, scoped to `:root[data-brand]` and
+  `@import`ed from `ui-appkit/styles.css` (so it travels with EVERY feature UI
+  package via the shared base — `ui-appkit` deps `ui-branding`). It is INERT
+  until `applyBrandContext()` (via `BrandProvider applyToDocument`) sets the
+  `data-brand` attribute, so default AppKit is never disturbed. It is
+  identity-only (primary/accent/ring/sidebar-primary + fonts); it deliberately
+  does NOT remap neutrals (`--background`/`--foreground`/`--muted`/`--border`)
+  because the brand carries a single light palette — remapping neutrals would
+  break dark mode. To theme a host: wrap in `<BrandProvider applyToDocument>`
+  (pass `context` for a non-default brand). New semantic tokens to re-skin go in
+  `brand-bridge.css`, not per-component.
+- **Model display names.** `ServingEndpointSummary` carries an optional
+  `displayName` alongside `name` (the invoke id). It flows through `/models`
+  (wire `ServingEndpointsResponseSchema`) automatically. Derivation lives in the
+  pure `@dbx-tools/shared-model` `display.toModelDisplayName(name, provided?)`
+  (browser-safe, reuses `shared-core`'s `string.tokenizeWithOptions`): prefer a
+  Databricks-provided name (a `display_name`/`displayName`/`name` endpoint tag or
+  an external-model name — extracted in `node/model` `serving.ts`), else strip
+  leading vendor prefixes (`databricks`/`system`/`dbx`, plus `ai` only as the
+  `system.ai.*` namespace half) and title-case. The UI picker shows
+  `displayName ?? name`. Add new strip prefixes in `shared-model/src/display.ts`.

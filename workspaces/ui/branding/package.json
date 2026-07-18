@@ -41,6 +41,7 @@
     "./react": "./src/react/index.ts",
     "./styles.css": "./src/styles.css",
     "./browser": "./src/browser.ts",
+    "./brand-bridge.css": "./src/brand-bridge.css",
     "./assets": "./src/generated/assets.ts",
     "./assets/icon-light.svg": "./src/generated/icon-light.svg",
     "./assets/icon-dark.svg": "./src/generated/icon-dark.svg",

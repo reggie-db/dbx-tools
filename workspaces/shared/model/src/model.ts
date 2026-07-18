@@ -74,6 +74,12 @@ export const ServingEndpointSummarySchema = z.object({
     .describe(
       "Endpoint name as listed by the Model Serving REST API; the id used to invoke the model.",
     ),
+  displayName: z
+    .string()
+    .optional()
+    .describe(
+      "Human-readable label for the endpoint: a Databricks-provided name when present (a display-name tag or external-model name), else a title-cased rendering of `name` with vendor prefixes stripped. `name` remains the invoke id.",
+    ),
   task: z.string().optional().describe("Task hint, e.g. 'llm/v1/chat' or 'llm/v1/embeddings'."),
   state: z.string().optional().describe("Deployment state, e.g. ready, updating, or failed."),
   description: z.string().optional().describe("Free-form endpoint description; informational."),

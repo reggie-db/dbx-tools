@@ -9,6 +9,23 @@ body,
   height: 100%;
 }
 
+/*
+ * Lock the app to the viewport so the chat owns all scrolling internally
+ * (its own transcript container). Without this, mobile browsers let the whole
+ * page rubber-band / scroll around behind the fixed composer. `100dvh` tracks
+ * the *dynamic* viewport so the layout doesn't jump as mobile browser chrome
+ * shows/hides, and `overscroll-behavior: none` kills the bounce.
+ */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100dvh;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;

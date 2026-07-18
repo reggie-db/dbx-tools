@@ -38,6 +38,34 @@ Import `@dbx-tools/ui-branding/styles.css` once to expose the default CSS custom
 properties. `applyBrandContext()` updates those properties and can set the page
 title and favicon.
 
+## Theming the UI (the `[data-brand]` token bridge)
+
+The dbx-tools UI components style off AppKit's shadcn semantic tokens
+(`--primary`, `--ring`, `--sidebar-primary`, `--font-sans`, ...), not the
+`--brand-color-*` variables directly. `brand-bridge.css` connects the two: it
+remaps those AppKit tokens onto the brand variables, scoped to
+`:root[data-brand]`.
+
+It is imported (inert) through `@dbx-tools/ui-appkit/styles.css` — the shared UI
+base every feature UI package depends on — so **every dbx-tools UI component
+carries the bridge automatically**. It stays inert until a brand is applied:
+`applyBrandContext()` (and therefore `<BrandProvider applyToDocument>`) sets the
+`data-brand` attribute, which is what activates the remap. With no `data-brand`,
+default AppKit renders untouched.
+
+```tsx
+// Theme the whole app: sets brand vars + data-brand + title/favicon.
+<BrandProvider applyToDocument>
+  <App />
+</BrandProvider>
+```
+
+The bridge is **identity-only** (primary/accent/ring/sidebar-primary + fonts). It
+intentionally does not remap neutrals (`--background`/`--foreground`/`--muted`/
+`--border`) because a `BrandContext` carries a single light palette — remapping
+neutrals would disable dark mode. Add new semantic tokens to re-skin in
+`brand-bridge.css`.
+
 ## Assets
 
 ```ts
@@ -55,3 +83,6 @@ Static SVG files are also exported from
 - `./assets` - generated SVG strings and data URLs.
 - `./assets/*.svg` - static package asset files.
 - `./styles.css` - default brand CSS custom properties.
+- `./brand-bridge.css` - `:root[data-brand]`-scoped remap of AppKit semantic
+  tokens onto the brand variables. Imported via `ui-appkit/styles.css`; inert
+  until `applyBrandContext()` sets `data-brand`.

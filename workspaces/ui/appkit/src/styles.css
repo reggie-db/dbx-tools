@@ -11,6 +11,13 @@
 
 @import "tailwindcss";
 @import "streamdown/styles.css";
+/*
+ * Brand -> AppKit token bridge. Scoped to `:root[data-brand]`, so it is inert
+ * until a host applies a brand (see `@dbx-tools/ui-branding` `applyBrandContext`
+ * / `BrandProvider applyToDocument`). Imported here so it travels with every
+ * feature UI package that depends on this shared base.
+ */
+@import "@dbx-tools/ui-branding/brand-bridge.css";
 
 @source "./react";
 

@@ -168,6 +168,7 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
   p.addDeps(
     dep("@dbx-tools/shared-core"),
     dep("@dbx-tools/ui-appkit"),
+    dep("@dbx-tools/ui-branding"),
     dep("@dbx-tools/ui-mastra"),
     "react-router-dom@catalog:",
   );

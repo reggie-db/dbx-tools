@@ -33,8 +33,13 @@ export type ToolEvent = {
  */
 export type ToolProgress = GenieWriterEvent;
 
-/** Subset of a Model Serving endpoint surfaced in the model picker. */
-export type ChatModelOption = { name: string };
+/**
+ * Subset of a Model Serving endpoint surfaced in the model picker. `name`
+ * is the invoke id; `displayName` is the optional human-readable label the
+ * `/models` endpoint derives (Databricks-provided name, else a title-cased
+ * rendering of `name`). The picker shows `displayName ?? name`.
+ */
+export type ChatModelOption = { name: string; displayName?: string };
 
 /** Thumbs reaction a user can leave on an assistant turn. */
 export type FeedbackValue = "up" | "down";

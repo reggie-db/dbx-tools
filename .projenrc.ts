@@ -391,6 +391,11 @@ project.applyToProjects(root, { identifierName: "cli-model-proxy", tags: "cli" }
 project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) => {
   p.addDeps(
     "@databricks/appkit-ui@catalog:",
+    // The brand->AppKit token bridge ships here via `styles.css`
+    // (`@import "@dbx-tools/ui-branding/brand-bridge.css"`), so every feature
+    // UI package that depends on this base carries the (inert-by-default)
+    // bridge. Scoped to `:root[data-brand]`, so it never disturbs AppKit.
+    "@dbx-tools/ui-branding@workspace:*",
     "@tailwindcss/vite@catalog:",
     "@vitejs/plugin-react@catalog:",
     "tailwindcss@catalog:",
@@ -410,6 +415,10 @@ project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) =
 project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p) => {
   projectApi.addExports(p, {
     "./browser": "./src/browser.ts",
+    // The brand->AppKit token bridge stylesheet. `ui-appkit/styles.css`
+    // `@import`s it so it travels with every feature UI package; scoped to
+    // `:root[data-brand]` so it is inert until a brand is applied.
+    "./brand-bridge.css": "./src/brand-bridge.css",
     "./assets": "./src/generated/assets.ts",
     "./assets/icon-light.svg": "./src/generated/icon-light.svg",
     "./assets/icon-dark.svg": "./src/generated/icon-dark.svg",

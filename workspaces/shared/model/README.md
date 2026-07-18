@@ -16,8 +16,27 @@ Key features:
 - Endpoint classifier that groups serving endpoints by score profile and family
   naming conventions.
 - Version/family parsing helpers for model catalogues and tests.
+- Human-readable endpoint display names via `display.toModelDisplayName`.
 - Types that match the server selection API without depending on the Databricks
   SDK.
+
+## Human-Readable Display Names
+
+```ts
+import { display } from "@dbx-tools/shared-model";
+
+display.toModelDisplayName("databricks-claude-sonnet-4-6"); // "Claude Sonnet 4 6"
+display.toModelDisplayName("system.ai.bge_large_en"); // "Bge Large En"
+display.toModelDisplayName("x", "Claude 4.6 (Preview)"); // provided name wins
+```
+
+`ServingEndpointSummary.displayName` is the optional friendly label for the
+picker; `name` stays the invoke id. A Databricks-provided name (a
+`display_name`/`displayName`/`name` endpoint tag, or an external-model name —
+extracted in [`@dbx-tools/model`](../../node/model)'s `serving.ts`) wins;
+otherwise the pure helper strips leading vendor prefixes and title-cases via
+`@dbx-tools/shared-core`'s tokenizer. It flows through `GET /models`
+automatically, and the UI picker shows `displayName ?? name`.
 
 ## Validate A Model Lookup Request
 

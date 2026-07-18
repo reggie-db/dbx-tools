@@ -5,6 +5,8 @@ import { MastraChat } from "@dbx-tools/ui-mastra/react";
 // "New chat" creates a fresh thread. Thread management is on by default
 // (`enableThreads`); this page highlights that flow vs the /stream page.
 
-const Conversations = () => <MastraChat showModelPicker className="h-full" />;
+const Conversations = () => (
+  <MastraChat showModelPicker enableExport className="h-full" />
+);
 
 export default Conversations;

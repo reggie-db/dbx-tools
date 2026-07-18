@@ -1,6 +1,7 @@
 import Conversations from "@/pages/Conversations";
 import Stream from "@/pages/Stream";
 import { Button, Separator } from "@dbx-tools/ui-appkit/react";
+import { BrandLogo, BrandProvider } from "@dbx-tools/ui-branding/react";
 import {
   BrowserRouter,
   Link,
@@ -41,6 +42,7 @@ const Nav = () => {
   const { pathname } = useLocation();
   return (
     <nav className="max-w-4xl mx-auto flex items-center gap-1 px-4 md:px-6 py-2">
+      <BrandLogo height={24} className="mr-2 h-6 w-auto" />
       {ROUTES.map((r) => (
         <Button
           key={r.path}
@@ -58,23 +60,29 @@ const Nav = () => {
 };
 
 const App = () => (
-  <BrowserRouter>
-    <div className="flex flex-col h-screen">
-      <header>
-        <Nav />
-        <Separator />
-      </header>
-      <main className="flex-1 min-h-0">
-        <Routes>
-          <Route path="/" element={<Navigate to="/stream" replace />} />
-          {ROUTES.map((r) => (
-            <Route key={r.path} path={r.path} element={r.element} />
-          ))}
-          <Route path="*" element={<Navigate to="/stream" replace />} />
-        </Routes>
-      </main>
-    </div>
-  </BrowserRouter>
+  // `applyToDocument` writes the brand CSS vars + sets `data-brand` (which
+  // activates the inert `:root[data-brand]` token bridge) and updates the
+  // page title + favicon. Uses the default dbx-tools brand; pass `context`
+  // to theme with another brand.
+  <BrandProvider applyToDocument>
+    <BrowserRouter>
+      <div className="flex flex-col h-dvh">
+        <header>
+          <Nav />
+          <Separator />
+        </header>
+        <main className="flex-1 min-h-0">
+          <Routes>
+            <Route path="/" element={<Navigate to="/stream" replace />} />
+            {ROUTES.map((r) => (
+              <Route key={r.path} path={r.path} element={r.element} />
+            ))}
+            <Route path="*" element={<Navigate to="/stream" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </BrowserRouter>
+  </BrandProvider>
 );
 
 export default App;

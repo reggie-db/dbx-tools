@@ -41,7 +41,12 @@ export const ExportMenu = ({
       <DownloadIcon className="size-3" />
     </Button>
   ) : (
-    <Button type="button" size="sm" variant="outline" className="gap-1.5">
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className="h-7 gap-1 rounded-full px-2.5 text-xs [&_svg]:size-3"
+    >
       <DownloadIcon className="size-3" />
       Export
     </Button>

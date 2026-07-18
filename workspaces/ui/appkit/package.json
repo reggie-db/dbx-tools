@@ -27,6 +27,7 @@
   "dependencies": {
     "@databricks/appkit-ui": "catalog:",
     "@dbx-tools/shared-core": "workspace:*",
+    "@dbx-tools/ui-branding": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "react": "catalog:",
