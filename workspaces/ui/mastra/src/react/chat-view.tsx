@@ -1,6 +1,14 @@
 import {
   Alert,
   AlertDescription,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   AlertTitle,
   Button,
   Empty,
@@ -286,18 +294,20 @@ export const ChatView = ({
   // otherwise as static text.
   const showModelDisplay = Boolean(onModelChange);
   const modelChangeable = Boolean(models && models.length > 0);
-  // Human-readable name for an endpoint id, using the catalogue's
-  // `displayName` when present, else the raw id.
+  // Human-readable name for a pinned endpoint id, using the catalogue's
+  // `displayName`. Returns undefined until the catalogue has an entry for it,
+  // so we never fall back to the raw id (no raw-name flash on load).
   const modelLabel = (name?: string): string | undefined => {
     if (!name) return undefined;
-    return models?.find((m) => m.name === name)?.displayName || name;
+    return models?.find((m) => m.name === name)?.displayName;
   };
-  // The default option shows the server's fallback model by name when known
-  // (from `defaultModelName`), else a neutral "Default" - no "server default"
-  // phrasing either way.
-  const defaultOptionLabel = modelLabel(defaultModelName) ?? "Default";
-  // Label the current model by its human-readable name when a model is
-  // pinned, else the default-option label.
+  // The default option shows the server's fallback model by its already-
+  // humanized name (`defaultModelName` is the server's `displayName`), else a
+  // neutral "Default". No "server default" phrasing, no raw id.
+  const defaultOptionLabel = defaultModelName || "Default";
+  // Label the current model by its human-readable name when a model is pinned
+  // and the catalogue has resolved it; else the default-option label. Never
+  // shows a raw endpoint id.
   const currentModelLabel = modelLabel(model) || defaultOptionLabel;
   // Picker entries sorted by their human-readable label (case-insensitive).
   const sortedModels = [...(models ?? [])].sort((a, b) =>
@@ -339,29 +349,26 @@ export const ChatView = ({
     if (isMobile) setMobileDrawerOpen((open) => !open);
     else toggleDesktopSidebar();
   };
-  // Top bar carries only the sidebar toggle + Clear now; the model picker and
-  // export live in a toolbar row just above the composer (Janna-style), closer
-  // to where the user is typing.
-  const showHeader = showClear || showSidebar;
-  const showComposerToolbar = showModelDisplay || showExport;
+  // Top bar carries only the sidebar toggle now; the model picker, export, and
+  // clear all live in a toolbar row below the composer, closer to where the
+  // user is typing.
+  const showHeader = showSidebar;
+  const showComposerToolbar = showModelDisplay || showExport || showClear;
 
-  // Local "in-flight" + confirm latch for the clear button so the
-  // user can't double-fire the DELETE and so a stray click doesn't
-  // wipe history without a beat to back out. Resets back to idle
-  // after the parent's `onClear` settles (success or failure).
-  const [clearState, setClearState] = useState<"idle" | "confirm" | "clearing">("idle");
+  // Clear confirmation is an AppKit `AlertDialog` (a real modal), plus an
+  // in-flight flag so the DELETE can't be double-fired. `clearing` disables
+  // the confirm action while `onClear` runs; the dialog closes on settle.
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
-  const handleClearClick = async () => {
-    if (clearState === "clearing" || !onClear) return;
-    if (clearState === "idle") {
-      setClearState("confirm");
-      return;
-    }
-    setClearState("clearing");
+  const handleClearConfirm = async () => {
+    if (clearing || !onClear) return;
+    setClearing(true);
     try {
       await onClear();
+      setClearOpen(false);
     } finally {
-      setClearState("idle");
+      setClearing(false);
     }
   };
 
@@ -462,44 +469,6 @@ export const ChatView = ({
                     </TooltipTrigger>
                     <TooltipContent>
                       {sidebarOpen ? "Hide conversations" : "Show conversations"}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
-              <div className="flex min-w-0 items-center justify-end gap-2 md:gap-3">
-                {showClear && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant={clearState === "confirm" ? "destructive" : "outline"}
-                        size="sm"
-                        onClick={handleClearClick}
-                        onBlur={() =>
-                          // Drop the confirm latch when focus leaves so a
-                          // half-armed button doesn't sit destructive-red
-                          // forever after the user clicks away.
-                          setClearState((s) => (s === "confirm" ? "idle" : s))
-                        }
-                        disabled={clearState === "clearing"}
-                        className="gap-1.5"
-                      >
-                        {clearState === "clearing" ? (
-                          <Spinner className="size-3" />
-                        ) : (
-                          <Trash2Icon className="size-3" />
-                        )}
-                        {clearState === "confirm"
-                          ? "Confirm clear"
-                          : clearState === "clearing"
-                            ? "Clearing..."
-                            : "Clear"}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {clearState === "confirm"
-                        ? "Click again to confirm; wipes this conversation."
-                        : "Clear chat history for this thread"}
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -718,6 +687,51 @@ export const ChatView = ({
                     onExport={(format) => void onExportConversation?.(format)}
                     tooltip="Export conversation"
                   />
+                )}
+                {showClear && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setClearOpen(true)}
+                          className="h-7 gap-1 rounded-full px-2.5 text-xs [&_svg]:size-3"
+                        >
+                          <Trash2Icon className="size-3" />
+                          Clear
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Clear chat history for this thread</TooltipContent>
+                    </Tooltip>
+                    <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Clear this conversation?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This permanently deletes the chat history for this thread. This
+                            can&apos;t be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={(e) => {
+                              // Keep the dialog open while the DELETE runs; we
+                              // close it ourselves once `onClear` settles.
+                              e.preventDefault();
+                              void handleClearConfirm();
+                            }}
+                            disabled={clearing}
+                          >
+                            {clearing ? <Spinner className="size-3" /> : null}
+                            {clearing ? "Clearing..." : "Clear"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
                 )}
               </div>
             )}

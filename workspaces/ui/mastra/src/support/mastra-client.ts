@@ -175,12 +175,13 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Fetch the static default serving-endpoint id `agentId` falls back to
-   * when no model is pinned, from `GET ${basePath}/default-model`. Returns
-   * `null` when the agent resolves its model dynamically at call time (or the
-   * agent id is unknown) - there's nothing static to advertise. The picker
-   * uses this to name its "Server default" option. Defaults to the server's
-   * default agent when `agentId` is omitted.
+   * Fetch the humanized name of the static default model `agentId` falls back
+   * to when no model is pinned, from `GET ${basePath}/default-model`. Returns
+   * the server-humanized `displayName` (never a raw endpoint id), or `null`
+   * when the agent resolves its model dynamically at call time (or the agent
+   * id is unknown) - there's nothing static to advertise. The picker uses this
+   * to label its default option on load, before the `/models` catalogue
+   * arrives. Defaults to the server's default agent when `agentId` is omitted.
    */
   async defaultModel(agentId?: string, signal?: AbortSignal): Promise<string | null> {
     const query = agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
@@ -189,7 +190,7 @@ export class MastraPluginClient extends MastraClient {
       wire.DefaultModelResponseSchema,
       signal,
     );
-    return payload.model;
+    return payload.displayName ?? payload.model;
   }
 
   /**

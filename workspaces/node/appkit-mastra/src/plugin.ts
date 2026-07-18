@@ -62,7 +62,7 @@ import {
   type StatementData,
 } from "@dbx-tools/shared-mastra";
 import { serving as nodeServing } from "@dbx-tools/model";
-import { type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { display, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents";
 import { fetchChart } from "./chart";
 import type { MastraPluginConfig } from "./config";
@@ -327,9 +327,16 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     router.get(routes.MASTRA_ROUTES.defaultModel, (req, res) => {
       const requested = string.firstNonEmpty(req.query["agentId"]);
       const agentId = requested ?? this.built?.defaultAgentId ?? FALLBACK_AGENT_ID;
-      const model = this.built?.defaultModels[agentId];
+      const raw = this.built?.defaultModels[agentId];
       // `"<dynamic>"` (a call-time function) has no fixed id to advertise.
-      res.json({ agentId, model: model && model !== "<dynamic>" ? model : null });
+      const model = raw && raw !== "<dynamic>" ? raw : null;
+      // Return the humanized label too, so the picker shows a friendly name on
+      // load without waiting on the `/models` catalogue (no raw-id flash).
+      res.json({
+        agentId,
+        model,
+        displayName: model ? display.toModelDisplayName(model) : null,
+      });
     });
 
     // `GET /embed/:type/:id` is the single resolver for every embed
