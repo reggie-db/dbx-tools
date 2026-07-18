@@ -246,18 +246,20 @@ export const useMastraChat = (
   // using it as a hook dep doesn't refire the initial-history fetch on
   // every parent render.
   const mastraClient = useMastraClient();
-  // Apply the selected model as a per-request override header in place,
-  // so the next `agent.stream()` picks it up without rebuilding the
-  // client (which would refire history loads on every model change).
-  useEffect(() => {
-    mastraClient.setModelOverride(model || undefined);
-  }, [mastraClient, model]);
+  // The selected model rides each turn as a per-call override (see
+  // `runStream`), never stored on the shared client - so two threads can
+  // stream under different models without clobbering each other. Mirror it
+  // into a ref so the send path reads the latest selection without adding
+  // `model` to its dependency list.
+  const modelRef = useRef(model);
+  modelRef.current = model;
   const agentId = options.agentId ?? mastraClient.defaultAgent;
   // Built-in conversation management. When on, the chat always drives an
   // explicit client thread id (rather than leaning on the per-session
   // cookie) so it can reference, persist, and switch between the
-  // conversations a user owns. Selecting a thread routes every call
-  // (stream + history + clear) at it via `mastraClient.setThreadId`.
+  // conversations a user owns. Each call (stream / history / clear) carries
+  // its thread id per request, so many threads can run concurrently without
+  // sharing routing state.
   const enableThreads = options.enableThreads !== false;
   // Export is opt-in (default off): the host turns it on explicitly.
   const enableExport = options.enableExport === true;
@@ -693,7 +695,7 @@ export const useMastraChat = (
     async (
       threadId: string,
       assistantId: string,
-      open: () => Promise<MastraStreamResponse>,
+      open: (signal: AbortSignal) => Promise<MastraStreamResponse>,
     ) => {
       const controller = new AbortController();
       let token = 0;
@@ -712,10 +714,7 @@ export const useMastraChat = (
       });
       const runIdRef = { current: getSession(threadId).runId };
       try {
-        const streamThreadId =
-          threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
-        mastraClient.setThreadId(streamThreadId);
-        const stream = await open();
+        const stream = await open(controller.signal);
         await processStream(threadId, stream, assistantId, runIdRef, controller.signal);
         updateSession(threadId, (session) => {
           if (session.runToken !== token) return session;
@@ -745,7 +744,7 @@ export const useMastraChat = (
         }));
       }
     },
-    [getSession, mastraClient, processStream, refreshThreadsSoon, updateSession],
+    [getSession, processStream, refreshThreadsSoon, updateSession],
   );
 
   const runStream = useCallback(
@@ -757,35 +756,53 @@ export const useMastraChat = (
         assistantId,
         runId,
       }));
-      return driveStream(threadId, assistantId, () => {
-        const agent = mastraClient.getAgent(agentId);
-        const messagesForAgent = history.flatMap((m) =>
+      // Capture this run's thread + model at send time and pass them per
+      // call, so a run keeps its own routing even if the user switches
+      // threads or changes the model picker while it streams.
+      const streamThreadId =
+        threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
+      const model = modelRef.current || undefined;
+      return driveStream(threadId, assistantId, (signal) => {
+        const messages = history.flatMap((m) =>
           m.parts
             .filter((p): p is { type: "text"; text: string } => p.type === "text")
             .map((p) => ({ role: m.role, content: p.text })),
-        ) as Parameters<typeof agent.stream>[0];
-        return agent.stream(messagesForAgent, {
+        );
+        return mastraClient.streamAgent({
+          agentId,
+          messages,
           runId,
-        }) as Promise<MastraStreamResponse>;
+          threadId: streamThreadId,
+          model,
+          signal,
+        });
       });
     },
     [driveStream, mastraClient, agentId, updateSession],
   );
 
-  const stop = useCallback(() => {
-    const threadId = activeKey;
-    updateSession(threadId, (session) => {
-      if (!isSessionRunning(session)) return session;
-      session.abortController?.abort();
-      return {
-        ...session,
-        abortController: null,
-        runToken: session.runToken + 1,
-        error: null,
-        status: "ready",
-      };
-    });
-  }, [activeKey, updateSession]);
+  // Cancel a thread's in-flight run. Defaults to the active thread (the
+  // composer stop button), but takes an explicit thread id so the sidebar
+  // can cancel a background thread without switching to it. Aborting one
+  // thread's controller leaves every other run streaming - each run owns
+  // its own controller and routing.
+  const stop = useCallback(
+    (threadId?: string) => {
+      const key = threadId ?? activeKey;
+      updateSession(key, (session) => {
+        if (!isSessionRunning(session)) return session;
+        session.abortController?.abort();
+        return {
+          ...session,
+          abortController: null,
+          runToken: session.runToken + 1,
+          error: null,
+          status: "ready",
+        };
+      });
+    },
+    [activeKey, updateSession],
+  );
 
   /**
    * Approve or deny an in-flight `requireApproval` tool call. The
@@ -830,10 +847,22 @@ export const useMastraChat = (
         toolCallId,
         runId,
       });
-      await driveStream(activeKey, assistantId, () =>
+      const streamThreadId =
+        activeKey === DEFAULT_THREAD_SESSION_KEY ? undefined : activeKey;
+      await driveStream(activeKey, assistantId, (signal) =>
         decision.approved
-          ? mastraClient.approveToolCallStream(agentId, { runId, toolCallId })
-          : mastraClient.declineToolCallStream(agentId, { runId, toolCallId }),
+          ? mastraClient.approveToolCallStream(agentId, {
+              runId,
+              toolCallId,
+              threadId: streamThreadId,
+              signal,
+            })
+          : mastraClient.declineToolCallStream(agentId, {
+              runId,
+              toolCallId,
+              threadId: streamThreadId,
+              signal,
+            }),
       );
     },
     [activeKey, driveStream, getSession, mastraClient, agentId, updateSession],
@@ -882,7 +911,7 @@ export const useMastraChat = (
   const handleClear = useCallback(async () => {
     const threadId = activeKey;
     try {
-      const result = await mastraClient.clearHistory({ agentId });
+      const result = await mastraClient.clearHistory({ agentId, threadId: activeThreadId });
       logger.info("history cleared", { cleared: result.cleared });
     } catch (error) {
       logger.error("history clear error", {
@@ -1039,7 +1068,6 @@ export const useMastraChat = (
   // refetching or aborting other threads' runs.
   useEffect(() => {
     const threadId = activeKey;
-    mastraClient.setThreadId(activeThreadId);
     const session = getSession(threadId);
     if (session.historyLoaded) {
       setIsLoadingHistory(false);
@@ -1053,6 +1081,7 @@ export const useMastraChat = (
     mastraClient
       .history({
         agentId,
+        threadId: activeThreadId,
         page: 0,
         perPage: HISTORY_PAGE_SIZE,
         signal: controller.signal,
@@ -1096,7 +1125,7 @@ export const useMastraChat = (
     const page = session.historyPage;
     updateSession(threadId, (current) => ({ ...current, historyPage: page + 1 }));
     mastraClient
-      .history({ agentId, page, perPage: HISTORY_PAGE_SIZE })
+      .history({ agentId, threadId: activeThreadId, page, perPage: HISTORY_PAGE_SIZE })
       .then((response) => {
         const uiMessages = response.uiMessages as unknown as UIMessage[];
         if (uiMessages.length > 0) {
@@ -1123,7 +1152,15 @@ export const useMastraChat = (
         historyInFlightRef.current = false;
         setIsLoadingMore(false);
       });
-  }, [activeKey, getSession, mastraClient, agentId, updateSession, writeMessages]);
+  }, [
+    activeKey,
+    activeThreadId,
+    getSession,
+    mastraClient,
+    agentId,
+    updateSession,
+    writeMessages,
+  ]);
 
   // Chat export (opt-in). Resolves `[chart:<id>]` / `[data:<id>]` embeds
   // straight off the client so the export inlines the same charts /
@@ -1356,6 +1393,9 @@ export const useMastraChat = (
           onNewThread: newThread,
           onDeleteThread: deleteThread,
           onRenameThread: renameThread,
+          // Cancel a background thread's run from the sidebar without
+          // switching to it.
+          onCancelThread: stop,
           // Persisted sidebar visibility, controlled from the driver so
           // the show/hide choice survives reloads.
           sidebarOpen,

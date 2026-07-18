@@ -124,6 +124,7 @@ export const ChatView = ({
   onNewThread,
   onDeleteThread,
   onRenameThread,
+  onCancelThread,
   sidebarOpen: sidebarOpenProp,
   onToggleSidebar,
   onExportConversation,
@@ -424,6 +425,7 @@ export const ChatView = ({
                     : {})}
                   {...(onDeleteThread ? { onDelete: onDeleteThread } : {})}
                   {...(onRenameThread ? { onRename: onRenameThread } : {})}
+                  {...(onCancelThread ? { onCancel: onCancelThread } : {})}
                   onHide={toggleSidebar}
                   className="relative z-10 w-[85vw] max-w-xs shadow-xl"
                 />
@@ -444,6 +446,7 @@ export const ChatView = ({
                 {...(onNewThread ? { onNew: onNewThread } : {})}
                 {...(onDeleteThread ? { onDelete: onDeleteThread } : {})}
                 {...(onRenameThread ? { onRename: onRenameThread } : {})}
+                {...(onCancelThread ? { onCancel: onCancelThread } : {})}
                 onHide={toggleSidebar}
               />
             )
@@ -630,7 +633,7 @@ export const ChatView = ({
                     type="button"
                     size="icon-sm"
                     variant="default"
-                    onClick={onStop}
+                    onClick={() => onStop()}
                     aria-label="Stop response"
                   >
                     <SquareIcon className="size-3 fill-current" />

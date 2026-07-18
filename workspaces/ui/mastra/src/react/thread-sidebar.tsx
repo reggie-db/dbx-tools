@@ -13,6 +13,7 @@ import {
   MessageSquarePlusIcon,
   PanelLeftIcon,
   PencilIcon,
+  SquareIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useState } from "react";
@@ -42,6 +43,12 @@ export interface ThreadSidebarProps {
   onDelete?: (threadId: string) => void;
   /** Rename a thread. Per-row edit affordance (inline text field) hidden when omitted. */
   onRename?: (threadId: string, title: string) => void;
+  /**
+   * Cancel a thread's in-flight run. When provided, a streaming row (one in
+   * {@link streamingThreadIds}) shows a stop button in place of its spinner
+   * on hover, so a background run can be cancelled without switching to it.
+   */
+  onCancel?: (threadId: string) => void;
   /** Collapse the sidebar. Renders the hide button in the header when provided. */
   onHide?: () => void;
   /** Extra classes merged onto the sidebar root. */
@@ -67,6 +74,7 @@ export const ThreadSidebar = ({
   onNew,
   onDelete,
   onRename,
+  onCancel,
   onHide,
   className,
 }: ThreadSidebarProps) => {
@@ -212,12 +220,34 @@ export const ThreadSidebar = ({
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 truncate">
-                        {isStreaming && (
-                          <Loader2Icon
-                            aria-label="Streaming"
-                            className="size-3 shrink-0 animate-spin text-primary"
-                          />
-                        )}
+                        {isStreaming &&
+                          (onCancel ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onCancel(thread.id);
+                                  }}
+                                  aria-label="Stop generating"
+                                  className="size-4 shrink-0 text-primary"
+                                >
+                                  {/* Spinner by default; swap to a stop square on hover/focus. */}
+                                  <Loader2Icon className="size-3 animate-spin group-hover:hidden" />
+                                  <SquareIcon className="hidden size-3 fill-current group-hover:block" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Stop generating</TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <Loader2Icon
+                              aria-label="Streaming"
+                              className="size-3 shrink-0 animate-spin text-primary"
+                            />
+                          ))}
                         <span className="truncate">{threadTitle(thread)}</span>
                       </div>
                       {thread.updatedAt && (

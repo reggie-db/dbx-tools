@@ -140,12 +140,25 @@ import {
 } from "@dbx-tools/ui-mastra/react";
 
 const client = new MastraPluginClient(clientConfig);
-client.setModelOverride("claude sonnet");
-client.setThreadId(activeThreadId);
+
+// Routing (thread + model) is passed per call, so concurrent runs on
+// different threads never share state.
+const stream = await client.streamAgent({
+  agentId: client.defaultAgent,
+  messages: [{ role: "user", content: "Hello" }],
+  runId,
+  threadId: activeThreadId,
+  model: "claude sonnet",
+  signal: controller.signal,
+});
 
 const models = await client.models();
-const history = await client.history({ page: 0, perPage: 20 });
+const history = await client.history({ threadId: activeThreadId, page: 0, perPage: 20 });
 ```
+
+Each conversation thread runs independently: start a turn on one thread, switch
+to another and start a second, and both stream concurrently. Cancel one via its
+`AbortSignal` (or the driver's `onCancelThread`) without touching the others.
 
 `MastraPluginClient` extends `@mastra/client-js` with the AppKit-Mastra custom
 routes. It uses `credentials: "include"` so session cookies travel with streaming

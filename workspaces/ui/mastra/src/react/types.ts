@@ -99,7 +99,7 @@ export type ChatViewProps = {
    * to hide the Stop affordance (the Send button just disables while a
    * response streams).
    */
-  onStop?: () => void;
+  onStop?: (threadId?: string) => void;
   /** Extra classes merged onto the root layout container. */
   className?: string;
   /**
@@ -220,6 +220,13 @@ export type ChatViewProps = {
    * affordance that swaps the title into an inline text field.
    */
   onRenameThread?: (threadId: string, title: string) => void;
+  /**
+   * Cancel a thread's in-flight run by id, without switching to it. When
+   * provided, each running sidebar row shows a stop affordance next to its
+   * streaming indicator (see {@link streamingThreadIds}). Isolated to that
+   * thread - other threads keep streaming.
+   */
+  onCancelThread?: (threadId: string) => void;
   /**
    * Controlled open/closed state for the conversation sidebar. When
    * omitted the view manages its own (session-only) open state; pass

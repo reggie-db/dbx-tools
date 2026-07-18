@@ -72,43 +72,55 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Set (or clear) the per-request model override sent on every
-   * streaming call as `X-Mastra-Model`. The Mastra plugin's middleware
-   * reads it and overrides the resolved model for that request without
-   * an agent redeploy. `model` is either a concrete endpoint name
-   * (fuzzy-matched server-side) or a model class slug
-   * (`ModelClass.ChatFast` / `"chat-thinking"`); pass `undefined` to
-   * fall back to the agent's configured default.
+   * Build the per-request routing headers for a call: the thread-selection
+   * header (`THREAD_ID_HEADER`) so the server pins `RequestContext`'s thread
+   * id, and the model-override header (`MODEL_OVERRIDE_HEADER`) so the server
+   * swaps the resolved model for that request without an agent redeploy.
    *
-   * Mutates the shared `options.headers` in place (rather than
-   * rebuilding the client) so the client identity stays stable across
-   * model changes - hooks can depend on it without refiring history
-   * loads when only the model changes.
+   * Routing is per-CALL - never stored on the shared client - so concurrent
+   * runs on different threads / models can't clobber each other's headers.
+   * `threadId` is a conversation id (omit to fall back to the per-session
+   * cookie thread); `model` is a concrete endpoint name (fuzzy-matched
+   * server-side) or a model-class slug (`"chat-fast"` / `"chat-thinking"`).
    */
-  setModelOverride(model?: string): void {
-    const headers = (this.options.headers ??= {});
-    if (model) headers[override.MODEL_OVERRIDE_HEADER] = model;
-    else delete headers[override.MODEL_OVERRIDE_HEADER];
+  #routingHeaders(routing: { threadId?: string; model?: string }): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (routing.threadId) headers[thread.THREAD_ID_HEADER] = routing.threadId;
+    if (routing.model) headers[override.MODEL_OVERRIDE_HEADER] = routing.model;
+    return headers;
   }
 
   /**
-   * Select (or clear) the conversation thread every subsequent request
-   * targets, sent as the thread-selection header (`THREAD_ID_HEADER`).
-   * The plugin's middleware pins `RequestContext`'s thread id to it, so
-   * the agent stream persists into - and `history()` reads from - the
-   * chosen thread instead of the default per-session one. Pass
-   * `undefined` to fall back to the session thread.
-   *
-   * Mutates the shared `options.headers` in place (like
-   * {@link setModelOverride}) so the client identity stays stable; the
-   * inherited `agent.stream()` and the custom routes
-   * ({@link history} / {@link clearHistory} / {@link threads}) all read
-   * these headers, so selecting a thread routes every call at once.
+   * Open an agent stream for one conversation turn, routed and cancelled
+   * PER CALL. Posts to the agent `/stream` route with this run's own thread
+   * id + model as request headers and its own `AbortSignal` on the fetch, so
+   * many threads can stream at once and aborting one leaves the others
+   * untouched. Reads the SSE directly (like the tool-approval streams) rather
+   * than through the inherited `agent.stream()`, whose shared-client headers
+   * and single client-level abort signal can't isolate concurrent runs.
    */
-  setThreadId(threadId?: string): void {
-    const headers = (this.options.headers ??= {});
-    if (threadId) headers[thread.THREAD_ID_HEADER] = threadId;
-    else delete headers[thread.THREAD_ID_HEADER];
+  async streamAgent(params: {
+    agentId: string;
+    messages: Array<{ role: string; content: string }>;
+    runId: string;
+    threadId?: string;
+    model?: string;
+    signal?: AbortSignal;
+  }): Promise<MastraStreamResponse> {
+    const url = `${this.basePath}/agents/${encodeURIComponent(params.agentId)}/stream`;
+    const init: RequestInit = {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.#routingHeaders(params),
+      },
+      body: JSON.stringify({ messages: params.messages, runId: params.runId }),
+    };
+    if (params.signal) init.signal = params.signal;
+    const response = await fetch(url, init);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return asMastraStreamResponse(response);
   }
 
   /**
@@ -120,7 +132,7 @@ export class MastraPluginClient extends MastraClient {
    */
   async approveToolCallStream(
     agentId: string,
-    params: { runId: string; toolCallId: string },
+    params: { runId: string; toolCallId: string; threadId?: string; signal?: AbortSignal },
   ): Promise<MastraStreamResponse> {
     return this.#toolApprovalStream(agentId, "approve-tool-call", params);
   }
@@ -131,7 +143,7 @@ export class MastraPluginClient extends MastraClient {
    */
   async declineToolCallStream(
     agentId: string,
-    params: { runId: string; toolCallId: string },
+    params: { runId: string; toolCallId: string; threadId?: string; signal?: AbortSignal },
   ): Promise<MastraStreamResponse> {
     return this.#toolApprovalStream(agentId, "decline-tool-call", params);
   }
@@ -139,24 +151,22 @@ export class MastraPluginClient extends MastraClient {
   async #toolApprovalStream(
     agentId: string,
     route: "approve-tool-call" | "decline-tool-call",
-    params: { runId: string; toolCallId: string },
+    params: { runId: string; toolCallId: string; threadId?: string; signal?: AbortSignal },
   ): Promise<MastraStreamResponse> {
-    const response = (await this.request(
-      `/agents/${encodeURIComponent(agentId)}/${route}`,
-      {
-        method: "POST",
-        body: params,
-        stream: true,
+    const url = `${this.basePath}/agents/${encodeURIComponent(agentId)}/${route}`;
+    const init: RequestInit = {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.#routingHeaders({ threadId: params.threadId }),
       },
-    )) as Response;
-    if (!response.body) throw new Error("No response body");
-    return asMastraStreamResponse(
-      new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-      }),
-    );
+      body: JSON.stringify({ runId: params.runId, toolCallId: params.toolCallId }),
+    };
+    if (params.signal) init.signal = params.signal;
+    const response = await fetch(url, init);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return asMastraStreamResponse(response);
   }
 
   /**
@@ -209,11 +219,14 @@ export class MastraPluginClient extends MastraClient {
   /**
    * Fetch one page of thread history from `GET ${basePath}/history`.
    * Messages come back oldest -> newest so the caller can prepend them
-   * to a live transcript.
+   * to a live transcript. `threadId` targets a specific conversation
+   * (sent as the `?threadId=` query so it doesn't depend on shared client
+   * state); omit it to read the per-session cookie thread.
    */
   async history(
     options: {
       agentId?: string;
+      threadId?: string;
       page?: number;
       perPage?: number;
       signal?: AbortSignal;
@@ -222,6 +235,7 @@ export class MastraPluginClient extends MastraClient {
     const params = new URLSearchParams();
     if (options.page !== undefined) params.set("page", String(options.page));
     if (options.perPage !== undefined) params.set("perPage", String(options.perPage));
+    if (options.threadId) params.set(thread.THREAD_ID_QUERY, options.threadId);
     const qs = params.toString();
     const base = this.#agentScoped(routes.MASTRA_ROUTES.history, options.agentId);
     return this.#getJson(
@@ -232,19 +246,26 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Wipe the caller's thread history (`DELETE ${basePath}/history`).
-   * The session cookie that anchors the thread id is preserved - only
-   * the messages go away. Idempotent: a fresh thread reports
+   * Wipe a thread's history (`DELETE ${basePath}/history`). `threadId`
+   * targets a specific conversation via the thread-selection header (so it
+   * doesn't depend on shared client state); omit it to clear the per-session
+   * cookie thread. The session cookie that anchors the thread id is
+   * preserved - only the messages go away. Idempotent: a fresh thread reports
    * `cleared: 0` without erroring.
    */
   async clearHistory(
-    options: { agentId?: string; signal?: AbortSignal } = {},
+    options: { agentId?: string; threadId?: string; signal?: AbortSignal } = {},
   ): Promise<MastraClearHistoryResponse> {
     return this.#mutateJson(
       this.#agentScoped(routes.MASTRA_ROUTES.history, options.agentId),
       "DELETE",
       wire.MastraClearHistoryResponseSchema,
-      options.signal ? { signal: options.signal } : {},
+      {
+        ...(options.threadId
+          ? { headers: { [thread.THREAD_ID_HEADER]: options.threadId } }
+          : {}),
+        ...(options.signal ? { signal: options.signal } : {}),
+      },
     );
   }
 
@@ -282,9 +303,8 @@ export class MastraPluginClient extends MastraClient {
    * clashing with the inherited `MastraClient.deleteThread`, which hits
    * Mastra's stock thread route rather than our OBO-scoped, custom
    * mount). The id is sent as the thread-selection header for this one
-   * call (without disturbing the client's currently-selected thread,
-   * set via {@link setThreadId}), so the sidebar can remove any thread
-   * while the user stays on another. Idempotent: deleting an unknown /
+   * call, so the sidebar can remove any thread while the user stays on
+   * another (routing is per call, never shared). Idempotent: deleting an unknown /
    * already-removed thread reports `deleted: false` without erroring.
    */
   async removeThread(
@@ -306,9 +326,8 @@ export class MastraPluginClient extends MastraClient {
    * Rename a single conversation thread via the plugin's own
    * `PATCH ${basePath}/threads` route. The id travels as the
    * thread-selection header for this one call (mirroring
-   * {@link removeThread}, so the sidebar can rename any thread without
-   * disturbing the client's currently-selected thread) and the new
-   * `title` rides in the JSON body. The server enforces ownership and
+   * {@link removeThread}, so the sidebar can rename any thread; routing is
+   * per call, never shared) and the new `title` rides in the JSON body. The server enforces ownership and
    * echoes back the updated thread, so the caller can reflect the new
    * title immediately. Throws on an unknown / unowned thread (HTTP 404).
    */
@@ -384,13 +403,13 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Snapshot of the client's per-request override headers (model +
-   * thread selection) for the custom-route fetches that don't go
-   * through `@mastra/client-js`'s own request pipeline. Returns a fresh
-   * object each call so a caller can safely add one-off headers without
-   * mutating the shared `options.headers`. The thread-selection header
-   * here is what routes `history()` / `clearHistory()` / `threads()` to
-   * the currently-selected thread (see {@link setThreadId}).
+   * Snapshot of the client's base headers for the custom-route fetches
+   * that don't go through `@mastra/client-js`'s own request pipeline.
+   * Returns a fresh object each call so a caller can safely add one-off
+   * headers without mutating the shared `options.headers`. Routing
+   * (thread selection, model override) is passed per call - via a
+   * `?threadId=` query or the thread-selection header on the individual
+   * request - not stored here, so concurrent calls never share routing.
    */
   #defaultHeaders(): Record<string, string> {
     return { ...((this.options.headers as Record<string, string>) ?? {}) };
@@ -416,9 +435,8 @@ export class MastraPluginClient extends MastraClient {
    * `POST` / `DELETE` / `PATCH` + JSON-parse + schema-validate for the
    * mutating routes (`clearHistory` / `removeThread` / `renameThread` /
    * `feedback`). A JSON body, when present, sets `Content-Type`;
-   * `options.headers` add one-off headers (e.g. the thread-selection
-   * header for a targeted delete / rename) over the client's default
-   * override headers.
+   * `options.headers` add per-call headers (e.g. the thread-selection
+   * header for a targeted delete / rename) over the client's base headers.
    */
   async #mutateJson<T>(
     url: string,
@@ -477,12 +495,12 @@ export const useMastraConfig = (): MastraClientConfig =>
 /**
  * The single {@link MastraPluginClient} for the plugin, built once from
  * the published `basePath`. Use it for everything: stream a turn with
- * `client.getAgent(agentId).stream(...)`, page history with
- * `client.history()`, resolve embeds with `client.chart(id)`, etc.
- * Rebuilt only when `basePath` / `defaultAgent` change (e.g. a custom
- * mount), so it's safe as a `useMemo` / `useCallback` / `useEffect`
- * dependency; the per-request model override is applied in place via
- * {@link MastraPluginClient.setModelOverride} without changing identity.
+ * `client.streamAgent({ agentId, messages, runId, threadId, model, signal })`,
+ * page history with `client.history()`, resolve embeds with
+ * `client.chart(id)`, etc. Rebuilt only when `basePath` / `defaultAgent`
+ * change (e.g. a custom mount), so it's safe as a `useMemo` / `useCallback`
+ * / `useEffect` dependency; per-turn thread + model routing is passed per
+ * call rather than stored on the client, so concurrent runs stay isolated.
  */
 export const useMastraClient = (): MastraPluginClient => {
   const config = useMastraConfig();
