@@ -10,7 +10,8 @@ selection fields, and Mastra response schemas used by
 Key features:
 
 - Route constants for the AppKit-Mastra client surface, including history,
-  threads, suggestions, model lists, embeds, and feedback.
+  threads, suggestions, model lists, the per-agent default-model lookup,
+  embeds, and feedback.
 - Header/query/body constants for thread selection and model override requests.
 - Embed-marker parsing for delayed chart and statement-data payloads in
   streaming assistant text.
@@ -28,7 +29,7 @@ const config = wire.MastraClientConfigSchema.parse(await response.json());
 ```
 
 `wire.MastraClientConfigSchema` describes the plugin-published client config:
-mount path, default agent, feedback enablement, and MCP route details. Use it to
+mount path, default agent, the agent roster, and feedback enablement. Use it to
 bootstrap a UI without hard-coding server paths.
 
 ## Use Route Constants
@@ -41,7 +42,8 @@ const threadsUrl = `${basePath}${routes.MASTRA_ROUTES.threads}`;
 ```
 
 `routes.MASTRA_ROUTES` keeps client fetch calls aligned with plugin route names
-for history, threads, models, suggestions, feedback, and embeds.
+for history, threads, models, the default-model lookup, suggestions, feedback,
+and embeds.
 
 ## Select Threads And Models
 

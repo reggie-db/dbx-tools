@@ -184,9 +184,8 @@ export class MastraPluginClient extends MastraClient {
    * arrives. Defaults to the server's default agent when `agentId` is omitted.
    */
   async defaultModel(agentId?: string, signal?: AbortSignal): Promise<string | null> {
-    const query = agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
     const payload = await this.#getJson(
-      `${this.basePath}${routes.MASTRA_ROUTES.defaultModel}${query}`,
+      this.#agentScoped(routes.MASTRA_ROUTES.defaultModel, agentId),
       wire.DefaultModelResponseSchema,
       signal,
     );
@@ -553,35 +552,47 @@ export const useMastraModels = (
 };
 
 /**
- * Fetch the static default serving-endpoint id the given agent (or the
- * server's default agent) falls back to when no model is pinned, via
- * `client.defaultModel(agentId)`. `null` while loading, when the agent's
- * model is dynamic, or on error - the picker then shows a plain "Server
- * default". Pass `enabled: false` to skip the fetch (e.g. picker hidden).
+ * Fetch the humanized name of the static default model the given agent (or
+ * the server's default agent) falls back to when no model is pinned, via
+ * `client.defaultModel(agentId)`. `defaultModel` is `null` while loading,
+ * when the agent's model is dynamic, or on error - the picker then shows a
+ * plain "Default". Pass `enabled: false` to skip the fetch (e.g. picker
+ * hidden), which also clears any prior value. Returns an object to match the
+ * shape of the sibling data hooks ({@link useMastraModels},
+ * {@link useMastraSuggestions}).
  */
 export const useMastraDefaultModel = (
   agentId?: string,
   enabled = true,
-): string | null => {
+): { defaultModel: string | null; loading: boolean } => {
   const client = useMastraClient();
   const [model, setModel] = useState<string | null>(null);
+  const [loading, setLoading] = useState(enabled);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setModel(null);
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
+    setLoading(true);
     client
       .defaultModel(agentId, controller.signal)
       .then((m) => {
         if (!controller.signal.aborted) setModel(m);
       })
       .catch(() => {
-        // Non-critical: a missing default just yields a plain "Server default".
+        // Non-critical: a missing default just yields a plain "Default".
         if (!controller.signal.aborted) setModel(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
   }, [client, agentId, enabled]);
 
-  return model;
+  return { defaultModel: model, loading };
 };
 
 /**

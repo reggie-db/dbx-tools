@@ -318,14 +318,17 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         .catch(next);
     });
 
-    // `GET /default-model[?agentId=]` reports the static serving-endpoint id
-    // an agent falls back to when the client pins no model, so the picker can
-    // name its "Server default" option. Agent-scoped (defaults to the default
-    // agent); `model` is null when the agent has no static default (a dynamic,
-    // call-time model) or the agent id is unknown. Registered before the
-    // catch-all, same as `/models`.
-    router.get(routes.MASTRA_ROUTES.defaultModel, (req, res) => {
-      const requested = string.firstNonEmpty(req.query["agentId"]);
+    // `GET /default-model` (and `/default-model/:agentId`) reports the static
+    // serving-endpoint an agent falls back to when the client pins no model,
+    // so the picker can label its default option with the model's humanized
+    // name. Agent-scoped via the optional `/:agentId` suffix (URL symmetry
+    // with the history / threads / suggestions routes), defaulting to the
+    // default agent. `model` / `displayName` are null when the agent has no
+    // static default (a dynamic, call-time model) or the agent id is unknown.
+    // Reads only in-memory build state, so it's synchronous and needs no OBO
+    // scoping. Registered before the catch-all, same as `/models`.
+    const handleDefaultModel = (req: express.Request, res: express.Response): void => {
+      const requested = string.firstNonEmpty(req.params["agentId"]);
       const agentId = requested ?? this.built?.defaultAgentId ?? FALLBACK_AGENT_ID;
       const raw = this.built?.defaultModels[agentId];
       // `"<dynamic>"` (a call-time function) has no fixed id to advertise.
@@ -337,7 +340,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         model,
         displayName: model ? display.toModelDisplayName(model) : null,
       });
-    });
+    };
+    router.get(routes.MASTRA_ROUTES.defaultModel, handleDefaultModel);
+    router.get(`${routes.MASTRA_ROUTES.defaultModel}/:agentId`, handleDefaultModel);
 
     // `GET /embed/:type/:id` is the single resolver for every embed
     // marker the agent emits in prose (`[chart:<id>]`,

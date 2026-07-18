@@ -117,10 +117,10 @@ export type ChatViewProps = {
   model?: string;
   onModelChange?: (model: string) => void;
   /**
-   * The serving-endpoint id the server falls back to when no model is pinned.
-   * When set, the picker's "Server default" option names it (e.g. "Server
-   * default (Claude Sonnet 4.6)"), using the matching `models` entry's
-   * `displayName` when available.
+   * The serving-endpoint fallback the server uses when no model is pinned,
+   * already humanized (the server's `displayName`, e.g. "Claude Sonnet 4.6").
+   * When set, the picker's default option shows this name; otherwise it shows
+   * a neutral "Default". Never a raw endpoint id.
    */
   defaultModelName?: string;
   /**

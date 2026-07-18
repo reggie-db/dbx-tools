@@ -278,6 +278,13 @@ Use `serving.extractModelOverride()` and `serving.resolveServingConfig()` when
 building custom routes that should behave like the plugin's `/models` and stream
 routes.
 
+The plugin also serves `GET /default-model` (and `/default-model/:agentId`),
+returning `{ agentId, model, displayName }` - the static serving-endpoint an
+agent falls back to when the client pins no model, plus its humanized label.
+`model` / `displayName` are `null` when the agent resolves its model
+dynamically at call time. This lets a model picker label its default option
+without waiting on the `/models` catalogue (so it never flashes a raw id).
+
 ## Threads, History, And Suggestions
 
 When storage is enabled, the plugin provides route helpers and in-process

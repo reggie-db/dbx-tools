@@ -529,6 +529,21 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   (`...-4-6` -> "4.6"), glues size units (`120b` -> "120B"), and uppercases
   acronyms (GPT/GTE/BGE/OSS/AI). The UI picker shows `displayName ?? name`. Add
   new strip prefixes / acronyms / size units in `shared-model/src/display.ts`.
+  The `v<digit>` version marker (`v2` -> "V2") is kept as one token by a
+  `shared-core` tokenizer override, alongside the `ai` -> "AI" one.
+- **Default-model endpoint.** The picker labels its default option (the model
+  used when the client pins none) from `GET /default-model` (and
+  `/default-model/:agentId` - agent-scoped by the same `/:agentId` path-suffix
+  convention as `/history`/`/threads`/`/suggestions`, NOT a query param), which
+  returns `{ agentId, model, displayName }` with the server-humanized name so
+  the label never flashes a raw id or waits on `/models`. `model`/`displayName`
+  are null for a dynamic (call-time) model. Route: `MASTRA_ROUTES.defaultModel`
+  + `DefaultModelResponseSchema` (shared-mastra), handler + `BuiltAgents.defaultModels`
+  (appkit-mastra), client `defaultModel()` + `useMastraDefaultModel` hook
+  (ui-mastra). This is deliberately an endpoint, NOT a field on the static
+  `clientConfig` (per-agent + can be dynamic; the config sanitizer also redacts
+  values matching env vars like `DATABRICKS_SERVING_ENDPOINT_NAME`). The picker
+  shows the humanized name or a neutral "Default" - no "server default" text.
 - **Chat export (`ui-mastra/src/support/export.ts`)** produces `pdf` |
   `markdown`. `pdf` renders one branded, self-contained HTML document and drives
   it through a hidden `<iframe>` + `print()` (Save-as-PDF dialog, no popup tab;

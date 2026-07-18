@@ -84,13 +84,7 @@ export function humanizeLabel(
   value: string,
   options?: string.TokenizeOptions,
 ): string {
-  const tokens = [
-    ...string.tokenizeWithOptions(
-      { lowerCase: true, capitalize: true, ...options },
-      value,
-    ),
-  ];
-  return tokens.length > 0 ? tokens.join(" ") : value;
+  return string.toLabel(value, options);
 }
 
 /**

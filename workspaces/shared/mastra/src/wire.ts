@@ -591,8 +591,9 @@ export type GenieDatasetData = z.infer<typeof GenieDatasetDataSchema>;
  *
  * `option` is intentionally NOT included. The resolved Echarts
  * spec lives off-band in the chart cache: the host UI fetches it
- * by `chartId` via `${MastraClientConfig.embedPathTemplate}`
- * (`/embed/chart/:id`, see {@link Chart}). Embedding the full spec inline would
+ * by `chartId` from the plugin's embed route (derived from
+ * `basePath` + {@link MASTRA_ROUTES}.embed, i.e. `/embed/chart/:id`;
+ * see {@link Chart}). Embedding the full spec inline would
  * inflate every dataset by several KB per chart and round-trip
  * through the LLM context for zero benefit (the model only needs
  * the `chartId` to place a `[chart:<chartId>]` marker in its

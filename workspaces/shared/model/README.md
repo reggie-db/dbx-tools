@@ -25,8 +25,8 @@ Key features:
 ```ts
 import { display } from "@dbx-tools/shared-model";
 
-display.toModelDisplayName("databricks-claude-sonnet-4-6"); // "Claude Sonnet 4 6"
-display.toModelDisplayName("system.ai.bge_large_en"); // "Bge Large En"
+display.toModelDisplayName("databricks-claude-sonnet-4-6"); // "Claude Sonnet 4.6"
+display.toModelDisplayName("system.ai.bge_large_en"); // "BGE Large En"
 display.toModelDisplayName("x", "Claude 4.6 (Preview)"); // provided name wins
 ```
 

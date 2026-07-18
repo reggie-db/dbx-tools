@@ -348,10 +348,10 @@ export const useMastraChat = (
   // hidden and skips the catalogue fetch entirely.
   const showModelPicker = Boolean(options.showModelPicker);
   const { models } = useMastraModels(showModelPicker);
-  // The endpoint the active agent falls back to when no model is pinned, so
-  // the picker can name its "Server default" option. Fetched only when the
-  // picker is shown; `null` when the agent's model is dynamic.
-  const defaultModelName = useMastraDefaultModel(agentId, showModelPicker);
+  // The humanized name of the model the active agent falls back to when no
+  // model is pinned, so the picker can label its default option. Fetched only
+  // when the picker is shown; `null` when the agent's model is dynamic.
+  const { defaultModel: defaultModelName } = useMastraDefaultModel(agentId, showModelPicker);
   // Starter suggestions: an explicit `options.suggestions` always
   // wins (including `[]` to force none) and is rendered verbatim;
   // otherwise auto-source the agent's Genie space sample questions.

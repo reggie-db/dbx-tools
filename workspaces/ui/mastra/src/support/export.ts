@@ -222,7 +222,7 @@ function messageText(message: UIMessage): string {
 function roleLabel(role: UIMessage["role"], userLabel: string): string {
   if (role === "user") return userLabel;
   if (role === "assistant") return "Assistant";
-  return role.charAt(0).toUpperCase() + role.slice(1);
+  return string.capitalize(role);
 }
 
 /* --------------------------------- HTML ---------------------------------- */
@@ -331,7 +331,7 @@ async function dataTableHtml(
   const data = await safeStatement(resolver, id);
   if (!data || data.rows.length === 0) return null;
   const head = data.columns
-    .map((c) => `<th>${escapeHtml(humanizeHeader(c))}</th>`)
+    .map((c) => `<th>${escapeHtml(string.toLabel(c))}</th>`)
     .join("");
   const body = data.rows
     .map(
@@ -409,7 +409,7 @@ async function dataTableMarkdown(
 ): Promise<string | null> {
   const data = await safeStatement(resolver, id);
   if (!data || data.rows.length === 0) return null;
-  const header = `| ${data.columns.map((c) => mdCell(humanizeHeader(c))).join(" | ")} |`;
+  const header = `| ${data.columns.map((c) => mdCell(string.toLabel(c))).join(" | ")} |`;
   const sep = `| ${data.columns.map(() => "---").join(" | ")} |`;
   const rows = data.rows.map(
     (row) => `| ${data.columns.map((c) => mdCell(cellText(row[c]))).join(" | ")} |`,
@@ -456,14 +456,6 @@ function cellText(value: unknown): string {
 /** Escape a Markdown table cell (pipes / newlines would break the row). */
 function mdCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
-}
-
-/** Title-case a snake/kebab/camel column name for a header label. */
-function humanizeHeader(name: string): string {
-  const tokens = [
-    ...string.tokenizeWithOptions({ lowerCase: true, capitalize: true }, name),
-  ];
-  return tokens.length > 0 ? tokens.join(" ") : name;
 }
 
 /** Escape HTML-significant characters (from the shared string utils). */

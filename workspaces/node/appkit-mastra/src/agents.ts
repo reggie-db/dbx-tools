@@ -331,8 +331,9 @@ export interface BuiltAgents {
   /**
    * Static default serving-endpoint id per agent id, as resolved by
    * {@link describeAgentDefaultModel}. `"<dynamic>"` when the model is a
-   * function decided at call time. Surfaced so `clientConfig()` can label
-   * the picker's "Server default" option with the real endpoint.
+   * function decided at call time. Consumed by the plugin's
+   * `GET /default-model` route handler so the client's model picker can label
+   * its default option with the real endpoint's humanized name.
    */
   defaultModels: Record<string, string>;
   /**

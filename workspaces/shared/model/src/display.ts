@@ -22,8 +22,13 @@ const STRIP_LEADING_TOKENS = new Set(["databricks", "system", "dbx"]);
 /** `ai` is stripped only as the `system.ai.*` namespace half (after `system`). */
 const NAMESPACE_SECOND_TOKENS: Record<string, string> = { system: "ai" };
 
-/** Segment-internal tokens rendered fully uppercased (acronyms), not title-cased. */
-const ACRONYMS = new Set(["gpt", "gte", "bge", "dbrx", "oss", "ai", "llm", "moe"]);
+/**
+ * Segment-internal tokens rendered fully uppercased (acronyms), not
+ * title-cased. `ai` is intentionally omitted: the shared tokenizer already
+ * force-cases `ai` -> `AI` via its {@link string.TokenizeOptions} `capitalize`
+ * override, which `renderSegment` always passes.
+ */
+const ACRONYMS = new Set(["gpt", "gte", "bge", "dbrx", "oss", "llm", "moe"]);
 
 /** Parameter-count unit letters glued to a preceding number (`120b` -> `120B`). */
 const SIZE_UNITS = new Set(["b", "m", "k"]);

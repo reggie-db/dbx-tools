@@ -7,6 +7,19 @@
  */
 import { fnvHashWithOptions } from "./hash";
 
+/**
+ * Options controlling {@link tokenizeWithOptions}. All default off except
+ * `camelCase`.
+ *
+ * - `distinct` - drop duplicate tokens (first occurrence wins).
+ * - `lowerCase` - lowercase every token.
+ * - `capitalize` - upper-case each token's first letter (then
+ *   {@link TOKENIZE_OVERRIDES} fix up `ai` -> `AI` and `v2` -> `V2`).
+ * - `omitUriScheme` - strip a leading `scheme://` before tokenizing.
+ * - `omitEmailDomain` - keep only the local part of an email.
+ * - `camelCase` - split on camelCase boundaries / digit runs / acronyms
+ *   (default `true`); when `false`, split only on non-alphanumerics.
+ */
 export type TokenizeOptions = {
   distinct?: boolean;
   lowerCase?: boolean;
@@ -492,4 +505,30 @@ function renderMap(node: Record<string, Description>, pad: string): string {
  */
 export function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * Title-case a snake / kebab / camel identifier into a human-readable label:
+ * tokenize (lowercased, capitalized), then join with spaces. Falls back to
+ * the raw `value` when it yields no tokens (e.g. punctuation-only input).
+ * `bge_large_en` -> `"Bge Large En"`, `promptId` -> `"Prompt Id"`.
+ *
+ * The single source of truth for the "humanize a column / field name" idiom -
+ * reused by the chat data-grid headers and the export renderer. Extra
+ * {@link TokenizeOptions} (e.g. `camelCase: false`) merge over the defaults.
+ */
+export function toLabel(value: string, options?: TokenizeOptions): string {
+  const tokens = [
+    ...tokenizeWithOptions({ lowerCase: true, capitalize: true, ...options }, value),
+  ];
+  return tokens.length > 0 ? tokens.join(" ") : value;
+}
+
+/**
+ * Upper-case the first character of `value`, leaving the rest untouched.
+ * `"working"` -> `"Working"`. Collapses the
+ * `s.charAt(0).toUpperCase() + s.slice(1)` idiom.
+ */
+export function capitalize(value: string): string {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }

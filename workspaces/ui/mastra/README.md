@@ -25,7 +25,7 @@ Key features:
   the server plugin.
 - Conversation sidebar with new, select, rename, delete, active-thread, and
   background-streaming states.
-- Export menu for print/PDF and Markdown, resolving charts and tables so
+- Export menu for PDF and Markdown, resolving charts and tables so
   exported conversations remain useful offline.
 
 ## Why Not Just AppKit UI?
@@ -44,7 +44,7 @@ understand Mastra-specific behavior:
   answer.
 - `[chart:<id>]` and `[data:<id>]` assistant markers rendered as ECharts charts
   and sortable tables.
-- Conversation export that resolves those embeds into Markdown or print/PDF.
+- Conversation export that resolves those embeds into Markdown or PDF.
 
 ## Add The Styles
 
@@ -133,6 +133,7 @@ transport or needs to combine Mastra messages with another state model.
 import {
   MastraPluginClient,
   useMastraClient,
+  useMastraDefaultModel,
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,
@@ -172,7 +173,7 @@ The UI understands the extra events produced by
 <MastraChat enableExport />
 ```
 
-Exports support Markdown downloads and print/PDF. Chart and data markers are
+Exports support Markdown downloads and PDF (rendered through a hidden print iframe, so the browser's Save-as-PDF dialog opens with no popup tab). Chart and data markers are
 resolved during export: charts are rendered to inline SVG with ECharts' server
 renderer, and data markers become real tables. Expired or missing embeds are
 skipped so old transcripts still export cleanly.
@@ -184,8 +185,9 @@ skipped so old transcripts still export cleanly.
 - `ChatView` - controlled presentational chat shell.
 - `MastraPluginClient` - `@mastra/client-js` plus AppKit-Mastra custom routes.
 - `useMastraClient`, `useMastraConfig`, `useMastraModels`,
-  `useMastraSuggestions`, `useMastraThreads`, `useChartFetch`,
-  `useStatementFetch` - route/config hooks for controlled clients.
+  `useMastraDefaultModel`, `useMastraSuggestions`, `useMastraThreads`,
+  `useChartFetch`, `useStatementFetch` - route/config hooks for controlled
+  clients.
 - `ThreadSidebar` - controlled conversation list.
 - `ExportMenu` - shared export format menu.
 - Types - `ChatViewProps`, `MastraChatProps`, `UseMastraChatOptions`,
