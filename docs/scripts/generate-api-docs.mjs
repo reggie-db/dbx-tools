@@ -34,6 +34,32 @@ function packageSlug(name) {
     .replace(/\//g, "-");
 }
 
+/** Human label for a package's `workspaces/<group>/…` area (mirrors sync-readmes). */
+function groupTitle(group) {
+  switch (group) {
+    case "node":
+      return "Node and AppKit";
+    case "shared":
+      return "Shared Contracts";
+    case "cli":
+      return "CLI Tools";
+    case "ui":
+      return "React UI";
+    default:
+      return group.charAt(0).toUpperCase() + group.slice(1);
+  }
+}
+
+/** First real prose paragraph of a README (skips the H1, code fences, tables). */
+function firstParagraph(markdown) {
+  return markdown
+    .replace(/^# .*(\r?\n)+/, "")
+    .split(/\r?\n\r?\n/)
+    .map((s) => s.trim())
+    .find((s) => s && !s.startsWith("```") && !s.startsWith("|"))
+    ?.replace(/\s+/g, " ");
+}
+
 function discoverPackages() {
   return walk(path.join(root, "workspaces"))
     .filter((p) => path.basename(p) === "package.json")
@@ -41,11 +67,16 @@ function discoverPackages() {
       const pkg = JSON.parse(read(packageJson));
       const dir = path.dirname(packageJson);
       const entry = path.join(dir, "index.ts");
+      const readme = path.join(dir, "README.md");
+      // `workspaces/<group>/<pkg>` -> the `<group>` segment, for the area column.
+      const group = posix(path.relative(root, dir)).split("/")[1] ?? "other";
       return {
         name: pkg.name,
         slug: packageSlug(pkg.name),
         dir,
         entry,
+        readme,
+        group,
       };
     })
     .filter((pkg) => fs.existsSync(pkg.entry))
@@ -64,12 +95,21 @@ function yamlString(value) {
   return JSON.stringify(value ?? "");
 }
 
+/**
+ * Strip the `.md` suffix from relative TypeDoc cross-links so Starlight
+ * resolves them (it serves extension-less routes). With `--flattenOutputFiles`
+ * TypeDoc emits flat, same-directory filenames, so the link target already
+ * matches the file on disk - we must NOT rewrite case or strip characters
+ * (the previous `@`-strip + lowercase produced paths that didn't exist and
+ * broke case-sensitive symbol files on the Linux CI runner). External links
+ * (`http`, `mailto`, anchors, absolute paths) pass through untouched.
+ */
 function normalizeTypedocLinks(markdown) {
   return markdown.replace(
-    /\]\((@dbx-tools\/[^)#]+?)(\.md)?(#[^)]+)?\)/g,
-    (_match, target, _md, hash = "") => {
-      const normalizedTarget = `./${target.replace(/^@/, "").toLowerCase()}`;
-      return `](${normalizedTarget}${hash.toLowerCase()})`;
+    /(\]\()([^)]+?)(\.md)(#[^)]+)?(\))/g,
+    (match, open, target, _md, hash = "", close) => {
+      if (/^(https?:|mailto:|#|\/)/.test(target)) return match;
+      return `${open}${target}${hash}${close}`;
     },
   );
 }
@@ -107,10 +147,13 @@ function relativeLink(fromFile, toFile) {
 function buildApiIndex(packages) {
   const indexPath = path.join(apiRoot, "index.md");
   const rows = packages
-    .map(
-      (pkg) =>
-        `| [${pkg.name}](${relativeLink(indexPath, path.join(apiRoot, pkg.slug, "index.md"))}) |`,
-    )
+    .map((pkg) => {
+      const link = relativeLink(indexPath, path.join(apiRoot, pkg.slug, "index.md"));
+      const summary = (
+        (fs.existsSync(pkg.readme) ? firstParagraph(read(pkg.readme)) : "") ?? ""
+      ).replace(/\|/g, "\\|");
+      return `| [${pkg.name}](${link}) | ${groupTitle(pkg.group)} | ${summary} |`;
+    })
     .join("\n");
   return [
     "---",
@@ -124,10 +167,10 @@ function buildApiIndex(packages) {
     "  Do not edit generated files under .docs-build/.",
     "-->",
     "",
-    "These pages are generated from package TypeScript exports. Edit source types and JSDoc comments, then rerun the docs generator.",
+    "Generated from each package's TypeScript exports and JSDoc. For usage guides and rationale, start with the package's README under Package Reference; edit the source types / JSDoc and rerun the docs generator to update these pages.",
     "",
-    "| Package |",
-    "| --- |",
+    "| Package | Area | Summary |",
+    "| --- | --- | --- |",
     rows,
     "",
   ].join("\n");
@@ -153,6 +196,11 @@ function generatePackageApi(pkg) {
       posix(path.relative(siteRoot, outDir)),
       "--entryFileName",
       "index.md",
+      // Flat, same-directory filenames. Without this TypeDoc nests output
+      // under a literal `@dbx-tools/` folder, which corrupts every cross-link
+      // and breaks case-sensitive filenames on the Linux CI runner.
+      "--flattenOutputFiles",
+      "true",
       "--readme",
       "none",
       "--hidePageHeader",
@@ -174,9 +222,27 @@ function generatePackageApi(pkg) {
     throw new Error(`TypeDoc failed for ${pkg.name}\n${output}`);
   }
 
-  for (const file of walk(outDir).filter((p) => p.endsWith(".md"))) {
+  const mdFiles = walk(outDir).filter((p) => p.endsWith(".md"));
+  for (const file of mdFiles) {
     addFrontmatter(file, pkg.name, pkg.entry);
   }
+
+  // A package with real API surface emits per-symbol pages. With flat output
+  // TypeDoc names them `<scope>.<Kind>.<Symbol>.md` (e.g.
+  // `resolve.Function.rankModels.md`, `model.Enumeration.ModelClass.md`); the
+  // singular capitalized `<Kind>` marks a documented symbol. `index.md` and
+  // `Namespace.<x>.md` stubs carry no symbol of their own. If nothing but
+  // stubs was produced there's nothing worth publishing, so drop the dir.
+  const hasSymbols = mdFiles.some((p) =>
+    /\.(Function|Interface|TypeAlias|Enumeration|Variable|Class)\./.test(
+      path.basename(p),
+    ),
+  );
+  if (!hasSymbols) {
+    fs.rmSync(outDir, { recursive: true, force: true });
+    return false;
+  }
+  return true;
 }
 
 function main() {
@@ -207,8 +273,7 @@ function main() {
 
   const generated = [];
   for (const pkg of packages) {
-    generatePackageApi(pkg);
-    generated.push(pkg);
+    if (generatePackageApi(pkg)) generated.push(pkg);
   }
 
   write(path.join(apiRoot, "index.md"), buildApiIndex(generated));

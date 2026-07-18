@@ -24,7 +24,12 @@ Key features:
 - Inline embed rendering for `[chart:<id>]` and `[data:<id>]` markers produced by
   the server plugin.
 - Conversation sidebar with new, select, rename, delete, active-thread, and
-  background-streaming states.
+  background-streaming states, plus a per-row cancel for a running thread.
+- Concurrent threads: run several conversations at once, switch between them
+  while each keeps streaming, and cancel any one independently (per-thread abort
+  + routing, no shared client state).
+- Mid-turn steering: submit a message while a turn streams to fold it into the
+  live run (Mastra queue-message), with an immediate interrupt-and-resend option.
 - Export menu for PDF and Markdown, resolving charts and tables so
   exported conversations remain useful offline.
 
@@ -44,6 +49,9 @@ understand Mastra-specific behavior:
   answer.
 - `[chart:<id>]` and `[data:<id>]` assistant markers rendered as ECharts charts
   and sortable tables.
+- Concurrent multi-thread streaming, per-thread cancel, and mid-turn steering
+  (queue-message with interrupt fallback) - the native AppKit chat surface runs
+  one turn at a time and has no steering.
 - Conversation export that resolves those embeds into Markdown or PDF.
 
 ## Add The Styles

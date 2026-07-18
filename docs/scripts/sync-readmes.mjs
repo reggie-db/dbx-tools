@@ -218,11 +218,13 @@ function nav(packages) {
   const sidebar = [
     { label: "Overview", link: "/" },
     { label: "Package Reference", link: "/packages/" },
-    { label: "API Reference", link: "/api/" },
     ...[...groups.entries()].map(([group, items]) => ({
       label: groupTitle(group),
       items: items.map((item) => ({ label: item.text, link: item.link })),
     })),
+    // API reference sorts after the README guides: readers reach the
+    // hand-written package guides first, then the generated TypeScript API.
+    { label: "API Reference", link: "/api/" },
   ];
   return {
     sidebar,

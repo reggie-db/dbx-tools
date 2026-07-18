@@ -142,7 +142,10 @@ why to use this package anyway:
   AppKit agent model is enough.
 - `@dbx-tools/ui-mastra`: use when the server is `node-appkit-mastra` and the UI
   needs Mastra stream handling, approvals, thread sidebar, model picker,
-  feedback, exports, and `[chart:<id>]` / `[data:<id>]` embeds. Native AppKit UI
+  feedback, exports, `[chart:<id>]` / `[data:<id>]` embeds, or the features the
+  native AppKit chat surface lacks: CONCURRENT multi-thread streaming (run many
+  conversations at once, switch freely, cancel any one), and mid-turn STEERING
+  (queue a message into a live run, with interrupt-and-resend). Native AppKit UI
   is enough for general components or native Genie/Serving hooks.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need async iterators, snapshot diffing, typed events,
@@ -555,3 +558,20 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   interpolates it with neutral fallbacks. The email UI (`ui-email`) needs no
   export/brand code — it styles off AppKit tokens, so the `[data-brand]` bridge
   re-skins it automatically wherever a brand is applied.
+- **Concurrent threads + steering (`ui-mastra`).** The `useMastraChat` driver
+  keeps a per-thread `ThreadSession` map (each with its own `abortController` +
+  `runToken`); chunks route by `threadId`, so many threads stream at once. Every
+  request carries its own thread + model as PER-CALL headers (`streamAgent` /
+  `queueMessage` in `mastra-client.ts`) with its own `AbortSignal` — there is NO
+  shared mutable client routing (the old `setThreadId`/`setModelOverride` header
+  mutation was removed) so concurrent runs never collide. Cancel is thread-
+  addressed (`stop(threadId?)`), exposed to the drawer as `onCancelThread`.
+  Mid-turn steering: `sendMessage` on a running thread calls `queueMessage`
+  (`ifActive.behavior: 'deliver'`) to fold the message into the live run, with
+  an automatic interrupt-and-resend fallback if the server won't deliver; the
+  composer also offers an explicit `onInterrupt` (abort + resend now). Cancelling
+  / superseding a run settles stuck `running` tool pills via
+  `terminateRunningToolEvents` (thread-sessions.ts). Server-side, the scoped API
+  gate (`server.ts` `AGENT_INFERENCE`) must allow `queue-message` /
+  `send-message` / `threads/subscribe` for steering to work under `apiAccess:
+  "scoped"`. Mastra's queue/signal/subscribe routes are `@experimental`.
