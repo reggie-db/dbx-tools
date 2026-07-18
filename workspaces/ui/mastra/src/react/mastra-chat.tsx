@@ -10,6 +10,7 @@ import { exportChat, type EmbedResolver, type ExportFormat } from "../support/ex
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import {
   useMastraClient,
+  useMastraDefaultModel,
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,
@@ -347,6 +348,10 @@ export const useMastraChat = (
   // hidden and skips the catalogue fetch entirely.
   const showModelPicker = Boolean(options.showModelPicker);
   const { models } = useMastraModels(showModelPicker);
+  // The endpoint the active agent falls back to when no model is pinned, so
+  // the picker can name its "Server default" option. Fetched only when the
+  // picker is shown; `null` when the agent's model is dynamic.
+  const defaultModelName = useMastraDefaultModel(agentId, showModelPicker);
   // Starter suggestions: an explicit `options.suggestions` always
   // wins (including `[]` to force none) and is rendered verbatim;
   // otherwise auto-source the agent's Genie space sample questions.
@@ -1333,6 +1338,7 @@ export const useMastraChat = (
     models: showModelPicker ? models : undefined,
     model,
     onModelChange: showModelPicker ? setModel : undefined,
+    defaultModelName: showModelPicker ? (defaultModelName ?? undefined) : undefined,
     onLoadMore: loadOlderHistory,
     isLoadingMore,
     hasMore: activeSession.hasMoreHistory,

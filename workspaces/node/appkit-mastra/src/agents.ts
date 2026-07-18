@@ -329,6 +329,13 @@ export interface BuiltAgents {
   agents: Record<string, Agent>;
   defaultAgentId: string;
   /**
+   * Static default serving-endpoint id per agent id, as resolved by
+   * {@link describeAgentDefaultModel}. `"<dynamic>"` when the model is a
+   * function decided at call time. Surfaced so `clientConfig()` can label
+   * the picker's "Server default" option with the real endpoint.
+   */
+  defaultModels: Record<string, string>;
+  /**
    * Ambient tools shared across every agent (the built-in system tools
    * spread with `config.tools`). Surfaced so the optional MCP server
    * can re-expose them when {@link MastraMcpConfig.tools} is enabled.
@@ -469,6 +476,7 @@ export async function buildAgents(opts: {
     ...(config.stripStaleCharts === false ? [] : [stripStaleChartsProcessor]),
   ];
   const agents: Record<string, Agent> = {};
+  const defaultModels: Record<string, string> = {};
   const approvalGatedByAgent: Array<{ agentId: string; toolIds: string[] }> = [];
 
   for (const [id, def] of Object.entries(definitions)) {
@@ -502,10 +510,12 @@ export async function buildAgents(opts: {
     // *static* default; per-request overrides (header / query /
     // body) and the workspace-catalogue fuzzy match still apply at
     // call time.
+    const defaultModel = describeAgentDefaultModel(config, def);
+    defaultModels[id] = defaultModel;
     log.info("agent registered", {
       id,
       name: def.name ?? id,
-      defaultModel: describeAgentDefaultModel(config, def),
+      defaultModel,
       tools: Object.keys(tools),
     });
   }
@@ -519,7 +529,7 @@ export async function buildAgents(opts: {
   assertApprovalGatedToolsHaveStorage(approvalGatedByAgent, memoryBuilder);
 
   log.info("agents ready", { ids, defaultAgentId });
-  return { agents, defaultAgentId, ambientTools };
+  return { agents, defaultAgentId, defaultModels, ambientTools };
 }
 
 /**

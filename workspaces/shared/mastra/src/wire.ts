@@ -68,6 +68,20 @@ export const MastraClientConfigSchema = z.object({
 });
 export type MastraClientConfig = z.infer<typeof MastraClientConfigSchema>;
 
+/**
+ * JSON payload returned by `GET ${basePath}/default-model[?agentId=]`. The
+ * static default serving-endpoint id the agent resolves to when the client
+ * pins no model, or `null` when the agent decides its model dynamically at
+ * call time (nothing static to advertise). Lets the picker name its "Server
+ * default" option. Kept off the static bootstrap `clientConfig` on purpose:
+ * it is per-agent and can be dynamic, so it is fetched like `/models`.
+ */
+export const DefaultModelResponseSchema = z.object({
+  agentId: z.string(),
+  model: z.string().nullable(),
+});
+export type DefaultModelResponse = z.infer<typeof DefaultModelResponseSchema>;
+
 /* ---------------------------- model catalogue ---------------------------- */
 
 /**

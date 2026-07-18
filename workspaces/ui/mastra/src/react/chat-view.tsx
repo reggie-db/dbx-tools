@@ -100,6 +100,7 @@ export const ChatView = ({
   models,
   model,
   onModelChange,
+  defaultModelName,
   onLoadMore,
   isLoadingMore = false,
   hasMore = false,
@@ -285,11 +286,22 @@ export const ChatView = ({
   // otherwise as static text.
   const showModelDisplay = Boolean(onModelChange);
   const modelChangeable = Boolean(models && models.length > 0);
-  // Label the current model by its human-readable name when the catalogue
-  // carries one (`displayName`), falling back to the raw endpoint id, then
-  // to "Server default" when no model is pinned.
-  const currentModelLabel =
-    models?.find((m) => m.name === model)?.displayName || model || "Server default";
+  // Human-readable name for an endpoint id, using the catalogue's
+  // `displayName` when present, else the raw id.
+  const modelLabel = (name?: string): string | undefined => {
+    if (!name) return undefined;
+    return models?.find((m) => m.name === name)?.displayName || name;
+  };
+  // The "Server default" option names the actual endpoint the server falls
+  // back to (from `defaultModelName`) when known: "Server default (Claude
+  // Sonnet 4.6)". Plain "Server default" when the server didn't report one.
+  const defaultOptionLabel = (() => {
+    const named = modelLabel(defaultModelName);
+    return named ? `Server default (${named})` : "Server default";
+  })();
+  // Label the current model by its human-readable name when a model is
+  // pinned, else the default-option label (which names the server default).
+  const currentModelLabel = modelLabel(model) || defaultOptionLabel;
   const showClear = Boolean(onClear);
   const showExport = Boolean(onExportConversation);
   // The conversation sidebar turns on once the host wires both the
@@ -680,10 +692,12 @@ export const ChatView = ({
                         size="sm"
                         className="h-7 w-auto max-w-[200px] gap-1 rounded-full px-2.5 text-xs [&_svg]:size-3"
                       >
-                        <SelectValue placeholder="Server default" />
+                        <SelectValue placeholder={defaultOptionLabel} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={DEFAULT_MODEL_VALUE}>Server default</SelectItem>
+                        <SelectItem value={DEFAULT_MODEL_VALUE}>
+                          {defaultOptionLabel}
+                        </SelectItem>
                         {models!.map((m) => (
                           <SelectItem key={m.name} value={m.name}>
                             {m.displayName || m.name}

@@ -117,6 +117,13 @@ export type ChatViewProps = {
   model?: string;
   onModelChange?: (model: string) => void;
   /**
+   * The serving-endpoint id the server falls back to when no model is pinned.
+   * When set, the picker's "Server default" option names it (e.g. "Server
+   * default (Claude Sonnet 4.6)"), using the matching `models` entry's
+   * `displayName` when available.
+   */
+  defaultModelName?: string;
+  /**
    * Optional infinite-scroll-up handler. Fired when the user scrolls
    * within `TOP_LOAD_MORE_THRESHOLD_PX` of the top of the
    * transcript. The parent is expected to fetch the next older page

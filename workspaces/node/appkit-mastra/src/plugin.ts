@@ -76,7 +76,7 @@ import { attachRoutePatchMiddleware, isMastraRequestAllowed, MastraServer } from
 import { resolveServingConfig } from "./serving";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement";
 import { threadsRoute } from "./threads";
-import { error, log } from "@dbx-tools/shared-core";
+import { error, log, string } from "@dbx-tools/shared-core";
 import { plugin } from "@dbx-tools/appkit";
 
 const GENIE_MANIFEST = plugin.data(genie).plugin.manifest;
@@ -316,6 +316,20 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         .listModels()
         .then((endpoints) => res.json({ endpoints }))
         .catch(next);
+    });
+
+    // `GET /default-model[?agentId=]` reports the static serving-endpoint id
+    // an agent falls back to when the client pins no model, so the picker can
+    // name its "Server default" option. Agent-scoped (defaults to the default
+    // agent); `model` is null when the agent has no static default (a dynamic,
+    // call-time model) or the agent id is unknown. Registered before the
+    // catch-all, same as `/models`.
+    router.get(routes.MASTRA_ROUTES.defaultModel, (req, res) => {
+      const requested = string.firstNonEmpty(req.query["agentId"]);
+      const agentId = requested ?? this.built?.defaultAgentId ?? FALLBACK_AGENT_ID;
+      const model = this.built?.defaultModels[agentId];
+      // `"<dynamic>"` (a call-time function) has no fixed id to advertise.
+      res.json({ agentId, model: model && model !== "<dynamic>" ? model : null });
     });
 
     // `GET /embed/:type/:id` is the single resolver for every embed
@@ -746,6 +760,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         "/route/history",
         "/route/threads",
         "/models",
+        "/default-model",
         "/suggestions",
         "/route/feedback",
         "/embed/:type/:id",

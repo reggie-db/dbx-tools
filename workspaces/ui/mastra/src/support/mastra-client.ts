@@ -175,6 +175,24 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
+   * Fetch the static default serving-endpoint id `agentId` falls back to
+   * when no model is pinned, from `GET ${basePath}/default-model`. Returns
+   * `null` when the agent resolves its model dynamically at call time (or the
+   * agent id is unknown) - there's nothing static to advertise. The picker
+   * uses this to name its "Server default" option. Defaults to the server's
+   * default agent when `agentId` is omitted.
+   */
+  async defaultModel(agentId?: string, signal?: AbortSignal): Promise<string | null> {
+    const query = agentId ? `?agentId=${encodeURIComponent(agentId)}` : "";
+    const payload = await this.#getJson(
+      `${this.basePath}${routes.MASTRA_ROUTES.defaultModel}${query}`,
+      wire.DefaultModelResponseSchema,
+      signal,
+    );
+    return payload.model;
+  }
+
+  /**
    * Fetch the curated starter questions for `agentId`'s Genie space
    * from `GET ${basePath}/suggestions`. Empty when the agent has no
    * Genie space (or it defines none).
@@ -531,6 +549,38 @@ export const useMastraModels = (
   }, [client, enabled]);
 
   return { models, loading, error };
+};
+
+/**
+ * Fetch the static default serving-endpoint id the given agent (or the
+ * server's default agent) falls back to when no model is pinned, via
+ * `client.defaultModel(agentId)`. `null` while loading, when the agent's
+ * model is dynamic, or on error - the picker then shows a plain "Server
+ * default". Pass `enabled: false` to skip the fetch (e.g. picker hidden).
+ */
+export const useMastraDefaultModel = (
+  agentId?: string,
+  enabled = true,
+): string | null => {
+  const client = useMastraClient();
+  const [model, setModel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const controller = new AbortController();
+    client
+      .defaultModel(agentId, controller.signal)
+      .then((m) => {
+        if (!controller.signal.aborted) setModel(m);
+      })
+      .catch(() => {
+        // Non-critical: a missing default just yields a plain "Server default".
+        if (!controller.signal.aborted) setModel(null);
+      });
+    return () => controller.abort();
+  }, [client, agentId, enabled]);
+
+  return model;
 };
 
 /**

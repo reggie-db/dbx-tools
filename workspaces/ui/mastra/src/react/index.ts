@@ -15,6 +15,7 @@ export {
   useChartFetch,
   useMastraClient,
   useMastraConfig,
+  useMastraDefaultModel,
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,

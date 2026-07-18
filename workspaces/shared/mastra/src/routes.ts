@@ -22,5 +22,11 @@ export const MASTRA_ROUTES = {
   feedback: "/route/feedback",
   suggestions: "/suggestions",
   models: "/models",
+  // The serving-endpoint id an agent falls back to when the client pins no
+  // model. Agent-scoped via an optional `?agentId=`; the default agent is
+  // used when omitted. Returns `{ agentId, model }` where `model` is null
+  // when the agent resolves its model dynamically at call time (nothing
+  // static to advertise). Lets the picker label its "Server default" option.
+  defaultModel: "/default-model",
   embed: "/embed",
 } as const;
