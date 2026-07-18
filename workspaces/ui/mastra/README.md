@@ -28,8 +28,9 @@ Key features:
 - Concurrent threads: run several conversations at once, switch between them
   while each keeps streaming, and cancel any one independently (per-thread abort
   + routing, no shared client state).
-- Mid-turn steering: submit a message while a turn streams to fold it into the
-  live run (Mastra queue-message), with an immediate interrupt-and-resend option.
+- Mid-turn steering: submit a message while a turn streams to "send now" - it
+  interrupts the in-flight run and starts a fresh turn with your message
+  immediately.
 - Export menu for PDF and Markdown, resolving charts and tables so
   exported conversations remain useful offline.
 
@@ -50,8 +51,8 @@ understand Mastra-specific behavior:
 - `[chart:<id>]` and `[data:<id>]` assistant markers rendered as ECharts charts
   and sortable tables.
 - Concurrent multi-thread streaming, per-thread cancel, and mid-turn steering
-  (queue-message with interrupt fallback) - the native AppKit chat surface runs
-  one turn at a time and has no steering.
+  ("send now" interrupts the live run and restarts with your message) - the
+  native AppKit chat surface runs one turn at a time and has no steering.
 - Conversation export that resolves those embeds into Markdown or PDF.
 
 ## Add The Styles

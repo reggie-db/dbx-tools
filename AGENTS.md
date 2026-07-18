@@ -145,8 +145,8 @@ why to use this package anyway:
   feedback, exports, `[chart:<id>]` / `[data:<id>]` embeds, or the features the
   native AppKit chat surface lacks: CONCURRENT multi-thread streaming (run many
   conversations at once, switch freely, cancel any one), and mid-turn STEERING
-  (queue a message into a live run, with interrupt-and-resend). Native AppKit UI
-  is enough for general components or native Genie/Serving hooks.
+  ("send now" interrupts the live run and restarts with the new message).
+  Native AppKit UI is enough for general components or native Genie/Serving hooks.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need async iterators, snapshot diffing, typed events,
   custom SSE/logging/tests, or chart/data planning. Native AppKit Genie is the
@@ -561,17 +561,15 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
 - **Concurrent threads + steering (`ui-mastra`).** The `useMastraChat` driver
   keeps a per-thread `ThreadSession` map (each with its own `abortController` +
   `runToken`); chunks route by `threadId`, so many threads stream at once. Every
-  request carries its own thread + model as PER-CALL headers (`streamAgent` /
-  `queueMessage` in `mastra-client.ts`) with its own `AbortSignal` — there is NO
-  shared mutable client routing (the old `setThreadId`/`setModelOverride` header
-  mutation was removed) so concurrent runs never collide. Cancel is thread-
-  addressed (`stop(threadId?)`), exposed to the drawer as `onCancelThread`.
-  Mid-turn steering: `sendMessage` on a running thread calls `queueMessage`
-  (`ifActive.behavior: 'deliver'`) to fold the message into the live run, with
-  an automatic interrupt-and-resend fallback if the server won't deliver; the
-  composer also offers an explicit `onInterrupt` (abort + resend now). Cancelling
-  / superseding a run settles stuck `running` tool pills via
-  `terminateRunningToolEvents` (thread-sessions.ts). Server-side, the scoped API
-  gate (`server.ts` `AGENT_INFERENCE`) must allow `queue-message` /
-  `send-message` / `threads/subscribe` for steering to work under `apiAccess:
-  "scoped"`. Mastra's queue/signal/subscribe routes are `@experimental`.
+  request carries its own thread + model as PER-CALL headers (`streamAgent` in
+  `mastra-client.ts`) with its own `AbortSignal` — there is NO shared mutable
+  client routing (the old `setThreadId`/`setModelOverride` header mutation was
+  removed) so concurrent runs never collide. Cancel is thread-addressed
+  (`stop(threadId?)`), exposed to the drawer as `onCancelThread`. Mid-turn
+  steering is "send now": `sendMessage` on a running thread interrupts the live
+  run and starts a fresh turn including the new message (`runStream` /
+  `driveStream` supersede via abort + `runToken` bump). True mid-run message
+  queueing (Mastra's experimental `queue-message` / `deliver`) was NOT used —
+  the agent didn't fold queued messages into the live turn, so interrupt-and-
+  restart is the reliable model. Cancelling / superseding a run settles stuck
+  `running` tool pills via `terminateRunningToolEvents` (thread-sessions.ts).

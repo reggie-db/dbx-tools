@@ -35,7 +35,6 @@ import {
 import { error as errorUtil } from "@dbx-tools/shared-core";
 import {
   ArrowDownIcon,
-  FastForwardIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   RefreshCwIcon,
@@ -101,7 +100,6 @@ export const ChatView = ({
   status,
   error,
   sendMessage,
-  onInterrupt,
   regenerate,
   onStop,
   className,
@@ -278,16 +276,6 @@ export const ChatView = ({
     });
   };
 
-  // Interrupt-submit: force an immediate course-correction (abort the current
-  // run, resend with this text) rather than queuing to the live turn.
-  const handleInterrupt = () => {
-    const text = input.trim();
-    if (!text || !onInterrupt) return;
-    onInterrupt({ text });
-    setInput("");
-    setIsAtBottom(true);
-    pinToBottom();
-  };
 
   const lastMessage = messages.at(-1);
   const lastEvents = lastMessage ? toolEventsByMessage[lastMessage.id] : undefined;
@@ -665,38 +653,17 @@ export const ChatView = ({
                 ) : (
                   <>
                     {/*
-                     * Running with typed text: offer an immediate interrupt
-                     * alongside the steer Send. Interrupt aborts the current
-                     * turn and resends now; Send folds the message into the
-                     * live turn (queue-steer).
-                     */}
-                    {isRunning && onInterrupt && input.trim() && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <InputGroupButton
-                            type="button"
-                            size="icon-sm"
-                            variant="outline"
-                            onClick={handleInterrupt}
-                            aria-label="Interrupt and send now"
-                          >
-                            <FastForwardIcon className="size-3" />
-                          </InputGroupButton>
-                        </TooltipTrigger>
-                        <TooltipContent>Interrupt &amp; send now</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {/*
-                     * Idle, or running with typed text: the primary button
-                     * sends. A send mid-run steers the live turn (see the
-                     * driver's sendMessage).
+                     * The primary button sends. Submitting while a turn is
+                     * running is a "send now": it interrupts the live run and
+                     * starts a fresh turn with this message immediately (see
+                     * the driver's sendMessage). Idle, it just sends.
                      */}
                     <InputGroupButton
                       type="submit"
                       size="icon-sm"
                       variant="default"
                       disabled={!input.trim()}
-                      aria-label={isRunning ? "Steer response" : "Send message"}
+                      aria-label={isRunning ? "Send now (interrupts)" : "Send message"}
                     >
                       <SendIcon className="size-3" />
                     </InputGroupButton>

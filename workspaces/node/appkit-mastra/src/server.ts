@@ -281,17 +281,11 @@ export interface MastraApiGateOptions {
  * prefix their `-generate` non-streaming variants), the `-network-` variants,
  * and `resume-stream` (covers `resume-stream-until-idle`). Without these an
  * approval-gated tool (e.g. `send_email`) can be requested but never approved
- * from the browser - the resume `POST` 403s under scoped mode.
- *
- * Also covers the mid-turn steering verbs the chat client uses to hand a
- * message to a live run: `queue-message` / `send-message` and the
- * `threads/subscribe` observer that watches an in-flight run. These are
- * `@experimental` in Mastra; keeping them here means a steer request is not
- * refused under scoped mode. These are the only *writes* the browser client
- * is allowed to make against stock Mastra.
+ * from the browser - the resume `POST` 403s under scoped mode. These are the
+ * only *writes* the browser client is allowed to make against stock Mastra.
  */
 const AGENT_INFERENCE =
-  /^\/agents\/[^/]+\/(stream|generate|network|resume-stream|approve-tool-call|decline-tool-call|approve-network-tool-call|decline-network-tool-call|queue-message|send-message|threads\/subscribe)/i;
+  /^\/agents\/[^/]+\/(stream|generate|network|resume-stream|approve-tool-call|decline-tool-call|approve-network-tool-call|decline-network-tool-call)/i;
 
 /** Mount-relative read-only agent metadata (`/agents`, `/agents/:id`). */
 const AGENT_METADATA = /^\/agents(\/[^/]+)?$/;

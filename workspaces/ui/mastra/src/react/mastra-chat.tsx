@@ -901,50 +901,21 @@ export const useMastraChat = (
     [activeThreadId, getSession, noteThreadActivity, updateSession, writeMessages],
   );
 
+  // Send a message, steering the active thread. Submitting while a turn is
+  // already streaming is a "send now": it interrupts the live run and starts a
+  // fresh turn that includes the new message, immediately. `runStream` /
+  // `driveStream` supersede the prior run (abort + runToken bump + settle any
+  // running tool pills), so the interrupted turn stops cleanly and the new one
+  // takes over. An idle submit just starts a turn.
   const sendMessage = useCallback<ChatViewProps["sendMessage"]>(
     (message) => {
       const text = message.text ?? "";
       if (!text) return;
       const threadId = activeKey;
       const { before, next } = appendUserMessage(threadId, text);
-      // Steering: if a turn is already streaming on this thread, hand the
-      // message to the live run so the agent folds it into the current turn
-      // (no restart). If the server won't deliver it, fall back to
-      // interrupting + resending so a steer never silently drops.
-      if (isSessionRunning(before) && before.runId) {
-        const runId = before.runId;
-        const steerThreadId =
-          threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
-        void mastraClient
-          .queueMessage({ agentId, runId, threadId: steerThreadId, message: text })
-          .then((accepted) => {
-            if (accepted) {
-              logger.info("steer:queued", { runId });
-              return;
-            }
-            logger.info("steer:fallback-interrupt", { runId });
-            void runStream(threadId, getSession(threadId).messages);
-          });
-        return;
+      if (isSessionRunning(before)) {
+        logger.info("steer:interrupt", { threadId });
       }
-      void runStream(threadId, next);
-    },
-    [appendUserMessage, runStream, activeKey, getSession, mastraClient, agentId],
-  );
-
-  // Interrupt-and-resend: unconditionally abort any in-flight run on the
-  // active thread and start a fresh turn with `text` included immediately.
-  // The composer offers this alongside the queue-steer send so the user can
-  // force an immediate course-correction rather than waiting for the current
-  // turn to fold in a queued message. `runStream`/`driveStream` supersede the
-  // prior run (abort + runToken bump + pill cleanup).
-  const interrupt = useCallback(
-    (message: { text?: string }) => {
-      const text = message.text ?? "";
-      if (!text) return;
-      const threadId = activeKey;
-      const { next } = appendUserMessage(threadId, text);
-      logger.info("steer:interrupt", { threadId });
       void runStream(threadId, next);
     },
     [appendUserMessage, runStream, activeKey],
@@ -1412,7 +1383,6 @@ export const useMastraChat = (
     status: activeSession.status,
     error: activeSession.error,
     sendMessage,
-    onInterrupt: interrupt,
     regenerate,
     onStop: stop,
     suggestions,

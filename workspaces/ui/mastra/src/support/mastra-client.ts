@@ -124,50 +124,6 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Steer a live run by handing it another message mid-turn ("queue"), via
-   * the agent `/queue-message` route. `behavior` controls what happens when
-   * the run is active: `deliver` (default) folds the message into the current
-   * turn so the agent picks it up without restarting; `persist` holds it for
-   * the next turn; `discard` drops it. Routed per call (own thread header, no
-   * shared client state) like {@link streamAgent}.
-   *
-   * Resolves `true` when the server accepted the message for delivery, `false`
-   * otherwise (unknown run / route unsupported / non-2xx) - never throws for a
-   * rejected steer, so the caller can fall back to interrupting + resending.
-   * Queue / signal routes are `@experimental` in Mastra.
-   */
-  async queueMessage(params: {
-    agentId: string;
-    runId: string;
-    threadId?: string;
-    message: string;
-    behavior?: "deliver" | "persist" | "discard";
-  }): Promise<boolean> {
-    const url = `${this.basePath}/agents/${encodeURIComponent(params.agentId)}/queue-message`;
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          ...this.#routingHeaders({ threadId: params.threadId }),
-        },
-        body: JSON.stringify({
-          runId: params.runId,
-          ...(params.threadId ? { threadId: params.threadId } : {}),
-          message: params.message,
-          ifActive: { behavior: params.behavior ?? "deliver" },
-        }),
-      });
-      if (!response.ok) return false;
-      const body = (await response.json().catch(() => null)) as { accepted?: boolean } | null;
-      return body?.accepted === true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
    * Resume a suspended `requireApproval` tool via `approve-tool-call`.
    * Reads SSE directly instead of `agent.approveToolCall()` so the
    * stock client's internal `processChatResponse_vNext` tee does not
