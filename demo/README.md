@@ -74,7 +74,7 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
    databricks auth login --host "$DATABRICKS_HOST"
    ```
 
-3. **Run** (client build + server, two processes):
+3. **Run** (client + server, two processes):
 
    ```bash
    pnpm --filter @dbx-tools/demo-appkit-app dev      # vite dev server
@@ -82,6 +82,43 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
    ```
 
    The server serves the client's built `dist/` on the same port as the API.
+
+## Two dev modes
+
+Which mode you want depends on whether you're building a CONSUMING project or
+working on the `@dbx-tools/*` packages themselves.
+
+### Consumer mode (default) — for consuming projects
+
+`@dbx-tools/*` install as normal versioned packages from the registry in
+[`.npmrc`](.npmrc). This is exactly how a downstream app consumes them, so it's
+the right mode when the demo (or your own app) is the thing under development and
+the packages are a fixed dependency. To pick up a new package version you
+bump/publish it, then `pnpm update "@dbx-tools/*" --latest` and rebuild.
+
+### Dev-link mode — for working on the packages in THIS repo
+
+When you're iterating on the package source in `../workspaces/**`, the
+bump → publish → update → restart loop is too slow. `dev-link` points every
+`@dbx-tools/*` dependency at its live workspace source (via pnpm `overrides`
+`link:` entries), so the running watchers hot-reload your edits with no
+republish and no restart:
+
+```bash
+node scripts/dev-link.mjs        # link @dbx-tools/* to ../workspaces source
+# start the watchers (client HMRs, server tsx-watch reloads):
+pnpm --filter @dbx-tools/demo-appkit-app dev
+pnpm --filter @dbx-tools/demo-appkit-server dev
+# now edit anything under ../workspaces/**/src — the demo updates live.
+
+node scripts/dev-link.mjs --unlink   # restore the registry consumer mode
+```
+
+`dev-link` discovers the packages automatically (it reads every
+`package.json` under `../workspaces`), so it needs no maintenance as packages
+are added or renamed. The link overrides are transient local state written into
+this `package.json`'s `pnpm.overrides` — run `--unlink` (or discard the change)
+before committing; the committed demo always stays a clean registry consumer.
 
 ## Required env
 

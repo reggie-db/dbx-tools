@@ -416,6 +416,26 @@ projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
 Barrels re-export every exporting file under `src/` except names starting with
 `_`; a package's barrel lives at its ROOT (`index.ts`), re-exporting `./src/*`.
 
+## Working on the packages via the `demo/` app
+
+`demo/` is a standalone downstream CONSUMER: it installs `@dbx-tools/*` from the
+registry in `demo/.npmrc` (a local verdaccio), so by default it runs PUBLISHED
+package versions, not your working tree. To iterate on package source against the
+running demo WITHOUT a bump/publish/reinstall/restart each time, use dev-link:
+
+```sh
+node demo/scripts/dev-link.mjs          # link every @dbx-tools/* to workspaces/** source
+# run the watchers (client HMR + server tsx-watch), then edit workspaces/**/src live
+node demo/scripts/dev-link.mjs --unlink # restore the registry-consumer resolution
+```
+
+`dev-link` discovers packages dynamically (reads every `package.json` under
+`workspaces/`) and writes transient `pnpm.overrides` `link:` entries into
+`demo/package.json`; `--unlink` (or discarding that change) returns the demo to a
+clean consumer before committing. Because the packages have `.ts` source entry
+points (no build step), `vite` and `tsx watch` read the linked source directly.
+See `demo/README.md` for the two-mode explanation (consumer vs dev-link).
+
 ## Generated files — DO NOT edit by hand
 
 - **Per-package** (`package.json`, `tsconfig.json`, `.projen/*`, `README.md`,
