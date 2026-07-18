@@ -525,5 +525,18 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   Databricks-provided name (a `display_name`/`displayName`/`name` endpoint tag or
   an external-model name — extracted in `node/model` `serving.ts`), else strip
   leading vendor prefixes (`databricks`/`system`/`dbx`, plus `ai` only as the
-  `system.ai.*` namespace half) and title-case. The UI picker shows
-  `displayName ?? name`. Add new strip prefixes in `shared-model/src/display.ts`.
+  `system.ai.*` namespace half) and title-case. Also dots numeric version runs
+  (`...-4-6` -> "4.6"), glues size units (`120b` -> "120B"), and uppercases
+  acronyms (GPT/GTE/BGE/OSS/AI). The UI picker shows `displayName ?? name`. Add
+  new strip prefixes / acronyms / size units in `shared-model/src/display.ts`.
+- **Chat export (`ui-mastra/src/support/export.ts`)** produces `pdf` | `print` |
+  `markdown`. `pdf`/`print` render one branded, self-contained HTML document and
+  drive it through a hidden `<iframe>` + `print()` (Save-as-PDF dialog, no popup
+  tab; falls back to an `.html` download when there's no DOM body). The module is
+  framework-free: brand styling arrives as a plain `ExportBrand` (`logoDataUrl` +
+  colors + font), which the driver (`mastra-chat.tsx`) resolves from the active
+  `BrandProvider` via `useBrand()` (`context.assets.logo.light` -> `resolveAsset`
+  data URL, `context.colors`, `context.typography`). `buildDocumentCss(brand)`
+  interpolates it with neutral fallbacks. The email UI (`ui-email`) needs no
+  export/brand code — it styles off AppKit tokens, so the `[data-brand]` bridge
+  re-skins it automatically wherever a brand is applied.
