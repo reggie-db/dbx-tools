@@ -35,6 +35,7 @@ import {
 import { error as errorUtil } from "@dbx-tools/shared-core";
 import {
   ArrowDownIcon,
+  FastForwardIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   RefreshCwIcon,
@@ -100,6 +101,7 @@ export const ChatView = ({
   status,
   error,
   sendMessage,
+  onInterrupt,
   regenerate,
   onStop,
   className,
@@ -253,15 +255,38 @@ export const ChatView = ({
     // to the live run (or interrupts + resends). Idle submits start a turn.
     sendMessage({ text });
     setInput("");
-    // Sending is an explicit "I want to see the response" action, so
-    // re-pin to the bottom even if the user had scrolled up. Without this
-    // the freshly-appended user turn + waiting row can leave `isAtBottom`
-    // false, suppressing auto-scroll and forcing a manual scroll down.
+    // Sending is an explicit "I want to see the response" action, so re-pin to
+    // the bottom even if the user had scrolled up. `setIsAtBottom(true)` makes
+    // the message-dep + ResizeObserver auto-scroll effects follow the new turn;
+    // the double-rAF is a belt-and-suspenders jump that runs AFTER React
+    // commits the appended message (a single frame can fire pre-commit).
     setIsAtBottom(true);
-    requestAnimationFrame(() => {
+    pinToBottom();
+  };
+
+  // Re-pin the transcript to the bottom after a submit. `setIsAtBottom(true)`
+  // drives the auto-scroll effects; the double-rAF jump runs after React
+  // commits the appended message (a single frame can fire pre-commit).
+  const pinToBottom = () => {
+    const pin = () => {
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
+    };
+    requestAnimationFrame(() => {
+      pin();
+      requestAnimationFrame(pin);
     });
+  };
+
+  // Interrupt-submit: force an immediate course-correction (abort the current
+  // run, resend with this text) rather than queuing to the live turn.
+  const handleInterrupt = () => {
+    const text = input.trim();
+    if (!text || !onInterrupt) return;
+    onInterrupt({ text });
+    setInput("");
+    setIsAtBottom(true);
+    pinToBottom();
   };
 
   const lastMessage = messages.at(-1);
@@ -638,17 +663,44 @@ export const ChatView = ({
                     <SquareIcon className="size-3 fill-current" />
                   </InputGroupButton>
                 ) : (
-                  // Idle, or running with typed text: the button sends. A send
-                  // mid-run steers the live turn (see the driver's sendMessage).
-                  <InputGroupButton
-                    type="submit"
-                    size="icon-sm"
-                    variant="default"
-                    disabled={!input.trim()}
-                    aria-label={isRunning ? "Steer response" : "Send message"}
-                  >
-                    <SendIcon className="size-3" />
-                  </InputGroupButton>
+                  <>
+                    {/*
+                     * Running with typed text: offer an immediate interrupt
+                     * alongside the steer Send. Interrupt aborts the current
+                     * turn and resends now; Send folds the message into the
+                     * live turn (queue-steer).
+                     */}
+                    {isRunning && onInterrupt && input.trim() && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <InputGroupButton
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            onClick={handleInterrupt}
+                            aria-label="Interrupt and send now"
+                          >
+                            <FastForwardIcon className="size-3" />
+                          </InputGroupButton>
+                        </TooltipTrigger>
+                        <TooltipContent>Interrupt &amp; send now</TooltipContent>
+                      </Tooltip>
+                    )}
+                    {/*
+                     * Idle, or running with typed text: the primary button
+                     * sends. A send mid-run steers the live turn (see the
+                     * driver's sendMessage).
+                     */}
+                    <InputGroupButton
+                      type="submit"
+                      size="icon-sm"
+                      variant="default"
+                      disabled={!input.trim()}
+                      aria-label={isRunning ? "Steer response" : "Send message"}
+                    >
+                      <SendIcon className="size-3" />
+                    </InputGroupButton>
+                  </>
                 )}
               </InputGroupAddon>
             </InputGroup>

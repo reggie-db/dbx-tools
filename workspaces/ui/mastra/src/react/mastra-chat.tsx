@@ -875,11 +875,12 @@ export const useMastraChat = (
     [activeKey, driveStream, getSession, mastraClient, agentId, updateSession],
   );
 
-  const sendMessage = useCallback<ChatViewProps["sendMessage"]>(
-    (message) => {
-      const text = message.text ?? "";
-      if (!text) return;
-      const threadId = activeKey;
+  // Append a user message to a thread's transcript, stamping `lastUserText`,
+  // thread-activity, and a provisional title for a brand-new thread. Returns
+  // the pre-append session (so callers can see whether a run was in flight)
+  // and the new message list. Shared by send + interrupt.
+  const appendUserMessage = useCallback(
+    (threadId: string, text: string): { before: ThreadSession; next: UIMessage[] } => {
       updateSession(threadId, (session) => ({ ...session, lastUserText: text }));
       if (activeThreadId) {
         noteThreadActivity(activeThreadId);
@@ -895,11 +896,21 @@ export const useMastraChat = (
       const before = getSession(threadId);
       const next = [...before.messages, makeUserMessage(text)];
       writeMessages(threadId, next);
-      // Steering: if a turn is already streaming on this thread, try to hand
-      // the message to the live run so the agent folds it into the current
-      // turn (no restart). If the server won't deliver it, fall back to
-      // interrupting the run and starting a fresh turn with the message
-      // included, so a steer never silently drops.
+      return { before, next };
+    },
+    [activeThreadId, getSession, noteThreadActivity, updateSession, writeMessages],
+  );
+
+  const sendMessage = useCallback<ChatViewProps["sendMessage"]>(
+    (message) => {
+      const text = message.text ?? "";
+      if (!text) return;
+      const threadId = activeKey;
+      const { before, next } = appendUserMessage(threadId, text);
+      // Steering: if a turn is already streaming on this thread, hand the
+      // message to the live run so the agent folds it into the current turn
+      // (no restart). If the server won't deliver it, fall back to
+      // interrupting + resending so a steer never silently drops.
       if (isSessionRunning(before) && before.runId) {
         const runId = before.runId;
         const steerThreadId =
@@ -918,17 +929,25 @@ export const useMastraChat = (
       }
       void runStream(threadId, next);
     },
-    [
-      runStream,
-      writeMessages,
-      activeThreadId,
-      activeKey,
-      getSession,
-      mastraClient,
-      agentId,
-      noteThreadActivity,
-      updateSession,
-    ],
+    [appendUserMessage, runStream, activeKey, getSession, mastraClient, agentId],
+  );
+
+  // Interrupt-and-resend: unconditionally abort any in-flight run on the
+  // active thread and start a fresh turn with `text` included immediately.
+  // The composer offers this alongside the queue-steer send so the user can
+  // force an immediate course-correction rather than waiting for the current
+  // turn to fold in a queued message. `runStream`/`driveStream` supersede the
+  // prior run (abort + runToken bump + pill cleanup).
+  const interrupt = useCallback(
+    (message: { text?: string }) => {
+      const text = message.text ?? "";
+      if (!text) return;
+      const threadId = activeKey;
+      const { next } = appendUserMessage(threadId, text);
+      logger.info("steer:interrupt", { threadId });
+      void runStream(threadId, next);
+    },
+    [appendUserMessage, runStream, activeKey],
   );
 
   /**
@@ -1393,6 +1412,7 @@ export const useMastraChat = (
     status: activeSession.status,
     error: activeSession.error,
     sendMessage,
+    onInterrupt: interrupt,
     regenerate,
     onStop: stop,
     suggestions,

@@ -44,6 +44,39 @@ import type {
 // the helpers that surface approval-gated tool calls out of a message's
 // parts.
 
+/**
+ * Copy `text` to the clipboard, resolving `true` on success. Prefers the
+ * async Clipboard API, but that is only available in a secure context
+ * (HTTPS / localhost) - over plain HTTP (e.g. a LAN / ZeroTier IP) it is
+ * `undefined`, which is why a tap on mobile could silently do nothing. Falls
+ * back to a hidden `<textarea>` + `document.execCommand("copy")` so copy works
+ * off a non-secure origin too.
+ */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through to the execCommand path.
+  }
+  try {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 const getReasoningText = (parts: UIMessage["parts"]): string =>
   parts
     .filter((p): p is { type: "reasoning"; text: string } => p.type === "reasoning")
@@ -274,6 +307,17 @@ export const AssistantBubble = ({
   );
   const fullText = textParts.map((p) => p.text).join("");
   const hasText = fullText.length > 0;
+  // Brief "copied" acknowledgement on the copy button (swaps the icon to a
+  // check for ~1.5s), so a tap gives visible feedback on touch where there's
+  // no hover/tooltip.
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    void copyText(fullText).then((ok) => {
+      if (!ok) return;
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
   // Suggestions are deferred until the turn is settled so they don't
   // pop in mid-stream. A bubble is "settled" if it isn't the active
   // streaming target - either the agent has returned to `ready` /
@@ -379,12 +423,17 @@ export const AssistantBubble = ({
                     size="icon"
                     variant="ghost"
                     className="size-7"
-                    onClick={() => navigator.clipboard.writeText(fullText)}
+                    onClick={handleCopy}
+                    aria-label={copied ? "Copied" : "Copy"}
                   >
-                    <CopyIcon className="size-3" />
+                    {copied ? (
+                      <CheckIcon className="size-3" />
+                    ) : (
+                      <CopyIcon className="size-3" />
+                    )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Copy</TooltipContent>
+                <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
               </Tooltip>
             )}
             {onExport && (

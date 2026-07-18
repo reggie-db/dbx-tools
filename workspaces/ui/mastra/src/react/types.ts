@@ -90,6 +90,15 @@ export type ChatViewProps = {
    */
   error?: Error | null;
   sendMessage: (message: { text: string }) => void;
+  /**
+   * Send a message that interrupts the in-flight turn immediately: abort the
+   * current run and start a fresh turn with this message. When provided and
+   * the chat is running, the composer shows a small "interrupt" action next
+   * to the queue-steer Send, so the user can force an immediate
+   * course-correction instead of folding the message into the live turn.
+   * Omit to offer only the queue-steer send while running.
+   */
+  onInterrupt?: (message: { text: string }) => void;
   regenerate?: () => void;
   /**
    * Abort the in-flight response. When provided and the chat is running
