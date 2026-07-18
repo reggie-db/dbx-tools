@@ -50,6 +50,28 @@ export function isSessionRunning(session: ThreadSession): boolean {
   return session.status === "submitted" || session.status === "streaming";
 }
 
+/**
+ * Settle any tool-progress pills still marked `running` to `done`. A cancelled
+ * or interrupted turn stops delivering the `tool-result` / `tool-error` chunks
+ * that would otherwise close them, so without this a Genie / chart pill would
+ * spin forever after the user hits stop. Returns the same map when nothing was
+ * running so callers can skip a needless state update.
+ */
+export function terminateRunningToolEvents(
+  toolEventsByMessage: Record<string, ToolEvent[]>,
+): Record<string, ToolEvent[]> {
+  let changed = false;
+  const next: Record<string, ToolEvent[]> = {};
+  for (const [messageId, events] of Object.entries(toolEventsByMessage)) {
+    next[messageId] = events.map((event) => {
+      if (event.status !== "running") return event;
+      changed = true;
+      return { ...event, status: "done" as const };
+    });
+  }
+  return changed ? next : toolEventsByMessage;
+}
+
 export function sessionKey(activeThreadId: string | undefined): string {
   return activeThreadId ?? DEFAULT_THREAD_SESSION_KEY;
 }

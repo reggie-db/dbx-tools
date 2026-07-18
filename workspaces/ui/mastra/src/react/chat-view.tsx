@@ -47,7 +47,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles";
 import { ExportMenu } from "./export-menu";
 import { SuggestionPills } from "./suggestion-pills";
-import { ThreadSidebar } from "./thread-sidebar";
+import { ThreadSidebar, type ThreadSidebarProps } from "./thread-sidebar";
 import type { ChatViewProps } from "./types";
 
 // Controlled, presentational chat shell: the scroll container, header
@@ -247,11 +247,10 @@ export const ChatView = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Don't queue a new turn while one is streaming - the Enter-key
-    // path would otherwise bypass the disabled Send button.
-    if (isRunning) return;
     const text = input.trim();
     if (!text) return;
+    // Submitting while a turn streams is a steer: the driver hands the text
+    // to the live run (or interrupts + resends). Idle submits start a turn.
     sendMessage({ text });
     setInput("");
     // Sending is an explicit "I want to see the response" action, so
@@ -360,6 +359,23 @@ export const ChatView = ({
   const showHeader = showSidebarToggle;
   const showComposerToolbar = showModelDisplay || showExport || showClear;
 
+  // Props shared by the mobile drawer and the desktop inline sidebar - the two
+  // render the SAME `ThreadSidebar`, differing only in framing (overlay vs.
+  // inline) and, on mobile, closing the drawer after select / new. Building
+  // the prop bag once keeps the two call sites from drifting.
+  const sidebarProps: ThreadSidebarProps = {
+    threads: threads ?? [],
+    ...(activeThreadId ? { activeThreadId } : {}),
+    streamingThreadIds,
+    isLoading: isLoadingThreads,
+    onSelect: (id) => onSelectThread?.(id),
+    onHide: toggleSidebar,
+    ...(onNewThread ? { onNew: onNewThread } : {}),
+    ...(onDeleteThread ? { onDelete: onDeleteThread } : {}),
+    ...(onRenameThread ? { onRename: onRenameThread } : {}),
+    ...(onCancelThread ? { onCancel: onCancelThread } : {}),
+  };
+
   // Clear confirmation is an AppKit `AlertDialog` (a real modal), plus an
   // in-flight flag so the DELETE can't be double-fired. `clearing` disables
   // the confirm action while `onClear` runs; the dialog closes on settle.
@@ -395,9 +411,9 @@ export const ChatView = ({
             /*
              * Mobile: a fixed overlay drawer with a tap-to-close backdrop, so
              * the conversation list never eats horizontal space from the chat
-             * on a phone. Selecting a thread / starting a new one closes it so
-             * the transcript comes back into view. Session-only + default
-             * closed (see `mobileDrawerOpen`).
+             * on a phone. Selecting a thread / starting a new one also closes
+             * the drawer so the transcript comes back into view. Session-only
+             * + default closed (see `mobileDrawerOpen`).
              */
             mobileDrawerOpen && (
               <div className="fixed inset-0 z-40 flex">
@@ -407,10 +423,7 @@ export const ChatView = ({
                   aria-hidden="true"
                 />
                 <ThreadSidebar
-                  threads={threads ?? []}
-                  {...(activeThreadId ? { activeThreadId } : {})}
-                  streamingThreadIds={streamingThreadIds}
-                  isLoading={isLoadingThreads}
+                  {...sidebarProps}
                   onSelect={(id) => {
                     onSelectThread?.(id);
                     toggleSidebar();
@@ -423,10 +436,6 @@ export const ChatView = ({
                         },
                       }
                     : {})}
-                  {...(onDeleteThread ? { onDelete: onDeleteThread } : {})}
-                  {...(onRenameThread ? { onRename: onRenameThread } : {})}
-                  {...(onCancelThread ? { onCancel: onCancelThread } : {})}
-                  onHide={toggleSidebar}
                   className="relative z-10 w-[85vw] max-w-xs shadow-xl"
                 />
               </div>
@@ -434,22 +443,11 @@ export const ChatView = ({
           ) : (
             /*
              * Desktop: an inline flex child sharing the row with the chat
-             * column, using the persisted open/hide preference.
+             * column, using the persisted open/hide preference. Same
+             * `sidebarProps` as mobile - only the framing + close-on-select
+             * differ.
              */
-            desktopSidebarOpen && (
-              <ThreadSidebar
-                threads={threads ?? []}
-                {...(activeThreadId ? { activeThreadId } : {})}
-                streamingThreadIds={streamingThreadIds}
-                isLoading={isLoadingThreads}
-                onSelect={(id) => onSelectThread?.(id)}
-                {...(onNewThread ? { onNew: onNewThread } : {})}
-                {...(onDeleteThread ? { onDelete: onDeleteThread } : {})}
-                {...(onRenameThread ? { onRename: onRenameThread } : {})}
-                {...(onCancelThread ? { onCancel: onCancelThread } : {})}
-                onHide={toggleSidebar}
-              />
-            )
+            desktopSidebarOpen && <ThreadSidebar {...sidebarProps} />
           ))}
         <div className="flex h-full min-w-0 flex-1 flex-col">
           {showHeader && (
@@ -628,7 +626,8 @@ export const ChatView = ({
                 className="max-h-48 text-base md:text-sm"
               />
               <InputGroupAddon align="inline-end">
-                {isRunning && onStop ? (
+                {isRunning && onStop && !input.trim() ? (
+                  // Running with an empty composer: the button stops the turn.
                   <InputGroupButton
                     type="button"
                     size="icon-sm"
@@ -639,18 +638,16 @@ export const ChatView = ({
                     <SquareIcon className="size-3 fill-current" />
                   </InputGroupButton>
                 ) : (
+                  // Idle, or running with typed text: the button sends. A send
+                  // mid-run steers the live turn (see the driver's sendMessage).
                   <InputGroupButton
                     type="submit"
                     size="icon-sm"
                     variant="default"
-                    disabled={!input.trim() || isRunning}
-                    aria-label="Send message"
+                    disabled={!input.trim()}
+                    aria-label={isRunning ? "Steer response" : "Send message"}
                   >
-                    {isRunning ? (
-                      <Spinner className="size-3" />
-                    ) : (
-                      <SendIcon className="size-3" />
-                    )}
+                    <SendIcon className="size-3" />
                   </InputGroupButton>
                 )}
               </InputGroupAddon>

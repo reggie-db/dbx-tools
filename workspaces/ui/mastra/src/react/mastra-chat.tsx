@@ -21,6 +21,7 @@ import {
   DEFAULT_THREAD_SESSION_KEY,
   isSessionRunning,
   sessionKey,
+  terminateRunningToolEvents,
   type ThreadSession,
 } from "../support/thread-sessions";
 import { ChatView } from "./chat-view";
@@ -710,6 +711,9 @@ export const useMastraChat = (
           error: null,
           status: "submitted",
           runToken: token,
+          // Superseding an in-flight run (a steer that interrupts, or a rapid
+          // re-send) stops its stream, so close any pills it left running.
+          toolEventsByMessage: terminateRunningToolEvents(session.toolEventsByMessage),
         };
       });
       const runIdRef = { current: getSession(threadId).runId };
@@ -798,6 +802,9 @@ export const useMastraChat = (
           runToken: session.runToken + 1,
           error: null,
           status: "ready",
+          // Cancelling stops the stream, so close any tool pills still marked
+          // running - the closing chunks will never arrive.
+          toolEventsByMessage: terminateRunningToolEvents(session.toolEventsByMessage),
         };
       });
     },
@@ -885,8 +892,30 @@ export const useMastraChat = (
           }
         }
       }
-      const next = [...getSession(threadId).messages, makeUserMessage(text)];
+      const before = getSession(threadId);
+      const next = [...before.messages, makeUserMessage(text)];
       writeMessages(threadId, next);
+      // Steering: if a turn is already streaming on this thread, try to hand
+      // the message to the live run so the agent folds it into the current
+      // turn (no restart). If the server won't deliver it, fall back to
+      // interrupting the run and starting a fresh turn with the message
+      // included, so a steer never silently drops.
+      if (isSessionRunning(before) && before.runId) {
+        const runId = before.runId;
+        const steerThreadId =
+          threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
+        void mastraClient
+          .queueMessage({ agentId, runId, threadId: steerThreadId, message: text })
+          .then((accepted) => {
+            if (accepted) {
+              logger.info("steer:queued", { runId });
+              return;
+            }
+            logger.info("steer:fallback-interrupt", { runId });
+            void runStream(threadId, getSession(threadId).messages);
+          });
+        return;
+      }
       void runStream(threadId, next);
     },
     [
@@ -895,6 +924,8 @@ export const useMastraChat = (
       activeThreadId,
       activeKey,
       getSession,
+      mastraClient,
+      agentId,
       noteThreadActivity,
       updateSession,
     ],

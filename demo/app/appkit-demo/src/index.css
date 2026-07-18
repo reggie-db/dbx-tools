@@ -20,6 +20,14 @@ html,
 body {
   overflow: hidden;
   overscroll-behavior: none;
+  /*
+   * `manipulation` drops the legacy double-tap-to-zoom gesture (which iOS
+   * Safari honors even when the viewport meta's `user-scalable=no` is ignored
+   * for pinch), so a stray double-tap on the transcript / composer never zooms
+   * the fixed app shell out of alignment. Panning and normal scrolling still
+   * work.
+   */
+  touch-action: manipulation;
 }
 
 #root {
