@@ -8,7 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@dbx-tools/ui-appkit/react";
-import { DownloadIcon } from "lucide-react";
+import { DownloadIcon, FileTextIcon, PrinterIcon } from "lucide-react";
 import type { ExportFormat } from "../support/export";
 
 // Shared export affordance: a download button that opens a small menu of
@@ -16,9 +16,14 @@ import type { ExportFormat } from "../support/export";
 // labelled) and per-message export (bubble action row, icon-only).
 
 /** Menu entries, in display order. */
-const FORMATS: ReadonlyArray<{ format: ExportFormat; label: string }> = [
-  { format: "pdf", label: "PDF" },
-  { format: "markdown", label: "Markdown" },
+const FORMATS: ReadonlyArray<{
+  format: ExportFormat;
+  label: string;
+  Icon: typeof DownloadIcon;
+}> = [
+  { format: "pdf", label: "PDF", Icon: DownloadIcon },
+  { format: "print", label: "Print", Icon: PrinterIcon },
+  { format: "markdown", label: "Markdown", Icon: FileTextIcon },
 ];
 
 /**
@@ -65,8 +70,9 @@ export const ExportMenu = ({
         <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       )}
       <DropdownMenuContent align="end">
-        {FORMATS.map(({ format, label }) => (
+        {FORMATS.map(({ format, label, Icon }) => (
           <DropdownMenuItem key={format} onClick={() => onExport(format)}>
+            <Icon className="size-3.5" />
             {label}
           </DropdownMenuItem>
         ))}

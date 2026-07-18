@@ -5,10 +5,14 @@
  * the single-message or the whole-conversation level, in one of two
  * formats:
  *
- *   - `"pdf"`   - a print-ready HTML document opened in a new tab with
- *                 the browser's print dialog triggered, so the user saves
- *                 a real PDF ("Save as PDF"). Renders reliably offline.
+ *   - `"pdf"`   - a print-ready HTML document rendered in a hidden iframe
+ *                 with the browser's print dialog triggered, so the user
+ *                 saves a real PDF ("Save as PDF") with no popup tab.
+ *   - `"print"` - the same document routed to a paper printer.
  *   - `"markdown"` - a `.md` file download.
+ *
+ * The document can be brand-styled (logo, colors, font) via the optional
+ * `brand` option; the driver resolves it from `@dbx-tools/ui-branding`.
  *
  * Charts are included, not dropped: each `[chart:<id>]` marker is
  * resolved against the plugin's chart cache and rendered to an inline
@@ -29,8 +33,33 @@ import * as echarts from "echarts";
 import { marked } from "marked";
 import { normalizeChartOption } from "./chart-option";
 
-/** Output formats {@link exportChat} can produce. */
-export type ExportFormat = "pdf" | "markdown";
+/**
+ * Output formats {@link exportChat} can produce.
+ *   - `"pdf"`   - Save-as-PDF via a hidden print iframe (dialog defaults to
+ *                 "Save as PDF"); no new tab.
+ *   - `"print"` - same rendered document + print dialog, for a paper printer.
+ *   - `"markdown"` - a `.md` file download.
+ */
+export type ExportFormat = "pdf" | "print" | "markdown";
+
+/**
+ * Optional brand styling for the exported document. Plain data (no React /
+ * DOM), so this module stays framework-free; the driver resolves it from
+ * `@dbx-tools/ui-branding` (`useBrand()` + `resolveBrandAsset`) and passes it
+ * through. Any field omitted falls back to the neutral default styling.
+ */
+export interface ExportBrand {
+  /** Logo image src (a data URL) rendered in the document header. */
+  logoDataUrl?: string;
+  /** Primary brand color for the header rule, headings, and role labels. */
+  primary?: string;
+  /** Accent brand color (links). */
+  accent?: string;
+  /** Body text color. */
+  foreground?: string;
+  /** Sans-serif font stack for the document body. */
+  fontSans?: string;
+}
 
 /**
  * Resolves the embeds referenced by `[chart:<id>]` / `[data:<id>]`
@@ -61,6 +90,8 @@ export interface ExportChatOptions {
    * id / email form like `"User (someone@example.com)"`.
    */
   userLabel?: string;
+  /** Optional brand styling for the exported document. */
+  brand?: ExportBrand;
 }
 
 /** Fixed Echarts SSR canvas; the SVG scales to the print column via CSS. */
@@ -71,14 +102,14 @@ const CHART_HEIGHT_PX = 380;
 const PRINT_SETTLE_MS = 300;
 
 /**
- * Export `messages` as a PDF (via a print-ready tab) or a Markdown file.
+ * Export `messages` as a PDF, a print job, or a Markdown file.
  *
- * For `"pdf"` a new tab is opened **synchronously** (before any async
- * embed resolution) so browser popup blockers - which only allow
- * `window.open` inside a user gesture - don't swallow it; the resolved
- * document is written in once charts / tables are ready. If the popup is
- * blocked anyway, the HTML is downloaded as a file instead so the export
- * still succeeds.
+ * `"pdf"` and `"print"` render the same branded, self-contained HTML
+ * document and drive it through a hidden `<iframe>` + `print()` - so the
+ * browser's print dialog (defaulting to "Save as PDF" for `pdf`) opens
+ * directly, with no popup tab. If the iframe path can't run (e.g. no DOM
+ * body), the document is downloaded as a self-contained `.html` file so the
+ * export - charts included - still lands.
  */
 export async function exportChat(options: ExportChatOptions): Promise<void> {
   const { messages, format, resolver } = options;
@@ -92,22 +123,59 @@ export async function exportChat(options: ExportChatOptions): Promise<void> {
     return;
   }
 
-  // Open the tab up-front (user-gesture safe), show a placeholder while
-  // embeds resolve, then swap in the finished document and print.
-  const win = window.open("", "_blank");
-  win?.document.write(PREPARING_HTML);
-  const html = await buildHtmlDocument(messages, resolver, title, userLabel);
-  if (!win) {
-    // Popup blocked: fall back to an HTML file download so the export
-    // (charts included) still lands.
-    downloadTextFile(`${stem}.html`, html, "text/html;charset=utf-8");
+  // pdf / print: build the branded document, then print it from a hidden
+  // iframe so the Save-as-PDF / print dialog opens without a stray tab.
+  const html = await buildHtmlDocument(messages, resolver, title, userLabel, options.brand);
+  printViaHiddenIframe(html, `${stem}.html`);
+}
+
+/**
+ * Render `html` in an off-screen iframe and trigger its print dialog. The
+ * iframe is same-origin via `srcdoc`, so `contentWindow.print()` is allowed;
+ * it's removed after printing. Falls back to a file download when there's no
+ * document body to attach to.
+ */
+function printViaHiddenIframe(html: string, downloadName: string): void {
+  if (typeof document === "undefined" || !document.body) {
+    downloadTextFile(downloadName, html, "text/html;charset=utf-8");
     return;
   }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.setTimeout(() => win.print(), PRINT_SETTLE_MS);
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.srcdoc = html;
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    window.setTimeout(() => iframe.remove(), 1000);
+  };
+
+  iframe.onload = () => {
+    const win = iframe.contentWindow;
+    if (!win) {
+      iframe.remove();
+      downloadTextFile(downloadName, html, "text/html;charset=utf-8");
+      return;
+    }
+    // Settle so charts / fonts lay out, then print. `afterprint` removes the
+    // iframe once the dialog closes (a timeout backstops browsers that don't
+    // fire it).
+    win.addEventListener("afterprint", cleanup);
+    win.setTimeout(() => {
+      win.focus();
+      win.print();
+      window.setTimeout(cleanup, 60000);
+    }, PRINT_SETTLE_MS);
+  };
+
+  document.body.appendChild(iframe);
 }
 
 /* ------------------------------- segments -------------------------------- */
@@ -168,6 +236,7 @@ async function buildHtmlDocument(
   resolver: EmbedResolver,
   title: string,
   userLabel: string,
+  brand?: ExportBrand,
 ): Promise<string> {
   const articles: string[] = [];
   for (const message of messages) {
@@ -179,11 +248,14 @@ async function buildHtmlDocument(
         `<div class="content">${body}</div></article>`,
     );
   }
+  const logo = brand?.logoDataUrl
+    ? `<img class="doc-logo" src="${escapeHtml(brand.logoDataUrl)}" alt="">`
+    : "";
   return (
     `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
-    `<title>${escapeHtml(title)}</title><style>${PRINT_CSS}</style></head>` +
-    `<body><header class="doc-header"><h1>${escapeHtml(title)}</h1>` +
+    `<title>${escapeHtml(title)}</title><style>${buildDocumentCss(brand)}</style></head>` +
+    `<body><header class="doc-header">${logo}<h1>${escapeHtml(title)}</h1>` +
     `<div class="doc-meta">Exported ${escapeHtml(new Date().toLocaleString())}</div>` +
     `</header><main>${articles.join("")}</main></body></html>`
   );
@@ -417,15 +489,10 @@ function downloadTextFile(filename: string, content: string, mime: string): void
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** Placeholder shown in the print tab while embeds resolve. */
-const PREPARING_HTML =
-  '<!doctype html><html><head><meta charset="utf-8"><title>Preparing export...</title>' +
-  "<style>body{font:14px system-ui,sans-serif;color:#475569;display:flex;" +
-  "height:100vh;margin:0;align-items:center;justify-content:center}</style></head>" +
-  "<body>Preparing export...</body></html>";
-
 /**
- * Inline stylesheet for the exported document. Tuned for print:
+ * Build the inline stylesheet for the exported document, folding in optional
+ * brand color / font overrides (falling back to the neutral slate/blue theme
+ * and a system font stack). Tuned for print:
  *
  *   - A readable measure with role-labelled message blocks.
  *   - Content flows naturally across pages: whole messages are NOT
@@ -436,23 +503,30 @@ const PREPARING_HTML =
  *     rows - while long tables split across pages and repeat their
  *     header (`thead { display: table-header-group }`).
  *   - `@page { margin: 0 }` collapses the page margin box so the
- *     browser's own print header/footer (the `about:blank` URL, the
+ *     browser's own print header/footer (the source URL, the
  *     date, and `n/N` page numbers) have nowhere to render and drop
  *     out; the visible page margin is re-supplied as body padding.
  */
-const PRINT_CSS = `
+function buildDocumentCss(brand?: ExportBrand): string {
+  const fg = brand?.foreground || "#0f172a";
+  const primary = brand?.primary || "#0f172a";
+  const link = brand?.accent || "#2563eb";
+  const font =
+    brand?.fontSans || 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  return `
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
   body {
-    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    color: #0f172a; margin: 0; padding: 32px; background: #fff;
+    font: 15px/1.6 ${font};
+    color: ${fg}; margin: 0; padding: 32px; background: #fff;
   }
   main { max-width: 820px; margin: 0 auto; }
-  .doc-header { max-width: 820px; margin: 0 auto 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; }
-  .doc-header h1 { font-size: 22px; margin: 0 0 4px; }
+  .doc-header { max-width: 820px; margin: 0 auto 24px; border-bottom: 2px solid ${primary}; padding-bottom: 12px; }
+  .doc-logo { height: 28px; width: auto; display: block; margin: 0 0 10px; }
+  .doc-header h1 { font-size: 22px; margin: 0 0 4px; color: ${primary}; }
   .doc-meta { font-size: 12px; color: #64748b; }
   .msg { margin: 0 0 20px; }
-  .msg .role { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 4px; break-after: avoid; }
+  .msg .role { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: ${primary}; margin-bottom: 4px; break-after: avoid; }
   .msg-user .content { background: #f1f5f9; border-radius: 8px; padding: 10px 14px; }
   .msg .content > *:first-child { margin-top: 0; }
   .msg .content > *:last-child { margin-bottom: 0; }
@@ -462,7 +536,7 @@ const PRINT_CSS = `
   code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: #f1f5f9; padding: .1em .3em; border-radius: 4px; }
   pre { background: #0f172a; color: #e2e8f0; padding: 12px 14px; border-radius: 8px; overflow-x: auto; break-inside: avoid; }
   pre code { background: none; padding: 0; color: inherit; }
-  a { color: #2563eb; }
+  a { color: ${link}; }
   .embed { margin: 12px 0; }
   .embed-chart { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; break-inside: avoid; }
   .embed-chart svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
@@ -478,3 +552,4 @@ const PRINT_CSS = `
     a { color: inherit; text-decoration: none; }
   }
 `;
+}

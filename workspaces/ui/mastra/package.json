@@ -29,6 +29,7 @@
     "@dbx-tools/shared-mastra": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
     "@dbx-tools/ui-appkit": "workspace:*",
+    "@dbx-tools/ui-branding": "workspace:*",
     "@mastra/client-js": "catalog:",
     "@tanstack/react-table": "catalog:",
     "ai": "catalog:",

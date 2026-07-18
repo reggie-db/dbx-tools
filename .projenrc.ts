@@ -456,6 +456,10 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     "@dbx-tools/shared-genie@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
     "@dbx-tools/ui-appkit@workspace:*",
+    // Direct dep: the driver reads the active brand (`useBrand`) to style the
+    // chat export document (logo + colors + font). Also transitive via
+    // ui-appkit, but the direct import warrants a declared dep.
+    "@dbx-tools/ui-branding@workspace:*",
     "@mastra/client-js@catalog:",
     "@tanstack/react-table@catalog:",
     "ai@catalog:",

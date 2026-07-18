@@ -26,7 +26,7 @@ export type { UseMastraChatOptions, MastraChatProps } from "./src/react/mastra-c
 export type { SuggestionPillsProps } from "./src/react/suggestion-pills";
 export type { ThreadSidebarProps } from "./src/react/thread-sidebar";
 export type { ChatStatus, ToolEvent, ToolProgress, ChatModelOption, FeedbackValue, FeedbackSubmission, MessageFeedback, ThreadSummary, ChatViewProps, ApprovalDecision, PendingApproval } from "./src/react/types";
-export type { ExportFormat, EmbedResolver, ExportChatOptions } from "./src/support/export";
+export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from "./src/support/export";
 export type { ByIdFetchState } from "./src/support/mastra-client";
 export type { MastraStreamChunk, MastraStreamResponse } from "./src/support/mastra-stream";
 export type { ThreadSession } from "./src/support/thread-sessions";

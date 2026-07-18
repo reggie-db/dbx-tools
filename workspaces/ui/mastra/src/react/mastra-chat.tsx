@@ -7,6 +7,7 @@ import type { UIMessage } from "ai";
 import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exportChat, type EmbedResolver, type ExportFormat } from "../support/export";
+import { useBrand } from "@dbx-tools/ui-branding/react";
 import {
   useMastraClient,
   useMastraModels,
@@ -1139,6 +1140,21 @@ export const useMastraChat = (
     const resourceId = threads.find((t) => t.resourceId)?.resourceId;
     return resourceId ? `User (${resourceId})` : "User";
   }, [threads]);
+  // Brand styling for the exported document, resolved from the active
+  // BrandProvider (or the built-in dbx-tools default when the host wired
+  // none). The logo asset id is resolved to a portable data URL so the
+  // export is self-contained; colors/font come straight from the context.
+  const { context: brandContext, resolveAsset: resolveBrandAsset } = useBrand();
+  const exportBrand = useMemo(
+    () => ({
+      logoDataUrl: resolveBrandAsset(brandContext.assets.logo.light),
+      primary: brandContext.colors.primary,
+      accent: brandContext.colors.accent,
+      foreground: brandContext.colors.foreground,
+      fontSans: brandContext.typography.sans,
+    }),
+    [brandContext, resolveBrandAsset],
+  );
   const exportConversation = useCallback(
     async (format: ExportFormat) => {
       const title =
@@ -1151,6 +1167,7 @@ export const useMastraChat = (
           resolver: exportResolver,
           title,
           userLabel: exportUserLabel,
+          brand: exportBrand,
         });
       } catch (error) {
         logger.error("conversation export error", {
@@ -1159,7 +1176,15 @@ export const useMastraChat = (
         });
       }
     },
-    [exportResolver, activeThreadId, activeKey, getSession, threads, exportUserLabel],
+    [
+      exportResolver,
+      activeThreadId,
+      activeKey,
+      getSession,
+      threads,
+      exportUserLabel,
+      exportBrand,
+    ],
   );
   const exportMessage = useCallback(
     async (message: UIMessage, format: ExportFormat) => {
@@ -1171,6 +1196,7 @@ export const useMastraChat = (
           title: "Message",
           filename: "message",
           userLabel: exportUserLabel,
+          brand: exportBrand,
         });
       } catch (error) {
         logger.error("message export error", {
@@ -1179,7 +1205,7 @@ export const useMastraChat = (
         });
       }
     },
-    [exportResolver, exportUserLabel],
+    [exportResolver, exportUserLabel, exportBrand],
   );
 
   // Submit thumbs / comment feedback for an assistant message to MLflow
