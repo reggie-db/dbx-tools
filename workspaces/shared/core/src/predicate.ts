@@ -8,6 +8,8 @@
  * Ordinary boolean predicates are treated as narrowing to `T`, meaning they
  * do not narrow the input type by themselves. Composed predicates passed to
  * `.and()` / `.or()` may return any value; they are tested for truthiness.
+ *
+ * @module
  */
 
 /** An ordinary boolean predicate. */

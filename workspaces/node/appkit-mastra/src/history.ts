@@ -14,6 +14,8 @@
  * `MASTRA_THREAD_ID_KEY` and `MASTRA_RESOURCE_ID_KEY` by the time
  * the handler runs - no cookie or user lookups happen here, and the
  * session-cookie logic stays the single source of truth in `server.ts`.
+ *
+ * @module
  */
 
 import type {

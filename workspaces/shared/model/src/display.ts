@@ -6,6 +6,8 @@
  * this derives a friendly label from it. Prefer a Databricks-provided name
  * (a display-name tag or an external-model name) when the server has one -
  * see `@dbx-tools/model`'s serving lister, which passes it as `provided`.
+ *
+ * @module
  */
 import { string } from "@dbx-tools/shared-core";
 

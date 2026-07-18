@@ -10,6 +10,8 @@
  * - An **output** processor ({@link ResultProcessor}) that trims the
  *   bulky, redundant payload fields off targeted outbound stream frames
  *   before they're serialized to the SSE client.
+ *
+ * @module
  */
 
 import { log } from "@dbx-tools/shared-core";

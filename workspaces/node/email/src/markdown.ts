@@ -7,6 +7,8 @@
  * separator row - so they render as a `<hr>` / `<table>` rather than
  * literal text. The prompt steers the model away from ASCII art; this is
  * the belt-and-suspenders fallback.
+ *
+ * @module
  */
 
 import { marked } from "marked";

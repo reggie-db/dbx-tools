@@ -27,6 +27,8 @@
  * so this file stays purely declarative (schemas + inferred types).
  * The browser client that drives these routes (`MastraPluginClient`)
  * ships from `@dbx-tools/appkit-mastra-ui`.
+ *
+ * @module
  */
 
 import { genieModel, type GenieChatEvent, type MessageStatus } from "@dbx-tools/shared-genie";

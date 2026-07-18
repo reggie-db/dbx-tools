@@ -15,6 +15,8 @@
  * Server-only: DNS resolution needs `node:dns` (via `./net.ts`), the
  * disk cache needs `node:fs` / `node:os` / `node:path`, and the feeds
  * are fetched with the global `fetch`.
+ *
+ * @module
  */
 
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";

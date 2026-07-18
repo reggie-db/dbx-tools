@@ -7,6 +7,8 @@
  * request scope ({@link tryGetExecutionContext}) and to lazily boot a bare app
  * ({@link ensureInitialized}), and re-export the derived types so add-on
  * packages can type a context / client without re-deriving them inline.
+ *
+ * @module
  */
 
 import { createApp, getExecutionContext, InitializationError } from "@databricks/appkit";

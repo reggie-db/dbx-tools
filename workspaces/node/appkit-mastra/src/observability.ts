@@ -29,6 +29,8 @@
  * When `OTEL_EXPORTER_OTLP_ENDPOINT` is unset the bridge is not
  * registered at all (unless `observability: true` forces it on), so
  * Mastra does not emit `[OtelBridge] No OTEL span found` warnings.
+ *
+ * @module
  */
 
 import { Observability } from "@mastra/observability";

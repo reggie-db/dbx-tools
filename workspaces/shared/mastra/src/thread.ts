@@ -10,6 +10,8 @@
  * the per-session cookie when absent). Keeping the header / query
  * names in one place means the side that sets them and the side that
  * reads them can never drift.
+ *
+ * @module
  */
 
 /** HTTP header inspected for the thread id a request targets. */

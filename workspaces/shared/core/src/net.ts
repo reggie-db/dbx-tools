@@ -10,6 +10,8 @@
  * home for anything URL-, IP-, or email-shaped that also has to run in
  * a Vite / Webpack / esbuild client bundle. Node-only network helpers
  * (e.g. DNS resolution) belong in a node-tagged package, not here.
+ *
+ * @module
  */
 
 import type { NonFunctionKeys } from "./object";

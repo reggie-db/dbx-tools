@@ -8,6 +8,8 @@
  * the most likely culprit when events go missing client-side) but
  * swallowed so a cancelled request or a client that navigated
  * away can't crash a tool mid-flight.
+ *
+ * @module
  */
 
 import type { MastraWriter } from "@dbx-tools/shared-mastra";

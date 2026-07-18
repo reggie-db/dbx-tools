@@ -4,6 +4,8 @@
  * and the browser chat client (`@dbx-tools/appkit-mastra-ui`). Kept
  * here so the header / query / body field names can never drift
  * between the side that sets them and the side that reads them.
+ *
+ * @module
  */
 
 /** HTTP header inspected for a per-request model override. */

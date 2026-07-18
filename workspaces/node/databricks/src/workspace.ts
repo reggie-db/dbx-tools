@@ -2,6 +2,8 @@
  * Resolve the current Databricks workspace's URL and numeric id from the active
  * execution context (AppKit, when initialized), a default `WorkspaceClient`, or
  * the environment. Server-only.
+ *
+ * @module
  */
 
 import { functionModule, net } from "@dbx-tools/shared-core";

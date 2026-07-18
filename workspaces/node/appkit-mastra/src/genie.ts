@@ -32,6 +32,8 @@
  * {@link GENIE_INSTRUCTIONS}; compose it into the agent's own
  * `instructions` when you want the canonical "how to drive the
  * Genie tools" guidance.
+ *
+ * @module
  */
 
 import { CacheManager, genie } from "@databricks/appkit";

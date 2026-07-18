@@ -6,6 +6,8 @@
  * OBO client on {@link MASTRA_USER_KEY}. Optional mount resolver
  * contributions merge extra filesystems and skill scan roots; built-in
  * Assistant skill trees are toggled with `assistantSkills` (on by default).
+ *
+ * @module
  */
 
 import type { WorkspaceClient } from "@databricks/sdk-experimental";

@@ -7,6 +7,8 @@
  * Mastra plugin: pulling a per-request model override off an HTTP
  * request (header / query / body) and projecting the plugin config
  * onto the knobs `buildModel` and the `/models` route share.
+ *
+ * @module
  */
 
 import { override } from "@dbx-tools/shared-mastra";

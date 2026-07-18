@@ -7,6 +7,8 @@
  * slices). All browser-safe - built on `globalThis.crypto`, no
  * `node:crypto` import. **Never** use these for tokens, signatures, or
  * anything an attacker shouldn't be able to forge.
+ *
+ * @module
  */
 
 /**

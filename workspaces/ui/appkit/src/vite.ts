@@ -2,6 +2,8 @@
  * Default Vite plugins for host apps building `@dbx-tools/*` UI packages.
  * Import from `@dbx-tools/ui-appkit/vite` so Tailwind and React refresh resolve
  * from this package's dependencies, not the host's.
+ *
+ * @module
  */
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";

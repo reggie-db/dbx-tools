@@ -1,5 +1,7 @@
 /**
  * Filesystem utilities: best-effort `fs.stat` helpers that never throw.
+ *
+ * @module
  */
 import { Stats, statSync as nodeStatSync } from "node:fs";
 

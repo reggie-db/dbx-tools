@@ -15,6 +15,8 @@
  * asynchronous, so the just-finished trace may not exist in MLflow yet
  * when the user reacts; the log call retries briefly on "not found"
  * before giving up softly.
+ *
+ * @module
  */
 
 import { feedback } from "@dbx-tools/shared-mastra";

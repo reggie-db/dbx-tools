@@ -1,5 +1,7 @@
 /**
  * pnpm discovery, workspace install, and projen forwarding for the `dbxtools` CLI.
+ *
+ * @module
  */
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";

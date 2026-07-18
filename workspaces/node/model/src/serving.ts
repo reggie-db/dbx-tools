@@ -17,6 +17,8 @@
  * length recorded, so the cost is paid on a cache miss, not per read. The ping
  * is best-effort - a failure logs at debug and leaves `dimension` unset rather
  * than failing the whole listing.
+ *
+ * @module
  */
 
 import { error, log, string } from "@dbx-tools/shared-core";

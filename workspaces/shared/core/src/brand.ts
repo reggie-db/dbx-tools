@@ -3,6 +3,8 @@
  *
  * Asset values are intentionally strings: they may be relative file paths,
  * package exports, data URLs, or network URLs depending on the consumer.
+ *
+ * @module
  */
 import { z } from "zod";
 

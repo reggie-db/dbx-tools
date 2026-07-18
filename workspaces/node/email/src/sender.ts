@@ -15,6 +15,8 @@
  * bare `domain.com`, matching any local part on that domain), or `*`
  * (any). {@link listSenderOptions} expands the allow-list into the
  * concrete addresses a UI dropdown can offer for the current user.
+ *
+ * @module
  */
 
 import { net } from "@dbx-tools/shared-core";

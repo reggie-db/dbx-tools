@@ -11,6 +11,8 @@
  * Outlook) strip `<style>` blocks and ignore class selectors; the same
  * renderer feeds both the local outbox preview and the SMTP HTML part,
  * so a browser and an inbox show the same thing.
+ *
+ * @module
  */
 
 import { string } from "@dbx-tools/shared-core";

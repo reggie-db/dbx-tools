@@ -9,6 +9,8 @@
  * only when `include_serialized_space=true`. We hit that endpoint through the
  * workspace client's raw `apiClient` since the typed request shape has no flag
  * for it.
+ *
+ * @module
  */
 
 import { error, log, object, string } from "@dbx-tools/shared-core";

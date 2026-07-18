@@ -19,6 +19,8 @@
  *
  * It only fills gaps: any field the spec already sets (an explicit
  * `axisLabel.formatter`, `nameLocation`, etc.) is preserved.
+ *
+ * @module
  */
 import { object } from "@dbx-tools/shared-core";
 

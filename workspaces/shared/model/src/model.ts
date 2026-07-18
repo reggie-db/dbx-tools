@@ -6,6 +6,8 @@
  * client (or an agent tool's `inputSchema`) can validate a lookup
  * request and type a ranked response without dragging in server
  * dependencies.
+ *
+ * @module
  */
 
 import { z } from "zod";

@@ -9,6 +9,8 @@
  * Path helpers ({@link normalizeDatabricksBasePath}, {@link isDbfsPath}, …)
  * are exported for tests and callers that need to reason about Databricks
  * paths without constructing a filesystem.
+ *
+ * @module
  */
 
 import { getExecutionContext } from "@databricks/appkit";

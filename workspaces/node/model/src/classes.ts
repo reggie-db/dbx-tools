@@ -6,6 +6,8 @@
  * "this class and below" ceiling, and coercing loose request input to a class -
  * lives here in the service so the shared wire-format surface stays purely
  * declarative.
+ *
+ * @module
  */
 
 import { model } from "@dbx-tools/shared-model";

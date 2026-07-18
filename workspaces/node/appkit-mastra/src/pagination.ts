@@ -3,6 +3,8 @@
  * (`history` / `threads`). Each route keeps its own page-size default
  * and hard cap and passes them in, so the coercion rules stay in one
  * place without collapsing the routes' distinct sizing.
+ *
+ * @module
  */
 
 /** Bounds for {@link clampPerPage}. */

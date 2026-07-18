@@ -1,5 +1,7 @@
 /**
  * Bootstrap a brand-new folder into a working dbx-tools workspace before projen runs.
+ *
+ * @module
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

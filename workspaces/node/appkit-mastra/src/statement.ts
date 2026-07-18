@@ -15,6 +15,8 @@
  * which producer (Genie, a tool, a notebook, etc.) submitted the
  * query. Co-located here so consumers can fetch / cap / handle
  * 404s without reaching into the Genie tool module.
+ *
+ * @module
  */
 
 import { WorkspaceClient } from "@databricks/sdk-experimental";

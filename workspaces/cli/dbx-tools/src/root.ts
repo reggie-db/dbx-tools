@@ -1,5 +1,7 @@
 /**
  * Workspace root detection for the `dbxtools` CLI.
+ *
+ * @module
  */
 import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";

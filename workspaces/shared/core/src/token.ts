@@ -3,6 +3,8 @@
  *
  * Parses bearer tokens and `x-forwarded-access-token` payloads to read
  * OAuth scopes and other claims from incoming HTTP requests.
+ *
+ * @module
  */
 
 import { forEachHeaderValue, type HeaderLike } from "./http";

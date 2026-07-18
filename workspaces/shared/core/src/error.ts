@@ -3,6 +3,8 @@
  * `err instanceof Error ? err.message : String(err)` dance into a single
  * call, walk `cause` / `AggregateError` chains, and coerce any thrown
  * value into a real `Error`. Dependency-free and browser-safe.
+ *
+ * @module
  */
 
 import { tokenizeWithOptions } from "./string";

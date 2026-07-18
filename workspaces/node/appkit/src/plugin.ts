@@ -16,6 +16,8 @@
  *
  * Generic AppKit runtime (execution context, `WorkspaceClientLike`) lives in
  * `./appkit`; this module is plugin-lookup only.
+ *
+ * @module
  */
 
 import { type NameLike } from "@dbx-tools/shared-core";

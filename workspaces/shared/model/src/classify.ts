@@ -22,6 +22,8 @@
  *
  * Pure (no Node-only imports), so a client can classify a `/models`
  * response without server dependencies.
+ *
+ * @module
  */
 
 import { ModelClass, type ServingEndpointSummary } from "./model";

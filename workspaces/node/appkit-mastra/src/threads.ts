@@ -17,6 +17,8 @@
  * cookie) on `RequestContext` by the time a handler runs. Resource
  * scoping lives here so a caller can only ever see, rename, or delete
  * its own threads; no cookie or user lookups happen in this module.
+ *
+ * @module
  */
 
 import {

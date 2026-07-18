@@ -8,6 +8,8 @@
  * The sender derivation runs inside the AppKit user scope, so
  * `getExecutionContext()` returns the OBO user whose local-part seeds
  * the address (see {@link deriveSenderAddress}).
+ *
+ * @module
  */
 
 import { getExecutionContext } from "@databricks/appkit";

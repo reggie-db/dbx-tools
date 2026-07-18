@@ -23,6 +23,8 @@
  * Wire-format schemas live in `@dbx-tools/shared-mastra` so
  * the demo client and any other UI consumer share the exact same
  * shape this module reads and writes.
+ *
+ * @module
  */
 
 import { CacheManager } from "@databricks/appkit";

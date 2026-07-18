@@ -3,6 +3,8 @@
  * {@link AbortController} linker ({@link tieAbortSignal}), and a periodic
  * {@link poll} generator. Dependency-free; `poll`'s `"distinct"` filter
  * uses the local {@link deepEqual}.
+ *
+ * @module
  */
 import { deepEqual } from "./object";
 

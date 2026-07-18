@@ -34,6 +34,8 @@
  *
  * Pure types: no runtime imports beyond zod + the generated
  * sdk-type schemas, no Node-only code, safe for browser bundles.
+ *
+ * @module
  */
 
 import { string } from "@dbx-tools/shared-core";

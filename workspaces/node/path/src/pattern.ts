@@ -1,5 +1,7 @@
 /**
  * Glob pattern builders shared by ignore groups and matchers.
+ *
+ * @module
  */
 
 /** Glob metacharacters; escaped so a directory or file name is matched literally. */

@@ -176,6 +176,60 @@ function buildApiIndex(packages) {
   ].join("\n");
 }
 
+/**
+ * The prose body of a generated page, with frontmatter, the generated-file
+ * HTML comment, headings, list items, and horizontal rules stripped. Empty
+ * when the page carries no actual documentation - just navigation.
+ */
+function pageProse(markdown) {
+  return markdown
+    .replace(/^---\n[\s\S]*?\n---\n/, "") // frontmatter
+    .replace(/<!--[\s\S]*?-->/g, "") // generated-file comment
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (t === "" || t === "***") return false; // blank / rule
+      if (t.startsWith("#")) return false; // heading
+      if (/^[-*] /.test(t)) return false; // list item (link list)
+      return true;
+    })
+    .join("\n")
+    .trim();
+}
+
+/**
+ * Drop `Namespace.*.md` pages that carry no prose - a bare list of the symbols
+ * they re-export adds nothing the symbol pages and the package index don't
+ * already give (per the "useful or omitted" rule). A namespace page gets real
+ * content by adding a `@module` doc comment to its source file; until then it
+ * is omitted. Links to the removed pages are stripped from the package
+ * `index.md` so no dead nav entry is left behind.
+ */
+function pruneEmptyNamespacePages(outDir) {
+  const removedSlugs = [];
+  for (const file of walk(outDir).filter((p) => /\/Namespace\.[^/]+\.md$/.test(posix(p)))) {
+    if (pageProse(read(file)) === "") {
+      removedSlugs.push(path.basename(file, ".md"));
+      fs.rmSync(file);
+    }
+  }
+  if (removedSlugs.length === 0) return;
+  const indexPath = path.join(outDir, "index.md");
+  if (!fs.existsSync(indexPath)) return;
+  const removed = new Set(removedSlugs);
+  const index = read(indexPath)
+    .split("\n")
+    // Drop `- [name](Namespace.x)` links that point at a removed page.
+    .filter((line) => {
+      const m = line.match(/^[-*] \[[^\]]+\]\((Namespace\.[^)#]+)/);
+      return !(m && removed.has(m[1]));
+    })
+    .join("\n")
+    // Collapse a now-empty `## Namespaces` heading (no links under it).
+    .replace(/^## Namespaces\n(?=\n*(##|$))/m, "");
+  write(indexPath, index);
+}
+
 function generatePackageApi(pkg) {
   const outDir = path.join(apiRoot, pkg.slug);
   fs.rmSync(outDir, { recursive: true, force: true });
@@ -226,6 +280,8 @@ function generatePackageApi(pkg) {
   for (const file of mdFiles) {
     addFrontmatter(file, pkg.name, pkg.entry);
   }
+
+  pruneEmptyNamespacePages(outDir);
 
   // A package with real API surface emits per-symbol pages. With flat output
   // TypeDoc names them `<scope>.<Kind>.<Symbol>.md` (e.g.

@@ -15,6 +15,8 @@
  * Mirrors the chart-planner wiring in `chart.ts`: a per-config cached
  * `Agent` on the fast tier, invoked via `agent.generate(...)` inside
  * the active `asUser` scope so tokens stay user-scoped.
+ *
+ * @module
  */
 
 import { model } from "@dbx-tools/shared-model";

@@ -31,6 +31,8 @@
  * `process.env` so the downstream `lakebase` plugin picks them up.
  *
  * @see https://docs.databricks.com/api/workspace/postgres
+ *
+ * @module
  */
 
 import { log, string } from "@dbx-tools/shared-core";

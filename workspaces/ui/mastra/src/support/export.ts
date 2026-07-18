@@ -19,6 +19,8 @@
  * export carries the chart itself rather than a placeholder.
  * `[data:<id>]` markers resolve to a real table. Unresolved / expired
  * ids are skipped so the surrounding prose stays clean.
+ *
+ * @module
  */
 
 import {

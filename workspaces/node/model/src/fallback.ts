@@ -14,6 +14,8 @@
  * to fall back to and must not assume a stale, baked-in model list; it consumes
  * the live `/models` response instead. The pure classifier
  * ({@link classify.classifyEndpoints}) is what the client shares.
+ *
+ * @module
  */
 
 import { classify, model, type FamilyClass } from "@dbx-tools/shared-model";

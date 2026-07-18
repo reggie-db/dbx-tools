@@ -39,6 +39,8 @@
  *   yields `project`.
  *
  * Returns an empty object for inputs it doesn't recognize.
+ *
+ * @module
  */
 
 /** Postgres TLS mode passed through to `pg`. */

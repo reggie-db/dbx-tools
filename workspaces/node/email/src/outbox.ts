@@ -9,6 +9,8 @@
  * {@link renderEmailHtml}. Attachments are listed by filename in the
  * header table but not written to disk - the outbox previews the
  * envelope, it doesn't reproduce the wire payload.
+ *
+ * @module
  */
 
 import type { EmailMessage } from "@dbx-tools/shared-email";

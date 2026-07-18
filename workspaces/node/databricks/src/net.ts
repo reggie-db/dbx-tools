@@ -3,6 +3,8 @@
  * browser-safe URL / IP toolkit in `@dbx-tools/shared-core`'s `net` module: DNS
  * resolution ({@link resolveHostIps}, `node:dns`) and public-IP discovery
  * ({@link getPublicIp}).
+ *
+ * @module
  */
 
 import { lookup } from "node:dns/promises";

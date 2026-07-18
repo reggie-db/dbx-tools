@@ -16,6 +16,8 @@
  * The plugin mounts one route under its base path (`/api/email`):
  * `GET /senders` returns the permitted `From` options for the calling
  * user, so a compose UI can offer them in a dropdown.
+ *
+ * @module
  */
 
 import {

@@ -17,6 +17,8 @@
  * by throwing, with no `error` variant. Iterating UI / agent code that wants
  * every message verbatim takes the low-level stream; subscribers reacting to
  * "Genie is thinking about X" or "Genie produced text Y" take the event layer.
+ *
+ * @module
  */
 
 import { async, log, type PollContext } from "@dbx-tools/shared-core";

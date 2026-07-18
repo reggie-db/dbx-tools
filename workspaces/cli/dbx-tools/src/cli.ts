@@ -1,5 +1,7 @@
 /**
  * `dbxtools` commander entry: detect root, bootstrap or install, forward to projen.
+ *
+ * @module
  */
 import { Command } from "commander";
 import { bootstrapWorkspace, runInitialSynth, seedToolchain } from "./bootstrap";

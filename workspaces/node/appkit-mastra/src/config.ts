@@ -3,6 +3,8 @@
  *
  * Kept in a leaf module so `plugin.ts`, `server.ts`, `model.ts`, and
  * `memory.ts` can import them without creating a cycle.
+ *
+ * @module
  */
 
 import type { BasePluginConfig } from "@databricks/appkit";

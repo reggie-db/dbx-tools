@@ -9,6 +9,8 @@
  * - {@link ignorePatterns} - yields the enabled glob strings (for projen prettier/gitignore).
  * - {@link ignorePathMatcher} - returns a single {@link PathMatcher} for {@link findFiles}
  *   and {@link watchFiles}.
+ *
+ * @module
  */
 
 import { exec } from "@dbx-tools/core";

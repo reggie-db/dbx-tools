@@ -4,6 +4,8 @@
  * {@link toPathMatcher} compiles globs into {@link Predicate} values from
  * shared-core (`and` / `or` / `negate`) for use by {@link findFiles} and
  * {@link watchFiles}.
+ *
+ * @module
  */
 
 import {

@@ -8,6 +8,8 @@
  * `minItems` in the JSON schema, which some Model Serving endpoints reject
  * ("array types do not support minItems") when the schema is forwarded as a
  * tool definition.
+ *
+ * @module
  */
 
 import { z } from "zod";

@@ -7,6 +7,8 @@
  * wired to it. `models` lists the resolvable endpoints; `resolve` shows what a
  * fuzzy name snaps to. Auth comes from the standard Databricks SDK resolution
  * (env vars, `--profile`, or `databricks auth login`).
+ *
+ * @module
  */
 
 import { spawn } from "node:child_process";

@@ -21,6 +21,8 @@
  * lifecycle layer (the `genieEventChat` driver) because they track
  * per-yield / per-turn-completion semantics rather than a
  * field-level snapshot diff.
+ *
+ * @module
  */
 
 import {

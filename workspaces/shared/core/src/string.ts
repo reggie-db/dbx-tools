@@ -4,6 +4,8 @@
  * header-value trimming, and a nested description-tree renderer for
  * long-form LLM prompt / tool-description text. Depends only on the
  * local {@link fnvHashWithOptions} for deterministic hash suffixes.
+ *
+ * @module
  */
 import { fnvHashWithOptions } from "./hash";
 

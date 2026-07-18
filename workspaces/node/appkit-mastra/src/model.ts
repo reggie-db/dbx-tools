@@ -19,6 +19,8 @@
  * the resolved id in the OpenAI-compatible provider config Mastra
  * expects. Catalogue fetches fail loud: network / auth errors
  * propagate so callers see the real SDK message.
+ *
+ * @module
  */
 
 import { getExecutionContext } from "@databricks/appkit";

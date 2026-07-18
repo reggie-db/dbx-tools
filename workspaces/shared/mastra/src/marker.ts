@@ -38,6 +38,8 @@
  *
  * Parse everything through {@link parseMarkers}, validate the id with
  * {@link isUuid}, and branch on the returned {@link ParsedMarker.type}.
+ *
+ * @module
  */
 
 /**

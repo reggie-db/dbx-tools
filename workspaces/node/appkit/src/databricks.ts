@@ -6,6 +6,8 @@
  *
  * Server-only: leans on the Databricks SDK `Context`. Lives in node-appkit so
  * the browser-safe shared-core stays SDK-free.
+ *
+ * @module
  */
 
 import { async } from "@dbx-tools/shared-core";

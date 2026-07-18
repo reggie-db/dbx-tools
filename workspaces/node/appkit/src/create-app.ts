@@ -17,6 +17,8 @@
  * `process.env` during their synchronous `setup()`. Lakebase Postgres runs when
  * a `lakebase` plugin is present, or when `autoConfigure: true` is set on the
  * config object.
+ *
+ * @module
  */
 
 import { log } from "@dbx-tools/shared-core";

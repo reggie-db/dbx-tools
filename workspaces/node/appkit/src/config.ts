@@ -8,6 +8,8 @@
  *
  * Server-only (`node:child_process`, bundle root discovery). Databricks-app
  * specific, so it lives in node-appkit rather than shared-core.
+ *
+ * @module
  */
 
 import { readFile } from "node:fs/promises";

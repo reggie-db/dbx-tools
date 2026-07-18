@@ -16,6 +16,8 @@
  * `modelClass` acts as a ceiling: that band and the less-capable chat bands
  * below it are eligible (see {@link classesAtOrBelow}), so a `chat-balanced`
  * ask can fall to `chat-fast` but never escalate to `chat-thinking`.
+ *
+ * @module
  */
 
 import {

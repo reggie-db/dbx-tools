@@ -1,6 +1,8 @@
 /**
  * Snapshot `process.env`, diff after auto-config, and format deltas as
  * eval-able shell `export` / Windows `set` lines or JSON.
+ *
+ * @module
  */
 
 export type EnvExportFormat = "export" | "windows" | "json";

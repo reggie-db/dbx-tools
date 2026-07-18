@@ -3,6 +3,8 @@
  * stamps the per-request `RequestContext`, and a route-patch middleware
  * that lets the plugin's custom API routes (e.g. `historyRoute`) work
  * behind an Express mount point.
+ *
+ * @module
  */
 
 import { getExecutionContext } from "@databricks/appkit";

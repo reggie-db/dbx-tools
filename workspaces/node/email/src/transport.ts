@@ -7,6 +7,8 @@
  * holds no transport and {@link sendEmail} writes HTML to disk instead.
  * The first caller (normally the plugin at setup) primes it with the
  * plugin's config; later callers reuse it.
+ *
+ * @module
  */
 
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";

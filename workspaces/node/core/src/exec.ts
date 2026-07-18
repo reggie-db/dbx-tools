@@ -36,6 +36,8 @@
  *   stdin: "ignore",
  * });
  * ```
+ *
+ * @module
  */
 import { type ChildProcess, type SpawnOptions, spawn as nodeSpawn, spawnSync as nodeSpawnSync } from "node:child_process";
 import * as readline from "node:readline";

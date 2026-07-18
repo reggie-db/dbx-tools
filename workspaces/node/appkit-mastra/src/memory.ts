@@ -25,6 +25,8 @@
  * Plugin-level `config.storage` / `config.memory` act as the baseline
  * (auto-defaulted to `true` in `plugin.ts` when the `lakebase` plugin
  * is registered); per-agent settings cascade on top of that.
+ *
+ * @module
  */
 
 import { getUsernameWithApiLookup } from "@databricks/appkit";

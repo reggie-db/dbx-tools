@@ -12,6 +12,8 @@
  * Container}s (see {@link map}, {@link filter}, {@link group}, ...); the {@link
  * Sequence} methods are thin forwarders over them so the same logic backs both
  * the free-function and the fluent/chained styles.
+ *
+ * @module
  */
 
 /** Lazy sequence over iterable source(s). See {@link sequence}. */

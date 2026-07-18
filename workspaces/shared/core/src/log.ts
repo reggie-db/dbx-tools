@@ -28,6 +28,8 @@
  * through `globalThis` and guarded, and consola / `node:util` load lazily, so
  * the module works in any runtime. Consola is an optional peer; the module
  * loads fine without it.
+ *
+ * @module
  */
 
 import { memoize } from "./function";

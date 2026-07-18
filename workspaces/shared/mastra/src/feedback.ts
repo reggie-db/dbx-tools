@@ -11,6 +11,8 @@
  * captures it per assistant message and sends it back here when the
  * user reacts. Kept dependency-free so both the browser client and the
  * server plugin share one definition.
+ *
+ * @module
  */
 
 import { z } from "zod";

@@ -15,6 +15,8 @@
  * log a thumbs / comment assessment against a turn's MLflow trace (see
  * `feedback.ts`); it is not agent-scoped (a trace id identifies the
  * turn on its own).
+ *
+ * @module
  */
 export const MASTRA_ROUTES = {
   history: "/route/history",

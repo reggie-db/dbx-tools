@@ -16,6 +16,8 @@
  * The endpoint catalogue is listed once and reused for the process, and
  * re-listed on a resolve miss so a model deployed after start-up still resolves
  * on first use - no cache layer, just one lazy load.
+ *
+ * @module
  */
 
 import { log } from "@dbx-tools/shared-core";

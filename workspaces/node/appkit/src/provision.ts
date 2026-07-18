@@ -17,6 +17,8 @@
  * Must run AFTER {@link applyLakebaseToEnv} has written the resolved connection
  * to `process.env` (so `createLakebasePool` picks up host / database / endpoint)
  * and BEFORE `createApp` initializes the cache.
+ *
+ * @module
  */
 
 import { error, type log } from "@dbx-tools/shared-core";

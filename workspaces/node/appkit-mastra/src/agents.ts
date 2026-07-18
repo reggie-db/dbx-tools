@@ -11,6 +11,8 @@
  * When no agents are registered the plugin falls back to a single
  * built-in analyst so the bare `mastra()` call still mounts a working
  * streamable agent for demos.
+ *
+ * @module
  */
 
 import type { AgentConfig, ToolsInput } from "@mastra/core/agent";

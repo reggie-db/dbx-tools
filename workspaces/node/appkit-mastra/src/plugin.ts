@@ -37,6 +37,8 @@
  *   instance via `mcpServers`, so `@mastra/express` serves the stock
  *   MCP transport routes (`/mcp/<serverId>/...`) under the mount. See
  *   `./mcp.js`.
+ *
+ * @module
  */
 
 import {

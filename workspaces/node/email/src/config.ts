@@ -19,6 +19,8 @@
  * `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, plus `EMAIL_DOMAIN` for
  * the derived sender's domain, `EMAIL_FROM` for an explicit override,
  * and `EMAIL_OUTBOX_DIR` for the outbox directory.
+ *
+ * @module
  */
 import type { BasePluginConfig } from "@databricks/appkit";
 import type { JSONSchema7 } from "json-schema";

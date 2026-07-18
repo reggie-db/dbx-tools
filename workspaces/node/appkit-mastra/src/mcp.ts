@@ -8,6 +8,8 @@
  * `Mastra` instance via `mcpServers`, which makes `@mastra/express`
  * serve the stock MCP routes under the plugin's base path; the plugin
  * never registers a bespoke MCP route of its own.
+ *
+ * @module
  */
 
 import type { Agent } from "@mastra/core/agent";

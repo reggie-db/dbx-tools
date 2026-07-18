@@ -14,6 +14,8 @@
  *   - `GET  /v1/models`, `GET /models`   list resolvable endpoints
  *   - `POST /v1/chat/completions`        proxy (also `/completions`,
  *     `/v1/completions`, `/v1/embeddings`, and the un-prefixed variants)
+ *
+ * @module
  */
 
 import { error, log } from "@dbx-tools/shared-core";
