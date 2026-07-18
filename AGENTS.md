@@ -529,10 +529,10 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   (`...-4-6` -> "4.6"), glues size units (`120b` -> "120B"), and uppercases
   acronyms (GPT/GTE/BGE/OSS/AI). The UI picker shows `displayName ?? name`. Add
   new strip prefixes / acronyms / size units in `shared-model/src/display.ts`.
-- **Chat export (`ui-mastra/src/support/export.ts`)** produces `pdf` | `print` |
-  `markdown`. `pdf`/`print` render one branded, self-contained HTML document and
-  drive it through a hidden `<iframe>` + `print()` (Save-as-PDF dialog, no popup
-  tab; falls back to an `.html` download when there's no DOM body). The module is
+- **Chat export (`ui-mastra/src/support/export.ts`)** produces `pdf` |
+  `markdown`. `pdf` renders one branded, self-contained HTML document and drives
+  it through a hidden `<iframe>` + `print()` (Save-as-PDF dialog, no popup tab;
+  falls back to an `.html` download when there's no DOM body). The module is
   framework-free: brand styling arrives as a plain `ExportBrand` (`logoDataUrl` +
   colors + font), which the driver (`mastra-chat.tsx`) resolves from the active
   `BrandProvider` via `useBrand()` (`context.assets.logo.light` -> `resolveAsset`

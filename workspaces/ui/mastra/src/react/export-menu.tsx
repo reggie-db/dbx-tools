@@ -8,7 +8,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@dbx-tools/ui-appkit/react";
-import { DownloadIcon, FileTextIcon, PrinterIcon } from "lucide-react";
+import { DownloadIcon, FileTextIcon } from "lucide-react";
 import type { ExportFormat } from "../support/export";
 
 // Shared export affordance: a download button that opens a small menu of
@@ -22,7 +22,6 @@ const FORMATS: ReadonlyArray<{
   Icon: typeof DownloadIcon;
 }> = [
   { format: "pdf", label: "PDF", Icon: DownloadIcon },
-  { format: "print", label: "Print", Icon: PrinterIcon },
   { format: "markdown", label: "Markdown", Icon: FileTextIcon },
 ];
 

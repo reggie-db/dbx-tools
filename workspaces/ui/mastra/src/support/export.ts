@@ -8,7 +8,6 @@
  *   - `"pdf"`   - a print-ready HTML document rendered in a hidden iframe
  *                 with the browser's print dialog triggered, so the user
  *                 saves a real PDF ("Save as PDF") with no popup tab.
- *   - `"print"` - the same document routed to a paper printer.
  *   - `"markdown"` - a `.md` file download.
  *
  * The document can be brand-styled (logo, colors, font) via the optional
@@ -37,10 +36,9 @@ import { normalizeChartOption } from "./chart-option";
  * Output formats {@link exportChat} can produce.
  *   - `"pdf"`   - Save-as-PDF via a hidden print iframe (dialog defaults to
  *                 "Save as PDF"); no new tab.
- *   - `"print"` - same rendered document + print dialog, for a paper printer.
  *   - `"markdown"` - a `.md` file download.
  */
-export type ExportFormat = "pdf" | "print" | "markdown";
+export type ExportFormat = "pdf" | "markdown";
 
 /**
  * Optional brand styling for the exported document. Plain data (no React /
@@ -102,14 +100,13 @@ const CHART_HEIGHT_PX = 380;
 const PRINT_SETTLE_MS = 300;
 
 /**
- * Export `messages` as a PDF, a print job, or a Markdown file.
+ * Export `messages` as a PDF or a Markdown file.
  *
- * `"pdf"` and `"print"` render the same branded, self-contained HTML
- * document and drive it through a hidden `<iframe>` + `print()` - so the
- * browser's print dialog (defaulting to "Save as PDF" for `pdf`) opens
- * directly, with no popup tab. If the iframe path can't run (e.g. no DOM
- * body), the document is downloaded as a self-contained `.html` file so the
- * export - charts included - still lands.
+ * `"pdf"` renders a branded, self-contained HTML document and drives it
+ * through a hidden `<iframe>` + `print()` - so the browser's print dialog
+ * (defaulting to "Save as PDF") opens directly, with no popup tab. If the
+ * iframe path can't run (e.g. no DOM body), the document is downloaded as a
+ * self-contained `.html` file so the export - charts included - still lands.
  */
 export async function exportChat(options: ExportChatOptions): Promise<void> {
   const { messages, format, resolver } = options;
@@ -123,8 +120,8 @@ export async function exportChat(options: ExportChatOptions): Promise<void> {
     return;
   }
 
-  // pdf / print: build the branded document, then print it from a hidden
-  // iframe so the Save-as-PDF / print dialog opens without a stray tab.
+  // pdf: build the branded document, then print it from a hidden iframe so
+  // the Save-as-PDF dialog opens without a stray tab.
   const html = await buildHtmlDocument(messages, resolver, title, userLabel, options.brand);
   printViaHiddenIframe(html, `${stem}.html`);
 }
