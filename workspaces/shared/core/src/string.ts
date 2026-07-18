@@ -33,12 +33,24 @@ type ResolvedIdentifierOptions = Required<
   IdentifierOptions & Pick<TokenizeOptions, "lowerCase" | "capitalize">
 >;
 
-const TOKENIZE_CAMEL_CASE_REGEXP = /[A-Z]?[a-z]+|[0-9]+|[A-Z]+(?![a-z])/g;
+// A leading `v`/`V` immediately followed by digits (a version marker like
+// `v2`) is kept as ONE token instead of splitting into `v` + `2`; it leads the
+// alternation so it wins over the generic letter / digit runs. Everything else
+// is the usual camelCase word / number / all-caps-acronym split.
+const TOKENIZE_CAMEL_CASE_REGEXP = /[vV][0-9]+|[A-Z]?[a-z]+|[0-9]+|[A-Z]+(?![a-z])/g;
 const TOKENIZE_NON_ALPHANUMERIC_REGEXP = /[a-zA-Z0-9]+/g;
 const TOKENIZE_OVERRIDES: ((token: string, options: TokenizeOptions) => string)[] = [
   (token, options) => {
     if (options.capitalize && token.toLowerCase() === "ai") {
       return "AI";
+    }
+    return token;
+  },
+  // Version marker `v2` -> `V2` when capitalizing (the leading `v` uppercases,
+  // the digits stay), so it reads as one unit rather than "V 2".
+  (token, options) => {
+    if (options.capitalize && /^v[0-9]+$/.test(token)) {
+      return `V${token.slice(1)}`;
     }
     return token;
   },

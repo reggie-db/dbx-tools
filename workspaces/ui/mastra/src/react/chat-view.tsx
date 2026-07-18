@@ -292,16 +292,19 @@ export const ChatView = ({
     if (!name) return undefined;
     return models?.find((m) => m.name === name)?.displayName || name;
   };
-  // The "Server default" option names the actual endpoint the server falls
-  // back to (from `defaultModelName`) when known: "Server default (Claude
-  // Sonnet 4.6)". Plain "Server default" when the server didn't report one.
-  const defaultOptionLabel = (() => {
-    const named = modelLabel(defaultModelName);
-    return named ? `Server default (${named})` : "Server default";
-  })();
+  // The default option shows the server's fallback model by name when known
+  // (from `defaultModelName`), else a neutral "Default" - no "server default"
+  // phrasing either way.
+  const defaultOptionLabel = modelLabel(defaultModelName) ?? "Default";
   // Label the current model by its human-readable name when a model is
-  // pinned, else the default-option label (which names the server default).
+  // pinned, else the default-option label.
   const currentModelLabel = modelLabel(model) || defaultOptionLabel;
+  // Picker entries sorted by their human-readable label (case-insensitive).
+  const sortedModels = [...(models ?? [])].sort((a, b) =>
+    (a.displayName || a.name).localeCompare(b.displayName || b.name, undefined, {
+      sensitivity: "base",
+    }),
+  );
   const showClear = Boolean(onClear);
   const showExport = Boolean(onExportConversation);
   // The conversation sidebar turns on once the host wires both the
@@ -698,7 +701,7 @@ export const ChatView = ({
                         <SelectItem value={DEFAULT_MODEL_VALUE}>
                           {defaultOptionLabel}
                         </SelectItem>
-                        {models!.map((m) => (
+                        {sortedModels.map((m) => (
                           <SelectItem key={m.name} value={m.name}>
                             {m.displayName || m.name}
                           </SelectItem>
