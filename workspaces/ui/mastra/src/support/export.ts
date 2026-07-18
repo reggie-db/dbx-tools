@@ -162,13 +162,20 @@ function printViaHiddenIframe(html: string, downloadName: string): void {
       return;
     }
     // Settle so charts / fonts lay out, then print. `afterprint` removes the
-    // iframe once the dialog closes (a timeout backstops browsers that don't
-    // fire it).
+    // iframe once the dialog closes; a 60s timer backstops browsers that don't
+    // fire it. The backstop is armed BEFORE `print()` so a throw (sandboxed /
+    // policy-restricted frames can reject `print()`) still cleans up, and the
+    // export falls back to a file download rather than silently vanishing.
     win.addEventListener("afterprint", cleanup);
     win.setTimeout(() => {
-      win.focus();
-      win.print();
       window.setTimeout(cleanup, 60000);
+      try {
+        win.focus();
+        win.print();
+      } catch {
+        cleanup();
+        downloadTextFile(downloadName, html, "text/html;charset=utf-8");
+      }
     }, PRINT_SETTLE_MS);
   };
 
@@ -479,6 +486,20 @@ function downloadTextFile(filename: string, content: string, mime: string): void
 }
 
 /**
+ * A brand color / font value safe to interpolate into a `<style>` block.
+ * Brand colors are hex-validated upstream, but the font stack is only checked
+ * for non-blankness, so strip the characters that could close a declaration or
+ * rule (`{ } ; < > \` plus HTML-comment openers) to prevent CSS injection into
+ * the export document. Falls back to `fallback` when the value is blank.
+ */
+function cssValue(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  if (!trimmed) return fallback;
+  const safe = trimmed.replace(/[{}<>;\\]/g, "");
+  return safe || fallback;
+}
+
+/**
  * Build the inline stylesheet for the exported document, folding in optional
  * brand color / font overrides (falling back to the neutral slate/blue theme
  * and a system font stack). Tuned for print:
@@ -497,11 +518,13 @@ function downloadTextFile(filename: string, content: string, mime: string): void
  *     out; the visible page margin is re-supplied as body padding.
  */
 function buildDocumentCss(brand?: ExportBrand): string {
-  const fg = brand?.foreground || "#0f172a";
-  const primary = brand?.primary || "#0f172a";
-  const link = brand?.accent || "#2563eb";
-  const font =
-    brand?.fontSans || 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  const fg = cssValue(brand?.foreground, "#0f172a");
+  const primary = cssValue(brand?.primary, "#0f172a");
+  const link = cssValue(brand?.accent, "#2563eb");
+  const font = cssValue(
+    brand?.fontSans,
+    'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  );
   return `
   :root { color-scheme: light; }
   * { box-sizing: border-box; }

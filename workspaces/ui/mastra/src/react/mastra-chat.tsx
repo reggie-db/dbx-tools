@@ -46,10 +46,9 @@ import type {
 // `{ runId, payload: { toolCallId, toolName, args } }`. We surface that
 // as an out-of-band entry in `pendingApprovalsByMessage` and wire
 // `onResolveToolApproval` to {@link MastraPluginClient.approveToolCallStream}
-// / `declineToolCallStream`, which read SSE directly and avoid a stock
-// `@mastra/client-js` bug on resumed approval streams.
-// both of which return a fresh stream Response we run through the same
-// chunk handler.
+// / `declineToolCallStream` - both of which read SSE directly (avoiding a
+// stock `@mastra/client-js` bug on resumed approval streams) and return a
+// fresh stream Response we run through the same chunk handler.
 //
 // On mount the transcript hydrates with the most recent page of thread
 // history from the Mastra plugin's `/history` endpoint; scrolling near
@@ -1256,9 +1255,9 @@ export const useMastraChat = (
     [activeKey, mastraClient, updateSession],
   );
 
-  // Merge optimistic rows
-  // the server list, newest first, dropping any optimistic entry the
-  // server already returns so a thread is never listed twice.
+  // Merge optimistic rows over the server list, newest first, dropping any
+  // optimistic entry the server already returns so a thread is never listed
+  // twice.
   const sidebarThreads = useMemo<ThreadSummary[]>(() => {
     // Title overlay precedence per row: a manual rename always wins;
     // otherwise a provisional first-message title fills an untitled row

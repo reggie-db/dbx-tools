@@ -349,10 +349,14 @@ export const ChatView = ({
     if (isMobile) setMobileDrawerOpen((open) => !open);
     else toggleDesktopSidebar();
   };
-  // Top bar carries only the sidebar toggle now; the model picker, export, and
-  // clear all live in a toolbar row below the composer, closer to where the
-  // user is typing.
-  const showHeader = showSidebar;
+  // The top bar carries only the sidebar toggle; the model picker, export, and
+  // clear controls live in a toolbar row below the composer, closer to where
+  // the user is typing. The toggle is a mobile hamburger, or a desktop "show"
+  // affordance while the inline sidebar is collapsed - so the bar renders only
+  // when that toggle would actually be visible (an open desktop sidebar has its
+  // own hide button, leaving nothing for the bar to hold).
+  const showSidebarToggle = showSidebar && (isMobile || !desktopSidebarOpen);
+  const showHeader = showSidebarToggle;
   const showComposerToolbar = showModelDisplay || showExport || showClear;
 
   // Clear confirmation is an AppKit `AlertDialog` (a real modal), plus an
@@ -446,33 +450,31 @@ export const ChatView = ({
           ))}
         <div className="flex h-full min-w-0 flex-1 flex-col">
           {showHeader && (
-            <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-2 px-3 pb-2 pt-1 text-xs text-muted-foreground md:gap-3 md:px-6">
-              <div className="flex shrink-0 items-center gap-2">
-                {/*
-                 * Sidebar toggle. On mobile it's a persistent hamburger (the
-                 * overlay drawer has no always-visible hide button). On desktop
-                 * the panel hides itself, so the header only needs a "show"
-                 * affordance while the inline sidebar is collapsed.
-                 */}
-                {showSidebar && (isMobile || !desktopSidebarOpen) && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={toggleSidebar}
-                        aria-label={sidebarOpen ? "Hide conversations" : "Show conversations"}
-                      >
-                        <PanelLeftIcon className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {sidebarOpen ? "Hide conversations" : "Show conversations"}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
+            /*
+             * Slim top bar holding the sidebar toggle. On mobile the toggle is
+             * a persistent hamburger (the overlay drawer has no always-visible
+             * hide button); on desktop it's a "show" affordance rendered only
+             * while the inline sidebar is collapsed (an open sidebar has its
+             * own hide button). `showHeader` already tracks that visibility, so
+             * the bar never renders empty.
+             */
+            <div className="mx-auto flex w-full max-w-4xl items-center gap-2 px-3 pb-2 pt-1 text-xs text-muted-foreground md:gap-3 md:px-6">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={toggleSidebar}
+                    aria-label={sidebarOpen ? "Hide conversations" : "Show conversations"}
+                  >
+                    <PanelLeftIcon className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {sidebarOpen ? "Hide conversations" : "Show conversations"}
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
           <div className="relative flex flex-1 flex-col overflow-hidden">
