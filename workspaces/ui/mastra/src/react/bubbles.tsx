@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { MarkdownWithEmbeds } from "./embed-slots";
+import { ToolMarkdown } from "./markdown";
 import { ExportMenu } from "./export-menu";
 import { FeedbackControls } from "./feedback-controls";
 import { SuggestionPills } from "./suggestion-pills";
@@ -95,6 +96,74 @@ const RoleAvatar = ({ role }: { role: UIMessage["role"] }) => (
   </Avatar>
 );
 
+/** A tool-call input shaped like an outbound email (the `send_email` tool). */
+type EmailApprovalInput = {
+  to?: string | string[];
+  cc?: string | string[];
+  subject?: string;
+  body?: string;
+};
+
+/** Comma-join one-or-many addresses; empty string when none. */
+const joinAddresses = (value: string | string[] | undefined): string =>
+  (Array.isArray(value) ? value : value ? [value] : []).filter(Boolean).join(", ");
+
+/**
+ * Recognize an approval input that is an email draft (the `send_email` tool),
+ * so its card can render a formatted preview instead of raw JSON. Structural,
+ * not name-based, so a renamed email tool still previews.
+ */
+const asEmailInput = (input: unknown): EmailApprovalInput | null => {
+  if (!input || typeof input !== "object") return null;
+  const e = input as EmailApprovalInput;
+  const hasBody = typeof e.body === "string";
+  const hasSubject = typeof e.subject === "string";
+  const hasTo = typeof e.to === "string" || Array.isArray(e.to);
+  return hasBody && (hasSubject || hasTo) ? e : null;
+};
+
+/**
+ * Labeled To / Cc / Subject / Body preview of an email awaiting approval, with
+ * the body rendered as Markdown (headings, tables, lists) rather than the raw
+ * source. Mirrors `ui-email`'s `EmailPreview` without a dependency on that
+ * optional package, so the `send_email` approval card reads like an email
+ * instead of a JSON blob.
+ */
+const EmailApprovalPreview = ({ email }: { email: EmailApprovalInput }) => {
+  const to = joinAddresses(email.to);
+  const cc = joinAddresses(email.cc);
+  return (
+    <dl className="space-y-1 rounded bg-background/40 p-2 text-[11px]">
+      {to && (
+        <div className="flex gap-2">
+          <dt className="w-14 shrink-0 text-muted-foreground">To</dt>
+          <dd className="min-w-0 flex-1 truncate">{to}</dd>
+        </div>
+      )}
+      {cc && (
+        <div className="flex gap-2">
+          <dt className="w-14 shrink-0 text-muted-foreground">Cc</dt>
+          <dd className="min-w-0 flex-1 truncate">{cc}</dd>
+        </div>
+      )}
+      {email.subject && (
+        <div className="flex gap-2">
+          <dt className="w-14 shrink-0 text-muted-foreground">Subject</dt>
+          <dd className="min-w-0 flex-1 truncate font-medium">{email.subject}</dd>
+        </div>
+      )}
+      {email.body && (
+        <div className="flex gap-2">
+          <dt className="w-14 shrink-0 text-muted-foreground">Body</dt>
+          <dd className="min-w-0 flex-1 break-words">
+            <ToolMarkdown>{email.body}</ToolMarkdown>
+          </dd>
+        </div>
+      )}
+    </dl>
+  );
+};
+
 /**
  * Inline approval prompt rendered when a `requireApproval: true` tool is
  * paused in the agent loop. Approve / deny flows through
@@ -144,9 +213,13 @@ const ToolApprovalCard = ({
         <MessageSquareIcon className="size-3.5" />
         <span>Approval needed: {humanizeToolName(toolName)}</span>
       </div>
-      <pre className="overflow-x-auto rounded bg-background/40 p-2 text-[11px]">
-        {JSON.stringify(input, null, 2)}
-      </pre>
+      {asEmailInput(input) ? (
+        <EmailApprovalPreview email={asEmailInput(input)!} />
+      ) : (
+        <pre className="overflow-x-auto rounded bg-background/40 p-2 text-[11px]">
+          {JSON.stringify(input, null, 2)}
+        </pre>
+      )}
       {expired ? (
         <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <MessageSquareIcon className="size-3.5" />

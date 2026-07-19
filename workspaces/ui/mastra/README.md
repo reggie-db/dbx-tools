@@ -20,7 +20,9 @@ Key features:
   routes for history, threads, model lists, suggestions, feedback, charts, and
   statement data.
 - Tool-approval support for suspended Mastra `requireApproval` calls, including
-  direct resumed-stream handling.
+  direct resumed-stream handling. An email-shaped input (the `send_email` tool)
+  renders as a formatted To / Cc / Subject / Markdown-body preview rather than
+  raw JSON.
 - Inline embed rendering for `[chart:<id>]` and `[data:<id>]` markers produced by
   the server plugin.
 - Conversation sidebar with new, select, rename, delete, active-thread, and
