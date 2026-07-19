@@ -97,12 +97,10 @@ function yamlString(value) {
 
 /**
  * Strip the `.md` suffix from relative TypeDoc cross-links so Starlight
- * resolves them (it serves extension-less routes). With `--flattenOutputFiles`
- * TypeDoc emits flat, same-directory filenames, so the link target already
- * matches the file on disk - we must NOT rewrite case or strip characters
- * (the previous `@`-strip + lowercase produced paths that didn't exist and
- * broke case-sensitive symbol files on the Linux CI runner). External links
- * (`http`, `mailto`, anchors, absolute paths) pass through untouched.
+ * resolves them (it serves extension-less routes). External links (`http`,
+ * `mailto`, anchors, absolute paths) pass through untouched. The remaining
+ * case/dot mismatch between the flat filenames and Starlight's slugs is
+ * reconciled later by {@link slugifyApiFiles}.
  */
 function normalizeTypedocLinks(markdown) {
   return markdown.replace(
@@ -112,6 +110,74 @@ function normalizeTypedocLinks(markdown) {
       return `${open}${target}${hash}${close}`;
     },
   );
+}
+
+/**
+ * The route slug Starlight derives from a content filename: lowercase and dots
+ * removed. `--flattenOutputFiles` emits dotted, mixed-case names like
+ * `Namespace.databricks.md` and `databricks.TypeAlias.ContextLike.md`, so their
+ * served routes collapse to `namespacedatabricks` / `databrickstypealiascontextlike`.
+ * We rename each page to a hyphenated form of that slug (readable, collision-free,
+ * and unchanged by the slugifier) so the on-disk filename equals the served route.
+ */
+function apiSlug(basenameNoExt) {
+  return basenameNoExt.toLowerCase().replace(/\./g, "-");
+}
+
+/**
+ * Reconcile flat TypeDoc filenames with the routes Starlight actually serves.
+ * TypeDoc's mixed-case, dotted filenames slugify to lowercase, dot-free routes,
+ * but the generated cross-links keep the original name - so every API link
+ * resolves to a nonexistent route (a sitewide 404). Rename each page (except
+ * `index.md`, which is the directory root) to `apiSlug(name)`, then rewrite
+ * every intra-package link target to match. Runs last, after empty pages are
+ * pruned, so no link points at a removed file.
+ */
+function slugifyApiFiles(outDir) {
+  const files = walk(outDir).filter((p) => p.endsWith(".md"));
+  const rename = new Map();
+  for (const file of files) {
+    const base = path.basename(file, ".md");
+    if (base === "index") continue;
+    const slug = apiSlug(base);
+    if (slug !== base) rename.set(base, slug);
+  }
+  if (rename.size === 0) return;
+  // Rewrite links first (targets are extension-less basenames after
+  // `normalizeTypedocLinks`), then move the files.
+  for (const file of files) {
+    const text = read(file);
+    const next = text.replace(
+      /(\]\()(\.\/)?([^)#]+)(#[^)]+)?(\))/g,
+      (match, open, dot = "", target, hash = "", close) => {
+        const slug = rename.get(target);
+        return slug ? `${open}${dot}${slug}${hash}${close}` : match;
+      },
+    );
+    if (next !== text) write(file, next);
+  }
+  for (const [base, slug] of rename) {
+    const from = path.join(outDir, `${base}.md`);
+    const to = path.join(outDir, `${slug}.md`);
+    if (fs.existsSync(from)) fs.renameSync(from, to);
+  }
+}
+
+/**
+ * Drop TypeDoc's `## References` section from a package `index.md`. It lists
+ * the barrel's `export { … } from` re-exports as `Re-exports [X]` entries, each
+ * just re-linking a symbol already documented under its namespace - noise that
+ * adds nothing. Removes the heading through the next H2 (or end of file).
+ */
+function stripReExports(indexPath) {
+  if (!fs.existsSync(indexPath)) return;
+  const lines = read(indexPath).split("\n");
+  const start = lines.findIndex((l) => l.trim() === "## References");
+  if (start === -1) return;
+  let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
+  if (end === -1) end = lines.length;
+  lines.splice(start, end - start);
+  write(indexPath, `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`);
 }
 
 function addFrontmatter(file, fallbackTitle, sourcePath) {
@@ -289,6 +355,7 @@ function generatePackageApi(pkg) {
   // singular capitalized `<Kind>` marks a documented symbol. `index.md` and
   // `Namespace.<x>.md` stubs carry no symbol of their own. If nothing but
   // stubs was produced there's nothing worth publishing, so drop the dir.
+  // Test against the flat TypeDoc names, before slugification rewrites them.
   const hasSymbols = mdFiles.some((p) =>
     /\.(Function|Interface|TypeAlias|Enumeration|Variable|Class)\./.test(
       path.basename(p),
@@ -298,6 +365,11 @@ function generatePackageApi(pkg) {
     fs.rmSync(outDir, { recursive: true, force: true });
     return false;
   }
+
+  // Drop the re-export noise, then rename files + rewrite links so the on-disk
+  // names match the routes Starlight serves (must be last - it moves files).
+  stripReExports(path.join(outDir, "index.md"));
+  slugifyApiFiles(outDir);
   return true;
 }
 
