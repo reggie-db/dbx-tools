@@ -22,6 +22,7 @@ import {
   enqueueSteer,
   isSessionRunning,
   removeSteer as removeSteerFromQueue,
+  reorderSteers as reorderSteerQueue,
   sessionKey,
   terminateRunningToolEvents,
   type ThreadSession,
@@ -979,6 +980,18 @@ export const useMastraChat = (
     [activeKey, updateSession],
   );
 
+  // Reorder the queue to match a drag-reorder of the pending steers. The queue
+  // then drains (and "send now" fires) in the new order.
+  const reorderSteers = useCallback(
+    (orderedIds: string[]) => {
+      updateSession(activeKey, (session) => ({
+        ...session,
+        queuedSteers: reorderSteerQueue(session.queuedSteers, orderedIds),
+      }));
+    },
+    [activeKey, updateSession],
+  );
+
   /**
    * Wipe the current thread on the server and reset every piece of
    * client-side state that mirrored it. The session cookie that
@@ -1444,6 +1457,7 @@ export const useMastraChat = (
     queuedSteers: activeSession.queuedSteers,
     onSendSteerNow: sendSteerNow,
     onRemoveSteer: removeSteer,
+    onReorderSteers: reorderSteers,
     regenerate,
     onStop: stop,
     suggestions,

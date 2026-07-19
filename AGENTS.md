@@ -593,8 +593,9 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   path via `drainQueueRef`, which breaks the `driveStream`↔`runStream` cycle),
   and `onSendSteerNow(id)` fires any item early by interrupting the current run
   (`runStream`/`driveStream` supersede via abort + `runToken` bump), while
-  `onRemoveSteer(id)` drops one. Queue helpers (`enqueueSteer`/`removeSteer`) are
-  pure + unit-tested in thread-sessions.ts. True mid-run message delivery
+  `onRemoveSteer(id)` drops one and `onReorderSteers(ids)` reorders the queue
+  (the chips are native-HTML5-draggable). Queue helpers (`enqueueSteer` /
+  `removeSteer` / `reorderSteers`) are pure + unit-tested in thread-sessions.ts. True mid-run message delivery
   (Mastra's experimental `queue-message` / `deliver`) was NOT used — the agent
   didn't fold queued messages into the live turn, so enqueue + interrupt-restart
   is the reliable model. Cancelling / superseding a run settles stuck `running`

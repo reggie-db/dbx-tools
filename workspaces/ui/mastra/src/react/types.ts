@@ -116,6 +116,12 @@ export type ChatViewProps = {
   onSendSteerNow?: (steerId: string) => void;
   /** Drop a queued steer without sending it. */
   onRemoveSteer?: (steerId: string) => void;
+  /**
+   * Reorder the pending steers to match `orderedIds` (a drag-reorder). The
+   * queue then drains - and "send now" fires - in the new order. When
+   * provided, queued steer chips become drag-reorderable.
+   */
+  onReorderSteers?: (orderedIds: string[]) => void;
   regenerate?: () => void;
   /**
    * Abort the in-flight response. When provided and the chat is running

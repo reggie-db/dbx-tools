@@ -35,6 +35,7 @@ import {
 import { error as errorUtil } from "@dbx-tools/shared-core";
 import {
   ArrowDownIcon,
+  GripVerticalIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   RefreshCwIcon,
@@ -45,7 +46,7 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AssistantBubble, UserBubble } from "./bubbles";
 import { ExportMenu } from "./export-menu";
 import { SuggestionPills } from "./suggestion-pills";
@@ -105,6 +106,7 @@ export const ChatView = ({
   queuedSteers = [],
   onSendSteerNow,
   onRemoveSteer,
+  onReorderSteers,
   regenerate,
   onStop,
   className,
@@ -138,16 +140,22 @@ export const ChatView = ({
   onFeedback,
 }: ChatViewProps) => {
   const [input, setInput] = useState("");
+  // Id of the queued steer currently being dragged (native HTML5 drag), for
+  // the reorder affordance + drop styling. Null when not dragging.
+  const [draggingSteerId, setDraggingSteerId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   // Composer textarea, auto-grown with its content up to the CSS `max-h`.
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // `isAtBottom` drives the "jump to latest" button; `pinnedRef` drives the
+  // auto-follow. They usually agree, but `pinnedRef` is INTENT (do we want to
+  // stick to the bottom?) rather than a measurement, so a fast programmatic
+  // pin mid-stream can't be misread as the user scrolling away.
   const [isAtBottom, setIsAtBottom] = useState(true);
-  // Mirror `isAtBottom` into a ref so the ResizeObserver below (created
-  // per transcript mount, not per render) reads the latest value
-  // without re-subscribing every time the flag toggles.
-  const isAtBottomRef = useRef(isAtBottom);
-  isAtBottomRef.current = isAtBottom;
+  const pinnedRef = useRef(true);
+  // Set right before a programmatic `scrollTop` write so the `scroll` event it
+  // triggers is ignored by `handleScroll` (only USER scrolls should unpin).
+  const programmaticScrollRef = useRef(false);
   // Scroll-anchor state for prepending older messages. When the
   // parent answers an `onLoadMore` call we capture the pre-prepend
   // `scrollHeight`/`scrollTop`; once the new DOM nodes mount we shift
@@ -159,39 +167,42 @@ export const ChatView = ({
   const loadMoreRef = useRef(onLoadMore);
   loadMoreRef.current = onLoadMore;
 
-  // Auto-scroll to bottom whenever a new chunk lands, but only while the
-  // user is already pinned to the bottom. Lets them scroll up to read
-  // history mid-stream without the view yanking them back. Skip the
-  // adjust when an older page was just prepended (the anchor restore
-  // below owns that case).
-  useEffect(() => {
+  // Jump the transcript to the bottom, marking the write as programmatic so
+  // the resulting scroll event isn't mistaken for the user scrolling away.
+  const pinToBottomNow = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    if (prependAnchorRef.current) return;
-    if (!isAtBottom) return;
+    programmaticScrollRef.current = true;
     el.scrollTop = el.scrollHeight;
-  }, [messages, toolEventsByMessage, isAtBottom]);
+  }, []);
 
-  // Keep the view pinned to the bottom as streamed content grows. The
-  // `messages`-dep effect above only fires when the array reference
-  // changes; a ResizeObserver on the transcript also catches height
-  // growth that lands without a new `messages` ref - token-by-token
-  // text, async markdown/syntax layout, the in-flight waiting row - so
-  // the scroll keeps up while the user is pinned to the bottom. Only
-  // pins when already at the bottom, so scrolling up to read history
-  // mid-stream still works. Re-subscribes when the transcript mounts
-  // (empty -> first message, or history finishes loading).
+  // Follow the bottom as streamed content grows, as long as we're "pinned".
+  // A ResizeObserver on the transcript catches every height change - new
+  // messages, token-by-token text, async markdown/chart layout, the waiting
+  // row - and re-pins reading the FRESH scrollHeight, so the view keeps up
+  // with fast streaming. Pinning is intent-driven (`pinnedRef`), not measured
+  // off scrollTop, so our own programmatic jumps never look like the user
+  // scrolling up. Re-subscribes when the transcript mounts.
   useEffect(() => {
     const el = scrollRef.current;
     const content = contentRef.current;
     if (!el || !content) return;
     const observer = new ResizeObserver(() => {
-      if (prependAnchorRef.current || !isAtBottomRef.current) return;
+      if (prependAnchorRef.current || !pinnedRef.current) return;
+      programmaticScrollRef.current = true;
       el.scrollTop = el.scrollHeight;
     });
     observer.observe(content);
     return () => observer.disconnect();
   }, [messages.length, isLoadingHistory]);
+
+  // A new message reference (a turn starting, or a steer appended) re-pins if
+  // we were following, catching growth the observer's first callback might
+  // race. Skipped during a prepend (the anchor restore below owns that).
+  useEffect(() => {
+    if (prependAnchorRef.current || !pinnedRef.current) return;
+    pinToBottomNow();
+  }, [messages, toolEventsByMessage, pinToBottomNow]);
 
   // Restore the visual scroll position after a prepend. Runs in
   // `useLayoutEffect` so the adjustment happens before the browser
@@ -207,9 +218,17 @@ export const ChatView = ({
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    setIsAtBottom(
-      el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX,
-    );
+    const atBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX;
+    // A scroll we caused (a pin) shouldn't change intent - only reconcile the
+    // button state. A USER scroll sets intent: scrolling up unpins (stop
+    // following); scrolling back to the bottom re-pins (resume following).
+    if (programmaticScrollRef.current) {
+      programmaticScrollRef.current = false;
+    } else {
+      pinnedRef.current = atBottom;
+    }
+    setIsAtBottom(atBottom);
     // Lazy-load older messages once the user gets close to the top.
     // Capture the anchor *before* firing the callback so the parent's
     // synchronous state updates don't beat us to the layout effect.
@@ -227,12 +246,15 @@ export const ChatView = ({
     }
   };
 
+  // The "jump to latest" button: smooth-scroll to the bottom and resume
+  // following (re-pin), since the user asked to return to live content.
   const scrollToBottom = () => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = true;
+    setIsAtBottom(true);
+    programmaticScrollRef.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   };
 
   // Grow the composer with its content (up to the textarea's CSS `max-h`,
@@ -258,26 +280,21 @@ export const ChatView = ({
     // to the live run (or interrupts + resends). Idle submits start a turn.
     sendMessage({ text });
     setInput("");
-    // Sending is an explicit "I want to see the response" action, so re-pin to
-    // the bottom even if the user had scrolled up. `setIsAtBottom(true)` makes
-    // the message-dep + ResizeObserver auto-scroll effects follow the new turn;
-    // the double-rAF is a belt-and-suspenders jump that runs AFTER React
-    // commits the appended message (a single frame can fire pre-commit).
-    setIsAtBottom(true);
-    pinToBottom();
+    // Sending is an explicit "I want to see the response", so resume following
+    // even if the user had scrolled up.
+    resumeFollow();
   };
 
-  // Re-pin the transcript to the bottom after a submit. `setIsAtBottom(true)`
-  // drives the auto-scroll effects; the double-rAF jump runs after React
-  // commits the appended message (a single frame can fire pre-commit).
-  const pinToBottom = () => {
-    const pin = () => {
-      const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    };
+  // Resume auto-following the bottom (after a submit): set intent, then jump
+  // across two frames so the pin lands AFTER React commits the appended
+  // message (a single frame can fire pre-commit). The ResizeObserver keeps it
+  // pinned through the subsequent streaming growth.
+  const resumeFollow = () => {
+    pinnedRef.current = true;
+    setIsAtBottom(true);
     requestAnimationFrame(() => {
-      pin();
-      requestAnimationFrame(pin);
+      pinToBottomNow();
+      requestAnimationFrame(pinToBottomNow);
     });
   };
 
@@ -500,7 +517,10 @@ export const ChatView = ({
             <div
               ref={scrollRef}
               onScroll={handleScroll}
-              className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]"
+              // `overflow-anchor:none` stops the browser's scroll anchoring
+              // from fighting the programmatic bottom-pin as streamed content
+              // grows (it would otherwise lock onto a mid-transcript element).
+              className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]"
             >
               {messages.length === 0 && !isLoadingHistory ? (
                 <Empty className="mx-auto h-full w-full max-w-4xl px-4 md:px-6">
@@ -631,13 +651,64 @@ export const ChatView = ({
             {queuedSteers.length > 0 && (
               // Steers submitted while the turn is running, waiting to send.
               // They drain oldest-first when the turn ends; each can be fired
-              // now (interrupts) or removed.
+              // now (interrupts), removed, or dragged to reorder the queue.
               <div className="mb-2 flex flex-col gap-1">
-                {queuedSteers.map((steer) => (
+                {queuedSteers.map((steer) => {
+                  const reorderable = Boolean(onReorderSteers);
+                  // Move the dragged steer to just before `steer` (or to the
+                  // end when dropped on itself at the tail) and report the new
+                  // id order to the driver.
+                  const dropBefore = () => {
+                    if (!onReorderSteers || !draggingSteerId || draggingSteerId === steer.id) {
+                      return;
+                    }
+                    const ids = queuedSteers.map((s) => s.id).filter((id) => id !== draggingSteerId);
+                    const at = ids.indexOf(steer.id);
+                    ids.splice(at === -1 ? ids.length : at, 0, draggingSteerId);
+                    onReorderSteers(ids);
+                  };
+                  return (
                   <div
                     key={steer.id}
-                    className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2 py-1 text-xs"
+                    draggable={reorderable}
+                    onDragStart={
+                      reorderable
+                        ? (e) => {
+                            setDraggingSteerId(steer.id);
+                            e.dataTransfer.effectAllowed = "move";
+                          }
+                        : undefined
+                    }
+                    onDragOver={
+                      reorderable
+                        ? (e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                          }
+                        : undefined
+                    }
+                    onDrop={
+                      reorderable
+                        ? (e) => {
+                            e.preventDefault();
+                            dropBefore();
+                            setDraggingSteerId(null);
+                          }
+                        : undefined
+                    }
+                    onDragEnd={reorderable ? () => setDraggingSteerId(null) : undefined}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2 py-1 text-xs",
+                      reorderable && "cursor-grab active:cursor-grabbing",
+                      draggingSteerId === steer.id && "opacity-50",
+                    )}
                   >
+                    {reorderable && (
+                      <GripVerticalIcon
+                        className="size-3 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    )}
                     <span className="text-muted-foreground">Queued</span>
                     <span className="min-w-0 flex-1 truncate">{steer.text}</span>
                     {onSendSteerNow && (
@@ -675,7 +746,8 @@ export const ChatView = ({
                       </Tooltip>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <InputGroup className="rounded-2xl border-border/80 shadow-sm transition-shadow focus-within:shadow-md">

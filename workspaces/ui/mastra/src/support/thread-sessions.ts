@@ -70,6 +70,29 @@ export function removeSteer(queue: QueuedSteer[], id: string): QueuedSteer[] {
 }
 
 /**
+ * Reorder the queue to match `orderedIds` (a drag-reorder of the pending
+ * steers). Ids not present are dropped and unknown ids ignored, so a stale
+ * order can't duplicate or resurrect an item; any current steer missing from
+ * `orderedIds` is appended in its existing relative order as a safety net.
+ */
+export function reorderSteers(queue: QueuedSteer[], orderedIds: string[]): QueuedSteer[] {
+  const byId = new Map(queue.map((steer) => [steer.id, steer]));
+  const seen = new Set<string>();
+  const next: QueuedSteer[] = [];
+  for (const id of orderedIds) {
+    const steer = byId.get(id);
+    if (steer && !seen.has(id)) {
+      next.push(steer);
+      seen.add(id);
+    }
+  }
+  for (const steer of queue) {
+    if (!seen.has(steer.id)) next.push(steer);
+  }
+  return next;
+}
+
+/**
  * Settle any tool-progress pills still marked `running` to `done`. A cancelled
  * or interrupted turn stops delivering the `tool-result` / `tool-error` chunks
  * that would otherwise close them, so without this a Genie / chart pill would

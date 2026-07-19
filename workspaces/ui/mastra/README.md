@@ -30,7 +30,8 @@ Key features:
   + routing, no shared client state).
 - Mid-turn steering queue: messages submitted while a turn streams stack up as
   pending steers (they drain oldest-first when the turn ends); each queued item
-  can be sent now (interrupting the current turn) or removed.
+  can be sent now (interrupting the current turn), removed, or dragged to
+  reorder the queue.
 - Export menu for PDF and Markdown, resolving charts and tables so
   exported conversations remain useful offline.
 
