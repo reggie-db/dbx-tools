@@ -144,6 +144,40 @@ const html = emailHtml.renderEmailHtml({
 `markdown.markdownToHtml()` renders Markdown. `emailHtml.renderEmailHtml()` wraps
 the rendered body in the package layout and inlines CSS for mail clients.
 
+## Brand The Email
+
+Branding is optional. Pass a `brand` to the plugin (or to `renderEmailHtml`) to
+color the layout with an accent, font, and header logo; omit it for the neutral
+default palette.
+
+```ts
+import { brand, plugin } from "@dbx-tools/email";
+
+// The dbx-tools brand, ready to use:
+plugin.email({ brand: brand.defaultEmailBrand });
+
+// Or derive from any shared BrandContext:
+import { brand as coreBrand } from "@dbx-tools/shared-core";
+plugin.email({ brand: brand.emailBrandFromContext(coreBrand.defaultBrandContext) });
+
+// Or hand-build the small email-safe slice:
+plugin.email({
+  brand: {
+    accent: "#FF3621",
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+    name: "Acme",
+    logoUrl: "https://acme.example/logo.svg", // http(s): or data: only
+  },
+});
+```
+
+The brand is inlined into every rendered message. The browser UI's `[data-brand]`
+CSS bridge can't reach an inbox (mail clients strip `<style>` and ignore `var()`),
+so email branding uses inline token values instead. A `logoUrl` renders only when
+it is an `http(s):` or `data:` URL - a package-export asset path is dropped rather
+than shown as a broken image, so `defaultEmailBrand` applies the brand color and
+font but no logo.
+
 ## Use The Outbox In Tests
 
 ```ts
