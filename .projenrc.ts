@@ -281,6 +281,11 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@mastra/core@catalog:",
     "@mastra/ai-sdk@catalog:",
     "@mastra/express@catalog:",
+    // `plugin.ts` imports the `express` value (not just its types) to build
+    // the plugin sub-app, so express is a real runtime dep - not only a peer
+    // of `@mastra/express`. Declared so it resolves from this package's own
+    // tree (e.g. under a source `link:`), not just when hoisted by a consumer.
+    "express@catalog:",
     "@mastra/fastembed@catalog:",
     "@mastra/mcp@catalog:",
     "@mastra/memory@catalog:",

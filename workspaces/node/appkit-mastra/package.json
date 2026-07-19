@@ -45,6 +45,7 @@
     "@mastra/otel-bridge": "catalog:",
     "@mastra/pg": "catalog:",
     "@opentelemetry/api": "catalog:",
+    "express": "catalog:",
     "pg": "^8.22.0",
     "zod": "catalog:"
   },

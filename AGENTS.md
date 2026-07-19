@@ -420,21 +420,27 @@ Barrels re-export every exporting file under `src/` except names starting with
 
 `demo/` is a standalone downstream CONSUMER: it installs `@dbx-tools/*` from the
 registry in `demo/.npmrc` (a local verdaccio), so by default it runs PUBLISHED
-package versions, not your working tree. To iterate on package source against the
-running demo WITHOUT a bump/publish/reinstall/restart each time, use dev-link:
+package versions, not your working tree. To iterate on the CLIENT UI packages
+against the running demo WITHOUT a bump/publish/reinstall each time, use dev-link:
 
 ```sh
-node demo/scripts/dev-link.mjs          # link every @dbx-tools/* to workspaces/** source
-# run the watchers (client HMR + server tsx-watch), then edit workspaces/**/src live
+node demo/scripts/dev-link.mjs          # link the client UI packages to workspaces source
+# server (serves dist/, unchanged) + a client build-watch that rebuilds on UI edits:
+pnpm --filter @dbx-tools/demo-appkit-server dev
+pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch
 node demo/scripts/dev-link.mjs --unlink # restore the registry-consumer resolution
 ```
 
-`dev-link` discovers packages dynamically (reads every `package.json` under
-`workspaces/`) and writes transient `pnpm.overrides` `link:` entries into
-`demo/package.json`; `--unlink` (or discarding that change) returns the demo to a
-clean consumer before committing. Because the packages have `.ts` source entry
-points (no build step), `vite` and `tsx watch` read the linked source directly.
-See `demo/README.md` for the two-mode explanation (consumer vs dev-link).
+`dev-link` adds the client-reachable workspace packages (the closure of the
+client app's `@dbx-tools/*` deps: `ui-*` + browser-safe `shared-*`) as pnpm
+workspace members and switches the client app's deps to `workspace:*`; it edits
+only transient, gitignored files (`pnpm-workspace.yaml`, the app manifest, a
+`.dev-link.json` sidecar), and `--unlink` restores them. It is deliberately
+CLIENT-ONLY: linking the SERVER packages double-installs their `@databricks/appkit`
+/ `@mastra/*` (same version, different peer-hash) so AppKit singletons like
+`CacheManager` break ("not initialized"); the browser build avoids this via
+vite's React `dedupe`, which tsx has no equivalent for. Server changes still go
+through the publish cycle. See `demo/README.md` for the full two-mode explanation.
 
 ## Generated files — DO NOT edit by hand
 

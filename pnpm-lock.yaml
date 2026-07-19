@@ -87,6 +87,9 @@ catalogs:
     echarts-for-react:
       specifier: ^3.0.2
       version: 3.0.5
+    express:
+      specifier: ^5.1.0
+      version: 5.2.1
     lucide-react:
       specifier: ^0.554.0
       version: 0.554.0
@@ -365,6 +368,9 @@ importers:
       '@opentelemetry/api':
         specifier: 'catalog:'
         version: 1.9.1
+      express:
+        specifier: 'catalog:'
+        version: 5.2.1
       pg:
         specifier: ^8.22.0
         version: 8.22.0

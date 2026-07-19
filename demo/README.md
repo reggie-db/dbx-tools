@@ -96,29 +96,36 @@ the right mode when the demo (or your own app) is the thing under development an
 the packages are a fixed dependency. To pick up a new package version you
 bump/publish it, then `pnpm update "@dbx-tools/*" --latest` and rebuild.
 
-### Dev-link mode — for working on the packages in THIS repo
+### Dev-link mode — for iterating on the CLIENT UI packages in THIS repo
 
-When you're iterating on the package source in `../workspaces/**`, the
-bump → publish → update → restart loop is too slow. `dev-link` points every
-`@dbx-tools/*` dependency at its live workspace source (via pnpm `overrides`
-`link:` entries), so the running watchers hot-reload your edits with no
-republish and no restart:
+When you're editing the UI package source in `../workspaces/ui/**`, the
+bump → publish → update → rebuild loop is too slow. `dev-link` adds the
+client-reachable workspace packages (`ui-*` + the browser-safe `shared-*` they
+pull) as pnpm workspace members and points the client app's `@dbx-tools/*` deps
+at that source, so a `vite build --watch` rebuilds the bundle on every edit:
 
 ```bash
-node scripts/dev-link.mjs        # link @dbx-tools/* to ../workspaces source
-# start the watchers (client HMRs, server tsx-watch reloads):
-pnpm --filter @dbx-tools/demo-appkit-app dev
-pnpm --filter @dbx-tools/demo-appkit-server dev
-# now edit anything under ../workspaces/**/src — the demo updates live.
+node scripts/dev-link.mjs                                  # link client UI source
+pnpm --filter @dbx-tools/demo-appkit-server dev            # server (unchanged, serves dist/)
+pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch  # rebuild dist/ on UI source edits
+# edit anything under ../workspaces/ui/**/src, refresh the browser — no republish.
 
-node scripts/dev-link.mjs --unlink   # restore the registry consumer mode
+node scripts/dev-link.mjs --unlink                         # restore the registry consumer mode
 ```
 
-`dev-link` discovers the packages automatically (it reads every
-`package.json` under `../workspaces`), so it needs no maintenance as packages
-are added or renamed. The link overrides are transient local state written into
-this `package.json`'s `pnpm.overrides` — run `--unlink` (or discard the change)
-before committing; the committed demo always stays a clean registry consumer.
+`dev-link` discovers the linked set automatically — the closure of the client
+app's `@dbx-tools/*` deps followed through each package's own deps — so it needs
+no maintenance as packages are added or renamed. It edits only transient,
+gitignored files (`pnpm-workspace.yaml`, the app manifest, a `.dev-link.json`
+sidecar); run `--unlink` (or discard the changes) before committing.
+
+**Client only, on purpose.** The SERVER packages are NOT linked: their
+transitive `@databricks/appkit` / `@mastra/*` would resolve to a second
+physical install (same version, different peer-hash) than the demo's, so
+singletons like AppKit's `CacheManager` initialize in one copy and are read
+from the other. The browser build sidesteps this via vite's React `dedupe`,
+which has no server-side (tsx) equivalent. So server changes still go through
+bump → publish → `pnpm update` → restart; only the UI packages source-link.
 
 ## Required env
 
