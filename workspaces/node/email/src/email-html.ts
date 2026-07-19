@@ -12,15 +12,25 @@
  * renderer feeds both the local outbox preview and the SMTP HTML part,
  * so a browser and an inbox show the same thing.
  *
+ * Brand styling (accent color, font, header logo) is optional: pass an
+ * {@link EmailBrand} to color the layout, or omit it for the neutral
+ * default. Branding is inlined here because the browser UI's `[data-brand]`
+ * CSS bridge can't reach an inbox (see `./brand`).
+ *
  * @module
  */
 
 import { string } from "@dbx-tools/shared-core";
 import juice from "juice";
+import type { EmailBrand } from "./brand";
 import { markdownToHtml } from "./markdown";
 
-/** Accent color for the header band and links. */
-const ACCENT = "#0b6bcb";
+/** Neutral fallback styling when no brand is supplied. */
+const DEFAULT_BRAND: Required<Pick<EmailBrand, "accent" | "onAccent" | "fontFamily">> = {
+  accent: "#0b6bcb",
+  onAccent: "#ffffff",
+  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+};
 
 /** Escape HTML-significant characters (re-exported from `@dbx-tools/shared`). */
 export const escapeHtml = string.escapeHtml;
@@ -29,12 +39,14 @@ export const escapeHtml = string.escapeHtml;
  * Content stylesheet inlined onto the markdown body (juice maps these
  * onto elements). Outer layout styling is written inline directly so it
  * survives even if inlining is skipped; the `@media` rule is preserved
- * by juice for clients that honor it.
+ * by juice for clients that honor it. Parameterized by the resolved accent
+ * so body links match the brand.
  */
-const CONTENT_CSS = `
+function contentCss(accent: string): string {
+  return `
     .email-body { font-size: 15px; line-height: 1.55; color: #1a1a1a; }
     .email-body p { margin: 0 0 1rem; }
-    .email-body a { color: ${ACCENT}; }
+    .email-body a { color: ${accent}; }
     .email-body h1, .email-body h2, .email-body h3 { margin: 1.4rem 0 0.6rem; line-height: 1.25; }
     .email-body ul, .email-body ol { margin: 0 0 1rem; padding-left: 1.4rem; }
     .email-body table { border-collapse: collapse; margin: 1rem 0; width: 100%; font-size: 14px; }
@@ -52,6 +64,7 @@ const CONTENT_CSS = `
       .container { width: 100% !important; }
       .gutter { padding-left: 20px !important; padding-right: 20px !important; }
     }`;
+}
 
 /** Options for {@link renderEmailHtml}. */
 export interface EmailHtmlOptions {
@@ -67,6 +80,11 @@ export interface EmailHtmlOptions {
   headers?: ReadonlyArray<readonly [string, string]>;
   /** Optional small-print footer line. Omitted when unset. */
   footer?: string;
+  /**
+   * Optional brand styling for the layout (accent, font, header logo).
+   * Omit for the neutral default palette.
+   */
+  brand?: EmailBrand;
 }
 
 /** Render the optional envelope-header table block. */
@@ -90,11 +108,29 @@ function footerRow(footer: string | undefined): string {
 }
 
 /**
+ * Render the header-band content: the brand logo (when the brand supplies a
+ * renderable image) above the title, or just the title. The logo is capped
+ * at 28px tall and tinted implicitly by its own artwork; the title always
+ * shows so the band is never empty.
+ */
+function headerBand(title: string, brand: EmailBrand, onAccent: string): string {
+  const logo = brand.logoUrl
+    ? `<img src="${escapeHtml(brand.logoUrl)}" alt="${escapeHtml(brand.name ?? title)}" height="28" style="height: 28px; width: auto; display: block; margin-bottom: 8px;" />`
+    : "";
+  return `${logo}<span style="color: ${onAccent}; font-size: 18px; font-weight: 700; line-height: 1.3;">${escapeHtml(title)}</span>`;
+}
+
+/**
  * Render `body` (markdown) into a complete, style-inlined email document
- * using the branded responsive layout.
+ * using the responsive layout. When `opts.brand` is set its accent, font,
+ * and logo style the layout; otherwise a neutral default palette is used.
  */
 export function renderEmailHtml(opts: EmailHtmlOptions): string {
   const title = opts.subject?.trim() || "Message";
+  const accent = opts.brand?.accent ?? DEFAULT_BRAND.accent;
+  const onAccent = opts.brand?.onAccent ?? DEFAULT_BRAND.onAccent;
+  const fontFamily = opts.brand?.fontFamily ?? DEFAULT_BRAND.fontFamily;
+  const brand: EmailBrand = opts.brand ?? { accent, onAccent, fontFamily };
   const doc = `<!doctype html>
 <html lang="en">
   <head>
@@ -102,17 +138,17 @@ export function renderEmailHtml(opts: EmailHtmlOptions): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light only" />
     <title>${escapeHtml(title)}</title>
-    <style>${CONTENT_CSS}
+    <style>${contentCss(accent)}
     </style>
   </head>
   <body style="margin: 0; padding: 0; background-color: #f4f5f7; -webkit-text-size-adjust: 100%;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f5f7;">
       <tr>
         <td align="center" style="padding: 24px 12px;">
-          <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" style="width: 600px; max-width: 100%; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;">
+          <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" style="width: 600px; max-width: 100%; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); font-family: ${fontFamily};">
             <tr>
-              <td class="gutter" style="padding: 20px 32px; background-color: ${ACCENT};">
-                <span style="color: #ffffff; font-size: 18px; font-weight: 700; line-height: 1.3;">${escapeHtml(title)}</span>
+              <td class="gutter" style="padding: 20px 32px; background-color: ${accent};">
+                ${headerBand(title, brand, onAccent)}
               </td>
             </tr>
             <tr>

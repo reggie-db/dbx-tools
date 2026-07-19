@@ -26,6 +26,7 @@ import type { BasePluginConfig } from "@databricks/appkit";
 import type { JSONSchema7 } from "json-schema";
 import { object } from "@dbx-tools/shared-core";
 import { resolve } from "node:path";
+import type { EmailBrand } from "./brand";
 import { parseAllowedSenders } from "./sender";
 
 /** SMTP connection + credentials. All fields fall back to env when unset. */
@@ -74,9 +75,16 @@ export interface EmailPluginConfig extends BasePluginConfig {
    * `EMAIL_ALLOWED_SENDERS`. Omit (or leave empty) for no restriction.
    */
   allowedSenders?: string | string[];
+  /**
+   * Optional brand styling (accent, font, header logo) applied to the
+   * rendered HTML of every message. Omit for the neutral default layout.
+   * Pass {@link emailBrandFromContext} to derive it from a shared
+   * `BrandContext`.
+   */
+  brand?: EmailBrand;
 }
 
-/** Sender source shared by both resolved modes. */
+/** Config shared by both resolved modes. */
 interface ResolvedSender {
   /** Sender domain; present whenever {@link from} is absent. */
   domain?: string;
@@ -87,6 +95,8 @@ interface ResolvedSender {
    * Empty means no restriction.
    */
   allowedSenders: string[];
+  /** Brand styling applied to rendered HTML; absent for the default layout. */
+  brand?: EmailBrand;
 }
 
 /** Resolved config for real SMTP delivery. */
@@ -199,6 +209,7 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
     ...(domain ? { domain } : {}),
     ...(from ? { from } : {}),
     allowedSenders,
+    ...(config.brand ? { brand: config.brand } : {}),
   };
 
   const hasAllSmtp = Boolean(host && user && pass);

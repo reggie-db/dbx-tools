@@ -104,7 +104,7 @@ export async function sendEmail(message: EmailMessage, from: string): Promise<Em
   const recipient = recipientEcho(message.to);
 
   if (config.mode === "file") {
-    const path = await writeOutboxEmail(message, from, config.outDir);
+    const path = await writeOutboxEmail(message, from, config.outDir, config.brand);
     return { sent: true, recipient, from, messageId: path };
   }
 
@@ -115,7 +115,11 @@ export async function sendEmail(message: EmailMessage, from: string): Promise<Em
     to: message.to,
     subject: message.subject,
     text: message.body,
-    html: renderEmailHtml({ subject: message.subject, body: message.body }),
+    html: renderEmailHtml({
+      subject: message.subject,
+      body: message.body,
+      ...(config.brand ? { brand: config.brand } : {}),
+    }),
     ...(message.cc && message.cc.length > 0 ? { cc: message.cc } : {}),
     ...(message.bcc && message.bcc.length > 0 ? { bcc: message.bcc } : {}),
     ...(attachments ? { attachments } : {}),

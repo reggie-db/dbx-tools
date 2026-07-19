@@ -17,6 +17,7 @@ import type { EmailMessage } from "@dbx-tools/shared-email";
 import { string } from "@dbx-tools/shared-core";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import type { EmailBrand } from "./brand";
 import { renderEmailHtml } from "./email-html";
 
 /** Filesystem-safe slug of the subject for the file name. */
@@ -47,6 +48,7 @@ export async function writeOutboxEmail(
   message: EmailMessage,
   from: string,
   dir: string,
+  brand?: EmailBrand,
 ): Promise<string> {
   const folder = resolve(dir, from);
   await mkdir(folder, { recursive: true });
@@ -56,6 +58,7 @@ export async function writeOutboxEmail(
     headers: headerRows(message, from),
     body: message.body,
     footer: "Local outbox preview - written to disk, not sent (no SMTP credentials configured).",
+    ...(brand ? { brand } : {}),
   });
   await writeFile(path, html, "utf8");
   return path;

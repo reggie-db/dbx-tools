@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export * as brand from "./src/brand";
 export * as config from "./src/config";
 export * as emailHtml from "./src/email-html";
 export * as markdown from "./src/markdown";
@@ -10,6 +11,7 @@ export * as plugin from "./src/plugin";
 export * as sender from "./src/sender";
 export * as tool from "./src/tool";
 export * as transport from "./src/transport";
+export type { EmailBrand } from "./src/brand";
 export type { SmtpConfig, EmailPluginConfig, ResolvedSmtpConfig, ResolvedFileConfig, ResolvedEmailConfig } from "./src/config";
 export type { EmailHtmlOptions } from "./src/email-html";
 export type { EmailToolOptions } from "./src/tool";

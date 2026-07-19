@@ -140,9 +140,20 @@ export const ChatView = ({
   onFeedback,
 }: ChatViewProps) => {
   const [input, setInput] = useState("");
-  // Id of the queued steer currently being dragged (native HTML5 drag), for
-  // the reorder affordance + drop styling. Null when not dragging.
+  // Id of the queued steer currently being dragged (pointer drag), for the
+  // reorder affordance + drop styling. Null when not dragging. Pointer Events
+  // (not native HTML5 drag) so the grip works on touch as well as mouse -
+  // `draggable`/`onDrag*` never fire on a touchscreen.
   const [draggingSteerId, setDraggingSteerId] = useState<string | null>(null);
+  // Live DOM refs to each queued-steer chip, keyed by steer id, so a pointer
+  // drag can hit-test the pointer's Y against each chip's midpoint and reorder
+  // as the finger/cursor moves over a neighbour.
+  const steerChipRefs = useRef(new Map<string, HTMLDivElement>());
+  // Id of the steer under an active pointer drag, mirrored in a ref so the
+  // pointermove handler reads it synchronously. React state (`draggingSteerId`)
+  // only drives styling and lags a render behind the pointerdown, which on
+  // touch dropped the first moves and made the drag feel dead.
+  const draggingIdRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   // Composer textarea, auto-grown with its content up to the CSS `max-h`.
@@ -166,6 +177,10 @@ export const ChatView = ({
   );
   const loadMoreRef = useRef(onLoadMore);
   loadMoreRef.current = onLoadMore;
+  // Latest queued steers, read by the pointer-drag move handler so it reorders
+  // against the current queue rather than the order captured when the drag began.
+  const queuedSteersRef = useRef(queuedSteers);
+  queuedSteersRef.current = queuedSteers;
 
   // Jump the transcript to the bottom, marking the write as programmatic so
   // the resulting scroll event isn't mistaken for the user scrolling away.
@@ -175,6 +190,40 @@ export const ChatView = ({
     programmaticScrollRef.current = true;
     el.scrollTop = el.scrollHeight;
   }, []);
+
+  // Reorder the queued steers to place `draggingId` at the slot whose chip the
+  // pointer is currently over, hit-testing the pointer Y against each chip's
+  // vertical midpoint. Called continuously during a pointer drag so the queue
+  // reflows live under the finger/cursor, then committed via `onReorderSteers`.
+  const reorderSteersByPointer = useCallback(
+    (draggingId: string, pointerY: number) => {
+      if (!onReorderSteers) return;
+      const order = queuedSteersRef.current.map((s) => s.id);
+      // Build the target order: everything except the dragged id, then insert
+      // the dragged id before the first chip whose midpoint is below the
+      // pointer (or at the end if the pointer is past them all).
+      const rest = order.filter((id) => id !== draggingId);
+      let insertAt = rest.length;
+      for (let i = 0; i < rest.length; i += 1) {
+        const chip = steerChipRefs.current.get(rest[i]);
+        if (!chip) continue;
+        const box = chip.getBoundingClientRect();
+        if (pointerY < box.top + box.height / 2) {
+          insertAt = i;
+          break;
+        }
+      }
+      const next = [...rest];
+      next.splice(insertAt, 0, draggingId);
+      // Skip the commit when the order is unchanged, so we don't thrash the
+      // parent state on every pointermove tick.
+      if (next.length === order.length && next.every((id, i) => id === order[i])) {
+        return;
+      }
+      onReorderSteers(next);
+    },
+    [onReorderSteers],
+  );
 
   // Follow the bottom as streamed content grows, as long as we're "pinned".
   // A ResizeObserver on the transcript catches every height change - new
@@ -655,59 +704,56 @@ export const ChatView = ({
               <div className="mb-2 flex flex-col gap-1">
                 {queuedSteers.map((steer) => {
                   const reorderable = Boolean(onReorderSteers);
-                  // Move the dragged steer to just before `steer` (or to the
-                  // end when dropped on itself at the tail) and report the new
-                  // id order to the driver.
-                  const dropBefore = () => {
-                    if (!onReorderSteers || !draggingSteerId || draggingSteerId === steer.id) {
-                      return;
-                    }
-                    const ids = queuedSteers.map((s) => s.id).filter((id) => id !== draggingSteerId);
-                    const at = ids.indexOf(steer.id);
-                    ids.splice(at === -1 ? ids.length : at, 0, draggingSteerId);
-                    onReorderSteers(ids);
-                  };
                   return (
                   <div
                     key={steer.id}
-                    draggable={reorderable}
-                    onDragStart={
-                      reorderable
-                        ? (e) => {
-                            setDraggingSteerId(steer.id);
-                            e.dataTransfer.effectAllowed = "move";
-                          }
-                        : undefined
-                    }
-                    onDragOver={
-                      reorderable
-                        ? (e) => {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = "move";
-                          }
-                        : undefined
-                    }
-                    onDrop={
-                      reorderable
-                        ? (e) => {
-                            e.preventDefault();
-                            dropBefore();
-                            setDraggingSteerId(null);
-                          }
-                        : undefined
-                    }
-                    onDragEnd={reorderable ? () => setDraggingSteerId(null) : undefined}
+                    ref={(el) => {
+                      if (el) steerChipRefs.current.set(steer.id, el);
+                      else steerChipRefs.current.delete(steer.id);
+                    }}
                     className={cn(
                       "flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2 py-1 text-xs",
-                      reorderable && "cursor-grab active:cursor-grabbing",
                       draggingSteerId === steer.id && "opacity-50",
                     )}
                   >
                     {reorderable && (
-                      <GripVerticalIcon
-                        className="size-3 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
+                      // Drag handle. Pointer Events (not native HTML5 drag) so
+                      // it works on touch: `touch-none` (touch-action: none)
+                      // stops the browser treating the drag as a scroll, and
+                      // pointer capture keeps move/up events flowing to the grip
+                      // even as the finger slides over sibling chips. The active
+                      // id lives in a ref (`draggingIdRef`) so the first
+                      // pointermove isn't dropped waiting for a state re-render.
+                      // `-m-1 p-1` enlarges the tap target to ~28px without
+                      // widening the visible grip - a 12px icon is too small to
+                      // reliably grab on touch.
+                      <span
+                        role="button"
+                        tabIndex={-1}
+                        aria-label="Drag to reorder"
+                        className="-m-1 shrink-0 cursor-grab touch-none p-1 text-muted-foreground active:cursor-grabbing"
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          draggingIdRef.current = steer.id;
+                          setDraggingSteerId(steer.id);
+                        }}
+                        onPointerMove={(e) => {
+                          if (draggingIdRef.current !== steer.id) return;
+                          reorderSteersByPointer(steer.id, e.clientY);
+                        }}
+                        onPointerUp={(e) => {
+                          e.currentTarget.releasePointerCapture(e.pointerId);
+                          draggingIdRef.current = null;
+                          setDraggingSteerId(null);
+                        }}
+                        onPointerCancel={() => {
+                          draggingIdRef.current = null;
+                          setDraggingSteerId(null);
+                        }}
+                      >
+                        <GripVerticalIcon className="size-3" aria-hidden="true" />
+                      </span>
                     )}
                     <span className="text-muted-foreground">Queued</span>
                     <span className="min-w-0 flex-1 truncate">{steer.text}</span>

@@ -1,6 +1,6 @@
 import { genie, lakebase, server } from "@databricks/appkit";
 import { createApp } from "@dbx-tools/appkit";
-import { plugin as emailPlugin, tool as emailToolModule } from "@dbx-tools/email";
+import { brand as emailBrand, plugin as emailPlugin, tool as emailToolModule } from "@dbx-tools/email";
 import { agents, genie as mastraGenie, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,7 @@ import { z } from "zod";
 
 const { createApp: createAppAuto } = createApp;
 const { email } = emailPlugin;
+const { defaultEmailBrand } = emailBrand;
 const { emailTool } = emailToolModule;
 const { createAgent, tool } = agents;
 const { GENIE_INSTRUCTIONS } = mastraGenie;
@@ -142,7 +143,9 @@ await createAppAuto({
     lakebase(),
     // Validates SMTP config + verifies connectivity at startup, and
     // primes the transport the approval-gated `send_email` tool reuses.
-    email(),
+    // `brand` styles every rendered email (accent, font, header logo)
+    // with the dbx-tools brand; drop it for the neutral default layout.
+    email({ brand: defaultEmailBrand }),
     mastra({
       storage: true,
       memory: true,
