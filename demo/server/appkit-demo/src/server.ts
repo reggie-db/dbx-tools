@@ -2,6 +2,7 @@ import { genie, lakebase, server } from "@databricks/appkit";
 import { createApp } from "@dbx-tools/appkit";
 import { brand as emailBrand, plugin as emailPlugin, tool as emailToolModule } from "@dbx-tools/email";
 import { agents, genie as mastraGenie, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+import { plugin as webSearchPlugin, tool as webSearchToolModule } from "@dbx-tools/appkit-web-search";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -13,6 +14,8 @@ const { emailTool } = emailToolModule;
 const { createAgent, tool } = agents;
 const { GENIE_INSTRUCTIONS } = mastraGenie;
 const { mastra } = mastraPlugin;
+const { webSearch } = webSearchPlugin;
+const { webSearchTool, webFetchTool } = webSearchToolModule;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
 // `server({ staticPath })` serves it on the same port as the API.
@@ -123,6 +126,14 @@ const support = createAgent({
       // user's email on the configured `EMAIL_DOMAIN`; SMTP host /
       // credentials come from the `email()` plugin config / env.
       send_email: emailTool(),
+      // Web search + fetch from `@dbx-tools/appkit-web-search`.
+      // `web_search` runs the Databricks Model Serving native web-search
+      // tool, resolving its OWN web-search-capable model (Gemini/GPT) via
+      // the `webSearch()` plugin config - independent of this agent's chat
+      // model, which may not support web search. `web_fetch` reads a page
+      // via got-scraping. Both honor the plugin's optional URL allow-list.
+      web_search: webSearchTool(),
+      web_fetch: webFetchTool(),
     };
   },
 });
@@ -146,6 +157,11 @@ await createAppAuto({
     // `brand` styles every rendered email (accent, font, header logo)
     // with the dbx-tools brand; drop it for the neutral default layout.
     email({ brand: defaultEmailBrand }),
+    // Web-search runtime for the `web_search` / `web_fetch` tools. The
+    // web-search model defaults to Gemini, then GPT (the native web-search
+    // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,
+    // or `allowedUrls` to restrict which sites are reachable.
+    webSearch(),
     mastra({
       storage: true,
       memory: true,

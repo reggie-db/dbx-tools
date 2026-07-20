@@ -16,6 +16,11 @@ const write = (p, text) => {
 };
 const posix = (p) => p.split(path.sep).join("/");
 
+// Site base path, derived exactly like docs/scripts/sync-readmes.mjs so the
+// absolute API links this generator emits resolve under GitHub Pages' project
+// subpath (`/dbx-tools`) and under a local root serve alike.
+const base = process.env.GITHUB_REPOSITORY?.endsWith("/dbx-tools") ? "/dbx-tools" : "";
+
 function walk(dir, files = []) {
   if (!fs.existsSync(dir)) return files;
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -125,39 +130,71 @@ function apiSlug(basenameNoExt) {
 }
 
 /**
- * Reconcile flat TypeDoc filenames with the routes Starlight actually serves.
- * TypeDoc's mixed-case, dotted filenames slugify to lowercase, dot-free routes,
- * but the generated cross-links keep the original name - so every API link
- * resolves to a nonexistent route (a sitewide 404). Rename each page (except
- * `index.md`, which is the directory root) to `apiSlug(name)`, then rewrite
- * every intra-package link target to match. Runs last, after empty pages are
- * pruned, so no link points at a removed file.
+ * Reconcile flat TypeDoc filenames with the routes Starlight actually serves,
+ * and rewrite intra-package cross-links to absolute, always-resolvable routes.
+ *
+ * Two problems this fixes:
+ *
+ *   1. TypeDoc's mixed-case, dotted filenames (`Namespace.mcp.md`,
+ *      `mcp.Interface.ResolvedMcp.md`) slugify to lowercase, dot-free routes.
+ *      We rename each page (except `index.md`, the directory root) to
+ *      `apiSlug(name)` so the on-disk filename equals the served route.
+ *   2. Starlight serves EVERY page at a trailing-slash directory route
+ *      (`/api/<pkg>/namespace-mcp/`), and raw relative markdown links are
+ *      resolved by the browser against that URL. So a bare `mcp-interface-...`
+ *      link from a namespace page resolved to a nested child
+ *      (`/api/<pkg>/namespace-mcp/mcp-interface-...`) that doesn't exist - a
+ *      404. We rewrite every intra-package link to an ABSOLUTE route
+ *      (`<base>/api/<pkg>/<slug>`), which resolves identically from the index,
+ *      a namespace page, or a symbol page.
+ *
+ * Verify-and-drop: a link whose target isn't a real page on disk (after
+ * rename) is unwrapped to plain text rather than emitted as a 404. Runs last,
+ * after empty pages are pruned and re-exports stripped, so the on-disk set is
+ * final.
  */
 function slugifyApiFiles(outDir) {
+  const pkgSlug = path.basename(outDir);
   const files = walk(outDir).filter((p) => p.endsWith(".md"));
+  // Map every original basename -> its final slug, and record the set of slugs
+  // that actually exist on disk (index included) for the verify-and-drop pass.
   const rename = new Map();
+  const slugs = new Set();
   for (const file of files) {
-    const base = path.basename(file, ".md");
-    if (base === "index") continue;
-    const slug = apiSlug(base);
-    if (slug !== base) rename.set(base, slug);
+    const original = path.basename(file, ".md");
+    const slug = original === "index" ? "index" : apiSlug(original);
+    slugs.add(slug);
+    if (slug !== original) rename.set(original, slug);
   }
-  if (rename.size === 0) return;
-  // Rewrite links first (targets are extension-less basenames after
-  // `normalizeTypedocLinks`), then move the files.
+  const routeFor = (slug) =>
+    slug === "index" ? `${base}/api/${pkgSlug}/` : `${base}/api/${pkgSlug}/${slug}`;
+  // A target may arrive as the original dotted name (pre-rename) or already a
+  // slug; normalize either to the final slug.
+  const targetSlug = (target) => rename.get(target) ?? (slugs.has(target) ? target : apiSlug(target));
+
+  let droppedTotal = 0;
   for (const file of files) {
     const text = read(file);
     const next = text.replace(
-      /(\]\()(\.\/)?([^)#]+)(#[^)]+)?(\))/g,
-      (match, open, dot = "", target, hash = "", close) => {
-        const slug = rename.get(target);
-        return slug ? `${open}${dot}${slug}${hash}${close}` : match;
+      /(\[)([^\]]*)(\]\()(\.\/)?([^)#]+)(#[^)]*)?(\))/g,
+      (match, lb, label, open, _dot = "", target, hash = "", close) => {
+        // Leave external links, anchors, and already-absolute routes alone.
+        if (/^(https?:|mailto:|#|\/)/.test(target)) return match;
+        const slug = targetSlug(target);
+        if (slugs.has(slug)) return `${lb}${label}${open}${routeFor(slug)}${hash}${close}`;
+        // Verify-and-drop: no such page -> unwrap to plain text (keep the hash
+        // off; it pointed at a route that doesn't exist).
+        droppedTotal += 1;
+        return label;
       },
     );
     if (next !== text) write(file, next);
   }
-  for (const [base, slug] of rename) {
-    const from = path.join(outDir, `${base}.md`);
+  if (droppedTotal > 0) {
+    console.warn(`  ${pkgSlug}: dropped ${droppedTotal} link(s) with no target page`);
+  }
+  for (const [original, slug] of rename) {
+    const from = path.join(outDir, `${original}.md`);
     const to = path.join(outDir, `${slug}.md`);
     if (fs.existsSync(from)) fs.renameSync(from, to);
   }

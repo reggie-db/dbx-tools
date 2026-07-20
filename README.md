@@ -52,9 +52,10 @@ app:
 - **Approval-gated email workflows** — give agents a `send_email` tool that
   suspends for human approval, supports SMTP or local outbox mode, derives safe
   senders, and renders Markdown email.
-- **Web search and fetch tools** — give agents `web_search` (metasearch, no API
-  key) and `web_fetch` (page contents) with an optional URL allow-list and
-  per-tool approval gating.
+- **Web search and fetch tools** — give agents `web_search` (the Databricks
+  native web-search tool, on its own Gemini/GPT web-capable model, returning an
+  answer plus citations) and `web_fetch` (page contents) with an optional URL
+  allow-list and per-tool approval gating.
 - **Reusable React surfaces** — provide AppKit/Tailwind/Vite foundations, a
   Mastra chat UI, email approval, preview, compose, and Markdown body components.
 - **Shared browser-safe contracts** — keep UI, server, tests, and tools aligned

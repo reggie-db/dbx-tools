@@ -4,6 +4,11 @@
  * Pure zod + inferred types (no Node-only imports) so the tool layer, the
  * plugin, and any future UI validate / type against one definition.
  *
+ * `web_search` is backed by the Databricks Model Serving native web-search
+ * tool (see `provider.ts`): the model searches the web server-side and
+ * returns a synthesized answer plus the sources it used. `web_fetch` reads a
+ * single page's contents via got-scraping.
+ *
  * Array fields intentionally avoid `.min()` / `.nonempty()`: those emit
  * `minItems` in the JSON schema, which some Model Serving endpoints reject
  * ("array types do not support minItems") when the schema is forwarded as a
@@ -15,69 +20,53 @@
 import { string } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
-/** The metasearch backends {@link https://www.npmjs.com/package/duck-duck-scrape | duck-duck-scrape} drives. */
-export const searchBackendSchema = z
-  .enum(["text", "news"])
-  .describe(
-    'Which result modality to query: "text" for general web pages (default), "news" for recent news articles.',
-  );
-
-/** A search modality ({@link searchBackendSchema}). */
-export type SearchBackend = z.infer<typeof searchBackendSchema>;
-
-/** Safe-search strength forwarded to the backend. */
-export const safeSearchSchema = z
-  .enum(["strict", "moderate", "off"])
-  .describe('Adult-content filter strength: "strict", "moderate" (default), or "off".');
-
-/** Safe-search strength ({@link safeSearchSchema}). */
-export type SafeSearch = z.infer<typeof safeSearchSchema>;
-
 /** Schema for the `web_search` tool input. */
 export const webSearchRequestSchema = z.object({
   query: z
     .string()
     .describe(
-      "The search query. Use natural keywords; the backend does not support boolean operators.",
+      "What to search the web for, phrased as a natural-language question or request. The model searches and answers in one step.",
     ),
-  backend: searchBackendSchema.optional(),
-  maxResults: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe(
-      "Maximum results to return (the plugin caps this at its configured limit). Defaults to the plugin's configured maximum.",
-    ),
-  safeSearch: safeSearchSchema.optional(),
-  region: z
+  model: z
     .string()
     .optional()
-    .describe('Region/locale for results, e.g. "us-en", "uk-en", "wt-wt" (any region). Defaults to the plugin config.'),
+    .describe(
+      string.toDescription(`
+        Optional web-search-capable model to use (a Databricks serving
+        endpoint name like "databricks-gemini-3-pro", a loose name like "gpt"
+        or "gemini", or a capability class). Defaults to the plugin's
+        configured web-search model. The web-search tool resolves its own
+        model independently of the calling agent's chat model, since not
+        every chat model supports web search.
+      `),
+    ),
 });
 
 /** A validated `web_search` request. */
 export type WebSearchRequest = z.infer<typeof webSearchRequestSchema>;
 
-/** Schema for a single search hit. */
-export const webSearchResultItemSchema = z.object({
-  title: z.string().describe("The result's page title."),
-  url: z.string().describe("The result's canonical URL."),
-  snippet: z.string().describe("A short plain-text description / excerpt of the result."),
-  hostname: z.string().describe('The result host (e.g. "docs.databricks.com").'),
+/** Schema for a single source the model cited while answering. */
+export const webSearchCitationSchema = z.object({
+  url: z.string().describe("The source URL the answer drew on."),
+  title: z.string().optional().describe("The source page title, when available."),
+  snippet: z.string().optional().describe("A short excerpt from the source, when available."),
 });
 
-/** A single web-search hit ({@link webSearchResultItemSchema}). */
-export type WebSearchResultItem = z.infer<typeof webSearchResultItemSchema>;
+/** A single cited source ({@link webSearchCitationSchema}). */
+export type WebSearchCitation = z.infer<typeof webSearchCitationSchema>;
 
 /** Schema for the `web_search` tool output. */
 export const webSearchResultSchema = z.object({
   query: z.string().describe("Echo of the query that was searched."),
-  results: z
-    .array(webSearchResultItemSchema)
+  answer: z
+    .string()
+    .describe("The model's answer, synthesized from live web results."),
+  citations: z
+    .array(webSearchCitationSchema)
     .describe(
-      "Ranked results. When an allow-list is configured, results whose URL is not permitted are silently omitted.",
+      "Sources the answer drew on. When an allow-list is configured, citations whose URL is not permitted are silently omitted.",
     ),
+  model: z.string().describe("The serving endpoint that produced the answer."),
 });
 
 /** The outcome of a `web_search` call ({@link webSearchResultSchema}). */

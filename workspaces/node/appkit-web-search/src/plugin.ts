@@ -13,13 +13,13 @@
  * @module
  */
 
-import { Plugin, toPlugin, type PluginManifest } from "@databricks/appkit";
+import { getExecutionContext, Plugin, toPlugin, type PluginManifest } from "@databricks/appkit";
 import { log } from "@dbx-tools/shared-core";
 import { WEB_SEARCH_CONFIG_SCHEMA, type WebSearchPluginConfig } from "./config";
 import { runWebFetch } from "./fetch";
 import { getWebSearchRuntime } from "./runtime";
 import type { WebFetchRequest, WebFetchResult, WebSearchRequest, WebSearchResult } from "./schema";
-import { runWebSearch } from "./search";
+import { runWebSearch, type WebSearchContext } from "./search";
 
 /**
  * AppKit plugin that resolves and holds the web-search runtime config used
@@ -49,22 +49,31 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> {
   override async setup(): Promise<void> {
     const { config } = getWebSearchRuntime(this.config);
     this.logger.info("ready", {
+      model: config.model ?? `fallbacks:[${config.modelFallbacks.join(", ")}]`,
       restricted: config.allowList.restricted,
       ...(config.allowList.restricted ? { allowedUrls: config.allowList.patterns } : {}),
-      maxResults: config.maxResults,
+      maxCitations: config.maxCitations,
       fetchMaxLength: config.fetchMaxLength,
       approval: config.approval === false ? "none" : config.approval,
     });
   }
 
+  /** Resolve the OBO client + host from the active execution context. */
+  private async searchContext(): Promise<WebSearchContext> {
+    const ctx = getExecutionContext();
+    const host = (await ctx.client.config.getHost()).toString();
+    return { client: ctx.client, host };
+  }
+
   override exports() {
     return {
       /**
-       * Run a web search directly (bypassing the agent tool). Reads the
-       * shared runtime config primed at setup.
+       * Run a web search directly (bypassing the agent tool). Resolves the
+       * OBO client from the active execution context and reads the shared
+       * runtime config primed at setup.
        */
-      search: (request: WebSearchRequest): Promise<WebSearchResult> =>
-        runWebSearch(request, getWebSearchRuntime().config),
+      search: async (request: WebSearchRequest): Promise<WebSearchResult> =>
+        runWebSearch(request, getWebSearchRuntime().config, await this.searchContext()),
       /**
        * Fetch one URL directly (bypassing the agent tool). Enforces the
        * configured allow-list. Reads the shared runtime config.

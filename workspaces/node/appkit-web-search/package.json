@@ -25,10 +25,11 @@
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
+    "@dbx-tools/model": "workspace:*",
     "@dbx-tools/path": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
+    "@dbx-tools/shared-model": "workspace:*",
     "@mastra/core": "catalog:",
-    "duck-duck-scrape": "^2.2.7",
     "got-scraping": "^4.2.1",
     "zod": "catalog:"
   },

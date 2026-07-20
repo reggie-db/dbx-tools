@@ -261,19 +261,22 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
   p.addDevDeps("@types/nodemailer@^7", "@types/express@catalog:", "@types/json-schema@^7");
 });
 
-// node-appkit-web-search: server-side web-search add-on - metasearch over
-// duck-duck-scrape (the Node ddgs equivalent, no API key) + page fetching via
-// got-scraping (browser-like headers to dodge bot walls), an optional
-// allowed-URL glob allow-list (silently filters results / blocks fetches) built
-// on node-path's `match` matcher, per-tool approval gating, and the AppKit
-// `web-search` plugin exposing the `web_search` / `web_fetch` Mastra tools.
-// AppKit + Mastra are runtime deps; mirrors the node-email add-on's shape.
+// node-appkit-web-search: server-side web-search add-on. `web_search` runs on
+// the Databricks Model Serving native web-search tool (the model searches the
+// web server-side and answers), resolving its OWN web-search-capable model
+// (Gemini/GPT, via node-model's fuzzy selector) independently of the agent's
+// chat model; `web_fetch` reads a page via got-scraping (Databricks has no
+// page-fetch equivalent). Ships a per-provider tool-spec map, an optional
+// allowed-URL glob allow-list (node-path `match`; filters citations / blocks
+// fetches), per-tool approval gating, and the AppKit `web-search` plugin
+// exposing both Mastra tools. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/path@workspace:*",
+    "@dbx-tools/model@workspace:*",
+    "@dbx-tools/shared-model@workspace:*",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
-    "duck-duck-scrape@^2.2.7",
     "got-scraping@^4.2.1",
     "zod@catalog:",
   );

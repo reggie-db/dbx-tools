@@ -131,6 +131,7 @@ projectApi.applyToProjects(project, { identifierName: "server-appkit-demo", tags
     dep("@dbx-tools/appkit"),
     dep("@dbx-tools/appkit-mastra"),
     dep("@dbx-tools/email"),
+    dep("@dbx-tools/appkit-web-search"),
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",

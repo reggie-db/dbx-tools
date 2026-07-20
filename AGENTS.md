@@ -56,11 +56,15 @@ Primary package areas:
 - `workspaces/node/email`, `workspaces/shared/email`, and `workspaces/ui/email`
   — approval-gated email tool/runtime, shared payload schemas, and React email
   approval/compose surfaces.
-- `workspaces/node/appkit-web-search` — web-search add-on: `web_search`
-  (duck-duck-scrape metasearch, no API key) + `web_fetch` (got-scraping page
-  fetch) Mastra tools, an optional URL allow-list (built on `@dbx-tools/path`'s
-  `match`) that silently filters results / refuses disallowed fetches, per-tool
-  approval gating, and the AppKit `web-search` plugin. Same shape as node-email.
+- `workspaces/node/appkit-web-search` — web-search add-on: `web_search` (the
+  Databricks Model Serving NATIVE web-search tool — the model searches the web
+  server-side and returns answer + citations; resolves its OWN web-capable model
+  via `@dbx-tools/model`, Gemini→GPT, independent of the agent's chat model) +
+  `web_fetch` (got-scraping page fetch). A provider→tool-spec map (OpenAI
+  Responses `{"type":"web_search"}`, Gemini Chat `{"google_search":{}}`), an
+  optional URL allow-list (built on `@dbx-tools/path`'s `match`) filtering
+  citations / refusing disallowed fetches, per-tool approval gating, and the
+  AppKit `web-search` plugin. Same shape as node-email.
 - `workspaces/ui/appkit` — AppKit UI/Tailwind/Vite foundation used by feature UI
   packages.
 - `workspaces/node/databricks` and `workspaces/node/databricks-zerobus` —
@@ -178,9 +182,10 @@ why to use this package anyway:
   page-fetch surface, so use this whenever an agent must look things up on the
   open web or read a user-supplied URL — with a policy layer (URL allow-list +
   optional per-tool approval) controlling which sites are reachable and which
-  calls pause for a human. No API key (duck-duck-scrape + got-scraping). Same
-  add-on shape as node-email (Mastra tool pair + AppKit plugin priming a shared
-  runtime).
+  calls pause for a human. `web_search` uses the Databricks NATIVE web-search
+  tool and resolves its own web-capable model (so an agent on a non-web model
+  still searches); `web_fetch` uses got-scraping. Same add-on shape as
+  node-email (Mastra tool pair + AppKit plugin priming a shared runtime).
 
 Concrete examples to preserve in docs:
 
@@ -192,9 +197,9 @@ Concrete examples to preserve in docs:
   every app to hard-code a serving endpoint alias.
 - Email here adds human approval, sender policy, SMTP/outbox behavior, and UI
   surfaces around a Mastra tool.
-- Web search here gives agents open-web `web_search` / `web_fetch` tools (no API
-  key) behind a URL allow-list and optional approval gate, a surface AppKit
-  doesn't ship.
+- Web search here gives agents an open-web `web_search` (Databricks native
+  web-search tool, on its own web-capable model) + `web_fetch` behind a URL
+  allow-list and optional approval gate, a surface AppKit doesn't ship.
 
 ## Vocabulary (important)
 
@@ -572,6 +577,28 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   spread, and a base `textStyle` (font `typography.sans`, color
   `colors.foreground`). Omit `brand` for the default Echarts look. Add new
   themed properties in `brandChartTheme`/`themed`, not per-chart-type.
+- **Web search uses the Databricks NATIVE tool + its own model.**
+  `appkit-web-search` `web_search` does NOT scrape — it POSTs the query to a
+  serving endpoint with the provider's web-search tool spec attached and the
+  model answers with citations. The tool spec is provider-specific
+  (`provider.ts`: `WEB_SEARCH_PROVIDERS` — openai→Responses `{type:web_search}`,
+  gemini→Chat `{google_search:{}}`; overridable via `WEB_SEARCH_TOOLS`). The
+  web-search model is resolved SEPARATELY from the agent's chat model (via
+  `@dbx-tools/model` `selectModel`, Gemini→GPT fallbacks) because the agent may
+  run on a model without web search; an explicit unsupported model errors rather
+  than silently falling back. `search.ts` calls the serving REST surface through
+  the OBO client's `apiClient.request({payload})` (same pattern as
+  `appkit/src/lakebase-resolver.ts`). `web_fetch` still uses got-scraping.
+- **Generated API-docs links are ABSOLUTE, base-prefixed, and verify-and-drop.**
+  Starlight serves every content page at a trailing-slash directory route
+  (`/api/<pkg>/namespace-x/`), so a bare relative link between flat sibling
+  pages resolves as a nested child → 404. `docs/scripts/generate-api-docs.mjs`
+  `slugifyApiFiles` therefore rewrites intra-package links to
+  `${base}/api/<pkg>/<slug>` (base derived like `sync-readmes.mjs` from
+  `GITHUB_REPOSITORY`), which resolves identically from index/namespace/symbol
+  pages, and DROPS (unwraps to text) any link whose target page doesn't exist on
+  disk. When adding a docs generator change, keep links absolute — never emit a
+  bare or `./`-relative cross-page link.
 - **Model display names.** `ServingEndpointSummary` carries an optional
   `displayName` alongside `name` (the invoke id). It flows through `/models`
   (wire `ServingEndpointsResponseSchema`) automatically. Derivation lives in the
