@@ -56,6 +56,11 @@ Primary package areas:
 - `workspaces/node/email`, `workspaces/shared/email`, and `workspaces/ui/email`
   — approval-gated email tool/runtime, shared payload schemas, and React email
   approval/compose surfaces.
+- `workspaces/node/appkit-web-search` — web-search add-on: `web_search`
+  (duck-duck-scrape metasearch, no API key) + `web_fetch` (got-scraping page
+  fetch) Mastra tools, an optional URL allow-list (built on `@dbx-tools/path`'s
+  `match`) that silently filters results / refuses disallowed fetches, per-tool
+  approval gating, and the AppKit `web-search` plugin. Same shape as node-email.
 - `workspaces/ui/appkit` — AppKit UI/Tailwind/Vite foundation used by feature UI
   packages.
 - `workspaces/node/databricks` and `workspaces/node/databricks-zerobus` —
@@ -169,6 +174,13 @@ why to use this package anyway:
   portable `BrandContext`. Inert until a brand is applied, so it never gets in
   the way of default AppKit. Not a replacement for AppKit's own theming when the
   default palette is fine.
+- `@dbx-tools/appkit-web-search`: AppKit has no first-party web-search or
+  page-fetch surface, so use this whenever an agent must look things up on the
+  open web or read a user-supplied URL — with a policy layer (URL allow-list +
+  optional per-tool approval) controlling which sites are reachable and which
+  calls pause for a human. No API key (duck-duck-scrape + got-scraping). Same
+  add-on shape as node-email (Mastra tool pair + AppKit plugin priming a shared
+  runtime).
 
 Concrete examples to preserve in docs:
 
@@ -180,6 +192,9 @@ Concrete examples to preserve in docs:
   every app to hard-code a serving endpoint alias.
 - Email here adds human approval, sender policy, SMTP/outbox behavior, and UI
   surfaces around a Mastra tool.
+- Web search here gives agents open-web `web_search` / `web_fetch` tools (no API
+  key) behind a URL allow-list and optional approval gate, a surface AppKit
+  doesn't ship.
 
 ## Vocabulary (important)
 
@@ -547,6 +562,16 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   break dark mode. To theme a host: wrap in `<BrandProvider applyToDocument>`
   (pass `context` for a non-default brand). New semantic tokens to re-skin go in
   `brand-bridge.css`, not per-component.
+- **Chart branding is server-side, on the Echarts option.** The `[data-brand]`
+  CSS bridge can't reach an Echarts chart (it renders to canvas, not styled
+  DOM), so charts are themed the way email is: by inlining brand values at build
+  time. `mastra({ brand })` takes a portable `BrandContext`; the chart planner
+  (`appkit-mastra/src/chart.ts` `planToEchartsOption`) merges a
+  `brandChartTheme(brand)` into every spec (`themed(...)`) - a series `color`
+  cycle seeded from `colors.primary`/`colors.accent` plus a colorblind-friendly
+  spread, and a base `textStyle` (font `typography.sans`, color
+  `colors.foreground`). Omit `brand` for the default Echarts look. Add new
+  themed properties in `brandChartTheme`/`themed`, not per-chart-type.
 - **Model display names.** `ServingEndpointSummary` carries an optional
   `displayName` alongside `name` (the invoke id). It flows through `/models`
   (wire `ServingEndpointsResponseSchema`) automatically. Derivation lives in the

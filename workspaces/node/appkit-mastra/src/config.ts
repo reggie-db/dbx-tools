@@ -8,6 +8,7 @@
  */
 
 import type { BasePluginConfig } from "@databricks/appkit";
+import type { BrandContext } from "@dbx-tools/shared-core";
 import type { AgentConfig } from "@mastra/core/agent";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
@@ -442,4 +443,19 @@ export interface MastraPluginConfig extends BasePluginConfig {
    *   surface.
    */
   apiAccess?: "scoped" | "full";
+  /**
+   * Optional brand context applied to charts produced by the built-in
+   * `render_data` / `prepare_chart` tools. When set, the chart planner's
+   * Echarts output is themed with the brand's palette (series colors derived
+   * from `colors.primary` / `colors.accent`) and sans font
+   * (`typography.sans`) instead of Echarts' defaults. Omit for the default
+   * Echarts look.
+   *
+   * Pass the portable {@link BrandContext} shared across the UI and
+   * libraries (e.g. `brand.defaultBrandContext` from `@dbx-tools/shared-core`,
+   * or a customer brand) - the same object the email add-on and the UI
+   * `BrandProvider` consume, so a host themes charts, email, and UI from one
+   * source.
+   */
+  brand?: BrandContext;
 }

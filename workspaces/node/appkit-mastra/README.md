@@ -251,6 +251,25 @@ Agents can return `[chart:<id>]` and `[data:<statement_id>]` markers in prose.
 The embed route resolves them later, which avoids forcing the language model to
 inline large tables or wait for chart planning before continuing its answer.
 
+### Brand The Charts
+
+Pass a `brand` to the plugin to theme every generated chart with your brand's
+palette and font; omit it for the default Echarts look.
+
+```ts
+import { brand } from "@dbx-tools/shared-core";
+
+plugin.mastra({ agents, storage: true, brand: brand.defaultBrandContext });
+```
+
+`brand` is the portable `BrandContext` shared across the UI, email, and
+libraries, so charts, email, and the chat UI theme from one source. The chart
+planner derives an Echarts theme from it: a series color cycle seeded from
+`colors.primary` / `colors.accent` (plus a colorblind-friendly spread so
+many-series charts stay legible) and a base text style from `typography.sans` /
+`colors.foreground`. Charts render to canvas, so this is applied server-side on
+the Echarts option rather than through the browser `[data-brand]` CSS bridge.
+
 ## Model Selection
 
 `model.buildModel()` adapts the generic resolver from

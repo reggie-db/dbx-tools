@@ -37,7 +37,7 @@ import { z } from "zod";
 import type { MastraPluginConfig } from "./config";
 import { buildModel } from "./model";
 import { model } from "@dbx-tools/shared-model";
-import { async, error, hash, log, string } from "@dbx-tools/shared-core";
+import { async, error, hash, log, string, type BrandContext } from "@dbx-tools/shared-core";
 
 const logger = log.logger("mastra/chart");
 
@@ -353,7 +353,7 @@ async function runChartPlanner(
     ...(abortSignal ? { abortSignal } : {}),
   });
   const plan = chartPlanSchema.parse(result.object);
-  const option = planToEchartsOption(plan, title);
+  const option = planToEchartsOption(plan, title, config.brand);
   return { chartType: plan.chartType, option };
 }
 
@@ -551,6 +551,50 @@ export async function fetchChart(
   }
 }
 
+/* ----------------------------- echarts theme ----------------------------- */
+
+/**
+ * The slice of an Echarts option that carries brand identity: the series
+ * color cycle and the base text style (font family + foreground color).
+ * Derived from a {@link BrandContext} by {@link brandChartTheme} and merged
+ * into every spec by {@link planToEchartsOption}.
+ */
+interface ChartTheme {
+  color: string[];
+  textStyle: { fontFamily: string; color: string };
+}
+
+/**
+ * Expand two brand hex colors into a legible categorical cycle. Echarts
+ * repeats the `color` array across series / categories, so a good default
+ * needs several distinct hues, not two. We seed with the brand primary and
+ * accent (the identity colors) and follow with a fixed, colorblind-friendly
+ * spread so multi-series / many-slice charts stay readable while the first
+ * one or two marks still land on-brand.
+ */
+function brandColorCycle(primary: string, accent: string): string[] {
+  const spread = ["#5B8FF9", "#F6BD16", "#E86452", "#6DC8EC", "#945FB9", "#FF9845", "#1E9493"];
+  const seen = new Set<string>();
+  return [primary, accent, ...spread].filter((c) => {
+    const key = c.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * Derive an Echarts {@link ChartTheme} from a brand context: the primary +
+ * accent colors seed the series cycle, the sans stack becomes the base font,
+ * and the brand foreground becomes the base text color.
+ */
+function brandChartTheme(brand: BrandContext): ChartTheme {
+  return {
+    color: brandColorCycle(brand.colors.primary, brand.colors.accent),
+    textStyle: { fontFamily: brand.typography.sans, color: brand.colors.foreground },
+  };
+}
+
 /* ----------------------------- echarts expansion ----------------------------- */
 
 /**
@@ -559,10 +603,21 @@ export async function fetchChart(
  * compact plan shape; tooltip / animation / color / grid defaults
  * stay consistent across charts and are easy to tune without
  * retraining model behaviour.
+ *
+ * When `brand` is set, the resolved spec is themed with the brand's series
+ * color cycle and base text style (see {@link brandChartTheme}); otherwise
+ * Echarts' defaults apply.
  */
-function planToEchartsOption(plan: ChartPlan, fallbackTitle: string): Record<string, unknown> {
+function planToEchartsOption(
+  plan: ChartPlan,
+  fallbackTitle: string,
+  brand?: BrandContext,
+): Record<string, unknown> {
   const baseTitle = plan.title ?? fallbackTitle;
   const grid = { left: 48, right: 24, top: 56, bottom: 48, containLabel: true };
+  const theme = brand ? brandChartTheme(brand) : undefined;
+  const themed = (option: Record<string, unknown>): Record<string, unknown> =>
+    theme ? { ...theme, ...option } : option;
 
   if (plan.chartType === "pie") {
     // Echarts crashes on null pie slices - filter them out.
@@ -573,7 +628,7 @@ function planToEchartsOption(plan: ChartPlan, fallbackTitle: string): Record<str
       (d): d is { name: string; value: number } =>
         d !== null && typeof d === "object" && !Array.isArray(d),
     );
-    return {
+    return themed({
       title: { text: baseTitle, left: "center" },
       tooltip: { trigger: "item" },
       legend: { bottom: 0 },
@@ -585,14 +640,14 @@ function planToEchartsOption(plan: ChartPlan, fallbackTitle: string): Record<str
           data: slices,
         },
       ],
-    };
+    });
   }
 
   if (plan.chartType === "scatter") {
     // Echarts crashes on null scatter points - keep only valid
     // `[x, y]` tuples. Bare numbers / objects / nulls from a
     // mismatched plan get dropped silently.
-    return {
+    return themed({
       title: { text: baseTitle, left: "center" },
       tooltip: { trigger: "item" },
       legend: { bottom: 0 },
@@ -604,13 +659,13 @@ function planToEchartsOption(plan: ChartPlan, fallbackTitle: string): Record<str
         type: "scatter",
         data: s.data.filter((d): d is [number, number] => Array.isArray(d) && d.length === 2),
       })),
-    };
+    });
   }
 
   // bar / line / area share the same axis layout.
   const isArea = plan.chartType === "area";
   const seriesType = plan.chartType === "bar" ? "bar" : "line";
-  return {
+  return themed({
     title: { text: baseTitle, left: "center" },
     tooltip: { trigger: "axis" },
     legend: { bottom: 0 },
@@ -628,7 +683,7 @@ function planToEchartsOption(plan: ChartPlan, fallbackTitle: string): Record<str
       smooth: seriesType === "line",
       ...(isArea ? { areaStyle: {} } : {}),
     })),
-  };
+  });
 }
 
 /* ----------------------------- render_data tool ----------------------------- */

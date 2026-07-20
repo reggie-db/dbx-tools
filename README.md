@@ -52,6 +52,9 @@ app:
 - **Approval-gated email workflows** — give agents a `send_email` tool that
   suspends for human approval, supports SMTP or local outbox mode, derives safe
   senders, and renders Markdown email.
+- **Web search and fetch tools** — give agents `web_search` (metasearch, no API
+  key) and `web_fetch` (page contents) with an optional URL allow-list and
+  per-tool approval gating.
 - **Reusable React surfaces** — provide AppKit/Tailwind/Vite foundations, a
   Mastra chat UI, email approval, preview, compose, and Markdown body components.
 - **Shared browser-safe contracts** — keep UI, server, tests, and tools aligned
@@ -128,6 +131,7 @@ export function App() {
 | Model Serving selection     | [`@dbx-tools/model`](workspaces/node/model), [`@dbx-tools/shared-model`](workspaces/shared/model)                                               |
 | Local model proxy           | [`@dbx-tools/model-proxy`](workspaces/cli/model-proxy)                                                                                               |
 | Email workflows             | [`@dbx-tools/email`](workspaces/node/email), [`@dbx-tools/shared-email`](workspaces/shared/email), [`@dbx-tools/ui-email`](workspaces/ui/email) |
+| Web search and fetch        | [`@dbx-tools/appkit-web-search`](workspaces/node/appkit-web-search)                                                                                 |
 | React/AppKit UI             | [`@dbx-tools/ui-appkit`](workspaces/ui/appkit), [`@dbx-tools/ui-mastra`](workspaces/ui/mastra), [`@dbx-tools/ui-email`](workspaces/ui/email)         |
 | Brand context and assets    | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/core`](workspaces/node/core), [`@dbx-tools/ui-branding`](workspaces/ui/branding) |
 | Databricks infrastructure   | [`@dbx-tools/databricks`](workspaces/node/databricks), [`@dbx-tools/databricks-zerobus`](workspaces/node/databricks-zerobus)               |

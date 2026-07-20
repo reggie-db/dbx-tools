@@ -6,6 +6,7 @@ packages:
   - workspaces/cli/model-proxy
   - workspaces/node/appkit
   - workspaces/node/appkit-mastra
+  - workspaces/node/appkit-web-search
   - workspaces/node/core
   - workspaces/node/databricks
   - workspaces/node/databricks-zerobus
