@@ -89,6 +89,21 @@ agent's chat model, so an agent on any model can still search:
   Llama endpoint), the tool errors rather than silently searching with the wrong
   thing. When nothing is pinned, unsupported fallbacks are skipped.
 
+Model resolution runs against the LIVE workspace catalogue (via
+[`@dbx-tools/model`](../model)), so it only ever picks an endpoint that is
+actually deployed - a configured id that doesn't exist is never called.
+
+### Scrape Fallback
+
+The native tool is always preferred. But when the workspace has NO deployed
+GPT/Gemini endpoint (so native web search can't run at all), the tool falls
+back to a DuckDuckGo scrape (via `got-scraping`) so it still returns results
+instead of erroring. Fallback results set `model` to `"scrape:duckduckgo"` and
+carry the substance in `citations` (there is no model synthesizing an answer,
+so `answer` is a lead-in over the top results). It is enabled by default; set
+`scrapeFallback: false` (or `WEB_SEARCH_SCRAPE_FALLBACK=0`) to require a native
+model and error when none is deployed.
+
 The right provider tool-spec is selected automatically from the resolved model:
 OpenAI GPT uses the Responses API `{"type":"web_search"}`; Gemini uses Chat
 Completions `{"google_search":{}}`. Override or extend that map per provider with
@@ -188,6 +203,8 @@ default:
 - `WEB_SEARCH_MAX_CITATIONS` (default 10);
 - `WEB_SEARCH_FETCH_MAX_LENGTH` (default 50000 characters);
 - `WEB_SEARCH_TIMEOUT_MS` (default 30000);
+- `WEB_SEARCH_SCRAPE_FALLBACK` (fall back to a DuckDuckGo scrape when no native
+  web-search model is deployed; default on);
 - `WEB_SEARCH_ALLOWED_URLS` (comma/space-separated globs; empty = unrestricted).
 
 The plugin's `maxCitations` / `fetchMaxLength` are hard caps: a per-call request
@@ -204,6 +221,8 @@ the [Databricks docs](https://docs.databricks.com/aws/en/machine-learning/model-
 - `tool` - `webSearchTool()` / `webFetchTool()` Mastra tools.
 - `search` - `runWebSearch()` over the Databricks native web-search tool.
 - `provider` - provider detection + the provider -> tool-spec map.
+- `scrape` - `runScrapeSearch()` DuckDuckGo fallback for workspaces with no
+  native web-search model.
 - `fetch` - `runWebFetch()` over got-scraping, plus `htmlToText()`.
 - `runtime` - shared runtime, `getWebSearchRuntime()`, `resetWebSearchRuntime()`.
 - `config` - config types, JSON schema, `resolveWebSearchConfig()`, approval helpers.

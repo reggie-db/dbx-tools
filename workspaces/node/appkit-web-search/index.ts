@@ -9,6 +9,7 @@ export * as plugin from "./src/plugin";
 export * as provider from "./src/provider";
 export * as runtime from "./src/runtime";
 export * as schema from "./src/schema";
+export * as scrape from "./src/scrape";
 export * as search from "./src/search";
 export * as tool from "./src/tool";
 export type { UrlAllowList } from "./src/allowlist";

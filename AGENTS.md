@@ -583,12 +583,17 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   model answers with citations. The tool spec is provider-specific
   (`provider.ts`: `WEB_SEARCH_PROVIDERS` — openai→Responses `{type:web_search}`,
   gemini→Chat `{google_search:{}}`; overridable via `WEB_SEARCH_TOOLS`). The
-  web-search model is resolved SEPARATELY from the agent's chat model (via
-  `@dbx-tools/model` `selectModel`, Gemini→GPT fallbacks) because the agent may
-  run on a model without web search; an explicit unsupported model errors rather
-  than silently falling back. `search.ts` calls the serving REST surface through
-  the OBO client's `apiClient.request({payload})` (same pattern as
-  `appkit/src/lakebase-resolver.ts`). `web_fetch` still uses got-scraping.
+  web-search model is resolved SEPARATELY from the agent's chat model because
+  the agent may run on a model without web search. Resolution runs against the
+  LIVE catalogue (`@dbx-tools/model` `listServingEndpoints` + `resolveModel`,
+  filtered to `supportsWebSearch`) so it never returns a non-deployed id;
+  Gemini→GPT fallback order. An explicit unsupported model errors; when NO
+  native model is deployed it returns null and `runWebSearch` uses the
+  DuckDuckGo scrape fallback (`scrape.ts`, got-scraping GET — a POST trips DDG's
+  202 bot challenge; `scrapeFallback`/`WEB_SEARCH_SCRAPE_FALLBACK` gates it,
+  default on). Native is always preferred. `search.ts` calls the serving REST
+  surface through the OBO client's `apiClient.request({payload})` (same pattern
+  as `appkit/src/lakebase-resolver.ts`). `web_fetch` also uses got-scraping.
 - **Generated API-docs links are ABSOLUTE, base-prefixed, and verify-and-drop.**
   Starlight serves every content page at a trailing-slash directory route
   (`/api/<pkg>/namespace-x/`), so a bare relative link between flat sibling

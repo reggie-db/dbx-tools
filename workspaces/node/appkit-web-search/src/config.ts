@@ -111,6 +111,15 @@ export interface WebSearchPluginConfig extends BasePluginConfig {
    */
   timeoutMs?: number;
   /**
+   * Fall back to a DuckDuckGo scrape when the workspace has NO deployed
+   * web-search-capable model (no GPT / Gemini serving endpoint). The native
+   * Databricks tool is always preferred; this only kicks in when there is no
+   * native option, so the tool still returns results instead of erroring.
+   * Defaults to `true`; set `false` (or `WEB_SEARCH_SCRAPE_FALLBACK=0`) to
+   * require a native model and error otherwise.
+   */
+  scrapeFallback?: boolean;
+  /**
    * Optional URL allow-list. Each entry is a glob (or bare host) tested
    * against a URL's full `href`. When set, `web_search` silently filters
    * citations to the permitted set and `web_fetch` refuses a disallowed URL.
@@ -142,6 +151,8 @@ export interface ResolvedWebSearchConfig {
   maxCitations: number;
   fetchMaxLength: number;
   timeoutMs: number;
+  /** Whether to scrape-fallback when no native web-search model is deployed. */
+  scrapeFallback: boolean;
   /** Compiled allow-list (permit-all when unconfigured). */
   allowList: UrlAllowList;
   /** Default per-tool approval gate. */
@@ -248,6 +259,8 @@ export function resolveWebSearchConfig(
       DEFAULT_FETCH_MAX_LENGTH,
     ),
     timeoutMs: resolvePositiveInt(config.timeoutMs, "WEB_SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
+    scrapeFallback:
+      config.scrapeFallback ?? object.toBoolean(process.env["WEB_SEARCH_SCRAPE_FALLBACK"]) ?? true,
     allowList: toUrlAllowList(patterns),
     approval: config.approval ?? false,
   };

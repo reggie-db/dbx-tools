@@ -22,15 +22,16 @@
  */
 
 import { error, log } from "@dbx-tools/shared-core";
-import { resolve, type serving } from "@dbx-tools/model";
-
-type WorkspaceClientLike = serving.WorkspaceClientLike;
+import { resolve, serving } from "@dbx-tools/model";
 import type { ResolvedWebSearchConfig } from "./config";
 import { detectWebSearchProvider, supportsWebSearch, webSearchToolSpec } from "./provider";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema";
+import { runScrapeSearch } from "./scrape";
 
+type WorkspaceClientLike = serving.WorkspaceClientLike;
 const logger = log.logger("web-search/search");
-const { selectModel } = resolve;
+const { resolveModel } = resolve;
+const { listServingEndpoints } = serving;
 
 /** Context a search needs from the caller: the OBO client + workspace host. */
 export interface WebSearchContext {
@@ -39,49 +40,58 @@ export interface WebSearchContext {
 }
 
 /**
- * Resolve the web-search model for this call. A pinned id (request wins over
- * config) is fuzzy-matched against the catalogue; if the result isn't
- * web-search-capable AND the id was explicitly asked for, throw. With nothing
- * pinned, walk the fallback order (each fuzzy-matched) and take the first
- * web-search-capable endpoint. Returns the resolved endpoint id.
+ * Resolve a web-search-capable model against the LIVE workspace catalogue - so
+ * we never return an endpoint id that isn't actually deployed (the "endpoint
+ * does not exist" failure a hardcoded fallback id would cause). Reuses
+ * `@dbx-tools/model`'s existing catalogue + resolver rather than a custom
+ * lookup: {@link listServingEndpoints} lists the endpoints (cached), and we
+ * restrict the candidate set to the {@link supportsWebSearch} ones before
+ * {@link resolveModel} fuzzy-picks within it.
+ *
+ * Returns the chosen endpoint id, or `null` when the workspace has no
+ * web-search-capable model deployed (the caller then uses the scrape
+ * fallback). An explicit request that resolves to an unsupported / absent
+ * model throws, so a deliberate bad pin surfaces rather than silently
+ * degrading.
  */
 async function resolveWebSearchModel(
   ctx: WebSearchContext,
   config: ResolvedWebSearchConfig,
   requested: string | undefined,
-): Promise<string> {
-  const fuzzy = config.fuzzy;
-  const threshold = config.fuzzyThreshold;
-
+): Promise<string | null> {
+  const endpoints = await listServingEndpoints(ctx.client, ctx.host);
+  // Only deployed, web-search-capable endpoints are candidates.
+  const capable = endpoints.filter((e) => supportsWebSearch(e.name));
   const pinned = requested ?? config.model;
+
   if (pinned) {
-    const { modelId } = await selectModel(ctx.client, ctx.host, {
+    // Resolve the explicit ask within the capable set only.
+    const { modelId } = resolveModel(capable, {
       explicit: pinned,
-      fuzzy,
-      threshold,
+      fuzzy: config.fuzzy,
+      threshold: config.fuzzyThreshold,
     });
-    if (!supportsWebSearch(modelId)) {
+    // resolveModel returns the input verbatim on no match; require it to be a
+    // real capable endpoint so a bad pin is a clear error, not a phantom call.
+    if (!capable.some((e) => e.name === modelId) || !supportsWebSearch(modelId)) {
       throw new Error(
-        `web-search: model "${modelId}" (resolved from "${pinned}") does not support web search - ` +
-          `use a GPT or Gemini serving endpoint (e.g. databricks-gemini-3-pro, databricks-gpt-5).`,
+        `web-search: requested model "${pinned}" is not a deployed web-search-capable endpoint. ` +
+          `Deployed GPT/Gemini endpoints: [${capable.map((e) => e.name).join(", ") || "none"}].`,
       );
     }
     return modelId;
   }
 
-  // Nothing pinned: walk the fallback order and take the first supported one.
-  for (const candidate of config.modelFallbacks) {
-    const { modelId } = await selectModel(ctx.client, ctx.host, {
-      explicit: candidate,
-      fuzzy,
-      threshold,
-    });
-    if (supportsWebSearch(modelId)) return modelId;
-  }
-  throw new Error(
-    `web-search: no web-search-capable model found among fallbacks [${config.modelFallbacks.join(", ")}] - ` +
-      `set \`model\` / WEB_SEARCH_MODEL to a GPT or Gemini endpoint.`,
-  );
+  if (capable.length === 0) return null;
+
+  // Nothing pinned: prefer the configured fallback order (Gemini, then GPT)
+  // when those ids are actually deployed; else take the best capable endpoint.
+  const { modelId } = resolveModel(capable, {
+    fallbacks: config.modelFallbacks,
+    fuzzy: config.fuzzy,
+    threshold: config.fuzzyThreshold,
+  });
+  return capable.some((e) => e.name === modelId) ? modelId : (capable[0]?.name ?? null);
 }
 
 /** POST a serving request through the OBO client and return the parsed JSON. */
@@ -174,8 +184,11 @@ function fromChatPayload(payload: Record<string, unknown>): {
 }
 
 /**
- * Run a web search via the Databricks native web-search tool and return the
- * synthesized answer plus allow-list-filtered citations.
+ * Run a web search. Prefers the Databricks native web-search tool on a
+ * deployed GPT/Gemini endpoint (synthesized answer + citations); when the
+ * workspace has no such endpoint AND the scrape fallback is enabled, falls
+ * back to a DuckDuckGo scrape so the tool still returns results instead of
+ * erroring. Citations are filtered through the configured URL allow-list.
  */
 export async function runWebSearch(
   request: WebSearchRequest,
@@ -183,6 +196,20 @@ export async function runWebSearch(
   ctx: WebSearchContext,
 ): Promise<WebSearchResult> {
   const modelId = await resolveWebSearchModel(ctx, config, request.model);
+
+  if (modelId === null) {
+    // No native web-search model deployed in this workspace.
+    if (config.scrapeFallback) {
+      logger.info("no-native-model:scrape-fallback", { query: request.query });
+      return runScrapeSearch(request, config);
+    }
+    throw new Error(
+      "web-search: no web-search-capable model (GPT/Gemini) is deployed in this workspace, " +
+        "and the scrape fallback is disabled. Deploy a supported endpoint, set `model` / " +
+        "WEB_SEARCH_MODEL, or enable the fallback (WEB_SEARCH_SCRAPE_FALLBACK=1).",
+    );
+  }
+
   const provider = detectWebSearchProvider(modelId)!; // guaranteed by resolve step
   const spec = webSearchToolSpec(provider, config.webSearchTools);
 
