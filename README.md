@@ -229,6 +229,9 @@ This repository uses a small internal workspace generator so package metadata,
 barrels, generated schemas, and examples stay consistent. That tooling is not
 the main product surface of the repo, but it is documented for contributors:
 
+- [`docs/appkit-best-practices.md`](docs/appkit-best-practices.md) captures the
+  AppKit plugin-authoring, code-style, and documentation conventions these
+  packages follow, distilled from the AppKit repo and docs.
 - [`@dbx-tools/projen`](projen) documents the projen engine,
   workspace discovery, generated files, mixins, OpenAPI generation, and codegen.
 - [`dbx-tools`](workspaces/cli/dbx-tools) documents the contributor CLI.

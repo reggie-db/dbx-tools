@@ -1,4 +1,16 @@
-# dbx-tools docs site
+# dbx-tools docs
+
+This directory holds the docs-site generator plus the hand-written contributor
+guides that are not package READMEs.
+
+Guides:
+
+- [`appkit-best-practices.md`](./appkit-best-practices.md) — AppKit plugin
+  authoring, code style, and documentation conventions distilled from
+  `databricks/appkit` and the AppKit v0 docs. Read before touching an
+  AppKit-facing plugin.
+
+## Docs site
 
 The docs site is generated from existing README files and rendered with Astro
 Starlight. Do not hand-maintain a second copy of package documentation.
@@ -7,6 +19,7 @@ Source of truth:
 
 - `README.md` becomes the docs homepage.
 - `workspaces/**/README.md` becomes the package reference.
+- `docs/*.md` guides become the site's Guides section.
 - `docs/scripts/sync-readmes.mjs` rewrites local README links for the site,
   generates Starlight content, and publishes `llms.txt` / `llms-full.txt`.
 - `docs/scripts/generate-api-docs.mjs` generates TypeScript API reference pages

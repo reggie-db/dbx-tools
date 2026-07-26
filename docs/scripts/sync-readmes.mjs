@@ -94,6 +94,32 @@ function discoverPackages() {
     .sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
 }
 
+/**
+ * Hand-written contributor guides that live in `docs/*.md` (not package
+ * READMEs). Published under `/guides/<slug>` so the site carries them
+ * alongside the generated package reference.
+ */
+function discoverGuides() {
+  const dir = path.join(root, "docs");
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((ent) => ent.isFile() && ent.name.endsWith(".md") && ent.name !== "README.md")
+    .map((ent) => {
+      const source = path.join(dir, ent.name);
+      return {
+        source,
+        slug: ent.name.replace(/\.md$/, ""),
+        title: pageTitle(read(source), ent.name),
+      };
+    })
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
+function docsPathForGuide(guide) {
+  return `/guides/${guide.slug}`;
+}
+
 function firstParagraph(markdown) {
   const withoutTitle = markdown.replace(/^# .*(\r?\n)+/, "");
   return withoutTitle
@@ -134,6 +160,8 @@ function frontmatter({ title, description, sourcePath }) {
 
 function localDocsTarget(absTarget, mappings) {
   const clean = absTarget.replace(/[/\\]$/, "");
+  const guideDoc = mappings.byFile?.get(path.resolve(clean));
+  if (guideDoc) return guideDoc;
   const statTarget = fs.existsSync(clean) ? clean : undefined;
   const asDir = statTarget && fs.statSync(statTarget).isDirectory() ? clean : path.dirname(clean);
   const packageDoc = mappings.byDir.get(path.resolve(asDir));
@@ -205,7 +233,7 @@ function buildPackageIndex(packages) {
   ].join("\n");
 }
 
-function nav(packages) {
+function nav(packages, guides) {
   const groups = new Map();
   for (const pkg of packages) {
     const items = groups.get(pkg.group) ?? [];
@@ -217,6 +245,17 @@ function nav(packages) {
   }
   const sidebar = [
     { label: "Overview", link: "/" },
+    ...(guides.length
+      ? [
+          {
+            label: "Guides",
+            items: guides.map((guide) => ({
+              label: guide.title,
+              link: docsPathForGuide(guide),
+            })),
+          },
+        ]
+      : []),
     { label: "Package Reference", link: "/packages/" },
     ...[...groups.entries()].map(([group, items]) => ({
       label: groupTitle(group),
@@ -231,7 +270,7 @@ function nav(packages) {
   };
 }
 
-function llms(packages) {
+function llms(packages, guides) {
   const lines = [
     `# ${brandContext.name}`,
     "",
@@ -244,9 +283,16 @@ function llms(packages) {
     `- [Brand Context](${withBase("/brand.json")})`,
     `- [Brand Context JSON Schema](${withBase("/brand.schema.json")})`,
     "",
-    "## Packages",
-    "",
   ];
+  if (guides.length) {
+    lines.push("## Guides", "");
+    for (const guide of guides) {
+      const summary = firstParagraph(read(guide.source)) ?? "";
+      lines.push(`- [${guide.title}](${withBase(docsPathForGuide(guide))}): ${summary}`);
+    }
+    lines.push("");
+  }
+  lines.push("## Packages", "");
   for (const pkg of packages) {
     const summary = firstParagraph(read(pkg.readme)) ?? "";
     lines.push(`- [${pkg.name}](${withBase(docsPathForPackage(pkg))}): ${summary}`);
@@ -255,11 +301,14 @@ function llms(packages) {
   return lines.join("\n");
 }
 
-function llmsFull(packages, mappings) {
+function llmsFull(packages, guides, mappings) {
   const parts = [
     brand.brandContextPrompt(brandContext),
     transformLinks(read(path.join(root, "README.md")), root, mappings),
   ];
+  for (const guide of guides) {
+    parts.push(transformLinks(read(guide.source), path.dirname(guide.source), mappings));
+  }
   for (const pkg of packages) {
     parts.push(transformLinks(read(pkg.readme), pkg.dir, mappings));
   }
@@ -418,9 +467,13 @@ export const collections = {
 
 function main() {
   const packages = discoverPackages();
-  const mappings = { byDir: new Map() };
+  const guides = discoverGuides();
+  const mappings = { byDir: new Map(), byFile: new Map() };
   for (const pkg of packages) {
     mappings.byDir.set(path.resolve(pkg.dir), docsPathForPackage(pkg));
+  }
+  for (const guide of guides) {
+    mappings.byFile.set(path.resolve(guide.source), docsPathForGuide(guide));
   }
 
   rm(sourceRoot);
@@ -449,19 +502,32 @@ function main() {
     );
   }
 
-  write(path.join(sourceRoot, "nav.json"), `${JSON.stringify(nav(packages), null, 2)}\n`);
+  for (const guide of guides) {
+    write(
+      path.join(docsContentRoot, "guides", `${guide.slug}.md`),
+      generatedPage(
+        guide.source,
+        read(guide.source),
+        guide.title,
+        path.dirname(guide.source),
+        mappings,
+      ),
+    );
+  }
+
+  write(path.join(sourceRoot, "nav.json"), `${JSON.stringify(nav(packages, guides), null, 2)}\n`);
   write(path.join(sourceRoot, "package.json"), docsPackageJson());
   write(path.join(sourceRoot, "pnpm-workspace.yaml"), docsWorkspaceYaml());
   write(path.join(sourceRoot, "astro.config.mjs"), astroConfig());
   write(path.join(sourceRoot, "src", "content.config.ts"), contentConfig());
   syncBrandAssets();
-  write(path.join(publicRoot, "llms.txt"), llms(packages));
-  write(path.join(publicRoot, "llms-full.txt"), llmsFull(packages, mappings));
+  write(path.join(publicRoot, "llms.txt"), llms(packages, guides));
+  write(path.join(publicRoot, "llms-full.txt"), llmsFull(packages, guides, mappings));
   // Disable Jekyll on GitHub Pages so Astro's `_astro/` asset dir (underscore
   // prefix) is served instead of stripped. Astro copies `public/*` to dist root.
   write(path.join(publicRoot, ".nojekyll"), "");
   console.log(
-    `Generated docs from ${packages.length} package READMEs into ${posix(path.relative(root, sourceRoot))}`,
+    `Generated docs from ${packages.length} package READMEs and ${guides.length} guides into ${posix(path.relative(root, sourceRoot))}`,
   );
 }
 
