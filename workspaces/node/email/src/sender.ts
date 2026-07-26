@@ -9,19 +9,24 @@
  * file/outbox fallback (no domain) keeps the user's address verbatim so
  * test artifacts land under a recognizable folder.
  *
- * When an allow-list is configured (see {@link parseAllowedSenders}) the
- * resolved `From` is constrained to it: a pattern is either an exact
- * address (`user@domain.com`), a domain wildcard (`*@domain.com` or the
- * bare `domain.com`, matching any local part on that domain), or `*`
- * (any). {@link listSenderOptions} expands the allow-list into the
- * concrete addresses a UI dropdown can offer for the current user.
+ * The resolved `From` is then constrained to the effective allow-list: a
+ * pattern is either an exact address (`user@domain.com`), a domain wildcard
+ * (`*@domain.com` or the bare `domain.com`, matching any local part on that
+ * domain), or `*` (any). This module only matches patterns; which patterns
+ * apply is decided by the configured sender policy in `./config`, which
+ * under the default `"allowlist"` mode fills an empty list in from the
+ * sender source. {@link listSenderOptions} expands the effective list into
+ * the concrete addresses a UI dropdown can offer for the current user.
  *
  * @module
  */
 
-import { net } from "@dbx-tools/shared-core";
+import { ConfigurationError, ValidationError } from "@databricks/appkit";
+import { log, net } from "@dbx-tools/shared-core";
 
 import type { ResolvedEmailConfig } from "./config";
+
+const logger = log.logger("email/sender");
 
 /**
  * Re-home the OBO user's local part on `domain`. Throws when no usable
@@ -30,8 +35,9 @@ import type { ResolvedEmailConfig } from "./config";
 export function deriveSenderAddress(userEmail: string | undefined, domain: string): string {
   const local = userEmail?.split("@")[0]?.trim();
   if (!local) {
-    throw new Error(
-      "email: cannot derive sender address - no on-behalf-of user email is available; set `from` / EMAIL_FROM to send from a fixed address",
+    throw ConfigurationError.resourceNotFound(
+      "On-behalf-of user email",
+      "Set `from` / EMAIL_FROM to send from a fixed address instead of deriving one.",
     );
   }
   return `${local}@${domain}`;
@@ -67,7 +73,9 @@ function matchesPattern(address: string, pattern: string): boolean {
 
 /**
  * Whether `from` is permitted by the allow-list. An empty (or absent)
- * allow-list permits everything.
+ * allow-list permits everything: {@link resolveEmailConfig} is what turns
+ * the configured {@link SenderPolicy} into concrete patterns, so an empty
+ * list here means the policy had nothing to narrow to.
  */
 export function isSenderAllowed(from: string, patterns: string[]): boolean {
   if (patterns.length === 0) return true;
@@ -82,11 +90,15 @@ export function isSenderAllowed(from: string, patterns: string[]): boolean {
  * the address was derived server-side or chosen in a UI.
  */
 export function assertSenderAllowed(from: string, patterns: string[]): void {
-  if (!isSenderAllowed(from, patterns)) {
-    throw new Error(
-      `email: sender "${from}" is not permitted by the configured allow-list (${patterns.join(", ")})`,
-    );
-  }
+  if (isSenderAllowed(from, patterns)) return;
+  // The thrown message names the field only; the patterns are policy detail
+  // that belongs in the operator's logs, not in a client or model response.
+  logger.warn("sender:denied", { from, allowedSenders: patterns });
+  throw ValidationError.invalidValue(
+    "from",
+    from,
+    "an address permitted by the configured sender allow-list",
+  );
 }
 
 /**
@@ -103,8 +115,9 @@ export function resolveSenderAddress(
   if (config.domain) return deriveSenderAddress(userEmail, config.domain);
   const email = userEmail?.trim();
   if (!email) {
-    throw new Error(
-      "email: no sender address available - set `from` / EMAIL_FROM, `domain` / EMAIL_DOMAIN, or run on behalf of a user",
+    throw ConfigurationError.resourceNotFound(
+      "Email sender address",
+      "Set `from` / EMAIL_FROM, set `domain` / EMAIL_DOMAIN, or run on behalf of a user.",
     );
   }
   return email;

@@ -10,6 +10,7 @@ import {
   plugin as webSearchPlugin,
   tool as webSearchToolModule,
 } from "@dbx-tools/appkit-web-search";
+import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -23,6 +24,7 @@ const { GENIE_INSTRUCTIONS } = mastraGenie;
 const { mastra } = mastraPlugin;
 const { webSearch } = webSearchPlugin;
 const { webSearchTool, webFetchTool } = webSearchToolModule;
+const { defaultBrandContext } = sharedBrand;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
 // `server({ staticPath })` serves it on the same port as the API.
@@ -173,6 +175,11 @@ await createAppAuto({
       storage: true,
       memory: true,
       agents: support,
+      // Themes charts from the `render_data` / `prepare_chart` tools with the
+      // same brand the client UI (`BrandProvider`) and email layouts use, so a
+      // generated chart matches the surrounding AppKit UI instead of falling
+      // back to Echarts' defaults.
+      brand: defaultBrandContext,
     }),
   ],
   cache: {

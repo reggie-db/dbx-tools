@@ -1,11 +1,14 @@
-import { string } from "@dbx-tools/shared-core";
 /**
  * Derive a Postgres-safe schema name for per-agent Mastra storage.
  *
  * Agent ids are often kebab-case route segments (`data-mesh-book-assistant`)
  * but {@link PostgresStore} validates `schemaName` with Mastra's
  * `parseSqlIdentifier` (letter/underscore start, `[A-Za-z0-9_]` only, max 63).
+ *
+ * @module
  */
+
+import { string } from "@dbx-tools/shared-core";
 
 const SCHEMA_PREFIX = "mastra_";
 const MAX_PG_IDENTIFIER_LEN = 63;

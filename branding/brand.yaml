@@ -14,7 +14,7 @@ assets:
 colors:
   primary: "#FF3621"
   primaryHover: "#D92D18"
-  accent: "#00A972"
+  accent: "#2EB88A"
   foreground: "#0B2026"
   background: "#FFFFFF"
   surface: "#F6F7F8"

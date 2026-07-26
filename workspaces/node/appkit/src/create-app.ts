@@ -10,19 +10,22 @@
  * import { createApp } from "@dbx-tools/appkit";
  * import { lakebase, server } from "@databricks/appkit";
  *
- * await createApp({ plugins: [server(), lakebase()] });
+ * await createApp.createApp({ plugins: [server(), lakebase()] });
  * ```
  *
  * Auto-configuration runs BEFORE delegating so plugins see a fully populated
  * `process.env` during their synchronous `setup()`. Lakebase Postgres runs when
- * a `lakebase` plugin is present, or when `autoConfigure: true` is set on the
- * config object.
+ * a `lakebase` plugin is present, or when {@link AutoConfigureMode} is set
+ * explicitly on the config object.
  *
  * @module
  */
 
 import { createApp as appkitCreateApp, getUsernameWithApiLookup } from "@databricks/appkit";
-import { log } from "@dbx-tools/shared-core";
+// AppKit's root barrel re-exports `PluginData` but not `PluginMap`; the package
+// publishes this subpath for exactly that type.
+import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
+import { async, log } from "@dbx-tools/shared-core";
 
 import {
   applyLakebaseToEnv,
@@ -31,31 +34,92 @@ import {
 } from "./lakebase-resolver";
 import { provisionCacheSchema } from "./provision";
 
-type CreateAppConfig = Parameters<typeof appkitCreateApp>[0] & {
-  autoConfigure?: boolean | "provision";
+type AppKitCreateAppConfig = NonNullable<Parameters<typeof appkitCreateApp>[0]>;
+type AppKitPlugins = NonNullable<AppKitCreateAppConfig["plugins"]>;
+
+/**
+ * What auto-configuration does before AppKit boots.
+ *
+ * - `"provision"`: resolve the Lakebase connection into `process.env`, then
+ *   grant the AppKit cache schema to the connecting role.
+ * - `"env"`: resolve the Lakebase connection into `process.env` only.
+ *
+ * Omit it to get `"provision"` gated on a `lakebase` plugin being registered;
+ * set it explicitly to run regardless of the plugin list, or pass `false` to
+ * skip auto-configuration entirely.
+ */
+export type AutoConfigureMode = "env" | "provision";
+
+/** AppKit's `createApp` config plus the dbx-tools auto-configuration switch. */
+export type CreateAppConfig<T extends AppKitPlugins = AppKitPlugins> = Omit<
+  AppKitCreateAppConfig,
+  "plugins" | "onPluginsReady"
+> & {
+  plugins?: T;
+  onPluginsReady?: (appkit: PluginMap<T>) => void | Promise<void>;
+  /** Auto-configuration to run before AppKit boots. Defaults to `"provision"`. */
+  autoConfigure?: AutoConfigureMode | false;
 };
 
 const logger = log.logger("create-app");
 
 const LAKEBASE_PLUGIN = "lakebase";
+const DEFAULT_AUTO_CONFIGURE: AutoConfigureMode = "provision";
 
-function usesPlugin(config: CreateAppConfig | undefined, name: string): boolean {
+/**
+ * Upper bound on boot-time auto-configuration. It runs as the service principal
+ * before any plugin is constructed, so it sits outside AppKit's interceptor
+ * chain and inherits no timeout, retry, or telemetry from it. The budget covers
+ * the resolver's own worst case (create a project, then wait for its endpoint)
+ * plus the cache-schema grants.
+ */
+const AUTO_CONFIGURE_TIMEOUT_MS = 11 * 60_000;
+
+function usesPlugin<T extends AppKitPlugins>(
+  config: CreateAppConfig<T> | undefined,
+  name: string,
+): boolean {
   return Boolean(config?.plugins?.some((entry) => entry.name === name));
 }
 
 /**
  * Run enabled auto-configuration steps without calling AppKit's `createApp`.
- * Lakebase Postgres resolves when `autoConfigure` is `true` or a `lakebase`
- * plugin is listed in `config.plugins`. Defaults to `"provision"` (Lakebase env
- * + optional cache schema). Pass `autoConfigure: false` to skip entirely.
+ *
+ * Lakebase Postgres resolves when {@link CreateAppConfig.autoConfigure} is set
+ * explicitly or a `lakebase` plugin is listed in `config.plugins`. `signal`
+ * cancels the resolution; it is combined with an internal boot timeout either
+ * way.
+ *
+ * @example
+ * import { createApp } from "@dbx-tools/appkit";
+ *
+ * // Populate PGHOST / PGDATABASE / LAKEBASE_ENDPOINT without booting AppKit.
+ * await createApp.autoConfigure({ autoConfigure: "env" });
  */
-export async function autoConfigure(config?: CreateAppConfig): Promise<void> {
-  const { autoConfigure = "provision" } = config ?? {};
-  if (autoConfigure !== false) {
-    if (autoConfigure === true || usesPlugin(config, LAKEBASE_PLUGIN)) {
-      await autoConfigureLakebase(autoConfigure === "provision");
-    }
+export async function autoConfigure<T extends AppKitPlugins>(
+  config?: CreateAppConfig<T>,
+  signal?: AbortSignal,
+): Promise<void> {
+  const mode = config?.autoConfigure ?? DEFAULT_AUTO_CONFIGURE;
+  const explicit = config?.autoConfigure !== undefined;
+  const lakebasePluginPresent = usesPlugin(config, LAKEBASE_PLUGIN);
+  if (mode === false || !(explicit || lakebasePluginPresent)) {
+    logger.info("ready", {
+      autoConfigure: mode,
+      lakebasePluginPresent,
+      provisioned: false,
+      skippedReason: mode === false ? "disabled" : "no lakebase plugin",
+    });
+    return;
   }
+
+  const controller = new AbortController();
+  async.tieAbortSignal(controller, signal);
+  async.tieAbortSignal(controller, AbortSignal.timeout(AUTO_CONFIGURE_TIMEOUT_MS));
+
+  const provision = mode === "provision";
+  await autoConfigureLakebase(provision, controller.signal);
+  logger.info("ready", { autoConfigure: mode, lakebasePluginPresent, provisioned: provision });
 }
 
 /**
@@ -64,22 +128,20 @@ export async function autoConfigure(config?: CreateAppConfig): Promise<void> {
  * {@link resolveLakebaseConnection} and {@link applyLakebaseToEnv} directly when
  * finer control is needed.
  */
-async function autoConfigureLakebase(provision: boolean): Promise<LakebaseConnection> {
-  const resolved = await resolveLakebaseConnection();
+async function autoConfigureLakebase(
+  provision: boolean,
+  signal: AbortSignal,
+): Promise<LakebaseConnection> {
+  const resolved = await resolveLakebaseConnection(undefined, signal);
   applyLakebaseToEnv(resolved);
   const user = await getUsernameWithApiLookup({});
   if (user) process.env.PGUSER ??= user;
   logger.info("env updated", { ...redactLakebaseConnection(resolved), user });
   if (provision) {
-    await provisionCacheSchema(logger, user);
+    await provisionCacheSchema(user, logger);
   }
   return resolved;
 }
-
-const create = async (config?: CreateAppConfig) => {
-  await autoConfigure(config);
-  return appkitCreateApp(config);
-};
 
 function redactLakebaseConnection(resolved: LakebaseConnection): Record<string, unknown> {
   return {
@@ -93,5 +155,21 @@ function redactLakebaseConnection(resolved: LakebaseConnection): Record<string, 
   };
 }
 
-/** Auto-configuring drop-in for AppKit's `createApp`. */
-export const createApp = create as unknown as typeof appkitCreateApp;
+/**
+ * Auto-configuring drop-in for AppKit's `createApp`: same config, same typed
+ * plugin-export map, with {@link autoConfigure} run first.
+ *
+ * @example
+ * import { createApp } from "@dbx-tools/appkit";
+ * import { lakebase, server } from "@databricks/appkit";
+ *
+ * const app = await createApp.createApp({ plugins: [server(), lakebase()] });
+ */
+export async function createApp<T extends AppKitPlugins>(
+  config?: CreateAppConfig<T>,
+): Promise<PluginMap<T>> {
+  await autoConfigure(config);
+  const appConfig = { ...config };
+  delete appConfig.autoConfigure;
+  return appkitCreateApp<T>(appConfig);
+}

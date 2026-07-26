@@ -6,7 +6,7 @@ Import this package when backend code needs AppKit execution context, typed
 plugin lookup, Databricks SDK cancellation, layered config resolution, or
 Lakebase auto-configuration without taking on a heavier feature package.
 
-Key features:
+**Key features:**
 
 - Auto-configuration before AppKit setup, especially for Lakebase/Postgres env
   values that AppKit plugins read during initialization.
@@ -21,7 +21,7 @@ Key features:
 - Lakebase cache-schema provisioning for deployments where the app identity must
   be granted access before persistent cache initialization.
 
-## Why Not Just AppKit?
+## Why Use This Over Native AppKit
 
 Use native AppKit directly when your app can read its required env vars before
 `createApp()` and does not need extra setup around plugin exports or config
@@ -41,7 +41,8 @@ Use this package when the friction is around bootstrapping and reuse:
 
 ## Create An Auto-Configured App
 
-`createApp.createApp` is a drop-in wrapper around AppKit `createApp`. It runs
+`createApp.createApp` is a drop-in wrapper around AppKit `createApp` with the
+same config and the same typed plugin-export map. It runs
 `createApp.autoConfigure()` first so enabled capabilities can populate
 environment variables before plugin setup runs.
 
@@ -64,6 +65,11 @@ explicit options, and local-only discovery is skipped inside a Databricks App
 environment. This makes the same entrypoint usable in local development,
 Databricks Asset Bundle validation, and deployed Apps.
 
+Boot-time resolution runs as the service principal before any plugin exists, so
+it sits outside AppKit's interceptor chain. It carries its own timeout, and
+`createApp.autoConfigure()` accepts an `AbortSignal` when a caller wants to
+cancel it earlier.
+
 Use the lower-level functions when you need to inspect or customize the result:
 
 ```ts
@@ -77,16 +83,54 @@ const resolved = await lakebaseResolver.resolveLakebaseConnection({
 lakebaseResolver.applyLakebaseToEnv(resolved);
 ```
 
+## Configuration
+
+`createApp.createApp()` accepts everything AppKit's `createApp` does, plus:
+
+| Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                 |
+| --------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema; `"env"` resolves the connection only; `false` skips auto-configuration. Omit it to gate the default on a `lakebase` plugin being registered, or set it explicitly to run regardless. |
+
+`lakebaseResolver.resolveLakebaseConnection()` accepts:
+
+| Option       | Type                                 | Default                                  | Description                                                                                                    |
+| ------------ | ------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `endpoint`   | `string`                             | `LAKEBASE_ENDPOINT`                      | Any address `pgaddress.parseAddress()` understands: resource path, Postgres URI, hostname, or bare project id. |
+| `project`    | `string`                             | discovered                               | Lakebase project id. Resolved from the workspace when unset.                                                   |
+| `branch`     | `string`                             | project default                          | Branch id within the project.                                                                                  |
+| `database`   | `string`                             | `PGDATABASE`, else `databricks_postgres` | Postgres database name.                                                                                        |
+| `host`       | `string`                             | `PGHOST`, else the endpoint's host       | Postgres hostname.                                                                                             |
+| `port`       | `number`                             | `PGPORT`, else `5432`                    | Postgres port.                                                                                                 |
+| `sslMode`    | `"require" \| "disable" \| "prefer"` | `PGSSLMODE`, else `require`              | Postgres TLS mode.                                                                                             |
+| `autoCreate` | `string \| false`                    | slug of the package name                 | Project id to create when the workspace has none. `false` fails instead of creating.                           |
+
+Environment variables read during resolution:
+
+| Variable            | Description                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------ |
+| `LAKEBASE_ENDPOINT` | Endpoint resource path, Postgres URI, hostname, or project id.                                   |
+| `PGHOST`            | Postgres hostname. Skips the endpoint lookup when set with `PGDATABASE` and `LAKEBASE_ENDPOINT`. |
+| `PGDATABASE`        | Postgres database name.                                                                          |
+| `PGPORT`            | Postgres port. A value outside 1-65535 fails with a `ValidationError`.                           |
+| `PGSSLMODE`         | `require`, `disable`, or `prefer`. Any other value fails with a `ValidationError`.               |
+| `PGUSER`            | Connecting role. Filled from the workspace identity when unset.                                  |
+
+Resolved values are written back to `process.env` by
+`lakebaseResolver.applyLakebaseToEnv()`, which never overwrites a variable that
+is already set.
+
 ## Resolve Local And Bundle Config
 
 `config.resolveConfigValue()` checks explicit options, CLI overrides, env vars,
-Databricks Asset Bundle validation output, and `app.yaml` env entries.
+Databricks Asset Bundle validation output, and `app.yaml` env entries, in AppKit's
+precedence order: explicit config, then environment variable, then the app or
+bundle definition.
 
 ```ts
 import { config } from "@dbx-tools/appkit";
 
-const warehouseId = await config.resolveConfigValue("SQL_WAREHOUSE_ID", {
-  cli: { SQL_WAREHOUSE_ID: flags.warehouse },
+const warehouseId = await config.resolveConfigValue("DATABRICKS_WAREHOUSE_ID", {
+  cli: { DATABRICKS_WAREHOUSE_ID: flags.warehouse },
   sources: config.withCliSources(),
 });
 ```
@@ -136,14 +180,15 @@ Databricks SDK calls accept a `Context`. Many app and web APIs use
 ```ts
 import { databricks } from "@dbx-tools/appkit";
 
-const context = databricks.toContext(request.signal);
-await client.apiClient.request({
-  path: "/api/2.0/serving-endpoints",
-  method: "GET",
-  headers: new Headers(),
-  raw: false,
-  context,
-});
+await client.apiClient.request(
+  {
+    path: "/api/2.0/serving-endpoints",
+    method: "GET",
+    headers: new Headers(),
+    raw: false,
+  },
+  databricks.toContext(request.signal),
+);
 ```
 
 `databricks.isAppEnv()` checks the Databricks App environment shape for setup
@@ -166,7 +211,9 @@ const required = plugin.require(this.context, lakebase, "my-plugin").exports();
 ```
 
 Use this in AppKit plugins that depend on sibling plugin exports but should not
-hard-code registered names or casts at every call site.
+hard-code registered names or casts at every call site. A missing required
+plugin throws AppKit's `ConfigurationError`, naming both the caller and the
+plugin to register.
 
 ## Provision Lakebase Cache Schema
 
@@ -176,25 +223,26 @@ been resolved and before AppKit initializes its persistent cache.
 
 ```ts
 import { provision } from "@dbx-tools/appkit";
-import { log } from "@dbx-tools/shared-core";
 
-await provision.provisionCacheSchema(
-  log.logger("appkit-cache"),
-  "app-service-principal@databricks.com",
-);
+await provision.provisionCacheSchema("app-service-principal@databricks.com");
 ```
+
+Pass a second argument to report progress on your own logger. The grants are
+skipped inside a Databricks App, and any failure is logged rather than thrown so
+a degraded cache never blocks startup.
 
 ## Modules
 
-- `createApp` - `createApp()` wrapper and `autoConfigure()`.
-- `lakebaseResolver` - Lakebase connection discovery, default picking, optional
-  auto-create, and env application.
-- `pgaddress` - permissive Lakebase/Postgres address parser.
-- `config` - local/env/bundle/app-yaml config lookup.
-- `appkit` - execution context lookup and initialization.
-- `databricks` - App env detection and SDK context cancellation adapters.
-- `plugin` - typed AppKit plugin data, instance, and required-instance lookup.
-- `provision` - cache schema provisioning helpers.
+| Module             | Responsibility                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| `createApp`        | `createApp()` wrapper and `autoConfigure()`.                                               |
+| `lakebaseResolver` | Lakebase connection discovery, default picking, optional auto-create, and env application. |
+| `pgaddress`        | Permissive Lakebase/Postgres address parser.                                               |
+| `config`           | Local/env/bundle/app-yaml config lookup.                                                   |
+| `appkit`           | Execution context lookup and initialization.                                               |
+| `databricks`       | App env detection and SDK context cancellation adapters.                                   |
+| `plugin`           | Typed AppKit plugin data, instance, and required-instance lookup.                          |
+| `provision`        | Cache schema provisioning helpers.                                                         |
 
 The shell-facing wrapper for auto-config is
 [`@dbx-tools/cli-appkit-env`](../../cli/appkit-env). Higher-level agent composition

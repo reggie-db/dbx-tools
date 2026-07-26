@@ -6,13 +6,13 @@ written as house rules for authoring `@dbx-tools/*` AppKit plugins, packages,
 and docs. Read this before adding or changing an AppKit-facing plugin.
 
 The goal is that a `dbx-tools` plugin is indistinguishable in shape, ergonomics,
-and documentation from a first-party AppKit plugin — so an app author (or an
+and documentation from a first-party AppKit plugin - so an app author (or an
 agent) who knows AppKit already knows our packages.
 
 The AppKit source itself is the ground truth. Two ways to consult it:
 
 ```sh
-# API reference index (always run with no query first — do not guess paths)
+# API reference index (always run with no query first - do not guess paths)
 npx @databricks/appkit docs
 npx @databricks/appkit docs ./docs/plugins/custom-plugins.md
 
@@ -20,18 +20,25 @@ npx @databricks/appkit docs ./docs/plugins/custom-plugins.md
 ls node_modules/@databricks/appkit/docs
 ```
 
+This file is a distillation, so it can drift from the AppKit version actually
+installed. Confirm any symbol against the installed typings before you implement
+against it - `Plugin` lives in `dist/plugin/plugin.d.ts`, the interceptor option
+bags in `dist/shared/src/execute.d.ts`, and the error classes under
+`dist/errors/`. A prescription here that the pinned version does not export is a
+bug in this file; fix it here rather than working around it in a package.
+
 ## AppKit's Core Principles
 
 AppKit publishes seven principles. They are the "why" behind every convention
 below, and our packages inherit them:
 
-1. **Highly opinionated** — strong defaults, advanced customization when needed.
-2. **Built for application use cases** — an application SDK, not a service wrapper.
-3. **Delightful developer experience** — plug-and-play interfaces, examples, docs.
-4. **Zero-trust security** — minimal surface area, fail safely, validate all input.
-5. **Optimized for humans and AI** — every API discoverable, self-documenting, inferable.
-6. **Production-ready from day one** — observability and reliability from the first commit.
-7. **Layered extensibility** — high-level plugins, low-level primitives, extension points.
+1. **Highly opinionated** - strong defaults, advanced customization when needed.
+2. **Built for application use cases** - an application SDK, not a service wrapper.
+3. **Delightful developer experience** - plug-and-play interfaces, examples, docs.
+4. **Zero-trust security** - minimal surface area, fail safely, validate all input.
+5. **Optimized for humans and AI** - every API discoverable, self-documenting, inferable.
+6. **Production-ready from day one** - observability and reliability from the first commit.
+7. **Layered extensibility** - high-level plugins, low-level primitives, extension points.
 
 Practical consequence for this repo: a package that only works when the caller
 already knows the exact serving endpoint alias, secret name, or SSE frame shape
@@ -71,7 +78,7 @@ Rules we follow:
 
 - `name` matches `^[a-z][a-z0-9-]*$` (schema-enforced). It is the registry key,
   the route mount (`/api/<name>`), and the `AppKit.<name>` accessor, so it is
-  effectively public API — treat a rename as a breaking change.
+  effectively public API - treat a rename as a breaking change.
 - Use `satisfies PluginManifest<"<name>">` on an inline manifest so the literal
   name flows into `toPlugin()`'s inferred factory type. AppKit's own plugins use
   `manifest.json` + `as PluginManifest<"...">` because the CLI reads their JSON
@@ -82,7 +89,7 @@ Rules we follow:
   `InstanceType<...>` typing and sibling lookup; the factory is what they
   register.
 - `resources.required` / `resources.optional` are always present, even when
-  empty — the schema is `strict()` and requires both keys.
+  empty - the schema is `strict()` and requires both keys.
 - Set `stability: "beta"` until an API is settled. Absent means GA and implies
   strict semver. There is no reverse promotion path.
 
@@ -154,7 +161,7 @@ resources: { required: [], optional: [...GENIE_MANIFEST.resources.required] }
 
 ### Routes
 
-- Register through `this.route(router, { name, method, path, handler })` — never
+- Register through `this.route(router, { name, method, path, handler })` - never
   `router.get(...)` directly. `route()` adds async error forwarding and records
   the endpoint in the plugin's endpoint map, which is what the client can
   discover. `skipBodyParsing: true` is for upload routes.
@@ -183,7 +190,7 @@ this.route(router, {
 ### Execution: `execute()` And `executeStream()`
 
 Route all outbound I/O through the interceptor pipeline. It is how a plugin gets
-caching, retry, timeout, and telemetry for free — including the
+caching, retry, timeout, and telemetry for free - including the
 `execution.context` / `caller.id` span attributes that make OBO calls
 auditable.
 
@@ -236,11 +243,14 @@ Keep the defaults in a sibling `defaults.ts`, not inline at the call site.
 
 When a plugin exposes agent tools, implement AppKit's `ToolProvider`
 (`getAgentTools()` + `executeAgentTool()`), building a `ToolRegistry` with
-`defineTool` and dispatching via `executeFromRegistry` / `toolsFromRegistry`:
+`defineTool` and dispatching via `executeFromRegistry` / `toolsFromRegistry`.
+These live on the beta entry point, so import them from
+`@databricks/appkit/beta` rather than `@databricks/appkit`, and expect the
+shape to move between minor releases:
 
 - Registry keys are the public tool names; use `alias.method` for
   per-resource tools.
-- Zod schema per tool; `.describe()` every field — the description is the
+- Zod schema per tool; `.describe()` every field - the description is the
   model's only documentation.
 - `annotations: { effect: "read" | "write", requiresUserContext: true }` is how
   hosts reason about safety. Be accurate.
@@ -257,8 +267,12 @@ When a plugin exposes agent tools, implement AppKit's `ToolProvider`
 - Prefer the static factories (`ValidationError.missingField("warehouseId")`,
   `ConfigurationError.missingEnvVar("DATABRICKS_HOST")`) over ad-hoc strings, and
   add new ones rather than repeating message text.
-- Never put a secret or a raw value in `context` — record the field name and the
-  value's _type_. Serialize to clients via `clientMessage`, never raw `message`.
+- Never put a secret or a raw value in `context` - record the field name and the
+  value's _type_. `toJSON()` redacts sensitive context keys, so log that rather
+  than interpolating the raw value into the message.
+- Do not forward an upstream `message` (or a stack, or a Zod issue string) to a
+  client. Return a stable, actionable message of your own and attach the
+  `statusCode` the error already carries; log the full error separately.
 - One module-scoped logger per module. AppKit uses
   `const logger = createLogger("genie")`; this repo uses
   `log.logger(this)` / `log.logger(<module name>)` from `@dbx-tools/shared-core`.
@@ -274,7 +288,7 @@ When a plugin exposes agent tools, implement AppKit's `ToolProvider`
 - User-scoped work goes through `asUser(req)`; service-principal work is the
   default and should be the narrower case. In development a missing user token
   falls back to the service principal with a warning and an
-  `execution.obo_dev_fallback` span attribute — never suppress that signal.
+  `execution.obo_dev_fallback` span attribute - never suppress that signal.
 - Namespace caches per user via the `userKey` argument so an OBO result cannot
   leak across identities.
 - Bound anything unbounded: upload sizes, row counts, result counts, fetch
@@ -285,7 +299,7 @@ When a plugin exposes agent tools, implement AppKit's `ToolProvider`
 
 The AppKit repo runs Biome with double quotes and 2-space indent; this repo runs
 Prettier (100 col, double quotes, semicolons, trailing commas) plus ESLint,
-generated by projen. Follow the local formatter — `pnpm run format` — and these
+generated by projen. Follow the local formatter - `pnpm run format` - and these
 shared conventions:
 
 - **ESM only.** `import` / `export`, never `require()`.
@@ -308,7 +322,7 @@ shared conventions:
 - **Zod at runtime boundaries**, TypeScript types inside. Derive the type from
   the schema rather than declaring both.
 - **`satisfies`** over `as` whenever the literal type should be preserved. Reach
-  for `as` only when a package's export map makes the real type unimportable —
+  for `as` only when a package's export map makes the real type unimportable -
   and say so in a comment.
 - **Structural interfaces** for types AppKit does not export (e.g.
   `PluginContextLike { getPlugins(): ReadonlyMap<string, unknown> }`), with a
@@ -326,7 +340,7 @@ AppKit docs are terse, task-shaped, and example-first. Match them.
 - Every exported symbol gets a doc comment. For anything a caller configures,
   document the default and the env var inline:
   `/** SMTP server port (`SMTP_PORT`). Defaults to 587. */`
-- Use `@example` with realistic, copy-pasteable code — imports included. AppKit's
+- Use `@example` with realistic, copy-pasteable code - imports included. AppKit's
   `Plugin` class carries two full examples; that is the bar for a base class.
 - Prefer `{@link Symbol}` over backticked prose so generated API pages link up.
 - **Explain the "why" for anything surprising.** AppKit comments a vendor quirk
@@ -342,22 +356,22 @@ Keep the AppKit plugin-page structure. Our packages already follow it; new ones
 should too:
 
 1. `# <package name>` and a one-paragraph description of what importing it gets you.
-2. `**Key features:**` — a short bullet list, benefit-first.
-3. `## Why Use This Over Native AppKit` — required whenever the package overlaps
+2. `**Key features:**` - a short bullet list, benefit-first.
+3. `## Why Use This Over Native AppKit` - required whenever the package overlaps
    a native surface. Name the native alternative and when it is the better pick.
-4. `## Register The AppKit Plugin` / `## Basic usage` — the smallest working
+4. `## Register The AppKit Plugin` / `## Basic usage` - the smallest working
    snippet, using real exported subpaths.
 5. Task-shaped `##` sections in the order a reader hits them
    (configure → use → restrict → observe).
-6. `## Configuration` — a table of option / type / default / description.
+6. `## Configuration` - a table of option / type / default / description.
 7. Environment variables and HTTP routes as tables when there are more than two.
-8. `## Modules` — the subpath/module map.
+8. `## Modules` - the subpath/module map.
 9. Links to adjacent packages instead of restating them.
 
 Additional rules:
 
 - Lead with what the reader can do, not with internal architecture.
-- Every code block must be runnable as written — real import paths, no
+- Every code block must be runnable as written - real import paths, no
   pseudo-code, no invented APIs.
 - Document loading/error/empty handling for UI surfaces.
 - Tables for anything enumerable (options, env vars, event types, endpoints);
@@ -372,14 +386,14 @@ Additional rules:
   generate the site. Fix prose in the README, navigation in the generator.
 - AppKit publishes `llms.txt` / an `appkit docs <query>` CLI so agents can read
   the docs; this repo publishes `llms.txt` / `llms-full.txt` from the same
-  generator. Keep first paragraphs of READMEs tight — they become the summaries
+  generator. Keep first paragraphs of READMEs tight - they become the summaries
   in both.
 
 ## Testing
 
 - Colocate tests with the code under test (AppKit: `<plugin>/tests/*.test.ts`;
   this repo: package `test/`). Name them after the unit, not the ticket.
-- Unit-test the pure helpers directly — that is why they are extracted.
+- Unit-test the pure helpers directly - that is why they are extracted.
 - Mock the singletons, not the plugin: `CacheManager.getInstanceSync`,
   `ServiceContext`, and the connector are the seams. AppKit's
   `createMockRequest` / `createMockResponse` / `createMockRouter` /

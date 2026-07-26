@@ -22,8 +22,13 @@
  *   id has to be short / typeable and the scope is bounded - cache keys
  *   local to a request, slug suffixes. `length <= 0` throws.
  *
- * Built on `globalThis.crypto.randomUUID()` so the same function works in
- * Node (>= 19) and modern browsers without a polyfill.
+ * Prefers `crypto.randomUUID()`, which covers Node (>= 19) and a browser on
+ * a secure origin. Browsers gate `randomUUID` behind a secure context, so a
+ * page served over plain http (a LAN dev host) has `crypto` but not that
+ * method; this package is browser-safe and its callers mint ids on the
+ * render path, so it degrades instead of throwing: `getRandomValues` when
+ * present, else `Math.random`. Every branch returns a well-formed v4 UUID -
+ * only the entropy source differs.
  *
  * @example
  * id();   // "123e4567-e89b-12d3-a456-426614174000"
@@ -33,11 +38,30 @@ export function id(length?: number): string {
   if (length !== undefined && length <= 0) {
     throw new Error("Length must be greater than 0");
   }
-  const id = globalThis.crypto.randomUUID();
+  const id = uuidV4();
   if (length !== undefined) {
     return id.replace(/-/g, "").slice(0, length);
   }
   return id;
+}
+
+/** A v4 UUID from the strongest randomness source this runtime offers. */
+function uuidV4(): string {
+  const webCrypto = globalThis.crypto as Crypto | undefined;
+  if (typeof webCrypto?.randomUUID === "function") return webCrypto.randomUUID();
+
+  const bytes = new Uint8Array(16);
+  if (typeof webCrypto?.getRandomValues === "function") {
+    webCrypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  // Stamp the version (4) and variant (10xx) fields RFC 4122 requires.
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**

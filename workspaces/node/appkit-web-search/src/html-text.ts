@@ -1,9 +1,9 @@
 /**
  * Turning fetched HTML into the plain text a model can read.
  *
- * Both scraping paths need this: {@link fetchUrl}'s full-page read and the
- * DuckDuckGo fallback's title/snippet extraction. They previously carried
- * separate entity tables that drifted, so the decode lives here once.
+ * Both scraping paths need this: `runWebFetch`'s full-page read and
+ * `runScrapeSearch`'s title/snippet extraction. The entity table is shared so
+ * the two cannot drift apart.
  *
  * This is deliberately regex-based rather than a DOM parse. The inputs are
  * whole pages fetched for summarization, not documents to be queried, so the

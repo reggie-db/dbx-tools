@@ -132,6 +132,9 @@ projectApi.applyToProjects(project, { identifierName: "server-appkit-demo", tags
     dep("@dbx-tools/appkit-mastra"),
     dep("@dbx-tools/email"),
     dep("@dbx-tools/appkit-web-search"),
+    // The portable brand context, so the server themes generated charts with
+    // the same brand the client UI and email layouts use.
+    dep("@dbx-tools/shared-core"),
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",

@@ -13,19 +13,38 @@
  * {@link WebSearchPluginConfig.modelFallbacks} order (Gemini, then GPT, then a
  * repo floor) picks the first web-search-capable endpoint that exists.
  *
- * Resolution never throws here; it just fills defaults. Precedence per field:
- * explicit plugin config wins, then the matching environment variable, then a
- * built-in default.
+ * Which endpoint id is used follows the standard precedence - explicit plugin
+ * config, then environment, then a default - with two environment sources:
  *
- * Env fallbacks: `WEB_SEARCH_MODEL`, `WEB_SEARCH_MODEL_FALLBACKS`,
- * `WEB_SEARCH_TOOLS` (JSON), `WEB_SEARCH_ALLOWED_URLS`,
+ *   1. `model` in plugin config;
+ *   2. `WEB_SEARCH_MODEL`, the dedicated override, so a deployment can point
+ *      web search at a different endpoint than the agent's chat model;
+ *   3. `DATABRICKS_SERVING_ENDPOINT_NAME`, AppKit's standard name for a
+ *      Model Serving binding, honored so the resource declared in the manifest
+ *      wires this plugin up like any other. Because that binding is shared
+ *      with whatever else the app serves, it is treated as a preference: an
+ *      endpoint that cannot run the native web-search tool is skipped in
+ *      favor of {@link WebSearchPluginConfig.modelFallbacks} rather than
+ *      failing the call. A pin from (1) or (2) is explicit and DOES fail;
+ *   4. otherwise the fallback order, resolved against the live catalogue.
+ *
+ * Which model wins is decided lazily, at call time, against the live
+ * catalogue. Resolution here is eager about everything else and fails loudly
+ * on a contradiction: an unparseable `WEB_SEARCH_TOOLS`, an unknown
+ * {@link UrlPolicyMode}, or a URL policy that disagrees with the allow-list it
+ * was given.
+ *
+ * Env fallbacks: `WEB_SEARCH_MODEL`, `DATABRICKS_SERVING_ENDPOINT_NAME`,
+ * `WEB_SEARCH_MODEL_FALLBACKS`, `WEB_SEARCH_TOOLS` (JSON),
+ * `WEB_SEARCH_URL_POLICY`, `WEB_SEARCH_ALLOWED_URLS`,
  * `WEB_SEARCH_MAX_CITATIONS`, `WEB_SEARCH_FETCH_MAX_LENGTH`,
- * `WEB_SEARCH_TIMEOUT_MS`, `WEB_SEARCH_FUZZY`, `WEB_SEARCH_FUZZY_THRESHOLD`.
+ * `WEB_SEARCH_TIMEOUT_MS`, `WEB_SEARCH_SCRAPE_FALLBACK`, `WEB_SEARCH_FUZZY`,
+ * `WEB_SEARCH_FUZZY_THRESHOLD`.
  *
  * @module
  */
 
-import type { BasePluginConfig } from "@databricks/appkit";
+import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
 import { serving } from "@dbx-tools/model";
 import { json, object, type OneOrMany, string } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
@@ -36,9 +55,36 @@ import { parseAllowedUrls, toUrlAllowList, type UrlAllowList } from "./allowlist
  * pattern (or list of patterns, in the {@link OneOrMany} shape used across
  * the repo) gates only calls whose URL matches. Patterns use the same glob
  * syntax as the allow-list (see `allowlist.ts`). Omit / `false` for no
- * approval.
+ * approval. Normalized to an {@link ApprovalPolicy} before use.
  */
 export type ApprovalGate = boolean | OneOrMany<string> | string;
+
+/**
+ * The normalized form of an {@link ApprovalGate}: which calls pause for a
+ * human. `"none"` runs every call straight through, `"always"` gates all of
+ * them, and `"urls"` gates only calls whose URL matches one of `patterns`.
+ */
+export type ApprovalPolicy =
+  | { readonly mode: "none" }
+  | { readonly mode: "always" }
+  | { readonly mode: "urls"; readonly patterns: readonly string[] };
+
+/**
+ * Which URLs the tools may reach. `"allowlist"` permits only the configured
+ * entries; `"unrestricted"` names the permissive mode explicitly, so an
+ * unrestricted deployment is a stated choice visible in the boot log rather
+ * than an empty list nobody noticed.
+ */
+export type UrlPolicyMode = "unrestricted" | "allowlist";
+
+/** Dedicated override for the web-search endpoint id. */
+export const MODEL_ENV = "WEB_SEARCH_MODEL";
+
+/** AppKit's standard environment name for a Model Serving endpoint binding. */
+export const SERVING_ENDPOINT_ENV = "DATABRICKS_SERVING_ENDPOINT_NAME";
+
+/** Where the pinned web-search endpoint id came from, or `"none"` when unpinned. */
+export type ModelSource = "config" | typeof MODEL_ENV | typeof SERVING_ENDPOINT_ENV | "none";
 
 /**
  * Default web-search model preference, tried in order when no model is
@@ -69,8 +115,9 @@ export interface WebSearchPluginConfig extends BasePluginConfig {
    * The web-search model to use by default: a Databricks serving endpoint
    * name (`"databricks-gemini-3-pro"`), a loose name (`"gemini"`, `"gpt"`),
    * or a capability class. Fuzzy-matched against the live catalogue. Falls
-   * back to `WEB_SEARCH_MODEL`, then the {@link modelFallbacks} order. Chosen
-   * independently of the calling agent's chat model.
+   * back to `WEB_SEARCH_MODEL`, then `DATABRICKS_SERVING_ENDPOINT_NAME`, then
+   * the {@link modelFallbacks} order. Chosen independently of the calling
+   * agent's chat model.
    */
   model?: string;
   /**
@@ -121,6 +168,15 @@ export interface WebSearchPluginConfig extends BasePluginConfig {
    */
   scrapeFallback?: boolean;
   /**
+   * Which URLs the tools may reach ({@link UrlPolicyMode}). Falls back to
+   * `WEB_SEARCH_URL_POLICY`, then to `"allowlist"` when {@link allowedUrls}
+   * has entries and `"unrestricted"` when it does not. Naming the mode
+   * explicitly is the way to state that an open deployment is intended;
+   * `"allowlist"` with no entries, or `"unrestricted"` alongside entries, is
+   * a contradiction and fails at resolution.
+   */
+  urlPolicy?: UrlPolicyMode;
+  /**
    * Optional URL allow-list. Each entry is a glob (or bare host) tested
    * against a URL's full `href`. When set, `web_search` silently filters
    * citations to the permitted set and `web_fetch` refuses a disallowed URL.
@@ -132,15 +188,18 @@ export interface WebSearchPluginConfig extends BasePluginConfig {
   /**
    * Approval gate applied to BOTH tools (per-tool overrides via
    * {@link WebSearchToolOptions.approval} win). `true` gates every call;
-   * a URL-pattern (or list) gates only matching calls. Omit for no approval.
+   * a URL-pattern (or list) gates only matching calls; an
+   * {@link ApprovalPolicy} states the mode directly. Omit for no approval.
    */
-  approval?: ApprovalGate;
+  approval?: ApprovalGate | ApprovalPolicy;
 }
 
 /** Concrete, validated config the runtime + tools read. */
 export interface ResolvedWebSearchConfig {
   /** Pinned web-search model, when configured (else undefined - use fallbacks). */
   model?: string;
+  /** Where {@link model} came from, which decides whether an unsupported pin is fatal. */
+  modelSource: ModelSource;
   /** Ordered fallback model candidates (Gemini, then GPT, then a floor). */
   modelFallbacks: readonly string[];
   /** Provider -> tool-spec override map, merged over the built-in defaults. */
@@ -154,10 +213,12 @@ export interface ResolvedWebSearchConfig {
   timeoutMs: number;
   /** Whether to scrape-fallback when no native web-search model is deployed. */
   scrapeFallback: boolean;
-  /** Compiled allow-list (permit-all when unconfigured). */
+  /** The named URL policy in force. */
+  urlPolicy: UrlPolicyMode;
+  /** Compiled allow-list (permit-all under the `unrestricted` policy). */
   allowList: UrlAllowList;
-  /** Default per-tool approval gate. */
-  approval: ApprovalGate;
+  /** Default per-tool approval policy. */
+  approval: ApprovalPolicy;
 }
 
 /** JSON Schema published on the manifest's `config.schema`. */
@@ -167,7 +228,7 @@ export const WEB_SEARCH_CONFIG_SCHEMA: JSONSchema7 = {
     model: {
       type: "string",
       description:
-        "Default web-search model (endpoint name, loose name, or class). Fuzzy-matched. Env: WEB_SEARCH_MODEL.",
+        "Default web-search model (endpoint name, loose name, or class). Fuzzy-matched. Env: WEB_SEARCH_MODEL, then DATABRICKS_SERVING_ENDPOINT_NAME.",
     },
     modelFallbacks: {
       type: "array",
@@ -179,6 +240,16 @@ export const WEB_SEARCH_CONFIG_SCHEMA: JSONSchema7 = {
       type: "object",
       description:
         'Provider -> tool-spec override map merged over the built-in defaults (openai -> {"type":"web_search"}, gemini -> {"google_search":{}}). Env: WEB_SEARCH_TOOLS (JSON).',
+    },
+    modelFuzzyMatch: {
+      type: "boolean",
+      description:
+        "Fuzzy-match loose model names against the live catalogue. Default true (env: WEB_SEARCH_FUZZY).",
+    },
+    modelFuzzyThreshold: {
+      type: "number",
+      description:
+        "Fuse.js score threshold below which a fuzzy model match is accepted (env: WEB_SEARCH_FUZZY_THRESHOLD).",
     },
     maxCitations: {
       type: "number",
@@ -192,11 +263,39 @@ export const WEB_SEARCH_CONFIG_SCHEMA: JSONSchema7 = {
       type: "number",
       description: "Per-request network timeout in ms (env: WEB_SEARCH_TIMEOUT_MS).",
     },
+    scrapeFallback: {
+      type: "boolean",
+      description:
+        "Fall back to a DuckDuckGo scrape when no web-search-capable model is deployed. Default true (env: WEB_SEARCH_SCRAPE_FALLBACK).",
+    },
+    urlPolicy: {
+      type: "string",
+      enum: ["unrestricted", "allowlist"],
+      description:
+        "Which URLs the tools may reach. Defaults to allowlist when allowedUrls has entries, else unrestricted (env: WEB_SEARCH_URL_POLICY).",
+    },
     allowedUrls: {
       type: "array",
       items: { type: "string" },
       description:
         'URL allow-list of globs / bare hosts (e.g. "*.databricks.com", "docs.example.com"). Also accepts a comma/space-separated string. Falls back to WEB_SEARCH_ALLOWED_URLS. Empty = unrestricted.',
+    },
+    approval: {
+      description:
+        'Approval gate for both tools: true gates every call, a glob (or list of globs) gates only matching URLs, or state the mode directly as {"mode":"none"|"always"|"urls"}. Default none.',
+      oneOf: [
+        { type: "boolean" },
+        { type: "string" },
+        { type: "array", items: { type: "string" } },
+        {
+          type: "object",
+          properties: {
+            mode: { type: "string", enum: ["none", "always", "urls"] },
+            patterns: { type: "array", items: { type: "string" } },
+          },
+          required: ["mode"],
+        },
+      ],
     },
   },
 };
@@ -208,22 +307,103 @@ function resolvePositiveInt(value: number | undefined, envKey: string, fallback:
   return Number.isFinite(env) && env > 0 ? Math.floor(env) : fallback;
 }
 
-/** Parse the `WEB_SEARCH_TOOLS` env var (JSON), else `{}`. Bad JSON is ignored. */
+/**
+ * Parse the `WEB_SEARCH_TOOLS` env var (JSON object), else `{}`. A value that
+ * is set but not a JSON object is a deployment mistake that would otherwise
+ * silently leave the built-in tool specs in place, so it throws.
+ */
 function parseToolsEnv(): Record<string, unknown> {
-  return json.parseRecord(process.env.WEB_SEARCH_TOOLS) ?? {};
+  const raw = string.trimToNull(process.env.WEB_SEARCH_TOOLS);
+  if (raw === null) return {};
+  const parsed = json.parseRecord(raw);
+  if (!parsed) {
+    throw new ConfigurationError(
+      "WEB_SEARCH_TOOLS must be a JSON object mapping a provider family to its tool spec",
+      { context: { envVar: "WEB_SEARCH_TOOLS" } },
+    );
+  }
+  return parsed;
+}
+
+/** Read the pinned endpoint id and record which source supplied it. */
+function resolveModelPin(config: WebSearchPluginConfig): { model?: string; source: ModelSource } {
+  const fromConfig = string.trimToNull(config.model);
+  if (fromConfig !== null) return { model: fromConfig, source: "config" };
+  const fromModelEnv = string.trimToNull(process.env[MODEL_ENV]);
+  if (fromModelEnv !== null) return { model: fromModelEnv, source: MODEL_ENV };
+  const fromResourceEnv = string.trimToNull(process.env[SERVING_ENDPOINT_ENV]);
+  if (fromResourceEnv !== null) return { model: fromResourceEnv, source: SERVING_ENDPOINT_ENV };
+  return { source: "none" };
+}
+
+/**
+ * Resolve the named {@link UrlPolicyMode}, failing on a stated mode that
+ * contradicts the allow-list entries it was given.
+ */
+function resolveUrlPolicy(
+  configured: UrlPolicyMode | undefined,
+  patterns: readonly string[],
+): UrlPolicyMode {
+  const raw = configured ?? string.trimToNull(process.env.WEB_SEARCH_URL_POLICY) ?? undefined;
+  if (raw === undefined) return patterns.length > 0 ? "allowlist" : "unrestricted";
+  if (raw !== "allowlist" && raw !== "unrestricted") {
+    throw new ConfigurationError(
+      'urlPolicy must be "allowlist" or "unrestricted" (env: WEB_SEARCH_URL_POLICY)',
+      { context: { field: "urlPolicy", envVar: "WEB_SEARCH_URL_POLICY" } },
+    );
+  }
+  if (raw === "allowlist" && patterns.length === 0) {
+    throw new ConfigurationError(
+      'urlPolicy "allowlist" needs at least one entry in allowedUrls (env: WEB_SEARCH_ALLOWED_URLS)',
+      { context: { field: "allowedUrls", envVar: "WEB_SEARCH_ALLOWED_URLS" } },
+    );
+  }
+  if (raw === "unrestricted" && patterns.length > 0) {
+    throw new ConfigurationError(
+      'urlPolicy "unrestricted" cannot be combined with allowedUrls entries; drop the entries or set urlPolicy to "allowlist"',
+      { context: { field: "allowedUrls", envVar: "WEB_SEARCH_ALLOWED_URLS" } },
+    );
+  }
+  return raw;
+}
+
+/**
+ * Normalize any accepted approval spelling into an {@link ApprovalPolicy}.
+ * A pattern gate with no usable patterns collapses to `"none"` rather than
+ * gating everything, so a blank env var can never wedge the tools behind an
+ * approval nobody configured.
+ */
+export function toApprovalPolicy(gate: ApprovalGate | ApprovalPolicy | undefined): ApprovalPolicy {
+  if (gate === undefined || gate === false) return { mode: "none" };
+  if (gate === true) return { mode: "always" };
+  if (object.isRecord(gate) && "mode" in gate) {
+    if (gate.mode === "urls") {
+      const patterns = parseAllowedUrls([...gate.patterns]);
+      return patterns.length > 0 ? { mode: "urls", patterns } : { mode: "none" };
+    }
+    if (gate.mode === "always" || gate.mode === "none") return { mode: gate.mode };
+    throw new ConfigurationError('approval mode must be "none", "always" or "urls"', {
+      context: { field: "approval" },
+    });
+  }
+  const patterns = parseAllowedUrls(typeof gate === "string" ? gate : [...gate]);
+  return patterns.length > 0 ? { mode: "urls", patterns } : { mode: "none" };
 }
 
 /**
  * Resolve plugin config over environment defaults into the concrete
- * {@link ResolvedWebSearchConfig}. Never throws - the model is resolved
- * lazily at call time (against the live catalogue), so an unconfigured plugin
- * resolves to sensible defaults with no restrictions.
+ * {@link ResolvedWebSearchConfig}. Which model is used stays lazy - it is
+ * picked at call time against the live catalogue - but everything else is
+ * settled here, and a contradiction (unparseable `WEB_SEARCH_TOOLS`, an
+ * unknown URL policy, a policy that disagrees with its allow-list) throws a
+ * {@link ConfigurationError} naming the field and the environment variable.
  */
 export function resolveWebSearchConfig(
   config: WebSearchPluginConfig = {},
 ): ResolvedWebSearchConfig {
   const patterns = parseAllowedUrls(config.allowedUrls ?? process.env.WEB_SEARCH_ALLOWED_URLS);
-  const model = config.model ?? process.env.WEB_SEARCH_MODEL;
+  const urlPolicy = resolveUrlPolicy(config.urlPolicy, patterns);
+  const { model, source } = resolveModelPin(config);
   const fallbacks = string.parseList(
     config.modelFallbacks ?? process.env.WEB_SEARCH_MODEL_FALLBACKS,
   );
@@ -231,6 +411,7 @@ export function resolveWebSearchConfig(
     config.modelFuzzyThreshold ?? Number(process.env.WEB_SEARCH_FUZZY_THRESHOLD);
   return {
     ...(model ? { model } : {}),
+    modelSource: source,
     modelFallbacks: fallbacks.length > 0 ? fallbacks : DEFAULT_MODEL_FALLBACKS,
     webSearchTools: { ...parseToolsEnv(), ...(config.webSearchTools ?? {}) },
     fuzzy: config.modelFuzzyMatch ?? object.toBoolean(process.env.WEB_SEARCH_FUZZY) ?? true,
@@ -251,22 +432,26 @@ export function resolveWebSearchConfig(
     timeoutMs: resolvePositiveInt(config.timeoutMs, "WEB_SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
     scrapeFallback:
       config.scrapeFallback ?? object.toBoolean(process.env.WEB_SEARCH_SCRAPE_FALLBACK) ?? true,
-    allowList: toUrlAllowList(patterns),
-    approval: config.approval ?? false,
+    urlPolicy,
+    allowList: toUrlAllowList(urlPolicy === "allowlist" ? patterns : []),
+    approval: toApprovalPolicy(config.approval),
   };
 }
 
 /**
- * Resolve an {@link ApprovalGate} against a set of candidate URLs into a
- * concrete boolean: `true`/`false` pass through; a pattern (or list) gates
- * when ANY candidate matches. Empty candidates with a pattern gate never
- * match (nothing to approve). Reuses the allow-list matcher so approval
+ * Resolve an approval gate against a set of candidate URLs into a concrete
+ * boolean: `"none"` / `"always"` pass straight through; a `"urls"` policy
+ * gates when ANY candidate matches. Empty candidates with a pattern gate
+ * never match (nothing to approve). Reuses the allow-list matcher so approval
  * globs read exactly like allow-list globs.
  */
-export function approvalMatches(gate: ApprovalGate, urls: readonly string[]): boolean {
-  if (typeof gate === "boolean") return gate;
-  const patterns = parseAllowedUrls(typeof gate === "string" ? gate : [...gate]);
-  if (patterns.length === 0) return false;
-  const list = toUrlAllowList(patterns);
+export function approvalMatches(
+  gate: ApprovalGate | ApprovalPolicy,
+  urls: readonly string[],
+): boolean {
+  const policy = toApprovalPolicy(gate);
+  if (policy.mode === "none") return false;
+  if (policy.mode === "always") return true;
+  const list = toUrlAllowList(policy.patterns);
   return urls.some((url) => list.allows(url));
 }

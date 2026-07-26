@@ -29,6 +29,7 @@
  * @module
  */
 
+import { ValidationError } from "@databricks/appkit";
 import { match, type PathMatcher } from "@dbx-tools/path";
 import { string } from "@dbx-tools/shared-core";
 
@@ -128,8 +129,10 @@ export function toUrlAllowList(patterns: readonly string[]): UrlAllowList {
  */
 export function assertUrlAllowed(url: string, allow: UrlAllowList): void {
   if (!allow.allows(url)) {
-    throw new Error(
-      `web-search: URL "${url}" is not permitted by the configured allow-list (${allow.patterns.join(", ")})`,
+    throw ValidationError.invalidValue(
+      "url",
+      url,
+      `a URL permitted by the configured allow-list (${allow.patterns.join(", ")})`,
     );
   }
 }

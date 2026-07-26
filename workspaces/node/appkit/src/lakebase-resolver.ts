@@ -35,14 +35,22 @@
  * @module
  */
 
-import { getWorkspaceClient } from "@databricks/appkit";
+import {
+  ConfigurationError,
+  ExecutionError,
+  getWorkspaceClient,
+  ValidationError,
+} from "@databricks/appkit";
 import { project } from "@dbx-tools/core";
-import { async, log, string } from "@dbx-tools/shared-core";
+import { async, log, object, string } from "@dbx-tools/shared-core";
+import { z } from "zod";
 import { resolveConfigValue } from "./config";
 
+import { MAX_TCP_PORT, toContext } from "./databricks";
 import {
   parseAddress,
   parseResourcePath,
+  SSL_MODES,
   type LakebaseConnectionInputs,
   type SslMode,
 } from "./pgaddress";
@@ -58,6 +66,19 @@ const OPERATION_TIMEOUT_MS = 5 * 60_000;
 const OPERATION_POLL_MS = 2_000;
 const ENDPOINT_READY_TIMEOUT_MS = 5 * 60_000;
 const ENDPOINT_READY_POLL_MS = 2_000;
+/** Ceiling on a single backoff step, so a long wait still polls regularly. */
+const POLL_MAX_DELAY_MS = 15_000;
+const POLL_BACKOFF_FACTOR = 1.5;
+/** Fraction of each delay applied as +/- jitter, so concurrent boots desynchronize. */
+const POLL_JITTER_RATIO = 0.2;
+/** Endpoint `status.endpoint_type` for the writable primary. */
+const READ_WRITE_ENDPOINT_TYPE = "ENDPOINT_TYPE_READ_WRITE";
+/** Endpoint `status.current_state` values that will accept a connection. */
+const CONNECTABLE_ENDPOINT_STATES = new Set(["READY", "IDLE"]);
+/** Endpoint `status.current_state` before a hostname is meaningful. */
+const INITIALIZING_ENDPOINT_STATE = "INITIALIZING";
+/** Lakebase's own default Postgres database name. */
+const DEFAULT_DATABASE = "databricks_postgres";
 
 /**
  * User-supplied Lakebase inputs (config or env) before any API resolution.
@@ -84,76 +105,145 @@ export interface LakebaseConnection extends LakebaseConnectionInputs {
 }
 
 /**
+ * Every field of the Lakebase REST payloads is modelled as optional and
+ * validated at the boundary rather than asserted with a cast: the pickers below
+ * branch on `status.*`, and a shape change upstream should surface as one loud
+ * error here instead of an `undefined` three frames away. Enum-shaped fields
+ * stay `string` so a newly added state does not fail the whole response.
+ */
+const projectSchema = z.object({
+  // Full resource path: `projects/{p}`.
+  name: z.string().optional(),
+});
+type Project = z.infer<typeof projectSchema>;
+
+const endpointSchema = z.object({
+  // Full resource path: `projects/{p}/branches/{b}/endpoints/{e}`.
+  name: z.string().optional(),
+  uid: z.string().optional(),
+  // Server-side state. All connection info lives here - the spec block
+  // only carries the desired configuration, not the runtime hostnames.
+  status: z
+    .object({
+      endpoint_type: z.string().optional(),
+      // Resolved hostnames; `hosts.host` is the writable primary.
+      hosts: z
+        .object({
+          host: z.string().optional(),
+          read_only_host: z.string().optional(),
+        })
+        .optional(),
+      // Compute state: `INITIALIZING`, `STARTING`, `READY`, `IDLE`, ...
+      current_state: z.string().optional(),
+    })
+    .optional(),
+});
+type Endpoint = z.infer<typeof endpointSchema>;
+
+const branchSchema = z.object({
+  // Full resource path: `projects/{p}/branches/{b}`.
+  name: z.string().optional(),
+  status: z
+    .object({
+      // True for the project's default branch (e.g. `production`).
+      default: z.boolean().optional(),
+      current_state: z.string().optional(),
+    })
+    .optional(),
+});
+type Branch = z.infer<typeof branchSchema>;
+
+const databaseSchema = z.object({
+  // Full resource path: `projects/{p}/branches/{b}/databases/{d}`.
+  name: z.string().optional(),
+  status: z
+    .object({
+      // Actual Postgres database name (used as `PGDATABASE`). May differ
+      // from the resource id - e.g. resource `databricks-postgres`
+      // surfaces as Postgres database `databricks_postgres`.
+      postgres_database: z.string().optional(),
+    })
+    .optional(),
+});
+type Database = z.infer<typeof databaseSchema>;
+
+/**
  * Lakebase REST list responses follow the Google AIP convention:
  * `{ <plural-resource>: T[], next_page_token?: string }`. We only read
  * the first page; for auto-config's "pick something sensible" semantics the
  * cap is fine.
  */
-interface ListResponse {
-  next_page_token?: string;
-  projects?: Project[];
-  branches?: Branch[];
-  endpoints?: Endpoint[];
-  databases?: Database[];
-}
-
-interface Project {
-  /** Full resource path: `projects/{p}`. */
-  name?: string;
-}
-
-interface Endpoint {
-  /** Full resource path: `projects/{p}/branches/{b}/endpoints/{e}`. */
-  name?: string;
-  uid?: string;
-  /**
-   * Server-side state. All connection info lives here - the spec block
-   * only carries the desired configuration, not the runtime hostnames.
-   */
-  status?: {
-    endpoint_type?: "ENDPOINT_TYPE_READ_WRITE" | "ENDPOINT_TYPE_READ_ONLY";
-    /** Resolved hostnames; `hosts.host` is the writable primary. */
-    hosts?: {
-      host?: string;
-      read_only_host?: string;
-    };
-    /** Compute state: `INITIALIZING`, `STARTING`, `READY`, `IDLE`, ... */
-    current_state?: string;
-  };
-}
-
-interface Branch {
-  /** Full resource path: `projects/{p}/branches/{b}`. */
-  name?: string;
-  status?: {
-    /** True for the project's default branch (e.g. `production`). */
-    default?: boolean;
-    current_state?: string;
-  };
-}
-
-interface Database {
-  /** Full resource path: `projects/{p}/branches/{b}/databases/{d}`. */
-  name?: string;
-  status?: {
-    /**
-     * Actual Postgres database name (used as `PGDATABASE`). May differ
-     * from the resource id - e.g. resource `databricks-postgres`
-     * surfaces as Postgres database `databricks_postgres`.
-     */
-    postgres_database?: string;
-  };
-}
+const listResponseSchema = z.object({
+  next_page_token: z.string().optional(),
+  projects: z.array(projectSchema).optional(),
+  branches: z.array(branchSchema).optional(),
+  endpoints: z.array(endpointSchema).optional(),
+  databases: z.array(databaseSchema).optional(),
+});
 
 /**
  * Long-running operation envelope returned by mutating REST calls.
  * `done: true` means terminal; check `error` before reading `response`.
  */
-interface Operation {
-  name?: string;
-  done?: boolean;
-  error?: unknown;
-  response?: unknown;
+const operationSchema = z.object({
+  name: z.string().optional(),
+  done: z.boolean().optional(),
+  error: z.unknown().optional(),
+  response: z.unknown().optional(),
+});
+type Operation = z.infer<typeof operationSchema>;
+
+/** `PGPORT` must land inside the TCP port range. */
+const portSchema = z.coerce.number().int().min(1).max(MAX_TCP_PORT);
+
+const sslModeSchema = z.enum(SSL_MODES);
+
+/**
+ * Validate a `PGPORT`-shaped value. Returns `undefined` when unset, and throws
+ * a {@link ValidationError} naming `PGPORT` for anything that is not a TCP
+ * port, so a typo cannot reach the connection record as `NaN`.
+ */
+export function parsePort(value: string | number | undefined): number | undefined {
+  if (value === undefined || value === "") return undefined;
+  const parsed = portSchema.safeParse(value);
+  if (!parsed.success) {
+    throw ValidationError.invalidValue("PGPORT", value, `a TCP port between 1 and ${MAX_TCP_PORT}`);
+  }
+  return parsed.data;
+}
+
+/**
+ * Validate a `PGSSLMODE`-shaped value. Returns `undefined` when unset, and
+ * throws a {@link ValidationError} naming `PGSSLMODE` for an unsupported mode
+ * rather than handing `pg` a value it will reject at connect time.
+ */
+export function parseSslMode(value: string | undefined): SslMode | undefined {
+  if (value === undefined || value === "") return undefined;
+  const parsed = sslModeSchema.safeParse(value.trim().toLowerCase());
+  if (!parsed.success) {
+    throw ValidationError.invalidValue("PGSSLMODE", value, SSL_MODES.join(", "));
+  }
+  return parsed.data;
+}
+
+/**
+ * Delay before the next poll attempt: exponential backoff capped at
+ * {@link POLL_MAX_DELAY_MS}, plus jitter so several apps booting against the
+ * same workspace do not retry in lockstep.
+ */
+export function nextPollDelay(attempt: number, baseMs: number): number {
+  const backoff = Math.min(baseMs * POLL_BACKOFF_FACTOR ** attempt, POLL_MAX_DELAY_MS);
+  const jitter = backoff * POLL_JITTER_RATIO * (Math.random() * 2 - 1);
+  return Math.max(0, Math.round(backoff + jitter));
+}
+
+/**
+ * Wait out {@link nextPollDelay} before the next attempt. Rejects with the
+ * signal's reason when the caller cancels mid-wait, so a poll loop unwinds
+ * instead of finishing its backoff first.
+ */
+export function pollDelay(attempt: number, baseMs: number, signal?: AbortSignal): Promise<void> {
+  return async.sleep(nextPollDelay(attempt, baseMs), signal);
 }
 
 /**
@@ -173,7 +263,8 @@ export async function readLakebaseInputs(
 ): Promise<LakebaseResolverInputs> {
   const rawAddress = config?.endpoint ?? (await resolveConfigValue("LAKEBASE_ENDPOINT"));
   const parsed = parseAddress(rawAddress);
-  const portEnv = await resolveConfigValue("PGPORT");
+  const portEnv = parsePort(await resolveConfigValue("PGPORT"));
+  const sslModeEnv = parseSslMode(await resolveConfigValue("PGSSLMODE"));
   return {
     project: config?.project ?? parsed.project,
     branch: config?.branch ?? parsed.branch,
@@ -183,11 +274,8 @@ export async function readLakebaseInputs(
     endpoint: parsed.endpoint,
     database: config?.database ?? (await resolveConfigValue("PGDATABASE")) ?? parsed.database,
     host: config?.host ?? (await resolveConfigValue("PGHOST")) ?? parsed.host,
-    port: config?.port ?? (portEnv ? Number.parseInt(portEnv, 10) : undefined) ?? parsed.port,
-    sslMode:
-      config?.sslMode ??
-      ((await resolveConfigValue("PGSSLMODE")) as SslMode | undefined) ??
-      parsed.sslMode,
+    port: config?.port ?? portEnv ?? parsed.port,
+    sslMode: config?.sslMode ?? sslModeEnv ?? parsed.sslMode,
     autoCreate: config?.autoCreate,
   };
 }
@@ -198,9 +286,21 @@ export async function readLakebaseInputs(
  * Returns immediately without network traffic when env already supplies
  * `endpoint`, `host`, and `database`. Otherwise issues REST calls and
  * may auto-create a project (see module docstring).
+ *
+ * `signal` cancels every REST call and inter-poll sleep.
+ *
+ * @example
+ * import { lakebaseResolver } from "@dbx-tools/appkit";
+ *
+ * const resolved = await lakebaseResolver.resolveLakebaseConnection(
+ *   { autoCreate: false },
+ *   AbortSignal.timeout(60_000),
+ * );
+ * lakebaseResolver.applyLakebaseToEnv(resolved);
  */
 export async function resolveLakebaseConnection(
   config?: LakebaseResolverInputs,
+  signal?: AbortSignal,
 ): Promise<LakebaseConnection> {
   const inputs = await readLakebaseInputs(config);
   let { project, branch, endpoint, database, host } = inputs;
@@ -233,7 +333,7 @@ export async function resolveLakebaseConnection(
   // Host known but no resource path: scan the workspace to find which
   // endpoint owns this host so we can populate LAKEBASE_ENDPOINT.
   if (!project && host) {
-    const found = await findEndpointByHost(ws, host);
+    const found = await findEndpointByHost(ws, host, signal);
     if (found) {
       project = found.project;
       branch = found.branch;
@@ -243,15 +343,15 @@ export async function resolveLakebaseConnection(
 
   // No project anywhere in config/env/address: list, pick, or create.
   if (!project) {
-    project = await pickOrCreateProject(ws, config?.autoCreate, logger);
+    project = await pickOrCreateProject(ws, config?.autoCreate, signal);
   }
 
   if (!branch) {
-    branch = await pickBranch(ws, project, logger);
+    branch = await pickBranch(ws, project, signal);
   }
 
   if (!endpoint) {
-    const ep = await pickEndpoint(ws, project, branch, logger);
+    const ep = await pickEndpoint(ws, project, branch, signal);
     endpoint = ep.name;
     host ??= ep.host;
   }
@@ -264,7 +364,7 @@ export async function resolveLakebaseConnection(
         parsedEndpoint.project,
         parsedEndpoint.branch,
         parsedEndpoint.endpointId,
-        logger,
+        signal,
       );
       host = ep.status?.hosts?.host;
       logger.debug("autopg: resolved host from endpoint", { host });
@@ -272,7 +372,7 @@ export async function resolveLakebaseConnection(
   }
 
   if (!database) {
-    database = await pickDatabase(ws, project, branch, logger);
+    database = await pickDatabase(ws, project, branch, signal);
   }
 
   return { project, branch, endpoint, database, host, port, sslMode };
@@ -294,45 +394,95 @@ export function applyLakebaseToEnv(resolved: LakebaseConnection): void {
 
 type WorkspaceClient = ReturnType<typeof getWorkspaceClient>;
 
-/** GET helper that always parses JSON and forwards through `apiClient`. */
-async function getJson<T>(ws: WorkspaceClient, path: string): Promise<T> {
-  const res = await ws.apiClient.request({
-    path,
-    method: "GET",
-    headers: new Headers({ Accept: "application/json" }),
-    raw: false,
-  });
-  return res as T;
+/** The SDK `Context` accepted by the workspace client's own copy of the SDK. */
+type ApiRequestContext = NonNullable<Parameters<WorkspaceClient["apiClient"]["request"]>[1]>;
+
+/**
+ * Adapt an {@link AbortSignal} into the api client's cancellation context.
+ * AppKit resolves a different copy of `@databricks/sdk-experimental` than this
+ * package does, and `Context` carries a private field, so the two declarations
+ * are nominally incompatible even though the api client only reads
+ * `cancellationToken` and `logger` off the object.
+ */
+function requestContext(signal: AbortSignal | undefined): ApiRequestContext | undefined {
+  return signal ? (toContext(signal) as unknown as ApiRequestContext) : undefined;
 }
 
-/** POST helper for create / mutate calls; returns the parsed JSON body. */
+/**
+ * Validate a Lakebase REST body. The full payload is logged rather than thrown
+ * so a client never receives upstream detail.
+ */
+function parseResponse<T>(schema: z.ZodType<T>, path: string, body: unknown): T {
+  const parsed = schema.safeParse(body);
+  if (parsed.success) return parsed.data;
+  logger.error("autopg: unexpected Lakebase API response", {
+    path,
+    issues: parsed.error.issues,
+  });
+  throw new ExecutionError("Lakebase API returned an unexpected response", { context: { path } });
+}
+
+/** GET helper that validates the JSON body and forwards cancellation. */
+async function getJson<T>(
+  ws: WorkspaceClient,
+  path: string,
+  schema: z.ZodType<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const res = await ws.apiClient.request(
+    {
+      path,
+      method: "GET",
+      headers: new Headers({ Accept: "application/json" }),
+      raw: false,
+    },
+    requestContext(signal),
+  );
+  return parseResponse(schema, path, res);
+}
+
+/** POST helper for create / mutate calls; validates the JSON body. */
 async function postJson<T>(
   ws: WorkspaceClient,
   path: string,
+  schema: z.ZodType<T>,
   body: unknown,
   query?: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const res = await ws.apiClient.request({
-    path,
-    method: "POST",
-    query,
-    headers: new Headers({
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    }),
-    raw: false,
-    payload: body,
-  });
-  return res as T;
+  const res = await ws.apiClient.request(
+    {
+      path,
+      method: "POST",
+      query,
+      headers: new Headers({
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      }),
+      raw: false,
+      payload: body,
+    },
+    requestContext(signal),
+  );
+  return parseResponse(schema, path, res);
 }
 
-async function listProjects(ws: WorkspaceClient): Promise<Project[]> {
-  const res = await getJson<ListResponse>(ws, `${API_BASE}/projects`);
+async function listProjects(ws: WorkspaceClient, signal?: AbortSignal): Promise<Project[]> {
+  const res = await getJson(ws, `${API_BASE}/projects`, listResponseSchema, signal);
   return res.projects ?? [];
 }
 
-async function listBranches(ws: WorkspaceClient, project: string): Promise<Branch[]> {
-  const res = await getJson<ListResponse>(ws, `${API_BASE}/projects/${project}/branches`);
+async function listBranches(
+  ws: WorkspaceClient,
+  project: string,
+  signal?: AbortSignal,
+): Promise<Branch[]> {
+  const res = await getJson(
+    ws,
+    `${API_BASE}/projects/${project}/branches`,
+    listResponseSchema,
+    signal,
+  );
   return res.branches ?? [];
 }
 
@@ -340,10 +490,13 @@ async function listEndpoints(
   ws: WorkspaceClient,
   project: string,
   branch: string,
+  signal?: AbortSignal,
 ): Promise<Endpoint[]> {
-  const res = await getJson<ListResponse>(
+  const res = await getJson(
     ws,
     `${API_BASE}/projects/${project}/branches/${branch}/endpoints`,
+    listResponseSchema,
+    signal,
   );
   return res.endpoints ?? [];
 }
@@ -352,10 +505,13 @@ async function listDatabases(
   ws: WorkspaceClient,
   project: string,
   branch: string,
+  signal?: AbortSignal,
 ): Promise<Database[]> {
-  const res = await getJson<ListResponse>(
+  const res = await getJson(
     ws,
     `${API_BASE}/projects/${project}/branches/${branch}/databases`,
+    listResponseSchema,
+    signal,
   );
   return res.databases ?? [];
 }
@@ -365,10 +521,13 @@ async function getEndpoint(
   project: string,
   branch: string,
   endpointId: string,
+  signal?: AbortSignal,
 ): Promise<Endpoint> {
-  return getJson<Endpoint>(
+  return getJson(
     ws,
     `${API_BASE}/projects/${project}/branches/${branch}/endpoints/${endpointId}`,
+    endpointSchema,
+    signal,
   );
 }
 
@@ -384,16 +543,17 @@ async function getEndpoint(
 async function findEndpointByHost(
   ws: WorkspaceClient,
   host: string,
+  signal?: AbortSignal,
 ): Promise<{ project: string; branch: string; endpoint: string } | null> {
-  const projects = await listProjects(ws);
+  const projects = await listProjects(ws, signal);
   for (const p of projects) {
     const projectId = parseResourcePath(p.name).project;
     if (!projectId) continue;
-    const branches = await listBranches(ws, projectId);
+    const branches = await listBranches(ws, projectId, signal);
     for (const b of branches) {
       const branchId = parseResourcePath(b.name).branch;
       if (!branchId) continue;
-      const endpoints = await listEndpoints(ws, projectId, branchId);
+      const endpoints = await listEndpoints(ws, projectId, branchId, signal);
       const match = endpoints.find((e) => e.status?.hosts?.host === host);
       if (match?.name) {
         logger.debug("autopg: matched endpoint by host", {
@@ -426,9 +586,9 @@ async function findEndpointByHost(
 async function pickOrCreateProject(
   ws: WorkspaceClient,
   autoCreate: string | false | undefined,
-  logger: log.Logger,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const projects = await listProjects(ws);
+  const projects = await listProjects(ws, signal);
   if (projects.length === 1) {
     const id = parseResourcePath(projects[0]!.name).project;
     if (id) {
@@ -438,19 +598,21 @@ async function pickOrCreateProject(
   }
   if (projects.length === 0) {
     if (autoCreate === false) {
-      throw new Error(
-        "autopg: no Lakebase projects found and `autoCreate: false`; create a project or set config.project / LAKEBASE_ENDPOINT",
+      throw ConfigurationError.resourceNotFound(
+        "Lakebase project",
+        "autoCreate is false; create a project or set config.project / LAKEBASE_ENDPOINT.",
       );
     }
     const id = autoCreate ?? (await defaultProjectId());
-    return ensureProject(ws, id, logger);
+    return ensureProject(ws, id, signal);
   }
   const candidates = projects
     .map((p) => parseResourcePath(p.name).project)
     .filter((id): id is string => Boolean(id))
     .join(", ");
-  throw new Error(
-    `autopg: multiple projects found; set config.project or pin a project id in LAKEBASE_ENDPOINT. Candidates: ${candidates}`,
+  throw ConfigurationError.invalidConnection(
+    "Lakebase",
+    `Multiple projects found; set config.project or pin a project id in LAKEBASE_ENDPOINT. Candidates: ${candidates}`,
   );
 }
 
@@ -467,8 +629,10 @@ async function defaultProjectId(): Promise<string> {
   const name = project.name();
   const slug = string.toSlugWithOptions({ maxLength: PROJECT_ID_MAX_LEN }, name);
   if (!slug || !/^[a-z]/.test(slug)) {
-    throw new Error(
-      `autopg: could not derive a Lakebase project id from project name '${name}'; pass autoCreate explicitly`,
+    logger.warn("autopg: project name does not slugify to a Lakebase project id", { name });
+    throw ConfigurationError.invalidConnection(
+      "Lakebase",
+      "Could not derive a project id from the package name; pass autoCreate explicitly.",
     );
   }
   return slug;
@@ -487,17 +651,19 @@ async function defaultProjectId(): Promise<string> {
 async function ensureProject(
   ws: WorkspaceClient,
   projectId: string,
-  logger: log.Logger,
+  signal?: AbortSignal,
 ): Promise<string> {
   logger.warn("autopg: no projects found; creating", { project: projectId });
   try {
-    const op = await postJson<Operation>(
+    const op = await postJson(
       ws,
       `${API_BASE}/projects`,
+      operationSchema,
       { spec: { pg_version: DEFAULT_PG_VERSION } },
       { project_id: projectId },
+      signal,
     );
-    await waitForOperation(ws, op, logger);
+    await waitForOperation(ws, op, signal);
     logger.info("autopg: created project", { project: projectId });
   } catch (err) {
     if (!isAlreadyExistsError(err)) throw err;
@@ -532,44 +698,61 @@ function isAlreadyExistsError(error: unknown): boolean {
 }
 
 /**
+ * Reduce a Lakebase operation failure to an error safe to propagate: the
+ * operation name plus whatever code the payload carries. The payload itself can
+ * echo request context, so it goes to the log instead.
+ */
+function operationFailed(opName: string, opError: unknown): ExecutionError {
+  logger.error("autopg: operation failed", { operation: opName, error: opError });
+  const code = object.isRecord(opError) ? (opError.code ?? opError.reason) : undefined;
+  return new ExecutionError(`Lakebase operation failed: ${opName}`, {
+    context: {
+      operation: opName,
+      errorCode: typeof code === "string" || typeof code === "number" ? String(code) : "unknown",
+    },
+  });
+}
+
+/**
  * Poll a Lakebase long-running operation until `done: true`. Returns
  * the final operation envelope (which may carry `response` or `error`).
  *
  * Throws when:
  *   - the response carries an `error` field;
  *   - `op.name` is missing (nothing to poll);
- *   - the timeout elapses before `done: true`.
+ *   - the timeout elapses before `done: true`;
+ *   - `signal` aborts mid-wait.
  */
 async function waitForOperation(
   ws: WorkspaceClient,
   op: Operation,
-  logger: log.Logger,
+  signal?: AbortSignal,
 ): Promise<Operation> {
   if (op.done) {
     if (op.error) {
-      throw new Error(`autopg: operation failed: ${JSON.stringify(op.error)}`);
+      throw operationFailed(op.name ?? "unknown", op.error);
     }
     return op;
   }
   const opName = op.name;
   if (!opName) {
-    throw new Error("autopg: operation response has no name to poll");
+    throw ExecutionError.missingData("operation name");
   }
   const start = Date.now();
-  while (Date.now() - start < OPERATION_TIMEOUT_MS) {
-    await async.sleep(OPERATION_POLL_MS);
-    const current = await getJson<Operation>(ws, `${API_BASE}/${opName}`);
+  for (let attempt = 0; Date.now() - start < OPERATION_TIMEOUT_MS; attempt++) {
+    await pollDelay(attempt, OPERATION_POLL_MS, signal);
+    const current = await getJson(ws, `${API_BASE}/${opName}`, operationSchema, signal);
     logger.debug("autopg: operation status", { op: opName, done: current.done });
     if (current.done) {
       if (current.error) {
-        throw new Error(`autopg: operation '${opName}' failed: ${JSON.stringify(current.error)}`);
+        throw operationFailed(opName, current.error);
       }
       return current;
     }
   }
-  throw new Error(
-    `autopg: operation '${opName}' did not complete within ${OPERATION_TIMEOUT_MS}ms`,
-  );
+  throw new ExecutionError(`Lakebase operation did not complete: ${opName}`, {
+    context: { operation: opName, timeoutMs: OPERATION_TIMEOUT_MS },
+  });
 }
 
 /**
@@ -583,26 +766,32 @@ async function waitEndpointReady(
   project: string,
   branch: string,
   endpointId: string,
-  logger: log.Logger,
+  signal?: AbortSignal,
 ): Promise<Endpoint> {
   const start = Date.now();
   let last: Endpoint | null = null;
-  while (Date.now() - start < ENDPOINT_READY_TIMEOUT_MS) {
-    last = await getEndpoint(ws, project, branch, endpointId);
+  for (let attempt = 0; Date.now() - start < ENDPOINT_READY_TIMEOUT_MS; attempt++) {
+    last = await getEndpoint(ws, project, branch, endpointId, signal);
     const state = last.status?.current_state;
-    if (state === "READY" || state === "IDLE") return last;
-    if (last.status?.hosts?.host && state !== "INITIALIZING") {
+    if (state && CONNECTABLE_ENDPOINT_STATES.has(state)) return last;
+    if (last.status?.hosts?.host && state !== INITIALIZING_ENDPOINT_STATE) {
       // Compute is in some other state (STARTING, etc.) but hostname is
       // already published - good enough to connect; lakebase's OAuth
       // token request will wake it.
       return last;
     }
     logger.debug("autopg: waiting for endpoint", { endpointId, state });
-    await async.sleep(ENDPOINT_READY_POLL_MS);
+    await pollDelay(attempt, ENDPOINT_READY_POLL_MS, signal);
   }
-  throw new Error(
-    `autopg: endpoint '${endpointId}' under projects/${project}/branches/${branch} did not become ready within ${ENDPOINT_READY_TIMEOUT_MS}ms (last state: ${last?.status?.current_state ?? "unknown"})`,
-  );
+  throw new ExecutionError(`Lakebase endpoint did not become ready: ${endpointId}`, {
+    context: {
+      project,
+      branch,
+      endpointId,
+      timeoutMs: ENDPOINT_READY_TIMEOUT_MS,
+      lastState: last?.status?.current_state ?? "unknown",
+    },
+  });
 }
 
 /**
@@ -614,11 +803,14 @@ async function waitEndpointReady(
 async function pickBranch(
   ws: WorkspaceClient,
   project: string,
-  logger: log.Logger,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const branches = await listBranches(ws, project);
+  const branches = await listBranches(ws, project, signal);
   if (branches.length === 0) {
-    throw new Error(`autopg: project '${project}' has no branches; cannot resolve a default`);
+    throw ConfigurationError.resourceNotFound(
+      `Lakebase branch in project '${project}'`,
+      "The project has no branches; create one or set config.branch.",
+    );
   }
   const flagged = branches.find((b) => b.status?.default === true);
   const choice =
@@ -629,8 +821,9 @@ async function pickBranch(
       .map((b) => parseResourcePath(b.name).branch)
       .filter((id): id is string => Boolean(id))
       .join(", ");
-    throw new Error(
-      `autopg: project '${project}' has multiple branches and none marked default; set config.branch or include the branch in LAKEBASE_ENDPOINT. Candidates: ${candidates}`,
+    throw ConfigurationError.invalidConnection(
+      "Lakebase",
+      `Project '${project}' has multiple branches and none marked default; set config.branch or include the branch in LAKEBASE_ENDPOINT. Candidates: ${candidates}`,
     );
   }
   logger.debug("autopg: resolved branch", { project, branch: choice });
@@ -648,21 +841,23 @@ async function pickEndpoint(
   ws: WorkspaceClient,
   project: string,
   branch: string,
-  logger: log.Logger,
+  signal?: AbortSignal,
 ): Promise<{ name: string; host?: string }> {
-  const endpoints = await listEndpoints(ws, project, branch);
+  const endpoints = await listEndpoints(ws, project, branch, signal);
   if (endpoints.length === 0) {
-    throw new Error(
-      `autopg: branch 'projects/${project}/branches/${branch}' has no endpoints; cannot resolve LAKEBASE_ENDPOINT`,
+    throw ConfigurationError.resourceNotFound(
+      `Lakebase endpoint in 'projects/${project}/branches/${branch}'`,
+      "The branch has no endpoints; create one or set LAKEBASE_ENDPOINT.",
     );
   }
   const primary =
-    endpoints.find((e) => e.status?.endpoint_type === "ENDPOINT_TYPE_READ_WRITE") ??
+    endpoints.find((e) => e.status?.endpoint_type === READ_WRITE_ENDPOINT_TYPE) ??
     (endpoints.length === 1 ? endpoints[0] : undefined);
   if (!primary?.name) {
     const names = endpoints.map((e) => e.name).filter(Boolean);
-    throw new Error(
-      `autopg: branch has no primary READ_WRITE endpoint; set LAKEBASE_ENDPOINT or config.endpoint. Candidates: ${names.join(", ")}`,
+    throw ConfigurationError.invalidConnection(
+      "Lakebase",
+      `Branch has no primary read-write endpoint; set LAKEBASE_ENDPOINT or config.endpoint. Candidates: ${names.join(", ")}`,
     );
   }
   const host = primary.status?.hosts?.host;
@@ -683,22 +878,24 @@ async function pickDatabase(
   ws: WorkspaceClient,
   project: string,
   branch: string,
-  logger: log.Logger,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const databases = await listDatabases(ws, project, branch);
+  const databases = await listDatabases(ws, project, branch, signal);
   if (databases.length === 0) {
-    throw new Error(
-      `autopg: branch 'projects/${project}/branches/${branch}' has no databases; cannot resolve PGDATABASE`,
+    throw ConfigurationError.resourceNotFound(
+      `Lakebase database in 'projects/${project}/branches/${branch}'`,
+      "The branch has no databases; create one or set PGDATABASE.",
     );
   }
   const names = databases
     .map((d) => d.status?.postgres_database)
     .filter((n): n is string => Boolean(n));
   const choice =
-    names.find((n) => n === "databricks_postgres") ?? (names.length === 1 ? names[0] : undefined);
+    names.find((n) => n === DEFAULT_DATABASE) ?? (names.length === 1 ? names[0] : undefined);
   if (!choice) {
-    throw new Error(
-      `autopg: multiple databases and no 'databricks_postgres'; set PGDATABASE or config.database. Candidates: ${names.join(", ")}`,
+    throw ConfigurationError.invalidConnection(
+      "Lakebase",
+      `Multiple databases and no '${DEFAULT_DATABASE}'; set PGDATABASE or config.database. Candidates: ${names.join(", ")}`,
     );
   }
   logger.debug("autopg: resolved database", { database: choice });

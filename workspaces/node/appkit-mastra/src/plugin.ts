@@ -24,10 +24,13 @@
  * - HTTP: AppKit mounts this plugin under `/api/mastra`. Alongside the
  *   Mastra agent routes, the plugin registers `/route/history`
  *   (load + clear a thread's messages), `/route/threads` (list the
- *   caller's conversations + delete one), `/models`, `/suggestions`,
- *   `/route/feedback` (log a thumbs / comment to MLflow when feedback
- *   is enabled), and the generic `/embed/:type/:id` resolver for inline
- *   chart / data markers. The stock `@mastra/express` surface is gated
+ *   caller's conversations + delete one), `/models`, `/default-model`,
+ *   `/suggestions`, `/route/feedback` (log a thumbs / comment to MLflow
+ *   when feedback is enabled), and the generic `/embed/:type/:id`
+ *   resolver for inline chart / data markers. Each is registered through
+ *   AppKit's `route()` so it lands in the plugin's endpoint map, and
+ *   every outbound call one makes runs through `execute()` (see
+ *   `./defaults.js`). The stock `@mastra/express` surface is gated
  *   by `config.apiAccess` (default `"scoped"`): only agent inference,
  *   read-only agent metadata, the `/route/*` routes, and (when enabled)
  *   MCP are dispatched to Mastra; admin / mutating / bulk-export routes
@@ -42,21 +45,24 @@
  */
 
 import {
+  ExecutionError,
   genie,
   getExecutionContext,
   lakebase,
   Plugin,
   toPlugin,
+  type ExecutionResult,
   type IAppRouter,
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
 import { plugin } from "@dbx-tools/appkit";
 import { serving as nodeServing } from "@dbx-tools/model";
-import { error, log, string } from "@dbx-tools/shared-core";
+import { async, error, log, string } from "@dbx-tools/shared-core";
 import {
   feedback,
   routes,
+  type Chart,
   type MastraClientConfig,
   type MastraFeedbackRequest,
   type StatementData,
@@ -69,7 +75,14 @@ import type { Pool } from "pg";
 
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents";
 import { fetchChart } from "./chart";
-import type { MastraPluginConfig } from "./config";
+import { MASTRA_CONFIG_SCHEMA, resolveUserKey, type MastraPluginConfig } from "./config";
+import {
+  chartFetchDefaults,
+  feedbackWriteDefaults,
+  genieSuggestionDefaults,
+  modelCatalogueDefaults,
+  statementDataDefaults,
+} from "./defaults";
 import { collectSpaceSuggestions, resolveGenieSpaces } from "./genie";
 import { historyRoute } from "./history";
 import { buildMcpServer, type ResolvedMcp } from "./mcp";
@@ -80,17 +93,71 @@ import { attachRoutePatchMiddleware, isMastraRequestAllowed, MastraServer } from
 import { resolveServingConfig } from "./serving";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement";
 import { threadsRoute } from "./threads";
+import { invalidFields } from "./validation";
 
 const GENIE_MANIFEST = plugin.data(genie).plugin.manifest;
 const LAKEBASE_MANIFEST = plugin.data(lakebase).plugin.manifest;
 
 /**
+ * Budget for draining the memory service-principal pool on shutdown. Well
+ * inside AppKit's 15s graceful-shutdown window, so a stuck connection can
+ * never be what holds the process open.
+ */
+const POOL_DRAIN_TIMEOUT_MS = 5_000;
+
+/** Ceiling on the `?timeoutMs=` long-poll budget a client may request. */
+const MAX_EMBED_POLL_TIMEOUT_MS = 5 * 60_000;
+
+/** Stable client message when the workspace's model catalogue can't be read. */
+const MODEL_CATALOGUE_FAILED_MESSAGE = "Could not read the workspace's model catalogue";
+
+/** Stable client message for a feedback body that fails schema validation. */
+const INVALID_FEEDBACK_MESSAGE = "Invalid feedback request";
+
+/** Cache namespace for statement result sets, matching the chart cache's form. */
+const STATEMENT_CACHE_NAMESPACE = "mastra:statement";
+
+/**
  * AppKit plugin (registered name: `mastra`) that hosts Mastra agents
  * with optional Lakebase-backed memory and AI SDK chat routes under
  * the plugin mount (typically `/api/mastra`).
+ *
+ * @example Register the plugin
+ * ```ts
+ * import { createApp, lakebase } from "@databricks/appkit";
+ * import { createAgent, mastra } from "@dbx-tools/appkit-mastra";
+ *
+ * // `lakebase` first: registering it auto-enables Mastra storage + memory.
+ * const app = await createApp({
+ *   plugins: [
+ *     lakebase(),
+ *     mastra({
+ *       genieSpaces: { default: process.env.DATABRICKS_GENIE_SPACE_ID! },
+ *       agents: createAgent({
+ *         name: "analyst",
+ *         instructions: "You answer questions about revenue and returns.",
+ *         tools(plugins) {
+ *           return { ...plugins.genie?.toolkit() };
+ *         },
+ *       }),
+ *     }),
+ *   ],
+ * });
+ * ```
+ *
+ * @example Read the agents back off the AppKit instance
+ * ```ts
+ * const agentIds = app.mastra.list();
+ * const endpoints = await app.mastra.listModels();
+ * ```
  */
 export class MastraPlugin extends Plugin<MastraPluginConfig> {
-  static manifest = {
+  // Annotated rather than left to `satisfies`: the config schema's type comes
+  // from `@types/json-schema`, which this package does not depend on, so an
+  // inferred manifest type cannot be named in the emitted declaration. The
+  // `PluginManifest<"mastra">` parameter still carries the literal name into
+  // `toPlugin()`'s factory type.
+  static manifest: PluginManifest<"mastra"> = {
     name: "mastra",
     displayName: "Mastra",
     description:
@@ -100,19 +167,18 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     resources: {
       required: [],
       optional: [
-        // Surface the Genie resource binding (space id) declared by
-        // AppKit's `genie` plugin manifest. The Mastra plugin no
-        // longer uses the genie plugin's tools at runtime - the
-        // built-in Genie agent talks to Genie directly via
-        // `@dbx-tools/genie` - but reusing the manifest keeps the
-        // resource-binding shape identical to AppKit's so existing
-        // `app.yaml` configs and `genie({ spaces })` wiring keep
-        // working without change.
+        // Reuse the Genie space-id binding declared by AppKit's `genie`
+        // manifest so the resource-binding shape is identical to AppKit's and
+        // an existing `app.yaml` / `genie({ spaces })` wiring keeps working.
+        // The built-in Genie tools talk to Genie directly through
+        // `@dbx-tools/genie`, so only the binding is shared, not the plugin's
+        // tools.
         ...GENIE_MANIFEST.resources.required,
         ...LAKEBASE_MANIFEST.resources.required,
       ],
     },
-  } satisfies PluginManifest<"mastra">;
+    config: { schema: MASTRA_CONFIG_SCHEMA },
+  };
 
   /**
    * Tighten resource requirements based on which features are enabled.
@@ -128,7 +194,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     }
     for (const m of enabledManifests) {
       for (const resource of m.resources.required) {
-        resources.push({ ...resource, required: true } as ResourceRequirement);
+        resources.push({ ...resource, required: true });
       }
     }
     return resources;
@@ -149,8 +215,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * Dedicated service-principal Lakebase pool backing Mastra memory /
    * storage. Built once in {@link buildAgentAndServer} (outside any
    * `asUser` scope, so it never inherits a request's OBO identity) and
-   * drained in {@link abortActiveOperations}. `null` until setup runs
-   * or when Lakebase isn't needed.
+   * drained in {@link shutdown}. `null` until setup runs or when
+   * Lakebase isn't needed.
    */
   private servicePrincipalPool: Pool | null = null;
 
@@ -159,7 +225,6 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // the lakebase pool is valid when storage/memory are enabled.
     this.context?.onLifecycle("setup:complete", async () => {
       this.applyLakebaseAutoDefaults();
-      this.logger.info("setup:complete");
       await this.buildAgentAndServer();
     });
   }
@@ -179,23 +244,40 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   }
 
   /**
-   * Drain the memory service-principal pool on shutdown. AppKit calls
-   * this during teardown; the lakebase plugin closes its own SP / OBO
-   * pools the same way. Fire-and-forget so shutdown isn't blocked on a
-   * slow drain, and clear the handle so a re-`setup()` rebuilds it.
+   * Drain the memory service-principal pool. Idempotent: the handle is
+   * cleared before the drain starts, so a second call is a no-op and a
+   * later `setup()` rebuilds the pool. Bounded by
+   * {@link POOL_DRAIN_TIMEOUT_MS} to stay well inside the 15s graceful
+   * shutdown budget.
+   */
+  async shutdown(): Promise<void> {
+    const pool = this.servicePrincipalPool;
+    if (!pool) return;
+    this.servicePrincipalPool = null;
+    this.logger.info("closing memory SP pool");
+    // The budget timer is cancelled on the way out so a drain that finished
+    // early cannot hold the event loop open for the rest of the window.
+    const budget = new AbortController();
+    try {
+      await Promise.race([pool.end(), async.sleep(POOL_DRAIN_TIMEOUT_MS, budget.signal)]);
+    } catch (err) {
+      this.logger.error("error closing memory SP pool", {
+        error: error.errorMessage(err),
+      });
+    } finally {
+      budget.abort();
+    }
+  }
+
+  /**
+   * Abort in-flight work. AppKit's graceful shutdown calls this hook
+   * synchronously and never awaits {@link shutdown}, so the pool drain is
+   * started here too; it cannot be awaited from a `void` hook, and
+   * {@link shutdown} is idempotent so the duplicate call is free.
    */
   override abortActiveOperations(): void {
     super.abortActiveOperations();
-    if (this.servicePrincipalPool) {
-      this.logger.info("closing memory SP pool");
-      const pool = this.servicePrincipalPool;
-      this.servicePrincipalPool = null;
-      pool.end().catch((err) => {
-        this.logger.error("error closing memory SP pool", {
-          error: error.errorMessage(err),
-        });
-      });
-    }
+    void this.shutdown();
   }
 
   override exports() {
@@ -223,12 +305,20 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       getMastra: () => this.mastra,
       /**
        * MCP endpoint info when `config.mcp` is enabled, else `null`.
-       * Paths are absolute (under the plugin mount), ready to hand to an
-       * MCP client. Streamable HTTP is `http`; the SSE pair is the
-       * legacy transport.
+       * Streamable HTTP is `http`; the SSE pair is the legacy transport.
+       *
+       * Each path is given twice: mount-relative (`httpPath`, `ssePath`,
+       * `messagePath`) for anything that already knows where the plugin is
+       * mounted, and absolute (`http`, `sse`, `messages`) for MCP clients,
+       * which take a single URL and cannot compose one. The absolute form is
+       * built from {@link basePath}, so it honors a `config.name` override but
+       * still assumes AppKit's default `/api/<name>` mount.
        */
       getMcp: (): {
         serverId: string;
+        httpPath: string;
+        ssePath: string;
+        messagePath: string;
         http: string;
         sse: string;
         messages: string;
@@ -236,9 +326,12 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         this.mcp
           ? {
               serverId: this.mcp.serverId,
-              http: `/api/${this.name}${this.mcp.httpPath}`,
-              sse: `/api/${this.name}${this.mcp.ssePath}`,
-              messages: `/api/${this.name}${this.mcp.messagePath}`,
+              httpPath: this.mcp.httpPath,
+              ssePath: this.mcp.ssePath,
+              messagePath: this.mcp.messagePath,
+              http: `${this.basePath}${this.mcp.httpPath}`,
+              sse: `${this.basePath}${this.mcp.ssePath}`,
+              messages: `${this.basePath}${this.mcp.messagePath}`,
             }
           : null,
       /** Express subapp Mastra is mounted on; mostly for tests. */
@@ -248,7 +341,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
        * payload the `GET /models` route returns; surfaced here so
        * other plugins / scripts can introspect the catalogue without
        * an HTTP round-trip. AppKit wraps this with `asUser(req)` for
-       * OBO scoping automatically.
+       * OBO scoping automatically. Throws when the listing fails, since
+       * there is no status code to hand back on this surface.
        */
       listModels: (): Promise<ServingEndpointSummary[]> => this.listModels(),
       /**
@@ -262,18 +356,25 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     };
   }
 
+  /**
+   * Absolute mount this plugin's routes answer on. AppKit mounts every plugin
+   * at `/api/<plugin.name>` and `this.name` honors a `config.name` override,
+   * so the per-route segments (`routes.MASTRA_ROUTES`) hang off this.
+   */
+  private get basePath(): string {
+    return `/api/${this.name}`;
+  }
+
   override clientConfig(): Record<string, unknown> {
-    // AppKit mounts every plugin at `/api/<plugin.name>`. `this.name`
-    // honors `config.name` overrides, so publishing `basePath` is
-    // enough for the client to stay correct under a custom mount id -
-    // the per-route segments are fixed (`routes.MASTRA_ROUTES`) and the
-    // client (`MastraPluginClient`) derives every endpoint from
-    // `basePath`.
+    // Publishing `basePath` is enough for the client to stay correct under a
+    // custom mount id: the per-route segments are fixed
+    // (`routes.MASTRA_ROUTES`) and the client (`MastraPluginClient`) derives
+    // every endpoint from `basePath`.
     // Return widens to `Record<string, unknown>` to satisfy the
     // base-class signature; consumers read it through the typed
     // `MastraClientConfig` shape via `usePluginClientConfig<...>(...)`.
     const config: MastraClientConfig = {
-      basePath: `/api/${this.name}`,
+      basePath: this.basePath,
       defaultAgent: this.built?.defaultAgentId ?? FALLBACK_AGENT_ID,
       agents: Object.keys(this.built?.agents ?? {}),
       feedbackEnabled: this.feedbackEnabled(),
@@ -299,6 +400,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // the catch-all and rewrites the alias to the underlying route, so
     // the public path is just `/api/<plugin>/mcp`; the query string
     // (e.g. the SSE `sessionId`) is preserved.
+    //
+    // Middleware rather than `this.route`: it rewrites the URL for routes
+    // `@mastra/express` owns further down the chain instead of answering the
+    // request, which `RouteConfig` has no shape for.
     router.use((req, _res, next) => {
       const target = this.mcpRouteAlias(req.path);
       if (target) {
@@ -311,13 +416,19 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // `GET /models` exposes the cached endpoint list so clients can
     // populate model pickers, validate `?model=` choices, etc. Must
     // be registered before the catch-all that forwards everything to
-    // the Mastra subapp. Errors propagate to Express's default error
-    // handler via `next(err)` so callers see the real SDK message.
-    router.get(routes.MASTRA_ROUTES.models, (req, res, next) => {
-      this.userScopedSelf(req)
-        .listModels()
-        .then((endpoints) => res.json({ endpoints }))
-        .catch(next);
+    // the Mastra subapp.
+    this.route(router, {
+      name: "models",
+      method: "get",
+      path: routes.MASTRA_ROUTES.models,
+      handler: async (req, res) => {
+        const result = await this.asUser(req).listModelsResult();
+        if (!result.ok) {
+          this.sendFailure(res, result, "models", MODEL_CATALOGUE_FAILED_MESSAGE);
+          return;
+        }
+        res.json({ endpoints: result.data });
+      },
     });
 
     // `GET /default-model` (and `/default-model/:agentId`) reports the static
@@ -326,11 +437,19 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // name. Agent-scoped via the optional `/:agentId` suffix (URL symmetry
     // with the history / threads / suggestions routes), defaulting to the
     // default agent. `model` / `displayName` are null when the agent has no
-    // static default (a dynamic, call-time model) or the agent id is unknown.
-    // Reads only in-memory build state, so it's synchronous and needs no OBO
-    // scoping. Registered before the catch-all, same as `/models`.
-    const handleDefaultModel = (req: express.Request, res: express.Response): void => {
+    // static default (a dynamic, call-time model); an unknown agent id is a
+    // 404, matching the history / threads routes. Reads only in-memory build
+    // state, so it needs no OBO scoping. Registered before the catch-all,
+    // same as `/models`.
+    const handleDefaultModel = async (
+      req: express.Request,
+      res: express.Response,
+    ): Promise<void> => {
       const requested = string.firstNonEmpty(req.params.agentId);
+      if (requested !== null && !this.built?.agents[requested]) {
+        res.status(404).json({ error: this.unknownAgentMessage(requested) });
+        return;
+      }
       const agentId = requested ?? this.built?.defaultAgentId ?? FALLBACK_AGENT_ID;
       const raw = this.built?.defaultModels[agentId];
       // `"<dynamic>"` (a call-time function) has no fixed id to advertise.
@@ -343,8 +462,18 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         displayName: model ? display.toModelDisplayName(model) : null,
       });
     };
-    router.get(routes.MASTRA_ROUTES.defaultModel, handleDefaultModel);
-    router.get(`${routes.MASTRA_ROUTES.defaultModel}/:agentId`, handleDefaultModel);
+    this.route(router, {
+      name: "defaultModel",
+      method: "get",
+      path: routes.MASTRA_ROUTES.defaultModel,
+      handler: handleDefaultModel,
+    });
+    this.route(router, {
+      name: "defaultModelByAgent",
+      method: "get",
+      path: `${routes.MASTRA_ROUTES.defaultModel}/:agentId`,
+      handler: handleDefaultModel,
+    });
 
     // `GET /embed/:type/:id` is the single resolver for every embed
     // marker the agent emits in prose (`[chart:<id>]`,
@@ -379,48 +508,55 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const embedResolvers: Record<string, EmbedResolver> = {
       chart: (req, id, signal) => {
         const timeoutMs = parseTimeoutMs(req.query.timeoutMs);
-        return fetchChart(id, {
+        return this.asUser(req).fetchChartEntry(id, {
           ...(timeoutMs !== undefined ? { timeoutMs } : {}),
           signal,
         });
       },
       data: (req, id, signal) => {
         const limit = parseStatementLimit(req.query.limit);
-        return this.userScopedSelf(req).fetchStatement(id, {
+        return this.asUser(req).fetchStatement(id, {
           ...(limit !== undefined ? { limit } : {}),
           signal,
         });
       },
     };
 
-    router.get(`${routes.MASTRA_ROUTES.embed}/:type/:id`, (req, res, next) => {
-      const type = req.params.type ?? "";
-      const id = req.params.id;
-      const resolve = embedResolvers[type];
-      if (!resolve) {
-        res.status(404).json({ error: `unsupported embed type: ${type}` });
-        return;
-      }
-      if (!id) {
-        res.status(400).json({ error: "id is required" });
-        return;
-      }
-      // Express's `req` predates `AbortSignal`; bridge the `close`
-      // event onto an `AbortController` so a closed connection
-      // unblocks any long-poll immediately and frees the request
-      // thread. The listener is GC'd with the request on normal
-      // completion.
-      const controller = new AbortController();
-      req.on("close", () => controller.abort());
-      resolve(req, id, controller.signal)
-        .then((entry) => {
-          if (entry === undefined) {
-            res.status(404).json({ error: `${type} not found` });
-            return;
-          }
-          res.json(entry);
-        })
-        .catch(next);
+    this.route(router, {
+      name: "embed",
+      method: "get",
+      path: `${routes.MASTRA_ROUTES.embed}/:type/:id`,
+      handler: async (req, res) => {
+        const type = string.firstNonEmpty(req.params.type) ?? "";
+        const id = string.firstNonEmpty(req.params.id);
+        const resolve = embedResolvers[type];
+        if (!resolve) {
+          res.status(404).json({ error: `unsupported embed type: ${type}` });
+          return;
+        }
+        if (!id) {
+          res.status(400).json({ error: "id is required" });
+          return;
+        }
+        // Express's `req` predates `AbortSignal`; bridge the `close`
+        // event onto an `AbortController` so a closed connection
+        // unblocks any long-poll immediately and frees the request
+        // thread. The listener is GC'd with the request on normal
+        // completion.
+        const controller = new AbortController();
+        req.on("close", () => controller.abort());
+        const result = await resolve(req, id, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!result.ok) {
+          this.sendFailure(res, result, `embed:${type}`, `Could not resolve the ${type} embed`);
+          return;
+        }
+        if (result.data === undefined) {
+          res.status(404).json({ error: `${type} not found` });
+          return;
+        }
+        res.json(result.data);
+      },
     });
 
     // `GET /suggestions` (and `/suggestions/:agentId`) returns the
@@ -433,24 +569,39 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // routes; Genie spaces are resolved per-plugin, not per-agent,
     // so it doesn't change the result. OBO-scoped like the other
     // data routes so the space lookup runs as the calling user.
-    const handleSuggestions = (req: express.Request, res: express.Response): void => {
+    const handleSuggestions = async (
+      req: express.Request,
+      res: express.Response,
+    ): Promise<void> => {
       const controller = new AbortController();
       req.on("close", () => controller.abort());
-      this.userScopedSelf(req)
-        .fetchSuggestions(controller.signal)
-        .then((questions) => res.json({ questions }))
-        .catch((err: unknown) => {
-          // Suggestions are a non-critical enhancement; a lookup
-          // failure should leave the chat usable with a bare empty
-          // state rather than surfacing a 500. Log and degrade.
-          this.logger.warn("suggestions:error", {
-            error: error.errorMessage(err),
-          });
-          res.json({ questions: [] });
+      const result = await this.asUser(req).fetchSuggestions(controller.signal);
+      if (controller.signal.aborted) return;
+      if (!result.ok) {
+        // Suggestions are a non-critical enhancement; a lookup failure should
+        // leave the chat usable with a bare empty state rather than surfacing
+        // the upstream status. Log and degrade.
+        this.logger.warn("suggestions:error", {
+          status: result.status,
+          error: result.message,
         });
+        res.json({ questions: [] });
+        return;
+      }
+      res.json({ questions: result.data });
     };
-    router.get(routes.MASTRA_ROUTES.suggestions, handleSuggestions);
-    router.get(`${routes.MASTRA_ROUTES.suggestions}/:agentId`, handleSuggestions);
+    this.route(router, {
+      name: "suggestions",
+      method: "get",
+      path: routes.MASTRA_ROUTES.suggestions,
+      handler: handleSuggestions,
+    });
+    this.route(router, {
+      name: "suggestionsByAgent",
+      method: "get",
+      path: `${routes.MASTRA_ROUTES.suggestions}/:agentId`,
+      handler: handleSuggestions,
+    });
 
     // `POST /route/feedback` logs a thumbs / comment assessment against
     // a turn's MLflow trace (the `traceId` the client captured from the
@@ -462,27 +613,43 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // A recorded assessment yields `{ ok: true }`; a soft failure (most
     // often the trace hasn't finished exporting to MLflow yet) yields
     // `{ ok: false }` without a 5xx so the UI can prompt a retry.
-    router.post(routes.MASTRA_ROUTES.feedback, (req, res, next) => {
-      if (!this.feedbackEnabled()) {
-        res.status(404).json({ ok: false });
-        return;
-      }
-      const parsed = feedback.MastraFeedbackRequestSchema.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(400).json({ ok: false, error: parsed.error.message });
-        return;
-      }
-      this.userScopedSelf(req)
-        .logFeedback(parsed.data)
-        .then((assessmentId) =>
-          res.json({
-            ok: assessmentId !== undefined,
-            ...(assessmentId ? { assessmentId } : {}),
-          }),
-        )
-        .catch(next);
+    this.route(router, {
+      name: "feedback",
+      method: "post",
+      path: routes.MASTRA_ROUTES.feedback,
+      handler: async (req, res) => {
+        if (!this.feedbackEnabled()) {
+          res.status(404).json({ ok: false });
+          return;
+        }
+        const parsed = feedback.MastraFeedbackRequestSchema.safeParse(req.body);
+        if (!parsed.success) {
+          // A Zod issue string quotes the received body back, so only the
+          // offending field names travel; the full issue list is logged.
+          this.logger.warn("feedback:invalid", { error: parsed.error.message });
+          res.status(400).json({
+            ok: false,
+            error: INVALID_FEEDBACK_MESSAGE,
+            fields: invalidFields(parsed.error),
+          });
+          return;
+        }
+        const result = await this.asUser(req).logFeedback(parsed.data);
+        if (!result.ok) {
+          this.sendFailure(res, result, "feedback", "Feedback could not be recorded");
+          return;
+        }
+        const assessmentId = result.data;
+        res.json({
+          ok: assessmentId !== undefined,
+          ...(assessmentId ? { assessmentId } : {}),
+        });
+      },
     });
 
+    // Middleware rather than `this.route`: this is the catch-all that hands
+    // every remaining method / path pair to the Mastra sub-app, so it has no
+    // single method or path to register under.
     router.use((req, res, next) => {
       if (!this.mastraApp) return res.status(503).end();
       // Gate the stock Mastra surface before dispatch. In the default
@@ -512,8 +679,34 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       // an OBO token makes `userScopedSelf` return the proxy. `dispatchMastra`
       // is a plain method (its `.bind` is the normal one) and invokes
       // `this.mastraApp` off the real target, keeping the OBO scope active.
-      return this.userScopedSelf(req).dispatchMastra(req, res, next);
+      return this.asUser(req).dispatchMastra(req, res, next);
     });
+  }
+
+  /**
+   * Map a failed {@link ExecutionResult} onto the response: the status the
+   * execution pipeline resolved, paired with `clientMessage` rather than the
+   * result's own text, which can carry upstream detail. The full message is
+   * logged under `<operation>:error`.
+   */
+  private sendFailure(
+    res: express.Response,
+    result: { status: number; message: string },
+    operation: string,
+    clientMessage: string,
+  ): void {
+    this.logger.warn(`${operation}:error`, {
+      status: result.status,
+      error: result.message,
+    });
+    if (res.headersSent) return;
+    res.status(result.status).json({ error: clientMessage });
+  }
+
+  /** 404 body for a request naming an agent that isn't registered. */
+  private unknownAgentMessage(agentId: string): string {
+    const registered = Object.keys(this.built?.agents ?? {});
+    return `Unknown agent "${agentId}". Registered agents: ${registered.join(", ") || "none"}`;
   }
 
   /**
@@ -557,15 +750,18 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * Returns `[]` when no Genie space is configured so the client
    * shows a bare empty state instead of built-in example prompts.
    */
-  private async fetchSuggestions(signal?: AbortSignal): Promise<string[]> {
+  private async fetchSuggestions(signal?: AbortSignal): Promise<ExecutionResult<string[]>> {
     const spaces = resolveGenieSpaces(this.config, this.context);
-    if (Object.keys(spaces).length === 0) return [];
+    if (Object.keys(spaces).length === 0) return { ok: true, data: [] };
     const client = getExecutionContext().client;
-    return collectSpaceSuggestions({
-      spaces,
-      client,
-      ...(signal ? { signal } : {}),
-    });
+    return this.execute((executeSignal) => {
+      const combined = async.combineAbortSignals(signal, executeSignal);
+      return collectSpaceSuggestions({
+        spaces,
+        client,
+        ...(combined ? { signal: combined } : {}),
+      });
+    }, genieSuggestionDefaults);
   }
 
   /**
@@ -576,7 +772,9 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * created assessment id on success, or `undefined` on a soft failure
    * (see {@link logFeedback} in `./mlflow.js`).
    */
-  private async logFeedback(feedback: MastraFeedbackRequest): Promise<string | undefined> {
+  private async logFeedback(
+    feedback: MastraFeedbackRequest,
+  ): Promise<ExecutionResult<string | undefined>> {
     const ctx = getExecutionContext();
     const sourceId =
       "userEmail" in ctx && ctx.userEmail
@@ -584,10 +782,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         : "userId" in ctx
           ? ctx.userId
           : ctx.serviceUserId;
-    return logFeedback(ctx.client, {
-      ...feedback,
-      ...(sourceId ? { sourceId } : {}),
-    });
+    return this.execute(
+      () =>
+        logFeedback(ctx.client, {
+          ...feedback,
+          ...(sourceId ? { sourceId } : {}),
+        }),
+      feedbackWriteDefaults,
+    );
   }
 
   /**
@@ -598,57 +800,101 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * the `get_statement` tool runs so the LLM and the UI see the
    * exact same shape for the same statement.
    *
-   * Returns `undefined` for upstream 404s so the route can map
-   * them to a clean HTTP 404; any other failure bubbles up.
+   * Resolves to `undefined` data for upstream 404s so the route can map them
+   * to a clean HTTP 404; any other failure comes back as a non-`ok` result
+   * carrying the status to answer with.
    */
   private async fetchStatement(
     statementId: string,
     options: { limit?: number; signal?: AbortSignal } = {},
-  ): Promise<StatementData | undefined> {
+  ): Promise<ExecutionResult<StatementData | undefined>> {
     const client = getExecutionContext().client;
     const limit = Math.min(options.limit ?? STATEMENT_ROW_CAP, STATEMENT_ROW_CAP);
-    try {
-      const data = await fetchStatementData(client, statementId, {
-        limit,
-        ...(options.signal ? { signal: options.signal } : {}),
-      });
-      return {
-        columns: data.columns,
-        rows: data.rows,
-        rowCount: data.rowCount,
-        truncated: data.rows.length < data.rowCount,
-      };
-    } catch (err) {
-      // The Databricks SDK throws on 404; surface as `undefined`
-      // so the route maps to a clean HTTP 404 instead of a 500.
-      if (error.errorContext(err).notAccessible) return undefined;
-      throw err;
-    }
+    return this.execute(
+      async (executeSignal) => {
+        const combined = async.combineAbortSignals(options.signal, executeSignal);
+        try {
+          const data = await fetchStatementData(client, statementId, {
+            limit,
+            ...(combined ? { signal: combined } : {}),
+          });
+          return {
+            columns: data.columns,
+            rows: data.rows,
+            rowCount: data.rowCount,
+            truncated: data.rows.length < data.rowCount,
+          };
+        } catch (err) {
+          // The Databricks SDK throws on 404; surface as `undefined`
+          // so the route maps to a clean HTTP 404 instead of a 500.
+          if (error.errorContext(err).notAccessible) return undefined;
+          throw err;
+        }
+      },
+      {
+        default: {
+          ...statementDataDefaults.default,
+          // Namespaced so the key can't collide with another cache sharing the
+          // manager, and keyed on `limit` because the slice is part of the
+          // payload.
+          cache: {
+            ...statementDataDefaults.default.cache,
+            cacheKey: [STATEMENT_CACHE_NAMESPACE, statementId, limit],
+          },
+        },
+      },
+    );
   }
 
   /**
-   * Return `this.asUser(req)` when the request carries an OBO token,
-   * otherwise return `this` directly. Prevents the noisy AppKit warn
-   * (`asUser() called without user token in development mode. Skipping
-   * user impersonation.`) on every request in local dev where the
-   * browser never sends `x-forwarded-access-token`. Behavior is
-   * unchanged in production: a missing token always means a real OBO
-   * proxy call (and AppKit will throw upstream if that's wrong).
+   * Implementation backing the `chart` embed resolver
+   * (`GET /embed/chart/:id`). Runs inside the AppKit user-context proxy so the
+   * lookup is namespaced to the calling identity: a chart minted for another
+   * user is indistinguishable from an unknown id, and the route answers 404.
    */
-  private userScopedSelf(req: express.Request): this {
-    return req.header("x-forwarded-access-token") ? (this.asUser(req) as this) : this;
+  private async fetchChartEntry(
+    chartId: string,
+    options: { timeoutMs?: number; signal: AbortSignal },
+  ): Promise<ExecutionResult<Chart | undefined>> {
+    const userKey = resolveUserKey();
+    return this.execute(
+      (executeSignal) =>
+        fetchChart(chartId, {
+          userKey,
+          ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+          signal: async.combineAbortSignals(options.signal, executeSignal) ?? options.signal,
+        }),
+      chartFetchDefaults,
+    );
   }
 
   /**
-   * Implementation backing both the `/models` route and the
-   * `listModels` export. Runs inside the AppKit user-context proxy so
-   * `getExecutionContext()` returns the OBO-scoped client.
+   * Implementation backing the `/models` route. Runs inside the AppKit
+   * user-context proxy so `getExecutionContext()` returns the OBO-scoped
+   * client and the catalogue reflects what the caller can invoke.
+   */
+  private async listModelsResult(): Promise<ExecutionResult<ServingEndpointSummary[]>> {
+    return this.execute(async () => {
+      const client = getExecutionContext().client;
+      const host = (await client.config.getHost()).toString();
+      const serving = resolveServingConfig(this.config);
+      return nodeServing.listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
+    }, modelCatalogueDefaults);
+  }
+
+  /**
+   * Implementation backing the `listModels` export. The programmatic surface
+   * carries no status code, so a failed execution becomes a throw with a
+   * stable message; the routes branch on the {@link ExecutionResult} instead.
    */
   private async listModels(): Promise<ServingEndpointSummary[]> {
-    const client = getExecutionContext().client;
-    const host = (await client.config.getHost()).toString();
-    const serving = resolveServingConfig(this.config);
-    return nodeServing.listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
+    const result = await this.listModelsResult();
+    if (result.ok) return result.data;
+    this.logger.warn("listModels:error", {
+      status: result.status,
+      error: result.message,
+    });
+    throw new ExecutionError(MODEL_CATALOGUE_FAILED_MESSAGE);
   }
 
   private async buildAgentAndServer(): Promise<void> {
@@ -672,11 +918,6 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const memoryBuilder = this.servicePrincipalPool
       ? createMemoryBuilder(this.config, this.servicePrincipalPool)
       : undefined;
-
-    this.logger.debug("build:start", {
-      lakebase: memoryBuilder !== undefined,
-      stripStaleCharts: this.config.stripStaleCharts !== false,
-    });
 
     // Build every agent declared in `config.agents` (or the built-in
     // fallback when none are declared). Each agent's `model` resolves
@@ -767,21 +1008,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       ],
     });
     await this.mastraServer.init();
-    this.logger.debug("build:done", {
+    this.logger.info("ready", {
       agents: Object.keys(this.built.agents),
       defaultAgent: this.built.defaultAgentId,
-      routes: [
-        "/route/history",
-        "/route/threads",
-        "/models",
-        "/default-model",
-        "/suggestions",
-        "/route/feedback",
-        "/embed/:type/:id",
-      ],
-      instanceStorage: instanceStorage !== undefined,
+      apiAccess: this.config.apiAccess ?? "scoped",
+      mcp: this.mcp ? `${this.basePath}${this.mcp.httpPath}` : "off",
+      lakebase: memoryBuilder !== undefined,
+      feedback: this.feedbackEnabled(),
       observability: observability !== undefined ? "mlflow" : "off",
-      mcp: this.mcp ? `/api/${this.name}${this.mcp.httpPath}` : "off",
     });
   }
 }
@@ -797,13 +1031,13 @@ type EmbedResolver = (
   req: express.Request,
   id: string,
   signal: AbortSignal,
-) => Promise<unknown | undefined>;
+) => Promise<ExecutionResult<unknown>>;
 
 /**
  * Parse the optional `?timeoutMs=<n>` query parameter from a
  * `GET /embed/chart/:id` request. Accepts a positive integer up
- * to 5 minutes (clamped) and rejects everything else as
- * `undefined` so {@link fetchChart} falls back to its default.
+ * to {@link MAX_EMBED_POLL_TIMEOUT_MS} (clamped) and rejects everything else
+ * as `undefined` so {@link fetchChart} falls back to its default.
  * Express produces `string | string[] | undefined`; we normalize
  * to the first scalar before parsing.
  */
@@ -812,7 +1046,7 @@ function parseTimeoutMs(raw: unknown): number | undefined {
   if (typeof v !== "string") return undefined;
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return undefined;
-  return Math.min(Math.floor(n), 5 * 60_000);
+  return Math.min(Math.floor(n), MAX_EMBED_POLL_TIMEOUT_MS);
 }
 
 /**
@@ -830,4 +1064,45 @@ function parseStatementLimit(raw: unknown): number | undefined {
   return Math.floor(n);
 }
 
+/**
+ * Register the Mastra plugin on an AppKit app. Mounts the agents, the
+ * `/route/*` chat surface, and (unless disabled) the MCP transport under
+ * `/api/mastra`.
+ *
+ * @example Minimal app
+ * ```ts
+ * import { createApp } from "@databricks/appkit";
+ * import { mastra } from "@dbx-tools/appkit-mastra";
+ *
+ * // No `agents`: a single built-in `default` analyst is registered, so the
+ * // chat endpoint works out of the box.
+ * const app = await createApp({ plugins: [mastra()] });
+ * ```
+ *
+ * @example Two agents, a pinned model, and Genie
+ * ```ts
+ * import { createApp, lakebase } from "@databricks/appkit";
+ * import { createAgent, mastra } from "@dbx-tools/appkit-mastra";
+ *
+ * const app = await createApp({
+ *   plugins: [
+ *     lakebase(),
+ *     mastra({
+ *       defaultModel: "databricks-claude-sonnet-4-6",
+ *       defaultAgent: "analyst",
+ *       genieSpaces: { sales: { spaceId: "01ef...", hint: "orders, returns" } },
+ *       agents: {
+ *         analyst: createAgent({
+ *           instructions: "You answer questions about sales.",
+ *           tools(plugins) {
+ *             return { ...plugins.genie?.toolkit() };
+ *           },
+ *         }),
+ *         helper: createAgent({ instructions: "You explain the analyst's answers." }),
+ *       },
+ *     }),
+ *   ],
+ * });
+ * ```
+ */
 export const mastra = toPlugin(MastraPlugin);

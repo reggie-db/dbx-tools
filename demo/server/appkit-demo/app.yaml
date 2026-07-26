@@ -4,3 +4,20 @@ env:
     valueFrom: genie-space
   - name: LAKEBASE_ENDPOINT
     valueFrom: postgres
+  # SMTP for the approval-gated `send_email` tool. The values live in the
+  # `dbx-tools-demo` Databricks secret scope so no credential is committed
+  # here; grant the app's service principal READ on that scope.
+  - name: SMTP_HOST
+    valueFrom: smtp-host
+  - name: SMTP_PORT
+    valueFrom: smtp-port
+  - name: SMTP_SECURE
+    valueFrom: smtp-secure
+  - name: SMTP_USER
+    valueFrom: smtp-user
+  - name: SMTP_PASSWORD
+    valueFrom: smtp-password
+  - name: EMAIL_DOMAIN
+    valueFrom: email-domain
+  - name: EMAIL_FROM
+    valueFrom: email-from

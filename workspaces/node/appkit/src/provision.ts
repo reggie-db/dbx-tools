@@ -21,18 +21,36 @@
  * @module
  */
 
-import { createLakebasePool, getWorkspaceClient } from "@databricks/appkit";
-import { error, type log } from "@dbx-tools/shared-core";
+import { createLakebasePool, getWorkspaceClient, ValidationError } from "@databricks/appkit";
+import { error, log } from "@dbx-tools/shared-core";
 
 import { isAppEnv } from "./databricks";
+
+const defaultLogger = log.logger("provision");
 
 /** AppKit persistent-cache schema (see AppKit's `PersistentStorage`). */
 const CACHE_SCHEMA = "appkit";
 
 /**
+ * Characters a Lakebase Postgres role can legitimately contain: workspace
+ * identities are emails, service principals are UUIDs.
+ */
+const ROLE_PATTERN = /^[A-Za-z0-9._@+-]{1,255}$/;
+
+/**
+ * Provisioning runs at boot as the local developer identity, before any plugin
+ * exists, so it is outside AppKit's interceptor chain and inherits no timeout
+ * from it. Both bounds are explicit for that reason.
+ */
+const CONNECT_TIMEOUT_MS = 10_000;
+const STATEMENT_TIMEOUT_MS = 15_000;
+
+/**
  * Quote a Postgres identifier: wrap in double quotes and double any embedded
- * quote. Needed because Lakebase role names are often emails (`user@host`) that
- * must be quoted to be valid identifiers.
+ * quote. Schema and role names are identifiers, and Postgres does not accept a
+ * bind parameter in an identifier position, so quoting is the only defense
+ * available for these statements. Lakebase role names are usually emails
+ * (`user@host`), which must be quoted to be a valid identifier at all.
  */
 function quoteIdent(ident: string): string {
   return `"${ident.replace(/"/g, '""')}"`;
@@ -42,8 +60,14 @@ function quoteIdent(ident: string): string {
  * Idempotent grants that make the (already-existing) AppKit cache schema fully
  * usable by `role`. The `ALTER DEFAULT PRIVILEGES` lines cover the cache table
  * whenever the schema owner creates it later.
+ *
+ * Throws a {@link ValidationError} when `role` is not a plausible Postgres role
+ * name, since the value lands in an identifier position.
  */
-function cacheGrantStatements(role: string): readonly string[] {
+export function cacheGrantStatements(role: string): readonly string[] {
+  if (!ROLE_PATTERN.test(role)) {
+    throw ValidationError.invalidValue("role", role, "a Postgres role name");
+  }
   const schema = quoteIdent(CACHE_SCHEMA);
   const target = quoteIdent(role);
   return [
@@ -66,10 +90,16 @@ function cacheGrantStatements(role: string): readonly string[] {
  *
  * @param role - Postgres role to grant to and connect as (the resolved
  *   workspace-client identity); skips when undefined.
+ * @param logger - Logger to report progress on. Defaults to this module's.
+ *
+ * @example
+ * import { provision } from "@dbx-tools/appkit";
+ *
+ * await provision.provisionCacheSchema("app-service-principal@databricks.com");
  */
 export async function provisionCacheSchema(
-  logger: log.Logger,
   role: string | undefined,
+  logger: log.Logger = defaultLogger,
 ): Promise<void> {
   if (isAppEnv()) {
     logger.debug("autopg: skip cache provisioning (inside a Databricks App)");
@@ -88,6 +118,8 @@ export async function provisionCacheSchema(
   const pool = createLakebasePool({
     user: role,
     workspaceClient: getWorkspaceClient({}),
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+    statement_timeout: STATEMENT_TIMEOUT_MS,
   });
   try {
     const found = await pool.query(

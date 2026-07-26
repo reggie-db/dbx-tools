@@ -15,6 +15,7 @@
  * @module
  */
 
+import { ConfigurationError } from "@databricks/appkit";
 import { plugin } from "@dbx-tools/appkit";
 import { fallback } from "@dbx-tools/model";
 import { log, object, string } from "@dbx-tools/shared-core";
@@ -524,8 +525,9 @@ export async function buildAgents(opts: {
   }
 
   if (!agents[defaultAgentId]) {
-    throw new Error(
-      `mastra: defaultAgent "${defaultAgentId}" not found in registered agents (${ids.join(", ") || "none"})`,
+    throw ConfigurationError.resourceNotFound(
+      `mastra defaultAgent "${defaultAgentId}"`,
+      `Registered agents: ${ids.join(", ") || "none"}.`,
     );
   }
 
@@ -578,7 +580,7 @@ function assertApprovalGatedToolsHaveStorage(
   const detail = gated
     .map(({ agentId, toolIds }) => `${agentId}: ${toolIds.join(", ")}`)
     .join("; ");
-  throw new Error(
+  throw new ConfigurationError(
     "mastra: approval-gated tools require plugin storage (PostgresStore) to persist suspended runs. " +
       `Affected agents/tools: ${detail}. ` +
       "Register lakebase() before mastra() so storage auto-enables, or pass storage: true explicitly.",
@@ -637,7 +639,7 @@ function resolveDefinitions(config: MastraPluginConfig): Record<string, MastraAg
     input.forEach((def, i) => {
       const key = deriveAgentKey(def, i);
       if (out[key]) {
-        throw new Error(
+        throw new ConfigurationError(
           `mastra: duplicate agent id "${key}" derived from name "${def.name ?? ""}"; ` +
             `set unique \`name\`s on each definition`,
         );
@@ -749,7 +751,7 @@ function resolveAgentWorkspace(
  * `genie` is special-cased to swap the generic AppKit toolkit (which
  * runs `executeAgentTool` and only emits a single final `tool-result`
  * chunk per call) for the streaming-aware tools built by
- * {@link buildGenieProvider}. The streaming variant forwards each
+ * {@link buildGenieToolkitProvider}. The streaming variant forwards each
  * Genie wire event (status, SQL, row counts, errors) out through the
  * Mastra `ctx.writer`, so the UI gets `tool-output` chunks in real
  * time instead of staring at a spinner for the full Genie round-trip.
@@ -782,12 +784,11 @@ function buildPluginsMap(
  * Genie agent inherits the same model resolver / fallback
  * ladder the calling agents use.
  *
- * The Genie agent talks to Genie directly via `@dbx-tools/genie`
- * (`genieEventChat`) and the workspace
- * `statementExecution.getStatement` API. AppKit's stock `genie`
- * plugin is honored only for its resource manifest and `spaces`
- * config so existing `app.yaml` configs and `genie({ spaces })`
- * wiring keep working without change.
+ * The Genie tools talk to Genie directly through `@dbx-tools/genie`
+ * (`genieEventChat`) and the workspace `statementExecution.getStatement`
+ * API; AppKit's stock `genie` plugin contributes only its resource
+ * manifest and `spaces` config, so an `app.yaml` resource binding and a
+ * `genie({ spaces })` record have the same meaning here as they do there.
  */
 function resolveProvider(
   config: MastraPluginConfig,

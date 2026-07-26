@@ -18,11 +18,21 @@
 import { log } from "@dbx-tools/shared-core";
 import { gotScraping } from "got-scraping";
 import { assertUrlAllowed } from "./allowlist";
-import { decodeHtmlEntities, htmlToText } from "./html-text";
 import type { ResolvedWebSearchConfig } from "./config";
+import { toCallSettings, webFetchExecuteDefaults } from "./defaults";
+import { decodeHtmlEntities, htmlToText } from "./html-text";
+import { executeRead } from "./runtime";
 import type { WebFetchRequest, WebFetchResult } from "./schema";
 
 const logger = log.logger("web-search/fetch");
+
+/** The slice of a got-scraping response this module reads. */
+interface FetchedPage {
+  url: string;
+  statusCode: number;
+  contentType: string | undefined;
+  body: string;
+}
 
 /** Pull the <title> text out of an HTML document, when present. */
 function extractTitle(html: string): string | undefined {
@@ -41,43 +51,60 @@ function truncate(text: string, max: number): { content: string; truncated: bool
  * Fetch a single URL and return its content in the requested format.
  *
  * Throws when the URL is not permitted by the allow-list (the visible,
- * correctable failure the design calls for on the fetch path). Network /
- * HTTP errors propagate from got-scraping. The request's `maxLength` narrows
- * (never widens) the plugin's `fetchMaxLength` cap.
+ * correctable failure the design calls for on the fetch path). The request's
+ * `maxLength` narrows (never widens) the plugin's `fetchMaxLength` cap.
+ * `signal` cancels the in-flight fetch.
  */
 export async function runWebFetch(
   request: WebFetchRequest,
   config: ResolvedWebSearchConfig,
+  signal?: AbortSignal,
 ): Promise<WebFetchResult> {
   assertUrlAllowed(request.url, config.allowList);
   const cap = Math.min(request.maxLength ?? config.fetchMaxLength, config.fetchMaxLength);
 
-  const response = await gotScraping({
-    url: request.url,
-    timeout: { request: config.timeoutMs },
-    throwHttpErrors: false,
-    followRedirect: true,
-  });
+  // The response is cached before the format reduction, so the same page read
+  // as text and as html shares one network round trip.
+  const page = await executeRead(
+    "page-fetch",
+    toCallSettings(webFetchExecuteDefaults, config.timeoutMs, ["web-search", "fetch", request.url]),
+    async (executeSignal): Promise<FetchedPage> => {
+      const response = await gotScraping({
+        url: request.url,
+        // got's own timeout aborts the socket and reports which phase timed
+        // out; the interceptor timeout bounds the whole attempt around it.
+        timeout: { request: config.timeoutMs },
+        throwHttpErrors: false,
+        followRedirect: true,
+        ...(executeSignal ? { signal: executeSignal } : {}),
+      });
+      return {
+        url: response.url ?? request.url,
+        statusCode: response.statusCode,
+        contentType: response.headers["content-type"],
+        body: typeof response.body === "string" ? response.body : String(response.body ?? ""),
+      };
+    },
+    signal,
+  );
 
-  const body = typeof response.body === "string" ? response.body : String(response.body ?? "");
-  const contentType = response.headers["content-type"];
-  const isHtml = !contentType || /html|xml/i.test(contentType);
-  const rawContent = request.format === "html" || !isHtml ? body : htmlToText(body);
+  const isHtml = !page.contentType || /html|xml/i.test(page.contentType);
+  const rawContent = request.format === "html" || !isHtml ? page.body : htmlToText(page.body);
   const { content, truncated } = truncate(rawContent, cap);
-  const title = isHtml ? extractTitle(body) : undefined;
+  const title = isHtml ? extractTitle(page.body) : undefined;
 
   logger.debug("fetched", {
-    url: response.url,
-    status: response.statusCode,
-    bytes: body.length,
+    url: page.url,
+    status: page.statusCode,
+    bytes: page.body.length,
     returned: content.length,
     ...(truncated ? { truncated: true } : {}),
   });
 
   return {
-    url: response.url ?? request.url,
-    status: response.statusCode,
-    ...(contentType ? { contentType } : {}),
+    url: page.url,
+    status: page.statusCode,
+    ...(page.contentType ? { contentType: page.contentType } : {}),
     ...(title ? { title } : {}),
     content,
     truncated,

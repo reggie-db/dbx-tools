@@ -80,7 +80,7 @@ await createApp({
     plugin.mastra({
       agents: { analyst },
       defaultAgent: "analyst",
-      genie: { spaces: { sales: "01ef..." } },
+      genieSpaces: { sales: "01ef..." },
     }),
   ],
 });
@@ -152,6 +152,31 @@ const agent = agents.createAgent({
 Tool calls dispatch back through the owning AppKit plugin, preserving OBO auth
 and AppKit telemetry behavior. Optional plugins should be guarded with `?.` when
 you spread their tools.
+
+### Tools Flow In, Not Out
+
+The plugin is a tool _consumer_, not an AppKit `ToolProvider`: it deliberately
+implements neither `getAgentTools()` nor `executeAgentTool()`, so its built-in
+tools (`ask_genie`, `get_space_description`, `get_space_serialized`,
+`get_statement`, `prepare_chart`, `render_data`, `summarize`) are reachable only
+from a Mastra agent turn this plugin serves.
+
+That is a property of the tools, not a gap. Each one reads the per-request
+Mastra execution context - the AppKit user stamped on `RequestContext`, the
+`writer` that streams Genie progress events to the chat, the per-call
+`abortSignal` - and refuses to run without it. An AppKit `ToolProvider` call
+carries none of that, so exposing these through one would advertise tools that
+cannot work. Reach for
+[native AppKit Agents](https://developers.databricks.com/docs/appkit/v0) when you
+want your agent tools callable by other AppKit hosts.
+
+Nothing here can be auto-inherited by another host as a side effect: with no
+AppKit `ToolRegistry`, there is no `autoInheritable` surface to opt in or out
+of. Every built-in tool is also read-only (Genie questions, statement reads,
+chart planning, summarization), and the ambient tools stay off the MCP server
+unless `mcp: { tools: true }` names them explicitly. Approval-gated tools you
+register yourself are enforced separately: boot fails if one is registered
+without Mastra storage to persist the suspended run.
 
 ## Memory And Storage
 
@@ -232,19 +257,24 @@ record, resolves the data in the background, and stores a terminal chart or
 error. `chart.fetchChart()` long-polls that cache for route handlers and custom
 clients.
 
+Both take a `userKey`: the chart cache is namespaced by the caller's identity,
+so a chart id lifted from another user's transcript resolves to nothing and the
+embed route answers `404`. Use `config.resolveUserKey()`, which reads the AppKit
+user off the Mastra request context and falls back to the ambient execution
+context.
+
 ```ts
+const userKey = config.resolveUserKey(requestContext);
+
 const { chartId } = await chart.prepareChart({
-  config,
-  request: {
-    title: "Revenue by region",
-    chartType: "bar",
-    instructions: "Compare total revenue by region.",
-    data: rows,
-  },
-  resolveData: async () => rows,
+  config: pluginConfig,
+  userKey,
+  title: "Revenue by region",
+  description: "Compare total revenue by region.",
+  resolveData: async () => ({ rows }),
 });
 
-const resolved = await chart.fetchChart(chartId);
+const resolved = await chart.fetchChart(chartId, { userKey });
 ```
 
 Agents can return `[chart:<id>]` and `[data:<statement_id>]` markers in prose.
@@ -302,7 +332,9 @@ returning `{ agentId, model, displayName }` - the static serving-endpoint an
 agent falls back to when the client pins no model, plus its humanized label.
 `model` / `displayName` are `null` when the agent resolves its model
 dynamically at call time. This lets a model picker label its default option
-without waiting on the `/models` catalogue (so it never flashes a raw id).
+without waiting on the `/models` catalogue (so it never flashes a raw id). A
+`:agentId` that is not registered returns `404` with the registered ids, the
+same as the history and threads routes.
 
 ## Threads, History, And Suggestions
 
@@ -366,6 +398,40 @@ client needs. Use `apiAccess: "full"` only for a trusted first-party console.
 `server.isMastraRequestAllowed()` is exported for tests and custom dispatch
 logic that need the same allowlist.
 
+## Routes
+
+Mounted under the plugin base path, which is `/api/mastra` unless you override
+`name`. Every route below is registered through AppKit's `route()` helper, so it
+appears in the plugin's endpoint map and forwards handler errors to AppKit.
+
+| Method                     | Path                        | Purpose                                                                                     |
+| -------------------------- | --------------------------- | ------------------------------------------------------------------------------------------- |
+| `GET`                      | `/models`                   | Serving-endpoint catalogue for a model picker.                                              |
+| `GET`                      | `/default-model[/:agentId]` | Static default model an agent falls back to, with its humanized label. `404` on unknown id. |
+| `GET`                      | `/suggestions[/:agentId]`   | Starter questions from the configured Genie spaces. Degrades to `[]`.                       |
+| `GET`                      | `/embed/chart/:id`          | Long-polls a `[chart:<id>]` marker's cached spec. `?timeoutMs=` up to 5 minutes.            |
+| `GET`                      | `/embed/data/:id`           | Rows behind a `[data:<statement_id>]` marker. `?limit=` clamped server-side.                |
+| `GET` / `DELETE`           | `/route/history[/:agentId]` | Load or clear the caller's thread messages.                                                 |
+| `GET` / `DELETE` / `PATCH` | `/route/threads[/:agentId]` | List, delete, or rename the caller's conversations.                                         |
+| `POST`                     | `/route/feedback`           | Log a thumbs / comment assessment to the turn's MLflow trace. `404` when feedback is off.   |
+| `POST` / `GET`             | `/mcp`, `/sse`, `/messages` | MCP transports, when `mcp` is enabled.                                                      |
+
+Agent inference itself rides the stock Mastra routes (`/agents/:id/stream`), so
+`@mastra/client-js` and `@dbx-tools/ui-mastra` work without a bespoke protocol.
+
+## Environment Variables
+
+Every value can also be set through plugin config, which wins. These are the
+fallbacks, so a deployment that already follows AppKit's Databricks env naming
+needs no extra wiring.
+
+| Variable                                                            | Effect                                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Model used when neither the agent nor `defaultModel` names one.           |
+| `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                         |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. |
+| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset. |
+
 ## Configuration Reference
 
 The plugin config is intentionally centered on the AppKit lifecycle instead of
@@ -377,8 +443,11 @@ requiring callers to assemble a Mastra server by hand.
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
-- `genie.spaces` maps aliases to Genie Space IDs. Those aliases flow into tools,
-  suggestions, and chart/data workflows.
+- `genieSpaces` maps aliases to Genie Space IDs (or to
+  `{ spaceId, hint }` objects). Those aliases flow into tool names,
+  suggestions, and chart/data workflows. An alias present with no space id is a
+  wiring contradiction and fails at construction rather than silently
+  registering no Genie tools.
 - `defaultModel`, `modelOverride`, and `modelFuzzyMatch` control how loose model
   names are resolved through Databricks Model Serving.
 - `feedback` controls whether MLflow feedback routes are exposed. The automatic
@@ -403,8 +472,10 @@ client that talks to these routes.
 - `genie` - Genie prompt, space normalization, Genie toolkits, and suggestions.
 - `chart` / `statement` / `writer` - chart cache, statement row fetches, and
   safe writer events.
-- `history` / `threads` / `pagination` - conversation persistence helpers and
-  route handlers.
+- `history` / `threads` / `pagination` / `validation` - conversation persistence
+  helpers, route handlers, and request-body validation.
+- `defaults` - cache / retry / timeout settings for the plugin's own outbound
+  calls, one constant per call site with its reasoning.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
 - `workspaces` / `filesystems` - Mastra workspace creation and Databricks
   Workspace file adapters.

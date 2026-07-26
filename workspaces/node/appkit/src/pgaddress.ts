@@ -43,27 +43,33 @@
  * @module
  */
 
+/** Postgres TLS modes accepted by {@link SslMode}, in `PGSSLMODE` spelling. */
+export const SSL_MODES = ["require", "disable", "prefer"] as const;
+
 /** Postgres TLS mode passed through to `pg`. */
-export type SslMode = "require" | "disable" | "prefer";
+export type SslMode = (typeof SSL_MODES)[number];
 
 /**
  * Optional Lakebase Postgres connection fields shared by parsed addresses,
  * resolver/env inputs, and resolved connections.
  */
 export interface LakebaseConnectionInputs {
-  /** Lakebase project id. */
+  /** Lakebase project id. Resolved from the workspace when unset. */
   project?: string;
-  /** Branch id within the project. */
+  /** Branch id within the project. Defaults to the project's default branch. */
   branch?: string;
-  /** Canonical endpoint resource path (`projects/.../endpoints/...`). */
+  /**
+   * Canonical endpoint resource path (`projects/.../endpoints/...`), from
+   * `LAKEBASE_ENDPOINT`. Defaults to the branch's read-write endpoint.
+   */
   endpoint?: string;
-  /** Postgres database name (`PGDATABASE`). */
+  /** Postgres database name (`PGDATABASE`). Defaults to `databricks_postgres`. */
   database?: string;
-  /** Postgres hostname (`PGHOST`). */
+  /** Postgres hostname (`PGHOST`). Defaults to the resolved endpoint's host. */
   host?: string;
-  /** Postgres port (`PGPORT`). */
+  /** Postgres port (`PGPORT`). Defaults to 5432. */
   port?: number;
-  /** Postgres TLS mode (`PGSSLMODE`). */
+  /** Postgres TLS mode (`PGSSLMODE`). Defaults to `require`. */
   sslMode?: SslMode;
 }
 
@@ -88,6 +94,15 @@ const HOSTNAME_HINT_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/i;
  * Parse a Lakebase connection input into whatever pieces it carries.
  * See module docstring for the supported formats. Returns `{}` for
  * `undefined`, empty strings, and unrecognized inputs.
+ *
+ * @example
+ * import { pgaddress } from "@dbx-tools/appkit";
+ *
+ * pgaddress.parseAddress("projects/demo/branches/production/endpoints/ep-1");
+ * // { project: "demo", branch: "production", endpointId: "ep-1", endpoint: "projects/..." }
+ *
+ * pgaddress.parseAddress("postgresql://me@ep-1.database.azuredatabricks.net/app?sslmode=require");
+ * // { host: "ep-1.database.azuredatabricks.net", user: "me", database: "app", sslMode: "require" }
  */
 export function parseAddress(input: string | undefined | null): ParsedAddress {
   if (!input) return {};
@@ -138,10 +153,14 @@ function parseUri(s: string): ParsedAddress {
   if (db) result.database = decodeURIComponent(db);
   const sslmodeRaw = url.searchParams.get("sslmode") ?? url.searchParams.get("sslMode");
   const sslmode = sslmodeRaw?.toLowerCase();
-  if (sslmode === "require" || sslmode === "disable" || sslmode === "prefer") {
+  if (isSslMode(sslmode)) {
     result.sslMode = sslmode;
   }
   return result;
+}
+
+function isSslMode(value: string | undefined): value is SslMode {
+  return SSL_MODES.some((mode) => mode === value);
 }
 
 function parseResourcePathSegments(s: string): ParsedAddress {

@@ -62,6 +62,13 @@ export interface BuildModelOverrides {
  * while `agent.stream` is inside the `asUser(req)` scope so tokens
  * are user-scoped; outside an active user context the workspace
  * client falls back to the service principal.
+ *
+ * Endpoint precedence: the per-request override
+ * ({@link MASTRA_MODEL_OVERRIDE_KEY}, only when `config.modelOverride` allows
+ * it), then {@link BuildModelOverrides.modelId} from the agent / plugin
+ * config, then `DATABRICKS_SERVING_ENDPOINT_NAME`. With none of those set the
+ * capability class and fallback ladder in `@dbx-tools/model` choose the
+ * endpoint.
  */
 export async function buildModel(
   config: MastraPluginConfig,

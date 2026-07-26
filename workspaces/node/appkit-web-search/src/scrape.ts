@@ -21,7 +21,9 @@
 import { log } from "@dbx-tools/shared-core";
 import { gotScraping } from "got-scraping";
 import type { ResolvedWebSearchConfig } from "./config";
+import { scrapeSearchExecuteDefaults, toCallSettings } from "./defaults";
 import { htmlFragmentToText } from "./html-text";
+import { executeRead } from "./runtime";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema";
 
 const logger = log.logger("web-search/scrape");
@@ -71,21 +73,40 @@ function parseDdgHtml(html: string): WebSearchCitation[] {
  * Run a scraping search over DuckDuckGo. Returns the same
  * {@link WebSearchResult} shape as the native path, with `model` set to
  * `"scrape:duckduckgo"` so callers can tell how the result was produced.
- * Citations are filtered through the configured URL allow-list.
+ * Citations are filtered through the configured URL allow-list. `signal`
+ * cancels the in-flight request.
  */
 export async function runScrapeSearch(
   request: WebSearchRequest,
   config: ResolvedWebSearchConfig,
+  signal?: AbortSignal,
 ): Promise<WebSearchResult> {
-  const response = await gotScraping({
-    url: `${DDG_HTML_URL}?q=${encodeURIComponent(request.query)}`,
-    method: "GET",
-    timeout: { request: config.timeoutMs },
-    throwHttpErrors: false,
-    followRedirect: true,
-  });
-  const body = typeof response.body === "string" ? response.body : String(response.body ?? "");
-  const all = parseDdgHtml(body);
+  const page = await executeRead(
+    "scrape-search",
+    toCallSettings(scrapeSearchExecuteDefaults, config.timeoutMs, [
+      "web-search",
+      "scrape",
+      request.query,
+    ]),
+    async (executeSignal): Promise<{ body: string; statusCode: number }> => {
+      const response = await gotScraping({
+        url: `${DDG_HTML_URL}?q=${encodeURIComponent(request.query)}`,
+        method: "GET",
+        // got's own timeout aborts the socket and reports which phase timed
+        // out; the interceptor timeout bounds the whole attempt around it.
+        timeout: { request: config.timeoutMs },
+        throwHttpErrors: false,
+        followRedirect: true,
+        ...(executeSignal ? { signal: executeSignal } : {}),
+      });
+      return {
+        body: typeof response.body === "string" ? response.body : String(response.body ?? ""),
+        statusCode: response.statusCode,
+      };
+    },
+    signal,
+  );
+  const all = parseDdgHtml(page.body);
   const permitted = all.filter((c) => config.allowList.allows(c.url));
   const citations = permitted.slice(0, config.maxCitations);
   const answer =
@@ -99,7 +120,7 @@ export async function runScrapeSearch(
     query: request.query,
     found: all.length,
     returned: citations.length,
-    status: response.statusCode,
+    status: page.statusCode,
   });
   return { query: request.query, answer, citations, model: "scrape:duckduckgo" };
 }

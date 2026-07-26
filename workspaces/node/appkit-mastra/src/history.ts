@@ -18,6 +18,7 @@
  * @module
  */
 
+import { ValidationError } from "@databricks/appkit";
 import { error, log } from "@dbx-tools/shared-core";
 import type {
   MastraClearHistoryResponse,
@@ -207,8 +208,10 @@ export function historyRoute(options: HistoryRouteOptions) {
   const { path } = options;
   const fixedAgent = "agent" in options ? options.agent : undefined;
   if (!fixedAgent && !path.includes(":agentId")) {
-    throw new Error(
-      "historyRoute path must include `:agentId` or `agent` must be passed explicitly",
+    throw ValidationError.invalidValue(
+      "historyRoute.path",
+      path,
+      "a path containing `:agentId`, or an explicit `agent`",
     );
   }
   // Tiny resolver shared by GET / DELETE: derive the active agent

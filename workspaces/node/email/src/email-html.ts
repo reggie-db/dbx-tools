@@ -25,6 +25,12 @@ import juice from "juice";
 import type { EmailBrand } from "./brand";
 import { markdownToHtml } from "./markdown";
 
+/**
+ * Rendered height of the header logo. Fixed rather than intrinsic because
+ * mail clients ignore CSS sizing on an image without an `height` attribute.
+ */
+const LOGO_HEIGHT_PX = 28;
+
 /** Neutral fallback styling when no brand is supplied. */
 const DEFAULT_BRAND: Required<Pick<EmailBrand, "accent" | "onAccent" | "fontFamily">> = {
   accent: "#0b6bcb",
@@ -32,7 +38,7 @@ const DEFAULT_BRAND: Required<Pick<EmailBrand, "accent" | "onAccent" | "fontFami
   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
 };
 
-/** Escape HTML-significant characters (re-exported from `@dbx-tools/shared`). */
+/** Escape HTML-significant characters (re-exported from `@dbx-tools/shared-core`). */
 export const escapeHtml = string.escapeHtml;
 
 /**
@@ -110,12 +116,12 @@ function footerRow(footer: string | undefined): string {
 /**
  * Render the header-band content: the brand logo (when the brand supplies a
  * renderable image) above the title, or just the title. The logo is capped
- * at 28px tall and tinted implicitly by its own artwork; the title always
- * shows so the band is never empty.
+ * at {@link LOGO_HEIGHT_PX} and tinted implicitly by its own artwork; the
+ * title always shows so the band is never empty.
  */
 function headerBand(title: string, brand: EmailBrand, onAccent: string): string {
   const logo = brand.logoUrl
-    ? `<img src="${escapeHtml(brand.logoUrl)}" alt="${escapeHtml(brand.name ?? title)}" height="28" style="height: 28px; width: auto; display: block; margin-bottom: 8px;" />`
+    ? `<img src="${escapeHtml(brand.logoUrl)}" alt="${escapeHtml(brand.name ?? title)}" height="${LOGO_HEIGHT_PX}" style="height: ${LOGO_HEIGHT_PX}px; width: auto; display: block; margin-bottom: 8px;" />`
     : "";
   return `${logo}<span style="color: ${onAccent}; font-size: 18px; font-weight: 700; line-height: 1.3;">${escapeHtml(title)}</span>`;
 }

@@ -1,3 +1,18 @@
+/**
+ * Repairs Mastra / AI SDK message replays sent to Databricks Model
+ * Serving before they hit the OpenAI-compatible `/chat/completions`
+ * route.
+ *
+ * Exists because the transcript Mastra persists is not always a transcript the
+ * provider will accept back: Databricks-hosted Claude rejects replayed
+ * extended-thinking blocks and reads a trailing assistant message as a prefill
+ * request. Both repairs are provider quirks, not schema violations, so they are
+ * applied on the wire (see the `globalThis.fetch` wrapper in `model.ts`) rather
+ * than by changing what the agent stores or what the UI shows.
+ *
+ * @module
+ */
+
 import { json, string } from "@dbx-tools/shared-core";
 import {
   type ChatMessage,
@@ -5,11 +20,6 @@ import {
   openaiChat,
   openaiResponses,
 } from "@dbx-tools/shared-model";
-/**
- * Repairs Mastra / AI SDK message replays sent to Databricks Model
- * Serving before they hit the OpenAI-compatible `/chat/completions`
- * route.
- */
 
 /**
  * A chat message as it arrives on the serving wire, plus the extended-thinking

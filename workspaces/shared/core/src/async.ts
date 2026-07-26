@@ -184,6 +184,34 @@ export function tieAbortSignal(child: AbortController, parent?: AbortSignal): vo
 }
 
 /**
+ * Combine several optional cancellation sources into one signal that aborts
+ * as soon as any of them does.
+ *
+ * The usual caller is an operation that has to honor more than one source at
+ * once - a caller's own signal (a closed connection, an agent run being
+ * cancelled) plus one derived from a timeout - where the awaited I/O accepts
+ * only a single signal. Absent sources are ignored, and a lone signal is
+ * returned as-is so the common path allocates nothing. Returns `undefined`
+ * only when every input is absent, which callers can pass straight through
+ * to an optional `signal` parameter.
+ *
+ * Aborting an input aborts the result (carrying that input's `reason`);
+ * nothing propagates back the other way.
+ *
+ * @example
+ * await fetch(url, { signal: combineAbortSignals(req.signal, timeout.signal) });
+ */
+export function combineAbortSignals(
+  ...signals: (AbortSignal | undefined)[]
+): AbortSignal | undefined {
+  const present = signals.filter((signal): signal is AbortSignal => signal !== undefined);
+  if (present.length <= 1) return present[0];
+  const combined = new AbortController();
+  for (const signal of present) tieAbortSignal(combined, signal);
+  return combined.signal;
+}
+
+/**
  * Promisified `setTimeout` that wakes up early (and rejects with
  * `signal.reason`) when `signal` aborts mid-wait. Short-circuits to a
  * rejected promise when the signal is already aborted on entry, so the

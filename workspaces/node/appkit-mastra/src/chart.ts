@@ -27,7 +27,7 @@
  * @module
  */
 
-import { CacheManager } from "@databricks/appkit";
+import { AppKitError, CacheManager, ExecutionError } from "@databricks/appkit";
 import { async, error, hash, log, string, type BrandContext } from "@dbx-tools/shared-core";
 import { wire, type Chart, type ChartResult } from "@dbx-tools/shared-mastra";
 import { model } from "@dbx-tools/shared-model";
@@ -36,7 +36,7 @@ import type { RequestContext } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
-import type { MastraPluginConfig } from "./config";
+import { resolveUserKey, type MastraPluginConfig } from "./config";
 import { buildModel } from "./model";
 
 const logger = log.logger("mastra/chart");
@@ -55,19 +55,14 @@ const CHART_CACHE_TTL_SEC = 60 * 60;
 /** Cache namespace; keeps the chart keyspace tidy. */
 const CHART_CACHE_NAMESPACE = "mastra:chart";
 
-/**
- * `userKey` for `CacheManager.generateKey`. Chart ids are minted
- * via `hash.id()` (v4 UUID) and are unguessable, so a
- * constant user key is fine. The HTTP route can re-scope to the
- * requesting user when policy demands it.
- */
-const CHART_CACHE_USER_KEY = "mastra-chart";
-
 /** Default server-side long-poll budget for {@link fetchChart}. */
 const DEFAULT_FETCH_TIMEOUT_MS = 60_000;
 
 /** Default inter-poll sleep for {@link fetchChart}. */
 const DEFAULT_FETCH_INTERVAL_MS = 250;
+
+/** Stable text stored on a chart entry whose planner run failed. */
+const CHART_FAILED_MESSAGE = "Chart generation failed";
 
 /* ------------------------------- schemas ------------------------------- */
 
@@ -359,23 +354,27 @@ async function runChartPlanner(
 
 /* ------------------------------ cache helpers ------------------------------ */
 
-/** Build the canonical cache key for a `chartId`. */
-async function chartCacheKey(chartId: string): Promise<string> {
-  return (await CacheManager.getInstance()).generateKey(
-    [CHART_CACHE_NAMESPACE, chartId],
-    CHART_CACHE_USER_KEY,
-  );
+/**
+ * Build the canonical cache key for a `chartId` owned by `userKey`.
+ *
+ * The identity is part of the key, not a filter applied after the read, so a
+ * chart id guessed or copied from another user's transcript resolves to a
+ * different key and simply misses. That miss is what the HTTP route turns into
+ * a 404, which is also the answer that leaks the least.
+ */
+async function chartCacheKey(chartId: string, userKey: string): Promise<string> {
+  return (await CacheManager.getInstance()).generateKey([CHART_CACHE_NAMESPACE, chartId], userKey);
 }
 
 /**
- * Persist a {@link Chart} entry under its `chartId`. Refreshes
- * the TTL on every write. Cache-layer failures are logged and
+ * Persist a {@link Chart} entry under its `chartId`, owned by `userKey`.
+ * Refreshes the TTL on every write. Cache-layer failures are logged and
  * swallowed so background runners never throw into the
  * unhandled-rejection stream.
  */
-async function writeChart(entry: Chart): Promise<void> {
+async function writeChart(entry: Chart, userKey: string): Promise<void> {
   try {
-    const key = await chartCacheKey(entry.chartId);
+    const key = await chartCacheKey(entry.chartId, userKey);
     await CacheManager.getInstanceSync().set(key, entry, {
       ttl: CHART_CACHE_TTL_SEC,
     });
@@ -388,12 +387,13 @@ async function writeChart(entry: Chart): Promise<void> {
 }
 
 /**
- * Look up a chart by id. Returns `undefined` on miss, on
- * expiry, or when the cache layer is unhealthy - never throws.
+ * Look up a chart `userKey` owns. Returns `undefined` on miss, on
+ * expiry, when another identity owns the id, or when the cache layer is
+ * unhealthy - never throws.
  */
-async function readChart(chartId: string): Promise<Chart | undefined> {
+async function readChart(chartId: string, userKey: string): Promise<Chart | undefined> {
   try {
-    const key = await chartCacheKey(chartId);
+    const key = await chartCacheKey(chartId, userKey);
     const v = await CacheManager.getInstanceSync().get<Chart>(key);
     return v ?? undefined;
   } catch (err) {
@@ -411,6 +411,11 @@ async function readChart(chartId: string): Promise<Chart | undefined> {
 export interface PrepareChartOptions {
   /** Plugin config; resolves the planner agent's model. */
   config: MastraPluginConfig;
+  /**
+   * Identity that owns the minted chart. Only a {@link fetchChart} call
+   * carrying the same key resolves it. Use {@link resolveUserKey}.
+   */
+  userKey: string;
   /** Display title forwarded to the planner agent. */
   title?: string;
   /** Optional intent hint forwarded to the planner agent. */
@@ -455,7 +460,7 @@ export interface PrepareChartOptions {
  */
 export async function prepareChart(opts: PrepareChartOptions): Promise<{ chartId: string }> {
   const chartId = hash.id();
-  await writeChart({ chartId });
+  await writeChart({ chartId }, opts.userKey);
   logger.debug("queued", { chartId });
   // Fire-and-forget. Failures land in the cache as `error` entries;
   // never escape into an unhandled rejection.
@@ -468,7 +473,7 @@ async function runPrepareChart(chartId: string, opts: PrepareChartOptions): Prom
   try {
     const data = await opts.resolveData(opts.signal);
     if (data.rows.length === 0) {
-      throw new Error("dataset has no rows; nothing to chart");
+      throw new ExecutionError("Dataset has no rows; nothing to chart");
     }
     const result = await runChartPlanner(
       opts.config,
@@ -482,16 +487,18 @@ async function runPrepareChart(chartId: string, opts: PrepareChartOptions): Prom
         ...(opts.signal ? { abortSignal: opts.signal } : {}),
       },
     );
-    await writeChart({ chartId, result });
+    await writeChart({ chartId, result }, opts.userKey);
     logger.info("done", {
       chartId,
       chartType: result.chartType,
       elapsedMs: Date.now() - startedAt,
     });
   } catch (err) {
-    const errText = error.errorMessage(err);
-    logger.warn("error", { chartId, error: errText });
-    await writeChart({ chartId, error: errText });
+    logger.warn("error", { chartId, error: error.errorMessage(err) });
+    // The entry's `error` is rendered in the chat, so only an AppKitError's
+    // own message travels; anything else could carry upstream provider detail.
+    const errText = err instanceof AppKitError ? err.message : CHART_FAILED_MESSAGE;
+    await writeChart({ chartId, error: errText }, opts.userKey);
   }
 }
 
@@ -499,6 +506,11 @@ async function runPrepareChart(chartId: string, opts: PrepareChartOptions): Prom
 
 /** Inputs to {@link fetchChart}. */
 export interface FetchChartOptions {
+  /**
+   * Identity the chart must belong to. A chart minted under a different key
+   * is indistinguishable from an unknown id. Use {@link resolveUserKey}.
+   */
+  userKey: string;
   /**
    * Server-side polling budget in ms. When the entry stays in
    * the processing state past this window, the helper returns the
@@ -524,8 +536,8 @@ export interface FetchChartOptions {
  *   - the resolved {@link Chart} when it settled, errored, or
  *     stayed in processing past `timeoutMs` (so the client can
  *     re-poll);
- *   - `undefined` when the entry is missing or expired (the
- *     consumer should treat as 404).
+ *   - `undefined` when the entry is missing, expired, or owned by
+ *     another identity (the consumer should treat as 404).
  *
  * `signal` lets the caller cancel ahead of timeout (e.g. the HTTP
  * request closed). Cancellation propagates to the inter-poll sleep
@@ -533,7 +545,7 @@ export interface FetchChartOptions {
  */
 export async function fetchChart(
   chartId: string,
-  options: FetchChartOptions = {},
+  options: FetchChartOptions,
 ): Promise<Chart | undefined> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
   const intervalMs = options.intervalMs ?? DEFAULT_FETCH_INTERVAL_MS;
@@ -542,7 +554,7 @@ export async function fetchChart(
   let last: Chart | undefined;
   while (true) {
     options.signal?.throwIfAborted();
-    last = await readChart(chartId);
+    last = await readChart(chartId, options.userKey);
     if (!last) return undefined;
     if (last.result !== undefined || last.error !== undefined) return last;
     const remaining = deadline - Date.now();
@@ -565,15 +577,33 @@ interface ChartTheme {
 }
 
 /**
+ * AppKit's categorical chart palette (`--chart-cat-1` .. `--chart-cat-8` from
+ * `@databricks/appkit-ui`), as hex. Server-rendered chart specs cannot read the
+ * browser's CSS custom properties, so the values are mirrored here to keep a
+ * generated chart visually consistent with the AppKit-styled UI around it.
+ * Keep in sync with AppKit's stylesheet if it changes.
+ */
+const APPKIT_CHART_PALETTE = [
+  "#2463EB", // blue
+  "#2EB88A", // teal
+  "#AB47BD", // purple
+  "#F69E23", // amber
+  "#DD2C4D", // rose
+  "#1BA3BB", // cyan
+  "#9B61D1", // lavender
+  "#34B262", // emerald
+] as const;
+
+/**
  * Expand two brand hex colors into a legible categorical cycle. Echarts
  * repeats the `color` array across series / categories, so a good default
  * needs several distinct hues, not two. We seed with the brand primary and
- * accent (the identity colors) and follow with a fixed, colorblind-friendly
- * spread so multi-series / many-slice charts stay readable while the first
- * one or two marks still land on-brand.
+ * accent (the identity colors) and follow with AppKit's own categorical chart
+ * palette, so multi-series / many-slice charts stay readable and match the
+ * surrounding AppKit UI while the first one or two marks land on-brand.
  */
 function brandColorCycle(primary: string, accent: string): string[] {
-  const spread = ["#5B8FF9", "#F6BD16", "#E86452", "#6DC8EC", "#945FB9", "#FF9845", "#1E9493"];
+  const spread = APPKIT_CHART_PALETTE;
   const seen = new Set<string>();
   return [primary, accent, ...spread].filter((c) => {
     const key = c.toLowerCase();
@@ -742,6 +772,7 @@ export function buildRenderDataTool(config: MastraPluginConfig) {
       const ctx = ctxRaw as { requestContext?: RequestContext } | undefined;
       return prepareChart({
         config,
+        userKey: resolveUserKey(ctx?.requestContext),
         title,
         ...(description ? { description } : {}),
         resolveData: () => Promise.resolve({ rows: data }),

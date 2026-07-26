@@ -20,9 +20,15 @@ import type { EmailMessage } from "@dbx-tools/shared-email";
 import type { EmailBrand } from "./brand";
 import { renderEmailHtml } from "./email-html";
 
+/**
+ * Longest subject slug kept in an outbox file name, leaving room for the
+ * timestamp prefix and extension inside common filesystem name limits.
+ */
+const SUBJECT_SLUG_MAX_LENGTH = 48;
+
 /** Filesystem-safe slug of the subject for the file name. */
 function subjectSlug(subject: string): string {
-  return string.toSlugWithOptions({ maxLength: 48 }, subject) || "email";
+  return string.toSlugWithOptions({ maxLength: SUBJECT_SLUG_MAX_LENGTH }, subject) || "email";
 }
 
 /** The envelope rows shown above the body in the preview file. */

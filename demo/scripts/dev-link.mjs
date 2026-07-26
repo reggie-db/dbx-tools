@@ -46,6 +46,21 @@ const clientManifest = path.join(demoRoot, "app/appkit-demo/package.json");
 
 const read = (p) => fs.readFileSync(p, "utf8");
 const readJson = (p) => JSON.parse(read(p));
+/**
+ * Write a file projen may have marked READ-ONLY (mode 0444 - it owns
+ * `pnpm-workspace.yaml` and every member `package.json`, generating them
+ * unwritable so they are only edited through `.projenrc.ts`). Dev-link edits
+ * are deliberate, transient local state, so clear the write bit first and
+ * restore the original mode after - leaving the file as projen left it apart
+ * from the marked lines. Without this the first write fails EACCES.
+ */
+const write = (p, contents) => {
+  const mode = fs.existsSync(p) ? fs.statSync(p).mode & 0o777 : undefined;
+  const locked = mode !== undefined && !(mode & 0o200);
+  if (locked) fs.chmodSync(p, mode | 0o200);
+  fs.writeFileSync(p, contents);
+  if (locked) fs.chmodSync(p, mode);
+};
 
 // npm scope discovered from the demo's own package name (`@dbx-tools/demo` ->
 // `@dbx-tools/`) so a project-wide rename needs no edit here.
@@ -154,7 +169,7 @@ function link() {
         .join("\n");
       yaml = yaml.replace(/^catalog:\n/m, `catalog:\n${block}\n`);
     }
-    fs.writeFileSync(workspaceYaml, yaml);
+    write(workspaceYaml, yaml);
   }
 
   // 2. Switch the CLIENT app's reachable @dbx-tools deps to workspace:*,
@@ -171,11 +186,8 @@ function link() {
       }
     }
   }
-  fs.writeFileSync(clientManifest, `${JSON.stringify(manifest, null, 2)}\n`);
-  fs.writeFileSync(
-    stateFile,
-    `${JSON.stringify({ workspaceYaml: pristineYaml, deps: prior }, null, 2)}\n`,
-  );
+  write(clientManifest, `${JSON.stringify(manifest, null, 2)}\n`);
+  write(stateFile, `${JSON.stringify({ workspaceYaml: pristineYaml, deps: prior }, null, 2)}\n`);
 
   console.log(
     `dev-link: linked ${reachable.size} client UI packages to workspace source. Installing...`,
@@ -189,9 +201,9 @@ function link() {
 function unlink() {
   const state = fs.existsSync(stateFile) ? readJson(stateFile) : {};
   if (typeof state.workspaceYaml === "string") {
-    fs.writeFileSync(workspaceYaml, state.workspaceYaml);
+    write(workspaceYaml, state.workspaceYaml);
   } else {
-    fs.writeFileSync(
+    write(
       workspaceYaml,
       read(workspaceYaml)
         .split("\n")
@@ -210,7 +222,7 @@ function unlink() {
       }
     }
   }
-  fs.writeFileSync(clientManifest, `${JSON.stringify(manifest, null, 2)}\n`);
+  write(clientManifest, `${JSON.stringify(manifest, null, 2)}\n`);
   fs.rmSync(stateFile, { force: true });
   console.log("dev-link: removed workspace members + restored deps. Reinstalling...");
   pnpmInstall();

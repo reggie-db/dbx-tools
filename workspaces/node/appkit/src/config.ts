@@ -2,9 +2,9 @@
  * Layered configuration resolution for local development against a Databricks
  * App / Asset Bundle.
  *
- * Default sources: `env`, then Databricks App `config.env` (from {@link bundle})
- * and hard-coded `app.yaml` env entries (from {@link appYaml}). Opt in to `cli`
- * when a dev command wants flag overrides.
+ * Default sources: `explicit`, then `env`, then Databricks App `config.env`
+ * (from {@link bundle}) and hard-coded `app.yaml` env entries (from
+ * {@link appYaml}). Opt in to `cli` when a dev command wants flag overrides.
  *
  * Server-only (`node:child_process`, bundle root discovery). Databricks-app
  * specific, so it lives in node-appkit rather than shared-core.
@@ -15,6 +15,7 @@
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { ValidationError } from "@databricks/appkit";
 import { file, project } from "@dbx-tools/core";
 import { functionModule, json, object, log, string } from "@dbx-tools/shared-core";
 import { parse as parseYamlText } from "yaml";
@@ -36,7 +37,7 @@ export interface ConfigFile {
 /** Supported configuration sources, consulted in array order. */
 export type ConfigSource = "explicit" | "cli" | "env" | "bundle";
 
-const defaultConfigSources: ConfigSource[] = ["env", "bundle"];
+const defaultConfigSources: ConfigSource[] = ["explicit", "env", "bundle"];
 
 const APP_YAML_NAMES = ["app.yaml", "app.yml"] as const;
 
@@ -113,9 +114,12 @@ export interface ResolveConfigValueOptions {
   bundleData?: ConfigFile;
   /** Parsed `app.yaml` contents. Defaults to {@link appYaml} (skipped inside a Databricks App). */
   appData?: ConfigFile;
-  /** Sources to consult, first truthy string wins. Defaults to `env`, then `bundle`. */
+  /**
+   * Sources to consult, first truthy string wins. Defaults to `explicit`, then
+   * `env`, then `bundle`.
+   */
   sources?: ConfigSource[];
-  /** Programmatic overrides. When set, `explicit` is appended to `sources` unless already listed. */
+  /** Programmatic overrides. When set, `explicit` is prepended to `sources` unless already listed. */
   explicit?: Record<string, ConfigMapValue>;
   /** CLI flag values (when `cli` is listed in `sources`). */
   cli?: Record<string, ConfigMapValue>;
@@ -184,7 +188,7 @@ function readAppEnv(keys: Iterable<string>, envMap: Record<string, string>): str
 }
 
 function parseYaml(text: string): unknown {
-  return parseYamlText(text) as unknown;
+  return parseYamlText(text);
 }
 
 function pickAppResourceId(apps: Record<string, BundleApp>): string | undefined {
@@ -318,10 +322,10 @@ async function loadAppYaml(cwd: string): Promise<ConfigFile | undefined> {
     try {
       const text = await readFile(configFile, "utf8");
       const data = parseYaml(text);
-      if (typeof data !== "object" || data === null || Array.isArray(data)) {
+      if (!object.isRecord(data)) {
         return undefined;
       }
-      return { path: configFile, data: data as Record<string, unknown> };
+      return { path: configFile, data };
     } catch {
       logger.warn("failed to parse app yaml", { path: configFile });
     }
@@ -369,14 +373,13 @@ export function getBundlePath(data: BundleValidateJson, path: string): string | 
 
   let current: unknown = data;
   for (let i = 0; i < parts.length; i++) {
-    if (typeof current !== "object" || current === null) return undefined;
-    const record = current as Record<string, unknown>;
+    if (!object.isRecord(current)) return undefined;
     const part = parts[i]!;
-    const next = record[part];
+    const next = current[part];
     if (i === parts.length - 1) {
       if (typeof next === "string" && next) return next;
-      if (typeof next === "object" && next !== null && "value" in next) {
-        const value = (next as { value?: unknown }).value;
+      if (object.isRecord(next)) {
+        const value = next.value;
         return typeof value === "string" && value ? value : undefined;
       }
       return undefined;
@@ -399,7 +402,7 @@ async function resolveAppEnvMap(
 function resolveSources(options: ResolveConfigValueOptions): ConfigSource[] {
   const sources = [...(options.sources ?? defaultConfigSources)];
   if (options.explicit !== undefined && !sources.includes("explicit")) {
-    sources.push("explicit");
+    sources.unshift("explicit");
   }
   return sources;
 }
@@ -407,6 +410,17 @@ function resolveSources(options: ResolveConfigValueOptions): ConfigSource[] {
 /**
  * Resolve a configuration string from the configured sources. Returns the first
  * non-empty value, or `undefined` when nothing matches.
+ *
+ * Precedence follows AppKit's: explicit config, then environment variable, then
+ * whatever the Databricks App / bundle definition supplies.
+ *
+ * @example
+ * import { config } from "@dbx-tools/appkit";
+ *
+ * const warehouseId = await config.resolveConfigValue("DATABRICKS_WAREHOUSE_ID", {
+ *   cli: { DATABRICKS_WAREHOUSE_ID: flags.warehouse },
+ *   sources: config.withCliSources(),
+ * });
  */
 export async function resolveConfigValue(
   name: string,
@@ -433,7 +447,11 @@ export async function resolveConfigValue(
           yield readAppEnv(keys, appEnvMap);
           break;
         default:
-          throw new Error(`Unknown config source: ${source}`);
+          throw ValidationError.invalidValue(
+            "sources",
+            source,
+            "one of: explicit, cli, env, bundle",
+          );
       }
     }
   })();

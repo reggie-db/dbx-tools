@@ -20,7 +20,10 @@
  * @module
  */
 
-import { type NameLike } from "@dbx-tools/shared-core";
+import { ConfigurationError } from "@databricks/appkit";
+import { log, type NameLike } from "@dbx-tools/shared-core";
+
+const logger = log.logger("plugin");
 
 /**
  * Minimal structural shape of `this.context`. We mirror only the method we
@@ -71,6 +74,9 @@ const dataCache = new WeakMap<PluginDataFactory, PluginData>();
  */
 export function data<F extends PluginDataFactory, D extends ReturnType<F>>(factory: F): D {
   const cached = dataCache.get(factory);
+  // The cache is keyed by the erased `PluginDataFactory` bound, so `WeakMap`
+  // hands back the widened `PluginData`; only the caller's `F` knows the exact
+  // descriptor type.
   if (cached !== undefined) {
     return cached as D;
   }
@@ -100,6 +106,8 @@ export function instance<F extends PluginDataFactory>(
 ): PluginInstanceOf<F> | undefined {
   if (!ctx) return undefined;
   const name = data(factory).name;
+  // AppKit's registry is a `Map<string, unknown>`, so the instance type is only
+  // recoverable from the factory the caller passed.
   return ctx.getPlugins().get(name) as PluginInstanceOf<F> | undefined;
 }
 
@@ -127,5 +135,12 @@ export function require<F extends PluginDataFactory>(
   const prefix =
     typeof caller === "string" ? `${caller}: ` : caller?.name ? `${caller.name}: ` : "";
   const registeredName = data(factory).name;
-  throw new Error(`${prefix}required plugin not registered: ${registeredName}`);
+  logger.debug("required plugin not registered", {
+    plugin: registeredName,
+    registered: [...(ctx?.getPlugins().keys() ?? [])],
+  });
+  throw ConfigurationError.resourceNotFound(
+    `${prefix}plugin '${registeredName}'`,
+    `Add ${registeredName}() to the plugins passed to createApp.`,
+  );
 }

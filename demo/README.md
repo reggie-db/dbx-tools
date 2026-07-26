@@ -135,6 +135,47 @@ See [`.env.example`](.env.example). At minimum:
 - `LAKEBASE_*` / `PG*` for memory-backing Postgres
 - SMTP (or `EMAIL_OUTBOX_MODE=1`) for the `send_email` tool
 
+## Demo KPI dataset and Genie space
+
+The agent's Genie tools need a space with data behind them. A ready-made KPI
+dataset is provisioned in the FEVM workspace
+(`fevm-reggie-pierce-aws.cloud.databricks.com`):
+
+| Resource                                                    | What it is                                                                             |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `reggie_pierce_aws_catalog.dbx_tools_demo.fact_usage_daily` | Daily consumption fact (~42k rows), customer x product x day, 2024-01-01 to 2025-12-31 |
+| `…dbx_tools_demo.dim_customer`                              | 120 accounts with segment, industry, region, acquisition channel                       |
+| `…dbx_tools_demo.dim_product`                               | 8 SKUs across the Compute / AI / Storage families, with list price and unit cost       |
+| `…dbx_tools_demo.dim_date`                                  | Daily calendar spine with year, quarter, `year_month`, weekend flag                    |
+| `…dbx_tools_demo.vw_monthly_kpis`                           | Monthly rollup with margin %, revenue per customer, and month-over-month growth %      |
+
+The figures are generated deterministically from the natural keys, so the shape
+is stable across rebuilds: steady growth through the window, a Q4 seasonal lift,
+lighter weekend usage, and margins that differ by product family — enough for
+trend, mix, cohort, and margin questions to all return something interesting.
+
+Genie space **`dbx-tools Demo KPIs`** (`01f18902a1781636a3a4f383de2147e0`) is
+wired to those tables with column descriptions, 12 sample questions, analyst
+instructions, and 8 example question/SQL pairs. Point the demo at it with:
+
+```bash
+DATABRICKS_GENIE_SPACE_ID=01f18902a1781636a3a4f383de2147e0
+```
+
+## SMTP secrets
+
+The deployed app reads SMTP config from the `dbx-tools-demo` Databricks secret
+scope rather than from `.env`, so no credential is committed:
+
+```bash
+databricks secrets list-secrets dbx-tools-demo
+# email-domain, email-from, smtp-host, smtp-password, smtp-port, smtp-secure, smtp-user
+```
+
+[`app.yaml`](server/appkit-demo/app.yaml) maps each one to the matching env var
+via `valueFrom`. Grant the app's service principal `READ` on the scope
+(`databricks secrets put-acl dbx-tools-demo <sp-id> READ`) before deploying.
+
 ## Deploy
 
 ```bash

@@ -4,6 +4,7 @@
 
 export * as allowlist from "./src/allowlist";
 export * as config from "./src/config";
+export * as defaults from "./src/defaults";
 export * as fetch from "./src/fetch";
 export * as htmlText from "./src/html-text";
 export * as plugin from "./src/plugin";
@@ -14,9 +15,10 @@ export * as scrape from "./src/scrape";
 export * as search from "./src/search";
 export * as tool from "./src/tool";
 export type { UrlAllowList } from "./src/allowlist";
-export type { ApprovalGate, WebSearchPluginConfig, ResolvedWebSearchConfig } from "./src/config";
+export type { ApprovalGate, ApprovalPolicy, UrlPolicyMode, ModelSource, WebSearchPluginConfig, ResolvedWebSearchConfig } from "./src/config";
+export type { WebSearchExecuteConfig, WebSearchExecutionSettings } from "./src/defaults";
 export type { WebSearchProvider, WebSearchProviderSpec } from "./src/provider";
-export type { WebSearchRuntime } from "./src/runtime";
+export type { WebSearchExecutor, WebSearchRuntime } from "./src/runtime";
 export type { WebSearchRequest, WebSearchCitation, WebSearchResult, WebFetchRequest, WebFetchResult } from "./src/schema";
 export type { WebSearchContext } from "./src/search";
 export type { WebSearchToolOptions } from "./src/tool";

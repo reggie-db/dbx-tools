@@ -36,7 +36,13 @@
  * @module
  */
 
-import { CacheManager, genie } from "@databricks/appkit";
+import {
+  CacheManager,
+  ConfigurationError,
+  ExecutionError,
+  genie,
+  ValidationError,
+} from "@databricks/appkit";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 import { plugin } from "@dbx-tools/appkit";
 import { chat, space as genieSpace } from "@dbx-tools/genie";
@@ -50,7 +56,7 @@ import { z } from "zod";
 
 import type { MastraTools } from "./agents";
 import { chartPlannerRequestSchema, prepareChart } from "./chart";
-import { MASTRA_USER_KEY } from "./config";
+import { MASTRA_USER_KEY, resolveUserKey } from "./config";
 import type { MastraPluginConfig, User } from "./config";
 import { fetchStatementData } from "./statement";
 import { safeWrite } from "./writer";
@@ -114,11 +120,17 @@ function requireClient(
 } {
   const requestContext = ctx?.requestContext;
   if (!requestContext) {
-    throw new Error(`${toolId}: missing requestContext (MastraServer must stamp MASTRA_USER_KEY)`);
+    throw ConfigurationError.resourceNotFound(
+      `${toolId} request context`,
+      "Invoke the tool from an agent turn served by the mastra plugin.",
+    );
   }
   const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
   if (!user) {
-    throw new Error(`${toolId}: no user on requestContext (MASTRA_USER_KEY not set)`);
+    throw ConfigurationError.resourceNotFound(
+      `${toolId} user context`,
+      "Invoke the tool from an agent turn served by the mastra plugin, which stamps the AppKit user on the Mastra request context.",
+    );
   }
   return { client: user.executionContext.client, requestContext };
 }
@@ -164,15 +176,6 @@ const CONVERSATION_TTL_SEC = 4 * 60 * 60;
 const CONVERSATION_CACHE_NAMESPACE = "mastra:genie:conversation";
 
 /**
- * `userKey` for `CacheManager.getOrExecute` / `generateKey`. Genie
- * conversations are scoped to a single user + space + thread, and
- * `threadId` is already user-scoped (Mastra mints threads per
- * `resourceId`), so a constant user key here is safe and keeps the
- * cache key short.
- */
-const CONVERSATION_USER_KEY = "mastra-genie";
-
-/**
  * Build the per-request {@link RequestContext} key the active
  * Genie `conversation_id` lives under for `spaceId`. Scoped by
  * space so an app calling two Genie spaces in one request keeps
@@ -211,18 +214,23 @@ function writeContextConversationId(
 }
 
 /**
- * Build the canonical cache key for a `(spaceId, threadId)` pair.
- * Returns `undefined` when `threadId` is missing - callers should
+ * Build the canonical cache key for a `(spaceId, threadId)` pair, owned by
+ * `userKey`. Returns `undefined` when `threadId` is missing - callers should
  * skip caching entirely in that case (no Mastra memory wired up).
+ *
+ * The identity is part of the key because a client picks its own `threadId`
+ * (the thread-selection header / `?threadId=`), so the id alone does not
+ * establish who owns the Genie conversation behind it.
  */
 async function conversationCacheKey(
   spaceId: string,
   threadId: string | undefined,
+  userKey: string,
 ): Promise<string | undefined> {
   if (!threadId) return undefined;
   return (await CacheManager.getInstance()).generateKey(
     [CONVERSATION_CACHE_NAMESPACE, spaceId, threadId],
-    CONVERSATION_USER_KEY,
+    userKey,
   );
 }
 
@@ -395,7 +403,18 @@ function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string
       automatically while the call is in flight.
     `),
     inputSchema: z.object({
-      question: z.string().min(1, "question is required"),
+      question: z
+        .string()
+        .min(1, "question is required")
+        .describe(
+          string.toDescription(`
+            ONE focused natural-language question about the data in this
+            space, covering a single metric / dimension / time window
+            (e.g. "What was Q3 revenue by region?"). Decompose a
+            multi-part ask into separate calls rather than combining it
+            here.
+          `),
+        ),
     }),
     outputSchema: z.object({
       message: genieModel.GenieMessageSchema,
@@ -416,10 +435,10 @@ function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string
       // of wasting a turn.
       const trimmed = question.trim();
       if (trimmed.length === 0 || PLACEHOLDER_QUESTIONS.has(trimmed.toLowerCase())) {
-        throw new Error(
-          `${toolId}: refusing placeholder question "${question}" - ` +
-            `call ${toolId} only with a real natural-language question, ` +
-            `or skip the call entirely`,
+        throw ValidationError.invalidValue(
+          `${toolId}.question`,
+          question,
+          "a real natural-language question, not a placeholder; skip the call instead",
         );
       }
 
@@ -430,7 +449,11 @@ function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string
       // The same `RequestContext` is reused across every `ask_genie`
       // call within one user turn, so `ensureConversationSeeded`
       // hits the cache at most once per request per space.
-      const cacheKey = await conversationCacheKey(spaceId, threadId);
+      const cacheKey = await conversationCacheKey(
+        spaceId,
+        threadId,
+        resolveUserKey(requestContext),
+      );
       await ensureConversationSeeded(requestContext, spaceId, cacheKey);
 
       // Fire the lifecycle `started` event before any LLM /
@@ -466,7 +489,7 @@ function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string
           }
         }
         if (!finalMessage) {
-          throw new Error("Genie turn ended without a result event");
+          throw ExecutionError.missingData("Genie result event");
         }
         return finalMessage;
       };
@@ -612,7 +635,17 @@ function buildGetStatementTool() {
       upstream total - compare to \`rows.length\` to detect truncation.
     `),
     inputSchema: z.object({
-      statement_id: z.string().min(1, "statement_id is required"),
+      statement_id: z
+        .string()
+        .min(1, "statement_id is required")
+        .describe(
+          string.toDescription(`
+            Genie \`statement_id\` whose rows to read. Take it from
+            \`message.query_result.statement_id\` or
+            \`message.attachments[*].query.statement_id\` on an
+            \`ask_genie\` result; it is never a value you construct.
+          `),
+        ),
       limit: z
         .number()
         .int()
@@ -702,9 +735,10 @@ function buildPrepareChartTool(opts: { config: MastraPluginConfig }) {
     outputSchema: wire.ChartSchema.pick({ chartId: true }),
     execute: async (request, ctxRaw) => {
       const ctx = ctxRaw as ToolExecuteCtx;
-      const { client } = requireClient(ctx, toolId);
+      const { client, requestContext } = requireClient(ctx, toolId);
       return prepareChart({
         config,
+        userKey: resolveUserKey(requestContext),
         ...(request.title ? { title: request.title } : {}),
         ...(request.description ? { description: request.description } : {}),
         resolveData: (taskSignal) =>
@@ -855,9 +889,12 @@ export const GENIE_INSTRUCTIONS = string.toDescription([
  * Normalize the {@link GenieSpacesConfig} record. Bare-string
  * entries (`{ default: "01ef..." }`) get wrapped as
  * `{ spaceId: "01ef..." }`; object entries pass through unchanged.
- * `undefined` and empty-string values are dropped so callers can
- * pass `process.env.X` directly (matches AppKit `genie()`'s
- * defensive treatment of unset env vars).
+ *
+ * @throws ConfigurationError when an alias is present but carries no space id
+ *   (`{ default: process.env.DATABRICKS_GENIE_SPACE_ID }` with the variable
+ *   unset). An alias that resolves to nothing is a wiring contradiction: the
+ *   agent would advertise no Genie tool for a space the deployment believes it
+ *   configured, so it fails at construction instead of going quiet.
  */
 export function normalizeGenieSpaces(
   spaces: GenieSpacesConfig | Record<string, string | GenieSpaceConfig | undefined> | undefined,
@@ -865,16 +902,20 @@ export function normalizeGenieSpaces(
   if (!spaces) return {};
   const out: Record<string, GenieSpaceConfig> = {};
   for (const [alias, value] of Object.entries(spaces)) {
-    if (value === undefined) continue;
-    if (typeof value === "string") {
-      if (!value) continue;
-      out[alias] = { spaceId: value };
-      continue;
-    }
-    if (!value.spaceId) continue;
-    out[alias] = value;
+    const spaceId = typeof value === "string" ? value : value?.spaceId;
+    if (!spaceId) throw missingSpaceId(alias);
+    out[alias] = typeof value === "string" ? { spaceId } : value!;
   }
   return out;
+}
+
+/** Config contradiction: an alias present in `genieSpaces` with no space id. */
+function missingSpaceId(alias: string): ConfigurationError {
+  const envHint =
+    alias === DEFAULT_GENIE_ALIAS
+      ? "Set DATABRICKS_GENIE_SPACE_ID, pass the space id inline, or drop the alias."
+      : `Pass the space id inline (DATABRICKS_GENIE_SPACE_ID only backs the "${DEFAULT_GENIE_ALIAS}" alias) or drop the alias.`;
+  return ConfigurationError.resourceNotFound(`genieSpaces.${alias} space id`, envHint);
 }
 
 /**
@@ -907,9 +948,9 @@ type AppKitGenieConfig = NonNullable<Parameters<typeof genie>[0]>;
  *      pair just works.
  *
  * Aliases collide cleanly: a higher-precedence source's value
- * replaces a lower one's wholesale. Sources that contribute zero
- * aliases (or contribute only `undefined` / empty entries) are
- * silently ignored.
+ * replaces a lower one's wholesale. A source that contributes zero
+ * aliases is skipped; a source that names an alias without a space
+ * id fails through {@link normalizeGenieSpaces}.
  */
 export function resolveGenieSpaces(
   config: MastraPluginConfig,

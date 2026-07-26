@@ -1,16 +1,24 @@
 /**
  * Plugin configuration types and shared `RequestContext` keys.
  *
+ * Owns the typed {@link MastraPluginConfig} (the plugin's slice of AppKit
+ * config) and {@link MASTRA_CONFIG_SCHEMA}, the JSON Schema the manifest
+ * publishes for it so scaffolding tools and agents can read the option set.
+ *
+ * Precedence per field is explicit plugin config, then the environment
+ * variable named on the field, then a built-in default.
+ *
  * Kept in a leaf module so `plugin.ts`, `server.ts`, `model.ts`, and
  * `memory.ts` can import them without creating a cycle.
  *
  * @module
  */
 
-import type { BasePluginConfig } from "@databricks/appkit";
+import { getExecutionContext, type BasePluginConfig, type ConfigSchema } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import type { BrandContext } from "@dbx-tools/shared-core";
 import type { AgentConfig } from "@mastra/core/agent";
+import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
@@ -83,6 +91,28 @@ export interface User {
   executionContext: appkit.ExecutionContextLike;
 }
 
+/**
+ * Canonical identity for an AppKit execution context: the OBO user id on a
+ * user-scoped call, the service principal id otherwise.
+ */
+export function executionContextUserId(context: appkit.ExecutionContextLike): string {
+  return "userId" in context ? context.userId : context.serviceUserId;
+}
+
+/**
+ * Identity every per-user cache entry is namespaced under, so an OBO result
+ * cannot be read back by another caller.
+ *
+ * Prefers the {@link User} that {@link MastraServer} stamps on the request
+ * context. The MCP transport routes do not thread that context into tool
+ * execution, so those fall back to the ambient execution context (the active
+ * OBO scope, or the service principal).
+ */
+export function resolveUserKey(requestContext?: RequestContext): string {
+  const user = requestContext?.get(MASTRA_USER_KEY) as User | undefined;
+  return user?.id ?? executionContextUserId(getExecutionContext());
+}
+
 /** PgVector config with an optional Mastra store id. */
 export type MastraMemoryConfig = PgVectorConfig & {
   id?: string;
@@ -129,7 +159,7 @@ export interface MastraMcpConfig {
 
 /** Configuration accepted by the Mastra AppKit plugin. */
 export interface MastraPluginConfig extends BasePluginConfig {
-  /** Mastra OpenAI-compatible provider id. Defaults to `"databricks"`. */
+  /** Mastra OpenAI-compatible provider id. Defaults to `"databricks"`; no env fallback. */
   providerId?: string;
   /**
    * PostgresStore for Mastra threads/messages. `true` reuses the
@@ -213,34 +243,40 @@ export interface MastraPluginConfig extends BasePluginConfig {
    *   or `providerId`.
    *
    * Resolution order per agent: `def.model` → `defaultModel` →
-   * built-in `/serving-endpoints` resolver.
+   * `DATABRICKS_SERVING_ENDPOINT_NAME` → built-in `/serving-endpoints`
+   * resolver.
    */
   defaultModel?: AgentConfig["model"] | string;
   /**
-   * Allow loose model names (`"claude sonnet"`) to be fuzzy-matched
-   * against the workspace's Model Serving endpoints. Defaults to
-   * `true`; set `false` to require exact endpoint names everywhere.
+   * Fuzzy-match loose model names (`"claude sonnet"`) against the workspace's
+   * Model Serving endpoints. Defaults to `true`; no env fallback.
+   *
+   * Set `false` to require exact endpoint names everywhere.
    */
   modelFuzzyMatch?: boolean;
   /**
-   * Fuse.js score threshold for the fuzzy matcher (0 = exact match,
-   * 1 = anything matches). Defaults to `0.4`. Lower values reject
-   * loose matches; raise it if you have a sprawling endpoint
-   * catalogue with similar-looking names.
+   * Fuse.js score threshold for the fuzzy matcher, 0 (exact) to 1 (anything).
+   * Defaults to `0.4`; no env fallback.
+   *
+   * Lower values reject loose matches; raise it if you have a sprawling
+   * endpoint catalogue with similar-looking names.
    */
   modelFuzzyThreshold?: number;
   /**
-   * TTL for the in-memory serving-endpoints list cache, in
-   * milliseconds. Defaults to 5 minutes. The cache is per workspace
-   * host and shared across users; concurrent callers coalesce on a
-   * single in-flight fetch.
+   * TTL for the in-memory serving-endpoints list cache, in milliseconds.
+   * Defaults to 5 minutes; no env fallback.
+   *
+   * The cache is per workspace host and shared across users; concurrent
+   * callers coalesce on a single in-flight fetch.
    */
   modelCacheTtlMs?: number;
   /**
-   * Allow clients to override the active model per request via the
-   * `X-Mastra-Model` header, `?model=` query string, or `model` body
-   * field. Defaults to `true`. Disable when running multi-tenant
-   * where untrusted clients shouldn't pick the backing endpoint.
+   * Let clients pick the backing endpoint per request. Defaults to `true`;
+   * no env fallback.
+   *
+   * Reads the `X-Mastra-Model` header, the `?model=` query string, or a
+   * `model` body field, in that order. Disable when running multi-tenant
+   * where untrusted clients shouldn't choose the endpoint.
    */
   modelOverride?: boolean;
   /**
@@ -459,3 +495,119 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   brand?: BrandContext;
 }
+
+/**
+ * JSON Schema published on the manifest's `config.schema`, mirroring the
+ * documented defaults and environment fallbacks of {@link MastraPluginConfig}.
+ *
+ * Covers the JSON-expressible options only. `agents`, `tools`, and a
+ * `defaultModel` passed as a Mastra `DynamicArgument` are code-defined
+ * (functions / class instances), so they carry no schema entry; the
+ * `defaultModel` property below describes its string form.
+ */
+export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
+  type: "object",
+  properties: {
+    providerId: {
+      type: "string",
+      description: 'Mastra OpenAI-compatible provider id. Defaults to "databricks".',
+    },
+    storage: {
+      type: ["boolean", "object"],
+      description:
+        "PostgresStore for Mastra threads / messages. `true` reuses the `lakebase` plugin's pool, an object opens a dedicated store. Auto-enabled when the `lakebase` plugin is registered.",
+    },
+    memory: {
+      type: ["boolean", "object"],
+      description:
+        "PgVector store for Mastra semantic recall. `true` reuses the `lakebase` plugin's pool, an object opens a dedicated store. Auto-enabled when the `lakebase` plugin is registered.",
+    },
+    defaultAgent: {
+      type: "string",
+      description:
+        "Agent id used when the client names none. Defaults to the first registered agent, else the built-in `default`.",
+    },
+    defaultModel: {
+      type: "string",
+      description:
+        "Serving endpoint applied to every agent that omits its own model. Falls back to DATABRICKS_SERVING_ENDPOINT_NAME, then the auto-resolved catalogue.",
+    },
+    defaultModelFallbacks: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Priority-ordered endpoint names tried before the score-classified catalogue when nothing else pins a model.",
+    },
+    modelFuzzyMatch: {
+      type: "boolean",
+      description:
+        "Fuzzy-match loose model names against the workspace catalogue. Defaults to true.",
+    },
+    modelFuzzyThreshold: {
+      type: "number",
+      description:
+        "Fuse.js score threshold for the fuzzy matcher, 0 (exact) to 1 (anything). Defaults to 0.4.",
+    },
+    modelCacheTtlMs: {
+      type: "number",
+      description:
+        "TTL in ms for the serving-endpoints list cache, per workspace host. Defaults to 5 minutes.",
+    },
+    modelOverride: {
+      type: "boolean",
+      description:
+        "Honor a per-request model override from the X-Mastra-Model header, ?model= query, or a `model` body field. Defaults to true.",
+    },
+    genieSpaces: {
+      type: "object",
+      additionalProperties: { type: ["string", "object"] },
+      description:
+        "Genie spaces the agents can delegate to, keyed by alias (the tool-name suffix). Each value is a space id or `{ spaceId, hint }`. Falls back to the `genie` plugin's own `spaces` config, then DATABRICKS_GENIE_SPACE_ID under the `default` alias.",
+    },
+    genieSpaceCacheTtlMs: {
+      type: "number",
+      description: "TTL in ms for the Genie space metadata cache. Defaults to 5 minutes.",
+    },
+    agentMaxSteps: {
+      type: "number",
+      description:
+        "Maximum LLM steps each agent gets per turn (a tool call and the final reply each consume one). Defaults to 25.",
+    },
+    stripStaleCharts: {
+      type: "boolean",
+      description:
+        "Strip chartIds from recalled assistant tool results so the model cannot reuse a turn-scoped chart marker. Defaults to true.",
+    },
+    styleInstructions: {
+      type: ["string", "boolean"],
+      description:
+        "Style guardrails appended to every agent's instructions. A string replaces the built-in block, `false` disables it.",
+    },
+    observability: {
+      type: "boolean",
+      description:
+        "Bridge Mastra spans into AppKit's OTel pipeline. Defaults to on only when OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set.",
+    },
+    feedback: {
+      type: "boolean",
+      description:
+        "Log thumbs / comment assessments to MLflow and surface the feedback controls. Defaults to on only when an OTLP endpoint and MLFLOW_EXPERIMENT_ID or MLFLOW_EXPERIMENT_NAME are set.",
+    },
+    mcp: {
+      type: ["boolean", "object"],
+      description:
+        "Expose the registered agents over MCP. Defaults to agents-only; an object tunes the server id, advertised metadata, and whether ambient tools are exposed.",
+    },
+    apiAccess: {
+      type: "string",
+      enum: ["scoped", "full"],
+      description:
+        'How much of the stock @mastra/express API is reachable through the mount. "scoped" (default) allows agent inference, read-only agent metadata, this plugin\'s own routes, and MCP; "full" dispatches the entire management surface.',
+    },
+    brand: {
+      type: "object",
+      description:
+        "Portable brand context applied to generated charts (series palette from colors.primary / colors.accent, base font from typography.sans).",
+    },
+  },
+};

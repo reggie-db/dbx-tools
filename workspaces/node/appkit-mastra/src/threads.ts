@@ -21,6 +21,7 @@
  * @module
  */
 
+import { ValidationError } from "@databricks/appkit";
 import { log } from "@dbx-tools/shared-core";
 import {
   wire,
@@ -36,6 +37,7 @@ import type { ContextWithMastra } from "@mastra/core/server";
 import { registerApiRoute } from "@mastra/core/server";
 
 import { clampPerPage, parseIntParam } from "./pagination";
+import { invalidFields } from "./validation";
 
 const logger = log.logger("mastra/threads");
 
@@ -43,6 +45,8 @@ const logger = log.logger("mastra/threads");
 const DEFAULT_PER_PAGE = 30;
 /** Hard cap so a misbehaving client can't fetch every thread at once. */
 const MAX_PER_PAGE = 200;
+/** Stable client message for a rename body that fails schema validation. */
+const INVALID_RENAME_MESSAGE = "Invalid thread rename request";
 
 /** Inputs accepted by {@link listThreads}. */
 export interface ListThreadsOptions {
@@ -220,8 +224,10 @@ export function threadsRoute(options: ThreadsRouteOptions) {
   const { path } = options;
   const fixedAgent = "agent" in options ? options.agent : undefined;
   if (!fixedAgent && !path.includes(":agentId")) {
-    throw new Error(
-      "threadsRoute path must include `:agentId` or `agent` must be passed explicitly",
+    throw ValidationError.invalidValue(
+      "threadsRoute.path",
+      path,
+      "a path containing `:agentId`, or an explicit `agent`",
     );
   }
   // Shared by GET / DELETE: resolve the active agent and the caller's
@@ -298,7 +304,8 @@ export function threadsRoute(options: ThreadsRouteOptions) {
         }
         const body = wire.MastraUpdateThreadRequestSchema.safeParse(await c.req.json());
         if (!body.success) {
-          return c.json({ error: body.error.message }, 400);
+          logger.warn("rename:invalid", { error: body.error.message });
+          return c.json({ error: INVALID_RENAME_MESSAGE, fields: invalidFields(body.error) }, 400);
         }
         const thread = await renameThread({
           agent: ctx.agent,

@@ -14,7 +14,7 @@
  */
 
 import { posix as path } from "node:path";
-import { getExecutionContext } from "@databricks/appkit";
+import { ExecutionError, getExecutionContext, ValidationError } from "@databricks/appkit";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 import { error, functionModule, hash, log } from "@dbx-tools/shared-core";
 import {
@@ -101,7 +101,11 @@ export interface DatabricksWorkspaceFilesystemOptions extends MastraFilesystemOp
 export function normalizeDatabricksBasePath(basePath: string): string {
   const trimmed = basePath.trim();
   if (!trimmed.startsWith("/")) {
-    throw new Error(`Databricks base path must be absolute: ${basePath}`);
+    throw ValidationError.invalidValue(
+      "basePath",
+      basePath,
+      "an absolute Databricks path, e.g. /Volumes/catalog/schema/volume",
+    );
   }
   return trimmed.replace(/\/+$/, "") || "/";
 }
@@ -297,8 +301,16 @@ export class DatabricksWorkspaceFilesystem extends MastraFilesystem {
     if (ErrorType) {
       throw new ErrorType(workspacePath);
     }
-    const message = error.errorMessage(err);
-    throw new Error(`Databricks filesystem ${workspacePath}: ${message}`);
+    // The upstream message is logged rather than raised: it reaches the model
+    // (and from there the chat transcript) as the tool's failure text.
+    logger.warn("operation-failed", {
+      path: workspacePath,
+      error: error.errorMessage(err),
+    });
+    throw new ExecutionError(`Databricks filesystem operation failed for ${workspacePath}`, {
+      cause: error.toError(err),
+      context: { path: workspacePath },
+    });
   }
 
   /* --- lifecycle --- */
@@ -518,7 +530,7 @@ export class DatabricksWorkspaceFilesystem extends MastraFilesystem {
     const created = await this.client.dbfs.create({ path: absolutePath, overwrite });
     const handle = created.handle;
     if (handle === undefined) {
-      throw new Error(`DBFS create did not return a handle for ${absolutePath}`);
+      throw ExecutionError.missingData("DBFS upload handle");
     }
     for (let offset = 0; offset < buffer.length; offset += DBFS_PUT_MAX_BYTES) {
       const slice = buffer.subarray(offset, offset + DBFS_PUT_MAX_BYTES);

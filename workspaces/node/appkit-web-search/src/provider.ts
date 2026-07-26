@@ -23,6 +23,9 @@
  * @module
  */
 
+import { ValidationError } from "@databricks/appkit";
+import { z } from "zod";
+
 /** A web-search-capable model provider family. */
 export type WebSearchProvider = "openai" | "gemini";
 
@@ -71,20 +74,40 @@ export function supportsWebSearch(modelId: string): boolean {
 }
 
 /**
+ * Runtime shape of one entry in the operator override map. The map arrives as
+ * parsed JSON (config or `WEB_SEARCH_TOOLS`), so it is validated rather than
+ * asserted.
+ */
+const providerOverrideSchema = z.object({
+  api: z.enum(["responses", "chat"]).optional(),
+  tool: z.record(z.string(), z.unknown()).optional(),
+});
+
+/**
  * Resolve the effective {@link WebSearchProviderSpec} for a provider: the
  * built-in default, with any operator override (the `webSearchTools` map,
  * keyed by provider) shallow-merged over it. An override may replace just the
- * `tool` (the common case - a new tool type) or also the `api`.
+ * `tool` (the common case - a new tool type) or also the `api`. An override
+ * that is not one of those two fields is a deployment mistake that would
+ * otherwise be silently dropped, so it throws.
  */
 export function webSearchToolSpec(
   provider: WebSearchProvider,
   overrides?: Record<string, unknown>,
 ): WebSearchProviderSpec {
   const base = WEB_SEARCH_PROVIDERS[provider];
-  const override = overrides?.[provider] as Partial<WebSearchProviderSpec> | undefined;
-  if (!override) return base;
+  const raw = overrides?.[provider];
+  if (raw === undefined) return base;
+  const parsed = providerOverrideSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw ValidationError.invalidValue(
+      `webSearchTools.${provider}`,
+      raw,
+      'an object with an optional "api" ("responses" | "chat") and an optional "tool" object',
+    );
+  }
   return {
-    api: override.api ?? base.api,
-    tool: override.tool ?? base.tool,
+    api: parsed.data.api ?? base.api,
+    tool: parsed.data.tool ?? base.tool,
   };
 }

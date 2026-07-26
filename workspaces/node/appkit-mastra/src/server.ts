@@ -20,6 +20,7 @@ import { trace } from "@opentelemetry/api";
 import type express from "express";
 
 import {
+  executionContextUserId,
   MASTRA_REQUEST_ID_KEY,
   MASTRA_SCOPES_KEY,
   MASTRA_USER_EMAIL_KEY,
@@ -94,7 +95,7 @@ export class MastraServer extends MastraServerExpress {
     if ([MASTRA_USER_KEY, MASTRA_RESOURCE_ID_KEY].every((key) => requestContext.get(key))) return;
     const executionContext = getExecutionContext();
     const user: User = {
-      id: "userId" in executionContext ? executionContext.userId : executionContext.serviceUserId,
+      id: executionContextUserId(executionContext),
       executionContext,
     };
     requestContext.set(MASTRA_USER_KEY, user);

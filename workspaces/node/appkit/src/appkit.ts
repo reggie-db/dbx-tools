@@ -12,6 +12,9 @@
  */
 
 import { createApp, getExecutionContext, InitializationError } from "@databricks/appkit";
+import { log } from "@dbx-tools/shared-core";
+
+const logger = log.logger("appkit");
 
 /**
  * The AppKit per-request execution context returned by `getExecutionContext()`
@@ -33,7 +36,14 @@ export type WorkspaceClientLike = ExecutionContextLike["client"];
 /**
  * The current AppKit execution context, or `undefined` when AppKit isn't
  * initialized (outside a request scope). Swallows AppKit's
- * `InitializationError`; any other error propagates.
+ * {@link InitializationError}; any other error propagates.
+ *
+ * @example
+ * import { appkit } from "@dbx-tools/appkit";
+ * import { WorkspaceClient } from "@databricks/sdk-experimental";
+ *
+ * // OBO-scoped inside a request, service principal from a CLI or script.
+ * const client = appkit.tryGetExecutionContext()?.client ?? new WorkspaceClient({});
  */
 export function tryGetExecutionContext(): ExecutionContextLike | undefined {
   try {
@@ -49,9 +59,18 @@ export function tryGetExecutionContext(): ExecutionContextLike | undefined {
   return undefined;
 }
 
-/** Initialize a bare AppKit app (no plugins) when none is running yet. */
+/**
+ * Initialize a bare AppKit app (no plugins) when none is running yet.
+ *
+ * @example
+ * import { appkit } from "@dbx-tools/appkit";
+ *
+ * await appkit.ensureInitialized();
+ * const client = appkit.tryGetExecutionContext()?.client;
+ */
 export async function ensureInitialized(): Promise<void> {
   if (!tryGetExecutionContext()) {
+    logger.debug("initializing a bare AppKit app");
     await createApp({ plugins: [] });
   }
 }

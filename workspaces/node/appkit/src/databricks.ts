@@ -12,13 +12,24 @@
 
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
-import { async } from "@dbx-tools/shared-core";
+import { async, log } from "@dbx-tools/shared-core";
+
+const logger = log.logger("databricks");
+
+/** Highest valid TCP port number. */
+export const MAX_TCP_PORT = 65_535;
 
 /**
  * Detect the Databricks App runtime from environment shape: requires a
  * non-empty `DATABRICKS_APP_NAME`, a `DATABRICKS_HOST` that parses as an
  * `http`/`https` URL, and a `DATABRICKS_APP_PORT` that is a valid TCP port.
  * Reads `process.env` when no `env` is passed.
+ *
+ * @example
+ * import { databricks } from "@dbx-tools/appkit";
+ *
+ * // Skip bundle / app.yaml discovery when the app is already deployed.
+ * const local = !databricks.isAppEnv();
  */
 export function isAppEnv(env: Record<string, string | undefined> = process.env): boolean {
   const appName = env.DATABRICKS_APP_NAME?.trim();
@@ -32,14 +43,17 @@ export function isAppEnv(env: Record<string, string | undefined> = process.env):
   try {
     const url = new URL(host);
     if (!["http:", "https:"].includes(url.protocol)) {
+      logger.debug("app env rejected: host is not an http(s) URL");
       return false;
     }
   } catch {
+    logger.debug("app env rejected: host is not a URL");
     return false;
   }
 
   const portNumber = Number(port);
-  if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
+  if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > MAX_TCP_PORT) {
+    logger.debug("app env rejected: DATABRICKS_APP_PORT is not a TCP port");
     return false;
   }
 
@@ -49,7 +63,18 @@ export function isAppEnv(env: Record<string, string | undefined> = process.env):
 /** Either an SDK `Context` or a WHATWG `AbortSignal`. */
 export type ContextLike = Context | AbortSignal;
 
-/** Wrap a `Context` (returned as-is) or `AbortSignal` (adapted) as an SDK `Context`. */
+/**
+ * Wrap a `Context` (returned as-is) or `AbortSignal` (adapted) as an SDK `Context`.
+ *
+ * @example
+ * import { databricks } from "@dbx-tools/appkit";
+ * import { getWorkspaceClient } from "@databricks/appkit";
+ *
+ * await getWorkspaceClient({}).apiClient.request(
+ *   { path: "/api/2.0/serving-endpoints", method: "GET", headers: new Headers(), raw: false },
+ *   databricks.toContext(request.signal),
+ * );
+ */
 export function toContext(input: ContextLike): Context;
 /**
  * Derive an SDK `Context` from `controller.signal`, optionally tying `input`

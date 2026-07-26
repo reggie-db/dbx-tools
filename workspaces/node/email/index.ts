@@ -4,6 +4,7 @@
 
 export * as brand from "./src/brand";
 export * as config from "./src/config";
+export * as defaults from "./src/defaults";
 export * as emailHtml from "./src/email-html";
 export * as markdown from "./src/markdown";
 export * as outbox from "./src/outbox";
@@ -12,7 +13,8 @@ export * as sender from "./src/sender";
 export * as tool from "./src/tool";
 export * as transport from "./src/transport";
 export type { EmailBrand } from "./src/brand";
-export type { SmtpConfig, EmailPluginConfig, ResolvedSmtpConfig, ResolvedFileConfig, ResolvedEmailConfig } from "./src/config";
+export type { SenderPolicy, SmtpConfig, EmailPluginConfig, ResolvedSmtpConfig, ResolvedFileConfig, ResolvedEmailConfig } from "./src/config";
+export type { EmailExecuteConfig, EmailExecutionSettings } from "./src/defaults";
 export type { EmailHtmlOptions } from "./src/email-html";
 export type { EmailToolOptions } from "./src/tool";
-export type { EmailRuntime } from "./src/transport";
+export type { EmailExecutor, EmailRuntime } from "./src/transport";

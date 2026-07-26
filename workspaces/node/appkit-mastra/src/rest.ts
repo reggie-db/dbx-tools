@@ -1,5 +1,3 @@
-import { appkit } from "@dbx-tools/appkit";
-import { json } from "@dbx-tools/shared-core";
 /**
  * Minimal authenticated Databricks REST helper. Pulls the workspace
  * host and a fresh bearer header off an OBO-scoped `WorkspaceClient`
@@ -8,7 +6,12 @@ import { json } from "@dbx-tools/shared-core";
  * method (e.g. the MLflow assessments API); returns the raw `Response`
  * so callers decide how to treat status codes. Also carries the
  * defensive `Response` body readers those callers share.
+ *
+ * @module
  */
+
+import { appkit } from "@dbx-tools/appkit";
+import { json } from "@dbx-tools/shared-core";
 
 /** Workspace client carried on an AppKit execution context. */
 type WorkspaceClient = appkit.WorkspaceClientLike;

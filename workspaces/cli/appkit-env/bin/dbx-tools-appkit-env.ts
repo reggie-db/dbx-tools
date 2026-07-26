@@ -35,7 +35,7 @@ const program = new Command()
     const format = opts.format ? parseEnvExportFormat(opts.format) : defaultEnvExportFormat();
     logger.debug("Snapshotting env vars");
     const before = snapshotEnv();
-    await createApp.autoConfigure({ autoConfigure: true });
+    await createApp.autoConfigure({ autoConfigure: "env" });
     const changes = diffEnv(before, snapshotEnv());
 
     process.stdout.write(formatEnvExport(changes, format));

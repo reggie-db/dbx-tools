@@ -20,6 +20,28 @@
 import { string } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
+/**
+ * Description the model reads for `web_search`. Shared by the Mastra tool and
+ * the AppKit tool provider so both hosts describe the tool identically.
+ */
+export const WEB_SEARCH_TOOL_DESCRIPTION = string.toDescription(`
+  Search the web for current information and get an answer synthesized from
+  live results, with the sources it used. Pass a natural-language query;
+  the search runs inside a web-search-capable model (chosen independently
+  of your own model). Optionally pass a model name to use a specific
+  web-search model. Use it whenever a question needs up-to-date or external
+  information you don't already have.
+`);
+
+/** Description the model reads for `web_fetch`. Shared like {@link WEB_SEARCH_TOOL_DESCRIPTION}. */
+export const WEB_FETCH_TOOL_DESCRIPTION = string.toDescription(`
+  Fetch a single web page and return its readable contents. Pass an
+  absolute URL (including https://); set format to "html" for raw markup
+  instead of extracted text. Use it to read a page returned by web_search
+  or provided by the user. Content is length-capped; fetching a URL outside
+  the configured allow-list is refused.
+`);
+
 /** Schema for the `web_search` tool input. */
 export const webSearchRequestSchema = z.object({
   query: z

@@ -5,22 +5,63 @@
  * plugin at setup) primes it from the plugin's config; later callers (the
  * tools' `execute`) reuse it.
  *
+ * The runtime also carries the {@link WebSearchExecutor} every outbound call
+ * runs through. The plugin installs its own `execute()` there at setup, which
+ * is how the tools - plain functions with no plugin instance in scope - still
+ * get AppKit's cache / retry / timeout / telemetry chain. Without a
+ * registered plugin (a direct call from a script or a test) the calls still
+ * run, just without interceptors.
+ *
  * Unlike the email runtime there is no connection to pool - the backend is
- * stateless HTTP per call - so the runtime holds only the resolved config.
+ * stateless HTTP per call - so the runtime holds only the resolved config and
+ * that executor.
  *
  * @module
  */
 
+import { AppKitError, ExecutionError, type ExecutionResult } from "@databricks/appkit";
+import { async, error, log } from "@dbx-tools/shared-core";
 import {
   resolveWebSearchConfig,
   type ResolvedWebSearchConfig,
   type WebSearchPluginConfig,
 } from "./config";
+import type { WebSearchExecutionSettings } from "./defaults";
 
-/** The shared resolved config. */
+const logger = log.logger("web-search/runtime");
+
+/**
+ * Runs one outbound call through AppKit's interceptor chain. Matches
+ * `Plugin.execute()`, which never throws: a failure comes back as
+ * `{ ok: false }`.
+ */
+export type WebSearchExecutor = <T>(
+  fn: (signal?: AbortSignal) => Promise<T>,
+  settings: WebSearchExecutionSettings,
+) => Promise<ExecutionResult<T>>;
+
+/** The shared resolved config plus the executor outbound calls run through. */
 export interface WebSearchRuntime {
   config: ResolvedWebSearchConfig;
+  execute: WebSearchExecutor;
 }
+
+/**
+ * Executor used until (or unless) the plugin installs its own: run the call
+ * directly, mapping a throw onto the same {@link ExecutionResult} shape so
+ * call sites branch on `ok` either way.
+ */
+const directExecute: WebSearchExecutor = async (fn) => {
+  try {
+    return { ok: true, data: await fn() };
+  } catch (err) {
+    return {
+      ok: false,
+      status: err instanceof AppKitError ? err.statusCode : 500,
+      message: error.errorMessage(err),
+    };
+  }
+};
 
 let runtime: WebSearchRuntime | undefined;
 
@@ -33,12 +74,55 @@ let runtime: WebSearchRuntime | undefined;
  */
 export function getWebSearchRuntime(overrides?: WebSearchPluginConfig): WebSearchRuntime {
   if (!runtime) {
-    runtime = { config: resolveWebSearchConfig(overrides) };
+    runtime = { config: resolveWebSearchConfig(overrides), execute: directExecute };
   }
   return runtime;
+}
+
+/**
+ * Install the executor outbound calls run through. The plugin calls this at
+ * setup with its own `execute()`; a second call replaces the previous one, so
+ * a re-registered plugin does not leave the tools bound to a dead instance.
+ */
+export function setWebSearchExecutor(execute: WebSearchExecutor): void {
+  getWebSearchRuntime().execute = execute;
 }
 
 /** Drop the memoized runtime so the next {@link getWebSearchRuntime} rebuilds it. */
 export function resetWebSearchRuntime(): void {
   runtime = undefined;
+}
+
+/**
+ * Run one idempotent read through the shared executor and unwrap it.
+ *
+ * `execute()` never throws, so a failed call arrives as `{ ok: false }` with
+ * a status the interceptors already sanitized; it is logged here and re-raised
+ * as a stable {@link ExecutionError} so an upstream message never becomes the
+ * caller's error text. `signal` is the caller's own cancellation (an agent
+ * run, a request teardown); it is merged with the signal the timeout
+ * interceptor supplies so either one unwinds the I/O.
+ */
+export async function executeRead<T>(
+  operation: string,
+  settings: WebSearchExecutionSettings,
+  fn: (signal?: AbortSignal) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const { execute } = getWebSearchRuntime();
+  const result = await execute(
+    (executeSignal) => fn(async.combineAbortSignals(executeSignal, signal)),
+    settings,
+  );
+  if (result.ok) return result.data;
+  // A caller that cancelled is not a failure worth reporting as one.
+  if (signal?.aborted) throw ExecutionError.canceled();
+  logger.warn("execution-failed", {
+    operation,
+    status: result.status,
+    error: result.message,
+  });
+  throw new ExecutionError(`web-search: ${operation} failed`, {
+    context: { operation, status: result.status },
+  });
 }

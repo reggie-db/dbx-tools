@@ -6,7 +6,7 @@ import {
   parseAllowedUrls,
   toUrlAllowList,
 } from "../src/allowlist";
-import { approvalMatches, resolveWebSearchConfig } from "../src/config";
+import { approvalMatches, resolveWebSearchConfig, toApprovalPolicy } from "../src/config";
 import { htmlToText } from "../src/html-text";
 import {
   detectWebSearchProvider,
@@ -54,7 +54,7 @@ describe("web-search allow-list", () => {
 
   it("assertUrlAllowed throws for a disallowed URL, passes an allowed one", () => {
     const list = toUrlAllowList(parseAllowedUrls(["databricks.com"]));
-    assert.throws(() => assertUrlAllowed("https://evil.example.com/", list), /not permitted/);
+    assert.throws(() => assertUrlAllowed("https://evil.example.com/", list), /allow-list/);
     assert.doesNotThrow(() => assertUrlAllowed("https://databricks.com/", list));
   });
 });
@@ -97,8 +97,9 @@ describe("web-search provider detection", () => {
 describe("web-search config", () => {
   it("defaults model fallbacks to Gemini-then-GPT and approval to none", () => {
     const c = resolveWebSearchConfig();
-    assert.equal(c.approval, false);
+    assert.deepEqual(c.approval, { mode: "none" });
     assert.equal(c.model, undefined);
+    assert.equal(c.modelSource, "none");
     assert.match(c.modelFallbacks[0]!, /gemini/);
     assert.ok(c.modelFallbacks.some((m) => m.includes("gpt")));
   });
@@ -111,6 +112,71 @@ describe("web-search config", () => {
   it("enables the scrape fallback by default, honors an explicit off", () => {
     assert.equal(resolveWebSearchConfig().scrapeFallback, true);
     assert.equal(resolveWebSearchConfig({ scrapeFallback: false }).scrapeFallback, false);
+  });
+
+  it("records where a pinned endpoint came from", () => {
+    assert.equal(resolveWebSearchConfig({ model: "gemini" }).modelSource, "config");
+    process.env.DATABRICKS_SERVING_ENDPOINT_NAME = "databricks-claude-sonnet-4-6";
+    try {
+      const c = resolveWebSearchConfig();
+      assert.equal(c.model, "databricks-claude-sonnet-4-6");
+      assert.equal(c.modelSource, "DATABRICKS_SERVING_ENDPOINT_NAME");
+      // The dedicated override wins over the shared resource binding.
+      assert.equal(resolveWebSearchConfig({ model: "gemini" }).modelSource, "config");
+    } finally {
+      delete process.env.DATABRICKS_SERVING_ENDPOINT_NAME;
+    }
+  });
+
+  it("names the URL policy, defaulting from whether an allow-list was given", () => {
+    assert.equal(resolveWebSearchConfig().urlPolicy, "unrestricted");
+    assert.equal(resolveWebSearchConfig().allowList.restricted, false);
+    const restricted = resolveWebSearchConfig({ allowedUrls: ["databricks.com"] });
+    assert.equal(restricted.urlPolicy, "allowlist");
+    assert.equal(restricted.allowList.restricted, true);
+    assert.equal(
+      resolveWebSearchConfig({ urlPolicy: "allowlist", allowedUrls: ["databricks.com"] }).urlPolicy,
+      "allowlist",
+    );
+  });
+
+  it("fails loudly on a URL policy that contradicts its allow-list", () => {
+    assert.throws(() => resolveWebSearchConfig({ urlPolicy: "allowlist" }), /allowedUrls/);
+    assert.throws(
+      () => resolveWebSearchConfig({ urlPolicy: "unrestricted", allowedUrls: ["databricks.com"] }),
+      /allowedUrls/,
+    );
+  });
+
+  it("fails loudly on a WEB_SEARCH_TOOLS value that is not a JSON object", () => {
+    process.env.WEB_SEARCH_TOOLS = "not-json";
+    try {
+      assert.throws(() => resolveWebSearchConfig(), /WEB_SEARCH_TOOLS/);
+    } finally {
+      delete process.env.WEB_SEARCH_TOOLS;
+    }
+  });
+
+  it("rejects a webSearchTools override that is not a tool spec", () => {
+    assert.throws(() => webSearchToolSpec("gemini", { gemini: "nope" }), /webSearchTools.gemini/);
+  });
+});
+
+describe("web-search approval policy", () => {
+  it("normalizes every accepted spelling", () => {
+    assert.deepEqual(toApprovalPolicy(undefined), { mode: "none" });
+    assert.deepEqual(toApprovalPolicy(false), { mode: "none" });
+    assert.deepEqual(toApprovalPolicy(true), { mode: "always" });
+    assert.deepEqual(toApprovalPolicy("*.internal.example.com"), {
+      mode: "urls",
+      patterns: ["*.internal.example.com"],
+    });
+    assert.deepEqual(toApprovalPolicy({ mode: "always" }), { mode: "always" });
+  });
+
+  it("collapses an empty pattern list to no approval", () => {
+    assert.deepEqual(toApprovalPolicy("  "), { mode: "none" });
+    assert.deepEqual(toApprovalPolicy({ mode: "urls", patterns: [] }), { mode: "none" });
   });
 });
 

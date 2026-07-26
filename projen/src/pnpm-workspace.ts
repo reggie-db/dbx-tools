@@ -41,7 +41,12 @@ const DEFAULT_CATALOG: Catalog = {
   "@types/node": "^24.6.0",
   "@types/express": "^5.0.5",
   express: "^5.1.0",
-  zod: "^4.3.6",
+  // Exact, not a range: AppKit pins `zod` to a single version, and a schema
+  // built against a different copy is a structurally identical but nominally
+  // distinct type, so passing one to `defineTool` needs a cast. Matching the
+  // pin keeps one zod in the tree and the boundary cast-free. Still inside
+  // `@mastra/core`'s `^3.25.0 || ^4.0.0` peer range.
+  zod: "4.3.6",
   typescript: "^5.9.3",
   tsx: "^4.23.0",
   commander: "^15.0.0",

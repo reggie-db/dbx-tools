@@ -18,24 +18,49 @@
  * to a single SMTP server (e.g. SMTP2GO): `SMTP_HOST`, `SMTP_PORT`,
  * `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, plus `EMAIL_DOMAIN` for
  * the derived sender's domain, `EMAIL_FROM` for an explicit override,
- * and `EMAIL_OUTBOX_DIR` for the outbox directory.
+ * `EMAIL_SENDER_POLICY` for the sender restriction mode, and
+ * `EMAIL_OUTBOX_DIR` for the outbox directory.
  *
  * @module
  */
 import { resolve } from "node:path";
-import type { BasePluginConfig } from "@databricks/appkit";
+import { ConfigurationError, ValidationError, type BasePluginConfig } from "@databricks/appkit";
 import { object } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import type { EmailBrand } from "./brand";
 import { parseAllowedSenders } from "./sender";
 
+/** SMTP submission port used when none is configured. */
+export const DEFAULT_SMTP_PORT = 587;
+
+/** SMTP port that implies a TLS-on-connect socket rather than STARTTLS. */
+export const IMPLICIT_TLS_SMTP_PORT = 465;
+
+/**
+ * How the sender (`From`) address is restricted.
+ *
+ * `"allowlist"` is the default and the deny-by-default posture: a send is
+ * permitted only from an address the configuration names, either through
+ * {@link EmailPluginConfig.allowedSenders} or, when that is empty, through
+ * the configured sender source ({@link EmailPluginConfig.from} as an exact
+ * address, {@link EmailPluginConfig.domain} as a `*@domain` wildcard).
+ *
+ * `"unrestricted"` is the explicit opt-out: any `From` a caller supplies is
+ * accepted. Only reach for it when an upstream system already vets the
+ * sender.
+ */
+export type SenderPolicy = "allowlist" | "unrestricted";
+
 /** SMTP connection + credentials. All fields fall back to env when unset. */
 export interface SmtpConfig {
   /** SMTP server hostname (`SMTP_HOST`). */
   host?: string;
-  /** SMTP server port (`SMTP_PORT`). Defaults to 587. */
+  /** SMTP server port (`SMTP_PORT`). Defaults to {@link DEFAULT_SMTP_PORT}. */
   port?: number;
-  /** Use a TLS-on-connect socket (`SMTP_SECURE`). Defaults to `port === 465`. */
+  /**
+   * Use a TLS-on-connect socket (`SMTP_SECURE`). Defaults to
+   * `port === ` {@link IMPLICIT_TLS_SMTP_PORT}.
+   */
   secure?: boolean;
   /** SMTP auth username (`SMTP_USER`). */
   user?: string;
@@ -66,15 +91,22 @@ export interface EmailPluginConfig extends BasePluginConfig {
    */
   outDir?: string;
   /**
-   * Optional allow-list restricting the sender (`From`) address. Each
-   * entry is an exact address (`user@domain.com`), a domain wildcard
-   * (`*@domain.com` or the bare `domain.com`, matching any local part on
-   * that domain), or `*` (any). A resolved / chosen sender that matches
-   * no entry is rejected at send time. Accepts a `string[]` or a single
-   * comma- / whitespace-separated string; falls back to
-   * `EMAIL_ALLOWED_SENDERS`. Omit (or leave empty) for no restriction.
+   * Allow-list restricting the sender (`From`) address. Each entry is an
+   * exact address (`user@domain.com`), a domain wildcard (`*@domain.com`
+   * or the bare `domain.com`, matching any local part on that domain), or
+   * `*` (any). A resolved / chosen sender that matches no entry is
+   * rejected at send time. Accepts a `string[]` or a single comma- /
+   * whitespace-separated string; falls back to `EMAIL_ALLOWED_SENDERS`.
+   * When empty, the {@link senderPolicy} decides what is permitted.
    */
   allowedSenders?: string | string[];
+  /**
+   * How the sender address is restricted when {@link allowedSenders} is
+   * empty (`EMAIL_SENDER_POLICY`). Defaults to `"allowlist"`, which
+   * narrows sends to the configured sender source. See
+   * {@link SenderPolicy}.
+   */
+  senderPolicy?: SenderPolicy;
   /**
    * Optional brand styling (accent, font, header logo) applied to the
    * rendered HTML of every message. Omit for the neutral default layout.
@@ -91,10 +123,14 @@ interface ResolvedSender {
   /** Explicit sender override; present skips per-user derivation. */
   from?: string;
   /**
-   * Normalized sender allow-list (see {@link EmailPluginConfig.allowedSenders}).
-   * Empty means no restriction.
+   * Effective sender allow-list: the configured patterns when any were
+   * given, else the patterns implied by the sender source under an
+   * `"allowlist"` policy. Empty means unenforceable (an `"unrestricted"`
+   * policy, or an outbox with no sender source to narrow to).
    */
   allowedSenders: string[];
+  /** The restriction mode the allow-list was resolved under. */
+  senderPolicy: SenderPolicy;
   /** Brand styling applied to rendered HTML; absent for the default layout. */
   brand?: EmailBrand;
 }
@@ -126,14 +162,20 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
       type: "object",
       description: "SMTP connection and credentials (env fallbacks: SMTP_*).",
       properties: {
-        host: { type: "string", description: "SMTP server hostname." },
-        port: { type: "number", description: "SMTP server port (default 587)." },
+        host: { type: "string", description: "SMTP server hostname (SMTP_HOST)." },
+        port: {
+          type: "number",
+          description: `SMTP server port (SMTP_PORT). Defaults to ${DEFAULT_SMTP_PORT}.`,
+        },
         secure: {
           type: "boolean",
-          description: "TLS-on-connect socket (default: port === 465).",
+          description: `TLS-on-connect socket (SMTP_SECURE). Defaults to port === ${IMPLICIT_TLS_SMTP_PORT}.`,
         },
-        user: { type: "string", description: "SMTP auth username." },
-        password: { type: "string", description: "SMTP auth password / API key." },
+        user: { type: "string", description: "SMTP auth username (SMTP_USER)." },
+        password: {
+          type: "string",
+          description: "SMTP auth password / API key (SMTP_PASSWORD).",
+        },
       },
     },
     domain: {
@@ -154,15 +196,72 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
       type: "array",
       items: { type: "string" },
       description:
-        'Allow-list of permitted sender (From) patterns: exact addresses ("user@domain.com"), domain wildcards ("*@domain.com"), or "*". Also accepts a comma/space-separated string. Falls back to EMAIL_ALLOWED_SENDERS. Empty = unrestricted.',
+        'Allow-list of permitted sender (From) patterns: exact addresses ("user@domain.com"), domain wildcards ("*@domain.com"), or "*". Also accepts a comma/space-separated string. Falls back to EMAIL_ALLOWED_SENDERS. When empty, senderPolicy decides.',
+    },
+    senderPolicy: {
+      type: "string",
+      enum: ["allowlist", "unrestricted"],
+      description:
+        'How the sender is restricted when allowedSenders is empty (EMAIL_SENDER_POLICY). "allowlist" (default) narrows sends to the configured sender source; "unrestricted" accepts any From.',
+    },
+    brand: {
+      type: "object",
+      description:
+        "Brand styling inlined into every rendered message. Omit for the neutral default layout.",
+      properties: {
+        accent: {
+          type: "string",
+          description: 'Header-band background and body link color (e.g. "#FF3621").',
+        },
+        onAccent: {
+          type: "string",
+          description: "Text and logo color rendered on the accent band. Defaults to white.",
+        },
+        fontFamily: {
+          type: "string",
+          description: 'Body font stack (e.g. "Inter, ui-sans-serif, system-ui, sans-serif").',
+        },
+        name: {
+          type: "string",
+          description: "Product / display name used as the header text and the logo alt text.",
+        },
+        logoUrl: {
+          type: "string",
+          description:
+            "Logo image for the header band. Only an http(s): or data: URL renders; other values are dropped because a mail client cannot load them.",
+        },
+      },
+      required: ["accent", "fontFamily"],
     },
   },
 };
 
-/** Parse the `SMTP_SECURE` env / config flag, defaulting to `port === 465`. */
+/** Parse the `SMTP_SECURE` env / config flag, defaulting by port. */
 function resolveSecure(flag: boolean | undefined, port: number): boolean {
   if (typeof flag === "boolean") return flag;
-  return object.toBoolean(process.env.SMTP_SECURE) ?? port === 465;
+  return object.toBoolean(process.env.SMTP_SECURE) ?? port === IMPLICIT_TLS_SMTP_PORT;
+}
+
+/** Parse the `EMAIL_SENDER_POLICY` env / config value, defaulting to deny-by-default. */
+function resolveSenderPolicy(policy: SenderPolicy | undefined): SenderPolicy {
+  const raw = policy ?? process.env.EMAIL_SENDER_POLICY?.trim().toLowerCase();
+  if (raw === "unrestricted") return "unrestricted";
+  if (raw === undefined || raw === "" || raw === "allowlist") return "allowlist";
+  throw ValidationError.invalidValue("senderPolicy", raw, '"allowlist" or "unrestricted"');
+}
+
+/**
+ * Effective allow-list for an `"allowlist"` policy with no explicit patterns:
+ * the sender source itself, so a configured domain or fixed address is the
+ * boundary rather than "anything goes". Yields nothing when neither is set,
+ * which only happens in outbox mode (where the sender falls back to the
+ * on-behalf-of user's own address and cannot be enumerated up front).
+ */
+function impliedSenderPatterns(domain: string | undefined, from: string | undefined): string[] {
+  const patterns: string[] = [];
+  if (from) patterns.push(from.trim().toLowerCase());
+  if (domain) patterns.push(`*@${domain.trim().toLowerCase()}`);
+  return patterns;
 }
 
 /** Whether `EMAIL_OUTBOX_MODE` explicitly opts into the file/outbox fallback. */
@@ -194,6 +293,11 @@ function missingSmtpFields(
  * outbox falls back to the OBO user's own address). Partial SMTP
  * configuration or a send with no credentials and no outbox opt-in
  * throws.
+ *
+ * The sender allow-list is resolved here too: under the default
+ * `"allowlist"` policy an empty list is filled in from the sender source,
+ * so a deployment that only sets `EMAIL_DOMAIN` still rejects a `From` on
+ * any other domain. See {@link SenderPolicy}.
  */
 export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmailConfig {
   const smtp = config.smtp ?? {};
@@ -202,13 +306,19 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   const pass = smtp.password ?? process.env.SMTP_PASSWORD;
   const domain = config.domain ?? process.env.EMAIL_DOMAIN;
   const from = config.from ?? process.env.EMAIL_FROM;
-  const allowedSenders = parseAllowedSenders(
+  const senderPolicy = resolveSenderPolicy(config.senderPolicy);
+  const configuredSenders = parseAllowedSenders(
     config.allowedSenders ?? process.env.EMAIL_ALLOWED_SENDERS,
   );
+  const allowedSenders =
+    configuredSenders.length > 0 || senderPolicy === "unrestricted"
+      ? configuredSenders
+      : impliedSenderPatterns(domain, from);
   const sender: ResolvedSender = {
     ...(domain ? { domain } : {}),
     ...(from ? { from } : {}),
     allowedSenders,
+    senderPolicy,
     ...(config.brand ? { brand: config.brand } : {}),
   };
 
@@ -216,19 +326,18 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   const hasAnySmtp = Boolean(host || user || pass);
 
   if (hasAnySmtp && !hasAllSmtp) {
-    throw new Error(
-      `email: incomplete SMTP configuration - set ${missingSmtpFields(host, user, pass).join(", ")}`,
-    );
+    throw ValidationError.missingEnvVars(missingSmtpFields(host, user, pass));
   }
 
   if (hasAllSmtp) {
     if (!domain && !from) {
-      throw new Error(
-        "email: SMTP is configured but no sender source - set EMAIL_DOMAIN (to derive <user>@<domain>) or EMAIL_FROM (a fixed address)",
+      throw ConfigurationError.resourceNotFound(
+        "Email sender source",
+        "Set EMAIL_DOMAIN to derive <user-local-part>@<domain>, or EMAIL_FROM for a fixed address.",
       );
     }
     const portRaw = smtp.port ?? Number(process.env.SMTP_PORT);
-    const port = Number.isFinite(portRaw) && portRaw ? Number(portRaw) : 587;
+    const port = Number.isFinite(portRaw) && portRaw ? Number(portRaw) : DEFAULT_SMTP_PORT;
     return {
       mode: "smtp",
       host: host!,
@@ -240,8 +349,9 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   }
 
   if (!isOutboxModeEnabled()) {
-    throw new Error(
-      `email: SMTP is not configured - set ${SMTP_REQUIRED_FIELDS.join(", ")} (or EMAIL_OUTBOX_MODE=1 for local outbox testing)`,
+    throw ConfigurationError.invalidConnection(
+      "SMTP",
+      `Set ${SMTP_REQUIRED_FIELDS.join(", ")}, or EMAIL_OUTBOX_MODE=1 to write messages to a local outbox instead.`,
     );
   }
 
