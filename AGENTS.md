@@ -272,15 +272,18 @@ utility is an invisible one.
 
 ## Formatting and diff hygiene
 
-Prettier is configured at the root and its file globs are NOT limited to root
-files, so `prettier --write` on a broad path will reformat package sources and
-tests that no one has touched in a while. Some files predate the current
-`printWidth` and will churn by dozens of lines.
+`pnpm run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
+does not exclude `workspaces/`. Some committed files predate the current
+`printWidth: 100` and were never reformatted, so a repo-wide run rewraps them and
+churns dozens of lines that have nothing to do with your change.
 
-Format only the files you actually edited. Before finishing, check
-`git status` / `git diff --stat` for files you did not intend to change and
-revert them, so a behavior change is not buried in reflowed whitespace. There is
-no repo-wide format task on purpose.
+Prefer `pnpm exec prettier --write <the files you edited>`. Run the repo-wide
+`format` task only when reformatting the repo IS the change. Either way, check
+`git status` / `git diff --stat` before finishing and revert files you did not
+mean to touch, so a behavior change is not buried in reflowed whitespace.
+
+Lint is `pnpm run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
+over `workspaces`). It autofixes, so it can reformat too.
 
 ## Vocabulary (important)
 
@@ -469,6 +472,8 @@ pnpm run openapi             # generate the openapi packages from tsoa controlle
 pnpm run clean               # remove generated files (read-only ones); interactive picker, -y to skip
 pnpm -r compile              # type-check every package (projen's per-package compile: tsc --build)
 pnpm -r --no-bail test       # run every package's node:test suite, without stopping at the first failure
+pnpm run eslint              # lint (autofix) every package under workspaces
+pnpm run format              # prettier over the WHOLE repo - see "Formatting and diff hygiene" first
 ```
 
 A cross-package change is verified by all three of `pnpm exec projen`,

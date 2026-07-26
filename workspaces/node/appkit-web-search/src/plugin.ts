@@ -30,8 +30,9 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> {
     name: "web-search",
     displayName: "Web Search",
     description:
-      "Searches the web (via duck-duck-scrape) and fetches pages (via got-scraping), " +
-      "with an optional URL allow-list and per-tool approval gating.",
+      "Searches the web through the Databricks native web-search tool on its own " +
+      "web-capable serving endpoint, and fetches pages via got-scraping, behind an " +
+      "optional URL allow-list and per-tool approval gating.",
     stability: "beta",
     resources: {
       required: [],
