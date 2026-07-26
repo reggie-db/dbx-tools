@@ -337,8 +337,9 @@ async function proxyChatViaResponses(
  * workspace-level). Streaming and non-streaming both pass through as-is.
  *
  * Open Responses (Claude/Gemini/…) only accepts `function` tools and
- * `input_*` content part types, so Codex's built-in `web_search` /
- * `local_shell` / … and prior-turn `output_text` parts are rewritten/
+ * `input_*` content part types, and rejects replayed Claude thinking
+ * blocks — so Codex's built-in tools, prior-turn `output_text`, and
+ * `redacted_thinking` / `thinking` / `reasoning` parts are rewritten or
  * stripped there. The OpenAI `/responses` path keeps them - GPT supports
  * those shapes.
  */

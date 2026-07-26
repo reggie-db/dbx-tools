@@ -135,9 +135,10 @@ Use this when tests or local developer tools need a managed proxy lifecycle.
      `/serving-endpoints/responses`.
    - Responses → `/serving-endpoints/responses` (OpenAI-family) or
      `/serving-endpoints/open-responses` (Claude/Gemini/…). For Open
-     Responses the proxy strips non-`function` tools and rewrites prior-turn
-     `output_*` content parts to `input_*` (Claude/Gemini reject
-     `output_text` in `input`).
+     Responses the proxy strips non-`function` tools, rewrites prior-turn
+     `output_*` content parts to `input_*`, and drops Claude
+     `thinking` / `redacted_thinking` / `reasoning` blocks (replay of those
+     signed blobs fails with "Invalid `data` in `redacted_thinking`").
 5. JSON or SSE response bodies are piped back (with a chat↔Responses
    translation only when a chat client hit a Responses-only model).
 

@@ -6,6 +6,7 @@ import {
   createResponsesStreamTranslator,
   readResponsesOutput,
   responsesToChat,
+  sanitizeOpenResponsesRequest,
 } from "../src/openai-responses";
 
 /** The `messages` a lowered Responses body produced, typed for assertions. */
@@ -238,5 +239,74 @@ describe("readResponsesOutput", () => {
 
   it("returns empty results for a payload with no output", () => {
     assert.deepEqual(readResponsesOutput({}), { text: "", citations: [] });
+  });
+});
+
+describe("sanitizeOpenResponsesRequest", () => {
+  it("rewrites output_text content parts to input_text", () => {
+    const out = sanitizeOpenResponsesRequest({
+      input: [
+        {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "hi" }],
+        },
+      ],
+    });
+    assert.deepEqual(out.input, [
+      {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "input_text", text: "hi" }],
+      },
+    ]);
+  });
+
+  it("strips redacted_thinking / thinking content parts and reasoning items", () => {
+    const out = sanitizeOpenResponsesRequest({
+      input: [
+        { type: "reasoning", summary: [{ type: "summary_text", text: "plan" }] },
+        {
+          type: "message",
+          role: "assistant",
+          content: [
+            { type: "redacted_thinking", data: "not-a-valid-blob" },
+            { type: "thinking", thinking: "secret" },
+            { type: "output_text", text: "visible" },
+          ],
+        },
+      ],
+    });
+    assert.deepEqual(out.input, [
+      {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "input_text", text: "visible" }],
+      },
+    ]);
+  });
+
+  it("drops assistant turns that only carried thinking", () => {
+    const out = sanitizeOpenResponsesRequest({
+      input: [
+        {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "redacted_thinking", data: "x" }],
+        },
+        { type: "message", role: "user", content: [{ type: "input_text", text: "next" }] },
+      ],
+    });
+    assert.deepEqual(out.input, [
+      { type: "message", role: "user", content: [{ type: "input_text", text: "next" }] },
+    ]);
+  });
+
+  it("strips non-function tools", () => {
+    const out = sanitizeOpenResponsesRequest({
+      input: [],
+      tools: [{ type: "web_search" }, { type: "function", name: "f", parameters: {} }],
+    });
+    assert.deepEqual(out.tools, [{ type: "function", name: "f", parameters: {} }]);
   });
 });

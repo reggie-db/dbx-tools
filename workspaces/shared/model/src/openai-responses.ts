@@ -30,7 +30,8 @@
  *     request body (for `/open-responses` / Anthropic, which reject Codex
  *     built-ins like `web_search`).
  *   - {@link sanitizeOpenResponsesInput} rewrites `output_*` content part types
- *     in `input` to `input_*` (Open Responses rejects `output_text` in history).
+ *     in `input` to `input_*`, and drops Claude thinking / reasoning blocks
+ *     that Open Responses rejects on replay (`redacted_thinking`, …).
  *
  * Only the surface real clients exercise is translated; unknown fields are
  * ignored rather than rejected, so a newer client degrades instead of breaking.
@@ -646,17 +647,27 @@ export function sanitizeResponsesTools(
   return next;
 }
 
+/** Content part / input item types Claude extended-thinking uses on the wire. */
+const REASONING_TYPES = new Set(["reasoning", "thinking", "redacted_thinking"]);
+
 /**
- * Rewrite Responses `input` content parts so Open Responses will accept them.
+ * Rewrite Responses `input` so Open Responses will accept it.
  *
- * OpenAI `/responses` (and Codex) replay prior assistant turns with
- * `output_text` / `output_*` content part types. Databricks Open Responses
- * (Claude, Gemini, …) only allows input-side types:
- *   "Open Responses input content part type 'output_text' is not supported.
- *    Supported: input_text, input_image, input_file, input_audio."
- * Map every `output_<kind>` part to `input_<kind>` (shallow copy; no mutation).
- * Call together with {@link sanitizeResponsesTools} before forwarding to
- * `/serving-endpoints/open-responses`.
+ * Two OpenAI / Codex shapes that Databricks Open Responses (Claude, Gemini, …)
+ * reject:
+ *
+ * 1. Prior assistant turns with `output_text` / `output_*` content parts —
+ *    Open Responses only allows `input_text`, `input_image`, `input_file`,
+ *    `input_audio`. Map every `output_<kind>` part to `input_<kind>`.
+ * 2. Replayed extended-thinking blocks (`thinking`, `redacted_thinking`,
+ *    `reasoning` content parts, and top-level `reasoning` input items). Claude
+ *    signs those; any client round-trip that mutates them (or a cross-provider
+ *    replay) fails with e.g.
+ *      "messages.N.content.M: Invalid `data` in `redacted_thinking` block"
+ *    Strip them — the UI/client already showed the thinking; replay does not
+ *    need the signed blob. Same policy as appkit-mastra's serving sanitize.
+ *
+ * Returns a shallow copy when anything changes; otherwise the input body.
  */
 export function sanitizeOpenResponsesInput(
   body: Record<string, unknown>,
@@ -664,30 +675,63 @@ export function sanitizeOpenResponsesInput(
   if (!Array.isArray(body.input) || body.input.length === 0) return body;
 
   let changed = false;
-  const input = body.input.map((raw) => {
-    if (!raw || typeof raw !== "object") return raw;
+  const input: unknown[] = [];
+
+  for (const raw of body.input) {
+    if (!raw || typeof raw !== "object") {
+      input.push(raw);
+      continue;
+    }
     const item = raw as Record<string, unknown>;
-    if (!Array.isArray(item.content)) return raw;
+
+    // Top-level Responses reasoning items (not message content parts).
+    if (typeof item.type === "string" && REASONING_TYPES.has(item.type)) {
+      changed = true;
+      continue;
+    }
+
+    if (!Array.isArray(item.content)) {
+      input.push(raw);
+      continue;
+    }
 
     let partChanged = false;
-    const content = item.content.map((part) => {
-      if (!part || typeof part !== "object") return part;
+    const content: unknown[] = [];
+    for (const part of item.content) {
+      if (!part || typeof part !== "object") {
+        content.push(part);
+        continue;
+      }
       const p = part as Record<string, unknown>;
-      if (typeof p.type !== "string" || !p.type.startsWith("output_")) return part;
-      partChanged = true;
-      return { ...p, type: `input_${p.type.slice("output_".length)}` };
-    });
-    if (!partChanged) return raw;
+      if (typeof p.type === "string" && REASONING_TYPES.has(p.type)) {
+        partChanged = true;
+        continue;
+      }
+      if (typeof p.type === "string" && p.type.startsWith("output_")) {
+        partChanged = true;
+        content.push({ ...p, type: `input_${p.type.slice("output_".length)}` });
+        continue;
+      }
+      content.push(part);
+    }
+
+    if (!partChanged) {
+      input.push(raw);
+      continue;
+    }
     changed = true;
-    return { ...item, content };
-  });
+    // Drop assistant turns that only carried thinking (nothing left to replay).
+    if (content.length === 0 && item.role === "assistant") continue;
+    input.push({ ...item, content });
+  }
 
   return changed ? { ...body, input } : body;
 }
 
 /**
- * Full Open Responses request sanitizer: strip non-`function` tools and rewrite
- * `output_*` input content parts. Safe no-op when nothing needs changing.
+ * Full Open Responses request sanitizer: strip non-`function` tools, rewrite
+ * `output_*` content parts, and drop thinking / reasoning blocks. Safe no-op
+ * when nothing needs changing.
  */
 export function sanitizeOpenResponsesRequest(
   body: Record<string, unknown>,
