@@ -66,20 +66,6 @@ export interface EmailRuntime {
 }
 
 /**
- * Combine two optional cancellation sources into one signal. Returns the
- * single signal when only one is present so the common path allocates
- * nothing.
- */
-function mergeSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
-  if (!a) return b;
-  if (!b) return a;
-  const controller = new AbortController();
-  async.tieAbortSignal(controller, a);
-  async.tieAbortSignal(controller, b);
-  return controller.signal;
-}
-
-/**
  * Executor used until (or unless) the plugin installs its own: run the send
  * directly, mapping a throw onto the same {@link ExecutionResult} shape so
  * call sites branch on `ok` either way.
@@ -172,7 +158,7 @@ export async function executeWrite<T>(
 ): Promise<T> {
   const { execute } = getEmailRuntime();
   const result = await execute(
-    (executeSignal) => fn(mergeSignals(executeSignal, signal)),
+    (executeSignal) => fn(async.combineAbortSignals(executeSignal, signal)),
     settings,
   );
   if (result.ok) return result.data;

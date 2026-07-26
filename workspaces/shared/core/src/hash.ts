@@ -45,9 +45,20 @@ export function id(length?: number): string {
   return id;
 }
 
+/**
+ * The two `crypto` members this module uses, declared structurally. `Crypto`
+ * itself is not nameable here: this package compiles with neither the DOM nor
+ * the Node lib, and a consumer that does pull in Node types resolves `Crypto`
+ * to a global value rather than a type.
+ */
+type CryptoLike = {
+  randomUUID?: () => string;
+  getRandomValues?: (bytes: Uint8Array) => unknown;
+};
+
 /** A v4 UUID from the strongest randomness source this runtime offers. */
 function uuidV4(): string {
-  const webCrypto = globalThis.crypto as Crypto | undefined;
+  const webCrypto = globalThis.crypto as CryptoLike | undefined;
   if (typeof webCrypto?.randomUUID === "function") return webCrypto.randomUUID();
 
   const bytes = new Uint8Array(16);
