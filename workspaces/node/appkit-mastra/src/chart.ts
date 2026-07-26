@@ -122,7 +122,15 @@ const chartDataPointSchema = z
     z.union([
       z.number(),
       z.null(),
-      z.tuple([z.number(), z.number()]),
+      // `[x, y]` scatter point. Modelled as a length-constrained
+      // homogeneous array rather than `z.tuple`: Zod emits a tuple as
+      // JSON Schema 2020-12 `prefixItems`, and Databricks' Gemini
+      // endpoints reject a `response_json_schema` containing it
+      // ("must be a boolean or an object", since `items` is absent).
+      // `z.array(z.number()).length(2)` emits `items` + `minItems` /
+      // `maxItems`, which every provider understands, and validates
+      // the same two-number shape.
+      z.array(z.number()).length(2),
       z.object({ name: z.string(), value: z.number() }),
     ]),
   )
@@ -138,7 +146,7 @@ const chartDataPointSchema = z
  * and keeps animation / tooltip / styling defaults consistent
  * across charts.
  */
-const chartPlanSchema = z.object({
+export const chartPlanSchema = z.object({
   chartType: wire.ChartTypeSchema,
   title: z
     .string()

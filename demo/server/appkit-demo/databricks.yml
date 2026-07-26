@@ -78,3 +78,84 @@ resources:
       branch_id: main
       is_protected: false
       no_expiry: true
+
+  # The demo app itself. It was originally created with `databricks apps
+  # create`; declaring it here keeps the resource bindings and the OAuth
+  # scopes in source control instead of living only in ad-hoc CLI JSON.
+  #
+  # `user_api_scopes` is what the on-behalf-of-user token is minted with.
+  # Without them the SDK calls made on the user's behalf fail with
+  # "Provided OAuth token does not have required scopes":
+  #   - serving.serving-endpoints -> `@dbx-tools/model` lists serving
+  #     endpoints to resolve an intent (e.g. `chat-balanced`) to a real
+  #     endpoint id, so the agent stream 500s without it.
+  #   - dashboards.genie          -> the Genie tool queries the Fuel Mart space.
+  #   - sql                       -> warehouse queries behind the Genie/SQL tools.
+  apps:
+    demo_app:
+      name: dbx-tools-demo
+      description: "dbx-tools AppKit + Mastra demo (Fuel Mart)"
+      source_code_path: .
+      user_api_scopes:
+        - sql
+        - dashboards.genie
+        - serving.serving-endpoints
+      resources:
+        - name: genie-space
+          genie_space:
+            name: Fuel Mart Store Intelligence
+            space_id: 01f1890bd0cd1a7d93cb3c6dba8ab1e5
+            permission: CAN_RUN
+        - name: warehouse
+          sql_warehouse:
+            id: a2171589c3905bc7
+            permission: CAN_USE
+        # Lakebase binding that lets autopg mint a working OAuth token as
+        # the app service principal. Without it Mastra's PostgresStore init
+        # fails with 28P01 password authentication failed and the process
+        # exits. The database resource id is hyphenated
+        # (`databricks-postgres`); the PG database name is
+        # `databricks_postgres`.
+        - name: postgres
+          postgres:
+            branch: projects/dbx-tools-demo/branches/main
+            database: projects/dbx-tools-demo/branches/main/databases/databricks-postgres
+            permission: CAN_CONNECT_AND_CREATE
+        # SMTP + sender config for the approval-gated email tool, read from
+        # the `dbx-tools-demo` secret scope and surfaced to the runtime by
+        # the matching `valueFrom` entries in app.yaml.
+        - name: smtp-host
+          secret:
+            scope: dbx-tools-demo
+            key: smtp-host
+            permission: READ
+        - name: smtp-port
+          secret:
+            scope: dbx-tools-demo
+            key: smtp-port
+            permission: READ
+        - name: smtp-secure
+          secret:
+            scope: dbx-tools-demo
+            key: smtp-secure
+            permission: READ
+        - name: smtp-user
+          secret:
+            scope: dbx-tools-demo
+            key: smtp-user
+            permission: READ
+        - name: smtp-password
+          secret:
+            scope: dbx-tools-demo
+            key: smtp-password
+            permission: READ
+        - name: email-domain
+          secret:
+            scope: dbx-tools-demo
+            key: email-domain
+            permission: READ
+        - name: email-from
+          secret:
+            scope: dbx-tools-demo
+            key: email-from
+            permission: READ

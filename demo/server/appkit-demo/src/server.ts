@@ -27,11 +27,13 @@ const { webSearchTool, webFetchTool } = webSearchToolModule;
 const { defaultBrandContext } = sharedBrand;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
-// `server({ staticPath })` serves it on the same port as the API.
-const clientDist = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../../app/appkit-demo/dist",
-);
+// `server({ staticPath })` serves it on the same port as the API. Locally the
+// bundle lives beside the sibling package; a deployed Databricks App instead
+// stages it into the app root and points here with `CLIENT_DIST`, since the
+// sibling path does not exist in the deployed tree.
+const clientDist =
+  process.env.CLIENT_DIST ??
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../app/appkit-demo/dist");
 
 // AppKit demo wiring for `@dbx-tools/appkit-mastra`.
 //
