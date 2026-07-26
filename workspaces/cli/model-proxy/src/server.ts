@@ -38,7 +38,7 @@ import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 import type { DatabricksBackend } from "./backend";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
 
-const { chatToResponsesRequest, responseToChatCompletion, sanitizeResponsesTools } =
+const { chatToResponsesRequest, responseToChatCompletion, sanitizeOpenResponsesRequest } =
   openaiResponses;
 
 const logger = log.logger("model-proxy/server");
@@ -301,18 +301,23 @@ async function proxyChatViaResponses(
   headers["content-type"] = "application/json";
   headers.accept = "application/json";
 
+  const upstreamUrl = backend.responsesUrl(modelId);
+  const forward = upstreamUrl.includes("/open-responses")
+    ? sanitizeOpenResponsesRequest(responses)
+    : responses;
+
   logger.info("proxy", {
     requested,
     resolved: modelId,
     matched,
-    upstream: "responses",
+    upstream: upstreamUrl,
     stream: false,
   });
 
-  const upstream = await fetch(backend.responsesUrl(modelId), {
+  const upstream = await fetch(upstreamUrl, {
     method: "POST",
     headers,
-    body: JSON.stringify(responses),
+    body: JSON.stringify(forward),
   });
 
   if (!upstream.ok) {
@@ -331,9 +336,11 @@ async function proxyChatViaResponses(
  * Responses / Open Responses surface (model stays in the body; URL is
  * workspace-level). Streaming and non-streaming both pass through as-is.
  *
- * Open Responses (Claude/Gemini/…) only accepts `function` tools, so Codex's
- * built-in `web_search` / `local_shell` / … are stripped there. The OpenAI
- * `/responses` path keeps them - GPT models support those tool types.
+ * Open Responses (Claude/Gemini/…) only accepts `function` tools and
+ * `input_*` content part types, so Codex's built-in `web_search` /
+ * `local_shell` / … and prior-turn `output_text` parts are rewritten/
+ * stripped there. The OpenAI `/responses` path keeps them - GPT supports
+ * those shapes.
  */
 async function handleResponses(
   backend: DatabricksBackend,
@@ -351,10 +358,10 @@ async function handleResponses(
   body.model = resolved.modelId;
 
   const upstreamUrl = backend.responsesUrl(resolved.modelId);
-  // Cross-provider Open Responses rejects non-function tool types; OpenAI
-  // `/responses` keeps Codex built-ins (web_search, local_shell, custom, …).
+  // Cross-provider Open Responses rejects non-function tools and `output_*`
+  // content parts in `input`; OpenAI `/responses` keeps Codex's native shapes.
   const forward = upstreamUrl.includes("/open-responses")
-    ? sanitizeResponsesTools(body)
+    ? sanitizeOpenResponsesRequest(body)
     : body;
 
   const wantsStream = forward.stream === true;

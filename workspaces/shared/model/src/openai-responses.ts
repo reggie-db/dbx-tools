@@ -29,6 +29,8 @@
  *   - {@link sanitizeResponsesTools} keeps only `function` tools on a Responses
  *     request body (for `/open-responses` / Anthropic, which reject Codex
  *     built-ins like `web_search`).
+ *   - {@link sanitizeOpenResponsesInput} rewrites `output_*` content part types
+ *     in `input` to `input_*` (Open Responses rejects `output_text` in history).
  *
  * Only the surface real clients exercise is translated; unknown fields are
  * ignored rather than rejected, so a newer client degrades instead of breaking.
@@ -642,4 +644,53 @@ export function sanitizeResponsesTools(
     delete next.parallel_tool_calls;
   }
   return next;
+}
+
+/**
+ * Rewrite Responses `input` content parts so Open Responses will accept them.
+ *
+ * OpenAI `/responses` (and Codex) replay prior assistant turns with
+ * `output_text` / `output_*` content part types. Databricks Open Responses
+ * (Claude, Gemini, …) only allows input-side types:
+ *   "Open Responses input content part type 'output_text' is not supported.
+ *    Supported: input_text, input_image, input_file, input_audio."
+ * Map every `output_<kind>` part to `input_<kind>` (shallow copy; no mutation).
+ * Call together with {@link sanitizeResponsesTools} before forwarding to
+ * `/serving-endpoints/open-responses`.
+ */
+export function sanitizeOpenResponsesInput(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!Array.isArray(body.input) || body.input.length === 0) return body;
+
+  let changed = false;
+  const input = body.input.map((raw) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const item = raw as Record<string, unknown>;
+    if (!Array.isArray(item.content)) return raw;
+
+    let partChanged = false;
+    const content = item.content.map((part) => {
+      if (!part || typeof part !== "object") return part;
+      const p = part as Record<string, unknown>;
+      if (typeof p.type !== "string" || !p.type.startsWith("output_")) return part;
+      partChanged = true;
+      return { ...p, type: `input_${p.type.slice("output_".length)}` };
+    });
+    if (!partChanged) return raw;
+    changed = true;
+    return { ...item, content };
+  });
+
+  return changed ? { ...body, input } : body;
+}
+
+/**
+ * Full Open Responses request sanitizer: strip non-`function` tools and rewrite
+ * `output_*` input content parts. Safe no-op when nothing needs changing.
+ */
+export function sanitizeOpenResponsesRequest(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  return sanitizeOpenResponsesInput(sanitizeResponsesTools(body));
 }

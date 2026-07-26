@@ -134,8 +134,10 @@ Use this when tests or local developer tools need a managed proxy lifecycle.
      Responses-only models (Codex) which are translated and posted to
      `/serving-endpoints/responses`.
    - Responses → `/serving-endpoints/responses` (OpenAI-family) or
-     `/serving-endpoints/open-responses` (Claude/Gemini/…), body forwarded
-     as-is.
+     `/serving-endpoints/open-responses` (Claude/Gemini/…). For Open
+     Responses the proxy strips non-`function` tools and rewrites prior-turn
+     `output_*` content parts to `input_*` (Claude/Gemini reject
+     `output_text` in `input`).
 5. JSON or SSE response bodies are piped back (with a chat↔Responses
    translation only when a chat client hit a Responses-only model).
 
