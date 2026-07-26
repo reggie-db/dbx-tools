@@ -513,7 +513,7 @@ importers:
         version: link:../../shared/email
       '@mastra/core':
         specifier: 'catalog:'
-        version: 1.50.1(@grpc/grpc-js@1.14.4)(ai@6.0.221(zod@4.3.6))(bufferutil@4.1.0)(express@5.2.1)(rxjs@7.8.2)(zod@4.3.6)
+        version: 1.50.1(@grpc/grpc-js@1.14.4)(ai@6.0.221(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(rxjs@7.8.2)(zod@4.4.3)
       juice:
         specifier: ^12.1.1
         version: 12.1.1
@@ -892,13 +892,13 @@ importers:
         version: link:../branding
       '@mastra/client-js':
         specifier: 'catalog:'
-        version: 1.31.1(ai@5.0.210(zod@4.3.6))(zod@4.3.6)
+        version: 1.31.1(ai@5.0.210(zod@4.4.3))(zod@4.4.3)
       '@tanstack/react-table':
         specifier: 'catalog:'
         version: 8.21.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       ai:
         specifier: 'catalog:'
-        version: 5.0.210(zod@4.3.6)
+        version: 5.0.210(zod@4.4.3)
       echarts:
         specifier: 'catalog:'
         version: 6.0.0
@@ -7474,12 +7474,12 @@ snapshots:
       '@grpc/grpc-js': 1.14.4
       express: 5.2.1
 
-  '@ai-sdk/gateway@2.0.109(zod@4.3.6)':
+  '@ai-sdk/gateway@2.0.109(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 2.0.3
-      '@ai-sdk/provider-utils': 3.0.28(zod@4.3.6)
+      '@ai-sdk/provider-utils': 3.0.28(zod@4.4.3)
       '@vercel/oidc': 3.1.0
-      zod: 4.3.6
+      zod: 4.4.3
 
   '@ai-sdk/gateway@3.0.145(zod@4.3.6)':
     dependencies:
@@ -7489,12 +7489,27 @@ snapshots:
       zod: 4.3.6
     optional: true
 
+  '@ai-sdk/gateway@3.0.145(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.13
+      '@ai-sdk/provider-utils': 4.0.37(zod@4.4.3)
+      '@vercel/oidc': 3.2.0
+      zod: 4.4.3
+    optional: true
+
   '@ai-sdk/provider-utils@2.2.8(zod@4.3.6)':
     dependencies:
       '@ai-sdk/provider': 1.1.3
       nanoid: 3.3.15
       secure-json-parse: 2.7.0
       zod: 4.3.6
+
+  '@ai-sdk/provider-utils@2.2.8(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 1.1.3
+      nanoid: 3.3.15
+      secure-json-parse: 2.7.0
+      zod: 4.4.3
 
   '@ai-sdk/provider-utils@3.0.25(zod@4.3.6)':
     dependencies:
@@ -7503,12 +7518,19 @@ snapshots:
       eventsource-parser: 3.1.0
       zod: 4.3.6
 
-  '@ai-sdk/provider-utils@3.0.28(zod@4.3.6)':
+  '@ai-sdk/provider-utils@3.0.25(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 2.0.3
       '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.1.0
-      zod: 4.3.6
+      zod: 4.4.3
+
+  '@ai-sdk/provider-utils@3.0.28(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.3
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.1.0
+      zod: 4.4.3
 
   '@ai-sdk/provider-utils@4.0.27(zod@4.3.6)':
     dependencies:
@@ -7516,6 +7538,13 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.1.0
       zod: 4.3.6
+
+  '@ai-sdk/provider-utils@4.0.27(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.10
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.1.0
+      zod: 4.4.3
 
   '@ai-sdk/provider-utils@4.0.37(zod@4.3.6)':
     dependencies:
@@ -7525,6 +7554,14 @@ snapshots:
       zod: 4.3.6
     optional: true
 
+  '@ai-sdk/provider-utils@4.0.37(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.13
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.1.0
+      zod: 4.4.3
+    optional: true
+
   '@ai-sdk/provider-utils@5.0.0(zod@4.3.6)':
     dependencies:
       '@ai-sdk/provider': 4.0.0
@@ -7532,6 +7569,14 @@ snapshots:
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.0
       zod: 4.3.6
+
+  '@ai-sdk/provider-utils@5.0.0(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.0
+      zod: 4.4.3
 
   '@ai-sdk/provider@1.1.3':
     dependencies:
@@ -7560,6 +7605,13 @@ snapshots:
       '@ai-sdk/provider-utils': 2.2.8(zod@4.3.6)
       zod: 4.3.6
       zod-to-json-schema: 3.25.2(zod@4.3.6)
+
+  '@ai-sdk/ui-utils@1.2.11(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 1.1.3
+      '@ai-sdk/provider-utils': 2.2.8(zod@4.4.3)
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
 
   '@antfu/install-pkg@1.1.0':
     dependencies:
@@ -8381,16 +8433,16 @@ snapshots:
       '@mastra/core': 1.50.1(@grpc/grpc-js@1.14.4)(ai@6.0.221(zod@4.3.6))(bufferutil@4.1.0)(express@5.2.1)(rxjs@7.8.2)(zod@4.3.6)
       zod: 4.3.6
 
-  '@mastra/client-js@1.31.1(ai@5.0.210(zod@4.3.6))(zod@4.3.6)':
+  '@mastra/client-js@1.31.1(ai@5.0.210(zod@4.4.3))(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/ui-utils': 1.2.11(zod@4.3.6)
+      '@ai-sdk/ui-utils': 1.2.11(zod@4.4.3)
       '@lukeed/uuid': 2.0.1
-      '@mastra/core': 1.50.1(ai@5.0.210(zod@4.3.6))(zod@4.3.6)
-      '@mastra/schema-compat': 1.3.3(zod@4.3.6)
+      '@mastra/core': 1.50.1(ai@5.0.210(zod@4.4.3))(zod@4.4.3)
+      '@mastra/schema-compat': 1.3.3(zod@4.4.3)
       canonicalize: 1.0.8
       jose: 6.2.3
       json-schema: 0.4.0
-      zod: 4.3.6
+      zod: 4.4.3
     transitivePeerDependencies:
       - '@bufbuild/protobuf'
       - '@cfworker/json-schema'
@@ -8448,24 +8500,24 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@mastra/core@1.50.1(ai@5.0.210(zod@4.3.6))(zod@4.3.6)':
+  '@mastra/core@1.50.1(@grpc/grpc-js@1.14.4)(ai@6.0.221(zod@4.4.3))(bufferutil@4.1.0)(express@5.2.1)(rxjs@7.8.2)(zod@4.4.3)':
     dependencies:
       '@a2a-js/sdk': 0.3.13(@grpc/grpc-js@1.14.4)(express@5.2.1)
-      '@ai-sdk/provider-utils-v5': '@ai-sdk/provider-utils@3.0.25(zod@4.3.6)'
-      '@ai-sdk/provider-utils-v6': '@ai-sdk/provider-utils@4.0.27(zod@4.3.6)'
-      '@ai-sdk/provider-utils-v7': '@ai-sdk/provider-utils@5.0.0(zod@4.3.6)'
+      '@ai-sdk/provider-utils-v5': '@ai-sdk/provider-utils@3.0.25(zod@4.4.3)'
+      '@ai-sdk/provider-utils-v6': '@ai-sdk/provider-utils@4.0.27(zod@4.4.3)'
+      '@ai-sdk/provider-utils-v7': '@ai-sdk/provider-utils@5.0.0(zod@4.4.3)'
       '@ai-sdk/provider-v5': '@ai-sdk/provider@2.0.3'
       '@ai-sdk/provider-v6': '@ai-sdk/provider@3.0.10'
       '@ai-sdk/provider-v7': '@ai-sdk/provider@4.0.0'
-      '@ai-sdk/ui-utils-v5': '@ai-sdk/ui-utils@1.2.11(zod@4.3.6)'
+      '@ai-sdk/ui-utils-v5': '@ai-sdk/ui-utils@1.2.11(zod@4.4.3)'
       '@isaacs/ttlcache': 2.1.5
       '@lukeed/uuid': 2.0.1
-      '@mastra/schema-compat': 1.3.3(zod@4.3.6)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
+      '@mastra/schema-compat': 1.3.3(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       '@sindresorhus/slugify': 2.2.1
       '@standard-schema/spec': 1.1.0
       ajv: 8.20.0
-      chat: 4.33.0(ai@5.0.210(zod@4.3.6))(zod@4.3.6)
+      chat: 4.33.0(ai@6.0.221(zod@4.4.3))(zod@4.4.3)
       croner: 10.0.1
       dotenv: 17.4.2
       execa: 9.6.1
@@ -8482,7 +8534,53 @@ snapshots:
       tokenx: 1.3.0
       ws: 8.21.0(bufferutil@4.1.0)
       xxhash-wasm: 1.1.0
-      zod: 4.3.6
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@bufbuild/protobuf'
+      - '@cfworker/json-schema'
+      - '@grpc/grpc-js'
+      - ai
+      - bufferutil
+      - express
+      - rxjs
+      - supports-color
+      - utf-8-validate
+
+  '@mastra/core@1.50.1(ai@5.0.210(zod@4.4.3))(zod@4.4.3)':
+    dependencies:
+      '@a2a-js/sdk': 0.3.13(@grpc/grpc-js@1.14.4)(express@5.2.1)
+      '@ai-sdk/provider-utils-v5': '@ai-sdk/provider-utils@3.0.25(zod@4.4.3)'
+      '@ai-sdk/provider-utils-v6': '@ai-sdk/provider-utils@4.0.27(zod@4.4.3)'
+      '@ai-sdk/provider-utils-v7': '@ai-sdk/provider-utils@5.0.0(zod@4.4.3)'
+      '@ai-sdk/provider-v5': '@ai-sdk/provider@2.0.3'
+      '@ai-sdk/provider-v6': '@ai-sdk/provider@3.0.10'
+      '@ai-sdk/provider-v7': '@ai-sdk/provider@4.0.0'
+      '@ai-sdk/ui-utils-v5': '@ai-sdk/ui-utils@1.2.11(zod@4.4.3)'
+      '@isaacs/ttlcache': 2.1.5
+      '@lukeed/uuid': 2.0.1
+      '@mastra/schema-compat': 1.3.3(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@sindresorhus/slugify': 2.2.1
+      '@standard-schema/spec': 1.1.0
+      ajv: 8.20.0
+      chat: 4.33.0(ai@5.0.210(zod@4.4.3))(zod@4.4.3)
+      croner: 10.0.1
+      dotenv: 17.4.2
+      execa: 9.6.1
+      fastq: 1.20.1
+      gray-matter: 4.0.3
+      ignore: 7.0.5
+      jpeg-js: 0.4.4
+      json-schema: 0.4.0
+      lru-cache: 11.5.2
+      p-map: 7.0.5
+      p-retry: 7.1.1
+      picomatch: 4.0.5
+      posthog-node: 5.40.0(rxjs@7.8.2)
+      tokenx: 1.3.0
+      ws: 8.21.0(bufferutil@4.1.0)
+      xxhash-wasm: 1.1.0
+      zod: 4.4.3
     transitivePeerDependencies:
       - '@bufbuild/protobuf'
       - '@cfworker/json-schema'
@@ -8648,6 +8746,28 @@ snapshots:
       raw-body: 3.0.2
       zod: 4.3.6
       zod-to-json-schema: 3.25.2(zod@4.3.6)
+    transitivePeerDependencies:
+      - supports-color
+
+  '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
+    dependencies:
+      '@hono/node-server': 1.19.14(hono@4.12.28)
+      ajv: 8.20.0
+      ajv-formats: 3.0.1(ajv@8.20.0)
+      content-type: 1.0.5
+      cors: 2.8.6
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.0
+      express: 5.2.1
+      express-rate-limit: 8.5.2(express@5.2.1)
+      hono: 4.12.28
+      jose: 6.2.3
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
     transitivePeerDependencies:
       - supports-color
 
@@ -11806,13 +11926,13 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ai@5.0.210(zod@4.3.6):
+  ai@5.0.210(zod@4.4.3):
     dependencies:
-      '@ai-sdk/gateway': 2.0.109(zod@4.3.6)
+      '@ai-sdk/gateway': 2.0.109(zod@4.4.3)
       '@ai-sdk/provider': 2.0.3
-      '@ai-sdk/provider-utils': 3.0.28(zod@4.3.6)
+      '@ai-sdk/provider-utils': 3.0.28(zod@4.4.3)
       '@opentelemetry/api': 1.9.0
-      zod: 4.3.6
+      zod: 4.4.3
 
   ai@6.0.221(zod@4.3.6):
     dependencies:
@@ -11821,6 +11941,15 @@ snapshots:
       '@ai-sdk/provider-utils': 4.0.37(zod@4.3.6)
       '@opentelemetry/api': 1.9.1
       zod: 4.3.6
+    optional: true
+
+  ai@6.0.221(zod@4.4.3):
+    dependencies:
+      '@ai-sdk/gateway': 3.0.145(zod@4.4.3)
+      '@ai-sdk/provider': 3.0.13
+      '@ai-sdk/provider-utils': 4.0.37(zod@4.4.3)
+      '@opentelemetry/api': 1.9.1
+      zod: 4.4.3
     optional: true
 
   ajv-formats@3.0.1(ajv@8.20.0):
@@ -12074,7 +12203,7 @@ snapshots:
 
   character-reference-invalid@2.0.1: {}
 
-  chat@4.33.0(ai@5.0.210(zod@4.3.6))(zod@4.3.6):
+  chat@4.33.0(ai@5.0.210(zod@4.4.3))(zod@4.4.3):
     dependencies:
       '@workflow/serde': 4.1.0-beta.2
       mdast-util-to-string: 4.0.0
@@ -12084,8 +12213,8 @@ snapshots:
       remend: 1.3.0
       unified: 11.0.5
     optionalDependencies:
-      ai: 5.0.210(zod@4.3.6)
-      zod: 4.3.6
+      ai: 5.0.210(zod@4.4.3)
+      zod: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -12101,6 +12230,21 @@ snapshots:
     optionalDependencies:
       ai: 6.0.221(zod@4.3.6)
       zod: 4.3.6
+    transitivePeerDependencies:
+      - supports-color
+
+  chat@4.33.0(ai@6.0.221(zod@4.4.3))(zod@4.4.3):
+    dependencies:
+      '@workflow/serde': 4.1.0-beta.2
+      mdast-util-to-string: 4.0.0
+      remark-gfm: 4.0.1
+      remark-parse: 11.0.0
+      remark-stringify: 11.0.0
+      remend: 1.3.0
+      unified: 11.0.5
+    optionalDependencies:
+      ai: 6.0.221(zod@4.4.3)
+      zod: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
