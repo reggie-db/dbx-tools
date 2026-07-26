@@ -43,9 +43,18 @@ bundle:
 # read-write endpoints; you have to delete the whole project):
 #   databricks postgres delete-project projects/dbx-tools-demo
 
+# The demo is deployed to the AWS FEVM workspace. Pinning `host` here (rather
+# than relying on whichever profile happens to be active) is what keeps
+# `bundle deploy` from landing in another workspace: the CLI matches the host
+# against `~/.databrickscfg` and errors if the active profile points elsewhere.
 targets:
   dev:
     default: true
+    workspace:
+      host: https://fevm-reggie-pierce-aws.cloud.databricks.com
+      # Named explicitly because more than one profile in `~/.databrickscfg`
+      # points at this host, and the CLI refuses to guess between them.
+      profile: FEVM-REGGIE-PIERCE-AWS
 
 resources:
   postgres_projects:

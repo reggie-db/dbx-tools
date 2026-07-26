@@ -34,6 +34,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { error, json, log } from "@dbx-tools/shared-core";
 import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
+import { Agent } from "undici";
 
 import type { DatabricksBackend } from "./backend";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
@@ -42,6 +43,24 @@ const { chatToResponsesRequest, responseToChatCompletion, sanitizeOpenResponsesR
   openaiResponses;
 
 const logger = log.logger("model-proxy/server");
+
+/**
+ * Dispatcher for every upstream call, with undici's inactivity timeouts
+ * DISABLED (`0`).
+ *
+ * A proxied turn is only as fast as the model behind it, and undici's
+ * defaults (300s `headersTimeout`, 300s `bodyTimeout`) are both wrong here.
+ * `bodyTimeout` is the killer: it measures the gap BETWEEN chunks, so a model
+ * that thinks for a while mid-stream - extended reasoning, a long tool round
+ * trip, a slow Genie/SQL step - trips it and undici tears the socket down
+ * with `UND_ERR_BODY_TIMEOUT`, which the client sees as a truncated stream.
+ *
+ * The proxy has no opinion on how long a model may take, so it imposes no
+ * deadline: the stream ends when the upstream ends it, or when the client
+ * hangs up (see {@link requestAbortSignal}). Callers that DO want a deadline
+ * should send one, the same as they would to OpenAI.
+ */
+const upstreamDispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
 
 /** POST routes forwarded to a serving endpoint (chat or Responses-only). */
 const PROXY_PATHS = new Set([
@@ -95,9 +114,74 @@ export function createProxyServer(
   backend: DatabricksBackend,
   options: ProxyServerOptions = {},
 ): Server {
-  return createServer((req, res) => {
+  const server = createServer((req, res) => {
     void handleRequest(backend, options, req, res);
   });
+  // Match the upstream policy on the INBOUND side: never cut a client off
+  // mid-turn. Node's defaults (300s `requestTimeout`, 60s `headersTimeout`)
+  // are sized for ordinary web traffic, not for holding a streamed model
+  // response open, and a client that hits one gets a dead socket rather than
+  // an error it can act on. `0` disables each; the turn now ends when the
+  // model is done or the client disconnects.
+  server.requestTimeout = 0;
+  server.headersTimeout = 0;
+  server.timeout = 0;
+  return server;
+}
+
+/**
+ * Signal that aborts when the client hangs up.
+ *
+ * Removing the timeouts means nothing else will ever end a forgotten request,
+ * so the client's own disconnect becomes the only backstop against an upstream
+ * call running on with no one to receive it. Passing this to `fetch` is what
+ * makes a cancelled turn (Ctrl-C, a closed tab, a killed CLI) release the
+ * Databricks-side stream instead of leaking it for the life of the process.
+ *
+ * Keyed off the RESPONSE, not the request: `IncomingMessage` emits `close` as
+ * soon as its body has been fully consumed, which on every POST here happens
+ * before the upstream call is even made - watching that would abort each turn
+ * instantly. `ServerResponse` emits `close` when the response finishes or the
+ * connection drops, so the `writableFinished` check separates "client left"
+ * from "we replied".
+ */
+function clientAbortSignal(res: ServerResponse): AbortSignal {
+  const controller = new AbortController();
+  res.once("close", () => {
+    if (!res.writableFinished) controller.abort();
+  });
+  return controller.signal;
+}
+
+/**
+ * POST a JSON body to a serving endpoint on the no-timeout
+ * {@link upstreamDispatcher}, cancelled by the client hanging up.
+ *
+ * Every upstream call goes through here so the timeout and cancellation policy
+ * is stated once. `dispatcher` is an undici extension that the DOM
+ * `RequestInit` Node compiles against does not declare, hence the local
+ * intersection type rather than a cast at each call site.
+ */
+async function upstreamFetch(
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+  res: ServerResponse,
+): Promise<Response> {
+  const init: RequestInit = {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: clientAbortSignal(res),
+  };
+  // `dispatcher` is an undici extension the DOM `RequestInit` doesn't declare,
+  // and it can't simply be typed on: `@types/node` pins its own `undici-types`
+  // copy, so the `Agent` from our `undici` dependency is a structurally
+  // identical but nominally different type than the one the global `fetch`
+  // signature expects. Attaching it structurally sidesteps a version skew that
+  // no cast expresses cleanly, and `fetch` reads it at runtime all the same.
+  Reflect.set(init, "dispatcher", upstreamDispatcher);
+  return fetch(url, init);
 }
 
 /**
@@ -256,11 +340,12 @@ async function handleProxy(
     ...(dropped.length > 0 ? { dropped } : {}),
   });
 
-  const upstream = await fetch(backend.invocationsUrl(resolved.modelId), {
-    method: "POST",
+  const upstream = await upstreamFetch(
+    backend.invocationsUrl(resolved.modelId),
     headers,
-    body: JSON.stringify(body),
-  });
+    body,
+    res,
+  );
 
   res.writeHead(upstream.status, {
     "content-type": upstream.headers.get("content-type") ?? "application/json",
@@ -314,11 +399,7 @@ async function proxyChatViaResponses(
     stream: false,
   });
 
-  const upstream = await fetch(upstreamUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(forward),
-  });
+  const upstream = await upstreamFetch(upstreamUrl, headers, forward, res);
 
   if (!upstream.ok) {
     const text = await upstream.text();
@@ -383,11 +464,7 @@ async function handleResponses(
     ...(stripped ? { strippedNonFunctionTools: true } : {}),
   });
 
-  const upstream = await fetch(upstreamUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(forward),
-  });
+  const upstream = await upstreamFetch(upstreamUrl, headers, forward, res);
 
   res.writeHead(upstream.status, {
     "content-type": upstream.headers.get("content-type") ?? "application/json",
@@ -396,7 +473,16 @@ async function handleResponses(
   await streamBody(upstream, res);
 }
 
-/** Pump an upstream `fetch` Response body to the Node response, chunk by chunk. */
+/**
+ * Pump an upstream `fetch` Response body to the Node response, chunk by chunk.
+ *
+ * A mid-stream upstream failure is logged rather than thrown: the status line
+ * and some number of chunks have already gone out, so there is no way left to
+ * turn it into an HTTP error and the only honest move is to end the response
+ * and say why in the log. Without this the read loop rejected into the caller's
+ * catch, which found `headersSent` and ended the response silently - making an
+ * upstream teardown indistinguishable from a clean finish.
+ */
 async function streamBody(upstream: Response, res: ServerResponse): Promise<void> {
   const body = upstream.body;
   if (!body) {
@@ -411,6 +497,13 @@ async function streamBody(upstream: Response, res: ServerResponse): Promise<void
       if (value && !res.writableEnded) res.write(Buffer.from(value));
       if (res.writableEnded) break;
     }
+  } catch (err) {
+    // An aborted request is the expected shape of a client hanging up, not a
+    // fault worth reporting at error level.
+    const aborted = res.writableEnded || !res.writable;
+    logger[aborted ? "info" : "error"]("stream ended early", {
+      error: error.errorMessage(err),
+    });
   } finally {
     await reader.cancel().catch(() => {});
     res.end();

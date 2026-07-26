@@ -84,6 +84,7 @@ root.pnpmWorkspace?.addCatalog("@mastra/observability", "^1.15.2");
 root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "^1.4.0");
 root.pnpmWorkspace?.addCatalog("@mastra/pg", "^1.14.2");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
+root.pnpmWorkspace?.addCatalog("undici", "^7.17.0");
 
 // Catalog pins for the React `ui` add-on stack (AppKit UI kit + Tailwind v4 +
 // the Mastra chat-UI deps). These only load in ui-tagged (browser) packages.
@@ -399,6 +400,12 @@ project.applyToProjects(
       "@dbx-tools/model@workspace:*",
       "@dbx-tools/shared-model@workspace:*",
       "@databricks/sdk-experimental@catalog:",
+      // Node bundles undici as its `fetch` implementation but exports no
+      // `Agent` from a `node:` specifier, and the default 300s
+      // `headersTimeout`/`bodyTimeout` kill a long or bursty model stream.
+      // The package dependency is what lets the proxy hand `fetch` a
+      // no-timeout dispatcher.
+      "undici@catalog:",
     );
   },
 );

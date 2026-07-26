@@ -31,7 +31,8 @@
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
     "commander": "catalog:",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "undici": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

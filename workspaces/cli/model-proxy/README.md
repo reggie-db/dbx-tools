@@ -145,6 +145,35 @@ Use this when tests or local developer tools need a managed proxy lifecycle.
 This keeps the package small: Databricks already speaks the OpenAI schema, so
 the useful work is auth, endpoint resolution, and routing to the right surface.
 
+## Timeouts And Cancellation
+
+A proxied turn takes as long as the model behind it, so the proxy imposes **no
+deadline of its own** in either direction. The stream ends when Databricks ends
+it, or when the client hangs up.
+
+That is a deliberate override of two sets of defaults that otherwise truncate
+long turns:
+
+- **Inbound** (client → proxy). Node's `requestTimeout` (300s) and
+  `headersTimeout` (60s) are sized for ordinary web traffic, not for holding a
+  streamed model response open. Both are set to `0`.
+- **Upstream** (proxy → Databricks). Every upstream call goes out on an
+  `undici` `Agent` with `headersTimeout: 0` and `bodyTimeout: 0`. `bodyTimeout`
+  is the important one: it measures the gap **between** chunks, so its 300s
+  default fires on a model that pauses mid-stream - extended reasoning, a long
+  tool round trip, a slow Genie or SQL step - and tears the socket down with
+  `UND_ERR_BODY_TIMEOUT`. The client sees a stream that simply stops.
+
+Because nothing times out, client disconnect is the backstop: each upstream
+request carries an `AbortSignal` tied to the response, so a cancelled turn
+(Ctrl-C, a closed tab, a killed CLI) releases the Databricks-side stream instead
+of leaking it. If a turn should have a deadline, send one from the client - the
+same as you would to OpenAI.
+
+An upstream failure that happens _after_ the response headers are sent is
+logged (`stream ended early`) rather than thrown, since the status line is
+already committed and cannot be turned into an HTTP error.
+
 ## Unsupported Request Fields
 
 Databricks Model Serving validates the chat body strictly, so a single
