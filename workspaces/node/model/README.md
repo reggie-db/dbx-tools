@@ -162,4 +162,4 @@ policy decisions; fallbacks are a last resort.
 
 The AppKit-Mastra integration uses this package through
 [`@dbx-tools/appkit-mastra`](../appkit-mastra); the local OpenAI-compatible
-gateway uses it through [`@dbx-tools/model-proxy`](../../cli/model-proxy).
+gateway uses it through [`@dbx-tools/cli-model-proxy`](../../cli/model-proxy).

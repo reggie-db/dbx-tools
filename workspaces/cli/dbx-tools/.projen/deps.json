@@ -6,11 +6,6 @@
       "type": "build"
     },
     {
-      "name": "tsx",
-      "version": "^4.23.0",
-      "type": "build"
-    },
-    {
       "name": "typescript",
       "type": "build"
     },
@@ -36,6 +31,11 @@
     },
     {
       "name": "pnpm",
+      "type": "runtime"
+    },
+    {
+      "name": "tsx",
+      "version": "catalog:",
       "type": "runtime"
     }
   ],

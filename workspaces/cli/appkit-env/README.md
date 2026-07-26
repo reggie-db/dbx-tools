@@ -1,8 +1,8 @@
-# @dbx-tools/appkit-env
+# @dbx-tools/cli-appkit-env
 
 CLI and formatting helpers for exporting AppKit auto-configuration results.
 
-Use the `appkit-env` bin when a shell or process manager needs the Lakebase /
+Use the `dbx-tools-appkit-env` bin when a shell or process manager needs the Lakebase /
 AppKit environment that [`@dbx-tools/appkit`](../../node/appkit) would
 resolve before `createApp()`.
 
@@ -19,12 +19,20 @@ Key features:
 ## Load Env Into A Shell
 
 ```sh
-eval "$(appkit-env --quiet)"
+eval "$(dbx-tools-appkit-env --quiet)"
 ```
 
 The command snapshots `process.env`, runs AppKit auto-config, diffs the result,
 and prints only new or changed variables. On POSIX shells the default output is
 `export KEY=value`.
+
+The package installs two equivalent commands: `dbx-tools-appkit-env` and the
+shorter `dbxt-appkit-env`. Neither matches the package name, so a one-off run
+has to name the command explicitly:
+
+```sh
+npx --package @dbx-tools/cli-appkit-env dbx-tools-appkit-env --quiet
+```
 
 This is useful when another process must start after Lakebase discovery has
 filled `PGHOST`, `PGDATABASE`, `PGUSER`, or related AppKit variables.
@@ -32,8 +40,8 @@ filled `PGHOST`, `PGDATABASE`, `PGUSER`, or related AppKit variables.
 ## Inspect JSON Or Windows Output
 
 ```sh
-appkit-env --format json
-appkit-env --format windows
+dbx-tools-appkit-env --format json
+dbx-tools-appkit-env --format windows
 ```
 
 Use JSON for process managers and tests. Use Windows format for `cmd.exe`
@@ -42,7 +50,7 @@ Use JSON for process managers and tests. Use Windows format for `cmd.exe`
 ## Format Env Diffs Programmatically
 
 ```ts
-import { envExport } from "@dbx-tools/appkit-env";
+import { envExport } from "@dbx-tools/cli-appkit-env";
 
 const before = envExport.snapshotEnv();
 process.env.PGHOST = "ep-foo.database.azuredatabricks.net";

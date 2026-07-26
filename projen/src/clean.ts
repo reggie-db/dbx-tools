@@ -1,5 +1,5 @@
 /**
- * `dbxtools clean`: enumerate the workspace's generated files (plus every
+ * The `clean` task (`pnpm run clean`): enumerate the workspace's generated files (plus every
  * `node_modules` directory) and delete a chosen subset. This is the pure filesystem
  * half - reusable enumerate/remove helpers; the task that drives them (argv `-y`, the
  * `@clack/prompts` multiselect picker with all preselected, the TTY guard) lives in

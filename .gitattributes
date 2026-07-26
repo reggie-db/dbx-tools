@@ -25,5 +25,6 @@
 /tsconfig.base.json linguist-generated
 /tsconfig.json linguist-generated
 /tsconfig.projen.json linguist-generated linguist-language=JSON-with-Comments
+/workspaces/**/bin/*.mjs linguist-generated
 /workspaces/**/index.ts linguist-generated
 /workspaces/openapi/** linguist-generated

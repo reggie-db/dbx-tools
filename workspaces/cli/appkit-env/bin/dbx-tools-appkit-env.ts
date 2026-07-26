@@ -1,9 +1,9 @@
 #!/usr/bin/env -S npx tsx
 /**
- * `appkit-env`: run AppKit auto-config and print the env vars it added or
+ * `dbx-tools-appkit-env`: run AppKit auto-config and print the env vars it added or
  * changed. Snapshots `process.env`, runs auto-config, diffs, and writes
  * eval-able `export` / `set` lines (or JSON) to stdout - e.g.
- * `eval "$(appkit-env)"` to load a resolved Lakebase connection into your shell.
+ * `eval "$(dbx-tools-appkit-env)"` to load a resolved Lakebase connection into your shell.
  */
 
 import { Command, CommanderError } from "commander";
@@ -20,7 +20,7 @@ import {
 const logger = log.logger("appkit-env");
 
 const program = new Command()
-  .name("appkit-env")
+  .name("dbx-tools-appkit-env")
   .description("Run AppKit auto-config and print new/changed env vars.")
   .option(
     "-f, --format <format>",

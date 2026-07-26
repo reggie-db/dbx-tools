@@ -3,7 +3,7 @@
  *
  * The root project (`DBXToolsNodeProject`) discovers packages by scanning the
  * filesystem at synth and records them in `pnpm-workspace.yaml` (the source of
- * truth). During `dbxtools watch`, this compares the live filesystem against that
+ * truth). During `sync --watch`, this compares the live filesystem against that
  * record to decide whether the package SET changed (a package was added/removed)
  * and a full re-synth is needed - versus a content edit, where only barrels rebuild.
  */
@@ -33,7 +33,7 @@ export function packageSetChanged(): boolean {
  * projen network re-exec).
  *
  * `post: true` runs the full flow - projen's post-synth `pnpm install` AND the
- * post-synth barrels component - which is what the one-shot `dbxtools sync`
+ * post-synth barrels component - which is what the one-shot `sync` task
  * wants. The default (`post: false`) sets `PROJEN_DISABLE_POST`, skipping both so
  * the watch loop stays fast; there the caller rebuilds barrels explicitly.
  *
@@ -41,7 +41,7 @@ export function packageSetChanged(): boolean {
  * `CI` also makes pnpm choose a `--frozen-lockfile` install for a MULTI-package
  * workspace's subprojects, which is the wrong tradeoff for routine re-synths (a
  * newly added/edited package's lockfile entry is expected to be behind). A caller
- * that needs the no-TTY prompt answered non-interactively (the `dbxtools` CLI, when
+ * that needs the no-TTY prompt answered non-interactively (the `dbx-tools` CLI, when
  * bootstrapping an empty folder) runs with `post: false` and does its own install
  * afterward instead.
  */

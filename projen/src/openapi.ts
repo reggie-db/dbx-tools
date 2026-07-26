@@ -16,7 +16,7 @@
  * OpenAPI client generator.
  *
  * `tsoa`, `typescript`, and `openapi-typescript` are loaded lazily (heavy, and only
- * needed for `dbxtools openapi`), so importing this module stays cheap.
+ * needed for `pnpm run openapi`), so importing this module stays cheap.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -133,7 +133,7 @@ export async function generateOpenapi(): Promise<string[]> {
     makeWritable(schemaPath);
     writeFileSync(schemaPath, astToString(await openapiTS(spec)));
     stampGenerated(schemaPath, {
-      tool: "dbxtools openapi (tsoa + openapi-typescript)",
+      tool: "projen openapi (tsoa + openapi-typescript)",
       source: `the tsoa controllers in ${p.relPath}`,
     });
 
@@ -142,7 +142,7 @@ export async function generateOpenapi(): Promise<string[]> {
     makeWritable(clientPath);
     writeFileSync(clientPath, CLIENT_SRC);
     stampGenerated(clientPath, {
-      tool: "dbxtools openapi (openapi-fetch)",
+      tool: "projen openapi (openapi-fetch)",
       source: "./schema",
     });
 

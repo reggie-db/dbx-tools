@@ -3,8 +3,9 @@
  *
  * Wraps a single default-auth {@link WorkspaceClient} and exposes the three
  * things the proxy server needs: the workspace serving-endpoint list, fuzzy
- * name resolution (reusing `@dbx-tools/model`'s resolver so a loose
- * `"claude sonnet"` snaps to a real endpoint id), and a fresh set of auth
+ * name resolution (reusing `@dbx-tools/model`'s {@link resolve.rankModels} so a
+ * loose `"opus"` / `"claude sonnet"` snaps to the best live endpoint id -
+ * match score, then class, then within-class version), and a fresh set of auth
  * headers per upstream request.
  *
  * Auth is delegated entirely to the Databricks SDK: `config.authenticate`
@@ -22,7 +23,7 @@
 
 import { log } from "@dbx-tools/shared-core";
 import { type ServingEndpointSummary } from "@dbx-tools/shared-model";
-import { serving, type ResolvedModel } from "@dbx-tools/model";
+import { resolve, serving, type ResolvedModel } from "@dbx-tools/model";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 
 import { INVOCATIONS_SUFFIX } from "./defaults";
@@ -83,20 +84,41 @@ export class DatabricksBackend {
   }
 
   /**
-   * Snap a (possibly loose) OpenAI-style model name to the closest real serving
-   * endpoint. On a miss the catalogue is re-listed once and retried, so a
-   * freshly deployed model resolves without a restart. Returns the input
-   * unchanged with `matched: false` when nothing scores within the threshold,
-   * so a deliberate endpoint id is never silently rewritten and Databricks
-   * surfaces a clean 404.
+   * Snap a (possibly loose) OpenAI-style model name to the best real serving
+   * endpoint via {@link resolve.rankModels} (the same ranking
+   * {@link resolve.resolveModel} uses): Fuse match (bucketed so version
+   * siblings tie), then class, then within-class version - so `"opus"` prefers
+   * `opus-5` over `opus-4-7`. On a miss the catalogue is re-listed once and
+   * retried, so a freshly deployed model resolves without a restart. Returns
+   * the input unchanged with `matched: false` when nothing scores within the
+   * threshold, so a deliberate endpoint id is never silently rewritten and
+   * Databricks surfaces a clean 404.
    */
   async resolve(model: string): Promise<ResolvedModel> {
-    const options = this.threshold !== undefined ? { threshold: this.threshold } : {};
-    let resolved = serving.resolveModelId(model, await this.models(), options);
+    let resolved = this.resolveAgainst(model, await this.models());
     if (!resolved.matched) {
-      resolved = serving.resolveModelId(model, await this.models(true), options);
+      resolved = this.resolveAgainst(model, await this.models(true));
     }
     return resolved;
+  }
+
+  /**
+   * Rank `model` against a catalogue snapshot and collapse to a single
+   * {@link ResolvedModel}. Uses {@link resolve.rankModels} with `limit: 1`
+   * rather than Fuse-only {@link serving.resolveModelId}, so equal-score
+   * siblings are broken by class / version.
+   */
+  private resolveAgainst(
+    model: string,
+    endpoints: readonly ServingEndpointSummary[],
+  ): ResolvedModel {
+    const [top] = resolve.rankModels(endpoints, {
+      search: model,
+      limit: 1,
+      ...(this.threshold !== undefined ? { threshold: this.threshold } : {}),
+    });
+    if (!top) return { modelId: model, matched: false };
+    return { modelId: top.endpoint.name, matched: true, score: top.score };
   }
 
   /**

@@ -1,7 +1,7 @@
 /**
- * `model-proxy` CLI.
+ * `dbx-tools-model-proxy` CLI.
  *
- * `serve` (the default) runs a loopback OpenAI-compatible endpoint that fronts
+ * Run bare, it serves: a loopback OpenAI-compatible endpoint that fronts
  * Databricks Model Serving with fuzzy model names and per-request auth. `chat`
  * starts that same proxy and hands off to an off-the-shelf terminal client
  * wired to it. `models` lists the resolvable endpoints; `resolve` shows what a
@@ -15,9 +15,37 @@ import { spawn } from "node:child_process";
 import type { Server } from "node:http";
 import { Command, CommanderError } from "commander";
 
+import { type ServingEndpointSummary } from "@dbx-tools/shared-model";
+
 import { DatabricksBackend, type BackendOptions } from "./backend";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
 import { startProxyServer } from "./server";
+
+/** Capability flags an endpoint advertises, derived from its task/class. */
+interface EndpointCapabilities {
+  /** OpenAI chat/completions + Responses (what a chat agent like Codex needs). */
+  chat: boolean;
+  /** Embedding (vector) endpoint. */
+  embedding: boolean;
+  /** Function / tool calling. Chat endpoints here support it. */
+  tools: boolean;
+}
+
+/**
+ * Derive an endpoint's capabilities from its Databricks task hint and the
+ * classifier's model class. `llm/v1/chat` (and chat-classed endpoints) are
+ * chat- and tool-capable; `llm/v1/embeddings` (and embedding-classed) are
+ * embedding-only. Keeps capability logic in one place so consumers don't
+ * re-derive it from raw strings.
+ */
+function capabilitiesFor(endpoint: ServingEndpointSummary): EndpointCapabilities {
+  const task = endpoint.task;
+  const cls = endpoint.class;
+  const embedding = task === "llm/v1/embeddings" || cls === "embedding";
+  const chat =
+    !embedding && (task === "llm/v1/chat" || (typeof cls === "string" && cls.startsWith("chat")));
+  return { chat, embedding, tools: chat };
+}
 
 /**
  * Default terminal client for `chat`, launched via `bunx`. OpenHarness is an
@@ -64,15 +92,13 @@ async function startProxy(
   return { backend, server, url };
 }
 
-/** Build the `model-proxy` commander program (no side effects until parsed). */
+/** Build the `dbx-tools-model-proxy` commander program (no side effects until parsed). */
 export function buildProgram(): Command {
+  // Serving is the root action, not a subcommand: the bare command runs the
+  // proxy, and `chat`/`models`/`resolve` are the named detours off it.
   const program = new Command()
-    .name("model-proxy")
-    .description("Local OpenAI-compatible proxy to Databricks Model Serving.");
-
-  program
-    .command("serve", { isDefault: true })
-    .description("Run the local OpenAI-compatible proxy.")
+    .name("dbx-tools-model-proxy")
+    .description("Local OpenAI-compatible proxy to Databricks Model Serving.")
     .option("-p, --port <port>", "port to listen on", String(DEFAULT_PORT))
     .option("-H, --host <host>", "address to bind", DEFAULT_BIND_HOST)
     .option("--profile <profile>", "Databricks config profile")
@@ -133,10 +159,21 @@ export function buildProgram(): Command {
     .description("List resolvable Databricks serving endpoints (as JSON).")
     .option("--profile <profile>", "Databricks config profile")
     .option("--workspace-host <url>", "override the Databricks workspace host")
-    .action(async (opts: CommonOpts) => {
+    .option("--chat", "only list chat-capable endpoints")
+    .action(async (opts: CommonOpts & { chat?: boolean }) => {
       const backend = await DatabricksBackend.create(backendOptions(opts));
       const endpoints = await backend.models();
-      process.stdout.write(`${JSON.stringify(endpoints, null, 2)}\n`);
+      // Enrich each endpoint with a derived `capabilities` object so consumers
+      // filter on capability rather than re-deriving it from raw `task`/`class`
+      // strings. `chat` = OpenAI chat/completions + Responses (what an agent
+      // like Codex needs); `embedding` = vector endpoints; `tools` = whether the
+      // endpoint supports function/tool calls (all chat endpoints here do).
+      const enriched = endpoints.map((endpoint) => {
+        const caps = capabilitiesFor(endpoint);
+        return { ...endpoint, capabilities: caps };
+      });
+      const out = opts.chat ? enriched.filter((e) => e.capabilities.chat) : enriched;
+      process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
     });
 
   program

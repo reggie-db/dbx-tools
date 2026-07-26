@@ -9,7 +9,7 @@
 import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
 import { ignore, match, PathMatchInput } from "@dbx-tools/path";
 import { project as coreProject } from "@dbx-tools/core";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
@@ -196,6 +196,17 @@ export function applyCompilerOptions(
   if (compilerOptions.jsx) pkg.tsconfig?.addInclude("src/**/*.tsx");
 }
 
+/**
+ * Add `include` globs to a package's generated tsconfig. The tag defaults cover
+ * `src/**` only, so a package that compiles code OUTSIDE `src/` (its root
+ * `index.ts` barrel, a `bin/` or `tasks/` tree) needs the extra entries - pair
+ * this with a `rootDir: "."` in {@link applyCompilerOptions}.
+ */
+export function applyIncludes(pkg: javascript.NodeProject, ...includes: string[]): void {
+  if (!(pkg instanceof typescript.TypeScriptProject)) return;
+  for (const include of includes) pkg.tsconfig?.addInclude(include);
+}
+
 /** Apply a tag's `tasks` through projen's task system. */
 export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, TaskOptions>): void {
   if (!tasks) return;
@@ -240,6 +251,27 @@ export function addExports(
     ...exports,
     ...(packageJson !== undefined ? { "./package.json": packageJson } : {}),
   });
+}
+
+/**
+ * The `./<name>` -> `./src/<name>.ts` subpath map for a package's top-level `src`
+ * modules, skipping `_`-prefixed private modules and declaration files.
+ *
+ * This widens no API surface: the root `index.ts` barrel already re-exports every
+ * non-`_` module, so those names are public through `.` either way - the subpaths
+ * just add a narrower import path. Deriving the map is what lets a tag carry the
+ * whole export layout, instead of each package hand-listing its own modules.
+ */
+export function srcModuleExports(pkg: javascript.NodeProject): Record<string, string> {
+  const srcDir = join(pkg.outdir, "src");
+  if (!existsSync(srcDir)) return {};
+
+  const exports: Record<string, string> = {};
+  for (const file of readdirSync(srcDir).sort()) {
+    if (file.startsWith("_") || !file.endsWith(".ts") || file.endsWith(".d.ts")) continue;
+    exports[`./${file.slice(0, -".ts".length)}`] = `./src/${file}`;
+  }
+  return exports;
 }
 
 /** ESM compiler options every Node package shares regardless of tag. */
@@ -289,8 +321,8 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     depsUpgrade: false,
     // Bins are declared explicitly via `p.package.addBin(...)`. projen's default
     // auto-detection scans the `bin/` dir and adds every EXECUTABLE file keyed by
-    // its filename, so an executable `bin/dbxtools.ts` becomes a spurious second
-    // bin named `dbxtools.ts` (breaking `pnpm dlx` with ERR_PNPM_DLX_MULTIPLE_BINS).
+    // its filename, so an executable `bin/dbx-tools.ts` becomes a spurious second
+    // bin named `dbx-tools.ts` (breaking `pnpm dlx` with ERR_PNPM_DLX_MULTIPLE_BINS).
     autoDetectBin: false,
     peerDependencyOptions: { pinnedDevDependency: false },
     addPackageManagerToDevEngines: false,
@@ -746,6 +778,7 @@ function initProject(
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/openapi/**`);
+    project.annotateGenerated(`/${root}/**/bin/*.mjs`);
   }
 
   // ESLint lives ONLY on the root and lints every package. `projectService` resolves
@@ -761,7 +794,7 @@ function initProject(
     tsconfigPath: "./tsconfig.json",
   });
   // Generated read-only outputs (barrels, openapi clients, vite configs). ESLint
-  // --fix cannot rewrite them; they are stamped by the barrel generator / dbxtools / projen.
+  // --fix cannot rewrite them; they are stamped by the barrel generator / dbx-tools / projen.
   for (const root of roots) {
     eslint.addIgnorePattern(`${root}/openapi/**`);
     eslint.addIgnorePattern(`${root}/**/index.ts`);

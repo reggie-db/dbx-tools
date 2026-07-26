@@ -1,12 +1,13 @@
 {
-  "name": "@dbx-tools/appkit-env",
+  "name": "@dbx-tools/cli-appkit-env",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
     "directory": "workspaces/cli/appkit-env"
   },
   "bin": {
-    "appkit-env": "./bin/appkit-env.ts"
+    "dbx-tools-appkit-env": "./bin/dbx-tools-appkit-env.mjs",
+    "dbxt-appkit-env": "./bin/dbx-tools-appkit-env.mjs"
   },
   "scripts": {
     "build": "projen build",
@@ -21,7 +22,6 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
@@ -29,7 +29,8 @@
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
-    "commander": "catalog:"
+    "commander": "catalog:",
+    "tsx": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -42,6 +43,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./env-export": "./src/env-export.ts",
     "./package.json": "./package.json"
   },
   "dbxToolsConfig": {

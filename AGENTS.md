@@ -167,8 +167,9 @@ why to use this package anyway:
   names, capability classes (`chat-thinking`, `chat-balanced`, `chat-fast`,
   `embedding`), class ceilings, cached enriched catalogues, model pickers, and
   fallbacks. Native AppKit Serving is best when the endpoint alias is known.
-- `@dbx-tools/model-proxy`: use for local OpenAI-compatible clients and tools
-  that know `OPENAI_BASE_URL` but not AppKit.
+- `@dbx-tools/cli-model-proxy`: use for local OpenAI-compatible clients and
+  tools that know `OPENAI_BASE_URL` but not AppKit. Installs the
+  `dbx-tools-model-proxy` bin plus the short `dbxt-model-proxy` alias.
 - `@dbx-tools/ui-appkit`: use as a stable foundation/re-export for dbx-tools UI
   packages and hosts, not as a replacement for `@databricks/appkit-ui` in simple
   app code.
@@ -297,7 +298,12 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   - `ui` → Vite/React (DOM + `vite/client` types, jsx, `vite.config.ts`)
   - `server` → Node (`@types/node`, `tsoa` + `experimentalDecorators`, no DOM)
   - `node` → Node (`@types/node`, no DOM)
-  - `cli` → Node + `commander` + `@clack/prompts`
+  - `cli` → Node + `commander` + `@clack/prompts` + a RUNTIME `tsx`; a generated
+    `bin/<name>.mjs` launcher per `bin/<name>.ts` entry (see Gotchas); a
+    package-rooted tsconfig (`rootDir: "."` + `index.ts`/`bin/**/*.ts` includes,
+    since a CLI compiles code outside `src/`); and a DERIVED `exports` map (`.`,
+    a `./<module>` subpath per top-level `src` module, `./package.json`). A CLI
+    should need no per-package tsconfig or exports config.
   - `shared` → agnostic (the `AGNOSTIC_COMPILER_OPTIONS` floor: no DOM, no Node)
   - `openapi` → generated, read-only clients (`openapi-fetch`, DOM libs)
     Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
@@ -337,10 +343,10 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
 ## Layout
 
 ```
-.projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbxtools root task
+.projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbx-tools root task
 workspaces/
-  cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbxtools` bin)
-    bin/dbxtools.ts                       # commander entry: sync | barrels | openapi | clean
+  cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbx-tools` + `dbxt` bins)
+    bin/dbx-tools.ts                      # commander entry: sync | barrels | openapi | clean
     index.ts                              # generated barrel (public API surface)
     src/
       bootstrap.ts                        # bootstraps a COMPLETELY EMPTY folder (see Commands)
@@ -367,19 +373,33 @@ example-workspaces/
   cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ ui/app/   # seed examples, each a real subproject
 ```
 
-## Commands (the `dbxtools` CLI)
+## Commands
+
+Everything below the install line is a projen TASK the engine registers on the
+root, so run it with `pnpm run <task>`. The `dbx-tools` CLI is NOT needed here -
+see "The `dbx-tools` CLI" for the one case it exists for.
 
 ```sh
 pnpm install                 # link workspace + engine
 pnpm exec projen             # synth all generated config (+ install + barrels)
-pnpm exec projen sync --watch # watch while editing (concurrently: projenrc + barrels + openapi watchers)
-pnpm dbxtools sync           # bootstrap an empty folder, OR re-synth an existing workspace (one-shot)
-pnpm dbxtools sync --watch   # watch: projenrc re-synth (.projenrc.ts only) + barrels + openapi watchers, via concurrently
-pnpm dbxtools barrels        # rebuild every package's root index.ts barrel
+pnpm run sync                # one-shot full synth through the sync task
+pnpm run sync --watch        # watch while editing (concurrently: projenrc + barrels + openapi watchers)
+pnpm run barrels             # rebuild every package's root index.ts barrel
+pnpm run openapi             # generate the openapi packages from tsoa controllers
+pnpm run clean               # remove generated files (read-only ones); interactive picker, -y to skip
 pnpm -r compile              # type-check every package (projen's per-package compile: tsc --build)
-pnpm dbxtools openapi        # generate the openapi packages from tsoa controllers
-pnpm dbxtools clean          # remove generated files (read-only ones); interactive picker, -y to skip
 ```
+
+## The `dbx-tools` CLI
+
+`@dbx-tools/cli` ships the `dbx-tools` bin (aliased `dbxt`). It exists for the
+one thing projen cannot do for itself: a folder with no `.projenrc.ts` or
+toolchain installed yet, where there are no tasks to run. `dbx-tools sync`
+bootstraps that folder and then forwards to projen from then on.
+
+Inside an established workspace the CLI only forwards, so prefer the
+`pnpm run <task>` forms above - do not document `dbx-tools barrels` /
+`dbx-tools openapi` / `dbx-tools clean` as the way to run engine tasks.
 
 - **`projen sync --watch` is the always-on watcher** (the generated `sync` task run
   with `--watch`, also the VS Code folder-open task). `sync`'s `receiveArgs` forwards
@@ -399,7 +419,7 @@ pnpm dbxtools clean          # remove generated files (read-only ones); interact
   deliberately NOT used: it `fs.watch`es the whole repo recursively and re-synths
   (full post, so it installs) on EVERY file change, so a mere source edit forced a
   full re-synth + install.
-- **`dbxtools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
+- **`dbx-tools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
   `pnpm init`, seed a minimal `pnpm-workspace.yaml` (so the very next step can
   approve `tsx`'s `esbuild` build script non-interactively), `pnpm add -D
 projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
@@ -409,10 +429,11 @@ projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
   (`pnpm install --no-frozen-lockfile --force` - `--force` is what makes pnpm's
   own confirmation logic treat that prompt as pre-answered) and regenerate
   barrels. Scaffolds **no** package folders or sample code - just enough for
-  `pnpm exec projen`/`dbxtools sync` to work from here on.
-- **`dbxtools sync` on an existing workspace** just runs projen once (full synth,
-  installs, regenerates barrels via the post-synth component).
-- **`dbxtools sync --watch`** forwards to `projen sync --watch`, which does one
+  `pnpm exec projen`/`dbx-tools sync` to work from here on.
+- **`dbx-tools sync` on an existing workspace** just runs projen once (full synth,
+  installs, regenerates barrels via the post-synth component) - which is exactly
+  what `pnpm run sync` does directly, so prefer that once a workspace exists.
+- **`pnpm run sync --watch`** forwards to `projen sync --watch`, which does one
   initial full synth, then (via `concurrently`) runs the projenrc watcher alongside
   the barrel + openapi watchers. The projenrc watcher re-synths (+install) when
   `.projenrc.ts` or a configured `syncResynthPaths` entry changes; the barrel watcher
@@ -425,7 +446,7 @@ projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
   standalone barrel watcher calls `generateBarrels()` directly on edits (no synth),
   and `bootstrap` runs `runSynth` with `PROJEN_DISABLE_POST` set, doing its own
   install + barrels afterward.
-- **`dbxtools clean`** (`clean.ts`) deletes generated files. It doesn't hardcode a
+- **`pnpm run clean`** (`clean.ts`) deletes generated files. It doesn't hardcode a
   list: every file the toolchain writes is read-only (see below), so a read-only file
   under the repo (skipping vendor/build/VCS, but INCLUDING `.projen/*`) is a clean
   target. It shows a `@clack/prompts` picker with all files preselected (uncheck to
@@ -473,6 +494,8 @@ through the publish cycle. See `demo/README.md` for the full two-mode explanatio
   written by barrelsby. Marked generated in `.gitattributes` (`annotateGenerated`).
 - **openapi** (`<root>/openapi/<name>/`): fully generated from tsoa
   controllers - spec, types, and client.
+- **cli launchers** (`<cli package>/bin/<name>.mjs`): read-only + executable,
+  one per `bin/<name>.ts` entry, emitted by the `cli` tag (`cli-bin.ts`).
 
 Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated files.
 
@@ -488,13 +511,44 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` applies (via `project.mixin(...)`) a
   mixin matching `predicate.hasName("*/cli-dbx-tools").and(predicate.hasTag("cli"))` that:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
-  adds its bin (`p.package.addBin({ dbxtools: "./bin/dbxtools.ts" })`), depends on
-  `@dbx-tools/projen`, and bumps its tsconfig to ES2022 lib/target +
-  `rootDir: "."` - extra includes for `index.ts`/`bin/**/*.ts` (the `cli` tag's
-  defaults are ES2020 + `src/**/*.ts` only, which doesn't cover code outside
-  `src/`). The projen engine itself lives in `projen`
+  adds its bins - `dbx-tools` plus the short `dbxt` alias, both pointing at
+  `./bin/dbx-tools.mjs` (npm exposes every `bin` key as its own command) - and
+  depends on `@dbx-tools/projen`. That is ALL it declares: tsconfig
+  (`rootDir: "."` + the `index.ts`/`bin/**/*.ts` includes) and the `exports` map
+  come from the `cli` tag, so a CLI needs no per-package config for either.
+  It is the ONLY package in the repo that overrides its name: every other one,
+  CLIs included, keeps what discovery derives from its path
+  (`workspaces/cli/model-proxy` -> `@dbx-tools/cli-model-proxy`,
+  `workspaces/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
+  package, MOVE ITS FOLDER - do not add a name override.
+  The projen engine itself lives in `projen`
   (`@dbx-tools/projen`); a `shared`/`projen` mixin adds its deps
   (`projen`, `constructs`, `barrelsby`, `@dbx-tools/path`, ...).
+- **A CLI's `bin` points at a generated `.mjs` launcher, never the `.ts` entry.**
+  Node can't run the `.ts` directly, and the obvious fix - a
+  `#!/usr/bin/env -S npx tsx` shebang - only works inside a workspace checkout,
+  because `npx` resolves tsx from the CALLER'S cwd. After `npm i -g
+  @dbx-tools/cli` that cwd is unrelated to the package, so every first run
+  stalled to download tsx (and failed outright offline). So the `cli` tag makes
+  `tsx` a RUNTIME dep (not the baseline devDep, which it removes) and emits
+  `bin/<name>.mjs` beside each `bin/<name>.ts` (`cli-bin.ts`,
+  `addCliBinLaunchers`). The launcher reaches tsx through a bare
+  `import { register } from "tsx/esm/api"`, which NODE resolves relative to the
+  launcher's own location - i.e. the CLI's own `node_modules` - then hands off to
+  the `.ts`. Entries are discovered by scanning `bin/` at synth, so a new CLI
+  only needs its `.ts` file plus a `package.json` bin naming the `.mjs`.
+  Compiled `lib/` output is NOT a usable bin target: the sources use
+  extensionless imports (`moduleResolution: bundler`), which Node ESM can't
+  resolve without tsx.
+- **CLI command names are `dbx-tools-<name>` plus a short `dbxt-<name>` alias**,
+  and the `bin/` entry file is named after the primary command - so
+  `bin/dbx-tools-model-proxy.ts` backs `dbx-tools-model-proxy` /
+  `dbxt-model-proxy`. `@dbx-tools/cli` is the degenerate case of the same rule
+  (`bin/dbx-tools.ts` -> `dbx-tools` / `dbxt`). Note the package name and the
+  command deliberately DIVERGE (`@dbx-tools/cli-model-proxy` ships
+  `dbx-tools-model-proxy`), so `npx @dbx-tools/cli-model-proxy` can't pick a bin
+  on its own - name the command: `npx --package @dbx-tools/cli-model-proxy
+  dbx-tools-model-proxy`, or just install it.
 - **The root keeps the engine itself resolvable across synths** via
   `engineSelfDependency()` (`project.ts`): resolves the `@dbx-tools/cli`
   package (`dbx-tools`) via `require.resolve` when installed; if that
@@ -511,7 +565,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `packageManager` is readonly after construction); pass a different one only if
   you know what you're doing, since the whole toolchain assumes pnpm workspaces.
 - **Type-checking is projen's own per-package `compile`** (`tsc --build` against
-  each package's tag tsconfig), not a `dbxtools` command - the tag `lib`/`types`
+  each package's tag tsconfig), not a `dbx-tools` command - the tag `lib`/`types`
   overrides are what make misuse fail. Check one package with `pnpm exec projen
 compile` (or `pnpm compile`) in its dir, or all of them with `pnpm -r compile`.
 - **Tool bins are resolved lazily** (a memoized function, not a module-level
@@ -540,7 +594,7 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   The CLI package does exactly this so its own `package.json` stays writable.
   Source/sample files the developer owns (`.projenrc.ts`, each package's `README.md`,
   `src/*`) stay writable regardless.
-- **OpenAPI** (`openapi.ts`, `dbxtools openapi`): scans **every discovered**
+- **OpenAPI** (`openapi.ts`, `pnpm run openapi`): scans **every discovered**
   `server`/`node` package for **tsoa** controllers (classes with
   `@Route`/`@Get`/... - no JSDoc/YAML). For each, tsoa's `generateSpec` infers an
   OpenAPI 3 spec from the decorators + TS types, then openapi-typescript +
@@ -548,9 +602,9 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   package (`openapi.json` + `src/schema.ts` + `src/client.ts`) - colocated under
   the SAME root as the controller it came from (`example-workspaces/server/
 api`'s controllers generate `example-workspaces/openapi/api`), not a hardcoded
-  root. tsoa/typescript/openapi-typescript are lazy-loaded (only `dbxtools
+  root. tsoa/typescript/openapi-typescript are lazy-loaded (only `pnpm run
 openapi` / a watched controller edit needs them). The openapi watcher (started by
-  `projen sync --watch`, under `concurrently`) regenerates it automatically when a
+  `pnpm run sync --watch`, under `concurrently`) regenerates it automatically when a
   controller changes.
 - **Brand theming is a `[data-brand]` token bridge, opt-in by detection.**
   `@dbx-tools/ui-branding` writes portable `--brand-color-*` / `--brand-font-*`

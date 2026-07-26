@@ -1,5 +1,5 @@
 /**
- * `dbxtools` commander entry: detect root, bootstrap or install, forward to projen.
+ * `dbx-tools` commander entry: detect root, bootstrap or install, forward to projen.
  *
  * @module
  */
@@ -40,12 +40,12 @@ async function prepareAndRunProjen(projenArgs: string[], startDir?: string): Pro
 /** Parse `argv` with commander and forward remaining args to projen. */
 export async function runCli(argv: string[]): Promise<void> {
   const program = new Command()
-    .name("dbxtools")
+    .name("dbx-tools")
     .description("Bootstrap dbx-tools workspaces and forward to projen")
     .allowUnknownOption()
     .allowExcessArguments()
     .showHelpAfterError()
-    .helpOption("-h, --help", "Show dbxtools help");
+    .helpOption("-h, --help", "Show dbx-tools help");
 
   program.parse(argv);
   await prepareAndRunProjen(program.args);

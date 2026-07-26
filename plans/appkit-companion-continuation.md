@@ -475,7 +475,7 @@ cd ~/Projects/github-reggie-db/dbx-tools
 pnpm exec projen                       # synth: discover + generate + install
 (cd workspaces/shared/<pkg> && pnpm exec projen compile)   # type-check
 (cd workspaces/shared/<pkg> && pnpm exec projen test)      # node:test
-pnpm dbxtools barrels                   # regenerate barrels
+pnpm run barrels                           # regenerate barrels
 # confirm existing package names/tags unchanged (snapshot before/after)
 ```
 

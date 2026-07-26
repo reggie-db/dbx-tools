@@ -142,4 +142,7 @@ file contract as the CLI.
 - `publish` - packaging and tag-based release helpers.
 - `engineRoot` - engine package root resolution for bootstrapped repos.
 
-The user-facing CLI is [`dbx-tools`](../../cli/dbx-tools).
+The engine registers its commands as projen tasks on the workspace root, so run
+them with `pnpm run <task>` - `sync` (add `--watch`), `barrels`, `openapi`, and
+`clean`. [`@dbx-tools/cli`](../workspaces/cli/dbx-tools) is only needed to
+bootstrap a folder that has no `.projenrc.ts` or toolchain yet.

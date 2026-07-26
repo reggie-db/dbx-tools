@@ -91,11 +91,20 @@
       "name": "compile",
       "description": "Only compile"
     },
-    "dbxtools": {
-      "name": "dbxtools",
+    "dbx-tools": {
+      "name": "dbx-tools",
       "steps": [
         {
-          "exec": "tsx workspaces/cli/dbx-tools/bin/dbxtools.ts",
+          "exec": "tsx workspaces/cli/dbx-tools/bin/dbx-tools.ts",
+          "receiveArgs": true
+        }
+      ]
+    },
+    "dbxt": {
+      "name": "dbxt",
+      "steps": [
+        {
+          "exec": "tsx workspaces/cli/dbx-tools/bin/dbx-tools.ts",
           "receiveArgs": true
         }
       ]

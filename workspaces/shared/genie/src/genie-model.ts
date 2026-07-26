@@ -7,7 +7,7 @@
  *   1. Genie wire shapes derived from `@dbx-tools/shared-sdk-model`'s
  *      generated `dashboards` schemas (regenerated from the upstream
  *      `@databricks/sdk-experimental` `apis/dashboards/model.d.ts`
- *      by `dbxtools codegen`). We extend the SDK schemas where Genie
+ *      by the engine's codegen on synth). We extend the SDK schemas where Genie
  *      ships fields on the wire that the SDK doesn't currently type:
  *
  *        - `GenieMessage.auto_regenerate_count: number` (stamped

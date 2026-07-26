@@ -31,7 +31,7 @@ allowBuilds:
  * Turn a folder into a functioning dbx-tools workspace: `pnpm init`, seed
  * `pnpm-workspace.yaml`, add `projen`/`typescript`/`tsx` + the engine package,
  * write a minimal `.projenrc.ts`, synth once (with `PROJEN_DISABLE_POST`), then
- * install. Does not run barrels - run `dbxtools barrels` or a full projen synth
+ * install. Does not run barrels - run `pnpm run barrels` or a full projen synth
  * post-install to generate package barrels.
  *
  * Every step is idempotent and self-guarded, so this is safe to run against a
@@ -58,7 +58,7 @@ export function bootstrapWorkspace(
   runInitialSynth(root);
 
   runPnpm(["install", "--no-frozen-lockfile", "--force"], root);
-  outro("Workspace ready - re-run dbxtools or add packages under workspaces/");
+  outro("Workspace ready - re-run dbx-tools or add packages under workspaces/");
 }
 
 /**

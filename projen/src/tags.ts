@@ -14,9 +14,16 @@
  * callers add their own afterward.
  */
 import type { IMixin as ConstructsMixin } from "constructs";
-import { javascript } from "projen";
+import { DependencyType, javascript } from "projen";
+import { addCliBinLaunchers } from "./cli-bin";
 import { create } from "./mixin";
-import { applyCompilerOptions, applyExports, applyTasks } from "./project";
+import {
+  applyCompilerOptions,
+  applyExports,
+  applyIncludes,
+  applyTasks,
+  srcModuleExports,
+} from "./project";
 import * as projectPredicate from "./project-predicate";
 import { ViteConfigFile } from "./vite";
 
@@ -106,20 +113,32 @@ export const WORKSPACE_TAG_MIXINS = {
     });
   }),
   cli: create(projectPredicate.hasTag("cli"), (p) => {
-    p.addDeps("commander@catalog:", "@clack/prompts@catalog:");
+    // tsx is a RUNTIME dep, not a dev one: a CLI's bin is a `.ts` entry that needs
+    // the tsx loader registered before it can run, and an installed consumer
+    // (`npm i -g`) has no other source for it. Drop the baseline devDep so it isn't
+    // declared in both blocks. The generated `.mjs` launchers are what actually
+    // reach it - see {@link addCliBinLaunchers}.
+    p.deps.removeDependency("tsx", DependencyType.BUILD);
+    p.addDeps("commander@catalog:", "@clack/prompts@catalog:", "tsx@catalog:");
     p.addDevDeps("@types/node@catalog:");
-    applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
-    // A CLI's standard surface: a `.` root entry plus `./package.json`. A CLI
-    // that also exports a helper module (e.g. dbx-tools' `./pnpm`) overrides
-    // this in its own mixin.
+    addCliBinLaunchers(p);
+    // A CLI compiles code OUTSIDE `src/` - its root `index.ts` barrel and the
+    // `bin/` entries - which the src-only tag default doesn't reach, so the
+    // tsconfig is rooted at the package instead.
+    applyCompilerOptions(p, { ...NODE_COMPILER_OPTIONS, rootDir: "." });
+    applyIncludes(p, "index.ts", "bin/**/*.ts");
+    // A CLI's standard surface: the `.` root entry, a `./<module>` subpath per
+    // top-level `src` module, and `./package.json`. Derived rather than declared
+    // so no CLI has to hand-list its own modules.
     applyExports(p, {
       ".": "./index.ts",
+      ...srcModuleExports(p),
       "./package.json": "./package.json",
     });
   }),
   server: create(projectPredicate.hasTag("server"), (p) => {
     // A Node/Express service. tsoa's decorators (@Route/@Get/...) also drive
-    // `dbxtools openapi` (spec + client); experimentalDecorators lets them
+    // the `openapi` task (spec + client); experimentalDecorators lets them
     // type-check. `dev`/`start` run the app's `src/server.ts` with tsx.
     p.addDeps("express@catalog:", "tsoa@catalog:");
     p.addDevDeps("@types/node@catalog:", "@types/express@catalog:");

@@ -1,5 +1,5 @@
 /**
- * Workspace root detection for the `dbxtools` CLI.
+ * Workspace root detection for the `dbx-tools` CLI.
  *
  * @module
  */

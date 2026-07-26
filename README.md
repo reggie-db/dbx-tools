@@ -126,11 +126,11 @@ export function App() {
 
 | Use case                    | Packages                                                                                                                                             |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AppKit defaults             | [`@dbx-tools/appkit`](workspaces/node/appkit), [`@dbx-tools/appkit-env`](workspaces/cli/appkit-env)                                             |
+| AppKit defaults             | [`@dbx-tools/appkit`](workspaces/node/appkit), [`@dbx-tools/cli-appkit-env`](workspaces/cli/appkit-env)                                             |
 | AppKit-hosted agents        | [`@dbx-tools/appkit-mastra`](workspaces/node/appkit-mastra), [`@dbx-tools/shared-mastra`](workspaces/shared/mastra)                             |
 | Genie streaming and schemas | [`@dbx-tools/genie`](workspaces/node/genie), [`@dbx-tools/shared-genie`](workspaces/shared/genie)                                               |
 | Model Serving selection     | [`@dbx-tools/model`](workspaces/node/model), [`@dbx-tools/shared-model`](workspaces/shared/model)                                               |
-| Local model proxy           | [`@dbx-tools/model-proxy`](workspaces/cli/model-proxy)                                                                                               |
+| Local model proxy           | [`@dbx-tools/cli-model-proxy`](workspaces/cli/model-proxy)                                                                                               |
 | Email workflows             | [`@dbx-tools/email`](workspaces/node/email), [`@dbx-tools/shared-email`](workspaces/shared/email), [`@dbx-tools/ui-email`](workspaces/ui/email) |
 | Web search and fetch        | [`@dbx-tools/appkit-web-search`](workspaces/node/appkit-web-search)                                                                                 |
 | React/AppKit UI             | [`@dbx-tools/ui-appkit`](workspaces/ui/appkit), [`@dbx-tools/ui-mastra`](workspaces/ui/mastra), [`@dbx-tools/ui-email`](workspaces/ui/email)         |
@@ -194,12 +194,12 @@ const selected = await resolve.selectModel(client, host, {
 
 ### Run OpenAI-Shaped Tools Against Databricks
 
-Use [`@dbx-tools/model-proxy`](workspaces/cli/model-proxy) when a local tool
+Use [`@dbx-tools/cli-model-proxy`](workspaces/cli/model-proxy) when a local tool
 expects OpenAI-compatible endpoints but you want Databricks auth and Model
 Serving resolution.
 
 ```sh
-model-proxy serve --profile my-workspace --port 4000
+dbx-tools-model-proxy --profile my-workspace --port 4000
 ```
 
 Then point the client at `http://127.0.0.1:4000/v1`.

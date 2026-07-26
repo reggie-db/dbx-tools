@@ -1,6 +1,6 @@
 #!/usr/bin/env -S npx tsx
 /**
- * `model-proxy` entry: a local OpenAI-compatible proxy in front of Databricks
+ * `dbx-tools-model-proxy` entry: a local OpenAI-compatible proxy in front of Databricks
  * Model Serving. Delegates to the commander program in `../src/cli`.
  */
 import { CommanderError, runCli } from "../src/cli";

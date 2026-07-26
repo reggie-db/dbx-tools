@@ -1,5 +1,5 @@
 /**
- * pnpm discovery, workspace install, and projen forwarding for the `dbxtools` CLI.
+ * pnpm discovery, workspace install, and projen forwarding for the `dbx-tools` CLI.
  *
  * @module
  */

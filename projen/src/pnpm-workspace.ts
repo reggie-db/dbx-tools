@@ -43,6 +43,7 @@ const DEFAULT_CATALOG: Catalog = {
   express: "^5.1.0",
   zod: "^4.3.6",
   typescript: "^5.9.3",
+  tsx: "^4.23.0",
   commander: "^15.0.0",
   "@clack/prompts": "^1.7.0",
   "openapi-fetch": "^0.17.0",

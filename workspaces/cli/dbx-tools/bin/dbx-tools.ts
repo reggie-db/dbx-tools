@@ -1,6 +1,6 @@
 #!/usr/bin/env -S npx tsx
 /**
- * `dbxtools` bootstraps uninitialized workspaces, then forwards to projen.
+ * `dbx-tools` bootstraps uninitialized workspaces, then forwards to projen.
  */
 import { runCli } from "../src/cli";
 

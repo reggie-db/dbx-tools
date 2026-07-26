@@ -68,5 +68,8 @@ pnpm-workspace.yaml
 tsconfig.base.json
 tsconfig.json
 tsconfig.projen.json
-test/tsconfig.json
+bin/dbx-tools-appkit-env.mjs
 package.json
+test/tsconfig.json
+bin/dbx-tools.mjs
+bin/dbx-tools-model-proxy.mjs

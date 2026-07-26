@@ -197,5 +197,5 @@ await provision.provisionCacheSchema(
 - `provision` - cache schema provisioning helpers.
 
 The shell-facing wrapper for auto-config is
-[`@dbx-tools/appkit-env`](../../cli/appkit-env). Higher-level agent composition
+[`@dbx-tools/cli-appkit-env`](../../cli/appkit-env). Higher-level agent composition
 is in [`@dbx-tools/appkit-mastra`](../appkit-mastra).

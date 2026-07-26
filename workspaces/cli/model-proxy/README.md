@@ -1,4 +1,4 @@
-# @dbx-tools/model-proxy
+# dbx-tools-model-proxy
 
 Local OpenAI-compatible proxy for Databricks Model Serving.
 
@@ -38,7 +38,15 @@ nothing about AppKit:
 ## Run The Proxy
 
 ```sh
-model-proxy serve --profile my-workspace --port 4000
+dbx-tools-model-proxy --profile my-workspace --port 4000
+```
+
+The package installs two equivalent commands: `dbx-tools-model-proxy` and the
+shorter `dbxt-model-proxy`. Neither matches the package name, so a one-off run
+has to name the command explicitly:
+
+```sh
+npx --package @dbx-tools/cli-model-proxy dbx-tools-model-proxy
 ```
 
 Then point any OpenAI-compatible client at `http://127.0.0.1:4000/v1`:
@@ -58,8 +66,8 @@ putting another trusted access-control layer in front of it.
 ## Use A Terminal Chat Client
 
 ```sh
-model-proxy chat --profile my-workspace --model "claude sonnet"
-model-proxy chat --client "aichat" --model "chat fast"
+dbx-tools-model-proxy chat --profile my-workspace --model "claude sonnet"
+dbx-tools-model-proxy chat --client "aichat" --model "chat fast"
 ```
 
 `chat` starts the proxy, sets `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and
@@ -70,17 +78,19 @@ client without editing that client's config.
 ## Inspect Model Resolution
 
 ```sh
-model-proxy models --profile my-workspace
-model-proxy resolve claude sonnet --profile my-workspace
+dbx-tools-model-proxy models --profile my-workspace
+dbx-tools-model-proxy resolve claude sonnet --profile my-workspace
 ```
 
 These commands are useful when a client request resolves unexpectedly. They use
-the same backend and resolver as the proxy server.
+the same backend and resolver as the proxy server (`@dbx-tools/model`
+`rankModels`: Fuse match, then class, then within-class version - so `opus`
+prefers `opus-5` over `opus-4-7`).
 
 ## Require A Client API Key
 
 ```sh
-model-proxy serve --api-key "$LOCAL_PROXY_KEY"
+dbx-tools-model-proxy --api-key "$LOCAL_PROXY_KEY"
 ```
 
 With `--api-key` or `PROXY_API_KEY`, callers must send
@@ -90,7 +100,7 @@ local process may be able to reach it.
 ## Start Programmatically
 
 ```ts
-import { backend, server } from "@dbx-tools/model-proxy";
+import { backend, server } from "@dbx-tools/cli-model-proxy";
 
 const db = await backend.DatabricksBackend.create({
   profile: "my-workspace",

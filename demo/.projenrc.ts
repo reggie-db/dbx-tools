@@ -24,10 +24,10 @@ const SCOPE = "dbx-tools";
 /**
  * Gitignore every projen-GENERATED (read-only) file across the demo tree -
  * including the root/package manifests - so the committed demo carries only
- * hand-authored source. This shows the full `dbxtools sync` story: copy the
- * folder, run `dbxtools sync`, and EVERYTHING generated (package.json,
+ * hand-authored source. This shows the full `dbx-tools sync` story: copy the
+ * folder, run `dbx-tools sync`, and EVERYTHING generated (package.json,
  * pnpm-workspace.yaml, tsconfigs, `.projen/*`, vite config, barrels, ...) is
- * regenerated from `.projenrc.ts` locally rather than shipped. `dbxtools sync`
+ * regenerated from `.projenrc.ts` locally rather than shipped. `dbx-tools sync`
  * bootstraps even an otherwise-empty folder (pnpm init + seed the workspace),
  * so nothing generated needs to be committed.
  *
@@ -48,7 +48,7 @@ class IgnoreGeneratedFiles extends Component {
       const prefix = relativePosix(root.outdir, p.outdir);
       // `package.json` is projen-generated but kept WRITABLE (readonly === false)
       // on a project root, so the readonly walk below misses it. Ignore it
-      // explicitly - `dbxtools sync` regenerates it (bootstrapping even an empty
+      // explicitly - `dbx-tools sync` regenerates it (bootstrapping even an empty
       // folder), so nothing generated needs to be committed.
       root.gitignore.addPatterns(joinPosix(prefix, "package.json"));
       for (const file of p.files) {
@@ -186,7 +186,7 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
 project.gitignore.include("/.npmrc", "/.env.example");
 
 // Gitignore all generated files so the committed demo is hand-authored source
-// only - a copied folder regenerates them via `dbxtools sync` / `pnpm install`.
+// only - a copied folder regenerates them via `dbx-tools sync` / `pnpm install`.
 new IgnoreGeneratedFiles(project);
 
 project.synth();

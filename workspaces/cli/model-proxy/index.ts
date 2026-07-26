@@ -5,6 +5,7 @@
 export * as backend from "./src/backend";
 export * as cli from "./src/cli";
 export * as defaults from "./src/defaults";
+export * as responses from "./src/responses";
 export * as server from "./src/server";
 export type { BackendOptions } from "./src/backend";
 export type { ProxyServerOptions, StartProxyOptions } from "./src/server";
