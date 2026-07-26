@@ -17,6 +17,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { format as formatSql } from "sql-formatter";
 import { Streamdown } from "streamdown";
 import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid";
+import { copyText } from "../support/clipboard";
 import { createShikiPlugin, highlightToHtml } from "../support/shiki-plugin";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
@@ -307,7 +308,8 @@ const CopyButton = ({ value, className }: { value: string; className?: string })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => clearTimeout(timer.current ?? undefined), []);
   const onCopy = () => {
-    void navigator.clipboard.writeText(value).then(() => {
+    void copyText(value).then((ok) => {
+      if (!ok) return;
       setCopied(true);
       clearTimeout(timer.current ?? undefined);
       timer.current = setTimeout(() => setCopied(false), 1500);

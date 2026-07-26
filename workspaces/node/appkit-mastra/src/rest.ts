@@ -1,4 +1,5 @@
 import { appkit } from "@dbx-tools/appkit";
+import { json } from "@dbx-tools/shared-core";
 /**
  * Minimal authenticated Databricks REST helper. Pulls the workspace
  * host and a fresh bearer header off an OBO-scoped `WorkspaceClient`
@@ -58,10 +59,5 @@ export async function readResponseText(res: Response): Promise<string> {
 /** Parse a response body as JSON, returning `{}` on empty / invalid bodies. */
 export async function readResponseJson(res: Response): Promise<unknown> {
   const text = await readResponseText(res);
-  if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    return {};
-  }
+  return json.parse<unknown>(text, {});
 }

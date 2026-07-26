@@ -21,9 +21,10 @@
  * @module
  */
 
-import { resolve, serving } from "@dbx-tools/model";
-import { error, log } from "@dbx-tools/shared-core";
-import { openaiResponses } from "@dbx-tools/shared-model";
+import { getExecutionContext } from "@databricks/appkit";
+import { invoke, resolve, serving } from "@dbx-tools/model";
+import { error, log, string } from "@dbx-tools/shared-core";
+import { openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 import type { ResolvedWebSearchConfig } from "./config";
 import { detectWebSearchProvider, supportsWebSearch, webSearchToolSpec } from "./provider";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema";
@@ -38,6 +39,18 @@ const { listServingEndpoints } = serving;
 export interface WebSearchContext {
   client: WorkspaceClientLike;
   host: string;
+}
+
+/**
+ * Resolve the OBO workspace client + host from the active AppKit execution
+ * context. Inside `agent.stream`'s `asUser(req)` scope this hits the serving
+ * endpoint as the requesting user; outside a user context AppKit falls back to
+ * the service principal.
+ */
+export async function resolveWebSearchContext(): Promise<WebSearchContext> {
+  const ctx = getExecutionContext();
+  const host = (await ctx.client.config.getHost()).toString();
+  return { client: ctx.client, host };
 }
 
 /**
@@ -113,11 +126,6 @@ async function postServing(
 
 /* --------------------------- response extraction --------------------------- */
 
-/** Coerce an unknown to a trimmed string, or "" . */
-function str(v: unknown): string {
-  return typeof v === "string" ? v.trim() : "";
-}
-
 /**
  * Extract answer text + citations from an OpenAI Responses API payload, via the
  * shared reader in `@dbx-tools/shared-model` (the same module the model-proxy
@@ -143,17 +151,18 @@ function fromChatPayload(payload: Record<string, unknown>): {
 } {
   const choices = Array.isArray(payload.choices) ? (payload.choices as unknown[]) : [];
   const message = (choices[0] as { message?: Record<string, unknown> })?.message ?? {};
-  const answer = str(message.content);
+  const answer = openaiChat.chatContentToText(message.content);
   const citations: WebSearchCitation[] = [];
   // Best-effort grounding extraction: walk any nested object for {uri|url,title}.
   const seen = new Set<string>();
   const visit = (v: unknown, depth: number): void => {
     if (depth > 6 || v === null || typeof v !== "object") return;
     const o = v as Record<string, unknown>;
-    const url = str(o.url) || str(o.uri);
+    const url = string.trimToEmpty(o.url) || string.trimToEmpty(o.uri);
     if (url && !seen.has(url)) {
       seen.add(url);
-      citations.push({ url, ...(str(o.title) ? { title: str(o.title) } : {}) });
+      const title = string.trimToEmpty(o.title);
+      citations.push({ url, ...(title ? { title } : {}) });
     }
     for (const val of Object.values(o)) {
       if (Array.isArray(val)) val.forEach((x) => visit(x, depth + 1));
@@ -195,9 +204,7 @@ export async function runWebSearch(
   const spec = webSearchToolSpec(provider, config.webSearchTools);
 
   const path =
-    spec.api === "responses"
-      ? "/serving-endpoints/responses"
-      : "/serving-endpoints/chat/completions";
+    spec.api === "responses" ? `/${invoke.RESPONSES_PATH}` : `/${invoke.CHAT_COMPLETIONS_PATH}`;
   const body =
     spec.api === "responses"
       ? {

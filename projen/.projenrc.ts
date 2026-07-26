@@ -75,7 +75,6 @@ const project = new typescript.TypeScriptProject({
     "is-identifier@^1",
     "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
-    "p-memoize@^8.0.0",
     "projen@^0.101.6",
     "ts-to-zod@^5.1.0",
     "tsoa@^6.6.0",

@@ -21,26 +21,13 @@
 import { log } from "@dbx-tools/shared-core";
 import { gotScraping } from "got-scraping";
 import type { ResolvedWebSearchConfig } from "./config";
+import { htmlFragmentToText } from "./html-text";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema";
 
 const logger = log.logger("web-search/scrape");
 
 /** DuckDuckGo's no-JS HTML results endpoint (queried via GET). */
 const DDG_HTML_URL = "https://html.duckduckgo.com/html/";
-
-/** Strip HTML tags and decode the few entities DDG emits in titles/snippets. */
-function stripTags(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;|&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 /**
  * DDG wraps result URLs in a redirect (`//duckduckgo.com/l/?uddg=<encoded>`).
@@ -66,12 +53,12 @@ function parseDdgHtml(html: string): WebSearchCitation[] {
   const snippetRe = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
   const snippets: string[] = [];
   let sm: RegExpExecArray | null;
-  while ((sm = snippetRe.exec(html)) !== null) snippets.push(stripTags(sm[1] ?? ""));
+  while ((sm = snippetRe.exec(html)) !== null) snippets.push(htmlFragmentToText(sm[1] ?? ""));
   let am: RegExpExecArray | null;
   let i = 0;
   while ((am = anchorRe.exec(html)) !== null) {
     const url = unwrapDdgUrl(am[1] ?? "");
-    const title = stripTags(am[2] ?? "");
+    const title = htmlFragmentToText(am[2] ?? "");
     if (!url || !title) continue;
     const snippet = snippets[i] ?? "";
     citations.push({ url, title, ...(snippet ? { snippet } : {}) });

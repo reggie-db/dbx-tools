@@ -15,7 +15,7 @@
 
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 import { databricks } from "@dbx-tools/appkit";
-import { error, log, object, string } from "@dbx-tools/shared-core";
+import { json, log, object, string } from "@dbx-tools/shared-core";
 import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
 
 const logger = log.logger("genie/space");
@@ -89,14 +89,9 @@ interface SerializedSampleQuestion {
 export function genieSampleQuestions(space: GenieSpace): string[] {
   const serialized = space.serialized_space;
   if (!serialized) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(serialized);
-  } catch (err) {
-    logger.warn("serialized-space:parse-error", {
-      spaceId: space.space_id,
-      error: error.errorMessage(err),
-    });
+  const parsed = json.parse(serialized);
+  if (parsed === undefined) {
+    logger.warn("serialized-space:parse-error", { spaceId: space.space_id });
     return [];
   }
   const sampleQuestions = (parsed as { config?: { sample_questions?: unknown } } | null)?.config

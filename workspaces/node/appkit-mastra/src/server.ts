@@ -7,9 +7,8 @@
  * @module
  */
 
-import { randomUUID } from "node:crypto";
 import { getExecutionContext } from "@databricks/appkit";
-import { http, log, object, string, token } from "@dbx-tools/shared-core";
+import { hash, http, log, object, string, token } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
@@ -142,7 +141,7 @@ export class MastraServer extends MastraServerExpress {
     if (requestContext.get(MASTRA_REQUEST_ID_KEY)) return;
     const headerValue = req.headers["x-request-id"];
     const upstream = Array.isArray(headerValue) ? headerValue[0] : headerValue;
-    const requestId = upstream?.trim() || randomUUID();
+    const requestId = upstream?.trim() || hash.id();
     requestContext.set(MASTRA_REQUEST_ID_KEY, requestId);
     res.setHeader("X-Request-Id", requestId);
   }
@@ -218,7 +217,7 @@ export class MastraServer extends MastraServerExpress {
     );
     let sessionId = cookies[cookieName];
     if (!sessionId) {
-      sessionId = randomUUID();
+      sessionId = hash.id();
       res.cookie(cookieName, sessionId, {
         httpOnly: true,
         sameSite: "lax",

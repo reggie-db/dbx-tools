@@ -27,6 +27,7 @@ import { useState } from "react";
 import { MarkdownWithEmbeds } from "./embed-slots";
 import { ExportMenu } from "./export-menu";
 import { FeedbackControls } from "./feedback-controls";
+import { copyText } from "../support/clipboard";
 import { ToolMarkdown } from "./markdown";
 import { SuggestionPills } from "./suggestion-pills";
 import { collectSuggestions } from "./suggestions";
@@ -44,39 +45,6 @@ import type {
 // User / assistant message bubbles plus the inline approval card and
 // the helpers that surface approval-gated tool calls out of a message's
 // parts.
-
-/**
- * Copy `text` to the clipboard, resolving `true` on success. Prefers the
- * async Clipboard API, but that is only available in a secure context
- * (HTTPS / localhost) - over plain HTTP (e.g. a LAN / ZeroTier IP) it is
- * `undefined`, which is why a tap on mobile could silently do nothing. Falls
- * back to a hidden `<textarea>` + `document.execCommand("copy")` so copy works
- * off a non-secure origin too.
- */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // Fall through to the execCommand path.
-  }
-  try {
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.setAttribute("readonly", "");
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand("copy");
-    area.remove();
-    return ok;
-  } catch {
-    return false;
-  }
-}
 
 const getReasoningText = (parts: UIMessage["parts"]): string =>
   parts

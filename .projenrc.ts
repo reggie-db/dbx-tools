@@ -102,7 +102,6 @@ root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
 root.pnpmWorkspace?.addCatalog("echarts-for-react", "^3.0.2");
 root.pnpmWorkspace?.addCatalog("shiki", "^3.0.0");
 root.pnpmWorkspace?.addCatalog("sql-formatter", "^15.6.9");
-root.pnpmWorkspace?.addCatalog("nanoid", "^5.1.6");
 
 
 // ---------------------------------------------------------------------------
@@ -287,7 +286,6 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@dbx-tools/model@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
-    "@dbx-tools/databricks@workspace:*",
     "@databricks/sdk-experimental@catalog:",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
@@ -488,7 +486,6 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
     "echarts-for-react@catalog:",
     "lucide-react@catalog:",
     "marked@catalog:",
-    "nanoid@catalog:",
     "shiki@catalog:",
     "sql-formatter@catalog:",
     "streamdown@catalog:",

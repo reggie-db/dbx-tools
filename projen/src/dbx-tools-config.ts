@@ -17,13 +17,11 @@ export interface DBXToolsConfigOptions {
 }
 
 function readDBXToolsConfig(pkg: javascript.NodePackage): Record<string, unknown> {
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
-    value != null && typeof value === "object" && !Array.isArray(value);
   try {
     const manifest = pkg.manifest as unknown;
-    if (isRecord(manifest)) {
+    if (object.isRecord(manifest)) {
       const config = manifest[DBX_TOOLS_CONFIG_KEY];
-      if (isRecord(config)) {
+      if (object.isRecord(config)) {
         return config;
       }
     }

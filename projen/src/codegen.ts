@@ -48,8 +48,8 @@ import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import type * as ts from "typescript";
 import { header, isReadonly, makeReadonly, makeWritable } from "./generated";
-import { log } from "@dbx-tools/shared-core";
-import { repoRoot, workspacePackages } from "./workspace";
+import { log, object } from "@dbx-tools/shared-core";
+import { readPackageManifest, repoRoot, workspacePackages } from "./workspace";
 
 const logger = log.logger("projen:codegen");
 
@@ -68,15 +68,10 @@ interface CodegenInput {
 
 /** Read a package's `package.json` `codegen.inputs`, or `undefined` if absent. */
 function codegenInputs(dir: string): string[] | undefined {
-  try {
-    const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
-      codegen?: { inputs?: string[] };
-    };
-    const inputs = manifest.codegen?.inputs;
-    return inputs?.length ? inputs : undefined;
-  } catch {
-    return undefined;
-  }
+  const codegen = readPackageManifest(dir)?.codegen;
+  if (!object.isRecord(codegen)) return undefined;
+  const inputs = codegen.inputs;
+  return Array.isArray(inputs) && inputs.length > 0 ? (inputs as string[]) : undefined;
 }
 
 function deriveName(path: string): string {

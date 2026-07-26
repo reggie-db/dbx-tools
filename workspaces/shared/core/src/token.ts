@@ -8,19 +8,27 @@
  */
 
 import { forEachHeaderValue, type HeaderLike } from "./http";
+import * as json from "./json";
 import { isLevelEnabled, logger } from "./log";
 
 const BEARER_PREFIX_REGEX = /^bearer\s+/i;
 const SPLIT_REGEX = /\s+|\s*,\s*/;
 const log = logger("shared/token");
 
-/** Decode a JWT segment (base64url with standard base64 padding). */
-function decodeJwtSegment(segment: string): string {
+/**
+ * Decode a JWT segment (base64url with standard base64 padding), or
+ * `undefined` when the segment is not valid base64.
+ */
+function decodeJwtSegment(segment: string): string | undefined {
   const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-  const binary = atob(padded);
-  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+  try {
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -55,14 +63,8 @@ export function getAccessTokenPayload(
       }
       const parts = input.split(".", 4);
       if (parts.length === 2 || parts.length === 3) {
-        try {
-          const payload = JSON.parse(decodeJwtSegment(parts[1]!));
-          if (typeof payload === "object" && payload !== null) {
-            accessTokenPayload = payload as Record<string, unknown>;
-          }
-        } catch {
-          // Malformed JWT payload; fall through to empty object.
-        }
+        // A malformed segment yields undefined; fall through to empty object.
+        accessTokenPayload = json.parseRecord(decodeJwtSegment(parts[1]!));
       }
     }
   }

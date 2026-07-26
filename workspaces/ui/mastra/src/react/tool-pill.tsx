@@ -1,3 +1,4 @@
+import { string } from "@dbx-tools/shared-core";
 import { genieModel } from "@dbx-tools/shared-genie";
 import {
   Collapsible,
@@ -25,21 +26,7 @@ import type { ToolEvent, ToolProgress } from "./types";
  *   `ask_genie_sales` -> `Ask Genie Sales`
  *   `myCoolTool`    -> `My Cool Tool`
  */
-export const humanizeToolName = (toolName: string): string =>
-  toolName
-    .replace(/[._]/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ");
-
-/**
- * Capitalize the first character of a label without touching the rest
- * (preserves `EXECUTING_QUERY`-style backend status labels).
- */
-const capitalizeFirst = (s: string): string =>
-  s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
+export const humanizeToolName = (toolName: string): string => string.toLabel(toolName);
 
 /**
  * Track the freshest status label a running tool has published so the
@@ -54,7 +41,7 @@ const runningLabelFor = (event: ToolEvent): string => {
     .reverse()
     .find((p): p is Extract<ToolProgress, { type: "status" }> => p.type === "status");
   return latest
-    ? capitalizeFirst(genieModel.humanizeStatus(latest.status))
+    ? string.capitalize(genieModel.humanizeStatus(latest.status))
     : `Calling ${humanizeToolName(event.toolName)}`;
 };
 
@@ -256,13 +243,7 @@ const askGenieQuestion = (event: ToolEvent): string | undefined => {
  *   `THOUGHT_TYPE_UNDERSTANDING`   -> `Understanding`
  */
 const humanizeThoughtType = (kind: string): string =>
-  kind
-    .replace(/^THOUGHT_TYPE_/i, "")
-    .toLowerCase()
-    .split("_")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  string.toLabel(kind.replace(/^THOUGHT_TYPE_/i, ""));
 
 /**
  * Genie attaches one of three payload kinds per attachment slot:

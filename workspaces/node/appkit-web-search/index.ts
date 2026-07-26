@@ -5,6 +5,7 @@
 export * as allowlist from "./src/allowlist";
 export * as config from "./src/config";
 export * as fetch from "./src/fetch";
+export * as htmlText from "./src/html-text";
 export * as plugin from "./src/plugin";
 export * as provider from "./src/provider";
 export * as runtime from "./src/runtime";

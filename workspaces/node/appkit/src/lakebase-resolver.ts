@@ -35,10 +35,9 @@
  * @module
  */
 
-import { setTimeout as sleep } from "node:timers/promises";
 import { getWorkspaceClient } from "@databricks/appkit";
 import { project } from "@dbx-tools/core";
-import { log, string } from "@dbx-tools/shared-core";
+import { async, log, string } from "@dbx-tools/shared-core";
 import { resolveConfigValue } from "./config";
 
 import {
@@ -558,7 +557,7 @@ async function waitForOperation(
   }
   const start = Date.now();
   while (Date.now() - start < OPERATION_TIMEOUT_MS) {
-    await sleep(OPERATION_POLL_MS);
+    await async.sleep(OPERATION_POLL_MS);
     const current = await getJson<Operation>(ws, `${API_BASE}/${opName}`);
     logger.debug("autopg: operation status", { op: opName, done: current.done });
     if (current.done) {
@@ -599,7 +598,7 @@ async function waitEndpointReady(
       return last;
     }
     logger.debug("autopg: waiting for endpoint", { endpointId, state });
-    await sleep(ENDPOINT_READY_POLL_MS);
+    await async.sleep(ENDPOINT_READY_POLL_MS);
   }
   throw new Error(
     `autopg: endpoint '${endpointId}' under projects/${project}/branches/${branch} did not become ready within ${ENDPOINT_READY_TIMEOUT_MS}ms (last state: ${last?.status?.current_state ?? "unknown"})`,

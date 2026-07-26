@@ -8,6 +8,7 @@ export * as error from "./src/error";
 export * as functionModule from "./src/function";
 export * as hash from "./src/hash";
 export * as http from "./src/http";
+export * as json from "./src/json";
 export * as log from "./src/log";
 export * as net from "./src/net";
 export * as object from "./src/object";

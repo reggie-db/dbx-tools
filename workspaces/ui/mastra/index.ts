@@ -16,6 +16,8 @@ export * as reactThreadSidebar from "./src/react/thread-sidebar";
 export * as reactToolPill from "./src/react/tool-pill";
 export * as reactTypes from "./src/react/types";
 export * as supportChartOption from "./src/support/chart-option";
+export * as supportClipboard from "./src/support/clipboard";
+export * as supportDownload from "./src/support/download";
 export * as supportExport from "./src/support/export";
 export * as supportMastraClient from "./src/support/mastra-client";
 export * as supportMastraStream from "./src/support/mastra-stream";

@@ -30,6 +30,7 @@ import {
   DownloadIcon,
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
+import { downloadFile } from "../support/download";
 
 // Interactive result table plus the cell/label/CSV helpers it and the
 // markdown table renderer share. Built on `@tanstack/react-table` over
@@ -101,12 +102,7 @@ function downloadCsv(columns: string[], rows: DataRow[], filename: string): void
     columns.map(escape).join(","),
     ...rows.map((row) => columns.map((c) => escape(row[c])).join(",")),
   ].join("\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadFile(filename, csv, "text/csv;charset=utf-8");
 }
 
 /**

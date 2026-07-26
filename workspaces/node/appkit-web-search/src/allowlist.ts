@@ -30,7 +30,7 @@
  */
 
 import { match, type PathMatcher } from "@dbx-tools/path";
-import { object } from "@dbx-tools/shared-core";
+import { string } from "@dbx-tools/shared-core";
 
 /** A compiled URL allow-list. Build one with {@link toUrlAllowList}. */
 export interface UrlAllowList {
@@ -64,15 +64,7 @@ export function normalizeUrlPattern(pattern: string): string {
  * identically.
  */
 export function parseAllowedUrls(raw: string | string[] | undefined): string[] {
-  const entries = typeof raw === "string" ? raw.split(/[\s,]+/) : Array.isArray(raw) ? raw : [];
-  return [
-    ...object
-      .sequence(entries)
-      .map((entry) => normalizeUrlPattern(entry))
-      .filter((entry) => entry.length > 0)
-      .distinct()
-      .toArray(),
-  ];
+  return string.parseList(raw, normalizeUrlPattern);
 }
 
 /** One compiled entry: which URL slice it tests, and the matcher for it. */

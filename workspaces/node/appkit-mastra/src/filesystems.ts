@@ -17,17 +17,7 @@ import { posix as path } from "node:path";
 import { getExecutionContext } from "@databricks/appkit";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 import { error, functionModule, hash, log } from "@dbx-tools/shared-core";
-import type {
-  CopyOptions,
-  FileContent,
-  FileEntry,
-  FileStat,
-  FilesystemInfo,
-  ListOptions,
-  ProviderStatus,
-  ReadOptions,
-  RemoveOptions,
-  WriteOptions,
+import {
   DirectoryNotEmptyError,
   DirectoryNotFoundError,
   FileExistsError,
@@ -37,7 +27,19 @@ import type {
   NotDirectoryError,
   PermissionError,
   WorkspaceReadOnlyError,
-  type MastraFilesystemOptions,
+} from "@mastra/core/workspace";
+import type {
+  CopyOptions,
+  FileContent,
+  FileEntry,
+  FileStat,
+  FilesystemInfo,
+  ListOptions,
+  MastraFilesystemOptions,
+  ProviderStatus,
+  ReadOptions,
+  RemoveOptions,
+  WriteOptions,
 } from "@mastra/core/workspace";
 
 /* ------------------------------ constants ------------------------------ */

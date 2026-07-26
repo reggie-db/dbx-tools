@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { file, project } from "@dbx-tools/core";
-import { functionModule, object, log, string } from "@dbx-tools/shared-core";
+import { functionModule, json, object, log, string } from "@dbx-tools/shared-core";
 import { parse as parseYamlText } from "yaml";
 import { z } from "zod";
 
@@ -293,7 +293,7 @@ function validateBundle(root: string): BundleValidateJson | undefined {
       bundleValidateCache.set(key, undefined);
       return undefined;
     }
-    const data = JSON.parse(text) as BundleValidateJson;
+    const data = json.parse<BundleValidateJson>(text);
     bundleValidateCache.set(key, data);
     return data;
   } catch {

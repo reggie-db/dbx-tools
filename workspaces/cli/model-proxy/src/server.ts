@@ -32,7 +32,7 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { error, log } from "@dbx-tools/shared-core";
+import { error, json, log } from "@dbx-tools/shared-core";
 import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 
 import type { DatabricksBackend } from "./backend";
@@ -222,7 +222,7 @@ async function handleProxy(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  const body = (await readJsonBody(req)) as Record<string, unknown>;
+  const body = await readJsonBody(req);
   const requested = typeof body.model === "string" ? body.model : undefined;
   if (!requested) {
     sendJson(res, 400, errorBody("missing 'model' in request body", "invalid_request_error"));
@@ -348,7 +348,7 @@ async function handleResponses(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  const body = (await readJsonBody(req)) as Record<string, unknown>;
+  const body = await readJsonBody(req);
   const requested = typeof body.model === "string" ? body.model : undefined;
   if (!requested) {
     sendJson(res, 400, errorBody("missing 'model' in request body", "invalid_request_error"));
@@ -424,14 +424,16 @@ function isAuthorized(req: IncomingMessage, apiKey: string): boolean {
   return header.replace(/^Bearer\s+/i, "").trim() === apiKey;
 }
 
-/** Drain a request body and parse it as JSON (empty body parses to `{}`). */
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+/**
+ * Drain a request body and parse it as a JSON object. An empty, malformed, or
+ * non-object body yields `{}`, which the callers reject as a missing `model`.
+ */
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
   }
-  const raw = Buffer.concat(chunks).toString("utf8");
-  return raw ? JSON.parse(raw) : {};
+  return json.parseRecord(Buffer.concat(chunks).toString("utf8")) ?? {};
 }
 
 /** Serialize and send a JSON response. */

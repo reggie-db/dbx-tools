@@ -172,6 +172,15 @@ rather than the SDK's typed `servingEndpoints.query`. Mint `authHeaders()` per
 request: the SDK refreshes the underlying token as it nears expiry, so you never
 track lifetimes yourself.
 
+Every serving path this repo talks to is a constant here, with a matching URL
+builder: `INVOCATIONS_SUFFIX` / `invocationsUrl()`, `RESPONSES_PATH` /
+`responsesUrl()`, `OPEN_RESPONSES_PATH` / `openResponsesUrl()`, and
+`CHAT_COMPLETIONS_PATH` / `chatCompletionsUrl()`. Import one instead of writing a
+`/serving-endpoints/...` literal in a consumer: which path a model can accept is
+a property of the model (see `isResponsesOnly()` and `responsesUpstreamUrl()`),
+so a hard-coded string in one package silently diverges when that routing
+changes.
+
 ## Use Static Fallbacks
 
 ```ts
@@ -192,8 +201,8 @@ policy decisions; fallbacks are a last resort.
   resolver functions.
 - `serving` - Databricks serving-endpoint listing, cache management, fuzzy
   search, and endpoint-id resolution.
-- `invoke` - invocations URL construction and per-request auth headers for
-  calling an endpoint over raw HTTP.
+- `invoke` - serving-path constants, URL construction, and per-request auth
+  headers for calling an endpoint over raw HTTP.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.
 - `fallback` - static fallback model ids per class.
 

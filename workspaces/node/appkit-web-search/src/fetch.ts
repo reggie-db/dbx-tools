@@ -18,6 +18,7 @@
 import { log } from "@dbx-tools/shared-core";
 import { gotScraping } from "got-scraping";
 import { assertUrlAllowed } from "./allowlist";
+import { decodeHtmlEntities, htmlToText } from "./html-text";
 import type { ResolvedWebSearchConfig } from "./config";
 import type { WebFetchRequest, WebFetchResult } from "./schema";
 
@@ -26,41 +27,8 @@ const logger = log.logger("web-search/fetch");
 /** Pull the <title> text out of an HTML document, when present. */
 function extractTitle(html: string): string | undefined {
   const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
-  const title = match?.[1] ? decodeEntities(match[1]).trim() : "";
+  const title = match?.[1] ? decodeHtmlEntities(match[1]).trim() : "";
   return title.length > 0 ? title : undefined;
-}
-
-/** Decode the handful of HTML entities that survive tag-stripping. */
-function decodeEntities(text: string): string {
-  return text
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
-}
-
-/**
- * Reduce an HTML document to readable plain text: drop `<script>` /
- * `<style>` / `<noscript>` blocks and HTML comments, turn block-level tags
- * into newlines, strip the remaining tags, decode entities, and collapse
- * runs of blank lines / trailing spaces.
- */
-export function htmlToText(html: string): string {
-  return decodeEntities(
-    html
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, "")
-      .replace(/<\/(p|div|section|article|li|tr|h[1-6]|header|footer|br)>/gi, "\n")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<[^>]+>/g, ""),
-  )
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
 }
 
 /** Truncate `text` to `max` chars, reporting whether it was cut. */

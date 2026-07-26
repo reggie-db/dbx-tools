@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { hash, net } from "@dbx-tools/shared-core";
+import { hash, json, net, string } from "@dbx-tools/shared-core";
 import { statSync as stat } from "./file";
 
 const ROOT_MARKERS = [
@@ -219,12 +219,7 @@ export function name(cwd: string = process.cwd()): string {
  */
 function repositoryUrlFromGh(cwd?: string): string | undefined {
   const out = projectContextCommand("gh", ["repo", "view", "--json", "url"], cwd).output;
-  if (!out) return undefined;
-  try {
-    return (JSON.parse(out) as { url?: string }).url?.trim() || undefined;
-  } catch {
-    return undefined;
-  }
+  return string.trimToNull(json.parseRecord(out)?.url) ?? undefined;
 }
 
 /** Resolve an ssh host alias (`~/.ssh/config`) to its effective `hostname` via `ssh -G`. */
@@ -302,12 +297,7 @@ export function npmRegistry(cwd?: string): net.UrlBuilder | undefined {
 
 function readPackageName(pkgPath: string): string | undefined {
   if (!stat(pkgPath)?.isFile()) return undefined;
-  try {
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { name?: string };
-    return pkg.name?.trim() || undefined;
-  } catch {
-    return undefined;
-  }
+  return string.trimToNull(json.parseRecord(readFileSync(pkgPath, "utf8"))?.name) ?? undefined;
 }
 
 if (import.meta.main) {

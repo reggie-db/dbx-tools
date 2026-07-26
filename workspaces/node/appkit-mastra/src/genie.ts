@@ -50,7 +50,8 @@ import { z } from "zod";
 
 import type { MastraTools } from "./agents";
 import { chartPlannerRequestSchema, prepareChart } from "./chart";
-import type { MastraPluginConfig, MASTRA_USER_KEY, type User } from "./config";
+import { MASTRA_USER_KEY } from "./config";
+import type { MastraPluginConfig, User } from "./config";
 import { fetchStatementData } from "./statement";
 import { safeWrite } from "./writer";
 

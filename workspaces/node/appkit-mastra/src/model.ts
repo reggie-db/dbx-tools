@@ -25,7 +25,7 @@
 
 import { getExecutionContext } from "@databricks/appkit";
 import { classes, resolve } from "@dbx-tools/model";
-import { functionModule, log, net } from "@dbx-tools/shared-core";
+import { functionModule, json, log, net } from "@dbx-tools/shared-core";
 import { model } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
@@ -155,11 +155,13 @@ const setupFetchInterceptor = functionModule.memoize((): void => {
     if (rewritten !== init.body) {
       init = { ...init, body: rewritten };
     }
-    try {
-      logger.debug("POST", { url: url.toString(), body: JSON.parse(rewritten) });
-    } catch {
-      logger.debug("POST", { url: url.toString(), bodyType: "non-JSON" });
-    }
+    const parsed = json.parse<unknown>(rewritten);
+    logger.debug(
+      "POST",
+      parsed === undefined
+        ? { url: url.toString(), bodyType: "non-JSON" }
+        : { url: url.toString(), body: parsed },
+    );
     return original(input, init);
   }) as typeof globalThis.fetch;
 });

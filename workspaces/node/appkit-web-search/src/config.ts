@@ -26,7 +26,8 @@
  */
 
 import type { BasePluginConfig } from "@databricks/appkit";
-import { object, type OneOrMany } from "@dbx-tools/shared-core";
+import { serving } from "@dbx-tools/model";
+import { json, object, type OneOrMany, string } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import { parseAllowedUrls, toUrlAllowList, type UrlAllowList } from "./allowlist";
 
@@ -93,7 +94,7 @@ export interface WebSearchPluginConfig extends BasePluginConfig {
    * Defaults to `true`; falls back to `WEB_SEARCH_FUZZY`.
    */
   modelFuzzyMatch?: boolean;
-  /** Fuse.js fuzzy threshold. Falls back to `WEB_SEARCH_FUZZY_THRESHOLD`, then 0.4. */
+  /** Fuse.js fuzzy threshold. Falls back to `WEB_SEARCH_FUZZY_THRESHOLD`, then the shared default. */
   modelFuzzyThreshold?: number;
   /**
    * Hard cap on the number of citations a single search returns. Falls back
@@ -200,19 +201,6 @@ export const WEB_SEARCH_CONFIG_SCHEMA: JSONSchema7 = {
   },
 };
 
-/** Split a CSV / whitespace / array value into a trimmed, non-empty string list. */
-function toStringList(raw: string | string[] | undefined): string[] {
-  const entries = typeof raw === "string" ? raw.split(/[\s,]+/) : Array.isArray(raw) ? raw : [];
-  return [
-    ...object
-      .sequence(entries)
-      .map((e) => e.trim())
-      .filter((e) => e.length > 0)
-      .distinct()
-      .toArray(),
-  ];
-}
-
 /** Parse a positive integer env/config value, else the fallback. */
 function resolvePositiveInt(value: number | undefined, envKey: string, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) return Math.floor(value);
@@ -222,14 +210,7 @@ function resolvePositiveInt(value: number | undefined, envKey: string, fallback:
 
 /** Parse the `WEB_SEARCH_TOOLS` env var (JSON), else `{}`. Bad JSON is ignored. */
 function parseToolsEnv(): Record<string, unknown> {
-  const raw = process.env.WEB_SEARCH_TOOLS;
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
+  return json.parseRecord(process.env.WEB_SEARCH_TOOLS) ?? {};
 }
 
 /**
@@ -243,7 +224,9 @@ export function resolveWebSearchConfig(
 ): ResolvedWebSearchConfig {
   const patterns = parseAllowedUrls(config.allowedUrls ?? process.env.WEB_SEARCH_ALLOWED_URLS);
   const model = config.model ?? process.env.WEB_SEARCH_MODEL;
-  const fallbacks = toStringList(config.modelFallbacks ?? process.env.WEB_SEARCH_MODEL_FALLBACKS);
+  const fallbacks = string.parseList(
+    config.modelFallbacks ?? process.env.WEB_SEARCH_MODEL_FALLBACKS,
+  );
   const fuzzyThresholdRaw =
     config.modelFuzzyThreshold ?? Number(process.env.WEB_SEARCH_FUZZY_THRESHOLD);
   return {
@@ -252,7 +235,9 @@ export function resolveWebSearchConfig(
     webSearchTools: { ...parseToolsEnv(), ...(config.webSearchTools ?? {}) },
     fuzzy: config.modelFuzzyMatch ?? object.toBoolean(process.env.WEB_SEARCH_FUZZY) ?? true,
     fuzzyThreshold:
-      Number.isFinite(fuzzyThresholdRaw) && fuzzyThresholdRaw ? Number(fuzzyThresholdRaw) : 0.4,
+      Number.isFinite(fuzzyThresholdRaw) && fuzzyThresholdRaw
+        ? Number(fuzzyThresholdRaw)
+        : serving.DEFAULT_FUZZY_THRESHOLD,
     maxCitations: resolvePositiveInt(
       config.maxCitations,
       "WEB_SEARCH_MAX_CITATIONS",

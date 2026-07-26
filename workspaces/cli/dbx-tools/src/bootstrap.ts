@@ -7,6 +7,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { intro, outro } from "@clack/prompts";
 import { exec } from "@dbx-tools/core";
+import { json } from "@dbx-tools/shared-core";
 import { resolvePnpmArgv, runPnpm } from "./pnpm";
 import { rootLabel } from "./root";
 
@@ -94,8 +95,8 @@ export function seedToolchain(
 /** Remove the `devEngines` block pnpm `init` seeds, so npm-based tooling doesn't reject the manifest. */
 function stripDevEngines(manifestPath: string): void {
   try {
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
-    if (manifest.devEngines === undefined) return;
+    const manifest = json.parseRecord(readFileSync(manifestPath, "utf8"));
+    if (manifest?.devEngines === undefined) return;
     delete manifest.devEngines;
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   } catch {

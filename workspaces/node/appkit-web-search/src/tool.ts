@@ -18,7 +18,6 @@
  * @module
  */
 
-import { getExecutionContext } from "@databricks/appkit";
 import { string } from "@dbx-tools/shared-core";
 import { createTool } from "@mastra/core/tools";
 import { approvalMatches, type ApprovalGate } from "./config";
@@ -32,7 +31,7 @@ import {
   type WebFetchRequest,
   type WebSearchRequest,
 } from "./schema";
-import { runWebSearch, type WebSearchContext } from "./search";
+import { resolveWebSearchContext, runWebSearch } from "./search";
 
 /** Options shared by both web tools. */
 export interface WebSearchToolOptions {
@@ -49,18 +48,6 @@ export interface WebSearchToolOptions {
 /** Resolve the effective gate: explicit tool option, else the plugin default. */
 function effectiveGate(opts: WebSearchToolOptions): ApprovalGate {
   return opts.approval ?? getWebSearchRuntime().config.approval;
-}
-
-/**
- * Resolve the OBO workspace client + host from the active AppKit execution
- * context. Runs inside `agent.stream`'s `asUser(req)` scope, so the search
- * hits the serving endpoint as the requesting user; outside a user context it
- * falls back to the service principal.
- */
-async function webSearchContext(): Promise<WebSearchContext> {
-  const ctx = getExecutionContext();
-  const host = (await ctx.client.config.getHost()).toString();
-  return { client: ctx.client, host };
 }
 
 /**
@@ -99,7 +86,7 @@ export function webSearchTool(opts: WebSearchToolOptions = {}) {
       : { requireApproval: () => (typeof gate === "boolean" ? gate : true) }),
     execute: async (input) => {
       const { config } = getWebSearchRuntime();
-      return runWebSearch(input as WebSearchRequest, config, await webSearchContext());
+      return runWebSearch(input as WebSearchRequest, config, await resolveWebSearchContext());
     },
   });
 }

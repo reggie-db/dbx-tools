@@ -39,6 +39,14 @@ export const RESPONSES_PATH = "serving-endpoints/responses";
 export const OPEN_RESPONSES_PATH = "serving-endpoints/open-responses";
 
 /**
+ * Workspace-level OpenAI Chat Completions path. Body carries `model` (endpoint
+ * id), unlike {@link invocationsUrl} which names the endpoint in the URL. Use
+ * this when the caller has a model id rather than a per-endpoint route - e.g.
+ * attaching a provider tool spec to whichever endpoint was resolved.
+ */
+export const CHAT_COMPLETIONS_PATH = "serving-endpoints/chat/completions";
+
+/**
  * The OpenAI-compatible chat-completions invocations URL for an endpoint id.
  *
  * @param host - Workspace host, e.g. `https://my-workspace.cloud.databricks.com/`.
@@ -60,6 +68,11 @@ export function responsesUrl(host: string): string {
 /** Workspace Open Responses API URL (`POST`, model in the body). */
 export function openResponsesUrl(host: string): string {
   return new URL(OPEN_RESPONSES_PATH, host).toString();
+}
+
+/** Workspace OpenAI Chat Completions URL (`POST`, model in the body). */
+export function chatCompletionsUrl(host: string): string {
+  return new URL(CHAT_COMPLETIONS_PATH, host).toString();
 }
 
 /**

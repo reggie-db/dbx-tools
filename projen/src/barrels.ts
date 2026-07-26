@@ -36,6 +36,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { extname, join } from "node:path";
 import { find } from "@dbx-tools/path";
+import { string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
 import { moduleExports } from "./module-exports";
@@ -137,7 +138,7 @@ function modulePathToNamespace(modulePath: string): string {
       : segments[0]! +
         segments
           .slice(1)
-          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+          .map((s) => string.capitalize(s))
           .join("");
   if (!isIdentifier(name)) {
     name = `${name}Module`;

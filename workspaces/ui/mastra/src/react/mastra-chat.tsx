@@ -1,8 +1,7 @@
-import { error as errorUtil, log } from "@dbx-tools/shared-core";
+import { error as errorUtil, hash, log } from "@dbx-tools/shared-core";
 import { feedback, type MastraThread } from "@dbx-tools/shared-mastra";
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
-import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatView } from "./chat-view";
 import { dedupeSuggestions } from "./suggestions";
@@ -61,7 +60,7 @@ const logger = log.logger("ui-mastra/chat");
 const HISTORY_PAGE_SIZE = 20;
 
 const makeUserMessage = (text: string): UIMessage => ({
-  id: nanoid(),
+  id: hash.id(),
   role: "user",
   parts: [{ type: "text", text }],
 });
@@ -268,7 +267,7 @@ export const useMastraChat = (
   const feedbackAvailable = enableFeedback && mastraClient.feedbackEnabled;
   const threadKey = threadStorageKey(mastraClient.basePath, agentId);
   const [activeThreadId, setActiveThreadId] = useState<string | undefined>(() =>
-    enableThreads ? (readStoredThreadId(threadKey) ?? nanoid()) : undefined,
+    enableThreads ? (readStoredThreadId(threadKey) ?? hash.id()) : undefined,
   );
   const {
     threads,
@@ -743,8 +742,8 @@ export const useMastraChat = (
 
   const runStream = useCallback(
     (threadId: string, history: UIMessage[]) => {
-      const assistantId = nanoid();
-      const runId = nanoid();
+      const assistantId = hash.id();
+      const runId = hash.id();
       updateSession(threadId, (session) => ({
         ...session,
         assistantId,
@@ -917,7 +916,7 @@ export const useMastraChat = (
       if (isSessionRunning(getSession(threadId))) {
         updateSession(threadId, (session) => ({
           ...session,
-          queuedSteers: enqueueSteer(session.queuedSteers, { id: nanoid(), text }),
+          queuedSteers: enqueueSteer(session.queuedSteers, { id: hash.id(), text }),
         }));
         return;
       }
@@ -1026,7 +1025,7 @@ export const useMastraChat = (
   );
 
   const newThread = useCallback(() => {
-    const id = nanoid();
+    const id = hash.id();
     sessionsRef.current.set(id, { ...createThreadSession(), historyLoaded: true });
     notifySessions();
     setActiveThreadId(id);
@@ -1058,7 +1057,7 @@ export const useMastraChat = (
         return rest;
       });
       if (threadId === activeThreadId) {
-        const id = nanoid();
+        const id = hash.id();
         sessionsRef.current.set(id, { ...createThreadSession(), historyLoaded: true });
         notifySessions();
         setActiveThreadId(id);

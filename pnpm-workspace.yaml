@@ -71,7 +71,6 @@ catalog:
   echarts-for-react: ^3.0.2
   shiki: ^3.0.0
   sql-formatter: ^15.6.9
-  nanoid: ^5.1.6
 allowBuilds:
   esbuild: true
   "@databricks/appkit-ui": true

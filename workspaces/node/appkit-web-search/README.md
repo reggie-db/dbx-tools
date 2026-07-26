@@ -223,7 +223,9 @@ the [Databricks docs](https://docs.databricks.com/aws/en/machine-learning/model-
 - `provider` - provider detection + the provider -> tool-spec map.
 - `scrape` - `runScrapeSearch()` DuckDuckGo fallback for workspaces with no
   native web-search model.
-- `fetch` - `runWebFetch()` over got-scraping, plus `htmlToText()`.
+- `fetch` - `runWebFetch()` over got-scraping.
+- `html-text` - `htmlToText()` / `htmlFragmentToText()` / `decodeHtmlEntities()`, shared by
+  `fetch` and the DuckDuckGo scrape fallback.
 - `runtime` - shared runtime, `getWebSearchRuntime()`, `resetWebSearchRuntime()`.
 - `config` - config types, JSON schema, `resolveWebSearchConfig()`, approval helpers.
 - `allowlist` - URL allow-list parsing/compiling on top of `@dbx-tools/path`.

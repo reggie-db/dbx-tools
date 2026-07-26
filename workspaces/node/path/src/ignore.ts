@@ -16,7 +16,7 @@
  * @module
  */
 
-import { exec } from "@dbx-tools/core";
+import { project } from "@dbx-tools/core";
 import { functionModule, object, type Sequence } from "@dbx-tools/shared-core";
 import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match";
 import { directoryNamePattern, fileExtensionPattern } from "./pattern";
@@ -47,34 +47,20 @@ export type IgnorePatternOptions = {
   lock?: boolean | "auto";
 };
 
+/** Host of the public npm registry; anything else is treated as private. */
+const PUBLIC_NPM_REGISTRY_HOST = "registry.npmjs.org";
+
 /**
  * Memoized probe for {@link IgnorePatternOptions.lock} `"auto"`.
  *
- * Runs `npm`/`pnpm`/`yarn config get registry` (whichever succeeds first) and
- * returns `true` when the registry host is not `registry.npmjs.org`.
+ * Resolves the active registry through `@dbx-tools/core`'s
+ * {@link project.npmRegistry} and returns `true` when it is not the public npm
+ * registry - a lockfile produced against a private mirror pins URLs that other
+ * machines cannot reach, so it should not be committed.
  */
 const lockIgnoreMatchersAutoEnabled = functionModule.memoize(() => {
-  let registryUrl: URL | undefined;
-  for (const command of ["npm", "pnpm", "yarn"]) {
-    const result = exec.spawnSync(command, ["config", "get", "registry"], {
-      stdout: "capture",
-      stderr: "ignore",
-      stdin: "ignore",
-    });
-    if (result.exitCode !== 0) continue;
-    const output = result.stdout;
-    if (output && output.includes("://")) {
-      const url = new URL(output);
-      if (url.protocol && url.hostname) {
-        registryUrl = url;
-        break;
-      }
-    }
-  }
-  if (registryUrl && registryUrl.hostname !== "registry.npmjs.org") {
-    return true;
-  }
-  return false;
+  const registry = project.npmRegistry();
+  return registry !== undefined && registry.hostname !== PUBLIC_NPM_REGISTRY_HOST;
 });
 
 /** Resolves whether the lockfile ignore group is enabled for the given options. */

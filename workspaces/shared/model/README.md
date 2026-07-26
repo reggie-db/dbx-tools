@@ -122,6 +122,27 @@ the Responses event stream, and `readResponsesOutput` for pulling the answer and
 its citations back out of a native Responses reply. Pure functions over plain
 JSON, so the same translation runs in a proxy, a server route, or a test.
 
+## Sanitize A Replayed Conversation
+
+```ts
+import { openaiResponses } from "@dbx-tools/shared-model";
+
+const body = openaiResponses.sanitizeOpenResponsesRequest(requestBody);
+```
+
+`/open-responses` (the cross-provider path used for Claude and Gemini) rejects
+content parts that its own previous turn produced: an `output_text` part replayed
+as input fails with `Open Responses input content part type 'output_text' is not
+supported`. `sanitizeOpenResponsesRequest` rewrites `output_*` parts back to their
+`input_*` form and drops extended-thinking parts before the body goes out.
+
+The thinking-block types live in one exported constant,
+`openaiResponses.REASONING_TYPES`. Both wire sanitizers (this one and the Chat
+Completions sanitizer in [`@dbx-tools/appkit-mastra`](../../node/appkit-mastra))
+must strip exactly the same set: Anthropic signs `redacted_thinking` blocks, so a
+replay in which one path mutates a block the other preserved is rejected
+outright. Import the constant rather than re-listing the types.
+
 ## Strip Fields Databricks Rejects
 
 ```ts
@@ -151,7 +172,8 @@ one-by-one (`openaiResponses.responsesToChat`) already can't leak them. Pass
 - `display` - human-readable endpoint labels.
 - `openaiChat` - Chat Completions message / tool-call types,
   `chatContentToText`, and `stripUnsupportedChatFields`.
-- `openaiResponses` - Responses API translation, in both directions.
+- `openaiResponses` - Responses API translation in both directions, plus
+  `sanitizeOpenResponsesRequest` and the shared `REASONING_TYPES` constant.
 
 Server-side selection, cache, and fuzzy endpoint matching are in
 [`@dbx-tools/model`](../../node/model).

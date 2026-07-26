@@ -199,7 +199,6 @@
             "is-identifier",
             "openapi-typescript",
             "oxc-parser",
-            "p-memoize",
             "ts-to-zod",
             "tsoa",
             "tsx",

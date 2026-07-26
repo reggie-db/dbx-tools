@@ -115,7 +115,7 @@ export function* tokenizeWithOptions(
     for (const tokenMatch of stringValue.matchAll(regexp)) {
       let token = tokenMatch[0]!;
       if (opts.lowerCase) token = token.toLowerCase();
-      if (opts.capitalize) token = token.charAt(0).toUpperCase() + token.slice(1);
+      if (opts.capitalize) token = capitalize(token);
       if (!token) continue;
       for (const override of TOKENIZE_OVERRIDES) {
         token = override(token, opts);
@@ -203,6 +203,57 @@ export function trimToNull(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+// Config lists arrive either already split (an array) or as one env-var string
+// with entries separated by commas and/or whitespace.
+const LIST_SEPARATOR_REGEXP = /[\s,]+/;
+
+/**
+ * Normalize a config list that may arrive as an array or as a single
+ * comma/whitespace-separated string: split, apply `transform`, drop empties,
+ * and de-duplicate (first occurrence wins).
+ *
+ * This is the shape every allow-list / fallback-order setting in this repo
+ * takes, because the same value can come from typed config (`string[]`) or from
+ * an environment variable (`"a, b c"`). Pass `transform` to normalize entries
+ * as they are read; it defaults to trimming.
+ *
+ * @example
+ * parseList("docs.example.com, *.databricks.com");
+ * parseList(process.env.MODEL_FALLBACKS);
+ * parseList(raw, normalizeUrlPattern);
+ */
+export function parseList(
+  raw: string | readonly string[] | undefined | null,
+  transform: (entry: string) => string = (entry) => entry.trim(),
+): string[] {
+  const entries =
+    typeof raw === "string" ? raw.split(LIST_SEPARATOR_REGEXP) : Array.isArray(raw) ? raw : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    const normalized = transform(entry);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
+
+/**
+ * {@link trimToNull} with an empty-string miss instead of `null`, for callers
+ * that build a string unconditionally and treat "absent" as "".
+ *
+ * Reading loosely-typed JSON is the motivating case: a field that should be a
+ * string may be missing or the wrong type, and the caller wants `""` rather
+ * than a null check at every access.
+ *
+ * @example
+ * const title = trimToEmpty(record.title); // always a string
+ */
+export function trimToEmpty(value: unknown): string {
+  return trimToNull(value) ?? "";
 }
 
 /**

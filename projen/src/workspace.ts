@@ -24,31 +24,18 @@
  * synth-time name override or resolved tag set.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { basename, extname, relative, resolve, sep } from "node:path";
-import { exec } from "@dbx-tools/core";
-import { string } from "@dbx-tools/shared-core";
+import { extname, relative, resolve, sep } from "node:path";
+import { project as coreProject } from "@dbx-tools/core";
+import { json, object, string } from "@dbx-tools/shared-core";
 import { find } from "@dbx-tools/path";
 import { parse } from "yaml";
 
-/** Trimmed stdout from a command, or undefined when the process fails or prints nothing. */
-function capturedStdout(command: string, args: string[]): string | undefined {
-  const result = exec.spawnSync(command, args, {
-    stdout: "capture",
-    stderr: "ignore",
-    stdin: "ignore",
-  });
-  if (result.exitCode !== 0) return undefined;
-  return result.stdout || undefined;
-}
-
 /**
- * The repo root, detected (in order): `npm prefix` (nearest package root), then
- * the git top-level, then the current working directory.
+ * The repo root: the nearest package/projenrc root, falling back to the current
+ * working directory. Detection (npm prefix, git top-level, root markers) lives
+ * in `@dbx-tools/core`'s {@link coreProject.root}.
  */
-export const repoRoot =
-  capturedStdout("npm", ["prefix"]) ??
-  capturedStdout("git", ["rev-parse", "--show-toplevel"]) ??
-  process.cwd();
+export const repoRoot = coreProject.root() ?? process.cwd();
 
 /**
  * Default workspace-package roots. Each is scanned for packages; override via the
@@ -56,15 +43,14 @@ export const repoRoot =
  */
 export const DEFAULT_WORKSPACE_PACKAGE_ROOTS = ["workspaces"] as const;
 
-/** A project name: the git remote's repo name, else the root folder name. */
+/**
+ * A project name: the root `package.json` name, else the git remote's repo
+ * name, else the root folder name. Delegates to `@dbx-tools/core`'s
+ * {@link coreProject.name}, which is also what a consuming repo's own tooling
+ * sees, so the engine and its host agree on the name.
+ */
 export function projectName(): string {
-  const url = capturedStdout("git", ["-C", repoRoot, "config", "--get", "remote.origin.url"]);
-  const fromGit = url
-    ?.replace(/\.git$/, "")
-    .split(/[/:]/)
-    .filter(Boolean)
-    .pop();
-  return fromGit ?? basename(repoRoot);
+  return coreProject.name(repoRoot);
 }
 
 const MODULE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
@@ -74,10 +60,6 @@ const SRC_MODULE_GLOB = `**/src/**/*.{${[...MODULE_EXTS].map((e) => e.slice(1)).
 
 export function toPosix(p: string): string {
   return p.split(sep).join("/");
-}
-
-export function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -274,18 +256,35 @@ export interface WorkspacePackage {
   readonly tags: string[];
 }
 
+/**
+ * `<dir>/package.json` parsed as a record, or `undefined` when the file is
+ * absent or malformed. The single manifest reader for the engine - every
+ * caller that pokes at a `package.json` field goes through this so a missing or
+ * half-written manifest degrades the same way everywhere.
+ */
+export function readPackageManifest(dir: string): Record<string, unknown> | undefined {
+  const path = resolve(dir, "package.json");
+  if (!existsSync(path)) return undefined;
+  try {
+    return json.parseRecord(readFileSync(path, "utf8"));
+  } catch {
+    return undefined; // unreadable (permissions, race with a concurrent write)
+  }
+}
+
+/** A package's `dbxToolsConfig` object, or `undefined` when absent. */
+function readDbxToolsConfig(dir: string): Record<string, unknown> | undefined {
+  const config = readPackageManifest(dir)?.dbxToolsConfig;
+  return object.isRecord(config) ? config : undefined;
+}
+
 /** Read `<dir>/package.json`'s `name` + `dbxToolsConfig.tags` (each `undefined` if absent). */
 function readManifest(dir: string): { name?: string; tags?: string[] } {
-  try {
-    const m = JSON.parse(readFileSync(resolve(dir, "package.json"), "utf8"));
-    const tags = m?.dbxToolsConfig?.tags;
-    return {
-      name: typeof m?.name === "string" ? m.name : undefined,
-      tags: Array.isArray(tags) ? (tags as string[]) : undefined,
-    };
-  } catch {
-    return {};
-  }
+  const tags = readDbxToolsConfig(dir)?.tags;
+  return {
+    name: string.trimToNull(readPackageManifest(dir)?.name) ?? undefined,
+    tags: Array.isArray(tags) ? (tags as string[]) : undefined,
+  };
 }
 
 /**
@@ -294,14 +293,8 @@ function readManifest(dir: string): { name?: string; tags?: string[] } {
  * {@link DBXToolsProjectOptions.syncResynthPaths} option at synth).
  */
 export function syncResynthPaths(projectRoot: string = repoRoot): string[] {
-  try {
-    const m = JSON.parse(readFileSync(resolve(projectRoot, "package.json"), "utf8"));
-    const paths = m?.dbxToolsConfig?.syncResynthPaths;
-    if (!Array.isArray(paths)) return [];
-    return paths.map((p) => String(p).trim()).filter(Boolean);
-  } catch {
-    return [];
-  }
+  const paths = readDbxToolsConfig(projectRoot)?.syncResynthPaths;
+  return Array.isArray(paths) ? string.parseList(paths.map((p) => String(p))) : [];
 }
 
 /**

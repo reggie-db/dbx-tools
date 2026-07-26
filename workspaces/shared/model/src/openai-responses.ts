@@ -42,7 +42,9 @@
  * @module
  */
 
-import { type ChatMessage, chatContentToText } from "./openai-chat";
+import { string } from "@dbx-tools/shared-core";
+
+import { type ChatMessage, type ChatToolCall, chatContentToText } from "./openai-chat";
 
 /**
  * Lower a Responses request body to a chat-completions body. Returns the chat
@@ -73,16 +75,7 @@ export function responsesToChat(body: Record<string, unknown>): {
       messages.push({
         role: "assistant",
         content: null,
-        tool_calls: [
-          {
-            id: String(item.call_id ?? item.id ?? ""),
-            type: "function",
-            function: {
-              name: String(item.name ?? ""),
-              arguments: typeof item.arguments === "string" ? item.arguments : "{}",
-            },
-          },
-        ],
+        tool_calls: [toChatToolCall(item)],
       });
       continue;
     }
@@ -118,25 +111,7 @@ export function responsesToChat(body: Record<string, unknown>): {
   // only function tools and drop the rest.
   if (Array.isArray(body.tools) && body.tools.length > 0) {
     const chatTools = body.tools
-      .map((t) => {
-        const tool = t as Record<string, unknown>;
-        // Already chat-nested (`function` object present): pass through.
-        if (tool.type === "function" && tool.function && typeof tool.function === "object") {
-          return tool;
-        }
-        // Flat Responses function tool: nest it.
-        if (tool.type === "function" && typeof tool.name === "string") {
-          return {
-            type: "function",
-            function: {
-              name: tool.name,
-              ...(tool.description ? { description: tool.description } : {}),
-              ...(tool.parameters ? { parameters: tool.parameters } : {}),
-            },
-          };
-        }
-        return undefined; // non-function built-in tool: unsupported upstream, drop
-      })
+      .map(toChatTool)
       .filter((t): t is Record<string, unknown> => t !== undefined);
     if (chatTools.length > 0) {
       chat.tools = chatTools;
@@ -171,7 +146,11 @@ export function chatToResponsesRequest(body: Record<string, unknown>): {
     const role = typeof message.role === "string" ? message.role : "user";
 
     // Leading system / developer messages become top-level `instructions`.
-    if ((role === "system" || role === "developer") && instructions === undefined && input.length === 0) {
+    if (
+      (role === "system" || role === "developer") &&
+      instructions === undefined &&
+      input.length === 0
+    ) {
       const text = chatContentToText(message.content);
       if (text) instructions = text;
       continue;
@@ -186,17 +165,14 @@ export function chatToResponsesRequest(body: Record<string, unknown>): {
       continue;
     }
 
-    if (role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+    if (
+      role === "assistant" &&
+      Array.isArray(message.tool_calls) &&
+      message.tool_calls.length > 0
+    ) {
       for (const rawCall of message.tool_calls) {
         if (!rawCall || typeof rawCall !== "object") continue;
-        const call = rawCall as Record<string, unknown>;
-        const fn = (call.function ?? {}) as Record<string, unknown>;
-        input.push({
-          type: "function_call",
-          call_id: String(call.id ?? ""),
-          name: String(fn.name ?? ""),
-          arguments: typeof fn.arguments === "string" ? fn.arguments : "{}",
-        });
+        input.push(toFunctionCallItem(rawCall as Record<string, unknown>));
       }
       const text = chatContentToText(message.content);
       if (text) {
@@ -222,22 +198,7 @@ export function chatToResponsesRequest(body: Record<string, unknown>): {
   // Chat tools are nested (`function: { name, … }`); Responses wants them flat.
   if (Array.isArray(body.tools) && body.tools.length > 0) {
     const tools = body.tools
-      .map((t) => {
-        if (!t || typeof t !== "object") return undefined;
-        const tool = t as Record<string, unknown>;
-        if (tool.type !== "function") return undefined;
-        if (tool.function && typeof tool.function === "object") {
-          const fn = tool.function as Record<string, unknown>;
-          return {
-            type: "function",
-            name: fn.name,
-            ...(fn.description ? { description: fn.description } : {}),
-            ...(fn.parameters ? { parameters: fn.parameters } : {}),
-          };
-        }
-        if (typeof tool.name === "string") return tool;
-        return undefined;
-      })
+      .map(toResponsesTool)
       .filter((t): t is Record<string, unknown> => t !== undefined);
     if (tools.length > 0) {
       responses.tools = tools;
@@ -274,14 +235,7 @@ export function chatToResponse(chat: Record<string, unknown>, model: string): un
   // Surface any tool calls as Responses `function_call` output items.
   const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
   for (const raw of toolCalls) {
-    const call = raw as Record<string, unknown>;
-    const fn = (call.function ?? {}) as Record<string, unknown>;
-    output.push({
-      type: "function_call",
-      call_id: String(call.id ?? ""),
-      name: String(fn.name ?? ""),
-      arguments: typeof fn.arguments === "string" ? fn.arguments : "{}",
-    });
+    output.push(toFunctionCallItem(raw as Record<string, unknown>));
   }
 
   const usage = (chat.usage ?? {}) as Record<string, unknown>;
@@ -316,14 +270,7 @@ export function responseToChatCompletion(
     if (!raw || typeof raw !== "object") continue;
     const item = raw as Record<string, unknown>;
     if (item.type !== "function_call") continue;
-    toolCalls.push({
-      id: String(item.call_id ?? item.id ?? ""),
-      type: "function",
-      function: {
-        name: String(item.name ?? ""),
-        arguments: typeof item.arguments === "string" ? item.arguments : "{}",
-      },
-    });
+    toolCalls.push(toChatToolCall(item));
   }
 
   const message: Record<string, unknown> = {
@@ -351,6 +298,83 @@ export function responseToChatCompletion(
       total_tokens: Number(usage.total_tokens ?? 0),
     },
   };
+}
+
+/**
+ * A tool call's `arguments` JSON. Both wires carry it as an unparsed string;
+ * anything else (absent, an already-parsed object) becomes an empty literal so
+ * the receiving side always has valid JSON to parse.
+ */
+function callArguments(value: unknown): string {
+  return typeof value === "string" ? value : "{}";
+}
+
+/**
+ * The Responses `function_call` item for a tool call in either spelling: a chat
+ * `tool_calls[]` entry (`{id, function:{name, arguments}}`) or an item that is
+ * already flat.
+ */
+function toFunctionCallItem(call: Record<string, unknown>): Record<string, unknown> {
+  const fn = (call.function ?? call) as Record<string, unknown>;
+  return {
+    type: "function_call",
+    call_id: String(call.call_id ?? call.id ?? ""),
+    name: String(fn.name ?? ""),
+    arguments: callArguments(fn.arguments),
+  };
+}
+
+/** The chat `tool_calls[]` entry for a Responses `function_call` item. */
+function toChatToolCall(item: Record<string, unknown>): ChatToolCall {
+  return {
+    id: String(item.call_id ?? item.id ?? ""),
+    type: "function",
+    function: {
+      name: String(item.name ?? ""),
+      arguments: callArguments(item.arguments),
+    },
+  };
+}
+
+/**
+ * The chat-nested spelling (`{type:"function", function:{name, …}}`) of a tool
+ * spec, or `undefined` for a built-in Responses tool (`web_search`,
+ * `local_shell`, …) that chat cannot express and Databricks rejects.
+ */
+function toChatTool(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const tool = value as Record<string, unknown>;
+  if (tool.type !== "function") return undefined;
+  if (tool.function && typeof tool.function === "object") return tool; // already nested
+  if (typeof tool.name !== "string") return undefined;
+  return {
+    type: "function",
+    function: {
+      name: tool.name,
+      ...(tool.description ? { description: tool.description } : {}),
+      ...(tool.parameters ? { parameters: tool.parameters } : {}),
+    },
+  };
+}
+
+/**
+ * The flat Responses spelling (`{type:"function", name, …}`) of a tool spec.
+ * Inverse of {@link toChatTool}; non-function tools are dropped the same way.
+ */
+function toResponsesTool(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const tool = value as Record<string, unknown>;
+  if (tool.type !== "function") return undefined;
+  if (tool.function && typeof tool.function === "object") {
+    const fn = tool.function as Record<string, unknown>;
+    return {
+      type: "function",
+      name: fn.name,
+      ...(fn.description ? { description: fn.description } : {}),
+      ...(fn.parameters ? { parameters: fn.parameters } : {}),
+    };
+  }
+  return typeof tool.name === "string" ? tool : undefined; // already flat
 }
 
 /** One Server-Sent Event, ready to write to the client. */
@@ -591,27 +615,22 @@ export function readResponsesOutput(payload: Record<string, unknown>): Responses
     for (const rawPart of content) {
       if (!rawPart || typeof rawPart !== "object") continue;
       const part = rawPart as Record<string, unknown>;
-      const text = str(part.text);
+      const text = string.trimToEmpty(part.text);
       if (text) texts.push(text);
       const annotations = Array.isArray(part.annotations) ? part.annotations : [];
       for (const rawAnn of annotations) {
         if (!rawAnn || typeof rawAnn !== "object") continue;
         const ann = rawAnn as Record<string, unknown>;
-        const url = str(ann.url);
+        const url = string.trimToEmpty(ann.url);
         if (!url || seen.has(url)) continue;
         seen.add(url);
-        const title = str(ann.title);
+        const title = string.trimToEmpty(ann.title);
         citations.push({ url, ...(title ? { title } : {}) });
       }
     }
   }
 
-  return { text: str(payload.output_text) || texts.join("\n").trim(), citations };
-}
-
-/** Coerce an unknown JSON value to a trimmed string, or `""` when it isn't one. */
-function str(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return { text: string.trimToEmpty(payload.output_text) || texts.join("\n").trim(), citations };
 }
 
 /**
@@ -628,9 +647,7 @@ function str(value: unknown): string {
  * If filtering empties the list, `tools` / `tool_choice` / `parallel_tool_calls`
  * are dropped so we never send an empty `tools: []`.
  */
-export function sanitizeResponsesTools(
-  body: Record<string, unknown>,
-): Record<string, unknown> {
+export function sanitizeResponsesTools(body: Record<string, unknown>): Record<string, unknown> {
   if (!Array.isArray(body.tools) || body.tools.length === 0) return body;
   const fnTools = body.tools.filter(
     (t) => t && typeof t === "object" && (t as Record<string, unknown>).type === "function",
@@ -647,8 +664,20 @@ export function sanitizeResponsesTools(
   return next;
 }
 
-/** Content part / input item types Claude extended-thinking uses on the wire. */
-const REASONING_TYPES = new Set(["reasoning", "thinking", "redacted_thinking"]);
+/**
+ * Content-part / input-item types Claude extended thinking uses on the wire.
+ *
+ * Shared so both wire surfaces strip the same set: the Responses path here
+ * ({@link sanitizeOpenResponsesInput}) and the Chat Completions path in
+ * `@dbx-tools/appkit-mastra`'s serving sanitize. Anthropic signs these blocks,
+ * so a replay that mutates one is rejected outright - both paths must agree on
+ * what counts as a reasoning block.
+ */
+export const REASONING_TYPES: ReadonlySet<string> = new Set([
+  "reasoning",
+  "thinking",
+  "redacted_thinking",
+]);
 
 /**
  * Rewrite Responses `input` so Open Responses will accept it.
@@ -669,9 +698,7 @@ const REASONING_TYPES = new Set(["reasoning", "thinking", "redacted_thinking"]);
  *
  * Returns a shallow copy when anything changes; otherwise the input body.
  */
-export function sanitizeOpenResponsesInput(
-  body: Record<string, unknown>,
-): Record<string, unknown> {
+export function sanitizeOpenResponsesInput(body: Record<string, unknown>): Record<string, unknown> {
   if (!Array.isArray(body.input) || body.input.length === 0) return body;
 
   let changed = false;

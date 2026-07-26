@@ -29,9 +29,8 @@
  * @module
  */
 
-import { randomUUID } from "node:crypto";
 import { getUsernameWithApiLookup } from "@databricks/appkit";
-import { log } from "@dbx-tools/shared-core";
+import { hash, log } from "@dbx-tools/shared-core";
 import { fastembed } from "@mastra/fastembed";
 import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
@@ -252,7 +251,7 @@ export class MemoryBuilder {
  */
 function buildSharedPgVector(pool: Pool): PgVector {
   const vector = new PgVector({
-    id: `pg${randomUUID()}`,
+    id: `pg${hash.id()}`,
     // Keep the recall index out of `public`: on a Lakebase database the app
     // service principal has no CREATE on `public` (PG15+ locks it down), so a
     // default-schema PgVector fails on CREATE INDEX with "permission denied for
@@ -276,7 +275,7 @@ function buildSharedPgVector(pool: Pool): PgVector {
 /** Per-agent dedicated `PgVector` (rare; opt-in via object override). */
 function buildPgVector(setting: MastraMemoryConfigOverride): PgVector {
   return new PgVector(
-    withId(setting, `pg-vector__${randomUUID()}`) as ConstructorParameters<typeof PgVector>[0],
+    withId(setting, `pg-vector__${hash.id()}`) as ConstructorParameters<typeof PgVector>[0],
   );
 }
 

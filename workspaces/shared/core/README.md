@@ -7,7 +7,18 @@ browsers, workers, CLIs, and shared schema packages. Modules are exported as
 namespaces so call sites stay explicit:
 
 ```ts
-import { async, error, hash, http, log, net, object, brand, string } from "@dbx-tools/shared-core";
+import {
+  async,
+  brand,
+  error,
+  hash,
+  http,
+  json,
+  log,
+  net,
+  object,
+  string,
+} from "@dbx-tools/shared-core";
 ```
 
 Node-only helpers live in [`@dbx-tools/core`](../../node/core). AppKit and
@@ -21,8 +32,10 @@ Key features:
   status/message extraction.
 - Deterministic non-cryptographic hashes and short ids for cache keys, slugs,
   and generated names.
-- String normalization helpers for slugs, identifiers, unique labels, and prompt
-  descriptions.
+- Non-throwing JSON parsing for untrusted input, with record narrowing so parsed
+  data is not cast blindly.
+- String normalization helpers for slugs, identifiers, unique labels, human
+  labels, config lists, and prompt descriptions.
 - Object/iterable, predicate, HTTP, cookie, network, token, memoization, and
   logging helpers that avoid Node-only dependencies.
 - Namespace exports that make utility call sites explicit without creating a
@@ -91,6 +104,26 @@ const suffix = hash.fnvHashWithOptions({ length: 6 }, longName);
 These hashes are deterministic and non-cryptographic. Use them for cache keys,
 slug suffixes, and trace-stable identifiers, not secrets or signatures.
 
+## Parsing Untrusted JSON
+
+```ts
+const body = json.parseRecord(await readRequestText(req)) ?? {};
+const chunk = json.parse<StreamChunk>(sseData);
+if (!chunk) continue;
+
+const settings = json.parse<Settings>(process.env.SETTINGS, DEFAULT_SETTINGS);
+```
+
+`json.parse()` returns the fallback (or `undefined`) instead of throwing, so a
+malformed request body, env var, config file, subprocess stdout, or third-party
+response does not need its own `try`/`catch`. `json.parseRecord()` additionally
+narrows to `Record<string, unknown>`, which a bare `JSON.parse(...) as Record<...>`
+does not: it rejects a parsed `null`, array, or scalar rather than letting it
+through as an object.
+
+Reach for `JSON.parse` directly only when a throw is the correct outcome, such as
+reading a file this repo generated itself.
+
 ## Strings And Descriptions
 
 ```ts
@@ -106,6 +139,21 @@ const description = string.toDescription([
 `string.tokenize()`, `toSlug()`, and `toIdentifier()` keep package names, tool
 ids, schema ids, and generated labels consistent. `toDescription()` turns nested
 description data into prompt/tool text without hand-concatenating paragraphs.
+
+Three helpers exist so call sites stop re-implementing them:
+
+```ts
+const label = string.toLabel("web_search"); // "Web Search"
+const name = string.capitalize(segment); // no charAt(0).toUpperCase() idiom
+const host = string.trimToEmpty(parsed.host); // unknown JSON field -> string
+const allowed = string.parseList(process.env.ALLOWED_URLS);
+```
+
+`toLabel()` and `capitalize()` are the humanizers for identifiers and path
+segments. `trimToNull()` / `trimToEmpty()` / `firstNonEmpty()` coerce an unknown
+field off parsed JSON. `parseList()` normalizes a config value that may arrive as
+an array or as one comma/whitespace-separated env string, de-duplicating as it
+goes.
 
 ## Objects And Predicates
 
@@ -216,8 +264,9 @@ without paying formatting cost when disabled.
 - `async` - polling, sleep, and abort-signal wiring.
 - `error` - unknown-error normalization and HTTP-ish error context.
 - `hash` - ids, FNV hashes, and base32 encoding.
-- `string` - tokenization, slugs, identifiers, descriptions, pluralization, and
-  HTML escaping.
+- `json` - non-throwing `parse()` and record-narrowing `parseRecord()`.
+- `string` - tokenization, slugs, identifiers, human labels, string coercion,
+  config lists, descriptions, pluralization, and HTML escaping.
 - `object` - record checks, boolean coercion, deep equality, shape types, and
   lazy sequence transforms + collection helpers.
 - `predicate` - composable boolean/type predicates.

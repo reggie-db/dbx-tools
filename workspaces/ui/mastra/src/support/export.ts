@@ -29,6 +29,7 @@ import type { UIMessage } from "ai";
 import * as echarts from "echarts";
 import { marked } from "marked";
 import { normalizeChartOption } from "./chart-option";
+import { downloadFile } from "./download";
 
 /**
  * Output formats {@link exportChat} can produce.
@@ -114,7 +115,7 @@ export async function exportChat(options: ExportChatOptions): Promise<void> {
 
   if (format === "markdown") {
     const md = await buildMarkdown(messages, resolver, title, userLabel);
-    downloadTextFile(`${stem}.md`, md, "text/markdown;charset=utf-8");
+    downloadFile(`${stem}.md`, md, "text/markdown;charset=utf-8");
     return;
   }
 
@@ -132,7 +133,7 @@ export async function exportChat(options: ExportChatOptions): Promise<void> {
  */
 function printViaHiddenIframe(html: string, downloadName: string): void {
   if (typeof document === "undefined" || !document.body) {
-    downloadTextFile(downloadName, html, "text/html;charset=utf-8");
+    downloadFile(downloadName, html, "text/html;charset=utf-8");
     return;
   }
   const iframe = document.createElement("iframe");
@@ -156,7 +157,7 @@ function printViaHiddenIframe(html: string, downloadName: string): void {
     const win = iframe.contentWindow;
     if (!win) {
       iframe.remove();
-      downloadTextFile(downloadName, html, "text/html;charset=utf-8");
+      downloadFile(downloadName, html, "text/html;charset=utf-8");
       return;
     }
     // Settle so charts / fonts lay out, then print. `afterprint` removes the
@@ -172,7 +173,7 @@ function printViaHiddenIframe(html: string, downloadName: string): void {
         win.print();
       } catch {
         cleanup();
-        downloadTextFile(downloadName, html, "text/html;charset=utf-8");
+        downloadFile(downloadName, html, "text/html;charset=utf-8");
       }
     }, PRINT_SETTLE_MS);
   };
@@ -441,18 +442,6 @@ const escapeHtml = string.escapeHtml;
 /** Turn a title into a safe, lowercase filename stem. */
 function slugify(value: string): string {
   return string.toSlugWithOptions({ maxLength: 60 }, value) || "conversation";
-}
-
-/** Trigger a browser download of an in-memory text file. */
-function downloadTextFile(filename: string, content: string, mime: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: mime }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**

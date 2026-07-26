@@ -28,7 +28,6 @@
     "@databricks/sdk-experimental": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/core": "workspace:*",
-    "@dbx-tools/databricks": "workspace:*",
     "@dbx-tools/genie": "workspace:*",
     "@dbx-tools/model": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",

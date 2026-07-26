@@ -7,7 +7,7 @@ import {
   toUrlAllowList,
 } from "../src/allowlist";
 import { approvalMatches, resolveWebSearchConfig } from "../src/config";
-import { htmlToText } from "../src/fetch";
+import { htmlToText } from "../src/html-text";
 import {
   detectWebSearchProvider,
   supportsWebSearch,

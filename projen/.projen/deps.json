@@ -75,11 +75,6 @@
       "type": "runtime"
     },
     {
-      "name": "p-memoize",
-      "version": "^8.0.0",
-      "type": "runtime"
-    },
-    {
       "name": "projen",
       "version": "^0.101.6",
       "type": "runtime"

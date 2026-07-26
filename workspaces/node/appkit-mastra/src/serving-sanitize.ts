@@ -1,5 +1,10 @@
-import { string } from "@dbx-tools/shared-core";
-import { type ChatMessage, type ChatRole, openaiChat } from "@dbx-tools/shared-model";
+import { json, string } from "@dbx-tools/shared-core";
+import {
+  type ChatMessage,
+  type ChatRole,
+  openaiChat,
+  openaiResponses,
+} from "@dbx-tools/shared-model";
 /**
  * Repairs Mastra / AI SDK message replays sent to Databricks Model
  * Serving before they hit the OpenAI-compatible `/chat/completions`
@@ -19,7 +24,9 @@ export interface ServingChatMessage extends ChatMessage {
   reasoning_content?: unknown;
 }
 
-const REASONING_PART_TYPES = new Set(["reasoning", "thinking", "redacted_thinking"]);
+// Shared with the Responses sanitize path so both wire surfaces agree on what
+// counts as a signed reasoning block.
+const REASONING_PART_TYPES = openaiResponses.REASONING_TYPES;
 
 /**
  * Parse, sanitize, and re-serialize a `/serving-endpoints/...` POST
@@ -27,12 +34,8 @@ const REASONING_PART_TYPES = new Set(["reasoning", "thinking", "redacted_thinkin
  * JSON or no rewrite was needed.
  */
 export function rewriteServingBody(body: string): string {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(body) as Record<string, unknown>;
-  } catch {
-    return body;
-  }
+  const parsed = json.parseRecord(body);
+  if (!parsed) return body;
 
   // Runs regardless of `messages`: Databricks refuses to parse a body carrying
   // an unknown top-level field, so this failure is not specific to a transcript.

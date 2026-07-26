@@ -13,13 +13,13 @@
  * @module
  */
 
-import { getExecutionContext, Plugin, toPlugin, type PluginManifest } from "@databricks/appkit";
+import { Plugin, toPlugin, type PluginManifest } from "@databricks/appkit";
 import { log } from "@dbx-tools/shared-core";
 import { WEB_SEARCH_CONFIG_SCHEMA, type WebSearchPluginConfig } from "./config";
 import { runWebFetch } from "./fetch";
 import { getWebSearchRuntime } from "./runtime";
 import type { WebFetchRequest, WebFetchResult, WebSearchRequest, WebSearchResult } from "./schema";
-import { runWebSearch, type WebSearchContext } from "./search";
+import { resolveWebSearchContext, runWebSearch } from "./search";
 
 /**
  * AppKit plugin that resolves and holds the web-search runtime config used
@@ -58,13 +58,6 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> {
     });
   }
 
-  /** Resolve the OBO client + host from the active execution context. */
-  private async searchContext(): Promise<WebSearchContext> {
-    const ctx = getExecutionContext();
-    const host = (await ctx.client.config.getHost()).toString();
-    return { client: ctx.client, host };
-  }
-
   override exports() {
     return {
       /**
@@ -73,7 +66,7 @@ export class WebSearchPlugin extends Plugin<WebSearchPluginConfig> {
        * runtime config primed at setup.
        */
       search: async (request: WebSearchRequest): Promise<WebSearchResult> =>
-        runWebSearch(request, getWebSearchRuntime().config, await this.searchContext()),
+        runWebSearch(request, getWebSearchRuntime().config, await resolveWebSearchContext()),
       /**
        * Fetch one URL directly (bypassing the agent tool). Enforces the
        * configured allow-list. Reads the shared runtime config.

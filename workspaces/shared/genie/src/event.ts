@@ -25,6 +25,8 @@
  * @module
  */
 
+import { object } from "@dbx-tools/shared-core";
+
 import {
   detectAttachmentType,
   type GenieAttachment,
@@ -235,8 +237,7 @@ export const detectRows = eventDetector("rows", (current, previous, location) =>
 
 /**
  * Follow-up suggested-questions array appeared or changed.
- * Compares JSON-stringified arrays so a length-preserving content
- * rewrite still fires.
+ * Compares structurally so a length-preserving content rewrite still fires.
  */
 export const detectSuggestedQuestions = eventDetector(
   "suggested_questions",
@@ -244,7 +245,7 @@ export const detectSuggestedQuestions = eventDetector(
     const curr = current.suggested_questions?.questions;
     const prev = previous?.suggested_questions?.questions;
     if (!curr || curr.length === 0) return;
-    if (JSON.stringify(curr) === JSON.stringify(prev)) return;
+    if (object.deepEqual(curr, prev)) return;
     return { ...location, questions: curr };
   },
 );

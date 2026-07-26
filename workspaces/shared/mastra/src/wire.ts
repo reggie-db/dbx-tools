@@ -603,7 +603,7 @@ export type GenieDatasetData = z.infer<typeof GenieDatasetDataSchema>;
  */
 export const GenieDatasetChartSchema = z.object({
   chartId: z.string(),
-  chartType: z.enum(["bar", "line", "area", "scatter", "pie"]),
+  chartType: ChartTypeSchema,
 });
 export type GenieDatasetChart = z.infer<typeof GenieDatasetChartSchema>;
 

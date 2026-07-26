@@ -204,6 +204,25 @@ resolved during export: charts are rendered to inline SVG with ECharts' server
 renderer, and data markers become real tables. Expired or missing embeds are
 skipped so old transcripts still export cleanly.
 
+## Copying And Downloading
+
+Copy and download affordances appear in several places - message bubbles, code
+blocks, conversation export, and the data-grid CSV button - and they behave the
+same everywhere because each is backed by one internal module rather than
+per-component code.
+
+Copying works on hosts served over plain HTTP. An insecure context has no
+Clipboard API, so a bare `navigator.clipboard.writeText` silently does nothing on
+a local or intranet deployment; the shared helper falls back to a hidden
+`<textarea>` plus `document.execCommand("copy")` and reports whether the copy
+actually succeeded. Downloads revoke their object URL after the temporary anchor
+fires, so a long session does not accumulate blobs.
+
+If you build a controlled surface with `ChatView`, you get both without wiring
+anything. Adding a new copy or download button anywhere in this package should
+reuse `src/support/clipboard.ts` and `src/support/download.ts` instead of
+touching `navigator.clipboard` or `URL.createObjectURL` again.
+
 ## Modules
 
 - `MastraChat` - self-contained drop-in chat component.

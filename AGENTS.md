@@ -8,6 +8,12 @@ This file is the canonical repo instruction set for Codex, Claude, Cursor, and
 other coding agents. Keep tool-specific files such as `CLAUDE.md` and Cursor
 rules as thin pointers back here so instructions do not drift.
 
+Before authoring or changing an AppKit-facing plugin, package, or its docs, read
+`docs/appkit-best-practices.md`. It is the distilled house-rule version of the
+`databricks/appkit` repo and the AppKit v0 docs (plugin authoring, code style,
+documentation style), so `dbx-tools` packages stay shaped like first-party AppKit
+ones.
+
 If an older section below conflicts with the current README/package state or the
 Databricks/AppKit positioning guidance near the top of this file, prefer the
 newer guidance and the current source tree.
@@ -132,6 +138,11 @@ Docs site rules:
 
 ## Native AppKit overlap guidance
 
+For the authoring conventions themselves (manifest shape, lifecycle, execution
+interceptors, route registration, exports vs client config, errors, doc style),
+see `docs/appkit-best-practices.md`. This section is only about WHEN to reach for
+a `dbx-tools` package instead of the native one.
+
 Use native AppKit first when it already provides the needed surface. AppKit has
 first-party plugins and UI for Analytics, Genie, Files, Lakebase, Model Serving,
 Jobs, Vector Search, beta Agents, AppKit UI primitives, and standard plugin
@@ -201,6 +212,75 @@ Concrete examples to preserve in docs:
 - Web search here gives agents an open-web `web_search` (Databricks native
   web-search tool, on its own web-capable model) + `web_fetch` behind a URL
   allow-list and optional approval gate, a surface AppKit doesn't ship.
+
+## Shared utilities - check here before writing a helper
+
+`@dbx-tools/shared-core` is the browser-safe base EVERY workspace package
+already depends on (the `.projenrc.ts` blanket rule adds it), so importing from
+it never costs a new dependency. Before adding a small helper to a package,
+check whether one of these already exists; if the helper would be useful to a
+second package, put it in shared-core rather than duplicating it.
+
+- `json` - `parse(text, fallback?)` and `parseRecord(text)`. Use these for ANY
+  JSON that comes from outside the process (request body, env var, config file,
+  subprocess stdout, third-party API) instead of `JSON.parse` in a try/catch.
+  Keep bare `JSON.parse` only where a throw is the correct outcome.
+- `string` - `toLabel` / `capitalize` (humanizing an identifier: do not
+  hand-roll `charAt(0).toUpperCase()`), `toSlug` / `toUniqueSlug`, `trimToNull`
+  / `trimToEmpty` / `firstNonEmpty` (coercing an unknown JSON field to a
+  string), `parseList` (a config value that may be an array OR one
+  comma/whitespace-separated env string), `escapeHtml`, `pluralize`.
+- `object` - `isRecord` (narrowing parsed JSON), `deepEqual` (never compare via
+  `JSON.stringify`), `toBoolean`, plus the lazy `Sequence` transforms.
+- `async` - `sleep`, `tieAbortSignal`, `poll`. Do not import
+  `node:timers/promises` for a delay.
+- `error` (`toError` / `errorMessage` / `errorContext`), `log.logger`,
+  `hash.id` (id generation - no `nanoid`), `net.urlBuilder`,
+  `http.createFetchError`, `function.memoize`, `predicate`, `token`.
+
+Node-only equivalents live in `@dbx-tools/core` (`exec.spawn`/`spawnSync`,
+`project.root`/`name`/`repositoryUrl`/`npmRegistry`) and `@dbx-tools/path`
+(`findFiles`, `watchFiles`, `toPathMatcher`, `ignorePatterns`). The projen
+engine uses these too - it must not re-probe `npm prefix` / `git rev-parse` on
+its own.
+
+Cross-package contracts that are easy to duplicate by accident:
+
+- `@dbx-tools/shared-model` `openaiResponses.REASONING_TYPES` - the Claude
+  extended-thinking block types. Both wire sanitizers (Responses and Chat
+  Completions) MUST strip the same set; Anthropic signs these blocks, so a
+  replay that mutates one is rejected.
+- `@dbx-tools/model` `invoke.*_PATH` / `*Url` - the Databricks serving paths
+  (`invocations`, `responses`, `open-responses`, `chat/completions`). Never
+  hard-code a `/serving-endpoints/...` string in a consumer.
+
+Package-local modules that exist so a helper is written once, listed here because
+each was previously duplicated across sibling files:
+
+- `node/appkit-web-search` `src/html-text.ts` - `htmlToText` /
+  `htmlFragmentToText` / `decodeHtmlEntities`, shared by `fetch.ts` and
+  `scrape.ts`.
+- `node/appkit-web-search` `search.ts` `resolveWebSearchContext()` - the OBO
+  client + host + config resolution the tool, plugin, and search paths all need.
+- `ui/mastra` `src/support/clipboard.ts` and `src/support/download.ts` - copy
+  (with the insecure-context `execCommand` fallback) and blob download. Do not
+  touch `navigator.clipboard` or `URL.createObjectURL` directly in a component.
+
+When a helper is worth sharing, add it to the module map in the owning package's
+README as well; the docs site is generated from those READMEs, so an undocumented
+utility is an invisible one.
+
+## Formatting and diff hygiene
+
+Prettier is configured at the root and its file globs are NOT limited to root
+files, so `prettier --write` on a broad path will reformat package sources and
+tests that no one has touched in a while. Some files predate the current
+`printWidth` and will churn by dozens of lines.
+
+Format only the files you actually edited. Before finishing, check
+`git status` / `git diff --stat` for files you did not intend to change and
+revert them, so a behavior change is not buried in reflowed whitespace. There is
+no repo-wide format task on purpose.
 
 ## Vocabulary (important)
 
@@ -388,7 +468,14 @@ pnpm run barrels             # rebuild every package's root index.ts barrel
 pnpm run openapi             # generate the openapi packages from tsoa controllers
 pnpm run clean               # remove generated files (read-only ones); interactive picker, -y to skip
 pnpm -r compile              # type-check every package (projen's per-package compile: tsc --build)
+pnpm -r --no-bail test       # run every package's node:test suite, without stopping at the first failure
 ```
+
+A cross-package change is verified by all three of `pnpm exec projen`,
+`pnpm -r compile`, and `pnpm -r --no-bail test`: synth catches a manifest or
+barrel that no longer matches the source tree, compile catches a moved export,
+and the tests catch behavior. Use `--no-bail` so one broken package does not hide
+the state of the rest.
 
 ## The `dbx-tools` CLI
 

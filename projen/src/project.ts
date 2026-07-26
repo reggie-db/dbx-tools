@@ -9,8 +9,8 @@
 import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
 import { ignore, match, PathMatchInput } from "@dbx-tools/path";
 import { project as coreProject } from "@dbx-tools/core";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
 import { generateBarrels } from "./barrels";
@@ -27,6 +27,7 @@ import {
   DEFAULT_WORKSPACE_PACKAGE_ROOTS,
   type DiscoveredPackage,
   projectName,
+  readPackageManifest,
   repoRoot,
   scanPackages,
   toPosix,
@@ -635,22 +636,17 @@ function resolveIdentity(options: { name?: string; scope?: string }): {
 function engineSelfDependency(project: javascript.NodeProject): string | undefined {
   const enginePkgJson = join(resolvePkgRoot(), "package.json");
   if (!toPosix(enginePkgJson).includes("/node_modules/")) return undefined;
-  let name: string;
-  let version: string;
-  try {
-    ({ name, version } = JSON.parse(readFileSync(enginePkgJson, "utf8")));
-  } catch {
-    return undefined;
-  }
+  const engine = readPackageManifest(dirname(enginePkgJson));
+  const name = string.trimToNull(engine?.name);
+  if (!name) return undefined;
+  const version = string.trimToNull(engine?.version);
 
-  const consumerPkgJson = join(resolve(project.outdir), "package.json");
-  try {
-    const consumer = JSON.parse(readFileSync(consumerPkgJson, "utf8"));
-    const existing = consumer.devDependencies?.[name] ?? consumer.dependencies?.[name];
-    if (existing) return `${name}@${existing}`;
-  } catch {
-    // No existing package.json (or no entry) - fall through to a computed pin.
-  }
+  // No existing consumer manifest (or no entry) falls through to a computed pin.
+  const consumer = readPackageManifest(resolve(project.outdir));
+  const dependencyOf = (field: unknown): string | undefined =>
+    object.isRecord(field) ? (string.trimToNull(field[name]) ?? undefined) : undefined;
+  const existing = dependencyOf(consumer?.devDependencies) ?? dependencyOf(consumer?.dependencies);
+  if (existing) return `${name}@${existing}`;
   return `${name}@^${version}`;
 }
 
