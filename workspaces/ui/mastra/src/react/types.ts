@@ -300,10 +300,7 @@ export type ChatViewProps = {
    * the bubble shows thumbs up/down plus a comment affordance. The
    * handler logs the feedback to MLflow via the plugin's feedback route.
    */
-  onFeedback?: (
-    message: UIMessage,
-    submission: FeedbackSubmission,
-  ) => void | Promise<void>;
+  onFeedback?: (message: UIMessage, submission: FeedbackSubmission) => void | Promise<void>;
 };
 
 /** Payload {@link ChatViewProps.onResolveToolApproval} receives. */

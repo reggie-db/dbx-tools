@@ -21,7 +21,10 @@ Key features:
   endpoint id.
 - Supports class ceilings so callers can ask for a capability band without
   accidentally escalating to a larger model.
-- Caches enriched catalogues per workspace host through AppKit cache utilities.
+- Caches enriched catalogues per workspace host through AppKit cache utilities,
+  and re-lists once on a resolve miss so a newly deployed model still resolves.
+- Builds the invocations URL and mints per-request auth headers for callers that
+  issue their own OpenAI-shaped HTTP requests.
 - Provides a small static fallback floor for local tools and degraded workspace
   access.
 
@@ -137,6 +140,38 @@ Fuzzy matching is intentionally a server concern because it depends on the live
 workspace catalogue and may re-list on misses. Disable it in callers that require
 exact endpoint ids.
 
+## Resolve Against A Catalogue That May Be Stale
+
+```ts
+const resolved = await resolve.rankModelIdLive((force) => loadCatalogue(force), "opus");
+```
+
+`rankModelIdLive()` matches the catalogue you already hold and, on a miss,
+reloads once with `force` before giving up, so a model deployed after your cache
+warmed still resolves without a restart. You supply the loader, so the caching
+policy stays yours: `listServingEndpoints` and its `CacheManager`, a plain field
+in a long-lived CLI, or a test double. `rankModelId()` is the pure form over a
+single snapshot; unlike `serving.resolveModelId` it breaks equal match scores by
+class and then version, so `"opus"` prefers `opus-5` over `opus-4-7`.
+
+## Call An Endpoint Directly
+
+```ts
+import { invoke } from "@dbx-tools/model";
+
+const response = await fetch(invoke.invocationsUrl(host, endpointId), {
+  method: "POST",
+  headers: { ...(await invoke.authHeaders(client)), "content-type": "application/json" },
+  body: JSON.stringify({ messages }),
+});
+```
+
+Use `invoke` when you need to issue your own request against a serving endpoint
+with an OpenAI-shaped body - a proxy, a passthrough route, a streaming client -
+rather than the SDK's typed `servingEndpoints.query`. Mint `authHeaders()` per
+request: the SDK refreshes the underlying token as it nears expiry, so you never
+track lifetimes yourself.
+
 ## Use Static Fallbacks
 
 ```ts
@@ -157,6 +192,8 @@ policy decisions; fallbacks are a last resort.
   resolver functions.
 - `serving` - Databricks serving-endpoint listing, cache management, fuzzy
   search, and endpoint-id resolution.
+- `invoke` - invocations URL construction and per-request auth headers for
+  calling an endpoint over raw HTTP.
 - `classes` - model-class parsing, ordering, and class-ceiling helpers.
 - `fallback` - static fallback model ids per class.
 

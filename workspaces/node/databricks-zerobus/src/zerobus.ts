@@ -50,10 +50,5 @@ export async function createStream(
     recordType: 0 as RecordType, // RecordType.Json (const enum, can't be referenced under verbatimModuleSyntax)
     ...options,
   };
-  return await sdk.createStream(
-    streamTableProperties,
-    streamClientId,
-    streamClientSecret,
-    streamOptions,
-  );
+  return sdk.createStream(streamTableProperties, streamClientId, streamClientSecret, streamOptions);
 }

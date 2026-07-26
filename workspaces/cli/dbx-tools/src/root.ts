@@ -67,10 +67,7 @@ export function needsInstall(root: string): boolean {
 export function needsToolchain(root: string): boolean {
   const modules = join(root, "node_modules");
   if (!existsSync(modules)) return true;
-  return (
-    !existsSync(join(modules, "projen")) ||
-    !existsSync(join(modules, "@dbx-tools", "projen"))
-  );
+  return !existsSync(join(modules, "projen")) || !existsSync(join(modules, "@dbx-tools", "projen"));
 }
 
 /** Async, memoized root lookup from the process cwd at first use. */

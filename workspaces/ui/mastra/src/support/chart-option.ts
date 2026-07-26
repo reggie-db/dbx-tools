@@ -48,9 +48,7 @@ const isObj = object.isRecord;
 /** True when `title` (object or array) carries any non-empty `text`. */
 function hasTitleText(title: unknown): boolean {
   const entries = Array.isArray(title) ? title : [title];
-  return entries.some(
-    (t) => isObj(t) && typeof t.text === "string" && t.text.trim().length > 0,
-  );
+  return entries.some((t) => isObj(t) && typeof t.text === "string" && t.text.trim().length > 0);
 }
 
 /** Pin a title to the top-center so it clears the plot / axis names. */
@@ -109,8 +107,7 @@ function normalizeAxis(axis: Obj, pos: "x" | "y"): Obj {
 
 /** Apply {@link normalizeAxis} across an axis field (object or array). */
 function normalizeAxisField(axis: unknown, pos: "x" | "y"): unknown {
-  if (Array.isArray(axis))
-    return axis.map((a) => (isObj(a) ? normalizeAxis(a, pos) : a));
+  if (Array.isArray(axis)) return axis.map((a) => (isObj(a) ? normalizeAxis(a, pos) : a));
   return isObj(axis) ? normalizeAxis(axis, pos) : axis;
 }
 

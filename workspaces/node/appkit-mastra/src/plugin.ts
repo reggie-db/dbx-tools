@@ -51,11 +51,9 @@ import {
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import type { Agent } from "@mastra/core/agent";
-import { Mastra } from "@mastra/core/mastra";
-import express from "express";
-import type { Pool } from "pg";
-
+import { plugin } from "@dbx-tools/appkit";
+import { serving as nodeServing } from "@dbx-tools/model";
+import { error, log, string } from "@dbx-tools/shared-core";
 import {
   feedback,
   routes,
@@ -63,8 +61,12 @@ import {
   type MastraFeedbackRequest,
   type StatementData,
 } from "@dbx-tools/shared-mastra";
-import { serving as nodeServing } from "@dbx-tools/model";
 import { display, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import type { Agent } from "@mastra/core/agent";
+import { Mastra } from "@mastra/core/mastra";
+import express from "express";
+import type { Pool } from "pg";
+
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents";
 import { fetchChart } from "./chart";
 import type { MastraPluginConfig } from "./config";
@@ -78,8 +80,6 @@ import { attachRoutePatchMiddleware, isMastraRequestAllowed, MastraServer } from
 import { resolveServingConfig } from "./serving";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement";
 import { threadsRoute } from "./threads";
-import { error, log, string } from "@dbx-tools/shared-core";
-import { plugin } from "@dbx-tools/appkit";
 
 const GENIE_MANIFEST = plugin.data(genie).plugin.manifest;
 const LAKEBASE_MANIFEST = plugin.data(lakebase).plugin.manifest;
@@ -330,7 +330,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // Reads only in-memory build state, so it's synchronous and needs no OBO
     // scoping. Registered before the catch-all, same as `/models`.
     const handleDefaultModel = (req: express.Request, res: express.Response): void => {
-      const requested = string.firstNonEmpty(req.params["agentId"]);
+      const requested = string.firstNonEmpty(req.params.agentId);
       const agentId = requested ?? this.built?.defaultAgentId ?? FALLBACK_AGENT_ID;
       const raw = this.built?.defaultModels[agentId];
       // `"<dynamic>"` (a call-time function) has no fixed id to advertise.
@@ -378,14 +378,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // clean 404; thrown errors bubble through `next(err)`.
     const embedResolvers: Record<string, EmbedResolver> = {
       chart: (req, id, signal) => {
-        const timeoutMs = parseTimeoutMs(req.query["timeoutMs"]);
+        const timeoutMs = parseTimeoutMs(req.query.timeoutMs);
         return fetchChart(id, {
           ...(timeoutMs !== undefined ? { timeoutMs } : {}),
           signal,
         });
       },
       data: (req, id, signal) => {
-        const limit = parseStatementLimit(req.query["limit"]);
+        const limit = parseStatementLimit(req.query.limit);
         return this.userScopedSelf(req).fetchStatement(id, {
           ...(limit !== undefined ? { limit } : {}),
           signal,
@@ -394,8 +394,8 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     };
 
     router.get(`${routes.MASTRA_ROUTES.embed}/:type/:id`, (req, res, next) => {
-      const type = req.params["type"] ?? "";
-      const id = req.params["id"];
+      const type = req.params.type ?? "";
+      const id = req.params.id;
       const resolve = embedResolvers[type];
       if (!resolve) {
         res.status(404).json({ error: `unsupported embed type: ${type}` });

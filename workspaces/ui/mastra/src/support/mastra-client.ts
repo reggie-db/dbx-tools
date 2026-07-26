@@ -1,4 +1,4 @@
-import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
+import { error as errorUtil } from "@dbx-tools/shared-core";
 import {
   feedback,
   override,
@@ -17,8 +17,8 @@ import {
   type MastraUpdateThreadResponse,
   type StatementData,
 } from "@dbx-tools/shared-mastra";
-import { error as errorUtil } from "@dbx-tools/shared-core";
 import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
 import { MastraClient } from "@mastra/client-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { asMastraStreamResponse, type MastraStreamResponse } from "./mastra-stream";
@@ -59,8 +59,7 @@ export class MastraPluginClient extends MastraClient {
 
   constructor(config: MastraClientConfig) {
     super({
-      baseUrl:
-        typeof window !== "undefined" ? window.location.origin : "http://localhost",
+      baseUrl: typeof window !== "undefined" ? window.location.origin : "http://localhost",
       apiPrefix: config.basePath,
       credentials: "include",
       headers: {},
@@ -261,9 +260,7 @@ export class MastraPluginClient extends MastraClient {
       "DELETE",
       wire.MastraClearHistoryResponseSchema,
       {
-        ...(options.threadId
-          ? { headers: { [thread.THREAD_ID_HEADER]: options.threadId } }
-          : {}),
+        ...(options.threadId ? { headers: { [thread.THREAD_ID_HEADER]: options.threadId } } : {}),
         ...(options.signal ? { signal: options.signal } : {}),
       },
     );
@@ -551,8 +548,7 @@ export const useMastraModels = (
         // lists a vectoriser. If the server didn't tag tasks at all,
         // pass everything through so we don't show an empty list.
         const llms = endpoints.filter(
-          (e) =>
-            e.task !== "llm/v1/embeddings" && (!e.task || e.task.startsWith("llm/v1/")),
+          (e) => e.task !== "llm/v1/embeddings" && (!e.task || e.task.startsWith("llm/v1/")),
         );
         setModels(llms.length > 0 ? llms : endpoints);
       })
@@ -709,8 +705,7 @@ export const useMastraThreads = (
         setError(null);
       })
       .catch((e: unknown) => {
-        if (controller.signal.aborted || (e as { name?: string }).name === "AbortError")
-          return;
+        if (controller.signal.aborted || (e as { name?: string }).name === "AbortError") return;
         setError(errorUtil.toError(e));
         setThreads([]);
       })
@@ -766,8 +761,7 @@ export interface ByIdFetchState<T> {
  * everything. Keyed by `<type>:<id>` (e.g. `chart:abc123`).
  */
 type FetchCacheEntry<T> =
-  | { kind: "pending"; promise: Promise<T | undefined> }
-  | { kind: "ready"; data: T | undefined };
+  { kind: "pending"; promise: Promise<T | undefined> } | { kind: "ready"; data: T | undefined };
 
 const fetchCache = new Map<string, FetchCacheEntry<unknown>>();
 
@@ -902,8 +896,7 @@ function useByIdFetch<T>(
  * stays stable - inlining a fresh closure would refire the
  * effect on every render.
  */
-const chartIsTerminal = (c: Chart): boolean =>
-  c.result !== undefined || c.error !== undefined;
+const chartIsTerminal = (c: Chart): boolean => c.result !== undefined || c.error !== undefined;
 
 /**
  * `isTerminal` for {@link useStatementFetch}. A statement
@@ -955,9 +948,6 @@ export const useStatementFetch = (
 ): ByIdFetchState<StatementData> => {
   const client = useMastraClient();
   const key = statementId ? `data:${statementId}` : undefined;
-  const fetcher = useCallback(
-    () => client.statement(statementId as string),
-    [client, statementId],
-  );
+  const fetcher = useCallback(() => client.statement(statementId as string), [client, statementId]);
   return useByIdFetch<StatementData>(key, fetcher, statementIsTerminal);
 };

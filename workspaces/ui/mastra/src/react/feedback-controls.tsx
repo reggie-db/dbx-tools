@@ -114,12 +114,7 @@ export const FeedbackControls = ({
               autoFocus
             />
             <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => setOpen(false)}
-              >
+              <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
               <Button

@@ -5,5 +5,9 @@
 export * as classify from "./src/classify";
 export * as display from "./src/display";
 export * as model from "./src/model";
-export type { FamilyClass } from "./src/classify";
+export * as openaiChat from "./src/openai-chat";
+export * as openaiResponses from "./src/openai-responses";
+export type { EndpointCapabilities, FamilyClass } from "./src/classify";
 export type { ModelProfile, ServingEndpointSummary, ModelQuery, RankedModel } from "./src/model";
+export type { ChatRole, ChatContentPart, ChatToolCallFunction, ChatToolCall, ChatMessage, ChatContentToTextOptions } from "./src/openai-chat";
+export type { ResponsesStreamTranslator, ResponsesCitation, ResponsesOutput } from "./src/openai-responses";

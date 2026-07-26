@@ -39,11 +39,14 @@ export async function loadBrandContextFile(path: string): Promise<BrandContext> 
   const extension = extname(path).toLowerCase();
   let input: unknown;
 
-  if (extension === ".json") input = JSON.parse(source) as unknown;
-  else if (extension === ".yaml" || extension === ".yml") {
+  if (extension === ".json") {
+    input = JSON.parse(source) as unknown;
+  } else if (extension === ".yaml" || extension === ".yml") {
     const { parse } = await import("yaml");
     input = parse(source) as unknown;
-  } else throw new Error(`Unsupported brand context format: ${extension || "no extension"}`);
+  } else {
+    throw new Error(`Unsupported brand context format: ${extension || "no extension"}`);
+  }
 
   return sharedBrand.parseBrandContext(input);
 }

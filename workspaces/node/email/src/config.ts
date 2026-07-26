@@ -22,10 +22,10 @@
  *
  * @module
  */
-import type { BasePluginConfig } from "@databricks/appkit";
-import type { JSONSchema7 } from "json-schema";
-import { object } from "@dbx-tools/shared-core";
 import { resolve } from "node:path";
+import type { BasePluginConfig } from "@databricks/appkit";
+import { object } from "@dbx-tools/shared-core";
+import type { JSONSchema7 } from "json-schema";
 import type { EmailBrand } from "./brand";
 import { parseAllowedSenders } from "./sender";
 
@@ -162,12 +162,12 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
 /** Parse the `SMTP_SECURE` env / config flag, defaulting to `port === 465`. */
 function resolveSecure(flag: boolean | undefined, port: number): boolean {
   if (typeof flag === "boolean") return flag;
-  return object.toBoolean(process.env["SMTP_SECURE"]) ?? port === 465;
+  return object.toBoolean(process.env.SMTP_SECURE) ?? port === 465;
 }
 
 /** Whether `EMAIL_OUTBOX_MODE` explicitly opts into the file/outbox fallback. */
 function isOutboxModeEnabled(): boolean {
-  return object.toBoolean(process.env["EMAIL_OUTBOX_MODE"]) ?? false;
+  return object.toBoolean(process.env.EMAIL_OUTBOX_MODE) ?? false;
 }
 
 const SMTP_REQUIRED_FIELDS = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"] as const;
@@ -197,13 +197,13 @@ function missingSmtpFields(
  */
 export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmailConfig {
   const smtp = config.smtp ?? {};
-  const host = smtp.host ?? process.env["SMTP_HOST"];
-  const user = smtp.user ?? process.env["SMTP_USER"];
-  const pass = smtp.password ?? process.env["SMTP_PASSWORD"];
-  const domain = config.domain ?? process.env["EMAIL_DOMAIN"];
-  const from = config.from ?? process.env["EMAIL_FROM"];
+  const host = smtp.host ?? process.env.SMTP_HOST;
+  const user = smtp.user ?? process.env.SMTP_USER;
+  const pass = smtp.password ?? process.env.SMTP_PASSWORD;
+  const domain = config.domain ?? process.env.EMAIL_DOMAIN;
+  const from = config.from ?? process.env.EMAIL_FROM;
   const allowedSenders = parseAllowedSenders(
-    config.allowedSenders ?? process.env["EMAIL_ALLOWED_SENDERS"],
+    config.allowedSenders ?? process.env.EMAIL_ALLOWED_SENDERS,
   );
   const sender: ResolvedSender = {
     ...(domain ? { domain } : {}),
@@ -227,7 +227,7 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
         "email: SMTP is configured but no sender source - set EMAIL_DOMAIN (to derive <user>@<domain>) or EMAIL_FROM (a fixed address)",
       );
     }
-    const portRaw = smtp.port ?? Number(process.env["SMTP_PORT"]);
+    const portRaw = smtp.port ?? Number(process.env.SMTP_PORT);
     const port = Number.isFinite(portRaw) && portRaw ? Number(portRaw) : 587;
     return {
       mode: "smtp",
@@ -246,7 +246,7 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   }
 
   const outDir = resolve(
-    config.outDir ?? process.env["EMAIL_OUTBOX_DIR"] ?? resolve(process.cwd(), "tmp"),
+    config.outDir ?? process.env.EMAIL_OUTBOX_DIR ?? resolve(process.cwd(), "tmp"),
   );
   return { mode: "file", outDir, ...sender };
 }

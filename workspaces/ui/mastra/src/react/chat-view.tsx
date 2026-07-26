@@ -1,3 +1,4 @@
+import { error as errorUtil } from "@dbx-tools/shared-core";
 import {
   Alert,
   AlertDescription,
@@ -32,7 +33,6 @@ import {
   TooltipTrigger,
   cn,
 } from "@dbx-tools/ui-appkit/react";
-import { error as errorUtil } from "@dbx-tools/shared-core";
 import {
   ArrowDownIcon,
   GripVerticalIcon,
@@ -172,9 +172,7 @@ export const ChatView = ({
   // `scrollHeight`/`scrollTop`; once the new DOM nodes mount we shift
   // `scrollTop` so the previously-visible content stays in place
   // (instead of jumping to the bottom of the new transcript).
-  const prependAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(
-    null,
-  );
+  const prependAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const loadMoreRef = useRef(onLoadMore);
   loadMoreRef.current = onLoadMore;
   // Latest queued steers, read by the pointer-drag move handler so it reorders
@@ -267,8 +265,7 @@ export const ChatView = ({
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    const atBottom =
-      el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX;
     // A scroll we caused (a pin) shouldn't change intent - only reconcile the
     // button state. A USER scroll sets intent: scrolling up unpins (stop
     // following); scrolling back to the bottom re-pins (resume following).
@@ -347,7 +344,6 @@ export const ChatView = ({
     });
   };
 
-
   const lastMessage = messages.at(-1);
   const lastEvents = lastMessage ? toolEventsByMessage[lastMessage.id] : undefined;
   // Single in-flight indicator for the whole turn: visible from the
@@ -360,8 +356,7 @@ export const ChatView = ({
   const lastAssistantHasContent =
     lastAssistantParts.some(
       (p) =>
-        (p.type === "text" || p.type === "reasoning") &&
-        Boolean((p as { text?: string }).text),
+        (p.type === "text" || p.type === "reasoning") && Boolean((p as { text?: string }).text),
     ) || (lastEvents?.length ?? 0) > 0;
   const hasRunningTool = (lastEvents ?? []).some((e) => e.status === "running");
   const showWaiting = isRunning;
@@ -491,48 +486,46 @@ export const ChatView = ({
        */}
       <div className={cn("flex h-full min-h-0", className)}>
         {showSidebar &&
-          (isMobile ? (
-            /*
-             * Mobile: a fixed overlay drawer with a tap-to-close backdrop, so
-             * the conversation list never eats horizontal space from the chat
-             * on a phone. Selecting a thread / starting a new one also closes
-             * the drawer so the transcript comes back into view. Session-only
-             * + default closed (see `mobileDrawerOpen`).
-             */
-            mobileDrawerOpen && (
-              <div className="fixed inset-0 z-40 flex">
-                <div
-                  className="absolute inset-0 bg-black/50"
-                  onClick={toggleSidebar}
-                  aria-hidden="true"
-                />
-                <ThreadSidebar
-                  {...sidebarProps}
-                  onSelect={(id) => {
-                    onSelectThread?.(id);
-                    toggleSidebar();
-                  }}
-                  {...(onNewThread
-                    ? {
-                        onNew: () => {
-                          onNewThread();
-                          toggleSidebar();
-                        },
-                      }
-                    : {})}
-                  className="relative z-10 w-[85vw] max-w-xs shadow-xl"
-                />
-              </div>
-            )
-          ) : (
-            /*
-             * Desktop: an inline flex child sharing the row with the chat
-             * column, using the persisted open/hide preference. Same
-             * `sidebarProps` as mobile - only the framing + close-on-select
-             * differ.
-             */
-            desktopSidebarOpen && <ThreadSidebar {...sidebarProps} />
-          ))}
+          (isMobile
+            ? /*
+               * Mobile: a fixed overlay drawer with a tap-to-close backdrop, so
+               * the conversation list never eats horizontal space from the chat
+               * on a phone. Selecting a thread / starting a new one also closes
+               * the drawer so the transcript comes back into view. Session-only
+               * + default closed (see `mobileDrawerOpen`).
+               */
+              mobileDrawerOpen && (
+                <div className="fixed inset-0 z-40 flex">
+                  <div
+                    className="absolute inset-0 bg-black/50"
+                    onClick={toggleSidebar}
+                    aria-hidden="true"
+                  />
+                  <ThreadSidebar
+                    {...sidebarProps}
+                    onSelect={(id) => {
+                      onSelectThread?.(id);
+                      toggleSidebar();
+                    }}
+                    {...(onNewThread
+                      ? {
+                          onNew: () => {
+                            onNewThread();
+                            toggleSidebar();
+                          },
+                        }
+                      : {})}
+                    className="relative z-10 w-[85vw] max-w-xs shadow-xl"
+                  />
+                </div>
+              )
+            : /*
+               * Desktop: an inline flex child sharing the row with the chat
+               * column, using the persisted open/hide preference. Same
+               * `sidebarProps` as mobile - only the framing + close-on-select
+               * differ.
+               */
+              desktopSidebarOpen && <ThreadSidebar {...sidebarProps} />)}
         <div className="flex h-full min-w-0 flex-1 flex-col">
           {showHeader && (
             /*
@@ -594,9 +587,7 @@ export const ChatView = ({
                     <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground">
                       <Spinner className="size-3" />
                       <span>
-                        {isLoadingHistory
-                          ? "Loading history..."
-                          : "Loading older messages..."}
+                        {isLoadingHistory ? "Loading history..." : "Loading older messages..."}
                       </span>
                     </div>
                   )}
@@ -621,12 +612,10 @@ export const ChatView = ({
                             : {})}
                           {...(onFeedback && feedbackByMessage[message.id]
                             ? {
-                                onFeedback: (submission) =>
-                                  onFeedback(message, submission),
+                                onFeedback: (submission) => onFeedback(message, submission),
                                 ...(feedbackByMessage[message.id]?.value
                                   ? {
-                                      feedbackValue:
-                                        feedbackByMessage[message.id]!.value,
+                                      feedbackValue: feedbackByMessage[message.id]!.value,
                                     }
                                   : {}),
                               }
@@ -705,93 +694,93 @@ export const ChatView = ({
                 {queuedSteers.map((steer) => {
                   const reorderable = Boolean(onReorderSteers);
                   return (
-                  <div
-                    key={steer.id}
-                    ref={(el) => {
-                      if (el) steerChipRefs.current.set(steer.id, el);
-                      else steerChipRefs.current.delete(steer.id);
-                    }}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2 py-1 text-xs",
-                      draggingSteerId === steer.id && "opacity-50",
-                    )}
-                  >
-                    {reorderable && (
-                      // Drag handle. Pointer Events (not native HTML5 drag) so
-                      // it works on touch: `touch-none` (touch-action: none)
-                      // stops the browser treating the drag as a scroll, and
-                      // pointer capture keeps move/up events flowing to the grip
-                      // even as the finger slides over sibling chips. The active
-                      // id lives in a ref (`draggingIdRef`) so the first
-                      // pointermove isn't dropped waiting for a state re-render.
-                      // `-m-1 p-1` enlarges the tap target to ~28px without
-                      // widening the visible grip - a 12px icon is too small to
-                      // reliably grab on touch.
-                      <span
-                        role="button"
-                        tabIndex={-1}
-                        aria-label="Drag to reorder"
-                        className="-m-1 shrink-0 cursor-grab touch-none p-1 text-muted-foreground active:cursor-grabbing"
-                        onPointerDown={(e) => {
-                          e.preventDefault();
-                          e.currentTarget.setPointerCapture(e.pointerId);
-                          draggingIdRef.current = steer.id;
-                          setDraggingSteerId(steer.id);
-                        }}
-                        onPointerMove={(e) => {
-                          if (draggingIdRef.current !== steer.id) return;
-                          reorderSteersByPointer(steer.id, e.clientY);
-                        }}
-                        onPointerUp={(e) => {
-                          e.currentTarget.releasePointerCapture(e.pointerId);
-                          draggingIdRef.current = null;
-                          setDraggingSteerId(null);
-                        }}
-                        onPointerCancel={() => {
-                          draggingIdRef.current = null;
-                          setDraggingSteerId(null);
-                        }}
-                      >
-                        <GripVerticalIcon className="size-3" aria-hidden="true" />
-                      </span>
-                    )}
-                    <span className="text-muted-foreground">Queued</span>
-                    <span className="min-w-0 flex-1 truncate">{steer.text}</span>
-                    {onSendSteerNow && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-6 shrink-0"
-                            onClick={() => onSendSteerNow(steer.id)}
-                            aria-label="Send now (interrupts current turn)"
-                          >
-                            <SendHorizontalIcon className="size-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Send now — interrupts</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {onRemoveSteer && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-6 shrink-0"
-                            onClick={() => onRemoveSteer(steer.id)}
-                            aria-label="Remove queued message"
-                          >
-                            <XIcon className="size-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Remove</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
+                    <div
+                      key={steer.id}
+                      ref={(el) => {
+                        if (el) steerChipRefs.current.set(steer.id, el);
+                        else steerChipRefs.current.delete(steer.id);
+                      }}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/40 px-2 py-1 text-xs",
+                        draggingSteerId === steer.id && "opacity-50",
+                      )}
+                    >
+                      {reorderable && (
+                        // Drag handle. Pointer Events (not native HTML5 drag) so
+                        // it works on touch: `touch-none` (touch-action: none)
+                        // stops the browser treating the drag as a scroll, and
+                        // pointer capture keeps move/up events flowing to the grip
+                        // even as the finger slides over sibling chips. The active
+                        // id lives in a ref (`draggingIdRef`) so the first
+                        // pointermove isn't dropped waiting for a state re-render.
+                        // `-m-1 p-1` enlarges the tap target to ~28px without
+                        // widening the visible grip - a 12px icon is too small to
+                        // reliably grab on touch.
+                        <span
+                          role="button"
+                          tabIndex={-1}
+                          aria-label="Drag to reorder"
+                          className="-m-1 shrink-0 cursor-grab touch-none p-1 text-muted-foreground active:cursor-grabbing"
+                          onPointerDown={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            draggingIdRef.current = steer.id;
+                            setDraggingSteerId(steer.id);
+                          }}
+                          onPointerMove={(e) => {
+                            if (draggingIdRef.current !== steer.id) return;
+                            reorderSteersByPointer(steer.id, e.clientY);
+                          }}
+                          onPointerUp={(e) => {
+                            e.currentTarget.releasePointerCapture(e.pointerId);
+                            draggingIdRef.current = null;
+                            setDraggingSteerId(null);
+                          }}
+                          onPointerCancel={() => {
+                            draggingIdRef.current = null;
+                            setDraggingSteerId(null);
+                          }}
+                        >
+                          <GripVerticalIcon className="size-3" aria-hidden="true" />
+                        </span>
+                      )}
+                      <span className="text-muted-foreground">Queued</span>
+                      <span className="min-w-0 flex-1 truncate">{steer.text}</span>
+                      {onSendSteerNow && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-6 shrink-0"
+                              onClick={() => onSendSteerNow(steer.id)}
+                              aria-label="Send now (interrupts current turn)"
+                            >
+                              <SendHorizontalIcon className="size-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Send now — interrupts</TooltipContent>
+                        </Tooltip>
+                      )}
+                      {onRemoveSteer && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-6 shrink-0"
+                              onClick={() => onRemoveSteer(steer.id)}
+                              aria-label="Remove queued message"
+                            >
+                              <XIcon className="size-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Remove</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -850,9 +839,7 @@ export const ChatView = ({
                   (modelChangeable ? (
                     <Select
                       value={model ? model : DEFAULT_MODEL_VALUE}
-                      onValueChange={(v) =>
-                        onModelChange?.(v === DEFAULT_MODEL_VALUE ? "" : v)
-                      }
+                      onValueChange={(v) => onModelChange?.(v === DEFAULT_MODEL_VALUE ? "" : v)}
                     >
                       <SelectTrigger
                         size="sm"
@@ -861,9 +848,7 @@ export const ChatView = ({
                         <SelectValue placeholder={defaultOptionLabel} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={DEFAULT_MODEL_VALUE}>
-                          {defaultOptionLabel}
-                        </SelectItem>
+                        <SelectItem value={DEFAULT_MODEL_VALUE}>{defaultOptionLabel}</SelectItem>
                         {sortedModels.map((m) => (
                           <SelectItem key={m.name} value={m.name}>
                             {m.displayName || m.name}

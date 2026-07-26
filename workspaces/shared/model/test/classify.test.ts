@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { classifyByFamily, classifyEndpoints, versionTuple } from "../src/classify";
+import {
+  classifyByFamily,
+  classifyEndpoints,
+  endpointCapabilities,
+  versionTuple,
+} from "../src/classify";
 import { ModelClass, type ModelProfile, type ServingEndpointSummary } from "../src/model";
 
 const CHAT_TASK = "llm/v1/chat";
@@ -46,6 +51,53 @@ describe("versionTuple", () => {
 
   it("returns all-zero for names with no digits", () => {
     assert.deepEqual(versionTuple("databricks-bge-large-en"), [0, 0, 0]);
+  });
+});
+
+describe("endpointCapabilities", () => {
+  it("reads capability off the task hint", () => {
+    assert.deepEqual(endpointCapabilities(chat("databricks-gpt-5-5")), {
+      chat: true,
+      embedding: false,
+      tools: true,
+    });
+    assert.deepEqual(endpointCapabilities(embedding("databricks-gte-large-en")), {
+      chat: false,
+      embedding: true,
+      tools: false,
+    });
+  });
+
+  it("falls back to the classified class when the endpoint carries no task", () => {
+    assert.equal(
+      endpointCapabilities({ name: "custom", class: ModelClass.ChatFast }).chat,
+      true,
+    );
+    assert.equal(
+      endpointCapabilities({ name: "custom", class: ModelClass.Embedding }).embedding,
+      true,
+    );
+  });
+
+  it("keeps an unclassified, untasked endpoint out of both buckets", () => {
+    assert.deepEqual(endpointCapabilities({ name: "mystery" }), {
+      chat: false,
+      embedding: false,
+      tools: false,
+    });
+  });
+
+  it("lets embedding win when task and class disagree", () => {
+    const conflicted: ServingEndpointSummary = {
+      name: "databricks-gte-large-en",
+      task: EMBEDDING_TASK,
+      class: ModelClass.ChatFast,
+    };
+    assert.deepEqual(endpointCapabilities(conflicted), {
+      chat: false,
+      embedding: true,
+      tools: false,
+    });
   });
 });
 

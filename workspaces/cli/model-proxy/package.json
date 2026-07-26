@@ -47,7 +47,6 @@
     "./backend": "./src/backend.ts",
     "./cli": "./src/cli.ts",
     "./defaults": "./src/defaults.ts",
-    "./responses": "./src/responses.ts",
     "./server": "./src/server.ts",
     "./package.json": "./package.json"
   },

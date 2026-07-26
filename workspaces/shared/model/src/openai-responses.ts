@@ -1,9 +1,10 @@
 /**
  * OpenAI Responses API <-> Chat Completions translation.
  *
- * The Codex CLI speaks only the Responses API (`POST /v1/responses`), but
- * Databricks serving endpoints speak only Chat Completions (`messages`) at
- * their `invocations` URL. This module bridges the two:
+ * Some clients speak only the Responses API (`POST /v1/responses`) - the Codex
+ * CLI is the motivating one - while Databricks serving endpoints speak only
+ * Chat Completions (`messages`) at their `invocations` URL. This module bridges
+ * the two, in both directions:
  *
  *   - {@link responsesToChat} lowers a Responses request body to a chat
  *     completions body (instructions -> system message, typed `input` items ->
@@ -11,46 +12,25 @@
  *     folded back into the transcript).
  *   - {@link chatToResponse} lifts a non-streaming chat completion back into a
  *     Responses `response` object.
- *   - {@link chatStreamToResponsesSse} lifts a streaming chat completion (an
- *     OpenAI SSE `chat.completion.chunk` stream) into the Responses SSE event
- *     stream Codex consumes (`response.created`, `response.output_text.delta`,
- *     function-call argument deltas, `response.completed`).
+ *   - {@link createResponsesStreamTranslator} lifts a streaming chat completion
+ *     (an OpenAI SSE `chat.completion.chunk` stream) into the Responses SSE
+ *     event stream those clients consume (`response.created`,
+ *     `response.output_text.delta`, function-call argument deltas,
+ *     `response.completed`).
+ *   - {@link readResponsesOutput} reads the other direction: pull the answer
+ *     text and citations out of a `response` object returned by an endpoint
+ *     that speaks Responses natively (the Databricks native web-search tool).
  *
- * Only the surface Codex actually exercises is translated; unknown fields are
+ * Only the surface real clients exercise is translated; unknown fields are
  * ignored rather than rejected, so a newer client degrades instead of breaking.
+ *
+ * Browser-safe: pure functions over plain JSON, no transport and no Node
+ * built-ins, so the same translation runs in a proxy, a server route, or a test.
  *
  * @module
  */
 
-/** A minimal chat message as Databricks Model Serving expects it. */
-interface ChatMessage {
-  role: string;
-  content?: string | null;
-  tool_calls?: ChatToolCall[];
-  tool_call_id?: string;
-  name?: string;
-}
-
-interface ChatToolCall {
-  id: string;
-  type: "function";
-  function: { name: string; arguments: string };
-}
-
-/** Extract plain text from a Responses `content` value (string or typed parts). */
-function contentToText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  const parts: string[] = [];
-  for (const part of content) {
-    if (part && typeof part === "object") {
-      const p = part as Record<string, unknown>;
-      // input_text / output_text / text all carry their text on `.text`.
-      if (typeof p.text === "string") parts.push(p.text);
-    }
-  }
-  return parts.join("");
-}
+import { type ChatMessage, chatContentToText } from "./openai-chat";
 
 /**
  * Lower a Responses request body to a chat-completions body. Returns the chat
@@ -100,7 +80,7 @@ export function responsesToChat(body: Record<string, unknown>): {
       messages.push({
         role: "tool",
         tool_call_id: String(item.call_id ?? item.id ?? ""),
-        content: typeof item.output === "string" ? item.output : contentToText(item.output),
+        content: typeof item.output === "string" ? item.output : chatContentToText(item.output),
       });
       continue;
     }
@@ -109,7 +89,7 @@ export function responsesToChat(body: Record<string, unknown>): {
     const role = typeof item.role === "string" ? item.role : "user";
     // Chat has no "developer" role; treat it as system (its intent here).
     const chatRole = role === "developer" ? "system" : role;
-    messages.push({ role: chatRole, content: contentToText(item.content) });
+    messages.push({ role: chatRole, content: chatContentToText(item.content) });
   }
 
   const chat: Record<string, unknown> = {
@@ -120,8 +100,8 @@ export function responsesToChat(body: Record<string, unknown>): {
 
   // Carry through function-calling config when present. Responses function
   // tools are FLAT (`{type:"function", name, description, parameters}`); chat
-  // wants them NESTED (`{type:"function", function:{name, …}}`). Codex also
-  // sends built-in tool types (local_shell, web_search, …) that Databricks chat
+  // wants them NESTED (`{type:"function", function:{name, …}}`). Clients also
+  // send built-in tool types (local_shell, web_search, …) that Databricks chat
   // rejects ("Missing 'function' in the tool specification"), so we translate
   // only function tools and drop the rest.
   if (Array.isArray(body.tools) && body.tools.length > 0) {
@@ -149,9 +129,10 @@ export function responsesToChat(body: Record<string, unknown>): {
     if (chatTools.length > 0) {
       chat.tools = chatTools;
       if (body.tool_choice !== undefined) chat.tool_choice = body.tool_choice;
-      if (body.parallel_tool_calls !== undefined) {
-        chat.parallel_tool_calls = body.parallel_tool_calls;
-      }
+      // NOTE: do NOT forward `parallel_tool_calls`. Clients send it, but
+      // Databricks Model Serving's chat API rejects unknown fields
+      // ("parallel_tool_calls: Extra inputs are not permitted"), which would
+      // fail the whole turn. Drop it.
     }
   }
 
@@ -209,8 +190,19 @@ function sse(event: string, data: unknown): string {
 }
 
 /**
+ * Incremental chat-chunk -> Responses-SSE translator. `feed` and `finish` both
+ * return the SSE bytes to forward, or `""` when a chunk produced no event.
+ */
+export interface ResponsesStreamTranslator {
+  /** Translate one upstream `chat.completion.chunk` object. */
+  feed(chunk: Record<string, unknown>): string;
+  /** Close any open items and emit `response.completed`. Call once, at end of stream. */
+  finish(): string;
+}
+
+/**
  * Translate an upstream chat-completions SSE stream into the Responses SSE
- * event stream Codex consumes.
+ * event stream a Responses client consumes.
  *
  * Upstream chunks are `chat.completion.chunk` objects whose `choices[0].delta`
  * carries incremental `content` (assistant text) and/or `tool_calls` (function
@@ -223,11 +215,13 @@ function sse(event: string, data: unknown): string {
  *                       → function_call_arguments.done → output_item.done
  *   response.completed   (with the assembled final `response` object)
  *
- * `feed(chunk)` returns the SSE bytes to forward for that upstream chunk;
- * `finish()` returns the closing `response.completed` event. The generator is
- * intentionally tolerant: malformed/keepalive lines yield nothing.
+ * The translator is intentionally tolerant: malformed/keepalive lines yield
+ * nothing.
  */
-export function createResponsesStreamTranslator(model: string, responseId: string) {
+export function createResponsesStreamTranslator(
+  model: string,
+  responseId: string,
+): ResponsesStreamTranslator {
   let started = false;
   let outputIndex = 0;
 
@@ -389,3 +383,64 @@ export function createResponsesStreamTranslator(model: string, responseId: strin
   return { feed, finish };
 }
 
+/** A source the model cited, as carried by a Responses content-part annotation. */
+export interface ResponsesCitation {
+  url: string;
+  title?: string;
+}
+
+/** What {@link readResponsesOutput} pulls out of a `response` object. */
+export interface ResponsesOutput {
+  /** The assistant's answer, with the output items concatenated. */
+  text: string;
+  /** Cited sources in first-seen order, deduplicated by URL. */
+  citations: ResponsesCitation[];
+}
+
+/**
+ * Read the answer text and cited sources out of a Responses `response` payload.
+ *
+ * This is the inverse of {@link chatToResponse}: it consumes what an endpoint
+ * speaking Responses natively returns, rather than producing it. The Databricks
+ * native web-search tool answers this way, with each source attached as a
+ * `url_citation` annotation on the content part that used it.
+ *
+ * Prefers the flattened `output_text` when the payload carries it, and falls
+ * back to walking `output[].content[].text`. Every field is optional upstream,
+ * so a payload missing any of it yields empty results rather than throwing.
+ */
+export function readResponsesOutput(payload: Record<string, unknown>): ResponsesOutput {
+  const output = Array.isArray(payload.output) ? (payload.output as unknown[]) : [];
+  const texts: string[] = [];
+  const citations: ResponsesCitation[] = [];
+  const seen = new Set<string>();
+
+  for (const rawItem of output) {
+    if (!rawItem || typeof rawItem !== "object") continue;
+    const content = (rawItem as Record<string, unknown>).content;
+    if (!Array.isArray(content)) continue;
+    for (const rawPart of content) {
+      if (!rawPart || typeof rawPart !== "object") continue;
+      const part = rawPart as Record<string, unknown>;
+      const text = str(part.text);
+      if (text) texts.push(text);
+      const annotations = Array.isArray(part.annotations) ? part.annotations : [];
+      for (const rawAnn of annotations) {
+        if (!rawAnn || typeof rawAnn !== "object") continue;
+        const ann = rawAnn as Record<string, unknown>;
+        const url = str(ann.url);
+        if (!url || seen.has(url)) continue;
+        seen.add(url);
+        const title = str(ann.title);
+        citations.push({ url, ...(title ? { title } : {}) });
+      }
+    }
+  }
+
+  return { text: str(payload.output_text) || texts.join("\n").trim(), citations };
+}
+
+/** Coerce an unknown JSON value to a trimmed string, or `""` when it isn't one. */
+function str(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}

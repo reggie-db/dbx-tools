@@ -8,12 +8,7 @@
  * @module
  */
 
-import {
-  object,
-  predicate,
-  type Predicate,
-  type PredicateFunction,
-} from "@dbx-tools/shared-core";
+import { object, predicate, type Predicate, type PredicateFunction } from "@dbx-tools/shared-core";
 import { Minimatch } from "minimatch";
 import { ignorePathMatcher } from "./ignore";
 

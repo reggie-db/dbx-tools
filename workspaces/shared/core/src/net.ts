@@ -127,9 +127,7 @@ class UrlBuilderImpl extends URL {
    * arrays; each is trimmed of boundary slashes and blanks are dropped.
    */
   withPathReplace(...pathSegments: (string | string[])[]): UrlBuilder {
-    const pathnameParts: string[] = [...pathSegments].flatMap((p) =>
-      Array.isArray(p) ? p : [p],
-    );
+    const pathnameParts: string[] = [...pathSegments].flatMap((p) => (Array.isArray(p) ? p : [p]));
     const pathname = pathnameParts
       .map((p) => p.replace(URL_PATH_SEGMENT_TRIM, ""))
       .filter(Boolean)
@@ -242,8 +240,8 @@ export function pathMatch(input: UrlLike, path: string): boolean {
 function defaultUrl(): URL {
   // Reach `window` via `globalThis` so this compiles without the DOM
   // lib (it's `undefined` on the server / in workers without one).
-  const origin = (globalThis as { window?: { location?: { origin?: string } } }).window
-    ?.location?.origin;
+  const origin = (globalThis as { window?: { location?: { origin?: string } } }).window?.location
+    ?.origin;
   if (origin && origin !== "null") {
     const originUrl = parseUrl(origin);
     if (originUrl) {
@@ -257,7 +255,7 @@ function parseUrl(input: string): URL | null {
   if (input && input.includes(URL_SCHEME_SEPARATOR)) {
     try {
       return new URL(input);
-    } catch { }
+    } catch {}
   }
   return null;
 }

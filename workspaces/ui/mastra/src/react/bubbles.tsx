@@ -25,9 +25,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { MarkdownWithEmbeds } from "./embed-slots";
-import { ToolMarkdown } from "./markdown";
 import { ExportMenu } from "./export-menu";
 import { FeedbackControls } from "./feedback-controls";
+import { ToolMarkdown } from "./markdown";
 import { SuggestionPills } from "./suggestion-pills";
 import { collectSuggestions } from "./suggestions";
 import { ToolSessionPill, humanizeToolName } from "./tool-pill";
@@ -87,11 +87,7 @@ const getReasoningText = (parts: UIMessage["parts"]): string =>
 const RoleAvatar = ({ role }: { role: UIMessage["role"] }) => (
   <Avatar className="size-7">
     <AvatarFallback>
-      {role === "assistant" ? (
-        <SparklesIcon className="size-4" />
-      ) : (
-        <UserIcon className="size-4" />
-      )}
+      {role === "assistant" ? <SparklesIcon className="size-4" /> : <UserIcon className="size-4" />}
     </AvatarFallback>
   </Avatar>
 );
@@ -395,8 +391,7 @@ export const AssistantBubble = ({
   // pop in mid-stream. A bubble is "settled" if it isn't the active
   // streaming target - either the agent has returned to `ready` /
   // `error`, or a newer message has taken over the `isLast` slot.
-  const isStreamingThisBubble =
-    isLast && (status === "streaming" || status === "submitted");
+  const isStreamingThisBubble = isLast && (status === "streaming" || status === "submitted");
   const suggestions = isStreamingThisBubble ? [] : collectSuggestions(events);
   // Charts and tables are placed at inline marker positions in
   // the assistant's prose. `prepare_chart` / `render_data` mint
@@ -499,19 +494,13 @@ export const AssistantBubble = ({
                     onClick={handleCopy}
                     aria-label={copied ? "Copied" : "Copy"}
                   >
-                    {copied ? (
-                      <CheckIcon className="size-3" />
-                    ) : (
-                      <CopyIcon className="size-3" />
-                    )}
+                    {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
               </Tooltip>
             )}
-            {onExport && (
-              <ExportMenu onExport={onExport} iconOnly tooltip="Export message" />
-            )}
+            {onExport && <ExportMenu onExport={onExport} iconOnly tooltip="Export message" />}
             {onFeedback && (
               <FeedbackControls
                 onSubmit={onFeedback}
@@ -520,11 +509,7 @@ export const AssistantBubble = ({
             )}
           </div>
         )}
-        <SuggestionPills
-          questions={suggestions}
-          onSelect={onSuggestionClick}
-          className="mt-1"
-        />
+        <SuggestionPills questions={suggestions} onSelect={onSuggestionClick} className="mt-1" />
       </ItemContent>
     </Item>
   );

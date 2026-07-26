@@ -1,8 +1,15 @@
 import { genie, lakebase, server } from "@databricks/appkit";
 import { createApp } from "@dbx-tools/appkit";
-import { brand as emailBrand, plugin as emailPlugin, tool as emailToolModule } from "@dbx-tools/email";
+import {
+  brand as emailBrand,
+  plugin as emailPlugin,
+  tool as emailToolModule,
+} from "@dbx-tools/email";
 import { agents, genie as mastraGenie, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
-import { plugin as webSearchPlugin, tool as webSearchToolModule } from "@dbx-tools/appkit-web-search";
+import {
+  plugin as webSearchPlugin,
+  tool as webSearchToolModule,
+} from "@dbx-tools/appkit-web-search";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";

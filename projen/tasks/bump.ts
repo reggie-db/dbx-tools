@@ -103,7 +103,9 @@ function resolveLocalRegistry(value: string): string | undefined {
 const program = new Command();
 program
   .description("Bump the release version, then commit, tag, and push it")
-  .addOption(new Option("-l, --level <level>", "semver increment").choices([...LEVELS]).default("patch"))
+  .addOption(
+    new Option("-l, --level <level>", "semver increment").choices([...LEVELS]).default("patch"),
+  )
   .option("--prefix <prefix>", "git tag prefix", "v")
   // Declared in the `--no-` form so commander creates a boolean that defaults to
   // `true` and is turned off by `--no-synth` / `--no-version` / ... (the
@@ -157,7 +159,7 @@ program
       const tag = `${opts.prefix}${version}`;
       logger.info(
         `bump ${base.join(".")} -> ${version} (${opts.level}); tag ${tag}` +
-        `${remote ? "" : " [no remote tag]"}`,
+          `${remote ? "" : " [no remote tag]"}`,
       );
 
       const push = opts.push && opts.publish;
@@ -194,7 +196,7 @@ program
       // Local registry (e.g. verdaccio): publish AFTER the tag push so the
       // GitHub release still owns the public registry. Skipped under
       // `--no-version` (nothing bumped to publish).
-      const localRegistry = resolveLocalRegistry(opts.localRegistry)
+      const localRegistry = resolveLocalRegistry(opts.localRegistry);
       const publishToLocalRegistry = opts.version && localRegistry;
       if (opts.version === false && localRegistry) {
         logger.info("skipped local publish (--no-version left package.json unbumped)");

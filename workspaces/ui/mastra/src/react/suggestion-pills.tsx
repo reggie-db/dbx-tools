@@ -20,11 +20,7 @@ export interface SuggestionPillsProps {
  * capsule shape that scales cleanly when text wraps to multiple lines.
  * Disabled when no `onSelect` is provided.
  */
-export const SuggestionPills = ({
-  questions,
-  onSelect,
-  className,
-}: SuggestionPillsProps) => {
+export const SuggestionPills = ({ questions, onSelect, className }: SuggestionPillsProps) => {
   if (questions.length === 0) return null;
   return (
     <div className={cn("flex flex-wrap gap-1.5", className)}>

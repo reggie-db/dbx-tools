@@ -11,7 +11,11 @@
  * @module
  */
 
-import { resolveWebSearchConfig, type ResolvedWebSearchConfig, type WebSearchPluginConfig } from "./config";
+import {
+  resolveWebSearchConfig,
+  type ResolvedWebSearchConfig,
+  type WebSearchPluginConfig,
+} from "./config";
 
 /** The shared resolved config. */
 export interface WebSearchRuntime {

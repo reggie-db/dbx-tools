@@ -1,13 +1,21 @@
-import {
-  feedback,
-  type MastraThread,
-} from "@dbx-tools/shared-mastra";
 import { error as errorUtil, log } from "@dbx-tools/shared-core";
+import { feedback, type MastraThread } from "@dbx-tools/shared-mastra";
+import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
 import { nanoid } from "nanoid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChatView } from "./chat-view";
+import { dedupeSuggestions } from "./suggestions";
+import type {
+  ApprovalDecision,
+  ChatViewProps,
+  FeedbackSubmission,
+  MessageFeedback,
+  ThreadSummary,
+  ToolEvent,
+  ToolProgress,
+} from "./types";
 import { exportChat, type EmbedResolver, type ExportFormat } from "../support/export";
-import { useBrand } from "@dbx-tools/ui-branding/react";
 import {
   useMastraClient,
   useMastraDefaultModel,
@@ -27,17 +35,6 @@ import {
   terminateRunningToolEvents,
   type ThreadSession,
 } from "../support/thread-sessions";
-import { ChatView } from "./chat-view";
-import { dedupeSuggestions } from "./suggestions";
-import type {
-  ApprovalDecision,
-  ChatViewProps,
-  FeedbackSubmission,
-  MessageFeedback,
-  ThreadSummary,
-  ToolEvent,
-  ToolProgress,
-} from "./types";
 
 // Self-contained drop-in chat. `useMastraChat` drives the conversation
 // over `@mastra/client-js`: `agent.stream()` returns a Response
@@ -88,9 +85,7 @@ const TITLE_PREVIEW_MAX = 60;
  */
 const deriveThreadTitle = (text: string): string => {
   const clean = text.trim().replace(/\s+/g, " ");
-  return clean.length > TITLE_PREVIEW_MAX
-    ? `${clean.slice(0, TITLE_PREVIEW_MAX - 1)}…`
-    : clean;
+  return clean.length > TITLE_PREVIEW_MAX ? `${clean.slice(0, TITLE_PREVIEW_MAX - 1)}…` : clean;
 };
 
 /**
@@ -155,8 +150,7 @@ const storeStoredSidebarOpen = (key: string, open: boolean): void => {
  * when absent - which is the "no feedback for this turn" signal.
  */
 const readMlflowTraceId = (stream: unknown): string | undefined => {
-  const headers = (stream as { headers?: { get?: (name: string) => string | null } })
-    ?.headers;
+  const headers = (stream as { headers?: { get?: (name: string) => string | null } })?.headers;
   const raw = headers?.get?.(feedback.MLFLOW_TRACE_ID_HEADER);
   return raw?.trim() || undefined;
 };
@@ -316,9 +310,7 @@ export const useMastraChat = (
   // without this the sidebar wouldn't show a brand-new conversation
   // until the delayed post-turn refresh. Keyed by thread id; each entry
   // is pruned once the real server row supersedes it.
-  const [optimisticThreads, setOptimisticThreads] = useState<
-    Record<string, ThreadSummary>
-  >({});
+  const [optimisticThreads, setOptimisticThreads] = useState<Record<string, ThreadSummary>>({});
   // Optimistic title overrides for threads the user just renamed, keyed
   // by thread id. Applied over the server rows in `sidebarThreads` so the
   // new name shows instantly; each entry is dropped once the server list
@@ -329,9 +321,7 @@ export const useMastraChat = (
   // first question so the row stops reading "New conversation"; dropped
   // as soon as the server's auto-generated title lands (see the prune
   // effect below). A manual rename (`renamedThreads`) still wins.
-  const [provisionalTitles, setProvisionalTitles] = useState<Record<string, string>>(
-    {},
-  );
+  const [provisionalTitles, setProvisionalTitles] = useState<Record<string, string>>({});
   // Surface the active thread in the sidebar immediately (called when its
   // first message is sent). Upserts an untitled row stamped "now" so it
   // sorts to the top; the server row replaces it on the next refresh.
@@ -395,10 +385,7 @@ export const useMastraChat = (
     [getSession, notifySessions],
   );
   const activeKey = sessionKey(activeThreadId);
-  const activeSession = useMemo(
-    () => getSession(activeKey),
-    [activeKey, getSession, sessionsTick],
-  );
+  const activeSession = useMemo(() => getSession(activeKey), [activeKey, getSession, sessionsTick]);
   const streamingThreadIds = useMemo(() => {
     const ids: string[] = [];
     for (const [id, session] of sessionsRef.current.entries()) {
@@ -469,8 +456,9 @@ export const useMastraChat = (
       let assistantReasoning = "";
       if (existing) {
         for (const part of existing.parts) {
-          if (part.type === "text") textSegments.push(part.text);
-          else if (part.type === "reasoning") {
+          if (part.type === "text") {
+            textSegments.push(part.text);
+          } else if (part.type === "reasoning") {
             assistantReasoning += (part as { text?: string }).text ?? "";
           }
         }
@@ -519,9 +507,7 @@ export const useMastraChat = (
         if (started) return;
         started = true;
         updateSession(threadId, (session) =>
-          session.status === "streaming"
-            ? session
-            : { ...session, status: "streaming" },
+          session.status === "streaming" ? session : { ...session, status: "streaming" },
         );
       };
 
@@ -600,8 +586,7 @@ export const useMastraChat = (
                   break;
                 }
                 updateSession(threadId, (session) => {
-                  const existingApprovals =
-                    session.pendingApprovalsByMessage[assistantId] ?? [];
+                  const existingApprovals = session.pendingApprovalsByMessage[assistantId] ?? [];
                   if (existingApprovals.some((a) => a.toolCallId === toolCallId)) {
                     return session;
                   }
@@ -647,9 +632,7 @@ export const useMastraChat = (
                 const toolCallId = chunk.payload?.toolCallId;
                 if (typeof toolCallId !== "string") break;
                 patchToolEvents((list) =>
-                  list.map((e) =>
-                    e.id === toolCallId ? { ...e, status: "error" } : e,
-                  ),
+                  list.map((e) => (e.id === toolCallId ? { ...e, status: "error" } : e)),
                 );
                 break;
               }
@@ -664,9 +647,7 @@ export const useMastraChat = (
                 if (!isToolProgress(output)) break;
                 patchToolEvents((list) =>
                   list.map((e) =>
-                    e.id === toolCallId
-                      ? { ...e, progress: [...(e.progress ?? []), output] }
-                      : e,
+                    e.id === toolCallId ? { ...e, progress: [...(e.progress ?? []), output] } : e,
                   ),
                 );
                 break;
@@ -752,8 +733,7 @@ export const useMastraChat = (
           ...session,
           error: errorUtil.toError(caught),
           status: "error",
-          abortController:
-            session.abortController === controller ? null : session.abortController,
+          abortController: session.abortController === controller ? null : session.abortController,
           runId: runIdRef.current,
         }));
       }
@@ -773,8 +753,7 @@ export const useMastraChat = (
       // Capture this run's thread + model at send time and pass them per
       // call, so a run keeps its own routing even if the user switches
       // threads or changes the model picker while it streams.
-      const streamThreadId =
-        threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
+      const streamThreadId = threadId === DEFAULT_THREAD_SESSION_KEY ? undefined : threadId;
       const model = modelRef.current || undefined;
       return driveStream(threadId, assistantId, (signal) => {
         const messages = history.flatMap((m) =>
@@ -880,8 +859,7 @@ export const useMastraChat = (
         toolCallId,
         runId,
       });
-      const streamThreadId =
-        activeKey === DEFAULT_THREAD_SESSION_KEY ? undefined : activeKey;
+      const streamThreadId = activeKey === DEFAULT_THREAD_SESSION_KEY ? undefined : activeKey;
       await driveStream(activeKey, assistantId, (signal) =>
         decision.approved
           ? mastraClient.approveToolCallStream(agentId, {
@@ -1103,9 +1081,7 @@ export const useMastraChat = (
       if (!title) return;
       setRenamedThreads((prev) => ({ ...prev, [threadId]: title }));
       setOptimisticThreads((prev) =>
-        prev[threadId]
-          ? { ...prev, [threadId]: { ...prev[threadId], id: threadId, title } }
-          : prev,
+        prev[threadId] ? { ...prev, [threadId]: { ...prev[threadId], id: threadId, title } } : prev,
       );
       try {
         await mastraClient.renameThread(threadId, title, { agentId });
@@ -1131,17 +1107,14 @@ export const useMastraChat = (
     const lastUserText = getSession(threadId).lastUserText;
     if (!lastUserText) return;
     const prev = getSession(threadId).messages;
-    const lastAssistant =
-      prev.length > 0 && prev.at(-1)?.role === "assistant" ? prev.at(-1) : null;
+    const lastAssistant = prev.length > 0 && prev.at(-1)?.role === "assistant" ? prev.at(-1) : null;
     const trimmed = lastAssistant ? prev.slice(0, -1) : prev;
     if (lastAssistant) {
       updateSession(threadId, (session) => {
-        const { [lastAssistant.id]: _events, ...toolEvents } =
-          session.toolEventsByMessage;
+        const { [lastAssistant.id]: _events, ...toolEvents } = session.toolEventsByMessage;
         const { [lastAssistant.id]: _approvals, ...pendingApprovals } =
           session.pendingApprovalsByMessage;
-        const { [lastAssistant.id]: _feedback, ...feedback } =
-          session.feedbackByMessage;
+        const { [lastAssistant.id]: _feedback, ...feedback } = session.feedbackByMessage;
         return {
           ...session,
           toolEventsByMessage: toolEvents,
@@ -1244,15 +1217,7 @@ export const useMastraChat = (
         historyInFlightRef.current = false;
         setIsLoadingMore(false);
       });
-  }, [
-    activeKey,
-    activeThreadId,
-    getSession,
-    mastraClient,
-    agentId,
-    updateSession,
-    writeMessages,
-  ]);
+  }, [activeKey, activeThreadId, getSession, mastraClient, agentId, updateSession, writeMessages]);
 
   // Chat export (opt-in). Resolves `[chart:<id>]` / `[data:<id>]` embeds
   // straight off the client so the export inlines the same charts /
@@ -1291,8 +1256,7 @@ export const useMastraChat = (
   const exportConversation = useCallback(
     async (format: ExportFormat) => {
       const title =
-        (activeThreadId && threads.find((t) => t.id === activeThreadId)?.title) ||
-        "Conversation";
+        (activeThreadId && threads.find((t) => t.id === activeThreadId)?.title) || "Conversation";
       try {
         await exportChat({
           messages: getSession(activeKey).messages,
@@ -1309,15 +1273,7 @@ export const useMastraChat = (
         });
       }
     },
-    [
-      exportResolver,
-      activeThreadId,
-      activeKey,
-      getSession,
-      threads,
-      exportUserLabel,
-      exportBrand,
-    ],
+    [exportResolver, activeThreadId, activeKey, getSession, threads, exportUserLabel, exportBrand],
   );
   const exportMessage = useCallback(
     async (message: UIMessage, format: ExportFormat) => {
@@ -1364,9 +1320,7 @@ export const useMastraChat = (
       try {
         const result = await mastraClient.feedback({
           traceId,
-          ...(submission.value !== undefined
-            ? { value: submission.value === "up" }
-            : {}),
+          ...(submission.value !== undefined ? { value: submission.value === "up" } : {}),
           ...(submission.comment ? { comment: submission.comment } : {}),
         });
         if (!result.ok) {
@@ -1424,9 +1378,7 @@ export const useMastraChat = (
   // changes aren't masked by a stale override.
   useEffect(() => {
     const settled = threads
-      .filter(
-        (t) => renamedThreads[t.id] !== undefined && t.title === renamedThreads[t.id],
-      )
+      .filter((t) => renamedThreads[t.id] !== undefined && t.title === renamedThreads[t.id])
       .map((t) => t.id);
     if (settled.length === 0) return;
     setRenamedThreads((prev) => {

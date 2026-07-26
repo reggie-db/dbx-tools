@@ -29,7 +29,7 @@ Key features:
   background-streaming states, plus a per-row cancel for a running thread.
 - Concurrent threads: run several conversations at once, switch between them
   while each keeps streaming, and cancel any one independently (per-thread abort
-  + routing, no shared client state).
+  - routing, no shared client state).
 - Mid-turn steering queue: messages submitted while a turn streams stack up as
   pending steers (they drain oldest-first when the turn ends); each queued item
   can be sent now (interrupting the current turn), removed, or dragged to

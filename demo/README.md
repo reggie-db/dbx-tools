@@ -9,10 +9,10 @@ standalone downstream consumer: its own project, its own pnpm workspace, pulling
 `@dbx-tools/*` from a registry exactly like any external app would. Two small
 packages:
 
-| Package | Tag | What you write |
-| --- | --- | --- |
+| Package                                    | Tag      | What you write                               |
+| ------------------------------------------ | -------- | -------------------------------------------- |
 | [`server/appkit-demo`](server/appkit-demo) | `server` | ~30 lines: an AppKit `createApp` plugin list |
-| [`app/appkit-demo`](app/appkit-demo) | `app` | one line: `<MastraChat/>` |
+| [`app/appkit-demo`](app/appkit-demo)       | `app`    | one line: `<MastraChat/>`                    |
 
 Everything else — streaming, the Genie toolset, the approval card, Lakebase-backed
 memory, model selection, history pagination, and the thread switcher — comes from
@@ -27,7 +27,7 @@ await createApp({
     server({ host, staticPath: clientDist }),
     genie(),
     lakebase(),
-    email(),                       // approval-gated send_email tool transport
+    email(), // approval-gated send_email tool transport
     mastra({ storage: true, memory: true, agents: support }),
   ],
   cache: { enabled: true },

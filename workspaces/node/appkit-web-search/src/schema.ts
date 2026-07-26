@@ -58,9 +58,7 @@ export type WebSearchCitation = z.infer<typeof webSearchCitationSchema>;
 /** Schema for the `web_search` tool output. */
 export const webSearchResultSchema = z.object({
   query: z.string().describe("Echo of the query that was searched."),
-  answer: z
-    .string()
-    .describe("The model's answer, synthesized from live web results."),
+  answer: z.string().describe("The model's answer, synthesized from live web results."),
   citations: z
     .array(webSearchCitationSchema)
     .describe(

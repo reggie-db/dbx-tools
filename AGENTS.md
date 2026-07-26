@@ -528,7 +528,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   Node can't run the `.ts` directly, and the obvious fix - a
   `#!/usr/bin/env -S npx tsx` shebang - only works inside a workspace checkout,
   because `npx` resolves tsx from the CALLER'S cwd. After `npm i -g
-  @dbx-tools/cli` that cwd is unrelated to the package, so every first run
+@dbx-tools/cli` that cwd is unrelated to the package, so every first run
   stalled to download tsx (and failed outright offline). So the `cli` tag makes
   `tsx` a RUNTIME dep (not the baseline devDep, which it removes) and emits
   `bin/<name>.mjs` beside each `bin/<name>.ts` (`cli-bin.ts`,
@@ -548,7 +548,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   command deliberately DIVERGE (`@dbx-tools/cli-model-proxy` ships
   `dbx-tools-model-proxy`), so `npx @dbx-tools/cli-model-proxy` can't pick a bin
   on its own - name the command: `npx --package @dbx-tools/cli-model-proxy
-  dbx-tools-model-proxy`, or just install it.
+dbx-tools-model-proxy`, or just install it.
 - **The root keeps the engine itself resolvable across synths** via
   `engineSelfDependency()` (`project.ts`): resolves the `@dbx-tools/cli`
   package (`dbx-tools`) via `require.resolve` when installed; if that
@@ -679,12 +679,12 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   returns `{ agentId, model, displayName }` with the server-humanized name so
   the label never flashes a raw id or waits on `/models`. `model`/`displayName`
   are null for a dynamic (call-time) model. Route: `MASTRA_ROUTES.defaultModel`
-  + `DefaultModelResponseSchema` (shared-mastra), handler + `BuiltAgents.defaultModels`
-  (appkit-mastra), client `defaultModel()` + `useMastraDefaultModel` hook
-  (ui-mastra). This is deliberately an endpoint, NOT a field on the static
-  `clientConfig` (per-agent + can be dynamic; the config sanitizer also redacts
-  values matching env vars like `DATABRICKS_SERVING_ENDPOINT_NAME`). The picker
-  shows the humanized name or a neutral "Default" - no "server default" text.
+  - `DefaultModelResponseSchema` (shared-mastra), handler + `BuiltAgents.defaultModels`
+    (appkit-mastra), client `defaultModel()` + `useMastraDefaultModel` hook
+    (ui-mastra). This is deliberately an endpoint, NOT a field on the static
+    `clientConfig` (per-agent + can be dynamic; the config sanitizer also redacts
+    values matching env vars like `DATABRICKS_SERVING_ENDPOINT_NAME`). The picker
+    shows the humanized name or a neutral "Default" - no "server default" text.
 - **Chat export (`ui-mastra/src/support/export.ts`)** produces `pdf` |
   `markdown`. `pdf` renders one branded, self-contained HTML document and drives
   it through a hidden `<iframe>` + `print()` (Save-as-PDF dialog, no popup tab;

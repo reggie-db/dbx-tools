@@ -149,8 +149,7 @@ function configureRootPackage(project: javascript.NodeProject): void {
  * a normalized git remote), in npm's `git+https://.../repo.git` form.
  */
 function applyRepository(project: javascript.NodeProject, override?: string): void {
-  const url =
-    override && override.length ? override : coreProject.repositoryUrl(repoRoot, "npm");
+  const url = override && override.length ? override : coreProject.repositoryUrl(repoRoot, "npm");
   if (!url) return;
   const root = project.parent ?? project;
   const directory = toPosix(relative(resolve(root.outdir), resolve(project.outdir)));
@@ -223,10 +222,7 @@ export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, T
  * / `app` tags carry their standard export layout and a package only re-declare
  * `exports` when it deviates.
  */
-export function applyExports(
-  pkg: javascript.NodeProject,
-  exports: Record<string, string>,
-): void {
+export function applyExports(pkg: javascript.NodeProject, exports: Record<string, string>): void {
   pkg.package.addField("exports", exports);
 }
 
@@ -240,10 +236,7 @@ export function applyExports(
  * New subpaths are inserted before the conventional trailing `./package.json`
  * entry when present, so ordering stays `.` -> subpaths -> `./package.json`.
  */
-export function addExports(
-  pkg: javascript.NodeProject,
-  exports: Record<string, string>,
-): void {
+export function addExports(pkg: javascript.NodeProject, exports: Record<string, string>): void {
   const current = (pkg.package.manifest.exports ?? {}) as Record<string, string>;
   const { "./package.json": packageJson, ...rest } = current;
   pkg.package.addField("exports", {
@@ -329,13 +322,13 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     devDeps: ["@types/node@^24.6.0"],
     ...(isRoot
       ? {
-        prettier: true,
-        prettierOptions: {
-          settings: PRETTIER_SETTINGS,
-          ignoreFile: true,
-          ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns()] },
-        },
-      }
+          prettier: true,
+          prettierOptions: {
+            settings: PRETTIER_SETTINGS,
+            ignoreFile: true,
+            ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns()] },
+          },
+        }
       : {}),
     ...options,
     ...copiedGitIgnoreOptions(options),
@@ -391,9 +384,9 @@ const DEV_DEPS_ROOT: string[] = ["tsx@^4.23.0", "typescript@^5.9.3"];
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export interface DBXToolsProjectOptions
   extends
-  Partial<javascript.NodeProjectOptions>,
-  DBXToolsConfigOptions,
-  DBXToolsPNPMWorkspaceOptions {
+    Partial<javascript.NodeProjectOptions>,
+    DBXToolsConfigOptions,
+    DBXToolsPNPMWorkspaceOptions {
   /**
    * The npm scope for generated package names (`@<scope>/<seg-...>`). Defaults to
    * the (resolved) project name; a leading `@` is optional.
@@ -496,7 +489,8 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
  */
 export class DBXToolsTypeScriptProject
   extends typescript.TypeScriptProject
-  implements DBXToolsProject {
+  implements DBXToolsProject
+{
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
   pnpmWorkspace?: DBXToolsPNPMWorkspace;
@@ -965,7 +959,6 @@ function* projects(project: Project): Generator<Project> {
   }
 }
 
-
 /**
  * Filters selecting which projects an {@link applyToProjects} call runs its
  * callback(s) on. All provided filters are AND-ed; every string value is a glob
@@ -997,16 +990,14 @@ export interface ApplyToProjectsOptions {
 }
 
 /** {@link ApplyToProjectsOptions} for the default DBXTools-only selection (callback gets {@link DBXToolsProject}). */
-type ApplyToDBXToolsProjectsOptions =
-  Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
-    includeNonDBXToolsProjects?: false;
-  };
+type ApplyToDBXToolsProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
+  includeNonDBXToolsProjects?: false;
+};
 
 /** {@link ApplyToProjectsOptions} opting into all projen projects (callback gets the base {@link Project}). */
-type ApplyToAllProjectsOptions =
-  Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
-    includeNonDBXToolsProjects: true;
-  };
+type ApplyToAllProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
+  includeNonDBXToolsProjects: true;
+};
 
 /**
  * Run one or more callbacks against every project in `construct`'s subtree that
@@ -1030,39 +1021,49 @@ type ApplyToAllProjectsOptions =
  *   p.addDeps("@dbx-tools/shared-core@workspace:*");
  * });
  */
-export function applyToProjects(construct: IConstruct,
+export function applyToProjects(
+  construct: IConstruct,
   ...args:
     | [ApplyToDBXToolsProjectsOptions, ...OneOrMany<(project: DBXToolsProject) => void>]
     | OneOrMany<(project: DBXToolsProject) => void>
-): void
+): void;
 
-export function applyToProjects(construct: IConstruct,
-  ...args:
-    | [ApplyToAllProjectsOptions, ...OneOrMany<(project: Project) => void>]
-): void
+export function applyToProjects(
+  construct: IConstruct,
+  ...args: [ApplyToAllProjectsOptions, ...OneOrMany<(project: Project) => void>]
+): void;
 
-export function applyToProjects<P extends Project>(construct: IConstruct,
+export function applyToProjects<P extends Project>(
+  construct: IConstruct,
   ...args:
-    | [ApplyToProjectsOptions, ...OneOrMany<(project: P) => void>]
-    | OneOrMany<(project: P) => void>
+    [ApplyToProjectsOptions, ...OneOrMany<(project: P) => void>] | OneOrMany<(project: P) => void>
 ): void {
   const [first, ...rest] = args;
   const hasOptions = typeof first !== "function";
-  const options = hasOptions ? first as ApplyToProjectsOptions : undefined
-  const callbacks = (
-    hasOptions ? rest : args
-  ) as OneOrMany<(project: Project) => void>;
-  let pred = projectPredicate.isProject()
+  const options = hasOptions ? (first as ApplyToProjectsOptions) : undefined;
+  const callbacks = (hasOptions ? rest : args) as OneOrMany<(project: Project) => void>;
+  let pred = projectPredicate.isProject();
   if (!options?.includeNonDBXToolsProjects) pred = pred.and(projectPredicate.isDBXToolsProject());
   if (!options?.includeRoots) pred = pred.and((p) => p.parent != null);
-  if (options?.identifierPackageName) pred = pred.and(projectPredicate.hasIdentifierPackageName(...object.toOneOrMany(options.identifierPackageName)));
+  if (options?.identifierPackageName)
+    pred = pred.and(
+      projectPredicate.hasIdentifierPackageName(
+        ...object.toOneOrMany(options.identifierPackageName),
+      ),
+    );
   if (options?.name) pred = pred.and(projectPredicate.hasName(...object.toOneOrMany(options.name)));
-  if (options?.identifierScope) pred = pred.and(projectPredicate.hasIdentifierScope(...object.toOneOrMany(options.identifierScope)));
-  if (options?.identifierName) pred = pred.and(projectPredicate.hasIdentifierName(...object.toOneOrMany(options.identifierName)));
+  if (options?.identifierScope)
+    pred = pred.and(
+      projectPredicate.hasIdentifierScope(...object.toOneOrMany(options.identifierScope)),
+    );
+  if (options?.identifierName)
+    pred = pred.and(
+      projectPredicate.hasIdentifierName(...object.toOneOrMany(options.identifierName)),
+    );
   if (options?.tags) pred = pred.and(projectPredicate.hasTag(...object.toOneOrMany(options.tags)));
   if (options?.path) pred = pred.and(projectPredicate.hasPath(...object.toOneOrMany(options.path)));
   const projectMixin = mixin.create(pred, (p) => {
     callbacks.forEach((callback) => callback(p as Project));
-  })
+  });
   construct.with(projectMixin);
 }

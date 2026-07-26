@@ -170,7 +170,8 @@ function slugifyApiFiles(outDir) {
     slug === "index" ? `${base}/api/${pkgSlug}/` : `${base}/api/${pkgSlug}/${slug}`;
   // A target may arrive as the original dotted name (pre-rename) or already a
   // slug; normalize either to the final slug.
-  const targetSlug = (target) => rename.get(target) ?? (slugs.has(target) ? target : apiSlug(target));
+  const targetSlug = (target) =>
+    rename.get(target) ?? (slugs.has(target) ? target : apiSlug(target));
 
   let droppedTotal = 0;
   for (const file of files) {
@@ -214,7 +215,13 @@ function stripReExports(indexPath) {
   let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
   if (end === -1) end = lines.length;
   lines.splice(start, end - start);
-  write(indexPath, `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`);
+  write(
+    indexPath,
+    `${lines
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trimEnd()}\n`,
+  );
 }
 
 function addFrontmatter(file, fallbackTitle, sourcePath) {
@@ -394,9 +401,7 @@ function generatePackageApi(pkg) {
   // stubs was produced there's nothing worth publishing, so drop the dir.
   // Test against the flat TypeDoc names, before slugification rewrites them.
   const hasSymbols = mdFiles.some((p) =>
-    /\.(Function|Interface|TypeAlias|Enumeration|Variable|Class)\./.test(
-      path.basename(p),
-    ),
+    /\.(Function|Interface|TypeAlias|Enumeration|Variable|Class)\./.test(path.basename(p)),
   );
   if (!hasSymbols) {
     fs.rmSync(outDir, { recursive: true, force: true });

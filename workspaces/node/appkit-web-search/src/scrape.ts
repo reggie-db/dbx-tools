@@ -104,7 +104,9 @@ export async function runScrapeSearch(
   const answer =
     citations.length > 0
       ? `Web results for "${request.query}" (no Databricks web-search model is deployed in this workspace, so these are unsynthesized search results - read the citations):\n\n` +
-        citations.map((c, n) => `${n + 1}. ${c.title}${c.snippet ? ` - ${c.snippet}` : ""} (${c.url})`).join("\n")
+        citations
+          .map((c, n) => `${n + 1}. ${c.title}${c.snippet ? ` - ${c.snippet}` : ""} (${c.url})`)
+          .join("\n")
       : `No web results found for "${request.query}".`;
   logger.debug("scraped", {
     query: request.query,

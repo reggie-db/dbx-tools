@@ -1,4 +1,5 @@
 import { string } from "@dbx-tools/shared-core";
+import { type ChatMessage, type ChatRole, openaiChat } from "@dbx-tools/shared-model";
 /**
  * Repairs Mastra / AI SDK message replays sent to Databricks Model
  * Serving before they hit the OpenAI-compatible `/chat/completions`
@@ -6,43 +7,46 @@ import { string } from "@dbx-tools/shared-core";
  */
 
 /**
- * OpenAI-flavoured chat message shape we need to mutate. We do not
- * import the OpenAI / AI SDK types because both packages keep these
- * fields under internal namespaces; the wire payload is the contract
- * here and it's stable enough to inline.
+ * A chat message as it arrives on the serving wire, plus the extended-thinking
+ * fields Databricks-hosted Claude adds. The OpenAI-standard part of the shape
+ * is {@link ChatMessage} from `@dbx-tools/shared-model`; only the provider
+ * extensions this module strips are declared here.
  */
-export interface ServingChatMessage {
-  role: "system" | "user" | "assistant" | "tool" | "reasoning";
-  content?: string | ServingContentPart[];
-  tool_calls?: Array<{ id: string; type: string; function: unknown }>;
-  tool_call_id?: string;
+export interface ServingChatMessage extends ChatMessage {
+  /** Narrowed to the roles this repair pass reasons about, plus Claude's `reasoning` turn. */
+  role: ChatRole | "reasoning";
   reasoning?: unknown;
   reasoning_content?: unknown;
 }
-
-type ServingContentPart = {
-  type?: string;
-  text?: string;
-  [key: string]: unknown;
-};
 
 const REASONING_PART_TYPES = new Set(["reasoning", "thinking", "redacted_thinking"]);
 
 /**
  * Parse, sanitize, and re-serialize a `/serving-endpoints/...` POST
  * body. Returns the original string verbatim when the body is not
- * JSON, has no `messages`, or no rewrite was needed.
+ * JSON or no rewrite was needed.
  */
 export function rewriteServingBody(body: string): string {
-  let parsed: { messages?: unknown };
+  let parsed: Record<string, unknown>;
   try {
-    parsed = JSON.parse(body);
+    parsed = JSON.parse(body) as Record<string, unknown>;
   } catch {
     return body;
   }
-  if (!Array.isArray(parsed.messages)) return body;
-  const messages = parsed.messages as ServingChatMessage[];
-  const changed = stripReasoningFromServingMessages(messages) || repairAssistantPrefill(messages);
+
+  // Runs regardless of `messages`: Databricks refuses to parse a body carrying
+  // an unknown top-level field, so this failure is not specific to a transcript.
+  let changed = openaiChat.stripUnsupportedChatFields(parsed).length > 0;
+
+  if (Array.isArray(parsed.messages)) {
+    const messages = parsed.messages as ServingChatMessage[];
+    // Evaluated eagerly, not short-circuited: one transcript can need both
+    // reasoning blocks stripped AND a trailing assistant prefill folded back.
+    const stripped = stripReasoningFromServingMessages(messages);
+    const repaired = repairAssistantPrefill(messages);
+    changed = changed || stripped || repaired;
+  }
+
   return changed ? JSON.stringify(parsed) : body;
 }
 
@@ -145,15 +149,19 @@ export function repairAssistantPrefill(messages: ServingChatMessage[]): boolean 
   return true;
 }
 
+/**
+ * Flatten content to the prose a human would read: text parts only, separated
+ * by blank lines, since the result is spliced into another turn's message body.
+ */
 function textFromServingContent(content: ServingChatMessage["content"]): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((part) => part?.type === "text" && typeof part.text === "string")
-    .map((part) => part.text as string)
-    .join("\n\n");
+  return openaiChat.chatContentToText(content, { separator: "\n\n", types: ["text"] });
 }
 
+/**
+ * Whether a turn carries nothing worth replaying. Deliberately stricter than
+ * "has no text": a part of any other type (an image, a cache marker) counts as
+ * content, so a message holding one is kept even though it has no prose.
+ */
 function isEmptyServingContent(content: ServingChatMessage["content"]): boolean {
   if (content === undefined) return true;
   if (typeof content === "string") return content.trim().length === 0;

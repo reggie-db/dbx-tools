@@ -23,12 +23,8 @@
  * @module
  */
 
-import {
-  marker as markers,
-  type Chart,
-  type StatementData,
-} from "@dbx-tools/shared-mastra";
 import { string } from "@dbx-tools/shared-core";
+import { marker as markers, type Chart, type StatementData } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import * as echarts from "echarts";
 import { marked } from "marked";
@@ -188,9 +184,7 @@ function printViaHiddenIframe(html: string, downloadName: string): void {
 
 /** One slice of a message: prose, a chart embed, or a data embed. */
 type Segment =
-  | { kind: "text"; text: string }
-  | { kind: "chart"; id: string }
-  | { kind: "data"; id: string };
+  { kind: "text"; text: string } | { kind: "chart"; id: string } | { kind: "data"; id: string };
 
 /**
  * Split message text into prose / chart / data segments at
@@ -268,19 +262,14 @@ async function buildHtmlDocument(
 }
 
 /** Render one message's body (prose + inlined charts / tables) to HTML. */
-async function messageBodyHtml(
-  message: UIMessage,
-  resolver: EmbedResolver,
-): Promise<string> {
+async function messageBodyHtml(message: UIMessage, resolver: EmbedResolver): Promise<string> {
   const isAssistant = message.role === "assistant";
   const parts: string[] = [];
   for (const seg of splitSegments(messageText(message))) {
     if (seg.kind === "text") {
       if (!seg.text.trim()) continue;
       parts.push(
-        isAssistant
-          ? markdownToHtml(seg.text)
-          : `<p class="plain">${escapeHtml(seg.text)}</p>`,
+        isAssistant ? markdownToHtml(seg.text) : `<p class="plain">${escapeHtml(seg.text)}</p>`,
       );
       continue;
     }
@@ -320,9 +309,7 @@ async function chartSvg(resolver: EmbedResolver, id: string): Promise<string | n
       height: CHART_HEIGHT_PX,
     });
     try {
-      instance.setOption(
-        normalizeChartOption(chart.result.option) as echarts.EChartsCoreOption,
-      );
+      instance.setOption(normalizeChartOption(chart.result.option) as echarts.EChartsCoreOption);
       return instance.renderToSVGString();
     } finally {
       instance.dispose();
@@ -333,21 +320,14 @@ async function chartSvg(resolver: EmbedResolver, id: string): Promise<string | n
 }
 
 /** Resolve a data id and render its rows to an HTML table. `null` on miss. */
-async function dataTableHtml(
-  resolver: EmbedResolver,
-  id: string,
-): Promise<string | null> {
+async function dataTableHtml(resolver: EmbedResolver, id: string): Promise<string | null> {
   const data = await safeStatement(resolver, id);
   if (!data || data.rows.length === 0) return null;
-  const head = data.columns
-    .map((c) => `<th>${escapeHtml(string.toLabel(c))}</th>`)
-    .join("");
+  const head = data.columns.map((c) => `<th>${escapeHtml(string.toLabel(c))}</th>`).join("");
   const body = data.rows
     .map(
       (row) =>
-        `<tr>${data.columns
-          .map((c) => `<td>${escapeHtml(cellText(row[c]))}</td>`)
-          .join("")}</tr>`,
+        `<tr>${data.columns.map((c) => `<td>${escapeHtml(cellText(row[c]))}</td>`).join("")}</tr>`,
     )
     .join("");
   const note = data.truncated
@@ -379,10 +359,7 @@ async function buildMarkdown(
 }
 
 /** Render one message's body to Markdown (charts noted, tables as GFM). */
-async function messageBodyMarkdown(
-  message: UIMessage,
-  resolver: EmbedResolver,
-): Promise<string> {
+async function messageBodyMarkdown(message: UIMessage, resolver: EmbedResolver): Promise<string> {
   const parts: string[] = [];
   for (const seg of splitSegments(messageText(message))) {
     if (seg.kind === "text") {
@@ -405,17 +382,13 @@ function chartTitle(chart: Chart): string {
   const option = chart.result?.option as { title?: unknown } | undefined;
   const title = option?.title;
   const text =
-    (Array.isArray(title) ? title[0]?.text : (title as { text?: unknown })?.text) ??
-    undefined;
+    (Array.isArray(title) ? title[0]?.text : (title as { text?: unknown })?.text) ?? undefined;
   const label = typeof text === "string" ? text.trim() : "";
   return label || `${chart.result?.chartType ?? "chart"} chart`;
 }
 
 /** Render statement rows to a GFM table. `null` on miss / empty. */
-async function dataTableMarkdown(
-  resolver: EmbedResolver,
-  id: string,
-): Promise<string | null> {
+async function dataTableMarkdown(resolver: EmbedResolver, id: string): Promise<string | null> {
   const data = await safeStatement(resolver, id);
   if (!data || data.rows.length === 0) return null;
   const header = `| ${data.columns.map((c) => mdCell(string.toLabel(c))).join(" | ")} |`;
@@ -423,19 +396,14 @@ async function dataTableMarkdown(
   const rows = data.rows.map(
     (row) => `| ${data.columns.map((c) => mdCell(cellText(row[c]))).join(" | ")} |`,
   );
-  const note = data.truncated
-    ? `\n\n_Showing ${data.rows.length} of ${data.rowCount} rows._`
-    : "";
+  const note = data.truncated ? `\n\n_Showing ${data.rows.length} of ${data.rowCount} rows._` : "";
   return `${[header, sep, ...rows].join("\n")}${note}`;
 }
 
 /* -------------------------------- helpers -------------------------------- */
 
 /** Resolve a chart id, swallowing errors (best-effort export). */
-async function safeChart(
-  resolver: EmbedResolver,
-  id: string,
-): Promise<Chart | undefined> {
+async function safeChart(resolver: EmbedResolver, id: string): Promise<Chart | undefined> {
   try {
     return await resolver.chart(id);
   } catch {

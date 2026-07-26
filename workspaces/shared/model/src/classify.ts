@@ -34,6 +34,34 @@ const CHAT_TASK = "llm/v1/chat";
 /** Task hint Databricks stamps on embedding endpoints. */
 const EMBEDDING_TASK = "llm/v1/embeddings";
 
+/** What an endpoint can be asked to do, as derived by {@link endpointCapabilities}. */
+export interface EndpointCapabilities {
+  /** OpenAI chat/completions + Responses: the surface a chat agent needs. */
+  chat: boolean;
+  /** Embedding (vector) endpoint. */
+  embedding: boolean;
+  /** Function / tool calling. Every chat endpoint on Databricks supports it. */
+  tools: boolean;
+}
+
+/**
+ * Derive an endpoint's capabilities from its Databricks task hint and its
+ * classified {@link ModelClass}, so consumers filter on capability instead of
+ * re-deriving it from raw `task` / `class` strings.
+ *
+ * Either signal alone is enough: the task hint is authoritative when present,
+ * and the class covers endpoints Databricks left untasked but the classifier
+ * recognized. Embedding wins over chat when both point at it, since the two are
+ * not interchangeable.
+ */
+export function endpointCapabilities(endpoint: ServingEndpointSummary): EndpointCapabilities {
+  const embedding = endpoint.task === EMBEDDING_TASK || endpoint.class === ModelClass.Embedding;
+  // Every non-embedding class is a chat band, so "classified but not embedding"
+  // is the class-side test for chat capability.
+  const chat = !embedding && (endpoint.task === CHAT_TASK || endpoint.class !== undefined);
+  return { chat, embedding, tools: chat };
+}
+
 /** Family-heuristic classification of a single endpoint name. */
 export interface FamilyClass {
   /** Chat capability band the family maps to (never embedding). */

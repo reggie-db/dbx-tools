@@ -26,8 +26,7 @@ const appRoot = fileURLToPath(new URL(".", import.meta.url));
 // this app's single copy so the linked package and the app share one React.
 // Aliased to the package DIRECTORY (not index.js) so subpaths like
 // `react/jsx-runtime` still resolve. Harmless when unlinked.
-const pkgDir = (id) =>
-  dirname(require.resolve(`${id}/package.json`, { paths: [appRoot] }));
+const pkgDir = (id) => dirname(require.resolve(`${id}/package.json`, { paths: [appRoot] }));
 
 /** @type {import("vite").UserConfig} */
 export default {

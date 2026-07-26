@@ -1,3 +1,4 @@
+import { string } from "@dbx-tools/shared-core";
 import {
   Button,
   DropdownMenu,
@@ -12,7 +13,6 @@ import {
   TableRow,
   cn,
 } from "@dbx-tools/ui-appkit/react";
-import { string } from "@dbx-tools/shared-core";
 import {
   flexRender,
   getCoreRowModel,
@@ -56,8 +56,9 @@ export function colorizeDelta(content: React.ReactNode): React.ReactNode {
   if (!match) return content;
   const sign = match[1];
   if (sign === "+") return <span className="font-medium text-success">{content}</span>;
-  if (sign === "-" || sign === "\u2212")
+  if (sign === "-" || sign === "\u2212") {
     return <span className="font-medium text-destructive">{content}</span>;
+  }
   return content;
 }
 
@@ -80,10 +81,7 @@ export function renderDataCell(value: unknown): React.ReactNode {
  * column id, accessor key, and CSV header, so only the on-screen label
  * is prettified.
  */
-export function humanizeLabel(
-  value: string,
-  options?: string.TokenizeOptions,
-): string {
+export function humanizeLabel(value: string, options?: string.TokenizeOptions): string {
   return string.toLabel(value, options);
 }
 
@@ -275,12 +273,7 @@ export const DataGrid = ({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs"
-            onClick={exportCsv}
-          >
+          <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={exportCsv}>
             <DownloadIcon className="size-3.5" />
             Export
           </Button>
@@ -300,10 +293,7 @@ export const DataGrid = ({
                         className="inline-flex items-center gap-1 hover:text-foreground"
                         onClick={header.column.getToggleSortingHandler()}
                       >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
+                        {flexRender(header.column.columnDef.header, header.getContext())}
                         {sorted === "asc" ? (
                           <ArrowUpIcon className="size-3" />
                         ) : sorted === "desc" ? (

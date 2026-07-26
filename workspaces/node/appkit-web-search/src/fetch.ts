@@ -94,8 +94,7 @@ export async function runWebFetch(
   const body = typeof response.body === "string" ? response.body : String(response.body ?? "");
   const contentType = response.headers["content-type"];
   const isHtml = !contentType || /html|xml/i.test(contentType);
-  const rawContent =
-    request.format === "html" || !isHtml ? body : htmlToText(body);
+  const rawContent = request.format === "html" || !isHtml ? body : htmlToText(body);
   const { content, truncated } = truncate(rawContent, cap);
   const title = isHtml ? extractTitle(body) : undefined;
 

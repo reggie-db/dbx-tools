@@ -4,14 +4,18 @@ Local OpenAI-compatible proxy for Databricks Model Serving.
 
 Import this package or run its CLI when a tool expects the OpenAI API shape but
 you want Databricks Model Serving auth, endpoint discovery, and fuzzy model
-names. The proxy does not translate the OpenAI wire format; it resolves the
-requested model, mints/refreshes Databricks auth through the SDK, and streams the
-upstream response back to the caller.
+names. Chat/completions and embeddings bodies are forwarded verbatim: the proxy
+resolves the requested model, mints/refreshes Databricks auth through the SDK,
+and streams the upstream response back to the caller.
 
 Key features:
 
 - OpenAI-compatible `/v1/*` forwarding for local tools that already know how to
   call chat/completions endpoints.
+- `POST /v1/responses` support for clients that speak only the OpenAI Responses
+  API (the Codex CLI, for one), translated to and from Chat Completions -
+  streaming included - by
+  [`@dbx-tools/shared-model`](../../shared/model)'s `openaiResponses`.
 - Databricks SDK auth, including profile selection, token refresh, and workspace
   host resolution.
 - Fuzzy model names and model-class requests powered by
@@ -123,13 +127,39 @@ Use this when tests or local developer tools need a managed proxy lifecycle.
 
 1. `backend.DatabricksBackend` reads the OpenAI request body and resolves
    `body.model` through [`@dbx-tools/model`](../../node/model).
-2. The Databricks SDK supplies a fresh authorization header for the workspace.
-3. The proxy forwards the body to the resolved serving endpoint's
+2. Request fields Databricks refuses to parse are dropped (see below).
+3. The Databricks SDK supplies a fresh authorization header for the workspace.
+4. The proxy forwards the body to the resolved serving endpoint's
    `/invocations` route.
-4. JSON or SSE response bodies are piped back unchanged.
+5. JSON or SSE response bodies are piped back unchanged.
 
 This keeps the package small: Databricks already speaks the OpenAI schema, so
 the useful work is auth and endpoint resolution.
+
+## Unsupported Request Fields
+
+Databricks Model Serving validates the chat body strictly, so a single
+top-level key it doesn't recognize fails the whole turn:
+
+```json
+{ "error_code": "BAD_REQUEST", "message": "parallel_tool_calls: Extra inputs are not permitted" }
+```
+
+Because `/v1/chat/completions` forwards the client's body as-is, the proxy
+deletes the known offenders first - `parallel_tool_calls` plus OpenAI-platform
+bookkeeping like `store` and `metadata` - using
+`openaiChat.stripUnsupportedChatFields` from
+[`@dbx-tools/shared-model`](../../shared/model). Anything dropped is named in
+the `proxy` log line. `/v1/responses` is unaffected: it builds the chat body
+field-by-field and never copies these through.
+
+Set `PROXY_DROP_FIELDS` to a comma-separated list to drop more, when a
+workspace or a new client version trips a field this package doesn't know
+about yet:
+
+```sh
+PROXY_DROP_FIELDS=some_new_field,another dbx-tools-model-proxy
+```
 
 ## Modules
 

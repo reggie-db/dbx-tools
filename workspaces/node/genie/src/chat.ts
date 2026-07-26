@@ -21,10 +21,10 @@
  * @module
  */
 
-import { async, log, type PollContext } from "@dbx-tools/shared-core";
-import { databricks } from "@dbx-tools/appkit";
-import { event, genieModel, type GenieChatEvent, type GenieMessage } from "@dbx-tools/shared-genie";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
+import { databricks } from "@dbx-tools/appkit";
+import { async, log, type PollContext } from "@dbx-tools/shared-core";
+import { event, genieModel, type GenieChatEvent, type GenieMessage } from "@dbx-tools/shared-genie";
 
 const logger = log.logger("genie/chat");
 
@@ -159,7 +159,7 @@ export async function* genieChat(
       }
       // Subsequent polls: re-fetch the current message until its status becomes
       // terminal.
-      return await client.genie.getMessage(
+      return client.genie.getMessage(
         {
           space_id,
           conversation_id: conversationId,

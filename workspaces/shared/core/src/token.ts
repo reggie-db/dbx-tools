@@ -37,9 +37,7 @@ export function getAccessTokenPayload(
   if (!(typeof input === "string")) {
     if (headerName) {
       forEachHeaderValue(input, headerName, (value: string) => {
-        for (const [payloadKey, payloadValue] of Object.entries(
-          getAccessTokenPayload(value),
-        )) {
+        for (const [payloadKey, payloadValue] of Object.entries(getAccessTokenPayload(value))) {
           if (!accessTokenPayload || !(payloadKey in accessTokenPayload)) {
             if (!accessTokenPayload) accessTokenPayload = {};
             accessTokenPayload[payloadKey] = payloadValue;
@@ -98,10 +96,7 @@ export function getAccessTokenScopes(
  * Accepts the raw {@link MASTRA_SCOPES_KEY} array stamped on
  * `RequestContext` as well as iterables from {@link getAccessTokenScopes}.
  */
-export function includesAccessTokenScope(
-  scopes: unknown,
-  allowed: readonly string[],
-): boolean {
+export function includesAccessTokenScope(scopes: unknown, allowed: readonly string[]): boolean {
   if (allowed.length) {
     for (const scope of iterateClaims(scopes)) {
       if (allowed.includes(scope)) {

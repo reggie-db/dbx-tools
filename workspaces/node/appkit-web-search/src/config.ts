@@ -222,7 +222,7 @@ function resolvePositiveInt(value: number | undefined, envKey: string, fallback:
 
 /** Parse the `WEB_SEARCH_TOOLS` env var (JSON), else `{}`. Bad JSON is ignored. */
 function parseToolsEnv(): Record<string, unknown> {
-  const raw = process.env["WEB_SEARCH_TOOLS"];
+  const raw = process.env.WEB_SEARCH_TOOLS;
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -241,18 +241,23 @@ function parseToolsEnv(): Record<string, unknown> {
 export function resolveWebSearchConfig(
   config: WebSearchPluginConfig = {},
 ): ResolvedWebSearchConfig {
-  const patterns = parseAllowedUrls(config.allowedUrls ?? process.env["WEB_SEARCH_ALLOWED_URLS"]);
-  const model = config.model ?? process.env["WEB_SEARCH_MODEL"];
-  const fallbacks = toStringList(config.modelFallbacks ?? process.env["WEB_SEARCH_MODEL_FALLBACKS"]);
-  const fuzzyThresholdRaw = config.modelFuzzyThreshold ?? Number(process.env["WEB_SEARCH_FUZZY_THRESHOLD"]);
+  const patterns = parseAllowedUrls(config.allowedUrls ?? process.env.WEB_SEARCH_ALLOWED_URLS);
+  const model = config.model ?? process.env.WEB_SEARCH_MODEL;
+  const fallbacks = toStringList(config.modelFallbacks ?? process.env.WEB_SEARCH_MODEL_FALLBACKS);
+  const fuzzyThresholdRaw =
+    config.modelFuzzyThreshold ?? Number(process.env.WEB_SEARCH_FUZZY_THRESHOLD);
   return {
     ...(model ? { model } : {}),
     modelFallbacks: fallbacks.length > 0 ? fallbacks : DEFAULT_MODEL_FALLBACKS,
     webSearchTools: { ...parseToolsEnv(), ...(config.webSearchTools ?? {}) },
-    fuzzy:
-      config.modelFuzzyMatch ?? object.toBoolean(process.env["WEB_SEARCH_FUZZY"]) ?? true,
-    fuzzyThreshold: Number.isFinite(fuzzyThresholdRaw) && fuzzyThresholdRaw ? Number(fuzzyThresholdRaw) : 0.4,
-    maxCitations: resolvePositiveInt(config.maxCitations, "WEB_SEARCH_MAX_CITATIONS", DEFAULT_MAX_CITATIONS),
+    fuzzy: config.modelFuzzyMatch ?? object.toBoolean(process.env.WEB_SEARCH_FUZZY) ?? true,
+    fuzzyThreshold:
+      Number.isFinite(fuzzyThresholdRaw) && fuzzyThresholdRaw ? Number(fuzzyThresholdRaw) : 0.4,
+    maxCitations: resolvePositiveInt(
+      config.maxCitations,
+      "WEB_SEARCH_MAX_CITATIONS",
+      DEFAULT_MAX_CITATIONS,
+    ),
     fetchMaxLength: resolvePositiveInt(
       config.fetchMaxLength,
       "WEB_SEARCH_FETCH_MAX_LENGTH",
@@ -260,7 +265,7 @@ export function resolveWebSearchConfig(
     ),
     timeoutMs: resolvePositiveInt(config.timeoutMs, "WEB_SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
     scrapeFallback:
-      config.scrapeFallback ?? object.toBoolean(process.env["WEB_SEARCH_SCRAPE_FALLBACK"]) ?? true,
+      config.scrapeFallback ?? object.toBoolean(process.env.WEB_SEARCH_SCRAPE_FALLBACK) ?? true,
     allowList: toUrlAllowList(patterns),
     approval: config.approval ?? false,
   };

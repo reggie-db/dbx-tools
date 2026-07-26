@@ -2,31 +2,25 @@
  * Databricks backend for the local model proxy.
  *
  * Wraps a single default-auth {@link WorkspaceClient} and exposes the three
- * things the proxy server needs: the workspace serving-endpoint list, fuzzy
- * name resolution (reusing `@dbx-tools/model`'s {@link resolve.rankModels} so a
- * loose `"opus"` / `"claude sonnet"` snaps to the best live endpoint id -
- * match score, then class, then within-class version), and a fresh set of auth
- * headers per upstream request.
+ * things the proxy server needs, each delegating to `@dbx-tools/model`: the
+ * workspace serving-endpoint list, fuzzy name resolution ({@link
+ * resolve.rankModelIdLive}, so a loose `"opus"` / `"claude sonnet"` snaps to
+ * the best live endpoint id - match score, then class, then within-class
+ * version), and a fresh set of auth headers per upstream request ({@link
+ * invoke.authHeaders}).
  *
- * Auth is delegated entirely to the Databricks SDK: `config.authenticate`
- * re-runs the configured credential provider on every call and refreshes the
- * underlying OAuth / PAT token when it is close to expiry, so the proxy never
- * manages token lifetimes itself - each request is signed with a
- * currently-valid bearer token.
- *
- * The endpoint catalogue is listed once and reused for the process, and
- * re-listed on a resolve miss so a model deployed after start-up still resolves
- * on first use - no cache layer, just one lazy load.
+ * What is left here is only the proxy's own policy: which client to construct,
+ * and holding the endpoint catalogue for the process lifetime. The catalogue is
+ * listed once and re-listed on a resolve miss, so a model deployed after
+ * start-up still resolves on first use - no cache layer, just one lazy load.
  *
  * @module
  */
 
+import { WorkspaceClient } from "@databricks/sdk-experimental";
+import { invoke, resolve, serving, type ResolvedModel } from "@dbx-tools/model";
 import { log } from "@dbx-tools/shared-core";
 import { type ServingEndpointSummary } from "@dbx-tools/shared-model";
-import { resolve, serving, type ResolvedModel } from "@dbx-tools/model";
-import { WorkspaceClient } from "@databricks/sdk-experimental";
-
-import { INVOCATIONS_SUFFIX } from "./defaults";
 
 const logger = log.logger("model-proxy/backend");
 
@@ -74,6 +68,9 @@ export class DatabricksBackend {
    * {@link ServingEndpointSummary} the resolver needs. Loaded lazily and
    * reused; pass `force` to re-list (used by `/v1/models` and the
    * resolve-on-miss path).
+   *
+   * Deliberately the uncached listing: the cached one runs through AppKit's
+   * `CacheManager`, which a plain CLI has no app to initialize.
    */
   async models(force = false): Promise<ServingEndpointSummary[]> {
     if (this.endpoints && !force) return this.endpoints;
@@ -85,40 +82,17 @@ export class DatabricksBackend {
 
   /**
    * Snap a (possibly loose) OpenAI-style model name to the best real serving
-   * endpoint via {@link resolve.rankModels} (the same ranking
-   * {@link resolve.resolveModel} uses): Fuse match (bucketed so version
-   * siblings tie), then class, then within-class version - so `"opus"` prefers
-   * `opus-5` over `opus-4-7`. On a miss the catalogue is re-listed once and
-   * retried, so a freshly deployed model resolves without a restart. Returns
-   * the input unchanged with `matched: false` when nothing scores within the
-   * threshold, so a deliberate endpoint id is never silently rewritten and
-   * Databricks surfaces a clean 404.
+   * endpoint. {@link resolve.rankModelIdLive} owns the policy: rank against the
+   * loaded catalogue, and on a miss re-list once and retry so a freshly
+   * deployed model resolves without a restart. An unmatched name comes back
+   * unchanged so a deliberate endpoint id is never silently rewritten.
    */
   async resolve(model: string): Promise<ResolvedModel> {
-    let resolved = this.resolveAgainst(model, await this.models());
-    if (!resolved.matched) {
-      resolved = this.resolveAgainst(model, await this.models(true));
-    }
-    return resolved;
-  }
-
-  /**
-   * Rank `model` against a catalogue snapshot and collapse to a single
-   * {@link ResolvedModel}. Uses {@link resolve.rankModels} with `limit: 1`
-   * rather than Fuse-only {@link serving.resolveModelId}, so equal-score
-   * siblings are broken by class / version.
-   */
-  private resolveAgainst(
-    model: string,
-    endpoints: readonly ServingEndpointSummary[],
-  ): ResolvedModel {
-    const [top] = resolve.rankModels(endpoints, {
-      search: model,
-      limit: 1,
-      ...(this.threshold !== undefined ? { threshold: this.threshold } : {}),
-    });
-    if (!top) return { modelId: model, matched: false };
-    return { modelId: top.endpoint.name, matched: true, score: top.score };
+    return resolve.rankModelIdLive(
+      (force) => this.models(force),
+      model,
+      this.threshold !== undefined ? { threshold: this.threshold } : {},
+    );
   }
 
   /**
@@ -127,20 +101,11 @@ export class DatabricksBackend {
    * header without the proxy tracking expiry.
    */
   async authHeaders(): Promise<Record<string, string>> {
-    const headers = new Headers();
-    await this.client.config.authenticate(headers);
-    const out: Record<string, string> = {};
-    headers.forEach((value, key) => {
-      out[key] = value;
-    });
-    return out;
+    return invoke.authHeaders(this.client);
   }
 
   /** OpenAI-compatible invocations URL for a resolved endpoint id. */
   invocationsUrl(endpoint: string): string {
-    return new URL(
-      `serving-endpoints/${encodeURIComponent(endpoint)}/${INVOCATIONS_SUFFIX}`,
-      this.host,
-    ).toString();
+    return invoke.invocationsUrl(this.host, endpoint);
   }
 }

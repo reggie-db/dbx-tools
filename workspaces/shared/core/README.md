@@ -7,17 +7,7 @@ browsers, workers, CLIs, and shared schema packages. Modules are exported as
 namespaces so call sites stay explicit:
 
 ```ts
-import {
-  async,
-  error,
-  hash,
-  http,
-  log,
-  net,
-  object,
-  brand,
-  string,
-} from "@dbx-tools/shared-core";
+import { async, error, hash, http, log, net, object, brand, string } from "@dbx-tools/shared-core";
 ```
 
 Node-only helpers live in [`@dbx-tools/core`](../../node/core). AppKit and

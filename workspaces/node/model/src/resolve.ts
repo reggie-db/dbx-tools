@@ -20,6 +20,7 @@
  * @module
  */
 
+import { object } from "@dbx-tools/shared-core";
 import {
   classify,
   model,
@@ -27,11 +28,16 @@ import {
   type RankedModel,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
-import { object } from "@dbx-tools/shared-core";
 
 import { CHAT_CLASS_ORDER, classesAtOrBelow, MODEL_CLASS_ORDER } from "./classes";
 import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback";
-import { listServingEndpoints, searchServingEndpoints, type WorkspaceClientLike } from "./serving";
+import {
+  listServingEndpoints,
+  searchServingEndpoints,
+  type ResolvedModel,
+  type ResolveModelOptions,
+  type WorkspaceClientLike,
+} from "./serving";
 
 type ModelClass = model.ModelClass;
 
@@ -152,6 +158,56 @@ export function rankModels(
   }
 
   return query.limit !== undefined ? ranked.slice(0, Math.max(0, query.limit)) : ranked;
+}
+
+/**
+ * Collapse {@link rankModels} to a single id: the closest endpoint to `search`
+ * in a catalogue snapshot, or the input verbatim when nothing scores within the
+ * threshold.
+ *
+ * The rank-based counterpart to the Fuse-only {@link resolveModelId}: equal
+ * match scores are broken by class and then within-class version, so a loose
+ * `"opus"` prefers `opus-5` over `opus-4-7` instead of picking whichever
+ * sibling Fuse happened to order first. Returning the input unmatched (rather
+ * than a near neighbour) is deliberate - a deliberate endpoint id is never
+ * silently rewritten, and Databricks surfaces a clean 404.
+ */
+export function rankModelId(
+  endpoints: readonly ServingEndpointSummary[],
+  search: string,
+  options: ResolveModelOptions = {},
+): ResolvedModel {
+  const [top] = rankModels(endpoints, {
+    search,
+    limit: 1,
+    ...(options.threshold !== undefined ? { threshold: options.threshold } : {}),
+  });
+  if (!top) return { modelId: search, matched: false };
+  return { modelId: top.endpoint.name, matched: true, score: top.score };
+}
+
+/**
+ * {@link rankModelId} against a catalogue the caller may be holding stale:
+ * match the loaded snapshot, and on a miss reload once with `force` and match
+ * again. That way a model deployed after the catalogue was cached still
+ * resolves on first use, without a restart and without giving up caching.
+ *
+ * The catalogue arrives as a loader rather than a client so the caller keeps
+ * ownership of *how* it is cached - {@link listServingEndpoints} and its
+ * `CacheManager`, a plain process-lifetime field in a CLI, or a test double.
+ * Only one reload is attempted: a genuinely unknown name should fail fast
+ * rather than re-list on every request.
+ *
+ * @param load - Returns the catalogue; `force` asks it to bypass its cache.
+ */
+export async function rankModelIdLive(
+  load: (force: boolean) => Promise<readonly ServingEndpointSummary[]>,
+  search: string,
+  options: ResolveModelOptions = {},
+): Promise<ResolvedModel> {
+  const resolved = rankModelId(await load(false), search, options);
+  if (resolved.matched) return resolved;
+  return rankModelId(await load(true), search, options);
 }
 
 /**

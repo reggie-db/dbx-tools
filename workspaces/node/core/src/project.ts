@@ -1,10 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { Stats } from "node:fs";
-import { readFileSync } from "node:fs";
+import { Stats, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { hash, net } from "@dbx-tools/shared-core";
 import { statSync as stat } from "./file";
-
 
 const ROOT_MARKERS = [
   ".projenrc.ts",
@@ -17,7 +15,7 @@ const ROOT_MARKERS = [
 /** A command's stdout, classified as a filesystem path and/or a URL. */
 export interface ProjectContext {
   readonly cwd: string;
-  readonly output: string
+  readonly output: string;
   /** `output` when it names something on disk. */
   readonly path?: string;
   /** `fs.stat` of {@link path}, when it exists. */
@@ -29,7 +27,6 @@ export interface ProjectContext {
    */
   readonly url?: net.UrlBuilder;
 }
-
 
 /**
  * because this is crucial do not use exec.spawnSync
@@ -64,7 +61,7 @@ const parsedCommandCache = new Map<string, ProjectContext>();
 
 function projectContextCommand(command: string, args: string[], cwd?: string): ProjectContext {
   const processCwd = resolve(process.cwd());
-  let cacheEnabled: boolean
+  let cacheEnabled: boolean;
   if (!cwd) {
     cwd = processCwd;
     cacheEnabled = true;
@@ -78,7 +75,9 @@ function projectContextCommand(command: string, args: string[], cwd?: string): P
   }
   const cacheKey = cacheEnabled ? hash.fnvHash(command, args) : undefined;
   const cacheHit = cacheKey ? parsedCommandCache.get(cacheKey) : undefined;
-  if (cacheHit?.cwd === cwd) { return cacheHit; }
+  if (cacheHit?.cwd === cwd) {
+    return cacheHit;
+  }
   const result = projectContextCommandOutput(command, args, cwd);
   if (cacheKey) {
     parsedCommandCache.set(cacheKey, result);
@@ -135,7 +134,6 @@ export function root(cwd: string = process.cwd()): string | undefined {
     current = parent;
   }
 }
-
 
 /**
  * Parse a git remote URL (`https://...`, `git@host:owner/repo.git`, etc.) and
@@ -203,7 +201,11 @@ export function name(cwd: string = process.cwd()): string {
   const fromPackage = readPackageName(resolve(rootDir, "package.json"));
   if (fromPackage) return fromPackage;
 
-  const remote = projectContextCommand("git", ["-C", rootDir, "remote", "get-url", "origin"], rootDir).output;
+  const remote = projectContextCommand(
+    "git",
+    ["-C", rootDir, "remote", "get-url", "origin"],
+    rootDir,
+  ).output;
   const fromGit = remote ? parseGitRemote(remote) : undefined;
   if (fromGit) return fromGit;
 

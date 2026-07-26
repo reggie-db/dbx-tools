@@ -19,7 +19,6 @@
 /** Lazy sequence over iterable source(s). See {@link sequence}. */
 export type Sequence<T> = SequenceImpl<T>;
 
-
 type SequenceSource<T> = Iterable<T> | ReadonlyMap<unknown, T> | OneOrMany<T> | null | undefined;
 
 /**
@@ -58,9 +57,6 @@ type GroupValue<T, P> = P extends (value: any, ...rest: any[]) => value is infer
 /** A map of group name -> predicate, as accepted by {@link group}. */
 type GroupPredicates<T> = Record<string, (value: T, index: number) => boolean>;
 
-
-
-
 /**
  * Type guard for a {@link Collection}: an {@link Array}, {@link Set}, or
  * {@link Map}. Narrows `value` so its element/value type is treated as `T`.
@@ -84,19 +80,17 @@ export function isEmpty(
   collection: Collection<unknown> | Record<string, unknown>,
   options?: { recursive?: boolean },
 ): boolean {
-
   function visit(value: unknown, seen?: Set<unknown>): boolean {
-    if (value == null) return true;
-    else if (typeof value === "object") {
+    if (value == null) {
+      return true;
+    } else if (typeof value === "object") {
       if (seen?.has(value)) return true;
       seen?.add(value);
       if (Array.isArray(value)) {
         return value.length === 0 || (seen ? value.every((item) => visit(item, seen)) : false);
       }
       if (value instanceof Set) {
-        return (
-          value.size === 0 || (seen ? [...value].every((item) => visit(item, seen)) : false)
-        );
+        return value.size === 0 || (seen ? [...value].every((item) => visit(item, seen)) : false);
       }
       if (value instanceof Map) {
         return (
@@ -105,11 +99,12 @@ export function isEmpty(
         );
       }
       const keys = Object.keys(value);
-      if (keys.length === 0) return true;
-      else if (seen) {
+      if (keys.length === 0) {
+        return true;
+      } else if (seen) {
         return keys.every((key) => visit((value as Record<string, unknown>)[key], seen));
       } else {
-        return false
+        return false;
       }
     } else {
       return false;
@@ -117,7 +112,6 @@ export function isEmpty(
   }
   return visit(collection, options?.recursive ? new Set() : undefined);
 }
-
 
 /**
  * Normalizes a source to an iterable of its `T` values, so Maps are treated
@@ -153,7 +147,6 @@ export function isContainer<T = unknown>(value: unknown): value is Container<T> 
     typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function"
   );
 }
-
 
 function sequenceSources<T>(...sources: SequenceSource<T>[]): Iterable<T>[] {
   const sourceIterables: Iterable<T>[] = [];
@@ -526,7 +519,7 @@ export function at<T>(index: number, ...sources: readonly Source<T>[]): T | unde
   return undefined;
 }
 
-export function toOneOrMany<T>(input: (T | OneOrMany<T>)): OneOrMany<T> {
+export function toOneOrMany<T>(input: T | OneOrMany<T>): OneOrMany<T> {
   return Array.isArray(input) ? input : [input];
 }
 
@@ -585,7 +578,7 @@ class SequenceImpl<T> {
       // beginning.
       const buffer = this.buffer!;
       let index = 0;
-      for (; ;) {
+      for (;;) {
         if (index < buffer.length) {
           yield buffer[index++]!;
           continue;
@@ -648,9 +641,7 @@ class SequenceImpl<T> {
    *
    * @see {@link sequence}
    */
-  join(
-    ...sources: readonly SequenceSource<T>[]
-  ): Sequence<T> {
+  join(...sources: readonly SequenceSource<T>[]): Sequence<T> {
     const sourceIterables = sequenceSources(this, ...sources);
     return sequenceSources.length === 0 ? this : sequence(...sourceIterables);
   }
@@ -751,9 +742,7 @@ const emptySequence: Sequence<never> = new SequenceImpl([], undefined, {
  * @typeParam T - Element type of the sequence.
  * @param sources - Iterables to concatenate, in order (`Map` sources use values).
  */
-export function sequence<T>(
-  ...sources: readonly SequenceSource<T>[]
-): Sequence<T> {
+export function sequence<T>(...sources: readonly SequenceSource<T>[]): Sequence<T> {
   // Skip nullish sources and known-empty collections; normalize the rest to
   // their values so a Map contributes values rather than [key, value] entries.
   const sourceIterables = sequenceSources(...sources);
@@ -772,8 +761,6 @@ export function sequence<T>(
     undefined,
   );
 }
-
-
 
 /**
  * Flattens a mix of single items and iterables into one lazy {@link Generator}.
@@ -799,10 +786,6 @@ export function* generator<T>(
     }
   }
 }
-
-
-
-
 
 // ---------------------------------------------------------------------------
 // Object value guards, coercions, and structural equality
@@ -836,8 +819,9 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
  * well as the numbers `1` and `0`.
  */
 export function toBoolean(value: unknown): boolean | undefined {
-  if (typeof value === "boolean") return value;
-  else if (typeof value === "string") {
+  if (typeof value === "boolean") {
+    return value;
+  } else if (typeof value === "string") {
     value = value.trim().toLowerCase();
     if (
       value === "true" ||
@@ -846,17 +830,18 @@ export function toBoolean(value: unknown): boolean | undefined {
       value === "1" ||
       value === "yes" ||
       value === "y"
-    )
+    ) {
       return true;
-    else if (
+    } else if (
       value === "false" ||
       value == "f" ||
       value === "off" ||
       value === "0" ||
       value === "no" ||
       value === "n"
-    )
+    ) {
       return false;
+    }
   } else if (typeof value === "number") {
     if (value === 1) return true;
     else if (value === 0) return false;

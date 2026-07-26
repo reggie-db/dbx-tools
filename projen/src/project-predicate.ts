@@ -1,4 +1,10 @@
-import { object, predicate, Sequence, type OneOrMany, type Predicate } from "@dbx-tools/shared-core";
+import {
+  object,
+  predicate,
+  Sequence,
+  type OneOrMany,
+  type Predicate,
+} from "@dbx-tools/shared-core";
 import { IConstruct } from "constructs";
 import { Project } from "projen";
 import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project";
@@ -32,10 +38,6 @@ function projectMatchers(...inputs: OneOrMany<PathMatchInput>): Sequence<PathMat
     .cache();
 }
 
-
-
-
-
 /**
  * Matches projects whose raw projen {@link Project.name} matches every glob in
  * `patterns` (e.g. `@dbx-tools/ui-mastra`, `*-mastra`). Tests `project.name`
@@ -52,7 +54,9 @@ export function hasName(...patterns: OneOrMany<PathMatchInput>): Predicate<ICons
  * `*\/shared-core`, `@dbx-tools/*`): tested against the full `@scope/name` from
  * {@link PackageIdentifier}.
  */
-export function hasIdentifierPackageName(...patterns: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
+export function hasIdentifierPackageName(
+  ...patterns: OneOrMany<PathMatchInput>
+): Predicate<IConstruct, Project> {
   const matchers = projectMatchers(...patterns);
   return isProject().and((p) => {
     const packageName = project.identifier(p).packageName;
@@ -61,7 +65,9 @@ export function hasIdentifierPackageName(...patterns: OneOrMany<PathMatchInput>)
 }
 
 /** Matches projects whose parsed unscoped name (from {@link PackageIdentifier}) matches every glob. */
-export function hasIdentifierName(...patterns: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
+export function hasIdentifierName(
+  ...patterns: OneOrMany<PathMatchInput>
+): Predicate<IConstruct, Project> {
   const matchers = projectMatchers(...patterns);
   return isProject().and((p) => {
     const name = project.identifier(p).name;
@@ -70,15 +76,15 @@ export function hasIdentifierName(...patterns: OneOrMany<PathMatchInput>): Predi
 }
 
 /** Matches projects whose parsed npm scope (from {@link PackageIdentifier}) matches every glob. */
-export function hasIdentifierScope(...patterns: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
+export function hasIdentifierScope(
+  ...patterns: OneOrMany<PathMatchInput>
+): Predicate<IConstruct, Project> {
   const matchers = projectMatchers(...patterns);
   return isProject().and((p) => {
     const scope = project.identifier(p).scope;
     return scope && matchers.every((matcher) => matcher(scope));
   });
 }
-
-
 
 /**
  * Matches DBXTools packages carrying every listed tag (`dbxToolsConfig.tags`), narrowing

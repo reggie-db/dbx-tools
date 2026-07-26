@@ -152,7 +152,9 @@ export async function* poll<T, A = Record<string, unknown>>(
       if (options.filter) {
         if (options.filter === "distinct") {
           if (deepEqual(previous, value)) continue;
-        } else if (!(await options.filter(value, ctx))) continue;
+        } else if (!(await options.filter(value, ctx))) {
+          continue;
+        }
       }
       yield value;
       if (predicate && !(await predicate(value, ctx))) return;
@@ -170,8 +172,9 @@ export async function* poll<T, A = Record<string, unknown>>(
  * parent (so a fetch-level cancel doesn't tear down the main poll loop).
  */
 export function tieAbortSignal(child: AbortController, parent?: AbortSignal): void {
-  if (!parent) return;
-  else if (parent.aborted) {
+  if (!parent) {
+    return;
+  } else if (parent.aborted) {
     child.abort(parent.reason);
     return;
   }

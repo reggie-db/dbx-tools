@@ -1,3 +1,4 @@
+import { genieModel } from "@dbx-tools/shared-genie";
 import {
   Collapsible,
   CollapsibleContent,
@@ -5,7 +6,6 @@ import {
   Spinner,
   cn,
 } from "@dbx-tools/ui-appkit/react";
-import { genieModel } from "@dbx-tools/shared-genie";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { SqlBlock, ToolMarkdown } from "./markdown";
 import type { ToolEvent, ToolProgress } from "./types";
@@ -176,10 +176,7 @@ const summarizeProgress = (progress: ToolProgress[]): ToolDetailSummary => {
   // different `message_id`s can collide on `attachment_id` (Genie
   // restarts numbering per message), so the bucket map is owned by
   // the group, not the summary.
-  const bucketFor = (
-    group: MessageGroup,
-    attachmentId: string | undefined,
-  ): AttachmentBucket => {
+  const bucketFor = (group: MessageGroup, attachmentId: string | undefined): AttachmentBucket => {
     const key = attachmentId ?? ANON_ATTACHMENT_KEY;
     let bucket = group.attachments.find((b) => b.key === key);
     if (!bucket) {
@@ -284,9 +281,7 @@ const isAttachmentRenderable = (b: AttachmentBucket): boolean =>
 
 /** True when a group has any renderable content (question, attachments, or errors). */
 const isGroupRenderable = (g: MessageGroup): boolean =>
-  Boolean(g.question) ||
-  g.attachments.some(isAttachmentRenderable) ||
-  g.errors.length > 0;
+  Boolean(g.question) || g.attachments.some(isAttachmentRenderable) || g.errors.length > 0;
 
 /**
  * Body of one Genie sub-call (one `message_id` group). Pulled out
@@ -342,10 +337,7 @@ const MessageGroupBody = ({
         // SQL itself stays a nested Collapsible (default closed)
         // for the same reason: code is the heaviest content here,
         // and most readers only want a glance.
-        <Collapsible
-          key={bucket.key}
-          className="rounded border border-border/60 bg-background/40"
-        >
+        <Collapsible key={bucket.key} className="rounded border border-border/60 bg-background/40">
           <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
             <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
             <span>{queryBuckets.length > 1 ? `Query ${i + 1}` : "Query"}</span>
@@ -360,10 +352,7 @@ const MessageGroupBody = ({
               {bucket.thinking.length > 0 && (
                 <ul className="flex flex-col gap-1.5 border-l-2 border-border/60 pl-3 text-muted-foreground">
                   {bucket.thinking.map((p, j) => (
-                    <li
-                      key={`think-${j}`}
-                      className="whitespace-pre-wrap break-words leading-snug"
-                    >
+                    <li key={`think-${j}`} className="whitespace-pre-wrap break-words leading-snug">
                       <span className="font-medium text-foreground/80">
                         {humanizeThoughtType(p.thought_type)}:
                       </span>{" "}
@@ -402,10 +391,7 @@ const MessageGroupBody = ({
         // when there's only one prose bucket; multiple buckets
         // (rare - typically interpretation + a follow-up question)
         // get numbered so each row is addressable.
-        <Collapsible
-          key={bucket.key}
-          className="rounded border border-border/60 bg-background/40"
-        >
+        <Collapsible key={bucket.key} className="rounded border border-border/60 bg-background/40">
           <CollapsibleTrigger className="group flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
             <ChevronDownIcon className="size-3 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
             <span>{proseBuckets.length > 1 ? `Answer ${i + 1}` : "Answer"}</span>
@@ -415,10 +401,7 @@ const MessageGroupBody = ({
               {bucket.thinking.length > 0 && (
                 <ul className="flex flex-col gap-1 text-[11px] text-muted-foreground">
                   {bucket.thinking.map((p, j) => (
-                    <li
-                      key={`think-${j}`}
-                      className="whitespace-pre-wrap break-words leading-snug"
-                    >
+                    <li key={`think-${j}`} className="whitespace-pre-wrap break-words leading-snug">
                       <span className="font-medium text-foreground/80">
                         {humanizeThoughtType(p.thought_type)}:
                       </span>{" "}
@@ -534,18 +517,11 @@ const ToolCallRow = ({ event }: { event: ToolEvent }) => {
 
   const header = (
     <span className="min-w-0 flex-1">
-      <span
-        className={cn(
-          "block truncate",
-          isRunning && "animate-pulse text-foreground/90",
-        )}
-      >
+      <span className={cn("block truncate", isRunning && "animate-pulse text-foreground/90")}>
         {verb}
       </span>
       {question && (
-        <span className="mt-0.5 block break-words italic text-foreground/80">
-          {question}
-        </span>
+        <span className="mt-0.5 block break-words italic text-foreground/80">{question}</span>
       )}
     </span>
   );
@@ -603,11 +579,7 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
   const latest = events[events.length - 1]!;
   const anyRunning = events.some((e) => e.status === "running");
   const anyError = events.some((e) => e.status === "error");
-  const tone: "running" | "error" | "done" = anyRunning
-    ? "running"
-    : anyError
-      ? "error"
-      : "done";
+  const tone: "running" | "error" | "done" = anyRunning ? "running" : anyError ? "error" : "done";
 
   // Outer header uses the tool name verb (not the live wire
   // status) per the "show the most recent tool call" contract.
@@ -654,9 +626,7 @@ export const ToolSessionPill = ({ events }: { events: ToolEvent[] }) => {
             )}
           >
             {verb}
-            {countSuffix && (
-              <span className="text-muted-foreground/70">{countSuffix}</span>
-            )}
+            {countSuffix && <span className="text-muted-foreground/70">{countSuffix}</span>}
           </span>
           {/*
            * Trailing "live" pip on the right edge while any tool is

@@ -39,7 +39,12 @@
  *
  * @module
  */
-import { type ChildProcess, type SpawnOptions, spawn as nodeSpawn, spawnSync as nodeSpawnSync } from "node:child_process";
+import {
+  type ChildProcess,
+  type SpawnOptions,
+  spawn as nodeSpawn,
+  spawnSync as nodeSpawnSync,
+} from "node:child_process";
 import * as readline from "node:readline";
 import { Readable } from "node:stream";
 
@@ -136,13 +141,11 @@ export type SpawnArgs<T extends SpawnOptions> =
   | [command: string, args: readonly string[], options: T]
   | [command: string, ...argsAndOptions: [...string[], T]];
 
-
 interface ParsedSpawnArgs<T extends SpawnOptions> {
   command: string;
   commandArgs: string[];
   options?: T;
 }
-
 
 function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpawnArgs<T> {
   let [value, ...values] = input;
@@ -155,17 +158,13 @@ function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpaw
   }
 
   const last = values.at(-1);
-  const options = (
-    last !== null &&
-    typeof last === "object" &&
-    !Array.isArray(last)
-  ) ? last : undefined;
+  const options =
+    last !== null && typeof last === "object" && !Array.isArray(last) ? last : undefined;
   const argumentValues = options ? values.slice(0, -1) : values;
-  const valueArgs: string[] = (
-    argumentValues.length === 1 &&
-    Array.isArray(argumentValues[0])
-  ) ? [...argumentValues[0]] : argumentValues
-
+  const valueArgs: string[] =
+    argumentValues.length === 1 && Array.isArray(argumentValues[0])
+      ? [...argumentValues[0]]
+      : argumentValues;
 
   return {
     command,
@@ -481,11 +480,9 @@ function linesFromCapturedOutput(output: string): string[] {
  * @returns Exit code, captured line arrays, and trimmed `stdout` / `stderr` getters
  * @throws When spawn fails, line reads fail, or `check` is true and exit code is non-zero
  */
-export async function spawn(
-  ...args: SpawnArgs<ExecOptions>
-): Promise<ExecResult> {
+export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult> {
   const { command, commandArgs, options = {} } = parseSpawnArgs(args);
-  const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options
+  const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options;
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
   const stdoutHandler = resolveStdio(stdout, stdoutLines);
@@ -529,9 +526,7 @@ export async function spawn(
  * @returns Exit code, captured line arrays, and trimmed `stdout` / `stderr` getters
  * @throws When spawn fails or `check` is true and exit code is non-zero
  */
-export function spawnSync(
-  ...args: SpawnArgs<SyncExecOptions>
-): ExecResult {
+export function spawnSync(...args: SpawnArgs<SyncExecOptions>): ExecResult {
   const { command, commandArgs, options = {} } = parseSpawnArgs(args);
   const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options;
   const stdinMode: ExecStdio = typeof stdin === "string" ? "pipe" : (stdin ?? "inherit");

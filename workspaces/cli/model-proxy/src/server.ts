@@ -25,16 +25,14 @@
  * @module
  */
 
-import { error, log } from "@dbx-tools/shared-core";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { error, log } from "@dbx-tools/shared-core";
+import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 
 import type { DatabricksBackend } from "./backend";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
-import {
-  chatToResponse,
-  createResponsesStreamTranslator,
-  responsesToChat,
-} from "./responses";
+
+const { chatToResponse, createResponsesStreamTranslator, responsesToChat } = openaiResponses;
 
 const logger = log.logger("model-proxy/server");
 
@@ -53,6 +51,21 @@ const MODELS_PATHS = new Set(["/v1/models", "/models"]);
 
 /** POST routes that carry an OpenAI Responses API body (translated to chat). */
 const RESPONSES_PATHS = new Set(["/v1/responses", "/responses"]);
+
+/**
+ * Extra request fields to strip before forwarding, on top of
+ * `openaiChat.UNSUPPORTED_CHAT_FIELDS`. Comma-separated in `PROXY_DROP_FIELDS`.
+ *
+ * An escape hatch: when a workspace or a new client version trips a field
+ * Databricks rejects, an operator can unblock themselves immediately instead of
+ * waiting on a release of this package.
+ */
+function extraDropFields(): string[] {
+  return (process.env.PROXY_DROP_FIELDS ?? "")
+    .split(",")
+    .map((field) => field.trim())
+    .filter((field) => field.length > 0);
+}
 
 /** Options shared by {@link createProxyServer} and {@link startProxyServer}. */
 export interface ProxyServerOptions {
@@ -168,7 +181,7 @@ async function handleModels(
   const endpoints = await backend.models(true);
   if (codexShape) {
     const models = endpoints
-      .filter((endpoint) => endpoint.task === "llm/v1/chat")
+      .filter((endpoint) => classify.endpointCapabilities(endpoint).chat)
       .map((endpoint) => ({
         slug: endpoint.name,
         display_name: endpoint.displayName ?? endpoint.name,
@@ -213,6 +226,10 @@ async function handleProxy(
   // Address the endpoint by URL; rewrite the body's `model` to the real id so
   // pay-per-token endpoints that echo it still see a valid value.
   body.model = resolved.modelId;
+  // This route forwards the client's body as-is, so anything Databricks refuses
+  // to parse fails the turn. Drop the known offenders rather than relaying a
+  // 400 the client can do nothing about.
+  const dropped = openaiChat.stripUnsupportedChatFields(body, extraDropFields());
 
   const wantsStream = body.stream === true;
   const headers = await backend.authHeaders();
@@ -224,6 +241,7 @@ async function handleProxy(
     resolved: resolved.modelId,
     matched: resolved.matched,
     stream: wantsStream,
+    ...(dropped.length > 0 ? { dropped } : {}),
   });
 
   const upstream = await fetch(backend.invocationsUrl(resolved.modelId), {

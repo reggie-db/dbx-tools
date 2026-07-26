@@ -215,8 +215,9 @@ const BASE32_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
  * fail fast instead of producing silently-degraded encodings.
  */
 function base32Alphabet(alphabet?: string): string {
-  if (alphabet === undefined) return BASE32_ALPHABET;
-  else if (new Set(alphabet).size !== 32) {
+  if (alphabet === undefined) {
+    return BASE32_ALPHABET;
+  } else if (new Set(alphabet).size !== 32) {
     throw new Error("Base32 alphabet must contain 32 unique characters");
   }
   return alphabet;

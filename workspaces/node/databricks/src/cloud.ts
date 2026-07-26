@@ -23,8 +23,8 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { error, functionModule, hash, http, log, net } from "@dbx-tools/shared-core";
 import { file } from "@dbx-tools/core";
+import { error, functionModule, hash, http, log, net } from "@dbx-tools/shared-core";
 import { resolveHostIps } from "./net";
 
 const logger = log.logger("cloud");
@@ -255,7 +255,7 @@ async function fetchText(url: string): Promise<string> {
     const expiresAt = new Date(createdAt.getTime() + RANGE_CACHE_TTL_MS);
     if (expiresAt > new Date()) {
       logger.debug("cached fetch hit", { url, cachePath });
-      return await readFile(cachePath, "utf8");
+      return readFile(cachePath, "utf8");
     }
   }
   let tempPath: string | null = join(cacheDir, `${hash.id()}.txt`);

@@ -1,15 +1,12 @@
+import { marker as markers, type ParsedMarker } from "@dbx-tools/shared-mastra";
 import { Spinner } from "@dbx-tools/ui-appkit/react";
-import {
-  marker as markers,
-  type ParsedMarker,
-} from "@dbx-tools/shared-mastra";
 import ReactECharts from "echarts-for-react";
 import { ClockIcon } from "lucide-react";
 import { useMemo } from "react";
-import { normalizeChartOption } from "../support/chart-option";
-import { useChartFetch, useStatementFetch } from "../support/mastra-client";
 import { DataGrid, humanizeLabel } from "./data-grid";
 import { AssistantMarkdown } from "./markdown";
+import { normalizeChartOption } from "../support/chart-option";
+import { useChartFetch, useStatementFetch } from "../support/mastra-client";
 
 // Inline embed slots: chart / data tables resolved from `[chart:<id>]`
 // and `[data:<id>]` markers in the assistant's prose, plus the splitter
@@ -43,8 +40,7 @@ const ExpiredSlot = ({ type }: { type: string }) => (
   <div className="not-prose my-3 inline-flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
     <ClockIcon className="size-3.5 shrink-0" />
     <span>
-      This {humanizeLabel(type, { capitalize: false })} has expired and is no longer
-      available.
+      This {humanizeLabel(type, { capitalize: false })} has expired and is no longer available.
     </span>
   </div>
 );
@@ -249,9 +245,7 @@ export const MarkdownWithEmbeds = ({
         if (seg.kind === "chart") {
           return <ChartSlot key={`c-${i}-${seg.chartId}`} chartId={seg.chartId} />;
         }
-        return (
-          <DataSlot key={`d-${i}-${seg.statementId}`} statementId={seg.statementId} />
-        );
+        return <DataSlot key={`d-${i}-${seg.statementId}`} statementId={seg.statementId} />;
       })}
     </>
   );

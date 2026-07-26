@@ -82,8 +82,7 @@ export class DBXToolsRelease extends Component {
       bump: {
         exec: taskScript(project, "bump.ts", `--prefix ${this.tagPrefix}`),
         receiveArgs: true,
-        description:
-          "Bump the release version (default patch), then commit, tag, and push it",
+        description: "Bump the release version (default patch), then commit, tag, and push it",
       },
     });
 

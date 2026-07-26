@@ -1,3 +1,4 @@
+import { wire } from "@dbx-tools/shared-mastra";
 import {
   Button,
   Input,
@@ -7,7 +8,6 @@ import {
   TooltipTrigger,
   cn,
 } from "@dbx-tools/ui-appkit/react";
-import { wire } from "@dbx-tools/shared-mastra";
 import {
   Loader2Icon,
   MessageSquarePlusIcon,
@@ -288,9 +288,7 @@ export const ThreadSidebar = ({
                               setConfirmDeleteId((id) => (id === thread.id ? null : id))
                             }
                             aria-label={
-                              isConfirming
-                                ? "Confirm delete conversation"
-                                : "Delete conversation"
+                              isConfirming ? "Confirm delete conversation" : "Delete conversation"
                             }
                             className={cn(
                               "size-6 shrink-0",

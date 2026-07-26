@@ -7,7 +7,9 @@
  * @module
  */
 
+import { randomUUID } from "node:crypto";
 import { getExecutionContext } from "@databricks/appkit";
+import { http, log, object, string, token } from "@dbx-tools/shared-core";
 import { feedback, thread } from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
@@ -17,9 +19,6 @@ import {
 import { MastraServer as MastraServerExpress } from "@mastra/express";
 import { trace } from "@opentelemetry/api";
 import type express from "express";
-import { randomUUID } from "node:crypto";
-
-import { resolveFeedbackEnabled } from "./mlflow";
 
 import {
   MASTRA_REQUEST_ID_KEY,
@@ -30,7 +29,8 @@ import {
   type MastraPluginConfig,
   type User,
 } from "./config";
-import { http, log, object, string, token } from "@dbx-tools/shared-core";
+import { resolveFeedbackEnabled } from "./mlflow";
+
 import { extractModelOverride, MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving";
 /**
  * OpenTelemetry's sentinel for "no valid trace" - 32 zero hex chars.
@@ -154,10 +154,7 @@ export class MastraServer extends MastraServerExpress {
   configureRequestContextScopes(req: express.Request, requestContext: RequestContext) {
     const scopes = [
       ...object
-        .sequence(
-          token.getAccessTokenScopes(req),
-          token.getAccessTokenScopes(req, "authorization"),
-        )
+        .sequence(token.getAccessTokenScopes(req), token.getAccessTokenScopes(req, "authorization"))
         .distinct(),
     ];
     requestContext.set(MASTRA_SCOPES_KEY, scopes);

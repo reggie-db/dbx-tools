@@ -4,7 +4,9 @@
 
 export * as classes from "./src/classes";
 export * as fallback from "./src/fallback";
+export * as invoke from "./src/invoke";
 export * as resolve from "./src/resolve";
 export * as serving from "./src/serving";
+export type { AuthenticatingClientLike } from "./src/invoke";
 export type { ResolveModelInput, ResolvedModelSelection, SelectModelInput, SearchModelsInput } from "./src/resolve";
 export type { WorkspaceClientLike, ListServingEndpointsOptions, ResolvedModel, ResolveModelOptions, ScoredEndpoint } from "./src/serving";

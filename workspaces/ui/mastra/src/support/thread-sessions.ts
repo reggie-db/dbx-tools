@@ -57,10 +57,7 @@ export function isSessionRunning(session: ThreadSession): boolean {
 }
 
 /** Append a steer to the queue (oldest first). Returns a new array. */
-export function enqueueSteer(
-  queue: QueuedSteer[],
-  steer: QueuedSteer,
-): QueuedSteer[] {
+export function enqueueSteer(queue: QueuedSteer[], steer: QueuedSteer): QueuedSteer[] {
   return [...queue, steer];
 }
 

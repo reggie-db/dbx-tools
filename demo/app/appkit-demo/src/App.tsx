@@ -2,14 +2,7 @@ import Conversations from "@/pages/Conversations";
 import Stream from "@/pages/Stream";
 import { Button, Separator } from "@dbx-tools/ui-appkit/react";
 import { BrandLogo, BrandProvider } from "@dbx-tools/ui-branding/react";
-import {
-  BrowserRouter,
-  Link,
-  Navigate,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 // Real browser routes so deep links (and refreshing on `/stream`) land
 // on the right page. AppKit's dev and static servers already SPA-fallback
@@ -44,12 +37,7 @@ const Nav = () => {
     <nav className="max-w-4xl mx-auto flex items-center gap-1 px-4 md:px-6 py-2">
       <BrandLogo height={24} className="mr-2 h-6 w-auto" />
       {ROUTES.map((r) => (
-        <Button
-          key={r.path}
-          asChild
-          size="sm"
-          variant={pathname === r.path ? "default" : "ghost"}
-        >
+        <Button key={r.path} asChild size="sm" variant={pathname === r.path ? "default" : "ghost"}>
           <Link to={r.path} title={r.description}>
             {r.label}
           </Link>

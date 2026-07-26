@@ -79,9 +79,7 @@ export type EmailMessage = z.infer<typeof emailMessageSchema>;
 /** Schema for the dispatch result returned to the model after a send. */
 export const emailResultSchema = z.object({
   sent: z.boolean().describe("True once the message was handed to the SMTP server."),
-  recipient: z
-    .string()
-    .describe("Echo of the `to` recipients (comma-joined) for confirmation."),
+  recipient: z.string().describe("Echo of the `to` recipients (comma-joined) for confirmation."),
   from: z.string().describe("The resolved sender address the message was actually sent from."),
   messageId: z
     .string()
@@ -102,9 +100,7 @@ export type EmailResult = z.infer<typeof emailResultSchema>;
  * be resolved) and `restricted` is false, so a UI may allow free entry.
  */
 export const emailSendersSchema = z.object({
-  senders: z
-    .array(z.string())
-    .describe("Permitted sender addresses to offer as `From` choices."),
+  senders: z.array(z.string()).describe("Permitted sender addresses to offer as `From` choices."),
   defaultSender: z
     .string()
     .optional()

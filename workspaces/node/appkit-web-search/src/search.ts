@@ -21,8 +21,9 @@
  * @module
  */
 
-import { error, log } from "@dbx-tools/shared-core";
 import { resolve, serving } from "@dbx-tools/model";
+import { error, log } from "@dbx-tools/shared-core";
+import { openaiResponses } from "@dbx-tools/shared-model";
 import type { ResolvedWebSearchConfig } from "./config";
 import { detectWebSearchProvider, supportsWebSearch, webSearchToolSpec } from "./provider";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema";
@@ -118,36 +119,16 @@ function str(v: unknown): string {
 }
 
 /**
- * Extract answer text + citations from an OpenAI Responses API payload. The
- * Responses API returns an `output` array of items; message items carry
- * `content` parts with `text` and optional `annotations` (url_citation).
- * `output_text` is the convenience aggregate when present.
+ * Extract answer text + citations from an OpenAI Responses API payload, via the
+ * shared reader in `@dbx-tools/shared-model` (the same module the model-proxy
+ * uses to translate the Responses wire format in the other direction).
  */
 function fromResponsesPayload(payload: Record<string, unknown>): {
   answer: string;
   citations: WebSearchCitation[];
 } {
-  const citations: WebSearchCitation[] = [];
-  const texts: string[] = [];
-  const output = Array.isArray(payload["output"]) ? (payload["output"] as unknown[]) : [];
-  for (const item of output) {
-    const content = (item as { content?: unknown }).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      const p = part as { text?: unknown; annotations?: unknown };
-      const text = str(p.text);
-      if (text) texts.push(text);
-      if (Array.isArray(p.annotations)) {
-        for (const ann of p.annotations) {
-          const a = ann as { url?: unknown; title?: unknown };
-          const url = str(a.url);
-          if (url) citations.push({ url, ...(str(a.title) ? { title: str(a.title) } : {}) });
-        }
-      }
-    }
-  }
-  const answer = str(payload["output_text"]) || texts.join("\n").trim();
-  return { answer, citations };
+  const { text, citations } = openaiResponses.readResponsesOutput(payload);
+  return { answer: text, citations };
 }
 
 /**
@@ -160,26 +141,26 @@ function fromChatPayload(payload: Record<string, unknown>): {
   answer: string;
   citations: WebSearchCitation[];
 } {
-  const choices = Array.isArray(payload["choices"]) ? (payload["choices"] as unknown[]) : [];
+  const choices = Array.isArray(payload.choices) ? (payload.choices as unknown[]) : [];
   const message = (choices[0] as { message?: Record<string, unknown> })?.message ?? {};
-  const answer = str(message["content"]);
+  const answer = str(message.content);
   const citations: WebSearchCitation[] = [];
   // Best-effort grounding extraction: walk any nested object for {uri|url,title}.
   const seen = new Set<string>();
   const visit = (v: unknown, depth: number): void => {
     if (depth > 6 || v === null || typeof v !== "object") return;
     const o = v as Record<string, unknown>;
-    const url = str(o["url"]) || str(o["uri"]);
+    const url = str(o.url) || str(o.uri);
     if (url && !seen.has(url)) {
       seen.add(url);
-      citations.push({ url, ...(str(o["title"]) ? { title: str(o["title"]) } : {}) });
+      citations.push({ url, ...(str(o.title) ? { title: str(o.title) } : {}) });
     }
     for (const val of Object.values(o)) {
       if (Array.isArray(val)) val.forEach((x) => visit(x, depth + 1));
       else if (val && typeof val === "object") visit(val, depth + 1);
     }
   };
-  visit(message["grounding_metadata"] ?? message["groundingMetadata"], 0);
+  visit(message.grounding_metadata ?? message.groundingMetadata, 0);
   return { answer, citations };
 }
 

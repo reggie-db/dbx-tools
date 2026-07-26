@@ -126,9 +126,8 @@ type LoggerFactory = (name?: string) => Logger;
  * resolved factory (or the one resolved `undefined`). A rejection is evicted
  * by {@link memoize} so a later call retries.
  */
-const createConsolaLoggerFactory = memoize(
-  async (): Promise<LoggerFactory | undefined> => {
-    const consolaDisabled = toBoolean(globalProcess?.env?.LOG_CONSOLA_DISABLED);
+const createConsolaLoggerFactory = memoize(async (): Promise<LoggerFactory | undefined> => {
+  const consolaDisabled = toBoolean(globalProcess?.env?.LOG_CONSOLA_DISABLED);
   if (!consolaDisabled) {
     try {
       const { consola, createConsola, LogLevels } = await import(/* @vite-ignore */ "consola");
@@ -264,8 +263,7 @@ async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<Log
  */
 const createLogger: LoggerFactory = await (async () => {
   return (
-    (await createConsolaLoggerFactory()) ??
-    (await createConsoleLoggerFactory(globalProcessStdErr))
+    (await createConsolaLoggerFactory()) ?? (await createConsoleLoggerFactory(globalProcessStdErr))
   );
 })();
 
@@ -320,8 +318,9 @@ function parseLogLevel(raw: unknown): LogLevel | undefined {
       if (text === normalized) break;
       text = normalized;
     }
-    if (!text) break;
-    else if (text in LOG_LEVEL_RANK) {
+    if (!text) {
+      break;
+    } else if (text in LOG_LEVEL_RANK) {
       return text as LogLevel;
     }
   }

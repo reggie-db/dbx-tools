@@ -172,7 +172,10 @@ function link() {
     }
   }
   fs.writeFileSync(clientManifest, `${JSON.stringify(manifest, null, 2)}\n`);
-  fs.writeFileSync(stateFile, `${JSON.stringify({ workspaceYaml: pristineYaml, deps: prior }, null, 2)}\n`);
+  fs.writeFileSync(
+    stateFile,
+    `${JSON.stringify({ workspaceYaml: pristineYaml, deps: prior }, null, 2)}\n`,
+  );
 
   console.log(
     `dev-link: linked ${reachable.size} client UI packages to workspace source. Installing...`,

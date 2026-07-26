@@ -16,13 +16,8 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { format as formatSql } from "sql-formatter";
 import { Streamdown } from "streamdown";
+import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid";
 import { createShikiPlugin, highlightToHtml } from "../support/shiki-plugin";
-import {
-  DataGrid,
-  TABLE_WRAPPER_CLASSES,
-  colorizeDelta,
-  type DataRow,
-} from "./data-grid";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
 // wired with shiki highlighting and AppKit table primitives, plus the
@@ -62,9 +57,7 @@ function markdownTableData(
   if (!node || node.tagName !== "table") return null;
   const sections = node.children ?? [];
   const sectionRows = (tag: string): MarkdownNode[] =>
-    sections
-      .find((s) => s.tagName === tag)
-      ?.children?.filter((r) => r.tagName === "tr") ?? [];
+    sections.find((s) => s.tagName === tag)?.children?.filter((r) => r.tagName === "tr") ?? [];
 
   const headerCells = (sectionRows("thead")[0]?.children ?? []).filter(
     (c) => c.tagName === "th" || c.tagName === "td",
@@ -82,9 +75,7 @@ function markdownTableData(
   }
 
   const rows: DataRow[] = sectionRows("tbody").map((tr) => {
-    const cells = (tr.children ?? []).filter(
-      (c) => c.tagName === "td" || c.tagName === "th",
-    );
+    const cells = (tr.children ?? []).filter((c) => c.tagName === "td" || c.tagName === "th");
     const row: DataRow = {};
     columns.forEach((col, i) => {
       const cell = cells[i];
@@ -102,10 +93,7 @@ function markdownTableData(
  * renderer tool-detail copy uses unconditionally (a sort/column/export
  * toolbar would dwarf the tiny inline pills it renders in).
  */
-const plainMarkdownTable = ({
-  children,
-  ...rest
-}: React.HTMLAttributes<HTMLTableElement>) => (
+const plainMarkdownTable = ({ children, ...rest }: React.HTMLAttributes<HTMLTableElement>) => (
   <div className={TABLE_WRAPPER_CLASSES}>
     <Table {...rest}>{children}</Table>
   </div>
@@ -139,9 +127,7 @@ const MARKDOWN_TABLE_PARTS = {
   ),
   td: ({ children, ...rest }: React.HTMLAttributes<HTMLTableCellElement>) => {
     const colored = Array.isArray(children)
-      ? children.map((c, i) => (
-          <React.Fragment key={i}>{colorizeDelta(c)}</React.Fragment>
-        ))
+      ? children.map((c, i) => <React.Fragment key={i}>{colorizeDelta(c)}</React.Fragment>)
       : colorizeDelta(children as React.ReactNode);
     return <TableCell {...rest}>{colored}</TableCell>;
   },

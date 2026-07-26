@@ -13,39 +13,12 @@
 
 import { spawn } from "node:child_process";
 import type { Server } from "node:http";
+import { classify } from "@dbx-tools/shared-model";
 import { Command, CommanderError } from "commander";
-
-import { type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
 import { DatabricksBackend, type BackendOptions } from "./backend";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
 import { startProxyServer } from "./server";
-
-/** Capability flags an endpoint advertises, derived from its task/class. */
-interface EndpointCapabilities {
-  /** OpenAI chat/completions + Responses (what a chat agent like Codex needs). */
-  chat: boolean;
-  /** Embedding (vector) endpoint. */
-  embedding: boolean;
-  /** Function / tool calling. Chat endpoints here support it. */
-  tools: boolean;
-}
-
-/**
- * Derive an endpoint's capabilities from its Databricks task hint and the
- * classifier's model class. `llm/v1/chat` (and chat-classed endpoints) are
- * chat- and tool-capable; `llm/v1/embeddings` (and embedding-classed) are
- * embedding-only. Keeps capability logic in one place so consumers don't
- * re-derive it from raw strings.
- */
-function capabilitiesFor(endpoint: ServingEndpointSummary): EndpointCapabilities {
-  const task = endpoint.task;
-  const cls = endpoint.class;
-  const embedding = task === "llm/v1/embeddings" || cls === "embedding";
-  const chat =
-    !embedding && (task === "llm/v1/chat" || (typeof cls === "string" && cls.startsWith("chat")));
-  return { chat, embedding, tools: chat };
-}
 
 /**
  * Default terminal client for `chat`, launched via `bunx`. OpenHarness is an
@@ -168,10 +141,10 @@ export function buildProgram(): Command {
       // strings. `chat` = OpenAI chat/completions + Responses (what an agent
       // like Codex needs); `embedding` = vector endpoints; `tools` = whether the
       // endpoint supports function/tool calls (all chat endpoints here do).
-      const enriched = endpoints.map((endpoint) => {
-        const caps = capabilitiesFor(endpoint);
-        return { ...endpoint, capabilities: caps };
-      });
+      const enriched = endpoints.map((endpoint) => ({
+        ...endpoint,
+        capabilities: classify.endpointCapabilities(endpoint),
+      }));
       const out = opts.chat ? enriched.filter((e) => e.capabilities.chat) : enriched;
       process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
     });

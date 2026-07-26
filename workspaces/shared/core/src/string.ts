@@ -520,9 +520,7 @@ export function pluralize(count: number, noun: string): string {
  * {@link TokenizeOptions} (e.g. `camelCase: false`) merge over the defaults.
  */
 export function toLabel(value: string, options?: TokenizeOptions): string {
-  const tokens = [
-    ...tokenizeWithOptions({ lowerCase: true, capitalize: true, ...options }, value),
-  ];
+  const tokens = [...tokenizeWithOptions({ lowerCase: true, capitalize: true, ...options }, value)];
   return tokens.length > 0 ? tokens.join(" ") : value;
 }
 
