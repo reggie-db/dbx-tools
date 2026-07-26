@@ -1,13 +1,20 @@
 /**
  * OpenAI-compatible HTTP proxy in front of Databricks Model Serving.
  *
- * Databricks serving endpoints already speak the OpenAI wire format, so this
- * server is a thin pass-through: it resolves the request's (possibly fuzzy)
- * `model` to a real endpoint id via the {@link DatabricksBackend}, stamps a
- * fresh auth header, and forwards the body to that endpoint's `invocations`
- * URL, streaming the response straight back to the client. Any
- * OpenAI-compatible tool (iTerm, editors, the `openai` SDK) can point its base
- * URL at this server and use loose model names.
+ * Databricks serving endpoints speak OpenAI wire formats, so this server is a
+ * thin pass-through: it resolves the request's (possibly fuzzy) `model` to a
+ * real endpoint id via the {@link DatabricksBackend}, stamps a fresh auth
+ * header, and forwards to the right Databricks URL:
+ *
+ *   - Chat Completions → `/serving-endpoints/<name>/invocations`, except for
+ *     Responses-only models (Codex) which are translated and sent to
+ *     `/serving-endpoints/responses`.
+ *   - Responses → native `/serving-endpoints/responses` (OpenAI-family) or
+ *     `/serving-endpoints/open-responses` (Claude/Gemini/…), body forwarded
+ *     as-is. No chat round-trip.
+ *
+ * Any OpenAI-compatible tool (iTerm, editors, the `openai` SDK, Codex CLI) can
+ * point its base URL at this server and use loose model names.
  *
  * Routes:
  *   - `GET  /health`, `GET /`            liveness
@@ -18,9 +25,8 @@
  *     both standard OpenAI clients and Codex can enumerate the catalogue.
  *   - `POST /v1/chat/completions`        proxy (also `/completions`,
  *     `/v1/completions`, `/v1/embeddings`, and the un-prefixed variants)
- *   - `POST /v1/responses`               OpenAI Responses API, translated to a
- *     chat-completions `invocations` call and back (Databricks endpoints speak
- *     only chat completions). This is the surface the Codex CLI uses to chat.
+ *   - `POST /v1/responses`               OpenAI Responses API, forwarded to
+ *     Databricks' native Responses / Open Responses surface.
  *
  * @module
  */
@@ -32,11 +38,11 @@ import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 import type { DatabricksBackend } from "./backend";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
 
-const { chatToResponse, createResponsesStreamTranslator, responsesToChat } = openaiResponses;
+const { chatToResponsesRequest, responseToChatCompletion } = openaiResponses;
 
 const logger = log.logger("model-proxy/server");
 
-/** POST routes forwarded verbatim to a serving endpoint's invocations URL. */
+/** POST routes forwarded to a serving endpoint (chat or Responses-only). */
 const PROXY_PATHS = new Set([
   "/v1/chat/completions",
   "/chat/completions",
@@ -49,7 +55,7 @@ const PROXY_PATHS = new Set([
 /** GET routes that list the resolvable model catalogue. */
 const MODELS_PATHS = new Set(["/v1/models", "/models"]);
 
-/** POST routes that carry an OpenAI Responses API body (translated to chat). */
+/** POST routes that carry an OpenAI Responses API body (native passthrough). */
 const RESPONSES_PATHS = new Set(["/v1/responses", "/responses"]);
 
 /**
@@ -206,9 +212,9 @@ async function handleModels(
 }
 
 /**
- * Resolve the request's model to a real endpoint, then forward the body to that
- * endpoint's invocations URL with fresh auth, streaming the upstream response
- * (SSE or JSON) straight back to the client.
+ * Resolve the request's model and forward a Chat Completions body. Responses-
+ * only models (Codex) are translated to a Responses request and posted to
+ * `/serving-endpoints/responses`; everything else goes to `/invocations`.
  */
 async function handleProxy(
   backend: DatabricksBackend,
@@ -223,9 +229,13 @@ async function handleProxy(
   }
 
   const resolved = await backend.resolve(requested);
-  // Address the endpoint by URL; rewrite the body's `model` to the real id so
-  // pay-per-token endpoints that echo it still see a valid value.
   body.model = resolved.modelId;
+
+  if (backend.isResponsesOnly(resolved.modelId)) {
+    await proxyChatViaResponses(backend, body, requested, resolved.modelId, resolved.matched, res);
+    return;
+  }
+
   // This route forwards the client's body as-is, so anything Databricks refuses
   // to parse fails the turn. Drop the known offenders rather than relaying a
   // 400 the client can do nothing about.
@@ -240,6 +250,7 @@ async function handleProxy(
     requested,
     resolved: resolved.modelId,
     matched: resolved.matched,
+    upstream: "invocations",
     stream: wantsStream,
     ...(dropped.length > 0 ? { dropped } : {}),
   });
@@ -258,10 +269,66 @@ async function handleProxy(
 }
 
 /**
- * `POST /v1/responses`: accept an OpenAI Responses request (what the Codex CLI
- * sends), translate it to a chat-completions call against the resolved
- * Databricks endpoint, and translate the reply back to the Responses shape —
- * streaming (SSE) or not, matching the request's `stream` flag.
+ * Chat Completions client → Responses-only Databricks model: translate the
+ * request, POST to `/serving-endpoints/responses`, translate the reply back.
+ * Streaming is not translated yet - those clients should use `/v1/responses`.
+ */
+async function proxyChatViaResponses(
+  backend: DatabricksBackend,
+  body: Record<string, unknown>,
+  requested: string,
+  modelId: string,
+  matched: boolean,
+  res: ServerResponse,
+): Promise<void> {
+  const { responses, stream } = chatToResponsesRequest(body);
+  responses.model = modelId;
+
+  if (stream) {
+    sendJson(
+      res,
+      400,
+      errorBody(
+        `model ${modelId} only supports the Responses API; use POST /v1/responses for streaming`,
+        "invalid_request_error",
+      ),
+    );
+    return;
+  }
+
+  const headers = await backend.authHeaders();
+  headers["content-type"] = "application/json";
+  headers.accept = "application/json";
+
+  logger.info("proxy", {
+    requested,
+    resolved: modelId,
+    matched,
+    upstream: "responses",
+    stream: false,
+  });
+
+  const upstream = await fetch(backend.responsesUrl(modelId), {
+    method: "POST",
+    headers,
+    body: JSON.stringify(responses),
+  });
+
+  if (!upstream.ok) {
+    const text = await upstream.text();
+    res.writeHead(upstream.status, { "content-type": "application/json" });
+    res.end(text || JSON.stringify(errorBody("upstream error", "proxy_error")));
+    return;
+  }
+
+  const responseJson = (await upstream.json()) as Record<string, unknown>;
+  sendJson(res, 200, responseToChatCompletion(responseJson, modelId));
+}
+
+/**
+ * `POST /v1/responses`: forward the Responses body to Databricks' native
+ * Responses / Open Responses surface (model stays in the body; URL is
+ * workspace-level). Streaming and non-streaming both pass through as-is.
  */
 async function handleResponses(
   backend: DatabricksBackend,
@@ -276,112 +343,33 @@ async function handleResponses(
   }
 
   const resolved = await backend.resolve(requested);
-  const { chat, stream } = responsesToChat(body);
-  chat.model = resolved.modelId; // address by URL; keep a valid echoed id
+  body.model = resolved.modelId;
 
+  const wantsStream = body.stream === true;
   const headers = await backend.authHeaders();
   headers["content-type"] = "application/json";
-  headers.accept = stream ? "text/event-stream" : "application/json";
+  headers.accept = wantsStream ? "text/event-stream" : "application/json";
 
+  const upstreamUrl = backend.responsesUrl(resolved.modelId);
   logger.info("responses", {
     requested,
     resolved: resolved.modelId,
     matched: resolved.matched,
-    stream,
+    upstream: upstreamUrl,
+    stream: wantsStream,
   });
 
-  const upstream = await fetch(backend.invocationsUrl(resolved.modelId), {
+  const upstream = await fetch(upstreamUrl, {
     method: "POST",
     headers,
-    body: JSON.stringify(chat),
+    body: JSON.stringify(body),
   });
 
-  // Upstream error: forward its status with an OpenAI-shaped body rather than
-  // half-opening an SSE stream Codex can't parse.
-  if (!upstream.ok) {
-    const text = await upstream.text();
-    res.writeHead(upstream.status, { "content-type": "application/json" });
-    res.end(text || JSON.stringify(errorBody("upstream error", "proxy_error")));
-    return;
-  }
-
-  const responseId = `resp_${resolved.modelId}_${Date.now().toString(36)}`;
-
-  if (!stream) {
-    const chatJson = (await upstream.json()) as Record<string, unknown>;
-    sendJson(res, 200, chatToResponse(chatJson, resolved.modelId));
-    return;
-  }
-
-  // Streaming: translate the upstream chat SSE into the Responses SSE stream.
-  res.writeHead(200, {
-    "content-type": "text/event-stream",
-    "cache-control": "no-cache",
-    connection: "keep-alive",
+  res.writeHead(upstream.status, {
+    "content-type": upstream.headers.get("content-type") ?? "application/json",
     "x-resolved-model": resolved.modelId,
   });
-  await translateChatSseToResponses(upstream, res, resolved.modelId, responseId);
-}
-
-/**
- * Read an upstream chat-completions SSE stream and write the translated
- * Responses SSE stream to `res`. Parses the `data:` lines, hands each
- * `chat.completion.chunk` to the translator, and emits the closing
- * `response.completed` on the terminal `[DONE]` (or stream end).
- */
-async function translateChatSseToResponses(
-  upstream: Response,
-  res: ServerResponse,
-  model: string,
-  responseId: string,
-): Promise<void> {
-  const translator = createResponsesStreamTranslator(model, responseId);
-  const bodyStream = upstream.body;
-  if (!bodyStream) {
-    res.end(translator.finish());
-    return;
-  }
-  const reader = bodyStream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let finished = false;
-  const flushDone = () => {
-    if (finished) return;
-    finished = true;
-    if (!res.writableEnded) res.write(translator.finish());
-  };
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      // SSE frames are separated by blank lines; process complete lines.
-      let nl: number;
-      while ((nl = buffer.indexOf("\n")) !== -1) {
-        const line = buffer.slice(0, nl).trim();
-        buffer = buffer.slice(nl + 1);
-        if (!line.startsWith("data:")) continue;
-        const payload = line.slice(5).trim();
-        if (payload === "[DONE]") {
-          flushDone();
-          continue;
-        }
-        try {
-          const chunk = JSON.parse(payload) as Record<string, unknown>;
-          const out = translator.feed(chunk);
-          if (out && !res.writableEnded) res.write(out);
-        } catch {
-          // Ignore keepalives / partial or non-JSON data lines.
-        }
-        if (res.writableEnded) break;
-      }
-      if (res.writableEnded) break;
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-    flushDone();
-    res.end();
-  }
+  await streamBody(upstream, res);
 }
 
 /** Pump an upstream `fetch` Response body to the Node response, chunk by chunk. */

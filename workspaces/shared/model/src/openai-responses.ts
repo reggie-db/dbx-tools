@@ -2,16 +2,22 @@
  * OpenAI Responses API <-> Chat Completions translation.
  *
  * Some clients speak only the Responses API (`POST /v1/responses`) - the Codex
- * CLI is the motivating one - while Databricks serving endpoints speak only
- * Chat Completions (`messages`) at their `invocations` URL. This module bridges
- * the two, in both directions:
+ * CLI is the motivating one. Databricks now also exposes native Responses
+ * surfaces (`/serving-endpoints/responses` and `/serving-endpoints/open-responses`),
+ * while most endpoints still speak Chat Completions at `/invocations`. This
+ * module bridges the two, in both directions:
  *
  *   - {@link responsesToChat} lowers a Responses request body to a chat
  *     completions body (instructions -> system message, typed `input` items ->
  *     `messages`, `tools`/`tool_choice` carried through, function-call outputs
  *     folded back into the transcript).
+ *   - {@link chatToResponsesRequest} raises a chat-completions request into a
+ *     Responses request (the inverse of {@link responsesToChat}), for routing a
+ *     chat client at a Responses-only model like Codex.
  *   - {@link chatToResponse} lifts a non-streaming chat completion back into a
  *     Responses `response` object.
+ *   - {@link responseToChatCompletion} lifts a native Responses `response`
+ *     back into a chat-completions body (the inverse of {@link chatToResponse}).
  *   - {@link createResponsesStreamTranslator} lifts a streaming chat completion
  *     (an OpenAI SSE `chat.completion.chunk` stream) into the Responses SSE
  *     event stream those clients consume (`response.created`,
@@ -139,6 +145,110 @@ export function responsesToChat(body: Record<string, unknown>): {
   return { chat, stream: body.stream === true };
 }
 
+/**
+ * Raise a chat-completions request into a Responses request body. Inverse of
+ * {@link responsesToChat}: used when a chat client hits a Responses-only
+ * Databricks model (e.g. Codex) so the proxy can POST to
+ * `/serving-endpoints/responses` without the client knowing.
+ */
+export function chatToResponsesRequest(body: Record<string, unknown>): {
+  responses: Record<string, unknown>;
+  stream: boolean;
+} {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  const input: unknown[] = [];
+  let instructions: string | undefined;
+
+  for (const raw of messages) {
+    if (!raw || typeof raw !== "object") continue;
+    const message = raw as Record<string, unknown>;
+    const role = typeof message.role === "string" ? message.role : "user";
+
+    // Leading system / developer messages become top-level `instructions`.
+    if ((role === "system" || role === "developer") && instructions === undefined && input.length === 0) {
+      const text = chatContentToText(message.content);
+      if (text) instructions = text;
+      continue;
+    }
+
+    if (role === "tool") {
+      input.push({
+        type: "function_call_output",
+        call_id: String(message.tool_call_id ?? ""),
+        output: chatContentToText(message.content),
+      });
+      continue;
+    }
+
+    if (role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+      for (const rawCall of message.tool_calls) {
+        if (!rawCall || typeof rawCall !== "object") continue;
+        const call = rawCall as Record<string, unknown>;
+        const fn = (call.function ?? {}) as Record<string, unknown>;
+        input.push({
+          type: "function_call",
+          call_id: String(call.id ?? ""),
+          name: String(fn.name ?? ""),
+          arguments: typeof fn.arguments === "string" ? fn.arguments : "{}",
+        });
+      }
+      const text = chatContentToText(message.content);
+      if (text) {
+        input.push({ type: "message", role: "assistant", content: text });
+      }
+      continue;
+    }
+
+    input.push({
+      type: "message",
+      role,
+      content: chatContentToText(message.content),
+    });
+  }
+
+  const responses: Record<string, unknown> = {
+    model: body.model,
+    input,
+    stream: body.stream === true,
+  };
+  if (instructions) responses.instructions = instructions;
+
+  // Chat tools are nested (`function: { name, … }`); Responses wants them flat.
+  if (Array.isArray(body.tools) && body.tools.length > 0) {
+    const tools = body.tools
+      .map((t) => {
+        if (!t || typeof t !== "object") return undefined;
+        const tool = t as Record<string, unknown>;
+        if (tool.type !== "function") return undefined;
+        if (tool.function && typeof tool.function === "object") {
+          const fn = tool.function as Record<string, unknown>;
+          return {
+            type: "function",
+            name: fn.name,
+            ...(fn.description ? { description: fn.description } : {}),
+            ...(fn.parameters ? { parameters: fn.parameters } : {}),
+          };
+        }
+        if (typeof tool.name === "string") return tool;
+        return undefined;
+      })
+      .filter((t): t is Record<string, unknown> => t !== undefined);
+    if (tools.length > 0) {
+      responses.tools = tools;
+      if (body.tool_choice !== undefined) responses.tool_choice = body.tool_choice;
+    }
+  }
+
+  // Prefer Responses' max_output_tokens naming; fall back from chat max_tokens.
+  if (typeof body.max_output_tokens === "number") {
+    responses.max_output_tokens = body.max_output_tokens;
+  } else if (typeof body.max_tokens === "number") {
+    responses.max_output_tokens = body.max_tokens;
+  }
+
+  return { responses, stream: body.stream === true };
+}
+
 /** Lift a non-streaming chat completion JSON into a Responses `response` object. */
 export function chatToResponse(chat: Record<string, unknown>, model: string): unknown {
   const choices = Array.isArray(chat.choices) ? chat.choices : [];
@@ -179,6 +289,59 @@ export function chatToResponse(chat: Record<string, unknown>, model: string): un
     usage: {
       input_tokens: Number(usage.prompt_tokens ?? 0),
       output_tokens: Number(usage.completion_tokens ?? 0),
+      total_tokens: Number(usage.total_tokens ?? 0),
+    },
+  };
+}
+
+/**
+ * Lift a native Responses `response` object into a chat-completions body.
+ * Inverse of {@link chatToResponse}: used after a Responses-only upstream call
+ * when the client spoke Chat Completions.
+ */
+export function responseToChatCompletion(
+  response: Record<string, unknown>,
+  model: string,
+): Record<string, unknown> {
+  const { text } = readResponsesOutput(response);
+  const toolCalls: unknown[] = [];
+  const output = Array.isArray(response.output) ? response.output : [];
+  for (const raw of output) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Record<string, unknown>;
+    if (item.type !== "function_call") continue;
+    toolCalls.push({
+      id: String(item.call_id ?? item.id ?? ""),
+      type: "function",
+      function: {
+        name: String(item.name ?? ""),
+        arguments: typeof item.arguments === "string" ? item.arguments : "{}",
+      },
+    });
+  }
+
+  const message: Record<string, unknown> = {
+    role: "assistant",
+    content: text || null,
+  };
+  if (toolCalls.length > 0) message.tool_calls = toolCalls;
+
+  const usage = (response.usage ?? {}) as Record<string, unknown>;
+  return {
+    id: String(response.id ?? "chatcmpl"),
+    object: "chat.completion",
+    created: typeof response.created_at === "number" ? response.created_at : 0,
+    model,
+    choices: [
+      {
+        index: 0,
+        message,
+        finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop",
+      },
+    ],
+    usage: {
+      prompt_tokens: Number(usage.input_tokens ?? 0),
+      completion_tokens: Number(usage.output_tokens ?? 0),
       total_tokens: Number(usage.total_tokens ?? 0),
     },
   };

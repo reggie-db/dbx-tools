@@ -3,10 +3,11 @@
  *
  * The SDK's `servingEndpoints.query` covers the typed request shapes, but an
  * OpenAI-compatible caller (a proxy, a passthrough route, a streaming client)
- * needs to issue its own `fetch` against the endpoint's `invocations` URL with
+ * needs to issue its own `fetch` against Databricks' OpenAI-shaped URLs with
  * an OpenAI body. That needs exactly two things the SDK doesn't hand out
- * directly: the URL ({@link invocationsUrl}) and a currently-valid set of auth
- * headers ({@link authHeaders}).
+ * directly: the URL ({@link invocationsUrl} / {@link responsesUrl} /
+ * {@link openResponsesUrl}) and a currently-valid set of auth headers
+ * ({@link authHeaders}).
  *
  * Auth is delegated entirely to the Databricks SDK: `config.authenticate`
  * re-runs the configured credential provider on every call and refreshes the
@@ -18,14 +19,27 @@
  */
 
 /**
- * Path segment appended to a serving endpoint for OpenAI-compatible requests.
- * Databricks routes `/serving-endpoints/<name>/invocations` to the endpoint's
- * OpenAI-shaped surface (`messages` in, `choices` out).
+ * Path segment appended to a serving endpoint for OpenAI-compatible chat
+ * requests. Databricks routes `/serving-endpoints/<name>/invocations` to the
+ * endpoint's Chat Completions surface (`messages` in, `choices` out). Some
+ * models (notably Codex) reject this path and require {@link responsesUrl}.
  */
 export const INVOCATIONS_SUFFIX = "invocations";
 
 /**
- * The OpenAI-compatible invocations URL for an endpoint id.
+ * Workspace-level OpenAI Responses API path. Body carries `model` (endpoint
+ * id); used by GPT / Codex models that speak Responses natively.
+ */
+export const RESPONSES_PATH = "serving-endpoints/responses";
+
+/**
+ * Workspace-level Open Responses API path - the cross-provider Responses
+ * surface (Claude, Gemini, …) that OpenAI `/responses` does not cover.
+ */
+export const OPEN_RESPONSES_PATH = "serving-endpoints/open-responses";
+
+/**
+ * The OpenAI-compatible chat-completions invocations URL for an endpoint id.
  *
  * @param host - Workspace host, e.g. `https://my-workspace.cloud.databricks.com/`.
  *   Pass the value resolved from `client.config.getHost()`.
@@ -36,6 +50,45 @@ export function invocationsUrl(host: string, endpoint: string): string {
     `serving-endpoints/${encodeURIComponent(endpoint)}/${INVOCATIONS_SUFFIX}`,
     host,
   ).toString();
+}
+
+/** Workspace OpenAI Responses API URL (`POST`, model in the body). */
+export function responsesUrl(host: string): string {
+  return new URL(RESPONSES_PATH, host).toString();
+}
+
+/** Workspace Open Responses API URL (`POST`, model in the body). */
+export function openResponsesUrl(host: string): string {
+  return new URL(OPEN_RESPONSES_PATH, host).toString();
+}
+
+/**
+ * True when the endpoint is known to reject Chat Completions `/invocations`
+ * and require the Responses API (Codex models today). Callers should route
+ * those to {@link responsesUrl} instead of {@link invocationsUrl}.
+ */
+export function isResponsesOnly(endpoint: string): boolean {
+  return /codex/i.test(endpoint);
+}
+
+/**
+ * Pick the Databricks Responses upstream for an endpoint id: OpenAI-family
+ * models use `/serving-endpoints/responses`; everything else uses the
+ * cross-provider `/serving-endpoints/open-responses`.
+ */
+export function responsesUpstreamUrl(host: string, endpoint: string): string {
+  return isOpenAiFamily(endpoint) ? responsesUrl(host) : openResponsesUrl(host);
+}
+
+/** GPT / Codex / o-series style endpoint names that speak OpenAI Responses. */
+function isOpenAiFamily(endpoint: string): boolean {
+  const n = endpoint.toLowerCase();
+  return (
+    n.includes("gpt") ||
+    n.includes("codex") ||
+    /(^|[^a-z])o[1-9]([^a-z]|$)/.test(n) ||
+    n.includes("openai")
+  );
 }
 
 /**

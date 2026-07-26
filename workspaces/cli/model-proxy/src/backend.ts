@@ -104,8 +104,21 @@ export class DatabricksBackend {
     return invoke.authHeaders(this.client);
   }
 
-  /** OpenAI-compatible invocations URL for a resolved endpoint id. */
+  /** OpenAI-compatible chat-completions invocations URL for a resolved endpoint id. */
   invocationsUrl(endpoint: string): string {
     return invoke.invocationsUrl(this.host, endpoint);
+  }
+
+  /**
+   * Databricks Responses upstream for a resolved endpoint id
+   * (`/serving-endpoints/responses` for OpenAI-family, `/open-responses` else).
+   */
+  responsesUrl(endpoint: string): string {
+    return invoke.responsesUpstreamUrl(this.host, endpoint);
+  }
+
+  /** True when the endpoint rejects Chat Completions and needs Responses. */
+  isResponsesOnly(endpoint: string): boolean {
+    return invoke.isResponsesOnly(endpoint);
   }
 }

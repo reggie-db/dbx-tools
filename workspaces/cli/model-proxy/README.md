@@ -129,12 +129,18 @@ Use this when tests or local developer tools need a managed proxy lifecycle.
    `body.model` through [`@dbx-tools/model`](../../node/model).
 2. Request fields Databricks refuses to parse are dropped (see below).
 3. The Databricks SDK supplies a fresh authorization header for the workspace.
-4. The proxy forwards the body to the resolved serving endpoint's
-   `/invocations` route.
-5. JSON or SSE response bodies are piped back unchanged.
+4. The proxy picks the upstream URL:
+   - Chat Completions → `/serving-endpoints/<name>/invocations`, except
+     Responses-only models (Codex) which are translated and posted to
+     `/serving-endpoints/responses`.
+   - Responses → `/serving-endpoints/responses` (OpenAI-family) or
+     `/serving-endpoints/open-responses` (Claude/Gemini/…), body forwarded
+     as-is.
+5. JSON or SSE response bodies are piped back (with a chat↔Responses
+   translation only when a chat client hit a Responses-only model).
 
 This keeps the package small: Databricks already speaks the OpenAI schema, so
-the useful work is auth and endpoint resolution.
+the useful work is auth, endpoint resolution, and routing to the right surface.
 
 ## Unsupported Request Fields
 
@@ -150,8 +156,8 @@ deletes the known offenders first - `parallel_tool_calls` plus OpenAI-platform
 bookkeeping like `store` and `metadata` - using
 `openaiChat.stripUnsupportedChatFields` from
 [`@dbx-tools/shared-model`](../../shared/model). Anything dropped is named in
-the `proxy` log line. `/v1/responses` is unaffected: it builds the chat body
-field-by-field and never copies these through.
+the `proxy` log line. `/v1/responses` is a native passthrough to Databricks'
+Responses / Open Responses surface, so these chat-only field drops do not apply.
 
 Set `PROXY_DROP_FIELDS` to a comma-separated list to drop more, when a
 workspace or a new client version trips a field this package doesn't know
