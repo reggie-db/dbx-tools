@@ -174,6 +174,43 @@ An upstream failure that happens _after_ the response headers are sent is
 logged (`stream ended early`) rather than thrown, since the status line is
 already committed and cannot be turned into an HTTP error.
 
+## Rate Limits And 429 Backoff
+
+Databricks Foundation Model endpoints are pay-per-token with an account-level
+throughput ceiling. That ceiling is **not** exposed as a readable number, so the
+proxy cannot pace against it in advance - it can only react. An agentic client
+that bursts (Codex, for one) trips the limit and, left alone, retries a few
+times and gives up with "exceeded retry limit".
+
+So **by default the proxy absorbs the `429` itself**: instead of relaying it, it
+retries the upstream call in-proxy with exponential backoff and up to +50%
+jitter, honoring a server-sent `Retry-After` when present. Because the retry
+happens before any status line is written, it is transparent to both streaming
+and non-streaming callers - the client sees a slower success, not a 429. A fresh
+auth header is minted per attempt so a long backoff can't outlive the token, and
+a client disconnect during a backoff ends the wait immediately.
+
+Retries are exhausted after `maxRetries` attempts, at which point the final 429
+is relayed unchanged.
+
+Disable it (relay 429s straight through) with the flag or the env var:
+
+```sh
+dbx-tools-model-proxy --no-retry-429
+PROXY_RETRY_ON_429=false dbx-tools-model-proxy
+```
+
+Tune the policy with environment variables (all optional):
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PROXY_RETRY_ON_429` | `true` | Master switch (loose boolean: `false`/`off`/`0`/`no`). `--no-retry-429` overrides it. |
+| `PROXY_RETRY_MAX` | `5` | Max retry attempts after the initial try. |
+| `PROXY_RETRY_BASE_MS` | `500` | First backoff, doubled each attempt. |
+| `PROXY_RETRY_MAX_MS` | `30000` | Ceiling for any single backoff, including a `Retry-After`. |
+
+Precedence is CLI flag → env → built-in default.
+
 ## Unsupported Request Fields
 
 Databricks Model Serving validates the chat body strictly, so a single
@@ -205,7 +242,7 @@ PROXY_DROP_FIELDS=some_new_field,another dbx-tools-model-proxy
 - `backend` - `DatabricksBackend`, auth, model resolution, and upstream request
   forwarding.
 - `server` - Express proxy app and `startProxyServer()`.
-- `defaults` - bind host, port, and invocation path constants.
+- `defaults` - bind host, port, and the 429-retry policy (`resolveRetryConfig`).
 
 Endpoint ranking and fuzzy matching come from
 [`@dbx-tools/model`](../../node/model).

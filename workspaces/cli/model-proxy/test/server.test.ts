@@ -3,7 +3,8 @@ import { createServer, type Server } from "node:http";
 import { describe, it } from "node:test";
 
 import type { DatabricksBackend } from "../src/backend";
-import { createProxyServer } from "../src/server";
+import { DEFAULT_RETRY, resolveRetryConfig } from "../src/defaults";
+import { backoffDelayMs, createProxyServer, parseRetryAfterMs } from "../src/server";
 
 /** Listen on an ephemeral port and resolve the bound port. */
 async function listen(server: Server): Promise<number> {
@@ -69,5 +70,104 @@ describe("upstream dispatcher", () => {
 
   it("survives the same stall with bodyTimeout disabled, as the proxy configures it", async () => {
     assert.equal(await readThroughStall(0), "data: first\n\ndata: second\n\n");
+  });
+});
+
+describe("parseRetryAfterMs", () => {
+  const now = Date.UTC(2026, 0, 1, 0, 0, 0);
+
+  it("reads an integer count of seconds", () => {
+    assert.equal(parseRetryAfterMs("2", now), 2000);
+    assert.equal(parseRetryAfterMs("  30 ", now), 30_000);
+  });
+
+  it("reads an HTTP date as ms-until, clamped at zero", () => {
+    const future = new Date(now + 5000).toUTCString();
+    assert.equal(parseRetryAfterMs(future, now), 5000);
+    const past = new Date(now - 5000).toUTCString();
+    assert.equal(parseRetryAfterMs(past, now), 0);
+  });
+
+  it("returns undefined for a missing or unparseable header", () => {
+    assert.equal(parseRetryAfterMs(null, now), undefined);
+    assert.equal(parseRetryAfterMs("soon", now), undefined);
+  });
+});
+
+describe("backoffDelayMs", () => {
+  const retry = { enabled: true, maxRetries: 5, baseDelayMs: 500, maxDelayMs: 30_000 };
+
+  it("grows exponentially from the base with jitter=0", () => {
+    assert.equal(backoffDelayMs(0, retry, undefined, 0), 500);
+    assert.equal(backoffDelayMs(1, retry, undefined, 0), 1000);
+    assert.equal(backoffDelayMs(2, retry, undefined, 0), 2000);
+  });
+
+  it("caps the exponential at maxDelayMs", () => {
+    assert.equal(backoffDelayMs(20, retry, undefined, 0), retry.maxDelayMs);
+  });
+
+  it("adds up to +50% jitter", () => {
+    assert.equal(backoffDelayMs(0, retry, undefined, 1), 750);
+  });
+
+  it("lets a Retry-After win outright, still capped", () => {
+    assert.equal(backoffDelayMs(0, retry, 3000, 1), 3000);
+    assert.equal(backoffDelayMs(0, retry, 99_000, 0), retry.maxDelayMs);
+  });
+});
+
+describe("resolveRetryConfig", () => {
+  /** Run `fn` with `env` applied to `process.env`, restoring after. */
+  function withEnv(env: Record<string, string | undefined>, fn: () => void): void {
+    const saved = new Map<string, string | undefined>();
+    for (const key of Object.keys(env)) {
+      saved.set(key, process.env[key]);
+      if (env[key] === undefined) delete process.env[key];
+      else process.env[key] = env[key];
+    }
+    try {
+      fn();
+    } finally {
+      for (const [key, value] of saved) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  it("defaults to on with the built-in policy", () => {
+    withEnv(
+      {
+        PROXY_RETRY_ON_429: undefined,
+        PROXY_RETRY_MAX: undefined,
+        PROXY_RETRY_BASE_MS: undefined,
+        PROXY_RETRY_MAX_MS: undefined,
+      },
+      () => assert.deepEqual(resolveRetryConfig(), DEFAULT_RETRY),
+    );
+  });
+
+  it("honors a loose PROXY_RETRY_ON_429 to switch it off", () => {
+    withEnv({ PROXY_RETRY_ON_429: "no" }, () => assert.equal(resolveRetryConfig().enabled, false));
+    withEnv({ PROXY_RETRY_ON_429: "off" }, () => assert.equal(resolveRetryConfig().enabled, false));
+  });
+
+  it("reads numeric tunables from env", () => {
+    withEnv(
+      { PROXY_RETRY_MAX: "9", PROXY_RETRY_BASE_MS: "250", PROXY_RETRY_MAX_MS: "60000" },
+      () => {
+        const config = resolveRetryConfig();
+        assert.equal(config.maxRetries, 9);
+        assert.equal(config.baseDelayMs, 250);
+        assert.equal(config.maxDelayMs, 60_000);
+      },
+    );
+  });
+
+  it("lets an explicit override beat env (the CLI --no-retry-429 path)", () => {
+    withEnv({ PROXY_RETRY_ON_429: "true" }, () =>
+      assert.equal(resolveRetryConfig({ enabled: false }).enabled, false),
+    );
   });
 });

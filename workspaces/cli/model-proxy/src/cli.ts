@@ -24,7 +24,7 @@ import { classify, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { Command, CommanderError } from "commander";
 
 import { DatabricksBackend, type BackendOptions } from "./backend";
-import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
+import { DEFAULT_BIND_HOST, DEFAULT_PORT, resolveRetryConfig } from "./defaults";
 import { startProxyServer } from "./server";
 
 /**
@@ -47,6 +47,11 @@ interface ServeOpts extends CommonOpts {
   port: string;
   host: string;
   apiKey?: string;
+  /**
+   * Commander's negatable-flag value for `--no-retry-429`: `true` by default,
+   * `false` once the flag is passed. Off means relay upstream 429s unchanged.
+   */
+  retry429: boolean;
 }
 
 /** Map shared CLI flags onto {@link BackendOptions}. */
@@ -73,9 +78,13 @@ async function startProxy(
 ): Promise<{ backend: DatabricksBackend; server: Server; url: string }> {
   const backend = await DatabricksBackend.create(backendOptions(opts));
   const apiKey = opts.apiKey ?? process.env.PROXY_API_KEY;
+  // `--no-retry-429` (opts.retry429 === false) is the only explicit override;
+  // otherwise resolveRetryConfig layers PROXY_RETRY_* env then the on-default.
+  const retry = resolveRetryConfig(opts.retry429 === false ? { enabled: false } : {});
   const { server, url } = await startProxyServer(backend, {
     host: opts.host,
     port: Number(opts.port),
+    retry,
     ...(apiKey ? { apiKey } : {}),
   });
   return { backend, server, url };
@@ -99,7 +108,11 @@ export function buildProgram(): Command {
       .description("Local OpenAI-compatible proxy to Databricks Model Serving.")
       .option("-p, --port <port>", "port to listen on", String(DEFAULT_PORT))
       .option("-H, --host <host>", "address to bind", DEFAULT_BIND_HOST)
-      .option("-k, --api-key <key>", "require this bearer token from local clients"),
+      .option("-k, --api-key <key>", "require this bearer token from local clients")
+      .option(
+        "--no-retry-429",
+        "relay upstream 429s instead of retrying with backoff (default: retry)",
+      ),
   ).action(async (opts: ServeOpts) => {
     const { backend, url } = await startProxy(opts);
     process.stderr.write(`model-proxy -> ${backend.host}\n`);
@@ -113,6 +126,10 @@ export function buildProgram(): Command {
       .option("-p, --port <port>", "proxy port", String(DEFAULT_PORT))
       .option("-H, --host <host>", "proxy bind host", DEFAULT_BIND_HOST)
       .option("-m, --model <name>", "default model (fuzzy name ok)")
+      .option(
+        "--no-retry-429",
+        "relay upstream 429s instead of retrying with backoff (default: retry)",
+      )
       .option(
         "--client <cmd>",
         "terminal chat CLI to launch (run via your shell)",

@@ -7,4 +7,5 @@ export * as cli from "./src/cli";
 export * as defaults from "./src/defaults";
 export * as server from "./src/server";
 export type { BackendOptions } from "./src/backend";
+export type { RetryConfig } from "./src/defaults";
 export type { ProxyServerOptions, StartProxyOptions } from "./src/server";

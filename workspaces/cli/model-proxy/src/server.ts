@@ -32,12 +32,12 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { error, json, log } from "@dbx-tools/shared-core";
+import { async as asyncUtil, error, json, log } from "@dbx-tools/shared-core";
 import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 import { Agent } from "undici";
 
 import type { DatabricksBackend } from "./backend";
-import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
+import { DEFAULT_BIND_HOST, DEFAULT_PORT, DEFAULT_RETRY, type RetryConfig } from "./defaults";
 
 const { chatToResponsesRequest, responseToChatCompletion, sanitizeOpenResponsesRequest } =
   openaiResponses;
@@ -101,6 +101,11 @@ export interface ProxyServerOptions {
    * for a loopback bind but should be paired with a key on a wider one.
    */
   apiKey?: string;
+  /**
+   * Policy for absorbing upstream 429s. Omitted defaults to {@link
+   * DEFAULT_RETRY} (retry on). See {@link RetryConfig}.
+   */
+  retry?: RetryConfig;
 }
 
 /** Options for {@link startProxyServer}, adding the listen address. */
@@ -155,7 +160,7 @@ function clientAbortSignal(res: ServerResponse): AbortSignal {
 
 /**
  * POST a JSON body to a serving endpoint on the no-timeout
- * {@link upstreamDispatcher}, cancelled by the client hanging up.
+ * {@link upstreamDispatcher}, cancelled via `signal`.
  *
  * Every upstream call goes through here so the timeout and cancellation policy
  * is stated once. `dispatcher` is an undici extension that the DOM
@@ -165,15 +170,10 @@ function clientAbortSignal(res: ServerResponse): AbortSignal {
 async function upstreamFetch(
   url: string,
   headers: Record<string, string>,
-  body: unknown,
-  res: ServerResponse,
+  body: string,
+  signal: AbortSignal,
 ): Promise<Response> {
-  const init: RequestInit = {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal: clientAbortSignal(res),
-  };
+  const init: RequestInit = { method: "POST", headers, body, signal };
   // `dispatcher` is an undici extension the DOM `RequestInit` doesn't declare,
   // and it can't simply be typed on: `@types/node` pins its own `undici-types`
   // copy, so the `Agent` from our `undici` dependency is a structurally
@@ -182,6 +182,98 @@ async function upstreamFetch(
   // no cast expresses cleanly, and `fetch` reads it at runtime all the same.
   Reflect.set(init, "dispatcher", upstreamDispatcher);
   return fetch(url, init);
+}
+
+/**
+ * Delay (ms) a `429` response asks us to wait, from its `Retry-After` header,
+ * or `undefined` when absent/unparseable. Handles both header forms: an integer
+ * count of seconds, and an HTTP date to wait until (clamped to `>= 0`).
+ */
+export function parseRetryAfterMs(header: string | null, nowMs: number): number | undefined {
+  if (!header) return undefined;
+  const trimmed = header.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
+  const when = Date.parse(trimmed);
+  if (Number.isNaN(when)) return undefined;
+  return Math.max(0, when - nowMs);
+}
+
+/**
+ * Backoff (ms) before retry `attempt` (0-based): exponential from
+ * `baseDelayMs`, capped at `maxDelayMs`, with up to +50% jitter so concurrent
+ * retries from one agent don't resynchronize into the next burst. A server-sent
+ * `Retry-After` wins outright (still capped), since the server knows better
+ * than our schedule when it will accept traffic again.
+ */
+export function backoffDelayMs(
+  attempt: number,
+  retry: RetryConfig,
+  retryAfterMs: number | undefined,
+  jitter: number,
+): number {
+  if (retryAfterMs !== undefined) return Math.min(retryAfterMs, retry.maxDelayMs);
+  const exponential = retry.baseDelayMs * 2 ** attempt;
+  const capped = Math.min(exponential, retry.maxDelayMs);
+  return Math.round(capped * (1 + jitter * 0.5));
+}
+
+/**
+ * {@link upstreamFetch} with in-proxy `429` handling. When `retry.enabled`, a
+ * 429 is retried up to `retry.maxRetries` times with {@link backoffDelayMs}
+ * backoff instead of being surfaced; the throttled response body is drained
+ * each time so the connection is released. The retry happens BEFORE the caller
+ * writes any status line, so it is transparent to both streaming and
+ * non-streaming paths - the client only ever sees the final response.
+ *
+ * Bails early (returning the 429) when retries are exhausted, when the client
+ * has hung up (`signal.aborted`), or when the response carries no `Retry-After`
+ * and we would otherwise loop blind past the cap.
+ */
+async function upstreamFetchRetrying(
+  backend: DatabricksBackend,
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+  res: ServerResponse,
+  retry: RetryConfig,
+): Promise<Response> {
+  const signal = clientAbortSignal(res);
+  const payload = JSON.stringify(body);
+  let response = await upstreamFetch(url, headers, payload, signal);
+  if (!retry.enabled) return response;
+
+  for (let attempt = 0; response.status === 429 && attempt < retry.maxRetries; attempt++) {
+    const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"), Date.now());
+    const delayMs = backoffDelayMs(attempt, retry, retryAfterMs, jitterFraction());
+    // Release the throttled response's socket before waiting; its body is an
+    // error payload we are choosing not to relay.
+    await response.body?.cancel().catch(() => {});
+    logger.warn("upstream 429; backing off", {
+      attempt: attempt + 1,
+      maxRetries: retry.maxRetries,
+      delayMs,
+      ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+    });
+    try {
+      await asyncUtil.sleep(delayMs, signal);
+    } catch {
+      // Client hung up mid-wait: return the last 429 rather than issue a
+      // request no one is listening for.
+      return response;
+    }
+    // Fresh auth header per attempt so a long backoff can't outlive the token.
+    const retryHeaders = { ...(await backend.authHeaders()), ...headers };
+    response = await upstreamFetch(url, retryHeaders, payload, signal);
+  }
+  return response;
+}
+
+/**
+ * Jitter fraction in `[0, 1)`. Split out so tests can stub determinism;
+ * `Math.random` is fine for spreading retry timing.
+ */
+function jitterFraction(): number {
+  return Math.random();
 }
 
 /**
@@ -233,12 +325,13 @@ async function handleRequest(
       await handleModels(backend, res, wantsCodexShape);
       return;
     }
+    const retry = options.retry ?? DEFAULT_RETRY;
     if (req.method === "POST" && RESPONSES_PATHS.has(routePath)) {
-      await handleResponses(backend, req, res);
+      await handleResponses(backend, req, res, retry);
       return;
     }
     if (req.method === "POST" && PROXY_PATHS.has(routePath)) {
-      await handleProxy(backend, req, res);
+      await handleProxy(backend, req, res, retry);
       return;
     }
     sendJson(
@@ -305,6 +398,7 @@ async function handleProxy(
   backend: DatabricksBackend,
   req: IncomingMessage,
   res: ServerResponse,
+  retry: RetryConfig,
 ): Promise<void> {
   const body = await readJsonBody(req);
   const requested = typeof body.model === "string" ? body.model : undefined;
@@ -317,7 +411,15 @@ async function handleProxy(
   body.model = resolved.modelId;
 
   if (backend.isResponsesOnly(resolved.modelId)) {
-    await proxyChatViaResponses(backend, body, requested, resolved.modelId, resolved.matched, res);
+    await proxyChatViaResponses(
+      backend,
+      body,
+      requested,
+      resolved.modelId,
+      resolved.matched,
+      res,
+      retry,
+    );
     return;
   }
 
@@ -340,11 +442,13 @@ async function handleProxy(
     ...(dropped.length > 0 ? { dropped } : {}),
   });
 
-  const upstream = await upstreamFetch(
+  const upstream = await upstreamFetchRetrying(
+    backend,
     backend.invocationsUrl(resolved.modelId),
     headers,
     body,
     res,
+    retry,
   );
 
   res.writeHead(upstream.status, {
@@ -366,6 +470,7 @@ async function proxyChatViaResponses(
   modelId: string,
   matched: boolean,
   res: ServerResponse,
+  retry: RetryConfig,
 ): Promise<void> {
   const { responses, stream } = chatToResponsesRequest(body);
   responses.model = modelId;
@@ -399,7 +504,7 @@ async function proxyChatViaResponses(
     stream: false,
   });
 
-  const upstream = await upstreamFetch(upstreamUrl, headers, forward, res);
+  const upstream = await upstreamFetchRetrying(backend, upstreamUrl, headers, forward, res, retry);
 
   if (!upstream.ok) {
     const text = await upstream.text();
@@ -428,6 +533,7 @@ async function handleResponses(
   backend: DatabricksBackend,
   req: IncomingMessage,
   res: ServerResponse,
+  retry: RetryConfig,
 ): Promise<void> {
   const body = await readJsonBody(req);
   const requested = typeof body.model === "string" ? body.model : undefined;
@@ -464,7 +570,7 @@ async function handleResponses(
     ...(stripped ? { strippedNonFunctionTools: true } : {}),
   });
 
-  const upstream = await upstreamFetch(upstreamUrl, headers, forward, res);
+  const upstream = await upstreamFetchRetrying(backend, upstreamUrl, headers, forward, res, retry);
 
   res.writeHead(upstream.status, {
     "content-type": upstream.headers.get("content-type") ?? "application/json",
