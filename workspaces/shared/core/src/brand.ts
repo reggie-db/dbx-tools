@@ -35,7 +35,7 @@ export const BrandColorsSchema = z
   .object({
     primary: color.default("#FF3621").describe("Primary action and identity color."),
     primaryHover: color.default("#D92D18").describe("Primary hover or pressed color."),
-    accent: color.default("#00A972").describe("Secondary accent color."),
+    accent: color.default("#2EB88A").describe("Secondary accent color."),
     foreground: color.default("#0B2026").describe("Default text and mark color."),
     background: color.default("#FFFFFF").describe("Default page background."),
     surface: color.default("#F6F7F8").describe("Secondary surface background."),
