@@ -38,7 +38,8 @@ import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 import type { DatabricksBackend } from "./backend";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT } from "./defaults";
 
-const { chatToResponsesRequest, responseToChatCompletion } = openaiResponses;
+const { chatToResponsesRequest, responseToChatCompletion, sanitizeResponsesTools } =
+  openaiResponses;
 
 const logger = log.logger("model-proxy/server");
 
@@ -329,6 +330,10 @@ async function proxyChatViaResponses(
  * `POST /v1/responses`: forward the Responses body to Databricks' native
  * Responses / Open Responses surface (model stays in the body; URL is
  * workspace-level). Streaming and non-streaming both pass through as-is.
+ *
+ * Open Responses (Claude/Gemini/…) only accepts `function` tools, so Codex's
+ * built-in `web_search` / `local_shell` / … are stripped there. The OpenAI
+ * `/responses` path keeps them - GPT models support those tool types.
  */
 async function handleResponses(
   backend: DatabricksBackend,
@@ -345,24 +350,35 @@ async function handleResponses(
   const resolved = await backend.resolve(requested);
   body.model = resolved.modelId;
 
-  const wantsStream = body.stream === true;
+  const upstreamUrl = backend.responsesUrl(resolved.modelId);
+  // Cross-provider Open Responses rejects non-function tool types; OpenAI
+  // `/responses` keeps Codex built-ins (web_search, local_shell, custom, …).
+  const forward = upstreamUrl.includes("/open-responses")
+    ? sanitizeResponsesTools(body)
+    : body;
+
+  const wantsStream = forward.stream === true;
   const headers = await backend.authHeaders();
   headers["content-type"] = "application/json";
   headers.accept = wantsStream ? "text/event-stream" : "application/json";
 
-  const upstreamUrl = backend.responsesUrl(resolved.modelId);
+  const stripped =
+    Array.isArray(body.tools) &&
+    (!Array.isArray(forward.tools) || forward.tools.length !== body.tools.length);
+
   logger.info("responses", {
     requested,
     resolved: resolved.modelId,
     matched: resolved.matched,
     upstream: upstreamUrl,
     stream: wantsStream,
+    ...(stripped ? { strippedNonFunctionTools: true } : {}),
   });
 
   const upstream = await fetch(upstreamUrl, {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(forward),
   });
 
   res.writeHead(upstream.status, {

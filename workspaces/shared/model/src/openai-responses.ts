@@ -26,6 +26,9 @@
  *   - {@link readResponsesOutput} reads the other direction: pull the answer
  *     text and citations out of a `response` object returned by an endpoint
  *     that speaks Responses natively (the Databricks native web-search tool).
+ *   - {@link sanitizeResponsesTools} keeps only `function` tools on a Responses
+ *     request body (for `/open-responses` / Anthropic, which reject Codex
+ *     built-ins like `web_search`).
  *
  * Only the surface real clients exercise is translated; unknown fields are
  * ignored rather than rejected, so a newer client degrades instead of breaking.
@@ -606,4 +609,37 @@ export function readResponsesOutput(payload: Record<string, unknown>): Responses
 /** Coerce an unknown JSON value to a trimmed string, or `""` when it isn't one. */
 function str(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Strip tool types the upstream model doesn't support from a Responses request
+ * body, returning a shallow copy safe to forward (the input is not mutated).
+ *
+ * Clients like the Codex CLI include built-in Responses tools (`web_search`,
+ * `local_shell`, `custom`, ...) alongside their `function` tools. Databricks'
+ * Open Responses surface for Anthropic/Claude (and other non-OpenAI providers)
+ * only accepts `function` tools and hard-errors otherwise:
+ *   "Anthropic does not support tool type 'web_search'. Only 'function' is supported."
+ * Call this before forwarding to `/serving-endpoints/open-responses`. The OpenAI
+ * `/serving-endpoints/responses` path should keep built-ins (GPT supports them).
+ * If filtering empties the list, `tools` / `tool_choice` / `parallel_tool_calls`
+ * are dropped so we never send an empty `tools: []`.
+ */
+export function sanitizeResponsesTools(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!Array.isArray(body.tools) || body.tools.length === 0) return body;
+  const fnTools = body.tools.filter(
+    (t) => t && typeof t === "object" && (t as Record<string, unknown>).type === "function",
+  );
+  if (fnTools.length === body.tools.length) return body; // nothing to strip
+  const next: Record<string, unknown> = { ...body };
+  if (fnTools.length > 0) {
+    next.tools = fnTools;
+  } else {
+    delete next.tools;
+    delete next.tool_choice;
+    delete next.parallel_tool_calls;
+  }
+  return next;
 }
