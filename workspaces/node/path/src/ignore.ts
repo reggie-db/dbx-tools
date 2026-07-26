@@ -6,9 +6,12 @@
  * composition (`and`/`or`/`negate`) lives in {@link ./match}.
  *
  * Consumers:
- * - {@link ignorePatterns} - yields the enabled glob strings (for projen prettier/gitignore).
- * - {@link ignorePathMatcher} - returns a single {@link PathMatcher} for {@link findFiles}
- *   and {@link watchFiles}.
+ * - {@link ignorePatterns} - yields the enabled glob strings (for projen
+ *   prettier/gitignore). Pass `{ test: false }` there: the `test` group is for
+ *   filesystem scanning only (skip test dirs when discovering packages /
+ *   watching), not for VCS or formatter ignore files.
+ * - {@link ignorePathMatcher} - returns a single {@link PathMatcher} for
+ *   {@link findFiles} and {@link watchFiles} (keeps `test: true` by default).
  *
  * @module
  */
@@ -26,7 +29,11 @@ export type IgnorePatternOptions = {
   dot?: boolean;
   /** Temporary directories (`tmp`, `.tmp`, `scratch`, etc.). */
   temp?: boolean;
-  /** Test directories and `*.test.*` / `*.spec.*` naming conventions. */
+  /**
+   * Test directories and `*.test.*` / `*.spec.*` naming conventions.
+   * Scanning/watch default on; omit (`false`) when emitting `.gitignore` /
+   * `.prettierignore` so tests stay tracked and formatable.
+   */
   test?: boolean;
   /**
    * Lockfile ignore group (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`,
@@ -168,7 +175,9 @@ function ignoreMatchPredicates(
  * Yields the glob strings for each enabled built-in ignore group.
  *
  * Useful when a consumer needs literal patterns (e.g. projen `.gitignore` /
- * `.prettierignore`) rather than a compiled {@link PathMatcher}.
+ * `.prettierignore`) rather than a compiled {@link PathMatcher}. For those
+ * file emitters pass `{ test: false }` - the test group belongs to scanning
+ * only ({@link ignorePathMatcher}), not VCS/formatter ignores.
  *
  * @param options - Group toggles; omitted flags default to enabled.
  */

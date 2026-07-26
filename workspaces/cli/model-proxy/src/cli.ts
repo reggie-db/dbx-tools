@@ -8,6 +8,13 @@
  * fuzzy name snaps to. Auth comes from the standard Databricks SDK resolution
  * (env vars, `--profile`, or `databricks auth login`).
  *
+ * Shared flags (`--profile`, `--workspace-host`, `--threshold`, …) are declared
+ * on the root *and* redeclared on subcommands for help discoverability. Commander
+ * parks the values on the parent when both declare the same flag, so every
+ * subcommand action must read {@link Command.optsWithGlobals} - local `opts`
+ * alone misses `--profile` (env `DATABRICKS_CONFIG_PROFILE` still worked because
+ * the SDK reads that without the CLI flag).
+ *
  * @module
  */
 
@@ -51,6 +58,15 @@ function backendOptions(opts: CommonOpts): BackendOptions {
   };
 }
 
+/**
+ * Subcommand options merged with parent (root) options. Required for shared
+ * flags that are declared on both - Commander stores them on the parent, so
+ * the action's local `opts` alone omits `--profile` / `--workspace-host`.
+ */
+function globalOpts<T>(command: Command): T {
+  return command.optsWithGlobals() as T;
+}
+
 /** Create the backend and start the proxy from the shared listen flags. */
 async function startProxy(
   opts: ServeOpts,
@@ -65,102 +81,106 @@ async function startProxy(
   return { backend, server, url };
 }
 
+/** Shared auth / fuzzy-match flags added to the root and every subcommand. */
+function addAuthOptions(command: Command): Command {
+  return command
+    .option("--profile <profile>", "Databricks config profile")
+    .option("--workspace-host <url>", "override the Databricks workspace host")
+    .option("-t, --threshold <n>", "fuzzy match threshold (0..1)");
+}
+
 /** Build the `dbx-tools-model-proxy` commander program (no side effects until parsed). */
 export function buildProgram(): Command {
   // Serving is the root action, not a subcommand: the bare command runs the
   // proxy, and `chat`/`models`/`resolve` are the named detours off it.
-  const program = new Command()
-    .name("dbx-tools-model-proxy")
-    .description("Local OpenAI-compatible proxy to Databricks Model Serving.")
-    .option("-p, --port <port>", "port to listen on", String(DEFAULT_PORT))
-    .option("-H, --host <host>", "address to bind", DEFAULT_BIND_HOST)
-    .option("--profile <profile>", "Databricks config profile")
-    .option("--workspace-host <url>", "override the Databricks workspace host")
-    .option("-t, --threshold <n>", "fuzzy match threshold (0..1)")
-    .option("-k, --api-key <key>", "require this bearer token from local clients")
-    .action(async (opts: ServeOpts) => {
-      const { backend, url } = await startProxy(opts);
-      process.stderr.write(`model-proxy -> ${backend.host}\n`);
-      process.stderr.write(`  OpenAI base URL: ${url}/v1\n`);
-    });
+  const program = addAuthOptions(
+    new Command()
+      .name("dbx-tools-model-proxy")
+      .description("Local OpenAI-compatible proxy to Databricks Model Serving.")
+      .option("-p, --port <port>", "port to listen on", String(DEFAULT_PORT))
+      .option("-H, --host <host>", "address to bind", DEFAULT_BIND_HOST)
+      .option("-k, --api-key <key>", "require this bearer token from local clients"),
+  ).action(async (opts: ServeOpts) => {
+    const { backend, url } = await startProxy(opts);
+    process.stderr.write(`model-proxy -> ${backend.host}\n`);
+    process.stderr.write(`  OpenAI base URL: ${url}/v1\n`);
+  });
 
-  program
-    .command("chat")
-    .description("Start the proxy and launch a terminal chat client wired to it.")
-    .option("-p, --port <port>", "proxy port", String(DEFAULT_PORT))
-    .option("-H, --host <host>", "proxy bind host", DEFAULT_BIND_HOST)
-    .option("--profile <profile>", "Databricks config profile")
-    .option("--workspace-host <url>", "override the Databricks workspace host")
-    .option("-t, --threshold <n>", "fuzzy match threshold (0..1)")
-    .option("-m, --model <name>", "default model (fuzzy name ok)")
-    .option(
-      "--client <cmd>",
-      "terminal chat CLI to launch (run via your shell)",
-      process.env.PROXY_CHAT_CLIENT ?? DEFAULT_CHAT_CLIENT,
-    )
-    .action(async (opts: ServeOpts & { model?: string; client: string }) => {
-      const { backend, server, url } = await startProxy(opts);
-      const baseUrl = `${url}/v1`;
-      process.stderr.write(
-        `model-proxy -> ${backend.host}\n  OpenAI base URL: ${baseUrl}\n  launching: ${opts.client}\n`,
-      );
-      // Hand off to an off-the-shelf OpenAI-compatible client, pointing it at
-      // the proxy via the standard env vars (plus the provider switches a
-      // couple of popular CLIs read). `shell: true` lets `--client` carry its
-      // own args, e.g. `--client "bunx merlion"`.
-      const child = spawn(opts.client, {
-        stdio: "inherit",
-        shell: true,
-        env: {
-          ...process.env,
-          OPENAI_BASE_URL: baseUrl,
-          OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "model-proxy",
-          ...(opts.model ? { OPENAI_MODEL: opts.model } : {}),
-          LLM_PROVIDER: "openai-compat",
-          CLAUDE_CODE_USE_OPENAI: "1",
-        },
-      });
-      child.on("exit", (code) => {
-        server.close();
-        process.exit(code ?? 0);
-      });
-      process.on("SIGINT", () => child.kill("SIGINT"));
+  addAuthOptions(
+    program
+      .command("chat")
+      .description("Start the proxy and launch a terminal chat client wired to it.")
+      .option("-p, --port <port>", "proxy port", String(DEFAULT_PORT))
+      .option("-H, --host <host>", "proxy bind host", DEFAULT_BIND_HOST)
+      .option("-m, --model <name>", "default model (fuzzy name ok)")
+      .option(
+        "--client <cmd>",
+        "terminal chat CLI to launch (run via your shell)",
+        process.env.PROXY_CHAT_CLIENT ?? DEFAULT_CHAT_CLIENT,
+      ),
+  ).action(async (_local: ServeOpts & { model?: string; client: string }, command: Command) => {
+    const opts = globalOpts<ServeOpts & { model?: string; client: string }>(command);
+    const { backend, server, url } = await startProxy(opts);
+    const baseUrl = `${url}/v1`;
+    process.stderr.write(
+      `model-proxy -> ${backend.host}\n  OpenAI base URL: ${baseUrl}\n  launching: ${opts.client}\n`,
+    );
+    // Hand off to an off-the-shelf OpenAI-compatible client, pointing it at
+    // the proxy via the standard env vars (plus the provider switches a
+    // couple of popular CLIs read). `shell: true` lets `--client` carry its
+    // own args, e.g. `--client "bunx merlion"`.
+    const child = spawn(opts.client, {
+      stdio: "inherit",
+      shell: true,
+      env: {
+        ...process.env,
+        OPENAI_BASE_URL: baseUrl,
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "model-proxy",
+        ...(opts.model ? { OPENAI_MODEL: opts.model } : {}),
+        LLM_PROVIDER: "openai-compat",
+        CLAUDE_CODE_USE_OPENAI: "1",
+      },
     });
+    child.on("exit", (code) => {
+      server.close();
+      process.exit(code ?? 0);
+    });
+    process.on("SIGINT", () => child.kill("SIGINT"));
+  });
 
-  program
-    .command("models")
-    .description("List resolvable Databricks serving endpoints (as JSON).")
-    .option("--profile <profile>", "Databricks config profile")
-    .option("--workspace-host <url>", "override the Databricks workspace host")
-    .option("--chat", "only list chat-capable endpoints")
-    .action(async (opts: CommonOpts & { chat?: boolean }) => {
-      const backend = await DatabricksBackend.create(backendOptions(opts));
-      const endpoints = await backend.models();
-      // Enrich each endpoint with a derived `capabilities` object so consumers
-      // filter on capability rather than re-deriving it from raw `task`/`class`
-      // strings. `chat` = OpenAI chat/completions + Responses (what an agent
-      // like Codex needs); `embedding` = vector endpoints; `tools` = whether the
-      // endpoint supports function/tool calls (all chat endpoints here do).
-      const enriched = endpoints.map((endpoint) => ({
-        ...endpoint,
-        capabilities: classify.endpointCapabilities(endpoint),
-      }));
-      const out = opts.chat ? enriched.filter((e) => e.capabilities.chat) : enriched;
-      process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
-    });
+  addAuthOptions(
+    program
+      .command("models")
+      .description("List resolvable Databricks serving endpoints (as JSON).")
+      .option("--chat", "only list chat-capable endpoints"),
+  ).action(async (_local: CommonOpts & { chat?: boolean }, command: Command) => {
+    const opts = globalOpts<CommonOpts & { chat?: boolean }>(command);
+    const backend = await DatabricksBackend.create(backendOptions(opts));
+    const endpoints = await backend.models();
+    // Enrich each endpoint with a derived `capabilities` object so consumers
+    // filter on capability rather than re-deriving it from raw `task`/`class`
+    // strings. `chat` = OpenAI chat/completions + Responses (what an agent
+    // like Codex needs); `embedding` = vector endpoints; `tools` = whether the
+    // endpoint supports function/tool calls (all chat endpoints here do).
+    const enriched = endpoints.map((endpoint) => ({
+      ...endpoint,
+      capabilities: classify.endpointCapabilities(endpoint),
+    }));
+    const out = opts.chat ? enriched.filter((e) => e.capabilities.chat) : enriched;
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+  });
 
-  program
-    .command("resolve")
-    .description("Show what a fuzzy model name resolves to (as JSON).")
-    .argument("<query...>", "model name / fuzzy search terms")
-    .option("--profile <profile>", "Databricks config profile")
-    .option("--workspace-host <url>", "override the Databricks workspace host")
-    .option("-t, --threshold <n>", "fuzzy match threshold (0..1)")
-    .action(async (query: string[], opts: CommonOpts) => {
-      const backend = await DatabricksBackend.create(backendOptions(opts));
-      const resolved = await backend.resolve(query.join(" "));
-      process.stdout.write(`${JSON.stringify(resolved, null, 2)}\n`);
-    });
+  addAuthOptions(
+    program
+      .command("resolve")
+      .description("Show what a fuzzy model name resolves to (as JSON).")
+      .argument("<query...>", "model name / fuzzy search terms"),
+  ).action(async (query: string[], _local: CommonOpts, command: Command) => {
+    const opts = globalOpts<CommonOpts>(command);
+    const backend = await DatabricksBackend.create(backendOptions(opts));
+    const resolved = await backend.resolve(query.join(" "));
+    process.stdout.write(`${JSON.stringify(resolved, null, 2)}\n`);
+  });
 
   return program;
 }

@@ -6,9 +6,9 @@
  * `eval "$(dbx-tools-appkit-env)"` to load a resolved Lakebase connection into your shell.
  */
 
-import { Command, CommanderError } from "commander";
-import { log } from "@dbx-tools/shared-core";
 import { createApp } from "@dbx-tools/appkit";
+import { log } from "@dbx-tools/shared-core";
+import { Command, CommanderError } from "commander";
 import {
   defaultEnvExportFormat,
   diffEnv,

@@ -15,6 +15,9 @@
  * @module
  */
 
+import { plugin } from "@dbx-tools/appkit";
+import { fallback } from "@dbx-tools/model";
+import { log, object, string } from "@dbx-tools/shared-core";
 import type { AgentConfig, ToolsInput } from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
 import type { Tool } from "@mastra/core/tools";
@@ -27,12 +30,9 @@ import type { MastraPluginConfig } from "./config";
 import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie";
 import type { MemoryBuilder } from "./memory";
 import { buildModel } from "./model";
-import { fallback } from "@dbx-tools/model";
 import { ResultProcessor, stripStaleChartsProcessor } from "./processors";
 import { buildSummarizeTool } from "./summarize";
 import { createWorkspace } from "./workspaces";
-import { log, object, string } from "@dbx-tools/shared-core";
-import { plugin } from "@dbx-tools/appkit";
 
 /**
  * Tool record accepted by every Mastra `Agent.tools` field and by the

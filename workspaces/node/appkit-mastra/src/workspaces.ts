@@ -11,6 +11,7 @@
  */
 
 import type { WorkspaceClient } from "@databricks/sdk-experimental";
+import { log, string, token } from "@dbx-tools/shared-core";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
   CompositeFilesystem,
@@ -22,7 +23,6 @@ import {
 
 import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY, type User } from "./config";
 import { DatabricksWorkspaceFilesystem, emptyFilesystem } from "./filesystems";
-import { log, string, token } from "@dbx-tools/shared-core";
 
 /* ------------------------------ constants ------------------------------ */
 

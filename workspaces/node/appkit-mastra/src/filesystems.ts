@@ -13,8 +13,10 @@
  * @module
  */
 
+import { posix as path } from "node:path";
 import { getExecutionContext } from "@databricks/appkit";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
+import { error, functionModule, hash, log } from "@dbx-tools/shared-core";
 import type {
   CopyOptions,
   FileContent,
@@ -26,8 +28,6 @@ import type {
   ReadOptions,
   RemoveOptions,
   WriteOptions,
-} from "@mastra/core/workspace";
-import {
   DirectoryNotEmptyError,
   DirectoryNotFoundError,
   FileExistsError,
@@ -39,8 +39,6 @@ import {
   WorkspaceReadOnlyError,
   type MastraFilesystemOptions,
 } from "@mastra/core/workspace";
-import { posix as path } from "node:path";
-import { error, functionModule, hash, log } from "@dbx-tools/shared-core";
 
 /* ------------------------------ constants ------------------------------ */
 
@@ -764,7 +762,7 @@ export class DatabricksWorkspaceFilesystem extends MastraFilesystem {
       const entries = await this.listAbsoluteDirectory(absolutePath);
       const filtered = this.filterEntries(entries, options);
       if (!options?.recursive) return filtered;
-      return this.readDirectoryRecursive(absolutePath, options, 0);
+      return await this.readDirectoryRecursive(absolutePath, options, 0);
     } catch (err) {
       this.rethrow(err, inputPath);
     }

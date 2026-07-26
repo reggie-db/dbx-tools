@@ -20,8 +20,8 @@
  */
 
 import { WorkspaceClient } from "@databricks/sdk-experimental";
-import type { GenieDatasetData } from "@dbx-tools/shared-mastra";
 import { databricks } from "@dbx-tools/appkit";
+import type { GenieDatasetData } from "@dbx-tools/shared-mastra";
 
 /**
  * Hard server-side cap on rows returned by the

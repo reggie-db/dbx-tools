@@ -29,8 +29,8 @@
  * @module
  */
 
-import { object } from "@dbx-tools/shared-core";
 import { match, type PathMatcher } from "@dbx-tools/path";
+import { object } from "@dbx-tools/shared-core";
 
 /** A compiled URL allow-list. Build one with {@link toUrlAllowList}. */
 export interface UrlAllowList {

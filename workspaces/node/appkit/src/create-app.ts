@@ -21,8 +21,8 @@
  * @module
  */
 
-import { log } from "@dbx-tools/shared-core";
 import { createApp as appkitCreateApp, getUsernameWithApiLookup } from "@databricks/appkit";
+import { log } from "@dbx-tools/shared-core";
 
 import {
   applyLakebaseToEnv,

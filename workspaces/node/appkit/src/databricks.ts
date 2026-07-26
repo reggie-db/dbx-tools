@@ -10,9 +10,9 @@
  * @module
  */
 
-import { async } from "@dbx-tools/shared-core";
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
+import { async } from "@dbx-tools/shared-core";
 
 /**
  * Detect the Databricks App runtime from environment shape: requires a

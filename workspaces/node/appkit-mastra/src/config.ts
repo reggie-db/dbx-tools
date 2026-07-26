@@ -8,6 +8,7 @@
  */
 
 import type { BasePluginConfig } from "@databricks/appkit";
+import { appkit } from "@dbx-tools/appkit";
 import type { BrandContext } from "@dbx-tools/shared-core";
 import type { AgentConfig } from "@mastra/core/agent";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
@@ -15,7 +16,6 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
 import type { MastraAgentDefinition, MastraTools } from "./agents";
 import type { GenieSpacesConfig } from "./genie";
-import { appkit } from "@dbx-tools/appkit";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the

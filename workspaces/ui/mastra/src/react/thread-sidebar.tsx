@@ -178,7 +178,6 @@ export const ThreadSidebar = ({
                   <li key={thread.id}>
                     <div className="px-2 py-1">
                       <Input
-                        // eslint-disable-next-line jsx-a11y/no-autofocus -- focus the field the user just opened
                         autoFocus
                         value={draftTitle}
                         maxLength={wire.MASTRA_THREAD_TITLE_MAX}

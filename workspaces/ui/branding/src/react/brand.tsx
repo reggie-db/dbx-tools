@@ -1,3 +1,4 @@
+import { brand } from "@dbx-tools/shared-core";
 import {
   createContext,
   type ImgHTMLAttributes,
@@ -6,7 +7,6 @@ import {
   useEffect,
   useMemo,
 } from "react";
-import { brand } from "@dbx-tools/shared-core";
 import { applyBrandContext, type BrandAssetResolver, resolveBrandAsset } from "../browser";
 
 interface BrandState {

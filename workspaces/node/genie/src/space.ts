@@ -13,10 +13,10 @@
  * @module
  */
 
-import { error, log, object, string } from "@dbx-tools/shared-core";
-import { databricks } from "@dbx-tools/appkit";
-import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
+import { databricks } from "@dbx-tools/appkit";
+import { error, log, object, string } from "@dbx-tools/shared-core";
+import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
 
 const logger = log.logger("genie/space");
 

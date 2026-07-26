@@ -11,11 +11,11 @@
  * @module
  */
 
-import { override } from "@dbx-tools/shared-mastra";
 import { serving as nodeServing } from "@dbx-tools/model";
+import { string } from "@dbx-tools/shared-core";
+import { override } from "@dbx-tools/shared-mastra";
 
 import type { MastraPluginConfig } from "./config";
-import { string } from "@dbx-tools/shared-core";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the

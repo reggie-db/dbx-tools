@@ -21,6 +21,7 @@
  * @module
  */
 
+import { log } from "@dbx-tools/shared-core";
 import {
   wire,
   type MastraDeleteThreadResponse,
@@ -35,7 +36,6 @@ import type { ContextWithMastra } from "@mastra/core/server";
 import { registerApiRoute } from "@mastra/core/server";
 
 import { clampPerPage, parseIntParam } from "./pagination";
-import { log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("mastra/threads");
 

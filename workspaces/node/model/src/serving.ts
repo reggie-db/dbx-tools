@@ -21,6 +21,8 @@
  * @module
  */
 
+import { CacheManager } from "@databricks/appkit";
+import { appkit } from "@dbx-tools/appkit";
 import { error, log, string } from "@dbx-tools/shared-core";
 import {
   classify,
@@ -29,8 +31,6 @@ import {
   type ModelProfile,
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
-import { appkit } from "@dbx-tools/appkit";
-import { CacheManager } from "@databricks/appkit";
 import Fuse from "fuse.js";
 
 import { MODEL_CLASS_ORDER } from "./classes";

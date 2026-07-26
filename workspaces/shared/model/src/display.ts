@@ -103,11 +103,7 @@ function renderSegment(segment: string): string {
     const token = tokens[i]!;
     const lower = token.toLowerCase();
     // Glue a size unit onto the preceding number: `120` + `b` -> `120B`.
-    if (
-      SIZE_UNITS.has(lower) &&
-      out.length > 0 &&
-      /^\d+$/.test(out[out.length - 1]!)
-    ) {
+    if (SIZE_UNITS.has(lower) && out.length > 0 && /^\d+$/.test(out[out.length - 1]!)) {
       out[out.length - 1] = `${out[out.length - 1]}${lower.toUpperCase()}`;
       continue;
     }

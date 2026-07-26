@@ -19,6 +19,7 @@
  * @module
  */
 
+import { string } from "@dbx-tools/shared-core";
 import { model } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
 import type { MastraModelConfig } from "@mastra/core/llm";
@@ -28,7 +29,6 @@ import { z } from "zod";
 
 import type { MastraPluginConfig } from "./config";
 import { buildModel } from "./model";
-import { string } from "@dbx-tools/shared-core";
 
 /** Fast / small chat tier used for both titling and summaries. */
 const SUMMARY_MODEL_CLASS = model.ModelClass.ChatFast;

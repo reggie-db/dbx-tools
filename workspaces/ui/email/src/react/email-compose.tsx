@@ -1,3 +1,4 @@
+import type { EmailAttachment, EmailMessage } from "@dbx-tools/shared-email";
 import {
   Button,
   Input,
@@ -10,7 +11,6 @@ import {
   Textarea,
   cn,
 } from "@dbx-tools/ui-appkit/react";
-import type { EmailAttachment, EmailMessage } from "@dbx-tools/shared-email";
 import { EyeIcon, PaperclipIcon, PencilIcon, SendIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { EmailBody } from "./email-body";

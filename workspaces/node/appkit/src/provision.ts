@@ -21,8 +21,8 @@
  * @module
  */
 
-import { error, type log } from "@dbx-tools/shared-core";
 import { createLakebasePool, getWorkspaceClient } from "@databricks/appkit";
+import { error, type log } from "@dbx-tools/shared-core";
 
 import { isAppEnv } from "./databricks";
 

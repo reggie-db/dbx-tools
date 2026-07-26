@@ -12,8 +12,8 @@
  * @module
  */
 
-import type { MastraWriter } from "@dbx-tools/shared-mastra";
 import { error, log } from "@dbx-tools/shared-core";
+import type { MastraWriter } from "@dbx-tools/shared-mastra";
 
 /**
  * Best-effort `writer.write`. No-op when `writer` is undefined;

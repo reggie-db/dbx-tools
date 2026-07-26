@@ -326,7 +326,7 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
           prettierOptions: {
             settings: PRETTIER_SETTINGS,
             ignoreFile: true,
-            ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns()] },
+            ignoreFileOptions: { ignorePatterns: [...ignore.ignorePatterns({ test: false })] },
           },
         }
       : {}),
@@ -566,6 +566,26 @@ class GeneratedSource extends Component {
   }
 }
 
+/**
+ * Ignore each `codegen`-declaring package's `src/` from the root ESLint config.
+ * Those modules are read-only (ts-to-zod); lint `--fix` otherwise EACCES-crashes
+ * on them. Runs in `preSynthesize` so mixin-added `codegen.inputs` are visible.
+ */
+class EslintIgnoreCodegen extends Component {
+  public override preSynthesize(): void {
+    const eslint = javascript.Eslint.of(this.project);
+    if (!eslint) return;
+    const rootAbs = resolve(this.project.outdir);
+    for (const sub of this.project.subprojects) {
+      if (!(sub instanceof javascript.NodeProject)) continue;
+      const codegen = sub.package.manifest.codegen as { inputs?: unknown[] } | undefined;
+      if (!codegen?.inputs?.length) continue;
+      const rel = toPosix(relative(rootAbs, sub.outdir));
+      eslint.addIgnorePattern(`${rel}/src/**`);
+    }
+  }
+}
+
 /** Default leading path segment stripped from a package's name (not its tag). */
 const DEFAULT_OMIT_RELATIVE_PREFIX = ["node"];
 
@@ -767,7 +787,7 @@ function initProject(
     formatTask.prependExec("prettier . --write", { receiveArgs: true });
   }
 
-  project.gitignore.addPatterns(...[...ignore.ignorePatterns()]);
+  project.gitignore.addPatterns(...[...ignore.ignorePatterns({ test: false })]);
   const roots = options.workspacePackageRoots ?? DEFAULT_WORKSPACE_PACKAGE_ROOTS;
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
@@ -779,7 +799,8 @@ function initProject(
   // each file to its own package tsconfig (so type-aware rules work tree-wide), and
   // `import/no-extraneous-dependencies` still checks each file against its nearest
   // package.json. Formatting defers to the root Prettier to avoid rule/formatter
-  // conflicts (e.g. quote style).
+  // conflicts (e.g. quote style). Spawned from `test`, so ignorePatterns must cover
+  // every read-only generated path - `--fix` EACCES-crashes on them otherwise.
   const eslint = new javascript.Eslint(project, {
     dirs: [...roots],
     fileExtensions: [".ts", ".tsx"],
@@ -787,13 +808,17 @@ function initProject(
     prettier: Boolean(project.prettier),
     tsconfigPath: "./tsconfig.json",
   });
-  // Generated read-only outputs (barrels, openapi clients, vite configs). ESLint
-  // --fix cannot rewrite them; they are stamped by the barrel generator / dbx-tools / projen.
+  // Generated read-only outputs (barrels, openapi clients, vite configs, codegen).
+  // ESLint --fix cannot rewrite them; they are stamped by the barrel generator /
+  // openapi / codegen / projen.
   for (const root of roots) {
     eslint.addIgnorePattern(`${root}/openapi/**`);
     eslint.addIgnorePattern(`${root}/**/index.ts`);
   }
   eslint.addIgnorePattern("**/vite.config.ts");
+  // Codegen packages declare `codegen.inputs` via mixins after construction; ignore
+  // their `src/` once manifests are known (preSynthesize), same reason as openapi.
+  new EslintIgnoreCodegen(project);
   eslint.addRules({
     "import/no-relative-packages": "error",
     // Monorepo tooling legitimately uses devDeps (typescript, tsx, projen) in src.

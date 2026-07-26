@@ -13,8 +13,8 @@
  */
 
 import { getExecutionContext } from "@databricks/appkit";
-import { email, type EmailMessage } from "@dbx-tools/shared-email";
 import { log, string } from "@dbx-tools/shared-core";
+import { email, type EmailMessage } from "@dbx-tools/shared-email";
 import { createTool } from "@mastra/core/tools";
 import { resolveSenderAddress } from "./sender";
 import { getEmailRuntime, sendEmail } from "./transport";

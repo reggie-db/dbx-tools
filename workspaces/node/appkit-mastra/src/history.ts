@@ -18,6 +18,7 @@
  * @module
  */
 
+import { error, log } from "@dbx-tools/shared-core";
 import type {
   MastraClearHistoryResponse,
   MastraHistoryResponse,
@@ -31,7 +32,6 @@ import type { ContextWithMastra } from "@mastra/core/server";
 import { registerApiRoute } from "@mastra/core/server";
 
 import { clampPerPage, parseIntParam } from "./pagination";
-import { error, log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("mastra/history");
 

@@ -35,11 +35,11 @@
  * @module
  */
 
+import { setTimeout as sleep } from "node:timers/promises";
+import { getWorkspaceClient } from "@databricks/appkit";
+import { project } from "@dbx-tools/core";
 import { log, string } from "@dbx-tools/shared-core";
 import { resolveConfigValue } from "./config";
-import { project } from "@dbx-tools/core";
-import { getWorkspaceClient } from "@databricks/appkit";
-import { setTimeout as sleep } from "node:timers/promises";
 
 import {
   parseAddress,

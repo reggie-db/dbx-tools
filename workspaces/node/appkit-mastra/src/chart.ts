@@ -28,7 +28,9 @@
  */
 
 import { CacheManager } from "@databricks/appkit";
+import { async, error, hash, log, string, type BrandContext } from "@dbx-tools/shared-core";
 import { wire, type Chart, type ChartResult } from "@dbx-tools/shared-mastra";
+import { model } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
@@ -36,8 +38,6 @@ import { z } from "zod";
 
 import type { MastraPluginConfig } from "./config";
 import { buildModel } from "./model";
-import { model } from "@dbx-tools/shared-model";
-import { async, error, hash, log, string, type BrandContext } from "@dbx-tools/shared-core";
 
 const logger = log.logger("mastra/chart");
 

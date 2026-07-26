@@ -45,7 +45,8 @@
     "coverage",
     "workspaces/openapi/**",
     "workspaces/**/index.ts",
-    "**/vite.config.ts"
+    "**/vite.config.ts",
+    "workspaces/shared/sdk-model/src/**"
   ],
   "rules": {
     "curly": [

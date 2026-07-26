@@ -27,8 +27,8 @@ import {
   type IAppRouter,
   type PluginManifest,
 } from "@databricks/appkit";
-import type { EmailMessage, EmailResult, EmailSenders } from "@dbx-tools/shared-email";
 import { error, log } from "@dbx-tools/shared-core";
+import type { EmailMessage, EmailResult, EmailSenders } from "@dbx-tools/shared-email";
 import type express from "express";
 import { EMAIL_CONFIG_SCHEMA, type EmailPluginConfig } from "./config";
 import { isSenderAllowed, listSenderOptions, resolveSenderAddress } from "./sender";

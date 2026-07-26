@@ -12,11 +12,11 @@
  * @module
  */
 
-import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { functionModule, object, log, string } from "@dbx-tools/shared-core";
 import { file, project } from "@dbx-tools/core";
+import { functionModule, object, log, string } from "@dbx-tools/shared-core";
 import { parse as parseYamlText } from "yaml";
 import { z } from "zod";
 

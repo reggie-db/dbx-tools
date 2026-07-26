@@ -13,10 +13,10 @@
  * @module
  */
 
-import type { EmailMessage } from "@dbx-tools/shared-email";
-import { string } from "@dbx-tools/shared-core";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { string } from "@dbx-tools/shared-core";
+import type { EmailMessage } from "@dbx-tools/shared-email";
 import type { EmailBrand } from "./brand";
 import { renderEmailHtml } from "./email-html";
 

@@ -29,18 +29,18 @@
  * @module
  */
 
+import { randomUUID } from "node:crypto";
 import { getUsernameWithApiLookup } from "@databricks/appkit";
+import { log } from "@dbx-tools/shared-core";
 import { fastembed } from "@mastra/fastembed";
 import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
-import { randomUUID } from "node:crypto";
 import { Pool, type PoolConfig } from "pg";
 
 import type { MastraAgentDefinition, MastraMemoryConfigOverride } from "./agents";
 import type { MastraPluginConfig } from "./config";
 import { agentStorageSchemaName } from "./storage-schema";
 import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize";
-import { log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("mastra/memory");
 

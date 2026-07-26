@@ -14,7 +14,7 @@ export function statSync(path: string): Stats | undefined {
   if (path) {
     try {
       return nodeStatSync(path);
-    } catch { }
+    } catch {}
   }
   return undefined;
 }

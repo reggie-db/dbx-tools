@@ -38,11 +38,11 @@
 
 import { CacheManager, genie } from "@databricks/appkit";
 import { WorkspaceClient } from "@databricks/sdk-experimental";
-import { wire, type MastraWriter, type StartedEvent } from "@dbx-tools/shared-mastra";
-import { chat, space as genieSpace } from "@dbx-tools/genie";
-import { genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
-import { error, log, string } from "@dbx-tools/shared-core";
 import { plugin } from "@dbx-tools/appkit";
+import { chat, space as genieSpace } from "@dbx-tools/genie";
+import { error, log, string } from "@dbx-tools/shared-core";
+import { genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
+import { wire, type MastraWriter, type StartedEvent } from "@dbx-tools/shared-mastra";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
@@ -50,8 +50,7 @@ import { z } from "zod";
 
 import type { MastraTools } from "./agents";
 import { chartPlannerRequestSchema, prepareChart } from "./chart";
-import type { MastraPluginConfig } from "./config";
-import { MASTRA_USER_KEY, type User } from "./config";
+import type { MastraPluginConfig, MASTRA_USER_KEY, type User } from "./config";
 import { fetchStatementData } from "./statement";
 import { safeWrite } from "./writer";
 
@@ -918,7 +917,7 @@ export function resolveGenieSpaces(
   const merged: Record<string, GenieSpaceConfig> = {};
 
   // Source 3 (lowest precedence): env var.
-  const envSpaceId = process.env["DATABRICKS_GENIE_SPACE_ID"];
+  const envSpaceId = process.env.DATABRICKS_GENIE_SPACE_ID;
   if (envSpaceId) {
     merged[DEFAULT_GENIE_ALIAS] = { spaceId: envSpaceId };
   }

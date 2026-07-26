@@ -25,14 +25,14 @@
 
 import { getExecutionContext } from "@databricks/appkit";
 import { classes, resolve } from "@dbx-tools/model";
+import { functionModule, log, net } from "@dbx-tools/shared-core";
 import { model } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
 
 import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config";
-import { rewriteServingBody } from "./serving-sanitize";
 import { MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving";
-import { functionModule, log, net } from "@dbx-tools/shared-core";
+import { rewriteServingBody } from "./serving-sanitize";
 
 type ModelClass = model.ModelClass;
 const { parseModelClass } = classes;
