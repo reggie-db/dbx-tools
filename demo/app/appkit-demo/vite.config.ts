@@ -10,9 +10,14 @@ import {
 
 // Unmanaged override modules (relative to this file), merged over the generated
 // config in order - later wins, absent files are skipped.
-const OVERRIDE_FILES = ["vite.config.override.js"];
+const OVERRIDE_FILES = [
+  "vite.config.override.js",
+];
 
-async function resolveConfig(config: UserConfigExport, env: ConfigEnv): Promise<UserConfig> {
+async function resolveConfig(
+  config: UserConfigExport,
+  env: ConfigEnv,
+): Promise<UserConfig> {
   if (typeof config === "function") {
     return await config(env);
   }
@@ -30,7 +35,10 @@ export default defineConfig(async (configEnv: ConfigEnv) => {
       continue;
     }
     const overrideModule = await import(overrideUrl.href);
-    const override = await resolveConfig(overrideModule.default as UserConfigExport, configEnv);
+    const override = await resolveConfig(
+      overrideModule.default as UserConfigExport,
+      configEnv,
+    );
     config = mergeConfig(config, override);
   }
 

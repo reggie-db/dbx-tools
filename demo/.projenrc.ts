@@ -159,6 +159,14 @@ projectApi.applyToProjects(project, { identifierName: "server-appkit-demo", tags
     "@types/pg@^8",
     "@types/json-schema@^7",
   );
+  // The `server` tag's dev/start tasks run bare `tsx`, which reads no dotenv,
+  // so the `.env` the README tells you to create was never applied and the app
+  // booted against an empty config. Point Node at the demo-root `.env`; the
+  // `-if-exists` form keeps a fresh clone (and a deployed Databricks App, where
+  // the bundle injects env directly and no `.env` is shipped) working.
+  const envFileFlag = `--env-file-if-exists=${relativePosix(p.outdir, project.outdir)}/.env`;
+  p.tasks.tryFind("dev")?.reset(`tsx watch ${envFileFlag} src/server.ts`);
+  p.tasks.tryFind("start")?.reset(`tsx ${envFileFlag} src/server.ts`);
 });
 
 // app/appkit-demo: the React client. `app` tag supplies react + vite +
