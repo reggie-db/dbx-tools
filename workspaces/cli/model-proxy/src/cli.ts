@@ -20,7 +20,7 @@
 
 import { spawn } from "node:child_process";
 import type { Server } from "node:http";
-import { classify } from "@dbx-tools/shared-model";
+import { classify, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { Command, CommanderError } from "commander";
 
 import { DatabricksBackend, type BackendOptions } from "./backend";
@@ -157,15 +157,7 @@ export function buildProgram(): Command {
     const opts = globalOpts<CommonOpts & { chat?: boolean }>(command);
     const backend = await DatabricksBackend.create(backendOptions(opts));
     const endpoints = await backend.models();
-    // Enrich each endpoint with a derived `capabilities` object so consumers
-    // filter on capability rather than re-deriving it from raw `task`/`class`
-    // strings. `chat` = OpenAI chat/completions + Responses (what an agent
-    // like Codex needs); `embedding` = vector endpoints; `tools` = whether the
-    // endpoint supports function/tool calls (all chat endpoints here do).
-    const enriched = endpoints.map((endpoint) => ({
-      ...endpoint,
-      capabilities: classify.endpointCapabilities(endpoint),
-    }));
+    const enriched = endpoints.map(enrichEndpoint);
     const out = opts.chat ? enriched.filter((e) => e.capabilities.chat) : enriched;
     process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
   });
@@ -178,11 +170,31 @@ export function buildProgram(): Command {
   ).action(async (query: string[], _local: CommonOpts, command: Command) => {
     const opts = globalOpts<CommonOpts>(command);
     const backend = await DatabricksBackend.create(backendOptions(opts));
-    const resolved = await backend.resolve(query.join(" "));
-    process.stdout.write(`${JSON.stringify(resolved, null, 2)}\n`);
+    const search = query.join(" ");
+    const resolved = await backend.resolve(search);
+    // Same shape as one `models` entry when matched; null when nothing in the
+    // catalogue scores within the threshold (caller can fall back to the query).
+    if (!resolved.matched) {
+      process.stdout.write("null\n");
+      return;
+    }
+    const endpoint = (await backend.models()).find((e) => e.name === resolved.modelId);
+    process.stdout.write(
+      `${JSON.stringify(endpoint ? enrichEndpoint(endpoint) : null, null, 2)}\n`,
+    );
   });
 
   return program;
+}
+
+/** One `models` / `resolve` list entry: endpoint summary + derived capabilities. */
+function enrichEndpoint(endpoint: ServingEndpointSummary) {
+  return {
+    ...endpoint,
+    // `chat` = OpenAI chat/completions + Responses; `embedding` = vectors;
+    // `tools` = function/tool calls (every chat endpoint here).
+    capabilities: classify.endpointCapabilities(endpoint),
+  };
 }
 
 /** Parse `argv` and run the matching command. Throws {@link CommanderError} on flag errors. */
