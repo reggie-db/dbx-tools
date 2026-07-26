@@ -468,7 +468,9 @@ client that talks to these routes.
   defaults, and approval-gated tool inspection.
 - `config` - plugin config types and RequestContext key constants.
 - `model` / `serving` / `servingSanitize` - Mastra model config, request
-  overrides, serving-endpoint config, and request-body cleanup.
+  overrides, serving-endpoint config, and the on-the-wire request/response
+  cleanup that keeps provider-specific payload quirks (Claude's replayed
+  thinking blocks, Gemini's content-parts responses) from failing a turn.
 - `genie` - Genie prompt, space normalization, Genie toolkits, and suggestions.
 - `chart` / `statement` / `writer` - chart cache, statement row fetches, and
   safe writer events.

@@ -1,14 +1,20 @@
 /**
- * Repairs Mastra / AI SDK message replays sent to Databricks Model
- * Serving before they hit the OpenAI-compatible `/chat/completions`
- * route.
+ * Repairs traffic between Mastra / the AI SDK and Databricks Model Serving's
+ * OpenAI-compatible `/chat/completions` route, in both directions.
  *
- * Exists because the transcript Mastra persists is not always a transcript the
- * provider will accept back: Databricks-hosted Claude rejects replayed
- * extended-thinking blocks and reads a trailing assistant message as a prefill
- * request. Both repairs are provider quirks, not schema violations, so they are
- * applied on the wire (see the `globalThis.fetch` wrapper in `model.ts`) rather
- * than by changing what the agent stores or what the UI shows.
+ * Outbound ({@link rewriteServingBody}), because the transcript Mastra
+ * persists is not always a transcript the provider will accept back:
+ * Databricks-hosted Claude rejects replayed extended-thinking blocks and reads
+ * a trailing assistant message as a prefill request.
+ *
+ * Inbound ({@link rewriteServingResponseBody}), because Databricks-hosted
+ * Gemini answers with its native content-parts array where the OpenAI contract
+ * (and therefore the AI SDK's response schema) requires a plain string.
+ *
+ * Every repair here is a provider quirk rather than a schema violation, so all
+ * of them are applied on the wire (see the `globalThis.fetch` wrapper in
+ * `model.ts`) rather than by changing what the agent stores or what the UI
+ * shows.
  *
  * @module
  */
@@ -185,4 +191,57 @@ function isEmptyServingContent(content: ServingChatMessage["content"]): boolean 
     }
     return false;
   });
+}
+
+/**
+ * Parse, sanitize, and re-serialize a `/serving-endpoints/...` non-streaming
+ * JSON RESPONSE body. Returns the original string verbatim when the body is
+ * not JSON or no rewrite was needed, mirroring
+ * {@link rewriteServingBody} on the request side.
+ */
+export function rewriteServingResponseBody(body: string): string {
+  const parsed = json.parseRecord(body);
+  if (!parsed) return body;
+  return flattenChoiceMessageContent(parsed) ? JSON.stringify(parsed) : body;
+}
+
+/**
+ * Collapse a structured `choices[].message.content` array to the plain string
+ * the OpenAI Chat Completions contract specifies.
+ *
+ * Databricks-hosted Gemini answers a non-streaming `/chat/completions` call
+ * with the Gemini-native parts shape:
+ *
+ * ```json
+ * "content": [{ "type": "text", "text": "...", "thoughtSignature": "..." }]
+ * ```
+ *
+ * `@ai-sdk/openai-compatible` validates the response against the OpenAI
+ * schema, where `content` is a nullable string, so it throws
+ * `Type validation failed: ... expected string, received array` and the whole
+ * call fails (`AI_APICallError: Invalid JSON response` on an HTTP 200). Mastra
+ * uses `doGenerate` for its side calls, so the visible symptom is
+ * `Error generating title` - every thread keeps its placeholder name.
+ *
+ * Flattening on the wire keeps the repair in one place: the streaming path is
+ * unaffected (deltas already carry string content), and neither the agent's
+ * stored transcript nor the UI has to know the provider emitted parts. Any
+ * non-text part (a `thoughtSignature`-only entry, an inline image) contributes
+ * nothing, matching {@link openaiChat.chatContentToText}, and an all-parts-empty
+ * message flattens to `""` rather than being dropped, so `finish_reason` and
+ * `usage` still round-trip.
+ */
+export function flattenChoiceMessageContent(payload: Record<string, unknown>): boolean {
+  if (!Array.isArray(payload.choices)) return false;
+  let changed = false;
+  for (const choice of payload.choices) {
+    if (!choice || typeof choice !== "object") continue;
+    const message = (choice as { message?: unknown }).message;
+    if (!message || typeof message !== "object") continue;
+    const target = message as { content?: unknown };
+    if (!Array.isArray(target.content)) continue;
+    target.content = openaiChat.chatContentToText(target.content, { types: ["text"] });
+    changed = true;
+  }
+  return changed;
 }
