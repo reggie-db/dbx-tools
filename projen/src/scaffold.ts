@@ -3,7 +3,7 @@
  */
 import { join } from "node:path";
 import { exec } from "@dbx-tools/core";
-import { repoRoot } from "./workspace";
+import { repoRoot } from "./packages";
 
 /**
  * Re-run projen synth by executing `.projenrc.ts` with `node --import tsx` (no

@@ -1,15 +1,15 @@
 /**
- * Workspace tags, expressed as MIXINS (`constructs` `IMixin`).
+ * Tags, expressed as MIXINS (`constructs` `IMixin`).
  *
  * A tag names a target environment (React/Vite, Node, agnostic, ...) - modeled on
  * `databricks apps init` (AppKit): `ui`, `server`, `shared`. Any `src`-bearing folder
- * under a workspace-package root is discovered automatically; path-derived tag
- * candidates plus `workspacePackageTagPaths` decide which mixins apply. ("Scope" is
+ * under a package root is discovered automatically; path-derived tag
+ * candidates plus `packageTagPaths` decide which mixins apply. ("Scope" is
  * reserved for the npm `@scope/` in package names.)
  *
  * Mixin factories live in {@link ./mixin}; package predicates live in {@link ./project}
  * ({@link projectPredicate.hasTag}).
- * The per-tag table is {@link WORKSPACE_TAG_MIXINS}. Apply with the constructs-native `project.with(...)`
+ * The per-tag table is {@link PACKAGE_TAG_MIXINS}. Apply with the constructs-native `project.with(...)`
  * across the subtree; the root applies built-in tag mixins during construction and
  * callers add their own afterward.
  */
@@ -53,13 +53,13 @@ export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
 };
 
 /**
- * The workspace-tag table, as mixins. Each entry configures every package carrying
+ * The tag table, as mixins. Each entry configures every package carrying
  * that tag (deps + tsconfig + tasks) when applied via `project.with(...)`. The keys
  * are the known tag names; a package carrying a given tag receives its mixin when
  * that tag appears in `dbxToolsConfig.tags`. Select which apply with the `defaultTagMixins` option (`false` = none,
  * or a subset list; unselected packages fall back to {@link AGNOSTIC_COMPILER_OPTIONS}).
  */
-export const WORKSPACE_TAG_MIXINS = {
+export const PACKAGE_TAG_MIXINS = {
   // `ui`: a React COMPONENT LIBRARY (source-first, consumed by apps) - modeled
   // on `@databricks/appkit-ui`. React + DOM lib + JSX, and the default `tsc`
   // compile (typecheck). No vite app build / index.html: a full browser app is an
@@ -168,5 +168,5 @@ export const WORKSPACE_TAG_MIXINS = {
   }),
 } satisfies Record<string, ConstructsMixin>;
 
-/** A known workspace-tag name (a key of {@link WORKSPACE_TAG_MIXINS}). */
-export type WorkspaceTag = keyof typeof WORKSPACE_TAG_MIXINS;
+/** A known tag name (a key of {@link PACKAGE_TAG_MIXINS}). */
+export type PackageTag = keyof typeof PACKAGE_TAG_MIXINS;

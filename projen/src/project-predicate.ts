@@ -8,7 +8,7 @@ import {
 import { IConstruct } from "constructs";
 import { Project } from "projen";
 import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project";
-import { toPosix } from "./workspace";
+import { toPosix } from "./packages";
 import { relative } from "path";
 import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
 import { project } from "..";
@@ -98,7 +98,7 @@ export function hasIdentifierScope(
 /**
  * Matches DBXTools packages carrying every listed tag (`dbxToolsConfig.tags`), narrowing
  * {@link Project} to {@link DBXToolsProject} (tags live only on DBXTools packages). Also the
- * guard backing each built-in {@link WORKSPACE_TAG_MIXINS} entry. Keep it in the SAME `.and(...)`
+ * guard backing each built-in {@link PACKAGE_TAG_MIXINS} entry. Keep it in the SAME `.and(...)`
  * as any name/path filter (or last when chaining) - a later non-tag `.and` re-widens to
  * {@link Project} and drops the narrowing.
  */
@@ -112,8 +112,8 @@ export function hasTag(...tags: OneOrMany<PathMatchInput>): Predicate<IConstruct
 /**
  * Matches projects whose folder (relative to the tree root) matches any glob in
  * `pathPattern`. Globs are matched verbatim, so scope to a subtree with an
- * explicit pattern - e.g. `hasPath("workspaces/**")` for every package under
- * `workspaces/`.
+ * explicit pattern - e.g. `hasPath("packages/**")` for every package under
+ * `packages/`.
  */
 export function hasPath(...pathPattern: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
   const matchers = projectMatchers(...pathPattern);

@@ -37,7 +37,7 @@ before(() => {
   });
   new DBXToolsTypeScriptProject({
     parent: root,
-    outdir: "workspaces/member",
+    outdir: "packages/member",
     name: "@fixture/member",
   });
   // Added AFTER construction, the way a tag mixin or a consumer's .projenrc.ts
@@ -60,7 +60,7 @@ describe("pnpm-workspace.yaml", () => {
   });
 
   it("lists the discovered subproject as a member", () => {
-    assert.match(yaml, /^ {2}- workspaces\/member$/m);
+    assert.match(yaml, /^ {2}- packages\/member$/m);
   });
 
   it("carries catalog pins added after construction", () => {
@@ -99,7 +99,7 @@ describe("pnpm-workspace.yaml", () => {
     // projen's NodePackage attaches a PnpmWorkspaceYaml to EVERY pnpm project. A
     // nested one would make that member look like its own workspace root; it
     // stays off disk only because nothing feeds a member's schema (`omitEmpty`).
-    assert.ok(!existsSync(join(outdir, "workspaces/member/pnpm-workspace.yaml")));
+    assert.ok(!existsSync(join(outdir, "packages/member/pnpm-workspace.yaml")));
   });
 
   it("keeps the settings a projen-managed monorepo wants", () => {

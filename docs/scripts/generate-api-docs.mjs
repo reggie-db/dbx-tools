@@ -39,7 +39,7 @@ function packageSlug(name) {
     .replace(/\//g, "-");
 }
 
-/** Human label for a package's `workspaces/<group>/…` area (mirrors sync-readmes). */
+/** Human label for a package's `packages/<group>/…` area (mirrors sync-readmes). */
 function groupTitle(group) {
   switch (group) {
     case "node":
@@ -66,14 +66,14 @@ function firstParagraph(markdown) {
 }
 
 function discoverPackages() {
-  return walk(path.join(root, "workspaces"))
+  return walk(path.join(root, "packages"))
     .filter((p) => path.basename(p) === "package.json")
     .map((packageJson) => {
       const pkg = JSON.parse(read(packageJson));
       const dir = path.dirname(packageJson);
       const entry = path.join(dir, "index.ts");
       const readme = path.join(dir, "README.md");
-      // `workspaces/<group>/<pkg>` -> the `<group>` segment, for the area column.
+      // `packages/<group>/<pkg>` -> the `<group>` segment, for the area column.
       const group = posix(path.relative(root, dir)).split("/")[1] ?? "other";
       return {
         name: pkg.name,
@@ -269,7 +269,7 @@ function buildApiIndex(packages) {
     "---",
     'title: "API Reference"',
     'description: "Generated TypeScript API reference for dbx-tools packages."',
-    'source: "workspaces"',
+    'source: "packages"',
     "---",
     "",
     "<!--",
@@ -429,7 +429,7 @@ function main() {
           noEmit: true,
           skipLibCheck: true,
         },
-        include: ["../../workspaces/**/*.ts", "../../workspaces/**/*.tsx"],
+        include: ["../../packages/**/*.ts", "../../packages/**/*.tsx"],
         exclude: ["../../**/dist", "../../**/node_modules"],
       },
       null,

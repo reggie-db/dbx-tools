@@ -15,7 +15,7 @@
  *
  * Deleting only generated files is never destructive to the ability to regenerate:
  * `.projenrc.ts` imports the engine by SOURCE path (relative into the repo, e.g.
- * `workspaces/node/projen/src/...`, or from an installed package such as
+ * `packages/node/projen/src/...`, or from an installed package such as
  * `@dbx-tools/projen`), so even after deleting every barrel, manifest, and
  * `.projen/*`, `pnpm exec projen` still rebuilds the whole tree. Removing `node_modules` additionally requires a
  * `pnpm install` first - the engine's runtime deps live there - so a clean that takes
@@ -25,7 +25,7 @@ import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { find } from "@dbx-tools/path";
 import { isReadonly, makeWritable } from "./generated";
-import { repoRoot, toPosix } from "./workspace";
+import { repoRoot, toPosix } from "./packages";
 
 /**
  * Basenames `clean` never removes even when they are generated/read-only. `.gitignore`

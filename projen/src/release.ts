@@ -57,7 +57,7 @@ export interface DBXToolsReleaseOptions {
  *
  * When the project has a GitHub component (`github: true`), also authors the
  * `release` workflow: on a pushed `<prefix>*` tag it sets that version on every
- * publishable workspace package and runs `pnpm -r publish` (which skips
+ * publishable package and runs `pnpm -r publish` (which skips
  * `private` packages and honors each package's `publishConfig`).
  *
  * Provenance is opt-in. Each package's generated `publishConfig` omits
@@ -106,7 +106,7 @@ export class DBXToolsRelease extends Component {
 
   /**
    * Emit the `release` GitHub workflow: push `<prefix>1.2.3` and every
-   * publishable workspace package is published to npm at 1.2.3. Setting the
+   * publishable package is published to npm at 1.2.3. Setting the
    * version on every package first makes the pushed tag the published version
    * (no bump math).
    */
@@ -153,7 +153,7 @@ export class DBXToolsRelease extends Component {
         },
         {
           name: "Publish to npm",
-          // `pnpm -r publish` publishes every non-private workspace package,
+          // `pnpm -r publish` publishes every non-private package,
           // rewriting `workspace:*` deps to the published version. Provenance is
           // opt-in (omitted from each package's `publishConfig` so local
           // publishes work); CI turns it on here via `npm_config_provenance`.

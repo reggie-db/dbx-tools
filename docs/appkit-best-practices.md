@@ -381,7 +381,7 @@ Additional rules:
 
 ### Docs Site
 
-- `README.md` + `workspaces/**/README.md` remain the single source of truth;
+- `README.md` + `packages/**/README.md` remain the single source of truth;
   `docs/scripts/sync-readmes.mjs` and `docs/scripts/generate-api-docs.mjs`
   generate the site. Fix prose in the README, navigation in the generator.
 - AppKit publishes `llms.txt` / an `appkit docs <query>` CLI so agents can read

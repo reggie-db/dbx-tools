@@ -211,7 +211,7 @@ program
             stdin: "ignore",
             check: true,
           });
-        // Each workspace package keeps `version: 0.0.0` on disk (projen owns the
+        // Each package keeps `version: 0.0.0` on disk (projen owns the
         // manifest); the root bump above only touched the root. Mirror the CI
         // `release` workflow: stamp the release version on EVERY package (they're
         // projen-readonly, so unlock first) so `pnpm -r publish` publishes them

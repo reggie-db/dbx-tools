@@ -126,19 +126,19 @@ export function App() {
 
 | Use case                    | Packages                                                                                                                                          |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AppKit defaults             | [`@dbx-tools/appkit`](workspaces/node/appkit), [`@dbx-tools/cli-appkit-env`](workspaces/cli/appkit-env)                                           |
-| AppKit-hosted agents        | [`@dbx-tools/appkit-mastra`](workspaces/node/appkit-mastra), [`@dbx-tools/shared-mastra`](workspaces/shared/mastra)                               |
-| Genie streaming and schemas | [`@dbx-tools/genie`](workspaces/node/genie), [`@dbx-tools/shared-genie`](workspaces/shared/genie)                                                 |
-| Model Serving selection     | [`@dbx-tools/model`](workspaces/node/model), [`@dbx-tools/shared-model`](workspaces/shared/model)                                                 |
-| Local model proxy           | [`@dbx-tools/cli-model-proxy`](workspaces/cli/model-proxy)                                                                                        |
-| Email workflows             | [`@dbx-tools/email`](workspaces/node/email), [`@dbx-tools/shared-email`](workspaces/shared/email), [`@dbx-tools/ui-email`](workspaces/ui/email)   |
-| Web search and fetch        | [`@dbx-tools/appkit-web-search`](workspaces/node/appkit-web-search)                                                                               |
-| Teams chat and cards        | [`@dbx-tools/teams`](workspaces/node/teams), [`@dbx-tools/shared-teams`](workspaces/shared/teams), [`@dbx-tools/ui-teams`](workspaces/ui/teams)   |
-| React/AppKit UI             | [`@dbx-tools/ui-appkit`](workspaces/ui/appkit), [`@dbx-tools/ui-mastra`](workspaces/ui/mastra), [`@dbx-tools/ui-email`](workspaces/ui/email)      |
-| Brand context and assets    | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/core`](workspaces/node/core), [`@dbx-tools/ui-branding`](workspaces/ui/branding) |
-| Databricks infrastructure   | [`@dbx-tools/databricks`](workspaces/node/databricks), [`@dbx-tools/databricks-zerobus`](workspaces/node/databricks-zerobus)                      |
-| Shared utilities            | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/core`](workspaces/node/core), [`@dbx-tools/path`](workspaces/node/path)          |
-| SDK-derived schemas         | [`@dbx-tools/shared-sdk-model`](workspaces/shared/sdk-model)                                                                                      |
+| AppKit defaults             | [`@dbx-tools/appkit`](packages/node/appkit), [`@dbx-tools/cli-appkit-env`](packages/cli/appkit-env)                                           |
+| AppKit-hosted agents        | [`@dbx-tools/appkit-mastra`](packages/node/appkit-mastra), [`@dbx-tools/shared-mastra`](packages/shared/mastra)                               |
+| Genie streaming and schemas | [`@dbx-tools/genie`](packages/node/genie), [`@dbx-tools/shared-genie`](packages/shared/genie)                                                 |
+| Model Serving selection     | [`@dbx-tools/model`](packages/node/model), [`@dbx-tools/shared-model`](packages/shared/model)                                                 |
+| Local model proxy           | [`@dbx-tools/cli-model-proxy`](packages/cli/model-proxy)                                                                                        |
+| Email workflows             | [`@dbx-tools/email`](packages/node/email), [`@dbx-tools/shared-email`](packages/shared/email), [`@dbx-tools/ui-email`](packages/ui/email)   |
+| Web search and fetch        | [`@dbx-tools/appkit-web-search`](packages/node/appkit-web-search)                                                                               |
+| Teams chat and cards        | [`@dbx-tools/teams`](packages/node/teams), [`@dbx-tools/shared-teams`](packages/shared/teams), [`@dbx-tools/ui-teams`](packages/ui/teams)   |
+| React/AppKit UI             | [`@dbx-tools/ui-appkit`](packages/ui/appkit), [`@dbx-tools/ui-mastra`](packages/ui/mastra), [`@dbx-tools/ui-email`](packages/ui/email)      |
+| Brand context and assets    | [`@dbx-tools/shared-core`](packages/shared/core), [`@dbx-tools/core`](packages/node/core), [`@dbx-tools/ui-branding`](packages/ui/branding) |
+| Databricks infrastructure   | [`@dbx-tools/databricks`](packages/node/databricks), [`@dbx-tools/databricks-zerobus`](packages/node/databricks-zerobus)                      |
+| Shared utilities            | [`@dbx-tools/shared-core`](packages/shared/core), [`@dbx-tools/core`](packages/node/core), [`@dbx-tools/path`](packages/node/path)          |
+| SDK-derived schemas         | [`@dbx-tools/shared-sdk-model`](packages/shared/sdk-model)                                                                                      |
 
 Read the package README for each feature area. They are written as the
 package-level source of truth: key features, import examples, configuration or
@@ -164,7 +164,7 @@ code or structured LLM tools. Use `@dbx-tools/ui-branding/react` and
 
 ### Add AppKit Defaults
 
-Use [`@dbx-tools/appkit`](workspaces/node/appkit) when an AppKit backend
+Use [`@dbx-tools/appkit`](packages/node/appkit) when an AppKit backend
 needs the setup code you would otherwise repeat in every app: Lakebase env
 resolution, config lookup, Databricks SDK cancellation bridging, execution
 context fallback, and typed sibling plugin access.
@@ -180,7 +180,7 @@ await createApp.createApp({
 
 ### Resolve Models By Intent
 
-Use [`@dbx-tools/model`](workspaces/node/model) when a UI, agent, or CLI
+Use [`@dbx-tools/model`](packages/node/model) when a UI, agent, or CLI
 should ask for a model by capability or loose name instead of hard-coding a
 serving endpoint id.
 
@@ -195,7 +195,7 @@ const selected = await resolve.selectModel(client, host, {
 
 ### Run OpenAI-Shaped Tools Against Databricks
 
-Use [`@dbx-tools/cli-model-proxy`](workspaces/cli/model-proxy) when a local tool
+Use [`@dbx-tools/cli-model-proxy`](packages/cli/model-proxy) when a local tool
 expects OpenAI-compatible endpoints but you want Databricks auth and Model
 Serving resolution.
 
@@ -207,8 +207,8 @@ Then point the client at `http://127.0.0.1:4000/v1`.
 
 ### Require Human Approval For Email
 
-Use [`@dbx-tools/email`](workspaces/node/email) with
-[`@dbx-tools/ui-email`](workspaces/ui/email) when an agent should draft email but
+Use [`@dbx-tools/email`](packages/node/email) with
+[`@dbx-tools/ui-email`](packages/ui/email) when an agent should draft email but
 not send it until a user approves the suspended tool call.
 
 ```ts
@@ -234,8 +234,8 @@ the main product surface of the repo, but it is documented for contributors:
   AppKit plugin-authoring, code-style, and documentation conventions these
   packages follow, distilled from the AppKit repo and docs.
 - [`@dbx-tools/projen`](projen) documents the projen engine,
-  workspace discovery, generated files, mixins, OpenAPI generation, and codegen.
-- [`dbx-tools`](workspaces/cli/dbx-tools) documents the contributor CLI.
+  package discovery, generated files, mixins, OpenAPI generation, and codegen.
+- [`dbx-tools`](packages/cli/dbx-tools) documents the contributor CLI.
 
 Useful contributor commands:
 

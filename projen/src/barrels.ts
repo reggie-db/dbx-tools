@@ -38,7 +38,7 @@ import { string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
 import { moduleExports, moduleStatements } from "./module-exports";
-import { isModuleFile, toPosix, workspacePackages } from "./workspace";
+import { isModuleFile, toPosix, recordedPackages } from "./packages";
 
 /**
  * A `src`-relative posix path excluded from the root barrel:
@@ -313,12 +313,12 @@ function generateForPackage(pkgDir: string): number {
 
 /**
  * Rebuild barrels for the given package dirs (default: every package recorded in
- * `pnpm-workspace.yaml` - the source of truth, read via `workspacePackages()`).
+ * `pnpm-workspace.yaml` - the source of truth, read via `recordedPackages()`).
  * Returns the number of barrels whose contents actually changed (an unchanged
  * export surface is a no-op), so callers can stay quiet when nothing moved.
  */
 export function generateBarrels(opts: { dirs?: string[] } = {}): number {
-  const dirs = opts.dirs ?? workspacePackages().map((p) => p.dir);
+  const dirs = opts.dirs ?? recordedPackages().map((p) => p.dir);
   let total = 0;
   for (const dir of dirs) total += generateForPackage(dir);
   return total;

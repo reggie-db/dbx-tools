@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { log } from "@dbx-tools/shared-core";
 import { runSynth } from "../src/scaffold";
 import { watchLoop } from "../src/watch";
-import { repoRoot, syncResynthPaths } from "../src/workspace";
+import { repoRoot, syncResynthPaths } from "../src/packages";
 
 const logger = log.logger("projen:projenrc");
 

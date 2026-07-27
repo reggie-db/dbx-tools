@@ -30,18 +30,18 @@ before(() => {
   });
   const withCustom = new DBXToolsTypeScriptProject({
     parent: root,
-    outdir: "workspaces/with-custom",
+    outdir: "packages/with-custom",
     name: "@fixture/with-custom",
   });
   withCustom.gitignore.addPatterns("/generated-artifacts/");
   new DBXToolsTypeScriptProject({
     parent: root,
-    outdir: "workspaces/no-custom",
+    outdir: "packages/no-custom",
     name: "@fixture/no-custom",
   });
   new DBXToolsTypeScriptProject({
     parent: root,
-    outdir: "workspaces/via-options",
+    outdir: "packages/via-options",
     name: "@fixture/via-options",
     gitignore: ["/from-gitignore-opt/"],
     gitIgnoreOptions: { ignorePatterns: callerPatterns },
@@ -55,7 +55,7 @@ after(() => {
 
 describe("child .gitignore", () => {
   it("keeps only the custom patterns added after construction", () => {
-    const lines = read("workspaces/with-custom/.gitignore");
+    const lines = read("packages/with-custom/.gitignore");
     assert.ok(lines.includes("/generated-artifacts/"));
     // None of the NodeProject defaults leak in - custom + marker is all there is.
     assert.ok(!lines.includes("node_modules/"));
@@ -63,11 +63,11 @@ describe("child .gitignore", () => {
   });
 
   it("is not emitted at all without custom patterns", () => {
-    assert.ok(!existsSync(join(outdir, "workspaces/no-custom/.gitignore")));
+    assert.ok(!existsSync(join(outdir, "packages/no-custom/.gitignore")));
   });
 
   it("keeps only the patterns seeded through the standard projen options", () => {
-    const lines = read("workspaces/via-options/.gitignore").filter((l) => !l.startsWith("#"));
+    const lines = read("packages/via-options/.gitignore").filter((l) => !l.startsWith("#"));
     assert.deepEqual(lines.sort(), ["/from-gitignore-opt/", "/seeded-via-options/"]);
   });
 

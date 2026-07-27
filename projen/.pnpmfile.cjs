@@ -1,6 +1,6 @@
 /**
  * Resolve the projen engine's `@dbx-tools/*` utility dependencies to the local
- * source under `../workspaces/` instead of a registry.
+ * source under `../packages/` instead of a registry.
  *
  * `projen/` is a standalone project (NOT a member of the main pnpm
  * workspace), so pnpm can't see those packages as workspace siblings. This
@@ -16,9 +16,9 @@
 const path = require("node:path");
 
 const LINKS = {
-  "@dbx-tools/shared-core": path.resolve(__dirname, "../workspaces/shared/core"),
-  "@dbx-tools/core": path.resolve(__dirname, "../workspaces/node/core"),
-  "@dbx-tools/path": path.resolve(__dirname, "../workspaces/node/path"),
+  "@dbx-tools/shared-core": path.resolve(__dirname, "../packages/shared/core"),
+  "@dbx-tools/core": path.resolve(__dirname, "../packages/node/core"),
+  "@dbx-tools/path": path.resolve(__dirname, "../packages/node/path"),
 };
 
 function readPackage(pkg) {

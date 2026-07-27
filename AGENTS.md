@@ -43,26 +43,26 @@ Serving integrations, approval-gated email flows, and AppKit-oriented React UI.
 The repo also includes a projen/pnpm workspace generator because the packages are
 dogfooded here, but that is contributor tooling, not the primary product story.
 Keep generator details in `projen/README.md` and
-`workspaces/cli/dbx-tools/README.md`.
+`packages/cli/dbx-tools/README.md`.
 
 Primary package areas:
 
-- `workspaces/node/appkit` and `workspaces/cli/appkit-env` — AppKit defaults,
+- `packages/node/appkit` and `packages/cli/appkit-env` — AppKit defaults,
   Lakebase env/config resolution, execution-context helpers, plugin lookup, SDK
   cancellation, and cache-schema provisioning.
-- `workspaces/node/appkit-mastra`, `workspaces/shared/mastra`, and
-  `workspaces/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
+- `packages/node/appkit-mastra`, `packages/shared/mastra`, and
+  `packages/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
   and the matching React chat UI.
-- `workspaces/node/genie` and `workspaces/shared/genie` — low-level Genie
+- `packages/node/genie` and `packages/shared/genie` — low-level Genie
   drivers, typed async events, snapshot diffing, and browser-safe Genie
   contracts.
-- `workspaces/node/model`, `workspaces/shared/model`, and
-  `workspaces/cli/model-proxy` — intent-based Model Serving endpoint selection,
+- `packages/node/model`, `packages/shared/model`, and
+  `packages/cli/model-proxy` — intent-based Model Serving endpoint selection,
   shared schemas/classification, and local OpenAI-compatible proxying.
-- `workspaces/node/email`, `workspaces/shared/email`, and `workspaces/ui/email`
+- `packages/node/email`, `packages/shared/email`, and `packages/ui/email`
   — approval-gated email tool/runtime, shared payload schemas, and React email
   approval/compose surfaces.
-- `workspaces/node/appkit-web-search` — web-search add-on: `web_search` (the
+- `packages/node/appkit-web-search` — web-search add-on: `web_search` (the
   Databricks Model Serving NATIVE web-search tool — the model searches the web
   server-side and returns answer + citations; resolves its OWN web-capable model
   via `@dbx-tools/model`, Gemini→GPT, independent of the agent's chat model) +
@@ -71,7 +71,7 @@ Primary package areas:
   optional URL allow-list (built on `@dbx-tools/path`'s `match`) filtering
   citations / refusing disallowed fetches, per-tool approval gating, and the
   AppKit `web-search` plugin. Same shape as node-email.
-- `workspaces/node/teams`, `workspaces/shared/teams`, and `workspaces/ui/teams`
+- `packages/node/teams`, `packages/shared/teams`, and `packages/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
   registration can point at: it validates the inbound Bot Service JWT
@@ -118,15 +118,15 @@ Primary package areas:
   `AdaptiveCardGallery` built on the `adaptivecards` JS renderer (which ships no
   markdown parser — `ui-teams` installs `marked` as its `onProcessMarkdown`).
   Same add-on shape as node-email.
-- `workspaces/ui/appkit` — AppKit UI/Tailwind/Vite foundation used by feature UI
+- `packages/ui/appkit` — AppKit UI/Tailwind/Vite foundation used by feature UI
   packages.
-- `workspaces/node/databricks` and `workspaces/node/databricks-zerobus` —
+- `packages/node/databricks` and `packages/node/databricks-zerobus` —
   workspace/cloud/Zerobus infrastructure helpers.
-- `workspaces/shared/core`, `workspaces/node/core`, and `workspaces/node/path`
+- `packages/shared/core`, `packages/node/core`, and `packages/node/path`
   — cross-runtime and Node utility foundations.
 
-- **`workspaces/`** — real content goes here.
-- **`example-workspaces/`** — seed/example packages when present. Do not make
+- **`packages/`** — real content goes here.
+- **`example-packages/`** — seed/example packages when present. Do not make
   root docs primarily about examples.
 
 > Local dir is `dbx-tools/`; the GitHub repo is `reggie-db/dbx-tools`
@@ -152,10 +152,10 @@ Root README rules:
 - Explain that the packages augment Databricks/AppKit where native surfaces are
   low-level, repetitive, or missing sensible defaults.
 - Include a "Relationship To Native AppKit" section.
-- Do not lead with projen, workspace discovery, generated files, barrels, mixins,
+- Do not lead with projen, package discovery, generated files, barrels, mixins,
   or package-scanning internals.
 - Link to `projen/README.md` and
-  `workspaces/cli/dbx-tools/README.md` only under contributor/development
+  `packages/cli/dbx-tools/README.md` only under contributor/development
   context.
 
 Package README rules:
@@ -172,7 +172,7 @@ Package README rules:
 
 Docs site rules:
 
-- Source of truth is `README.md` plus `workspaces/**/README.md`.
+- Source of truth is `README.md` plus `packages/**/README.md`.
 - `docs/scripts/sync-readmes.mjs` generates the Starlight site under
   `.docs-build/site`.
 - `docs/scripts/generate-api-docs.mjs` generates TypeDoc Markdown into the same
@@ -280,7 +280,7 @@ Concrete examples to preserve in docs:
 
 ## Shared utilities - check here before writing a helper
 
-`@dbx-tools/shared-core` is the browser-safe base EVERY workspace package
+`@dbx-tools/shared-core` is the browser-safe base EVERY package
 already depends on (the `.projenrc.ts` blanket rule adds it), so importing from
 it never costs a new dependency. Before adding a small helper to a package,
 check whether one of these already exists; if the helper would be useful to a
@@ -338,7 +338,7 @@ utility is an invisible one.
 ## Formatting and diff hygiene
 
 `pnpm run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
-does not exclude `workspaces/`. Some committed files predate the current
+does not exclude `packages/`. Some committed files predate the current
 `printWidth: 100` and were never reformatted, so a repo-wide run rewraps them and
 churns dozens of lines that have nothing to do with your change.
 
@@ -348,20 +348,20 @@ Prefer `pnpm exec prettier --write <the files you edited>`. Run the repo-wide
 mean to touch, so a behavior change is not buried in reflowed whitespace.
 
 Lint is `pnpm run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
-over `workspaces`). It autofixes, so it can reformat too.
+over `packages`). It autofixes, so it can reformat too.
 
 ## Vocabulary (important)
 
-- **tag** — a label a workspace package carries (Bit-style; it names the target
+- **tag** — a label a package carries (Bit-style; it names the target
   _environment_ — React/Vite, Node, agnostic, …). A package can carry MANY tags,
   or none. Tags are NOT npm scopes. They come from three sources, unioned and
   deduped: (1) tags already on a project you attached yourself, (2) matches in
-  `workspacePackageTagPaths`, (3) the cumulative dash-join of the folder's path
+  `packageTagPaths`, (3) the cumulative dash-join of the folder's path
   segments relative to its root (`ui/app` → `[ui, ui-app]`).
 - **scope** — reserved for the npm `@scope/` in package identifiers (e.g. the
   `@dbx-tools` in `@dbx-tools/ui-app`). Don't call tags "scopes".
-- **workspace package** — a `src`-bearing folder under a `workspacePackageRoots`
-  root (e.g. `workspaces/ui/app`), named `@<scope>/<path-dash-joined>`.
+- **package** — a `src`-bearing folder under a `packageRoots`
+  root (e.g. `packages/ui/app`), named `@<scope>/<path-dash-joined>`.
 
 ## Mental model
 
@@ -374,8 +374,8 @@ over `workspaces`). It autofixes, so it can reformat too.
   under anything you pass. You then call
   `project.synth()` yourself. A normal consuming `.projenrc.ts` is two lines:
   `const project = new DBXToolsNodeProject(); project.synth();`. Both classes
-  share `DBXToolsCommonOptions` (`scope`, `workspacePackageRoots`,
-  `workspacePackageTagPaths`, `defaultTagMixins`), which
+  share `DBXToolsCommonOptions` (`scope`, `packageRoots`,
+  `packageTagPaths`, `defaultTagMixins`), which
   `extends` the component option bags directly — `DBXToolsConfigOptions` (`tags`)
   and `DBXToolsPNPMWorkspaceOptions` (`catalog`/`allowBuilds`/`workspaceYaml`) — so those
   are top-level options, not nested fields. Both implement the single
@@ -395,8 +395,8 @@ over `workspaces`). It autofixes, so it can reformat too.
   supplies is the OPTIONS object it renders, via
   `pnpmOptions.workspaceYamlOptions`; `PnpmWorkspaceState` (`pnpm-workspace.ts`)
   holds that object and is exposed as the root's `project.pnpmWorkspace` field.
-  The root scans the filesystem ONCE at synth (under each `workspacePackageRoots`
-  root, default `["workspaces"]`) and the file's `packages:` list is filled from
+  The root scans the filesystem ONCE at synth (under each `packageRoots`
+  root, default `["packages"]`) and the file's `packages:` list is filled from
   `project.subprojects` in the root's `preSynthesize` (so member order/timing
   never matters) — every discovered package becomes a real subproject, no manual
   member list. Mutate it through the typed methods
@@ -431,23 +431,23 @@ over `workspaces`). It autofixes, so it can reformat too.
   **`catalogMode: manual`** (the catalog is generated, so `pnpm add` must never
   write into it) and **`verifyDepsBeforeRun: warn`** (packages resolve siblings
   from source, so a stale `node_modules` after a branch switch warns on the next
-  task instead of surfacing as a confusing type error). Discovery is TWO functions in `workspace.ts`:
+  task instead of surfacing as a confusing type error). Discovery is TWO functions in `packages.ts`:
   `scanPackages(root, roots)` walks the filesystem (synth time; returns each
   package's path + the tags implied by its path, reading no manifest), while
-  `workspacePackages()` reads the recorded members back from `pnpm-workspace.yaml`
+  `recordedPackages()` reads the recorded members back from `pnpm-workspace.yaml`
   and augments each with the `name` + `tags` from its own `package.json` — what
   every post-synth command (`barrels`, the watcher, `openapi`) uses.
-- **Discovery + tag resolution.** Under each `workspacePackageRoots` root (this
-  repo passes `["workspaces", "example-workspaces"]`), ANY `src`-bearing folder at
+- **Discovery + tag resolution.** Under each `packageRoots` root (this
+  repo passes `["packages", "example-packages"]`), ANY `src`-bearing folder at
   ANY depth is a package. Its path relative to the root is decomposed into
   cumulative dash-join **tag candidates**: `ui/app` → `[ui, ui-app]`;
   `dir/another/path` → `[dir, dir-another, dir-another-path]`. Each candidate is
-  looked up in **`workspacePackageTagPaths`** (`Record<token, string[]>`,
+  looked up in **`packageTagPaths`** (`Record<token, string[]>`,
   default: identity over the tag names) and the union of matches — together with
   any tags already on a pre-attached project — is the package's applied tags,
   possibly NONE (then only the agnostic default applies). The deduped tag list is
   written to each package's `package.json` under **`dbxToolsConfig.tags`** (the
-  per-package source of truth, surfaced post-synth as `workspacePackages()[].tags`)
+  per-package source of truth, surfaced post-synth as `recordedPackages()[].tags`)
   and read back via the `DBXToolsConfig` component (`pkg.dbxToolsConfig.tags`, the
   basis an `applyToProjects({ tags })` selection dispatches on). No declaration
   needed: drop a `src/` folder, re-synth.
@@ -455,7 +455,7 @@ over `workspaces`). It autofixes, so it can reformat too.
   a subproject already attached to the root, it is NOT re-created — the resolved
   tags are pushed onto its `dbxToolsConfig.tags` (deduped at synth). The root
   itself can also carry tags (a `""`/`"."`
-  key in `workspacePackageTagPaths`, or the `tags` option).
+  key in `packageTagPaths`, or the `tags` option).
 - **Every package is a `DBXToolsTypeScriptProject`** (extends
   `typescript.TypeScriptProject`). The root's scan constructs one per discovered
   folder with `parent: root`; you can also `new DBXToolsTypeScriptProject({parent,
@@ -468,8 +468,8 @@ over `workspaces`). It autofixes, so it can reformat too.
   projen OWNS that package's `package.json`/`tsconfig.json`/tasks/`README.md`/
   `.projen/`; baseline projen features are off to match the root (`SUBPROJECT_
 DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
-- **Tags are ONE map of mixins.** `tags.ts` — `WORKSPACE_TAG_MIXINS`
-  (`Record<WorkspaceTag, IMixin>`, keyed by tag name). Each entry is a
+- **Tags are ONE map of mixins.** `tags.ts` — `PACKAGE_TAG_MIXINS`
+  (`Record<PackageTag, IMixin>`, keyed by tag name). Each entry is a
   `tagMixin(name, fn)` that, for every package carrying the tag, adds the tag's
   projen-native `deps`/`devDeps` (`@catalog:` specifiers) and OVERRIDES the
   generated tsconfig via `applyCompilerOptions` (projen enums, e.g.
@@ -498,7 +498,7 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   `@dbx-tools/shared-core` predicates (narrowing a construct):
   `projectPredicate.hasIdentifierName("shared-core", ...)` (unscoped npm name glob via
   `match.toPathMatcher`, `→ Project`), `projectPredicate.hasTag(tag, ...tags)` (all tags
-  required, `→ DBXToolsProject`), and `projectPredicate.hasPath("workspaces/**", ...)`
+  required, `→ DBXToolsProject`), and `projectPredicate.hasPath("packages/**", ...)`
   (root-relative folder glob, `→ Project`), plus the `isProject()` /
   `isDBXToolsProject()` guards. Three more match the name from a different angle:
   `hasName` (the RAW projen `project.name`, verbatim, no `PackageIdentifier`
@@ -517,7 +517,7 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
     receives the richer `DBXToolsProject`; `includeRoots: true` adds the parentless
     tree root, and `includeNonDBXToolsProjects: true` adds plain projen `Project`s
     and (via an overload) widens the callback parameter to `Project`, which drops
-    `dbxToolsConfig`. The root applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
+    `dbxToolsConfig`. The root applies the built-in tag mixins (**`PACKAGE_TAG_MIXINS`**,
     `tags.ts`) during its own construction, selected by the `defaultTagMixins` option
     (omit = all, `false` = none, or a subset list) - e.g. the `server` mixin adds
     `express`/`tsoa` + `dev`/`start` tasks. Consumers apply their own AFTER
@@ -525,8 +525,8 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
     after the defaults.
 - **Names**: `PackageIdentifier.of(scope, relPath)`
   (`project.ts`): normalized, lowercased, the root-relative path dash-joined as
-  `@<scope>/<seg-seg-...>` (e.g. `workspaces/shared/core` → `@dbx-tools/shared-core`,
-  `workspaces/cli/dbx-tools` → `@dbx-tools/cli-dbx-tools`). The `scope` option
+  `@<scope>/<seg-seg-...>` (e.g. `packages/shared/core` → `@dbx-tools/shared-core`,
+  `packages/cli/dbx-tools` → `@dbx-tools/cli-dbx-tools`). The `scope` option
   defaults to the resolved project `name`; the `name` option, if omitted, is
   auto-detected (git remote → folder name). This repo passes `scope: "dbx-tools"`,
   giving `@dbx-tools/*` packages. The engine keeps its derived name UNLESS
@@ -536,7 +536,7 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
 
 ```
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbx-tools root task
-workspaces/
+packages/
   cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbx-tools` + `dbxt` bins)
     bin/dbx-tools.ts                      # commander entry: sync | barrels | openapi | clean
     index.ts                              # generated barrel (public API surface)
@@ -551,8 +551,8 @@ projen/                                   # the projen engine (`@dbx-tools/proje
     project-predicate.ts                  # projectPredicate namespace (isProject/isDBXToolsProject/hasName/hasIdentifierPackageName/hasIdentifierScope/hasIdentifierName/hasTag/hasPath, .and/.or/.negate)
     mixin.ts                              # mixin.create() factory (tag table lives in tags.ts)
     pnpm-workspace.ts                     # PnpmWorkspaceState (options for projen's native PnpmWorkspaceYaml) + Catalog/DEFAULT_CATALOG + AllowBuilds/DEFAULT_ALLOW_BUILDS + DEFAULT_WORKSPACE_YAML
-    tags.ts                               # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
-    workspace.ts                          # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
+    tags.ts                               # PACKAGE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
+    packages.ts                          # discovery: scanPackages (fs) + recordedPackages (pnpm-yaml + manifest)
     barrels.ts                            # barrel generator (root index.ts, header + read-only)
     codegen.ts, module-exports.ts         # ts-to-zod codegen + exports-map generation
     watch.ts                              # generic file-watch util (watchLoop + watchRoots) the sync --watch task watchers forward to
@@ -561,7 +561,7 @@ projen/                                   # the projen engine (`@dbx-tools/proje
     openapi.ts                            # openapi generator (tsoa controllers -> spec + client)
     clean.ts, generated.ts, tsconfig.ts, vite.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
   tasks/                                  # projen task scripts (bump, sync, barrels, openapi, projenrc, clean)
-example-workspaces/
+example-packages/
   cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ ui/app/   # seed examples, each a real subproject
 ```
 
@@ -581,7 +581,7 @@ pnpm run openapi             # generate the openapi packages from tsoa controlle
 pnpm run clean               # remove generated files (read-only ones); interactive picker, -y to skip
 pnpm -r compile              # type-check every package (projen's per-package compile: tsc --build)
 pnpm -r --no-bail test       # run every package's node:test suite, without stopping at the first failure
-pnpm run eslint              # lint (autofix) every package under workspaces
+pnpm run eslint              # lint (autofix) every package under `packages`
 pnpm run format              # prettier over the WHOLE repo - see "Formatting and diff hygiene" first
 ```
 
@@ -666,14 +666,14 @@ package versions, not your working tree. To iterate on the CLIENT UI packages
 against the running demo WITHOUT a bump/publish/reinstall each time, use dev-link:
 
 ```sh
-node demo/scripts/dev-link.mjs          # link the client UI packages to workspaces source
+node demo/scripts/dev-link.mjs          # link the client UI packages to packages source
 # server (serves dist/, unchanged) + a client build-watch that rebuilds on UI edits:
 pnpm --filter @dbx-tools/demo-appkit-server dev
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch
 node demo/scripts/dev-link.mjs --unlink # restore the registry-consumer resolution
 ```
 
-`dev-link` adds the client-reachable workspace packages (the closure of the
+`dev-link` adds the client-reachable packages (the closure of the
 client app's `@dbx-tools/*` deps: `ui-*` + browser-safe `shared-*`) as pnpm
 workspace members and switches the client app's deps to `workspace:*`; it edits
 only transient, gitignored files (`pnpm-workspace.yaml`, the app manifest, a
@@ -758,7 +758,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   the supported consumption model: a bundler (Vite) or tsx, never bare Node
   `require`/`import` of the published package. A red node16 row is therefore
   expected output, not a regression to "fix" - changing it would mean
-  abandoning source-first resolution, which is what lets workspace packages
+  abandoning source-first resolution, which is what lets packages
   type-check against each other with no build step.
 - **`pnpm-lock.yaml` is UNTRACKED, and nothing in CI may depend on it existing.**
   It is covered by `.gitignore`'s `**/*-lock.yaml`, but it had been committed
@@ -804,7 +804,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   until projen can emit `eslint.config.*`. Do not hand-write a flat config
   beside the generated one - two configs is worse than one stale one.
 - **The engine is dogfooded as a normal auto-discovered package**, not a hand-
-  authored special case: it lives at `workspaces/cli/dbx-tools` (tag `cli`,
+  authored special case: it lives at `packages/cli/dbx-tools` (tag `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` selects it with
   `project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, ...)` and:
@@ -816,8 +816,8 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   come from the `cli` tag, so a CLI needs no per-package config for either.
   It is the ONLY package in the repo that overrides its name: every other one,
   CLIs included, keeps what discovery derives from its path
-  (`workspaces/cli/model-proxy` -> `@dbx-tools/cli-model-proxy`,
-  `workspaces/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
+  (`packages/cli/model-proxy` -> `@dbx-tools/cli-model-proxy`,
+  `packages/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
   package, MOVE ITS FOLDER - do not add a name override.
   The projen engine itself lives in `projen`
   (`@dbx-tools/projen`). It is NOT a workspace member and no mixin reaches it, so
@@ -921,8 +921,8 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   OpenAPI 3 spec from the decorators + TS types, then openapi-typescript +
   openapi-fetch produce a read-only `<sourcePackage root>/openapi/<name>`
   package (`openapi.json` + `src/schema.ts` + `src/client.ts`) - colocated under
-  the SAME root as the controller it came from (`example-workspaces/server/
-api`'s controllers generate `example-workspaces/openapi/api`), not a hardcoded
+  the SAME root as the controller it came from (`example-packages/server/
+api`'s controllers generate `example-packages/openapi/api`), not a hardcoded
   root. tsoa/typescript/openapi-typescript are lazy-loaded (only `pnpm run
 openapi` / a watched controller edit needs them). The openapi watcher (started by
   `pnpm run sync --watch`, under `concurrently`) regenerates it automatically when a

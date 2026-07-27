@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { brand } from "../../workspaces/node/core/index.ts";
+import { brand } from "../../packages/node/core/index.ts";
 
 const root = process.cwd();
 const sourceRoot = path.join(root, ".docs-build", "site");
@@ -73,7 +73,7 @@ function walk(dir, files = []) {
 }
 
 function discoverPackages() {
-  return walk(path.join(root, "workspaces"))
+  return walk(path.join(root, "packages"))
     .filter((p) => path.basename(p) === "package.json")
     .map((packageJson) => {
       const pkg = JSON.parse(read(packageJson));

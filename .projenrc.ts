@@ -1,9 +1,9 @@
 /**
  * projen definition. `new DBXToolsNodeProject(...)` constructs the monorepo root
- * and, from its `workspacePackageRoots`, scans + attaches a
+ * and, from its `packageRoots`, scans + attaches a
  * `DBXToolsTypeScriptProject` per `src`-bearing package folder at any depth under
- * `workspaces/`. The engine itself is dogfooded as a normal auto-discovered `cli`
- * package at `workspaces/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
+ * `packages/`. The engine itself is dogfooded as a normal auto-discovered `cli`
+ * package at `packages/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
  * it from the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
  *
  * The runnable sample app lives in its own standalone project under `demo/` (its
@@ -27,7 +27,7 @@ const SCOPE = "dbx-tools";
 const root = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
-  workspacePackageRoots: ["workspaces"],
+  packageRoots: ["packages"],
   // Any pnpm-workspace setting the engine does not manage itself, typed by
   // projen's own `PnpmWorkspaceYamlSchema`. `overrides` forces every transitive
   // glob onto v13: older majors are deprecated upstream (10.x now ships under
@@ -177,10 +177,10 @@ root.with(
 // Per-package dependency rules (selected by package name + tag)
 // ---------------------------------------------------------------------------
 
-// shared-core is the light, browser-safe base: EVERY workspace package (except
+// shared-core is the light, browser-safe base: EVERY package (except
 // shared-core itself) gets it automatically, regardless of tag. When in doubt,
 // reach for shared-core - so the per-package rules below never add it.
-project.applyToProjects(root, { path: "workspaces/**", identifierName: "!shared-core" }, (p) => {
+project.applyToProjects(root, { path: "packages/**", identifierName: "!shared-core" }, (p) => {
   p.addDeps("@dbx-tools/shared-core@workspace:*");
 });
 
@@ -197,7 +197,7 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 });
 
 // node-core: the Node-only half of the shared runtime (exec + project). Lives
-// under workspaces/node/, so the `node` tag auto-applies (node types + ES2022
+// under packages/node/, so the `node` tag auto-applies (node types + ES2022
 // lib, no DOM). shared-core stays browser-safe; anything needing child_process
 // / fs / process depends on node-core instead. (shared-core is added by the
 // blanket base-dep mixin above, so this package needs no rule of its own.)
@@ -383,7 +383,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
 
 // node-path: filesystem path helpers - glob find, ignore rules, path
 // matching, package scan, and watch. It shells out (node-core exec) and uses
-// chokidar/glob, so it lives under workspaces/node/ (the `node` tag
+// chokidar/glob, so it lives under packages/node/ (the `node` tag
 // auto-applies). Pin explicit ranges: bare names resolve against the local
 // registry, which can return stale majors (e.g. minimatch@3 lacks the
 // `{ Minimatch }` ESM export the code imports, chokidar@1 predates the v4 API).
@@ -604,14 +604,14 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 // `@dbx-tools/cli` installs (`dbx-tools` + the short `dbxt` alias).
 for (const task of [SCOPE, "dbxt"]) {
   root.addTask(task, {
-    exec: "tsx workspaces/cli/dbx-tools/bin/dbx-tools.ts",
+    exec: "tsx packages/cli/dbx-tools/bin/dbx-tools.ts",
     receiveArgs: true,
   });
 }
 
 // Both tag-driven release workflows are authored by the engine's
 // `DBXToolsRelease` component (see `projen/src/release.ts`):
-//   - `release` (`v*`): publishes every `@dbx-tools/*` workspace package.
+//   - `release` (`v*`): publishes every `@dbx-tools/*` package.
 //   - `projen-release` (`projen-v*`): publishes the standalone `@dbx-tools/projen`
 //     engine in `projen/`, declared via the `standaloneReleases` root option above.
 

@@ -39,7 +39,7 @@ import { fileURLToPath } from "node:url";
 
 const demoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repoRoot = path.resolve(demoRoot, "..");
-const workspacesRoot = path.join(repoRoot, "workspaces");
+const packagesRoot = path.join(repoRoot, "packages");
 const workspaceYaml = path.join(demoRoot, "pnpm-workspace.yaml");
 // The demo member whose deps we link: the CLIENT app only (see the server note).
 const clientManifest = path.join(demoRoot, "app/appkit-demo/package.json");
@@ -75,7 +75,7 @@ const stateFile = path.join(demoRoot, ".dev-link.json");
 const DEP_FIELDS = ["dependencies", "devDependencies", "peerDependencies"];
 
 /** Map every workspace package NAME under this scope to its source directory. */
-function workspacePackages() {
+function recordedPackages() {
   const out = {};
   const walk = (dir) => {
     for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -88,7 +88,7 @@ function workspacePackages() {
       }
     }
   };
-  walk(workspacesRoot);
+  walk(packagesRoot);
   return out;
 }
 
@@ -143,7 +143,7 @@ function parseCatalog(yaml) {
 }
 
 function link() {
-  const pkgDirs = workspacePackages();
+  const pkgDirs = recordedPackages();
   const reachable = clientReachable(pkgDirs);
   if (reachable.size === 0) {
     console.log("dev-link: no client @dbx-tools deps found - nothing to link.");
@@ -194,7 +194,7 @@ function link() {
   );
   pnpmInstall();
   console.log(
-    "dev-link: done. Run `pnpm --filter @dbx-tools/demo-appkit-app dev`; edits under the linked workspaces/**/src hot-reload in the browser. (The server keeps the publish cycle.)",
+    "dev-link: done. Run `pnpm --filter @dbx-tools/demo-appkit-app dev`; edits under the linked packages/**/src hot-reload in the browser. (The server keeps the publish cycle.)",
   );
 }
 

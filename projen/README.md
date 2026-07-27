@@ -3,7 +3,7 @@
 Projen engine for dbx-tools pnpm workspaces.
 
 Import this package from `.projenrc.ts` when a repository should discover
-workspace packages from the filesystem and generate manifests, tsconfigs,
+packages from the filesystem and generate manifests, tsconfigs,
 barrels, OpenAPI clients, codegen outputs, and release tasks.
 
 Key features:
@@ -28,7 +28,7 @@ import { project as projectApi } from "@dbx-tools/projen";
 const project = new projectApi.DBXToolsNodeProject({
   name: "my-apps",
   scope: "my-apps",
-  workspacePackageRoots: ["workspaces", "examples"],
+  packageRoots: ["packages", "examples"],
 });
 
 project.synth();
@@ -73,13 +73,13 @@ scripts, and generated files on top.
 ## Work With Package Discovery
 
 ```ts
-import { workspace } from "@dbx-tools/projen";
+import { packages } from "@dbx-tools/projen";
 
-const discovered = workspace.scanPackages(process.cwd(), ["workspaces"]);
-const recorded = workspace.workspacePackages();
+const discovered = packages.scanPackages(process.cwd(), ["packages"]);
+const recorded = packages.recordedPackages();
 ```
 
-`scanPackages()` reads the filesystem during synth. `workspacePackages()` reads
+`scanPackages()` reads the filesystem during synth. `recordedPackages()` reads
 the generated `pnpm-workspace.yaml` plus package manifests for post-synth tools.
 Use the latter for docs, linting, and release checks that should match the
 recorded workspace.
@@ -157,7 +157,7 @@ file contract as the CLI.
 - `mixin` / `projectPredicate` - constructs mixin factory and package
   predicates.
 - `tags` - built-in runtime tag mixins and compiler floors.
-- `workspace` - filesystem discovery and recorded package metadata.
+- `packages` - filesystem discovery and recorded package metadata.
 - `pnpmWorkspace` - generated pnpm workspace file and catalog model.
 - `barrels` / `moduleExports` - public entrypoint generation.
 - `codegen` - `.d.ts` to zod schema generation.
@@ -170,5 +170,5 @@ file contract as the CLI.
 
 The engine registers its commands as projen tasks on the workspace root, so run
 them with `pnpm run <task>` - `sync` (add `--watch`), `barrels`, `openapi`, and
-`clean`. [`@dbx-tools/cli`](../workspaces/cli/dbx-tools) is only needed to
+`clean`. [`@dbx-tools/cli`](../packages/cli/dbx-tools) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.

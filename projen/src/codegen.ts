@@ -1,7 +1,7 @@
 /**
  * Codegen generator (ts-to-zod based).
  *
- * Scans every workspace package whose `package.json` declares a `codegen`
+ * Scans every package whose `package.json` declares a `codegen`
  * field and turns the listed upstream `.d.ts` inputs into read-only `src/`
  * modules of zod schemas plus matching inferred TypeScript types. Each input
  * emits one `src/<name>.ts` (schemas + `export type X = z.infer<typeof
@@ -49,7 +49,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import type * as ts from "typescript";
 import { header, isReadonly, makeReadonly, makeWritable } from "./generated";
 import { log, object } from "@dbx-tools/shared-core";
-import { readPackageManifest, repoRoot, workspacePackages } from "./workspace";
+import { readPackageManifest, repoRoot, recordedPackages } from "./packages";
 
 const logger = log.logger("projen:codegen");
 
@@ -312,17 +312,17 @@ function generatePackage(
 }
 
 /**
- * Regenerate the `generated/` tree for every workspace package declaring a
+ * Regenerate the `generated/` tree for every package declaring a
  * `codegen` field. Returns the package dirs it wrote so the caller can rebuild
  * their barrels. `ts-to-zod` + `typescript` are lazy-loaded.
  */
 export function generateCodegen(): string[] {
-  const targets = workspacePackages()
+  const targets = recordedPackages()
     .map((p) => ({ dir: p.dir, inputs: codegenInputs(p.dir) }))
     .filter((t): t is { dir: string; inputs: string[] } => t.inputs !== undefined);
 
   if (targets.length === 0) {
-    logger.info("no workspace packages declare a `codegen` field");
+    logger.info("no packages declare a `codegen` field");
     return [];
   }
 

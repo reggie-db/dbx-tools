@@ -1,5 +1,5 @@
 /**
- * The dbx-tools project surface plus workspace package tooling: the single
+ * The dbx-tools project surface plus package tooling: the single
  * {@link DBXToolsProject} interface, the projen Node/TypeScript project classes,
  * naming, guards, manifest fields, and the shared root init.
  *
@@ -19,19 +19,19 @@ import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config";
 import { resolvePkgRoot } from "./engine-root";
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
 import { DBXToolsRelease, type StandaloneRelease } from "./release";
-import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, type WorkspaceTag } from "./tags";
+import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags";
 import { DBXToolsRootTsconfig } from "./tsconfig";
 import { ViteConfigFile } from "./vite";
 import { DBXToolsVsCode } from "./vscode";
 import {
-  DEFAULT_WORKSPACE_PACKAGE_ROOTS,
+  DEFAULT_PACKAGE_ROOTS,
   type DiscoveredPackage,
   projectName,
   readPackageManifest,
   repoRoot,
   scanPackages,
   toPosix,
-} from "./workspace";
+} from "./packages";
 import { mixin, projectPredicate } from "..";
 import { IConstruct } from "constructs";
 
@@ -317,7 +317,7 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     projenVersion: PROJEN_VERSION,
     defaultReleaseBranch: "main",
     projenrcJs: false,
-    // Every CHILD is a publishable workspace package, so it needs
+    // Every CHILD is a publishable package, so it needs
     // `publishConfig.access: public` - projen renders that from `npmAccess`
     // whenever the value differs from the name's default, and every child here is
     // scoped (`@dbx-tools/*`), whose default is RESTRICTED. Root-only exclusion is
@@ -420,13 +420,13 @@ export interface DBXToolsProjectOptions
   readonly scope?: string;
   /**
    * Roots scanned for packages (each `src`-bearing folder under a root is one).
-   * Only a ROOT scans. Defaults to {@link DEFAULT_WORKSPACE_PACKAGE_ROOTS}.
+   * Only a ROOT scans. Defaults to {@link DEFAULT_PACKAGE_ROOTS}.
    */
-  readonly workspacePackageRoots?: readonly string[];
+  readonly packageRoots?: readonly string[];
   /**
    * Leading path segment(s) dropped from a discovered package's relative path
    * before its npm name is derived, so a tier folder doesn't become a name
-   * prefix. E.g. with the default `"node"`, `workspaces/node/path` names as
+   * prefix. E.g. with the default `"node"`, `packages/node/path` names as
    * `@<scope>/path` instead of `@<scope>/node-path` (its `node` TAG still
    * derives from the path). One or many segment names; a segment is only
    * stripped when it is the FIRST segment of the relative path. Pass `[]` to
@@ -438,13 +438,13 @@ export interface DBXToolsProjectOptions
    * path-derived tags. Defaults to an identity map over the known tag names; a
    * `""`/`"."` key tags the root.
    */
-  readonly workspacePackageTagPaths?: Record<string, string[]>;
+  readonly packageTagPaths?: Record<string, string[]>;
   /**
-   * Which built-in {@link WORKSPACE_TAG_MIXINS} to apply and seed
-   * `workspacePackageTagPaths` identity entries for. Omitted = all; `false` = none;
+   * Which built-in {@link PACKAGE_TAG_MIXINS} to apply and seed
+   * `packageTagPaths` identity entries for. Omitted = all; `false` = none;
    * a list = only those tags.
    */
-  readonly defaultTagMixins?: false | WorkspaceTag[];
+  readonly defaultTagMixins?: false | PackageTag[];
   /**
    * Extra repo-root paths that trigger a full re-synth during `sync --watch`
    * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
@@ -468,7 +468,7 @@ export interface DBXToolsTypeScriptProjectOptions
 }
 
 /**
- * A monorepo root. Scans `workspacePackageRoots` and appends a
+ * A monorepo root. Scans `packageRoots` and appends a
  * {@link DBXToolsTypeScriptProject} per `src`-bearing folder, then emits the
  * shared config, tasks, `pnpm-workspace.yaml`, and barrels-on-synth.
  */
@@ -517,11 +517,11 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
 }
 
 /**
- * A single workspace package (usually created by a root's scan), or a standalone
+ * A single package (usually created by a root's scan), or a standalone
  * compiling root. The agnostic tsconfig floor is applied at construction; the
  * source-first package fields (`main`/`types`/`exports` -> `index.ts`) and an
  * optional `vite.config.ts` are applied after. Per-tag deps/tsconfig arrive later
- * via the {@link WORKSPACE_TAG_MIXINS} the root applies.
+ * via the {@link PACKAGE_TAG_MIXINS} the root applies.
  */
 export class DBXToolsTypeScriptProject
   extends typescript.TypeScriptProject
@@ -559,7 +559,7 @@ export class DBXToolsTypeScriptProject
     this.scope = scope;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     // Source-first entry: point the package at its package-ROOT `index.ts` barrel
-    // so workspace packages resolve each other's `@scope/pkg` imports to source.
+    // so packages resolve each other's `@scope/pkg` imports to source.
     this.package.addField("type", "module");
     this.package.addField("main", "index.ts");
     this.package.addField("types", "index.ts");
@@ -682,11 +682,11 @@ function engineSelfDependency(project: javascript.NodeProject): string | undefin
   return `${name}@^${version}`;
 }
 
-/** Resolve which {@link WORKSPACE_TAG_MIXINS} keys to apply from `defaultTagMixins`. */
-function resolveEnabledTagMixins(selection: false | WorkspaceTag[] | undefined): WorkspaceTag[] {
+/** Resolve which {@link PACKAGE_TAG_MIXINS} keys to apply from `defaultTagMixins`. */
+function resolveEnabledTagMixins(selection: false | PackageTag[] | undefined): PackageTag[] {
   if (selection === false) return [];
   if (selection === undefined) {
-    return Object.keys(WORKSPACE_TAG_MIXINS) as WorkspaceTag[];
+    return Object.keys(PACKAGE_TAG_MIXINS) as PackageTag[];
   }
   return selection;
 }
@@ -817,7 +817,7 @@ function initProject(
   // local editor state. Both ignore CONTENTS (`.idea/*`) rather than the
   // directory, so a later `!` negation can still reach a file inside.
   project.gitignore.addPatterns(".env", ".env.*", "!.env.example", "!.env.sample", ".idea/*");
-  const roots = options.workspacePackageRoots ?? DEFAULT_WORKSPACE_PACKAGE_ROOTS;
+  const roots = options.packageRoots ?? DEFAULT_PACKAGE_ROOTS;
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/openapi/**`);
@@ -876,10 +876,10 @@ function initProject(
   const omitPrefixes = resolveOmitRelativePrefix(options.omitRelativePrefix);
 
   // path token/relPath/glob -> tag(s). Default: identity over the enabled tag names;
-  // any workspacePackageTagPaths entries AUGMENT that. A `""`/`"."` key tags the root.
+  // any packageTagPaths entries AUGMENT that. A `""`/`"."` key tags the root.
   const tagPaths: Record<string, string[]> = {
     ...Object.fromEntries(enabledTagMixins.map((k) => [k, [k]])),
-    ...(options.workspacePackageTagPaths ?? {}),
+    ...(options.packageTagPaths ?? {}),
   };
 
   // Already-attached subprojects, keyed by repo-relative member path.
@@ -894,7 +894,7 @@ function initProject(
   // Discover + append a child per src-bearing folder. A root encapsulating an
   // already-attached project doesn't re-create it, it just unions the tags in. The
   // agnostic floor is set in the child's constructor; per-tag deps/tsconfig come from
-  // the WORKSPACE_TAG_MIXINS applied across the subtree below.
+  // the PACKAGE_TAG_MIXINS applied across the subtree below.
   for (const p of scanPackages(rootAbs, roots)) {
     const tags = [...new Set([...p.tagCandidates, ...resolveTags(p, tagPaths)])];
     const found = existing.get(p.memberPath);
@@ -918,7 +918,7 @@ function initProject(
   // (`construct.with` captures the tree at call time). User mixins run afterward
   // via the caller's own `project.with(...)`.
   if (enabledTagMixins.length) {
-    project.with(...enabledTagMixins.map((t) => WORKSPACE_TAG_MIXINS[t]));
+    project.with(...enabledTagMixins.map((t) => PACKAGE_TAG_MIXINS[t]));
   }
 
   new GeneratedSource(project);
@@ -1072,8 +1072,8 @@ type ApplyToAllProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXTool
  *   p.addDeps("echarts@catalog:");
  * });
  * @example
- * // Every workspace child except shared-core (negated glob):
- * applyToProjects(root, { path: "workspaces/**", identifierName: "!shared-core" }, (p) => {
+ * // Every child package except shared-core (negated glob):
+ * applyToProjects(root, { path: "packages/**", identifierName: "!shared-core" }, (p) => {
  *   p.addDeps("@dbx-tools/shared-core@workspace:*");
  * });
  */

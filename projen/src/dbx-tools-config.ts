@@ -1,5 +1,5 @@
 /**
- * In-memory `package.json` `dbxToolsConfig` record for a workspace package.
+ * In-memory `package.json` `dbxToolsConfig` record for a package.
  *
  * Values are read and written on the component's object; each write flushes the
  * record to the manifest through `project.package.addField`.

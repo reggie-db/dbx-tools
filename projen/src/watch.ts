@@ -10,14 +10,14 @@
  * that owns it (`tasks/barrels.ts`, `tasks/openapi.ts`, `tasks/projenrc.ts`), each
  * forwarding here rather than duplicating the watch machinery.
  *
- * `watchRoots()` is the one shared input - the workspace package roots where every
+ * `watchRoots()` is the one shared input - the package roots where every
  * watchable source file lives - so the barrels and openapi watchers don't each
  * recompute it. {@link watchFiles} owns the chokidar wiring; this is thin glue.
  */
 import { isAbsolute, resolve } from "node:path";
 import { watch as fileScan } from "@dbx-tools/path";
 import { log } from "@dbx-tools/shared-core";
-import { isGeneratedFile, recordedRoots, repoRoot } from "./workspace";
+import { isGeneratedFile, recordedRoots, repoRoot } from "./packages";
 
 const logger = log.logger("projen:watch");
 const DEBOUNCE_MS = 250;
@@ -27,7 +27,7 @@ export type IgnoreGroupOptions = NonNullable<
   Parameters<typeof fileScan.watchFiles>[1]
 >["ignoreOptions"];
 
-/** The workspace package roots (absolute), where every watchable source file lives. */
+/** The package roots (absolute), where every watchable source file lives. */
 export function watchRoots(): string[] {
   return recordedRoots().map((r) => resolve(repoRoot, r));
 }

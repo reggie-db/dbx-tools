@@ -80,8 +80,8 @@ const project = new projectApi.DBXToolsNodeProject({
   scope: SCOPE,
   // Discover packages from the demo root; the leading path segment is the tier
   // and derives the tag (`server/appkit-demo` -> `server`, `app/appkit-demo` ->
-  // `app`), exactly like the main repo's `workspaces/<tier>/<pkg>` layout.
-  workspacePackageRoots: ["."],
+  // `app`), exactly like the main repo's `packages/<tier>/<pkg>` layout.
+  packageRoots: ["."],
   // A consumer, not a publisher: no GitHub/release wiring.
   github: false,
   release: false,

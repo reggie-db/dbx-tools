@@ -66,7 +66,7 @@ The Cards page answers with the SAME content the Stream page does - ask both
 report the same numbers. That is the point of the endpoint: the agent, its tools,
 and its data are identical, and only the presentation changes (a card instead of
 streamed markdown). See
-[`@dbx-tools/teams`](../workspaces/node/teams/README.md) for the two-pass turn
+[`@dbx-tools/teams`](../packages/node/teams/README.md) for the two-pass turn
 that makes it so.
 
 The demo registers the plugin as `teams({ allowUnauthenticated: true })`, which
@@ -75,7 +75,7 @@ response, so the page works with no Azure Bot registration. That option is
 ignored unless `NODE_ENV=development` (which the local dev server sets). A real
 deployment sets `TEAMS_APP_ID` / `TEAMS_APP_PASSWORD` instead and gets the
 JWT-validated, Connector-delivered path — see
-[`@dbx-tools/teams`](../workspaces/node/teams/README.md).
+[`@dbx-tools/teams`](../packages/node/teams/README.md).
 
 ```tsx
 // app/appkit-demo/src/pages/Cards.tsx
@@ -105,7 +105,7 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
 
    ```bash
    # from the main repo root, publish the packages to your local registry:
-   pnpm -r --filter "./workspaces/**" publish \
+   pnpm -r --filter "./packages/**" publish \
      --registry http://localhost:4873 --no-git-checks
    ```
 
@@ -151,9 +151,9 @@ bump/publish it, then `pnpm update "@dbx-tools/*" --latest` and rebuild.
 
 ### Dev-link mode — for iterating on the CLIENT UI packages in THIS repo
 
-When you're editing the UI package source in `../workspaces/ui/**`, the
+When you're editing the UI package source in `../packages/ui/**`, the
 bump → publish → update → rebuild loop is too slow. `dev-link` adds the
-client-reachable workspace packages (`ui-*` + the browser-safe `shared-*` they
+client-reachable packages (`ui-*` + the browser-safe `shared-*` they
 pull) as pnpm workspace members and points the client app's `@dbx-tools/*` deps
 at that source, so a `vite build --watch` rebuilds the bundle on every edit:
 
@@ -161,7 +161,7 @@ at that source, so a `vite build --watch` rebuilds the bundle on every edit:
 node scripts/dev-link.mjs                                  # link client UI source
 pnpm --filter @dbx-tools/demo-appkit-server dev            # server (unchanged, serves dist/)
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch  # rebuild dist/ on UI source edits
-# edit anything under ../workspaces/ui/**/src, refresh the browser — no republish.
+# edit anything under ../packages/ui/**/src, refresh the browser — no republish.
 
 node scripts/dev-link.mjs --unlink                         # restore the registry consumer mode
 ```

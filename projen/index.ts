@@ -12,6 +12,7 @@ export * as generated from "./src/generated";
 export * as mixin from "./src/mixin";
 export * as moduleExports from "./src/module-exports";
 export * as openapi from "./src/openapi";
+export * as packages from "./src/packages";
 export * as pnpmWorkspace from "./src/pnpm-workspace";
 export * as project from "./src/project";
 export * as projectPredicate from "./src/project-predicate";
@@ -22,19 +23,13 @@ export * as tsconfig from "./src/tsconfig";
 export * as vite from "./src/vite";
 export * as vscode from "./src/vscode";
 export * as watch from "./src/watch";
-export * as workspace from "./src/workspace";
 export type { DBXToolsConfigOptions } from "./src/dbx-tools-config";
 export type { HeaderOpts } from "./src/generated";
 export type { ConstructsMixin } from "./src/mixin";
 export type { ModuleStatement, ModuleExport } from "./src/module-exports";
+export type { RecordedPackage } from "./src/packages";
 export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace";
-export type {
-  DBXToolsProject,
-  DBXToolsProjectOptions,
-  DBXToolsTypeScriptProjectOptions,
-  ApplyToProjectsOptions,
-} from "./src/project";
+export type { DBXToolsProject, DBXToolsProjectOptions, DBXToolsTypeScriptProjectOptions, ApplyToProjectsOptions } from "./src/project";
 export type { StandaloneRelease, DBXToolsReleaseOptions } from "./src/release";
-export type { WorkspaceTag } from "./src/tags";
+export type { PackageTag } from "./src/tags";
 export type { IgnoreGroupOptions } from "./src/watch";
-export type { WorkspacePackage } from "./src/workspace";

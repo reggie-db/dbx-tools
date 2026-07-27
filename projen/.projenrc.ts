@@ -9,7 +9,7 @@
  *
  * The engine imports three `@dbx-tools/*` utility packages at runtime
  * (`shared-core`, `node-core`, `node-path`). They are resolved to local source
- * under `../workspaces/` by this project's `.pnpmfile.cjs`, so they stay listed
+ * under `../packages/` by this project's `.pnpmfile.cjs`, so they stay listed
  * here as plain (registry-shaped) dependencies.
  */
 import { javascript, typescript } from "projen";

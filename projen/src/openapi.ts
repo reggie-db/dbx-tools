@@ -26,12 +26,12 @@ import { find } from "@dbx-tools/path";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated";
 import { log } from "@dbx-tools/shared-core";
 import {
-  type WorkspacePackage,
+  type RecordedPackage,
   isModuleFile,
   repoRoot,
   toPosix,
-  workspacePackages,
-} from "./workspace";
+  recordedPackages,
+} from "./packages";
 
 const logger = log.logger("projen:openapi");
 
@@ -50,7 +50,7 @@ export function createApiClient(options?: ClientOptions) {
 `;
 
 /** True if any module file in `<pkg>/src` matches {@link TSOA_IMPORT}. */
-function hasTsoaControllers(pkg: Pick<WorkspacePackage, "dir">): boolean {
+function hasTsoaControllers(pkg: Pick<RecordedPackage, "dir">): boolean {
   const srcDir = join(pkg.dir, "src");
   return [...find.findFiles("**/*", { cwd: srcDir })]
     .filter(isModuleFile)
@@ -58,8 +58,8 @@ function hasTsoaControllers(pkg: Pick<WorkspacePackage, "dir">): boolean {
 }
 
 /** `server`/`node` packages (never the generated `openapi` tag) with a tsoa import. */
-function controllerPackages(): WorkspacePackage[] {
-  return workspacePackages().filter(
+function controllerPackages(): RecordedPackage[] {
+  return recordedPackages().filter(
     (p) => (p.tags.includes("server") || p.tags.includes("node")) && hasTsoaControllers(p),
   );
 }

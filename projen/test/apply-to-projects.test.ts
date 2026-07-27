@@ -38,16 +38,16 @@ before(() => {
   });
   new DBXToolsTypeScriptProject({
     parent: root,
-    outdir: "workspaces/ui/app",
+    outdir: "packages/ui/app",
     name: "@fixture/ui-app",
   });
   new DBXToolsTypeScriptProject({
     parent: root,
-    outdir: "workspaces/shared/core",
+    outdir: "packages/shared/core",
     name: "@other/shared-core",
   });
   // A plain projen project, to prove the DBXTools-only default excludes it.
-  new Project({ name: "plain-child", parent: root, outdir: "workspaces/plain" });
+  new Project({ name: "plain-child", parent: root, outdir: "packages/plain" });
 });
 
 after(() => {
@@ -89,14 +89,14 @@ describe("applyToProjects selection", () => {
   });
 
   it("filters on the root-relative folder path", () => {
-    assert.deepEqual(selected({ path: "workspaces/ui/**" }), ["@fixture/ui-app"]);
+    assert.deepEqual(selected({ path: "packages/ui/**" }), ["@fixture/ui-app"]);
   });
 
   it("ANDs every provided filter", () => {
-    assert.deepEqual(selected({ identifierScope: "fixture", path: "workspaces/ui/**" }), [
+    assert.deepEqual(selected({ identifierScope: "fixture", path: "packages/ui/**" }), [
       "@fixture/ui-app",
     ]);
     // Same path, a scope that does not match there - AND yields nothing.
-    assert.deepEqual(selected({ identifierScope: "other", path: "workspaces/ui/**" }), []);
+    assert.deepEqual(selected({ identifierScope: "other", path: "packages/ui/**" }), []);
   });
 });
