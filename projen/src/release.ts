@@ -136,10 +136,11 @@ export class DBXToolsRelease extends Component {
           uses: "actions/setup-node@v6",
           with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
         },
-        // Frozen: what gets published must be built from the exact dependency
-        // set recorded at the tagged commit. A drifting lockfile here would
-        // publish against resolutions nothing ever tested, so fail instead.
-        { name: "Install", run: "pnpm install --frozen-lockfile" },
+        // NOT frozen. The lockfile is gitignored by policy (it can carry a
+        // private-registry fingerprint), so CI often has none or a stale one -
+        // and `--frozen-lockfile` turns that into a hard release failure rather
+        // than resolving. A blocked publish is worse here than a resolved one.
+        { name: "Install", run: "pnpm install --no-frozen-lockfile" },
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Set it on
         // every package (manifests are projen-readonly, so unlock them first).
         {
@@ -198,10 +199,11 @@ export class DBXToolsRelease extends Component {
           uses: "actions/setup-node@v6",
           with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
         },
-        // Frozen: what gets published must be built from the exact dependency
-        // set recorded at the tagged commit. A drifting lockfile here would
-        // publish against resolutions nothing ever tested, so fail instead.
-        { name: "Install", run: "pnpm install --frozen-lockfile" },
+        // NOT frozen. The lockfile is gitignored by policy (it can carry a
+        // private-registry fingerprint), so CI often has none or a stale one -
+        // and `--frozen-lockfile` turns that into a hard release failure rather
+        // than resolving. A blocked publish is worse here than a resolved one.
+        { name: "Install", run: "pnpm install --no-frozen-lockfile" },
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. package.json
         // is projen-generated read-only, so unlock it before `npm version` writes.
         {

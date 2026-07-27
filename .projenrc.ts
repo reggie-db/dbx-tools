@@ -16,7 +16,7 @@
  * `dbx-tools` root task first (see below); a normal consumer constructs,
  * `applyToProjects`es, synths.
  */
-import { JsonFile, YamlFile } from "projen";
+import { JsonFile } from "projen";
 import { mixin, project, project as projectApi } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
@@ -70,27 +70,6 @@ const root = new projectApi.DBXToolsNodeProject({
 // generates are named here instead. Whole directories, since nothing inside any
 // of them is ever committed.
 root.gitignore.addPatterns(".docs-build/", ".astro/", ".worktrees/", ".kanna/", ".polly/");
-
-// ---------------------------------------------------------------------------
-// GitHub Actions: pin third-party actions to immutable commits
-// ---------------------------------------------------------------------------
-// A moving tag (`@v5`) is resolved at run time, so whoever can move the tag
-// decides what executes in CI with this repo's token. A commit SHA cannot be
-// moved. First-party `actions/*` stay on major tags deliberately: GitHub owns
-// both the runner and that org, so the tag adds no third-party trust boundary.
-//
-// The pins live here, not in the emitted YAML, because projen owns those files
-// and rewrites every `uses:` through this provider at synth. Bump a pin by
-// editing the SHA below and re-synthing - a Dependabot PR against the generated
-// workflow would be reverted by the next synth.
-root.github?.actions.set(
-  "pnpm/action-setup",
-  "pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320", // v5.0.0
-);
-root.github?.actions.set(
-  "amannn/action-semantic-pull-request",
-  "amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50", // v6.1.1
-);
 
 // Least privilege at the workflow level: a job that omits its own
 // `permissions:` inherits read-only instead of the repo-wide token default.

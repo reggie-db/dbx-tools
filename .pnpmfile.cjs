@@ -13,10 +13,17 @@
  * node-path) resolve as normal workspace members here, so they need no rewrite.
  *
  * When the engine is published, drop this file (or point it at the registry).
+ *
+ * The link is RELATIVE on purpose. An absolute `path.resolve(__dirname, ...)`
+ * gets recorded verbatim as the lockfile specifier, which pins the lockfile to
+ * one machine's home directory - so every CI install fails
+ * `ERR_PNPM_OUTDATED_LOCKFILE` comparing `link:/Users/<someone>/...` against
+ * `link:/home/runner/...`. Relative keeps the lockfile portable. It resolves
+ * against the IMPORTING package's directory, and the only importer inside this
+ * workspace is the repo root; a nested package taking this dep would need its
+ * own depth, so re-check this if that ever changes.
  */
-const path = require("node:path");
-
-const ENGINE_LINK = `link:${path.resolve(__dirname, "projen")}`;
+const ENGINE_LINK = "link:./projen";
 
 function readPackage(pkg) {
   for (const field of ["dependencies", "devDependencies"]) {

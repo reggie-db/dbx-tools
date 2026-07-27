@@ -700,7 +700,6 @@ through the publish cycle. See `demo/README.md` for the full two-mode explanatio
   controllers - spec, types, and client.
 - **cli launchers** (`<cli package>/bin/<name>.mjs`): read-only + executable,
   one per `bin/<name>.ts` entry, emitted by the `cli` tag (`cli-bin.ts`).
-- **`.github/dependabot.yml`**: a `YamlFile` declared in `.projenrc.ts`.
 - **`.github/workflows/*.yml` except `docs.yml`**: projen-owned. `docs.yml` is
   the one hand-written workflow, so it is the only one to edit directly.
 
@@ -761,18 +760,26 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   expected output, not a regression to "fix" - changing it would mean
   abandoning source-first resolution, which is what lets workspace packages
   type-check against each other with no build step.
-- **Third-party GitHub Action pins live in `.projenrc.ts`, not the YAML.**
-  `root.github?.actions.set(...)` rewrites every `uses:` at synth via projen's
-  `GitHubActionsProvider`, so the generated workflows carry commit SHAs while
-  the source of truth stays in one place. Bump a pin by editing the SHA there
-  and re-synthing. First-party `actions/*`
-  intentionally stay on major tags.
-- **CI installs are frozen everywhere EXCEPT `build.yml`.** `release`,
-  `projen-release`, and `docs` use `--frozen-lockfile` so a publish or deploy
-  can never resolve dependencies nothing tested. `build.yml` keeps projen's
-  mutable install because the self-mutation job exists precisely to commit a
-  regenerated lockfile back to the PR; making it frozen would turn that
-  self-healing path into a hard failure.
+- **No CI install is `--frozen-lockfile`, and that is deliberate.** The lockfile
+  is gitignored by policy, so CI frequently has none or a stale one; frozen
+  turns that into a hard failure of a PUBLISH, which is the worst place to
+  discover it. That is not hypothetical - it broke the v0.3.38 release and the
+  docs deploy at once. `build.yml` additionally needs a mutable install because
+  its self-mutation job exists to commit a regenerated lockfile back to the PR.
+  If frozen installs ever come back, the lockfile has to become a committed,
+  machine-independent artifact FIRST.
+- **Keep `link:` specifiers RELATIVE in `.pnpmfile.cjs`.** An absolute
+  `path.resolve(__dirname, ...)` is recorded verbatim as the lockfile specifier,
+  which pins the lockfile to one developer's home directory and leaks that path.
+  Every install elsewhere then fails comparing `link:/Users/<someone>/...`
+  against `link:/home/runner/...`. Relative resolves against the IMPORTING
+  package's directory, so it only works while the importer's depth is known -
+  today the repo root is the sole importer of `@dbx-tools/projen`.
+- **There is no Dependabot, and third-party actions are on major tags.** Both
+  were tried and removed: SHA pins with no updater just rot, and Dependabot PRs
+  edit projen-GENERATED workflows, which the next synth reverts and the build's
+  self-mutation check then fails. Reintroducing either means solving that
+  generated-file conflict first.
 - **eslint is still eslintrc, and that is projen's limit, not a choice.**
   projen (0.101.x) emits `.eslintrc.json` and has no flat-config support, so
   the `eslint` task sets `ESLINT_USE_FLAT_CONFIG=false` to make eslint 9 load
