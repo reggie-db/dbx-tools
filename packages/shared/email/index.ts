@@ -3,4 +3,5 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as email from "./src/email";
+export { emailAttachmentSchema, emailMessageSchema, emailResultSchema, emailSendersSchema } from "./src/email";
 export type { EmailAttachment, EmailMessage, EmailResult, EmailSenders } from "./src/email";

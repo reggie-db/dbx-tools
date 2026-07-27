@@ -175,7 +175,7 @@
             "--peer",
             "--no-deprecated",
             "--dep=dev,prod,peer,optional",
-            "--filter=projen,@dbx-tools/core,@dbx-tools/path,@dbx-tools/shared-core"
+            "--filter=projen"
           ]
         },
         {
@@ -188,18 +188,19 @@
             "@types/node",
             "constructs",
             "projen",
+            "tsoa",
             "typescript",
             "@clack/prompts",
             "@dbx-tools/core",
             "@dbx-tools/path",
             "@dbx-tools/shared-core",
             "commander",
+            "concurrently",
             "consola",
             "is-identifier",
             "openapi-typescript",
             "oxc-parser",
             "ts-to-zod",
-            "tsoa",
             "tsx",
             "yaml"
           ]

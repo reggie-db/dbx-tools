@@ -5,4 +5,7 @@
 export * as cloud from "./src/cloud";
 export * as net from "./src/net";
 export * as workspace from "./src/workspace";
+export { RANGE_CACHE_TTL_MS, CloudProvider, resolveCloudLocation, loadProviderRanges } from "./src/cloud";
 export type { CloudLocation } from "./src/cloud";
+export { getPublicIp, resolveHostIps } from "./src/net";
+export { getWorkspaceUrl, getWorkspaceId } from "./src/workspace";

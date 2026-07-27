@@ -15,6 +15,11 @@
       "type": "build"
     },
     {
+      "name": "tsoa",
+      "version": "^6.6.0",
+      "type": "build"
+    },
+    {
       "name": "typescript",
       "version": "^5.9.3",
       "type": "build"
@@ -26,22 +31,27 @@
     },
     {
       "name": "@dbx-tools/core",
-      "version": "*",
+      "version": "^0.3.40",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/path",
-      "version": "*",
+      "version": "^0.3.40",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "*",
+      "version": "^0.3.40",
       "type": "runtime"
     },
     {
       "name": "commander",
       "version": "^15.0.0",
+      "type": "runtime"
+    },
+    {
+      "name": "concurrently",
+      "version": "^10.0.3",
       "type": "runtime"
     },
     {
@@ -77,11 +87,6 @@
     {
       "name": "ts-to-zod",
       "version": "^5.1.0",
-      "type": "runtime"
-    },
-    {
-      "name": "tsoa",
-      "version": "^6.6.0",
       "type": "runtime"
     },
     {

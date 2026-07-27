@@ -20,14 +20,16 @@
     "@types/node": "^24.6.0",
     "constructs": "^10.0.0",
     "projen": "^0.101.6",
+    "tsoa": "^6.6.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
-    "@dbx-tools/core": "^0.0.0",
-    "@dbx-tools/path": "^0.0.0",
-    "@dbx-tools/shared-core": "^0.0.0",
+    "@dbx-tools/core": "^0.3.40",
+    "@dbx-tools/path": "^0.3.40",
+    "@dbx-tools/shared-core": "^0.3.40",
     "commander": "^15.0.0",
+    "concurrently": "^10.0.3",
     "consola": "^3.4.2",
     "constructs": "^10.6.0",
     "is-identifier": "^1",
@@ -35,7 +37,6 @@
     "oxc-parser": "^0.90.0",
     "projen": "^0.101.16",
     "ts-to-zod": "^5.1.0",
-    "tsoa": "^6.6.0",
     "tsx": "^4.23.0",
     "yaml": "^2.9.0"
   },

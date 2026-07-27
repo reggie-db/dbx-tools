@@ -47,6 +47,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import type * as ts from "typescript";
+import { lazyRequire } from "./_lazy-require";
 import { header, isReadonly, makeReadonly, makeWritable } from "./generated";
 import { log, object } from "@dbx-tools/shared-core";
 import { readPackageManifest, repoRoot, recordedPackages } from "./packages";
@@ -327,8 +328,8 @@ export function generateCodegen(): string[] {
   }
 
   const require = createRequire(import.meta.url);
-  const tsRuntime = require("typescript") as typeof ts;
-  const { generate } = require("ts-to-zod") as typeof import("ts-to-zod");
+  const tsRuntime = lazyRequire<typeof ts>(require, "typescript", "codegen");
+  const { generate } = lazyRequire<typeof import("ts-to-zod")>(require, "ts-to-zod", "codegen");
 
   const written: string[] = [];
   for (const target of targets) {

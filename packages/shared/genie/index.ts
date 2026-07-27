@@ -4,4 +4,6 @@
 
 export * as event from "./src/event";
 export * as genieModel from "./src/genie-model";
+export { eventDetector, detectStatus, detectAttachmentAdded, detectThinking, detectText, detectQuery, detectStatement, detectRows, detectSuggestedQuestions, eventsFromMessage } from "./src/event";
+export { MessageStatusSchema, GenieThoughtSchema, ATTACHMENT_TYPES, GenieQueryAttachmentSchema, GenieAttachmentSchema, GenieMessageSchema, GenieResponseSchema, GenieSpaceSchema, TERMINAL_STATUSES, isTerminalStatus, humanizeStatus, detectAttachmentType, GenieChatLocationSchema, QuestionEventSchema, MessageEventSchema, StatusEventSchema, AttachmentEventSchema, ThinkingEventSchema, TextEventSchema, QueryEventSchema, StatementEventSchema, RowsEventSchema, SuggestedQuestionsEventSchema, ResultEventSchema, GenieChatEventSchema } from "./src/genie-model";
 export type { MessageStatus, GenieThoughtType, GenieThought, KnownAttachmentType, AttachmentType, GenieQueryAttachment, GenieAttachment, GenieMessage, GenieResponse, GenieSpace, TerminalStatus, GenieChatLocation, QuestionEvent, MessageEvent, StatusEvent, AttachmentEvent, ThinkingEvent, TextEvent, QueryEvent, StatementEvent, RowsEvent, SuggestedQuestionsEvent, ResultEvent, GenieChatEvent, GenieChatEventType, GenieChatEventFields } from "./src/genie-model";

@@ -19,15 +19,19 @@
  * namespace from its path segments; invalid identifiers suffixed with `Module`),
  * sorted by module path.
  *
- * On top of the namespace lines, every TYPE export that is UNIQUE across the
- * package (declared in exactly one module) is also HOISTED to the barrel's top
- * level via `export type { ... }`, so consumers can write `GenieMessage` instead
- * of `genieModel.GenieMessage`. Values (functions, classes, consts, enums) are
- * NOT hoisted - they keep the module namespace (`string.toSlug(...)`), which
- * keeps runtime call sites explicitly namespaced. A type declared by two or more
- * modules is ambiguous and stays namespace-only; `export type { ... }` is
- * required under `isolatedModules`. Names a hand-authored `exports.ts` declares
- * are never hoisted (that file wins).
+ * On top of the namespace lines, every export that is UNIQUE across the package
+ * (declared in exactly one module) is also HOISTED to the barrel's top level, so
+ * consumers can write `GenieMessage` or `DBXToolsNodeProject` instead of
+ * `genieModel.GenieMessage` / `project.DBXToolsNodeProject`. Types go out as
+ * `export type { ... }` (required under `isolatedModules`), values as
+ * `export { ... }`. The module namespaces stay either way, so a namespaced call
+ * site keeps working.
+ *
+ * Uniqueness is tallied over types and values TOGETHER: a name carried by two
+ * modules is ambiguous whichever kind it is, and hoisting one module's value
+ * beside another's same-named type would emit two conflicting re-exports. Such a
+ * name stays namespace-only. Names that collide with a generated namespace, or
+ * that a hand-authored `exports.ts` declares, are never hoisted (that file wins).
  *
  * The result gets a do-not-edit header + read-only bit (see `./generated`).
  */
@@ -37,7 +41,7 @@ import { find } from "@dbx-tools/path";
 import { string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
-import { moduleExports, moduleStatements } from "./module-exports";
+import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports";
 import { isModuleFile, toPosix, recordedPackages } from "./packages";
 
 /**
@@ -122,11 +126,11 @@ function namespaceLines(content: string): { ns: string; modulePath: string }[] {
 }
 
 /**
- * Append hoisted top-level `export type { ... }` re-exports for every TYPE
- * export that is UNIQUE across the package's modules. Values are never hoisted
- * (they keep the module namespace). A type declared by two or more modules is
- * ambiguous and left namespace-only. `suppress` names (a hand-authored
- * `exports.ts` surface) are never hoisted so that file stays authoritative.
+ * Append hoisted top-level re-exports for every export that is UNIQUE across the
+ * package's modules - `export type { ... }` for types, `export { ... }` for
+ * values. A name declared by two or more modules is ambiguous and left
+ * namespace-only. `suppress` names (a hand-authored `exports.ts` surface) are
+ * never hoisted so that file stays authoritative.
  */
 function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<string>): string {
   const namespaces = namespaceLines(content);
@@ -138,17 +142,17 @@ function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<strin
   const blocked = new Set<string>(suppress);
   for (const { ns } of namespaces) blocked.add(ns);
 
-  // Only TYPE exports are hoisted, so uniqueness is tallied over types alone:
-  // name -> { count, owning module }, to find types declared in exactly one module.
+  // Uniqueness is tallied over types AND values together - name -> { count,
+  // owning module } - so a name any two modules share stays namespace-only
+  // whichever kind each one is. `moduleExports` already dedupes within a module,
+  // so a count above one always means more than one module.
   const seen = new Map<string, { count: number; modulePath: string }>();
-  const perModule = new Map<string, string[]>();
+  const perModule = new Map<string, ModuleExport[]>();
   for (const { modulePath } of namespaces) {
     const abs = join(pkgDir, modulePath.replace(/^\.\//, ""));
-    const typeNames = moduleExports(withTsExt(abs))
-      .filter((e) => e.isType)
-      .map((e) => e.name);
-    perModule.set(modulePath, typeNames);
-    for (const name of typeNames) {
+    const exports = moduleExports(withTsExt(abs));
+    perModule.set(modulePath, exports);
+    for (const { name } of exports) {
       const prior = seen.get(name);
       if (prior) prior.count += 1;
       else seen.set(name, { count: 1, modulePath });
@@ -158,13 +162,15 @@ function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<strin
   const lines: string[] = [];
   for (const { modulePath } of namespaces) {
     const types: string[] = [];
-    for (const name of perModule.get(modulePath) ?? []) {
+    const values: string[] = [];
+    for (const { name, isType } of perModule.get(modulePath) ?? []) {
       if (blocked.has(name)) continue;
       const entry = seen.get(name);
       // Unique across the package AND this is the module that owns it.
       if (!entry || entry.count !== 1 || entry.modulePath !== modulePath) continue;
-      types.push(name);
+      (isType ? types : values).push(name);
     }
+    if (values.length) lines.push(`export { ${values.join(", ")} } from "${modulePath}";`);
     if (types.length) lines.push(`export type { ${types.join(", ")} } from "${modulePath}";`);
   }
   if (lines.length === 0) return content;

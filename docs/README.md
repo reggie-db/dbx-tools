@@ -1,14 +1,7 @@
 # dbx-tools docs
 
-This directory holds the docs-site generator plus the hand-written contributor
-guides that are not package READMEs.
-
-Guides:
-
-- [`appkit-best-practices.md`](./appkit-best-practices.md) — AppKit plugin
-  authoring, code style, and documentation conventions distilled from
-  `databricks/appkit` and the AppKit v0 docs. Read before touching an
-  AppKit-facing plugin.
+This directory holds the docs-site generator. Any `docs/*.md` added beside it
+becomes a hand-written guide on the site; there are none today.
 
 ## Docs site
 

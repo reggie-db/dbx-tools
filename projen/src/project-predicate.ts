@@ -9,7 +9,7 @@ import { IConstruct } from "constructs";
 import { Project } from "projen";
 import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project";
 import { toPosix } from "./packages";
-import { relative } from "path";
+import { relative } from "node:path";
 import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
 import { project } from "..";
 

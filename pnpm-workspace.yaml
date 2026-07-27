@@ -82,6 +82,7 @@ overrides:
 verifyDepsBeforeRun: warn
 allowBuilds:
   esbuild: true
+  unrs-resolver: true
   "@databricks/appkit-ui": true
   "@databricks/appkit": true
   "@google/genai": true

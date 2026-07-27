@@ -16,13 +16,16 @@
  * OpenAPI client generator.
  *
  * `tsoa`, `typescript`, and `openapi-typescript` are loaded lazily (heavy, and only
- * needed for `pnpm run openapi`), so importing this module stays cheap.
+ * needed for `pnpm run openapi`), so importing this module stays cheap. `tsoa` and
+ * `typescript` are not engine dependencies at all - both are resolved out of the
+ * consuming workspace, which is where they already live.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import type * as ts from "typescript";
 import { find } from "@dbx-tools/path";
+import { lazyRequire } from "./_lazy-require";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated";
 import { log } from "@dbx-tools/shared-core";
 import {
@@ -91,8 +94,8 @@ export async function generateOpenapi(): Promise<string[]> {
   // Lazy, resilient loads: tsoa + typescript are CJS (require), openapi-typescript
   // is ESM (dynamic import).
   const require = createRequire(import.meta.url);
-  const { generateSpec } = require("tsoa") as typeof import("tsoa");
-  const tsRuntime = require("typescript") as typeof ts;
+  const { generateSpec } = lazyRequire<typeof import("tsoa")>(require, "tsoa", "openapi generation");
+  const tsRuntime = lazyRequire<typeof ts>(require, "typescript", "openapi generation");
   const { default: openapiTS, astToString } = await import("openapi-typescript");
 
   // Read tsoa's controllers with decorator support; skipLibCheck keeps third-party

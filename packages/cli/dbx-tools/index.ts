@@ -6,3 +6,7 @@ export * as bootstrap from "./src/bootstrap";
 export * as cli from "./src/cli";
 export * as pnpm from "./src/pnpm";
 export * as root from "./src/root";
+export { bootstrapWorkspace, seedToolchain, runInitialSynth } from "./src/bootstrap";
+export { runCli } from "./src/cli";
+export { resolvePnpmArgv, runPnpm, ensureWorkspaceReady, runProjen } from "./src/pnpm";
+export { findWorkspaceRoot, needsBootstrap, needsInstall, needsToolchain, workspaceRoot, rootLabel } from "./src/root";

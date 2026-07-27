@@ -8,11 +8,10 @@ This file is the canonical repo instruction set for Codex, Claude, Cursor, and
 other coding agents. Keep tool-specific files such as `CLAUDE.md` and Cursor
 rules as thin pointers back here so instructions do not drift.
 
-Before authoring or changing an AppKit-facing plugin, package, or its docs, read
-`docs/appkit-best-practices.md`. It is the distilled house-rule version of the
-`databricks/appkit` repo and the AppKit v0 docs (plugin authoring, code style,
-documentation style), so `dbx-tools` packages stay shaped like first-party AppKit
-ones.
+Before authoring or changing an AppKit-facing plugin, package, or its docs, check
+the installed AppKit surface directly (`npx @databricks/appkit docs`, plus the
+`.d.ts` files under `node_modules/@databricks/appkit`) so `dbx-tools` packages
+stay shaped like first-party AppKit ones.
 
 If an older section below conflicts with the current README/package state or the
 Databricks/AppKit positioning guidance near the top of this file, prefer the
@@ -191,10 +190,8 @@ Docs site rules:
 
 ## Native AppKit overlap guidance
 
-For the authoring conventions themselves (manifest shape, lifecycle, execution
-interceptors, route registration, exports vs client config, errors, doc style),
-see `docs/appkit-best-practices.md`. This section is only about WHEN to reach for
-a `dbx-tools` package instead of the native one.
+This section is only about WHEN to reach for a `dbx-tools` package instead of the
+native one, not about how to author one.
 
 Use native AppKit first when it already provides the needed surface. AppKit has
 first-party plugins and UI for Analytics, Genie, Files, Lakebase, Model Serving,
@@ -379,7 +376,11 @@ over `packages`). It autofixes, so it can reformat too.
   `packageManager` are both set; projen's built-in prettier runs on the ROOT only)
   under anything you pass. You then call
   `project.synth()` yourself. A normal consuming `.projenrc.ts` is two lines:
-  `const project = new DBXToolsNodeProject(); project.synth();`. Both classes
+  `const project = new DBXToolsNodeProject(); project.synth();`. The barrel
+  exposes the class BOTH flat and under its module namespace
+  (`projectApi.DBXToolsNodeProject`), so either import works; the namespace form
+  is what in-repo code and `projen/README.md` use, and is the only one older
+  published engines understand. Both classes
   share `DBXToolsCommonOptions` (`scope`, `packageRoots`,
   `packageTagPaths`, `defaultTagMixins`), which
   `extends` the component option bags directly — `DBXToolsConfigOptions` (`tags`)
@@ -663,6 +664,15 @@ projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
 
 Barrels re-export every exporting file under `src/` except names starting with
 `_`; a package's barrel lives at its ROOT (`index.ts`), re-exporting `./src/*`.
+Each module gets an `export * as <ns>` line, and on top of that every name that
+is UNIQUE across the package is HOISTED flat as well - `export { ... }` for
+values, `export type { ... }` for types - so `DBXToolsNodeProject` and
+`projectApi.DBXToolsNodeProject` both resolve. Uniqueness is counted over values
+and types together, and a name colliding with a namespace or declared by a
+hand-authored `exports.ts` is skipped, so anything ambiguous stays reachable only
+through its namespace. Widening what gets hoisted grows the flat surface of every
+package at once; regenerate with `pnpm run barrels` and note that it skips
+`projen/` (not a workspace member), which needs `generateBarrels({ dirs: ["projen"] })`.
 
 ## Working on the packages via the `demo/` app
 
@@ -713,6 +723,46 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 
 ## Gotchas
 
+- **The engine releases SEPARATELY from the packages, and nothing links the
+  two.** `pnpm run bump` at the root cuts a `v*` tag, and the `release` workflow
+  publishes the `packages/**` members via `pnpm -r publish` - which by definition
+  cannot see `projen/`, since it is not a workspace member. The engine has its
+  own bump task (`cd projen && pnpm run bump`, tag prefix `projen-v`) feeding the
+  `projen-release` workflow, which versions from the pushed tag and does
+  `npm pack` + `npm publish`. That decoupling is deliberate: `@dbx-tools/projen`
+  is consumable on its own, by a repo that wants the monorepo generator and none
+  of the Databricks packages, so its version means "engine API", not "package
+  set". The cost is that the engine goes stale in silence - it sat at 0.1.24 on
+  the registry while the packages reached 0.3.40 - so a change to `projen/src`
+  reaches consumers only when someone remembers to bump it too.
+- **The engine's `@dbx-tools/*` deps must be a REAL published range, never `*`.**
+  `projen/.pnpmfile.cjs` rewrites them to `link:../packages/...` in-repo, so the
+  declared range is inert here and drifts unnoticed - but it ships verbatim in
+  the tarball. projen's install step resolves a `*` against what is linked, which
+  is the workspace's permanent `0.0.0`, and wrote `^0.0.0`. A caret on `0.0.0`
+  matches ONLY `0.0.0`, so publishing that would have produced an engine nobody
+  can install (`No matching version found for @dbx-tools/path@^0.0.0`), and the
+  in-repo link means no amount of local testing would show it. They are pinned to
+  `^0.3.40`; widen the floor by hand when the engine needs a newer sibling API.
+- **A generator tool the WORKSPACE already provides is a devDep, not a dep.** Every
+  engine dependency is installed by every consumer, including ones that never reach
+  the code path needing it, so the heavy generator toolchains are loaded lazily
+  (`_lazy-require.ts`) from the CONSUMER's install instead. That works because Node
+  resolves a bare specifier by walking up from the engine's own location, and under
+  pnpm that walk passes through `node_modules/.pnpm/node_modules` — the hidden
+  directory holding every package installed ANYWHERE in the workspace — so a tool
+  declared by some member package resolves fine. `typescript` and `tsoa` are the two
+  that qualify: `generateOpenapi` returns before touching either unless a package has
+  tsoa controllers, and a package can only have those if it carries the `server` tag,
+  which adds `tsoa@catalog:` to that package itself. Shipping tsoa anyway cost every
+  workspace 179 packages (and a deprecated `glob@10` warning) for a module it never
+  loads; dropping it took a bare bootstrap from 334 packages to 179. They stay
+  devDeps so the engine's own run and its `typeof import("tsoa")` types still
+  resolve. `ts-to-zod` and `openapi-typescript` are the opposite case — nothing else
+  puts them in a consumer's tree, so they remain real deps. Before adding a dep here,
+  ask whether a tag mixin or the root already installs it; if it does, `lazyRequire`
+  it. The residual `glob@10` warning in a workspace that genuinely uses tsoa is
+  upstream's, not ours — don't paper over it with a pnpm `overrides` entry.
 - **pnpm gates build scripts behind the `allowBuilds` MAP** in
   `pnpm-workspace.yaml` — `esbuild: true` is the default. Do NOT switch this to
   projen's own `allowScripts` option: for pnpm that renders

@@ -16,9 +16,13 @@ import { rootLabel } from "./root";
 // workspace on a stale engine. `@latest` always takes the newest published.
 const DEFAULT_PROJEN_SPECIFIER = "@dbx-tools/projen@latest";
 
-const PROJENRC_TEMPLATE = `import { DBXToolsNodeProject } from "@dbx-tools/projen";
+// Reach the class through its module NAMESPACE. Current engines also hoist it
+// flat, but every engine ever published exports the namespace, and this template
+// is resolved against `@latest` - a flat import dies on an older one with
+// "does not provide an export named 'DBXToolsNodeProject'".
+const PROJENRC_TEMPLATE = `import { project as projectApi } from "@dbx-tools/projen";
 
-const project = new DBXToolsNodeProject();
+const project = new projectApi.DBXToolsNodeProject();
 project.synth();
 `;
 
@@ -76,12 +80,7 @@ export function seedToolchain(
   const manifestPath = join(root, "package.json");
   if (!existsSync(manifestPath)) {
     runPnpm(["init"], root);
-    // pnpm 11 `init` writes `devEngines.packageManager: { name: "pnpm",
-    // onFail: "download" }`. Any npm-based tool later in the chain (an
-    // `npx`/dlx fallback) then refuses with EBADDEVENGINES because its own
-    // runner is npm, not pnpm. projen regenerates the whole manifest at synth
-    // anyway, so drop the block from this throwaway seed.
-    stripDevEngines(manifestPath);
+    normalizeSeedManifest(manifestPath);
   }
 
   const workspaceFile = join(root, "pnpm-workspace.yaml");
@@ -92,12 +91,27 @@ export function seedToolchain(
   runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", projenSpecifier], root);
 }
 
-/** Remove the `devEngines` block pnpm `init` seeds, so npm-based tooling doesn't reject the manifest. */
-function stripDevEngines(manifestPath: string): void {
+/**
+ * Make what `pnpm init` produced safe to synth against. Two corrections, both
+ * because that output varies by pnpm version:
+ *
+ *   - drop `devEngines`, which pnpm 11 seeds as `packageManager: { name: "pnpm",
+ *     onFail: "download" }`. Any npm-based tool later in the chain (an
+ *     `npx`/dlx fallback) then refuses with EBADDEVENGINES, its runner being npm;
+ *   - force `type: "module"`, which pnpm 11 writes and pnpm 10 does not. tsx
+ *     picks the entry's format from the nearest manifest, so without it
+ *     `.projenrc.ts` loads as CJS and the first dependency using top-level await
+ *     dies on "not supported with the cjs output format".
+ *
+ * projen regenerates the whole manifest at synth, so this only has to hold the
+ * seed together long enough to get there.
+ */
+function normalizeSeedManifest(manifestPath: string): void {
   try {
     const manifest = json.parseRecord(readFileSync(manifestPath, "utf8"));
-    if (manifest?.devEngines === undefined) return;
+    if (!manifest) return;
     delete manifest.devEngines;
+    manifest.type = "module";
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   } catch {
     // A malformed/absent manifest here just means the later `pnpm add` recreates it.

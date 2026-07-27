@@ -95,10 +95,14 @@ const DEFAULT_CATALOG: Catalog = {
 };
 
 /**
- * Build allowances every workspace needs. Only `esbuild`, which tsx pulls in and
- * which therefore has to be built for any task to run.
+ * Build allowances every workspace needs, because the engine itself is what
+ * drags each one in: `esbuild` arrives with tsx (so it has to be built for any
+ * task to run at all), and `unrs-resolver` is the native binding behind
+ * `eslint-import-resolver-typescript`, which projen's eslint component adds to
+ * every generated project. Leaving either unlisted greets a freshly bootstrapped
+ * workspace with pnpm's "Ignored build scripts" warning on its first install.
  */
-const DEFAULT_ALLOW_BUILDS: AllowBuilds = { esbuild: true };
+const DEFAULT_ALLOW_BUILDS: AllowBuilds = { esbuild: true, "unrs-resolver": true };
 
 /**
  * pnpm settings this engine applies to every workspace, beyond members, catalog,

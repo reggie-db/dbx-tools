@@ -65,10 +65,22 @@ const project = new typescript.TypeScriptProject({
   },
   deps: [
     "@clack/prompts@^1.7.0",
-    "@dbx-tools/core@*",
-    "@dbx-tools/path@*",
-    "@dbx-tools/shared-core@*",
+    // A REAL published range, never `*`. In-repo these three resolve through
+    // `.pnpmfile.cjs` to `link:../packages/...`, so the range is inert here - but
+    // it ships verbatim in the tarball, and projen's install step resolves a `*`
+    // against whatever is linked, which is the workspace's permanent `0.0.0`.
+    // That wrote `^0.0.0` (a caret on 0.0.0 matches ONLY 0.0.0), so a published
+    // engine became uninstallable: `No matching version found for
+    // @dbx-tools/path@^0.0.0`. These are independently released packages, so
+    // widen this floor by hand when the engine starts needing a newer API.
+    "@dbx-tools/core@^0.3.40",
+    "@dbx-tools/path@^0.3.40",
+    "@dbx-tools/shared-core@^0.3.40",
     "commander@^15.0.0",
+    // `tasks/sync.ts` imports this to fan the watchers out. It resolved here only
+    // because the repo root happens to depend on it; a consumer install has no
+    // such luck and `sync --watch` dies on a missing module.
+    "concurrently@^10.0.3",
     "consola@^3.4.2",
     "constructs@^10.6.0",
     "is-identifier@^1",
@@ -76,11 +88,21 @@ const project = new typescript.TypeScriptProject({
     "oxc-parser@^0.90.0",
     "projen@^0.101.16",
     "ts-to-zod@^5.1.0",
-    "tsoa@^6.6.0",
     "tsx@^4.23.0",
     "yaml@^2.9.0",
   ],
-  devDeps: ["@types/node@^24.6.0"],
+  devDeps: [
+    "@types/node@^24.6.0",
+    // Deliberately NOT a runtime dep. The engine only ever loads tsoa lazily, from
+    // `generateOpenapi`, which returns before touching it unless some package has
+    // tsoa controllers - and a package can only have those if it carries the
+    // `server` tag, which adds `tsoa@catalog:` to that package itself. So every
+    // workspace that can reach the require already installed tsoa, while one that
+    // cannot would be paying 179 packages (and a deprecated glob@10) for a module
+    // it never loads. Here it is a devDep so the engine's own openapi run and its
+    // `typeof import("tsoa")` types still resolve, without shipping it.
+    "tsoa@^6.6.0",
+  ],
 });
 
 // This package is consumed as TS source; publish the source subpaths, not a

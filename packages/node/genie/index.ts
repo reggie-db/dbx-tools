@@ -4,5 +4,7 @@
 
 export * as chat from "./src/chat";
 export * as space from "./src/space";
+export { genieChat, genieEventChat } from "./src/chat";
 export type { GenieChatOptions } from "./src/chat";
+export { getGenieSpace, genieSampleQuestions } from "./src/space";
 export type { GetGenieSpaceOptions } from "./src/space";
