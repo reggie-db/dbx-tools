@@ -18,6 +18,12 @@ import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project";
  * prefix so the two never collide. Tag-driven and pack-based: push
  * `<tagPrefix>1.2.3` and the single package in `directory` is published at 1.2.3
  * via `npm pack` + `npm publish`.
+ *
+ * Declaring one also enlists it in the root's `bump`, which cuts BOTH tags at one
+ * shared version. The separate tag namespace still lets it be released alone
+ * (`cd <directory> && pnpm run bump`) for a consumer who wants only this package -
+ * but a routine root bump no longer leaves it behind, which is how the engine
+ * drifted to 0.1.24 while the packages reached 0.3.41.
  */
 export interface StandaloneRelease {
   /** Workflow name (and `.github/workflows/<name>.yml` file). E.g. `projen-release`. */
@@ -86,9 +92,14 @@ export class DBXToolsRelease extends Component {
 
   public override preSynthesize(): void {
     const project = this.project as DBXToolsNodeProject;
+    // Release the standalone projects in the SAME run, at the same version. They
+    // are not workspace members, so nothing else would ever bring them along.
+    const siblingArgs = this.standaloneReleases
+      .map(({ directory, tagPrefix }) => ` --sibling ${directory}:${tagPrefix}`)
+      .join("");
     applyTasks(project, {
       bump: {
-        exec: taskScript(project, "bump.ts", `--prefix ${this.tagPrefix}`),
+        exec: taskScript(project, "bump.ts", `--prefix ${this.tagPrefix}${siblingArgs}`),
         receiveArgs: true,
         description: "Bump the release version (default patch), then commit, tag, and push it",
       },

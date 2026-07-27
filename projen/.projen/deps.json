@@ -55,11 +55,6 @@
       "type": "runtime"
     },
     {
-      "name": "consola",
-      "version": "^3.4.2",
-      "type": "runtime"
-    },
-    {
       "name": "constructs",
       "version": "^10.6.0",
       "type": "runtime"

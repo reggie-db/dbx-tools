@@ -723,18 +723,25 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
 
 ## Gotchas
 
-- **The engine releases SEPARATELY from the packages, and nothing links the
-  two.** `pnpm run bump` at the root cuts a `v*` tag, and the `release` workflow
-  publishes the `packages/**` members via `pnpm -r publish` - which by definition
-  cannot see `projen/`, since it is not a workspace member. The engine has its
-  own bump task (`cd projen && pnpm run bump`, tag prefix `projen-v`) feeding the
-  `projen-release` workflow, which versions from the pushed tag and does
-  `npm pack` + `npm publish`. That decoupling is deliberate: `@dbx-tools/projen`
-  is consumable on its own, by a repo that wants the monorepo generator and none
-  of the Databricks packages, so its version means "engine API", not "package
-  set". The cost is that the engine goes stale in silence - it sat at 0.1.24 on
-  the registry while the packages reached 0.3.40 - so a change to `projen/src`
-  reaches consumers only when someone remembers to bump it too.
+- **The engine ships on its own tag but at the SAME version, and one `bump` cuts
+  both.** `pnpm run bump` at the root publishes the `packages/**` members via the
+  `v*` tag -> `release` workflow -> `pnpm -r publish`, which by definition cannot
+  see `projen/`, since it is not a workspace member. So the engine keeps a second
+  namespace: tag `projen-v*` -> `projen-release` workflow -> `npm pack` +
+  `npm publish`, versioned from the pushed tag. The two namespaces stay separate
+  because `@dbx-tools/projen` is consumable on its own, by a repo that wants the
+  monorepo generator and none of the Databricks packages.
+  What links them is the root's bump task, generated as `--prefix v --sibling
+projen:projen-v` from the `standaloneReleases` option: it takes the base version
+  from the highest tag across EVERY listed prefix, stamps each manifest, and
+  pushes all the tags together, so both release at one version. It also publishes
+  each sibling to the local registry individually, which `pnpm -r` would skip.
+  Before that, each namespace only consulted its own tags and the engine went
+  stale in silence - it sat at 0.1.24 while the packages reached 0.3.41, so a
+  consumer's `@dbx-tools/projen@latest` was months behind the CLI that installed
+  it (a `sync --watch` died on the engine's then-undeclared `concurrently`).
+  Releasing the engine alone is still `cd projen && pnpm run bump`; nothing about
+  the version numbers being equal means a package change implies an engine change.
 - **The engine's `@dbx-tools/*` deps must be a REAL published range, never `*`.**
   `projen/.pnpmfile.cjs` rewrites them to `link:../packages/...` in-repo, so the
   declared range is inert here and drifts unnoticed - but it ships verbatim in

@@ -4,11 +4,21 @@
  * commit, tag, and push it. Pushing the tag is what triggers the release
  * workflow.
  *
- * The next version is derived from the HIGHER of:
+ * The next version is derived from the HIGHEST of:
  *   - the latest published git tag matching `<prefix><semver>` (fetched from
- *     the remote so a release made elsewhere is respected), and
+ *     the remote so a release made elsewhere is respected),
+ *   - the same for every `--sibling` prefix, and
  *   - the local `package.json` version,
  * then incremented by `--level` (patch | minor | major; default patch).
+ *
+ * `--sibling <dir>:<tagPrefix>` (repeatable) releases a standalone in-repo
+ * project - one that is NOT a pnpm workspace member, so `pnpm -r` cannot see it -
+ * at the SAME version as the root, in the same run: its manifest is stamped, its
+ * `<tagPrefix><version>` tag is cut and pushed (triggering its own workflow), and
+ * it is included in the local-registry publish. Taking the base version from
+ * every prefix at once is what keeps the two in lockstep: the engine sat at
+ * 0.1.24 while the packages reached 0.3.41 precisely because each namespace only
+ * ever looked at its own tags.
  *
  * Flags (all default ON; negate with the `--no-` form, per commander):
  *   --synth   / --no-synth     run `projen` (synth) first so the tree is current
@@ -29,7 +39,7 @@
  *   - `false`: never publish locally.
  *   - a URL: always publish to that registry.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Command, Option } from "commander";
 import { exec, project } from "@dbx-tools/core";
@@ -38,6 +48,26 @@ import { log, net } from "@dbx-tools/shared-core";
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;
 type Level = (typeof LEVELS)[number];
+
+/** A standalone in-repo project released alongside the root, on its own tag prefix. */
+interface Sibling {
+  /** Repo-relative directory, e.g. `projen`. */
+  readonly dir: string;
+  /** Git tag prefix, disjoint from the root's, e.g. `projen-v`. */
+  readonly prefix: string;
+}
+
+/**
+ * Commander collector for the repeatable `--sibling <dir>:<tagPrefix>`. Split on
+ * the LAST colon so a directory containing one still parses.
+ */
+function parseSibling(value: string, previous: Sibling[]): Sibling[] {
+  const at = value.lastIndexOf(":");
+  if (at <= 0 || at === value.length - 1) {
+    throw new Error(`--sibling expects <dir>:<tagPrefix>, got "${value}"`);
+  }
+  return [...previous, { dir: value.slice(0, at), prefix: value.slice(at + 1) }];
+}
 
 /** Parse `x.y.z` (ignoring any leading `v`/prefix), returning a `[maj,min,pat]` tuple. */
 function parseSemver(raw: string): [number, number, number] | undefined {
@@ -66,9 +96,8 @@ function git(args: string[], capture = false): string {
   return res.stdout?.trim() ?? "";
 }
 
-/** Highest remote tag matching `<prefix><semver>`, or undefined. `git fetch` first. */
-function latestRemoteVersion(prefix: string): [number, number, number] | undefined {
-  git(["fetch", "--tags", "--quiet"], true);
+/** Highest tag matching `<prefix><semver>`, or undefined. Call {@link fetchTags} first. */
+function latestTagVersion(prefix: string): [number, number, number] | undefined {
   const out = git(
     ["-c", "versionsort.suffix=-", "tag", "--sort=-version:refname", "--list", `${prefix}*`],
     true,
@@ -80,9 +109,31 @@ function latestRemoteVersion(prefix: string): [number, number, number] | undefin
   return undefined;
 }
 
+/** Pull remote tags once, so a release made elsewhere is respected. */
+function fetchTags(): void {
+  git(["fetch", "--tags", "--quiet"], true);
+}
+
 function readPackageVersion(pkgPath: string): [number, number, number] {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
   return parseSemver(pkg.version ?? "") ?? [0, 0, 0];
+}
+
+/**
+ * Write `version` into a manifest projen owns. Those are emitted read-only, so
+ * the write is bracketed by a chmod; the mode is restored afterwards to leave the
+ * tree exactly as synth left it.
+ */
+function writeManifestVersion(pkgPath: string, version: string): void {
+  const { mode } = statSync(pkgPath);
+  chmodSync(pkgPath, mode | 0o200);
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
+    pkg.version = version;
+    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+  } finally {
+    chmodSync(pkgPath, mode);
+  }
 }
 
 /**
@@ -107,6 +158,12 @@ program
     new Option("-l, --level <level>", "semver increment").choices([...LEVELS]).default("patch"),
   )
   .option("--prefix <prefix>", "git tag prefix", "v")
+  .option(
+    "--sibling <dir:prefix>",
+    "standalone in-repo project (not a workspace member) to release at the same version, repeatable",
+    parseSibling,
+    [] as Sibling[],
+  )
   // Declared in the `--no-` form so commander creates a boolean that defaults to
   // `true` and is turned off by `--no-synth` / `--no-version` / ... (the
   // positive `--synth` etc. also work and are no-ops on the default).
@@ -126,6 +183,7 @@ program
     (opts: {
       level: Level;
       prefix: string;
+      sibling: Sibling[];
       synth: boolean;
       version: boolean;
       commit: boolean;
@@ -136,6 +194,11 @@ program
     }) => {
       const pkgPath = resolve(process.cwd(), "package.json");
       if (!existsSync(pkgPath)) throw new Error(`no package.json in ${process.cwd()}`);
+
+      const siblings = opts.sibling.map((s) => ({ ...s, pkgPath: resolve(s.dir, "package.json") }));
+      for (const s of siblings) {
+        if (!existsSync(s.pkgPath)) throw new Error(`--sibling ${s.dir}: no package.json there`);
+      }
 
       // Synth first so the release commit captures an up-to-date tree (generated
       // manifests, workspace file, tasks, ...) rather than a stale one.
@@ -150,25 +213,37 @@ program
         });
       }
 
-      // Base = higher of the latest remote tag and the local package version.
-      const local = readPackageVersion(pkgPath);
-      const remote = latestRemoteVersion(opts.prefix);
-      const base = remote && compareSemver(remote, local) > 0 ? remote : local;
+      // Base = highest of the local package version and the latest tag in EVERY
+      // namespace being released, so one shared version stays ahead of them all.
+      fetchTags();
+      const prefixes = [opts.prefix, ...siblings.map((s) => s.prefix)];
+      const tagged = prefixes
+        .map((prefix) => ({ prefix, version: latestTagVersion(prefix) }))
+        .filter((t): t is { prefix: string; version: [number, number, number] } => !!t.version);
+      const base = tagged.reduce(
+        (highest, t) => (compareSemver(t.version, highest) > 0 ? t.version : highest),
+        readPackageVersion(pkgPath),
+      );
       const next = increment(base, opts.level);
       const version = next.join(".");
-      const tag = `${opts.prefix}${version}`;
+      const tags = prefixes.map((prefix) => `${prefix}${version}`);
       logger.info(
-        `bump ${base.join(".")} -> ${version} (${opts.level}); tag ${tag}` +
-          `${remote ? "" : " [no remote tag]"}`,
+        `bump ${base.join(".")} -> ${version} (${opts.level}); tags ${tags.join(", ")}` +
+          `${tagged.length ? "" : " [no remote tag]"}`,
       );
+      for (const t of tagged) {
+        if (compareSemver(t.version, base) < 0) {
+          logger.info(`${t.prefix}* was behind at ${t.version.join(".")}, catching it up`);
+        }
+      }
 
       const push = opts.push && opts.publish;
 
       if (opts.version) {
-        const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
-        pkg.version = version;
-        writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-        logger.info(`wrote version ${version} to package.json`);
+        writeManifestVersion(pkgPath, version);
+        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
+        const also = siblings.length ? ` (and ${siblings.map((s) => s.dir).join(", ")})` : "";
+        logger.info(`wrote version ${version} to package.json${also}`);
       }
 
       if (opts.commit) {
@@ -181,14 +256,16 @@ program
       }
 
       if (opts.tag) {
-        git(["tag", "-a", tag, "-m", tag]);
-        logger.info(`tagged ${tag}`);
+        for (const t of tags) git(["tag", "-a", t, "-m", t]);
+        logger.info(`tagged ${tags.join(", ")}`);
       }
 
       if (push) {
         git(["push", "origin", "HEAD"]);
-        if (opts.tag) git(["push", "origin", tag]);
-        logger.success(`pushed ${opts.tag ? tag : "HEAD"} to origin`);
+        // Push every tag in ONE invocation: each push triggers a workflow, and a
+        // partial push would release half the set at this version.
+        if (opts.tag) git(["push", "origin", ...tags]);
+        logger.success(`pushed ${opts.tag ? tags.join(", ") : "HEAD"} to origin`);
       } else {
         logger.info("skipped push (--no-push / --no-publish)");
       }
@@ -203,14 +280,16 @@ program
       }
       if (publishToLocalRegistry) {
         logger.info(`publishing ${version} to local registry ${localRegistry}`);
-        const runInRepo = (command: string, args: string[]) =>
+        const runIn = (cwd: string, command: string, args: string[]) =>
           exec.spawnSync(command, args, {
-            cwd: process.cwd(),
+            cwd,
             stdout: "inherit",
             stderr: "inherit",
             stdin: "ignore",
             check: true,
           });
+        const runInRepo = (command: string, args: string[]) =>
+          runIn(process.cwd(), command, args);
         // Each package keeps `version: 0.0.0` on disk (projen owns the
         // manifest); the root bump above only touched the root. Mirror the CI
         // `release` workflow: stamp the release version on EVERY package (they're
@@ -240,6 +319,19 @@ program
           "--access",
           "public",
         ]);
+        // `pnpm -r` cannot see a sibling (not a workspace member), so publish each
+        // one on its own. Skipping this is what left a local registry serving a
+        // current CLI against a months-old engine.
+        for (const s of siblings) {
+          runIn(s.dir, "pnpm", [
+            "publish",
+            "--registry",
+            localRegistry,
+            "--no-git-checks",
+            "--access",
+            "public",
+          ]);
+        }
         logger.success(`published ${version} to ${localRegistry}`);
       }
     },

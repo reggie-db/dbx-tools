@@ -81,7 +81,6 @@ const project = new typescript.TypeScriptProject({
     // because the repo root happens to depend on it; a consumer install has no
     // such luck and `sync --watch` dies on a missing module.
     "concurrently@^10.0.3",
-    "consola@^3.4.2",
     "constructs@^10.6.0",
     "is-identifier@^1",
     "openapi-typescript@^7.13.0",

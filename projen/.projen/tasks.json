@@ -196,7 +196,6 @@
             "@dbx-tools/shared-core",
             "commander",
             "concurrently",
-            "consola",
             "is-identifier",
             "openapi-typescript",
             "oxc-parser",
