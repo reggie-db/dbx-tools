@@ -46,7 +46,10 @@ const root = new projectApi.DBXToolsNodeProject({
   // workspace member) and releases on its own `projen-v*` tag prefix; the engine
   // authors its `projen-release` workflow alongside the root's `release`.
   standaloneReleases: [{ name: "projen-release", directory: "projen", tagPrefix: "projen-v" }],
-  workflowPackageCache: true,
+  // `actions/setup-node`'s pnpm cache keys off a lockfile in the tree, and
+  // `pnpm-lock.yaml` is deliberately untracked, so enabling it fails the job
+  // outright with "Dependencies lock file is not found".
+  workflowPackageCache: false,
   depsUpgrade: false,
   // `@dbx-tools/projen` (the engine) lives in the standalone `projen/`
   // project, not this workspace; the repo `.pnpmfile.cjs` rewrites it to a

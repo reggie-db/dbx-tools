@@ -760,14 +760,31 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   expected output, not a regression to "fix" - changing it would mean
   abandoning source-first resolution, which is what lets workspace packages
   type-check against each other with no build step.
-- **No CI install is `--frozen-lockfile`, and that is deliberate.** The lockfile
-  is gitignored by policy, so CI frequently has none or a stale one; frozen
+- **`pnpm-lock.yaml` is UNTRACKED, and nothing in CI may depend on it existing.**
+  It is covered by `.gitignore`'s `**/*-lock.yaml`, but it had been committed
+  before that rule existed and an ignore rule cannot untrack an already-tracked
+  path, so it stayed in the index for a long time while appearing to be ignored.
+  That state hid itself: `git check-ignore pnpm-lock.yaml` consults the index and
+  reports a TRACKED file as not ignored, never mentioning the rule that matches
+  it - only `--no-index` shows the rule. It has since been `git rm --cached`ed.
+  The reason to keep it out is that a lockfile resolved here can carry a
+  private-registry fingerprint; verify with
+  `rg -c 'localhost:4873|/Users/' pnpm-lock.yaml` before ever committing one.
+- **Do NOT set `workflowPackageCache: true`, and do not add `cache: pnpm` to a
+  hand-written workflow.** `actions/setup-node`'s package cache keys off a
+  lockfile in the tree; with `pnpm-lock.yaml` untracked the step fails the job
+  outright with "Dependencies lock file is not found". Turning it off removes
+  the `Setup Node.js` step from `build.yml` entirely, which is harmless - it
+  never pinned a `node-version`, so the runner's preinstalled Node is used
+  either way, exactly as before.
+- **No CI install is `--frozen-lockfile`, and that is deliberate.** With no
+  committed lockfile there is usually nothing to freeze against, and frozen
   turns that into a hard failure of a PUBLISH, which is the worst place to
-  discover it. That is not hypothetical - it broke the v0.3.38 release and the
+  discover it. That is not hypothetical: it broke the v0.3.38 release and the
   docs deploy at once. `build.yml` additionally needs a mutable install because
-  its self-mutation job exists to commit a regenerated lockfile back to the PR.
-  If frozen installs ever come back, the lockfile has to become a committed,
-  machine-independent artifact FIRST.
+  its self-mutation job exists to commit regenerated files back to the PR. The
+  cost of this choice is that CI resolves dependencies fresh, so a bad upstream
+  publish can break a build that nothing here changed.
 - **Keep `link:` specifiers RELATIVE in `.pnpmfile.cjs`.** An absolute
   `path.resolve(__dirname, ...)` is recorded verbatim as the lockfile specifier,
   which pins the lockfile to one developer's home directory and leaks that path.
