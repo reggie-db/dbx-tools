@@ -73,7 +73,7 @@ catalog:
   ai: ^5.0.0
   echarts: ^6.0.0
   echarts-for-react: ^3.0.2
-  shiki: ^3.0.0
+  shiki: ^4.3.0
   sql-formatter: ^15.6.9
   adaptivecards: ^3.0.5
 catalogMode: manual
