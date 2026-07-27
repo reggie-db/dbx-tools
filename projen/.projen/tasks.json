@@ -193,7 +193,6 @@
             "@dbx-tools/core",
             "@dbx-tools/path",
             "@dbx-tools/shared-core",
-            "@typescript-eslint/typescript-estree",
             "commander",
             "consola",
             "is-identifier",

@@ -70,6 +70,7 @@ import {
 import { display, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import type { Agent } from "@mastra/core/agent";
 import { Mastra } from "@mastra/core/mastra";
+import type { RequestContext } from "@mastra/core/request-context";
 import express from "express";
 import type { Pool } from "pg";
 
@@ -89,7 +90,12 @@ import { buildMcpServer, type ResolvedMcp } from "./mcp";
 import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory";
 import { logFeedback, resolveFeedbackEnabled } from "./mlflow";
 import { buildObservability } from "./observability";
-import { attachRoutePatchMiddleware, isMastraRequestAllowed, MastraServer } from "./server";
+import {
+  attachRoutePatchMiddleware,
+  createRequestContext,
+  isMastraRequestAllowed,
+  MastraServer,
+} from "./server";
 import { resolveServingConfig } from "./serving";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement";
 import { threadsRoute } from "./threads";
@@ -303,6 +309,24 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         (this.built && this.built.agents[this.built.defaultAgentId]) ?? null,
       /** Underlying Mastra instance for advanced use (custom routes etc.). */
       getMastra: () => this.mastra,
+      /**
+       * Build the `RequestContext` an agent turn driven from OUTSIDE this
+       * plugin's routes needs (a Teams activity on another plugin's endpoint, a
+       * scheduled job).
+       *
+       * Mastra's user-scoped tools - `ask_genie` most visibly - read the AppKit
+       * user off the request context, which only the HTTP middleware stamps.
+       * Calling `agent.generate` with a raw prompt therefore answers "the data
+       * source is unreachable" where the chat routes answer with real data.
+       * Passing this as `requestContext` closes that gap, so an out-of-band turn
+       * has exactly the capabilities a chat turn has.
+       *
+       * Must be called INSIDE an `asUser(req)` scope to inherit the caller's
+       * OBO identity; outside one it resolves to the service principal.
+       */
+      createRequestContext: (
+        options: { threadId?: string; resourceId?: string; requestId?: string } = {},
+      ): Promise<RequestContext> => createRequestContext(options),
       /**
        * MCP endpoint info when `config.mcp` is enabled, else `null`.
        * Streamable HTTP is `http`; the SSE pair is the legacy transport.

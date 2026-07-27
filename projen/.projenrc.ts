@@ -68,14 +68,13 @@ const project = new typescript.TypeScriptProject({
     "@dbx-tools/core@*",
     "@dbx-tools/path@*",
     "@dbx-tools/shared-core@*",
-    "@typescript-eslint/typescript-estree@^8",
     "commander@^15.0.0",
     "consola@^3.4.2",
     "constructs@^10.6.0",
     "is-identifier@^1",
     "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
-    "projen@^0.101.6",
+    "projen@^0.101.16",
     "ts-to-zod@^5.1.0",
     "tsoa@^6.6.0",
     "tsx@^4.23.0",
@@ -91,7 +90,6 @@ project.package.addField("main", "index.ts");
 project.package.addField("types", "index.ts");
 project.package.addField("exports", {
   ".": "./index.ts",
-  "./engine-root": "./src/engine-root.ts",
   "./package.json": "./package.json",
 });
 

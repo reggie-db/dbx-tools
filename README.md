@@ -133,6 +133,7 @@ export function App() {
 | Local model proxy           | [`@dbx-tools/cli-model-proxy`](workspaces/cli/model-proxy)                                                                                        |
 | Email workflows             | [`@dbx-tools/email`](workspaces/node/email), [`@dbx-tools/shared-email`](workspaces/shared/email), [`@dbx-tools/ui-email`](workspaces/ui/email)   |
 | Web search and fetch        | [`@dbx-tools/appkit-web-search`](workspaces/node/appkit-web-search)                                                                               |
+| Teams chat and cards        | [`@dbx-tools/teams`](workspaces/node/teams), [`@dbx-tools/shared-teams`](workspaces/shared/teams), [`@dbx-tools/ui-teams`](workspaces/ui/teams)   |
 | React/AppKit UI             | [`@dbx-tools/ui-appkit`](workspaces/ui/appkit), [`@dbx-tools/ui-mastra`](workspaces/ui/mastra), [`@dbx-tools/ui-email`](workspaces/ui/email)      |
 | Brand context and assets    | [`@dbx-tools/shared-core`](workspaces/shared/core), [`@dbx-tools/core`](workspaces/node/core), [`@dbx-tools/ui-branding`](workspaces/ui/branding) |
 | Databricks infrastructure   | [`@dbx-tools/databricks`](workspaces/node/databricks), [`@dbx-tools/databricks-zerobus`](workspaces/node/databricks-zerobus)                      |

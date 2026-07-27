@@ -72,6 +72,9 @@ catalogs:
     '@vitejs/plugin-react':
       specifier: ^5.0.4
       version: 5.2.0
+    adaptivecards:
+      specifier: ^3.0.5
+      version: 3.0.6
     ai:
       specifier: ^5.0.0
       version: 5.0.210
@@ -176,8 +179,8 @@ importers:
         specifier: ^3.9.4
         version: 3.9.4
       projen:
-        specifier: ^0.101.4
-        version: 0.101.6(constructs@10.6.0)
+        specifier: ^0.101.16
+        version: 0.101.16(constructs@10.6.0)
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -633,6 +636,43 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  workspaces/node/teams:
+    dependencies:
+      '@databricks/appkit':
+        specifier: 'catalog:'
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+      '@dbx-tools/shared-teams':
+        specifier: workspace:*
+        version: link:../../shared/teams
+      '@mastra/core':
+        specifier: 'catalog:'
+        version: 1.50.1(@grpc/grpc-js@1.14.4)(ai@6.0.221(zod@4.3.6))(bufferutil@4.1.0)(express@5.2.1)(rxjs@7.8.2)(zod@4.3.6)
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
+      '@types/express':
+        specifier: 'catalog:'
+        version: 5.0.6
+      '@types/json-schema':
+        specifier: ^7
+        version: 7.0.15
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   workspaces/shared/core:
     dependencies:
       zod:
@@ -749,6 +789,25 @@ importers:
       '@databricks/sdk-experimental':
         specifier: 'catalog:'
         version: 0.17.0
+      '@types/node':
+        specifier: ^24.6.0
+        version: 24.13.3
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  workspaces/shared/teams:
+    dependencies:
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
       '@types/node':
         specifier: ^24.6.0
         version: 24.13.3
@@ -932,6 +991,46 @@ importers:
       streamdown:
         specifier: 'catalog:'
         version: 2.5.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.6.0
+        version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.17)
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  workspaces/ui/teams:
+    dependencies:
+      '@dbx-tools/shared-core':
+        specifier: workspace:*
+        version: link:../../shared/core
+      '@dbx-tools/shared-teams':
+        specifier: workspace:*
+        version: link:../../shared/teams
+      '@dbx-tools/ui-appkit':
+        specifier: workspace:*
+        version: link:../appkit
+      adaptivecards:
+        specifier: 'catalog:'
+        version: 3.0.6(swiper@12.2.0)
+      marked:
+        specifier: 'catalog:'
+        version: 18.0.5
+      react:
+        specifier: 'catalog:'
+        version: 19.2.7
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.7(react@19.2.7)
     devDependencies:
       '@types/node':
         specifier: ^24.6.0
@@ -3983,6 +4082,11 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
+  adaptivecards@3.0.6:
+    resolution: {integrity: sha512-WDCIb2WXZ7cOHJ9HIHRNdhSt861HySVOdN2xPk2aKHAF3JvD8QGQ8/XcNFrDJxCteOog8MM7EBlXfSAR8JXKAg==}
+    peerDependencies:
+      swiper: ^12.1.2
+
   adm-zip@0.5.18:
     resolution: {integrity: sha512-ufJnssQGbxzLNS1Ho9bCtX4rQKCCvoVuDLHoJyc3F9dOGDB4BkWs2Ci0kv53lqocAEQ/Cbi+I2XCsNYGqVYqng==}
     engines: {node: '>=12.0'}
@@ -6473,8 +6577,8 @@ packages:
     resolution: {integrity: sha512-7PiHtLll5LdnKIMw100I+8xJXR5gW2QwWYkT6iJva0bXitZKa/XMrSbdmg3r2Xnaidz9Qumd0VPaMrZlF9V9sA==}
     engines: {node: '>=0.4.0'}
 
-  projen@0.101.6:
-    resolution: {integrity: sha512-tPC2X8fiQz0Z8ILxvjXHfMspbcR6yAwRJmJd8sWuv/KieGggoGJifN+wYsflYAxHTWxr1LXZXTGs+FFe3k6gJQ==}
+  projen@0.101.16:
+    resolution: {integrity: sha512-vUyYtMthrcnQW4O48KgYaMfFCwi5yklkw3u3kdGQxmWKkPxfXIEhlpEfYWsGbUSp3qEuZBYsFfaj/N/e5mWbEw==}
     engines: {node: '>= 16.0.0'}
     hasBin: true
     peerDependencies:
@@ -7038,6 +7142,10 @@ packages:
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
+
+  swiper@12.2.0:
+    resolution: {integrity: sha512-K8uXsBZU6ME97Ia3xbBge8IRCnR1lOmIILzvY/jGVic7dSTQ530s3uO8RvXbPUtkkXLWIwmZLRPbtDxRWVAFdg==}
+    engines: {node: '>= 4.7.0'}
 
   synckit@0.11.13:
     resolution: {integrity: sha512-eNRKgb3z66Yp3D2CixVujOUvXLFUTij/zVnV8KRyvFdQwpz7I5DS8UfRkTeLzb64u+dkzDSdelE24izu+zSSUg==}
@@ -11928,6 +12036,10 @@ snapshots:
 
   acorn@8.17.0: {}
 
+  adaptivecards@3.0.6(swiper@12.2.0):
+    dependencies:
+      swiper: 12.2.0
+
   adm-zip@0.5.18: {}
 
   agent-base@7.1.4: {}
@@ -14833,7 +14945,7 @@ snapshots:
 
   progress@2.0.3: {}
 
-  projen@0.101.6(constructs@10.6.0):
+  projen@0.101.16(constructs@10.6.0):
     dependencies:
       constructs: 10.6.0
 
@@ -15517,6 +15629,8 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  swiper@12.2.0: {}
 
   synckit@0.11.13:
     dependencies:

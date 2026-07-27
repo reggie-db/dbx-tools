@@ -71,6 +71,53 @@ Primary package areas:
   optional URL allow-list (built on `@dbx-tools/path`'s `match`) filtering
   citations / refusing disallowed fetches, per-tool approval gating, and the
   AppKit `web-search` plugin. Same shape as node-email.
+- `workspaces/node/teams`, `workspaces/shared/teams`, and `workspaces/ui/teams`
+  — Teams Adaptive Card add-on. The headline surface is `POST
+/api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
+  registration can point at: it validates the inbound Bot Service JWT
+  (signature + trusted issuer + audience === `appId`, the check that stops
+  another bot's validly-signed token driving your agent), pins the reply
+  destination to the token's `serviceurl` claim, acknowledges `200` BEFORE
+  running the agent (Bot Service retries an unacknowledged activity, so a
+  synchronous reply means duplicate cards), and delivers the card over the
+  Connector API. `POST /api/teams/activity` runs the same turn synchronously for
+  local/non-Teams callers, with the conversation id mapped onto the agent's
+  memory thread. It is the Teams-shaped analogue of how the Mastra plugin
+  exposes MCP at a path — the protocol is the interface. A turn runs in TWO
+  passes: the agent ANSWERS normally first (tools included, no
+  `structuredOutput`, nothing about cards in the prompt), then a second
+  `structuredOutput` pass reformats that answer into a `CardSpec`. Both passes
+  matter — asking for the answer and the card shape in one request makes the
+  model treat FORMATTING as the task, so it never calls its tools and replies
+  with a placeholder card ("I don't have a real system connected"). Answering
+  first is what makes this endpoint's CONTENT identical to the streaming
+  endpoint's; only the presentation differs. For that parity the turn also needs
+  the agent's per-turn Mastra `RequestContext` — user-scoped tools (`ask_genie`
+  above all) read the AppKit user off it and only the agent plugin can build one,
+  so `appkit-mastra` exposes `createRequestContext()` on its `exports()` and
+  node-teams resolves it structurally (`resolveCardContextFactory`). It resolves
+  its agent from the sibling Mastra plugin by registered NAME (`agentPlugin`,
+  default `mastra`) so this package takes no dependency on
+  `@dbx-tools/appkit-mastra`. The
+  `allowUnauthenticated` config serves `/messages` with NO token validation for
+  local development and is IGNORED unless `NODE_ENV=development`, so a
+  production build cannot be talked into it by an env var (the demo uses it to
+  render live cards). Card recovery is layered because a prompt-injected schema
+  is best-effort: a card the agent composed with `create_teams_card` short-
+  circuits the format pass, a FULL Adaptive Card document (what a capable model
+  often returns when asked for "an Adaptive Card") is read back into the spec
+  vocabulary, the payload Mastra REJECTED is salvaged off the thrown error
+  (`details.value`), and the answer text is the last resort — so a formatting
+  miss costs structure, never the answer. Host embed markers (`[data:<id>]`,
+  `[chart:<id>]`) are stripped since a card has no slot to render them; the
+  answering pass asks for the values instead. Also a
+  deterministic `CardSpec` -> Adaptive Card 1.5 builder, the
+  `create_teams_card` Mastra tool + AppKit `teams` plugin (`POST /api/teams/card`,
+  `POST /api/teams/post`, optional incoming webhook), browser-safe card +
+  activity schemas, and a React `TeamsChat` / `AdaptiveCardView` /
+  `AdaptiveCardGallery` built on the `adaptivecards` JS renderer (which ships no
+  markdown parser — `ui-teams` installs `marked` as its `onProcessMarkdown`).
+  Same add-on shape as node-email.
 - `workspaces/ui/appkit` — AppKit UI/Tailwind/Vite foundation used by feature UI
   packages.
 - `workspaces/node/databricks` and `workspaces/node/databricks-zerobus` —
@@ -198,6 +245,19 @@ why to use this package anyway:
   tool and resolves its own web-capable model (so an agent on a non-web model
   still searches); `web_fetch` uses got-scraping. Same add-on shape as
   node-email (Mastra tool pair + AppKit plugin priming a shared runtime).
+- `@dbx-tools/teams`: AppKit has no Teams / Adaptive Card surface, so use this
+  whenever a Microsoft Teams channel should be able to chat with the app's
+  agents, or an agent should emit a Teams card. Two things it buys: a real Bot
+  Framework messaging endpoint (`POST /api/teams/messages`, JWT-validated and
+  Connector-delivered — paste it into an Azure Bot registration) plus the
+  synchronous `POST /api/teams/activity` for local callers, so the wire format IS
+  the Teams protocol rather than a bespoke chat API; and a policy layer around a
+  card — the model works in the small `CardSpec` vocabulary instead of raw
+  Adaptive Card JSON, a deterministic builder guarantees a schema-valid Adaptive
+  Card 1.5 document, and posting is gated behind an explicitly configured
+  incoming webhook. `@dbx-tools/ui-teams`'s `TeamsChat` renders a whole
+  conversation of cards with the `adaptivecards` JS renderer. Same add-on shape
+  as node-email.
 
 Concrete examples to preserve in docs:
 
@@ -212,6 +272,11 @@ Concrete examples to preserve in docs:
 - Web search here gives agents an open-web `web_search` (Databricks native
   web-search tool, on its own web-capable model) + `web_fetch` behind a URL
   allow-list and optional approval gate, a surface AppKit doesn't ship.
+- Teams here gives an app a real Teams bot messaging endpoint — JWT-validated
+  inbound, Connector-API delivered outbound (the MCP-style "expose the real
+  protocol at a path" move) — compiles a model's small `CardSpec` into a valid
+  Adaptive Card, and renders a whole Teams conversation with the `adaptivecards`
+  JS renderer (with optional webhook posting), a surface AppKit doesn't ship.
 
 ## Shared utilities - check here before writing a helper
 
@@ -312,28 +377,61 @@ over `workspaces`). It autofixes, so it can reformat too.
   share `DBXToolsCommonOptions` (`scope`, `workspacePackageRoots`,
   `workspacePackageTagPaths`, `defaultTagMixins`), which
   `extends` the component option bags directly — `DBXToolsConfigOptions` (`tags`)
-  and `DBXToolsPNPMWorkspaceOptions` (`packages`/`catalog`/`allowBuilds`) — so those
+  and `DBXToolsPNPMWorkspaceOptions` (`catalog`/`allowBuilds`/`workspaceYaml`) — so those
   are top-level options, not nested fields. Both implement the single
   `DBXToolsProject` interface (`project.ts`; extends projen's `NodeProject`):
-  `scope`/`packageIdentifier`/`packageNameFor` plus the config
+  `scope` plus the config
   COMPONENTS as fields (projen-style, like `project.eslint?.addRules(...)`) —
-  `project.dbxToolsConfig` (implements
-  `ITagging`: `tags` + `addTags`, distinct/order-preserving, read/written directly on
-  `package.json` `dbxToolsConfig.tags` — never cached on a field) and
-  `project.pnpmWorkspace` (implements `IPnpmWorkspace`:
-  `addPackages`/`addCatalog`/`allowBuild`; ROOT-only, so `undefined` on a child).
-  Call methods on those fields directly (`project.dbxToolsConfig.addTags(...)`), not
+  `project.dbxToolsConfig` (a `DBXToolsConfig` component: a `tags` array you push
+  to plus an index signature for any other key, deduped and written to
+  `package.json` `dbxToolsConfig` at synth, never cached on a field) and
+  `project.pnpmWorkspace` (a `PnpmWorkspaceState`:
+  `addCatalog`/`allowBuild`; ROOT-only, so `undefined` on a child).
+  Reach those fields directly (`project.dbxToolsConfig.tags.push(...)`), not
   via delegator methods on the project.
-- **`pnpm-workspace.yaml` is the source of truth**, emitted by the
-  `DBXToolsPNPMWorkspace` component (`pnpm-workspace.ts`) exposed as the root's
-  `project.pnpmWorkspace` field. The root scans the filesystem ONCE at synth
-  (under each `workspacePackageRoots` root, default `["workspaces"]`) and the
-  file's `packages:` list is sourced from `project.subprojects` at synth via a
-  thunk (so member order/timing never matters) — every discovered package becomes
-  a real subproject, no manual member list. Mutate it through the typed methods
-  `project.pnpmWorkspace?.addCatalog(name, version)` / `.allowBuild(name)` /
-  `.addPackages(glob)` (or `file.addOverride(...)` for any other pnpm setting), not
-  by editing the YAML. Discovery is TWO functions in `workspace.ts`:
+- **`pnpm-workspace.yaml` is the source of truth**, and projen's OWN
+  `javascript.PnpmWorkspaceYaml` writes it — `NodePackage` creates that component
+  for every pnpm project, so the engine adds no file of its own. What the engine
+  supplies is the OPTIONS object it renders, via
+  `pnpmOptions.workspaceYamlOptions`; `PnpmWorkspaceState` (`pnpm-workspace.ts`)
+  holds that object and is exposed as the root's `project.pnpmWorkspace` field.
+  The root scans the filesystem ONCE at synth (under each `workspacePackageRoots`
+  root, default `["workspaces"]`) and the file's `packages:` list is filled from
+  `project.subprojects` in the root's `preSynthesize` (so member order/timing
+  never matters) — every discovered package becomes a real subproject, no manual
+  member list. Mutate it through the typed methods
+  `project.pnpmWorkspace?.addCatalog(name, version)` / `.allowBuild(name)` — or,
+  for any other pnpm setting, the root's
+  `workspaceYaml` option, which is projen's fully typed `PnpmWorkspaceYamlOptions`
+  (`overrides`, `packageExtensions`, `catalogs`, …) rather than an
+  `addOverride("...")` string path. Never edit the YAML.
+  Because projen spreads `workspaceYamlOptions` inside `NodePackage`'s own
+  constructor, `PnpmWorkspaceState` keeps STABLE mutable array/object references
+  (a spread copies them by reference) and mutates them in place — a getter would
+  fire before the root has scanned a single package, and the schema is only
+  serialized at synth.
+  Do NOT "simplify" those mutators into projen's public
+  `file.addOverride("catalog.<name>", …)`. It was tried and measured, and it is
+  worse twice over: `addOverride` SPLITS its path on `.`, so a dotted dependency
+  name renders as a nested object (`socket.io` → `socket: {io: …}`) — a catalog
+  entry no `catalog:` specifier resolves, with no error — and an override for a
+  key the schema did not already emit is appended LAST, burying `packages`
+  beneath the catalog (seeding `packages: []` does not help; `omitEmpty` strips
+  it before overrides apply). `packages`/`catalog` are plain object keys here, so
+  neither hazard exists. A regression test pins the dotted-name case.
+  The file is ROOT-only, but nothing enforces that: projen attaches a
+  `PnpmWorkspaceYaml` to EVERY pnpm project, and a member's copy stays off disk
+  only because nothing feeds its schema, so `omitEmpty` drops it. Setting any
+  workspace-schema option on a MEMBER (projen's own `allowScripts`, for one) makes
+  it real, and a nested `pnpm-workspace.yaml` makes that package look like its own
+  workspace root. Keep those options on the root.
+  Beyond members/catalog/`allowBuilds`, the engine sets a couple of pnpm settings
+  for every workspace (`DEFAULT_WORKSPACE_YAML`), each overridable per repo via
+  `workspaceYaml`:
+  **`catalogMode: manual`** (the catalog is generated, so `pnpm add` must never
+  write into it) and **`verifyDepsBeforeRun: warn`** (packages resolve siblings
+  from source, so a stale `node_modules` after a branch switch warns on the next
+  task instead of surfacing as a confusing type error). Discovery is TWO functions in `workspace.ts`:
   `scanPackages(root, roots)` walks the filesystem (synth time; returns each
   package's path + the tags implied by its path, reading no manifest), while
   `workspacePackages()` reads the recorded members back from `pnpm-workspace.yaml`
@@ -351,12 +449,12 @@ over `workspaces`). It autofixes, so it can reformat too.
   written to each package's `package.json` under **`dbxToolsConfig.tags`** (the
   per-package source of truth, surfaced post-synth as `workspacePackages()[].tags`)
   and read back via the `DBXToolsConfig` component (`pkg.dbxToolsConfig.tags`, the
-  basis a `project.mixin(...)` dispatches on). No declaration needed — drop a `src/`
-  folder, re-synth.
+  basis an `applyToProjects({ tags })` selection dispatches on). No declaration
+  needed: drop a `src/` folder, re-synth.
 - **A root may already hold in-tree subprojects.** If a discovered folder matches
   a subproject already attached to the root, it is NOT re-created — the resolved
-  tags are unioned onto it (`dbxToolsConfig.addTags` for a DBXTools project, else
-  `addWorkspacePackageTags`). The root itself can also carry tags (a `""`/`"."`
+  tags are pushed onto its `dbxToolsConfig.tags` (deduped at synth). The root
+  itself can also carry tags (a `""`/`"."`
   key in `workspacePackageTagPaths`, or the `tags` option).
 - **Every package is a `DBXToolsTypeScriptProject`** (extends
   `typescript.TypeScriptProject`). The root's scan constructs one per discovered
@@ -394,27 +492,31 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
 - **Per-package behavior is MIXINS** (`mixin.ts`; `constructs` `IMixin`). A mixin
   is `{ supports(c), applyTo(c) }`, applied with the constructs-native
   `construct.with(...mixins)` — it runs each across the construct's whole subtree
-  (tree captured at call time), so a root-level `project.with(...)` or
-  `project.mixin(...)` reaches every matching child. Package predicates live in
-  `project.ts` under an exported `predicate` namespace, as plain callable
+  (tree captured at call time), so a root-level `root.with(...)` reaches every
+  matching child. Package predicates live in `project-predicate.ts` (exported as
+  the `projectPredicate` namespace), as plain callable
   `@dbx-tools/shared-core` predicates (narrowing a construct):
-  `predicate.hasName("*/shared-core", ...)` (npm name glob via `match.toPathMatcher`,
-  `→ Project`), `predicate.hasTag(tag, ...tags)` (all tags required,
-  `→ DBXToolsProject`), and `predicate.inRelPath("workspaces", ...)` (root-relative
-  folder prefix, `→ Project`). Compose them with `.and()`/`.or()`/`.negate()` - e.g.
-  `predicate.hasName("*/shared-core").and(predicate.hasTag("node"))` - keeping
-  `predicate.hasTag` in the same `.and(...)` (or last when chaining) so its
-  `DBXToolsProject` narrowing survives (a later non-tag `.and` re-widens to `Project`).
-  Build the mixin with `mixin(predicate, consumer)` (`mixin.ts`) and hand it to
-  `project.with(...)`; `DBXToolsNodeProject.mixin(predicate, consumer)` is chainable
-  sugar over exactly that. A `FileBase` guard as the predicate targets any generated file. The root
-  applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
-  `tags.ts`) during its own construction, selected by the `defaultTagMixins` option
-  (omit = all, `false` = none, or a subset list) - e.g. the `server` mixin adds
-  `express`/`tsoa` + `dev`/`start` tasks. Consumers apply their own AFTER
-  construction with `project.mixin(...)` (see `.projenrc.ts`), so user mixins run
-  after the defaults.
-- **Names**: `pkg.packageNameFor(relPath)` → `PackageIdentifier.of(scope, relPath)`
+  `projectPredicate.hasIdentifierName("shared-core", ...)` (unscoped npm name glob via
+  `match.toPathMatcher`, `→ Project`), `projectPredicate.hasTag(tag, ...tags)` (all tags
+  required, `→ DBXToolsProject`), and `projectPredicate.hasPath("workspaces/**", ...)`
+  (root-relative folder glob, `→ Project`), plus the `isProject()` /
+  `isDBXToolsProject()` guards. Compose them with `.and()`/`.or()`/`.negate()` - e.g.
+  `projectPredicate.hasIdentifierName("shared-core").and(projectPredicate.hasTag("node"))`
+  - keeping `hasTag` in the same `.and(...)` (or last when chaining) so its
+    `DBXToolsProject` narrowing survives (a later non-tag `.and` re-widens to `Project`).
+    Build the mixin with `mixin.create(predicate, consumer)` (`mixin.ts`) and hand it to
+    `construct.with(...)`. A `FileBase` guard as the predicate targets any generated file.
+    **`project.applyToProjects(construct, options?, ...callbacks)` is the ergonomic
+    front-end** and what `.projenrc.ts` actually uses: it AND-s the
+    `{ identifierName, tags, path }` globs into one predicate (each a glob or list,
+    `!` to negate), always scoped to DBXTools CHILD projects, then applies the mixin
+    for you. The root applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
+    `tags.ts`) during its own construction, selected by the `defaultTagMixins` option
+    (omit = all, `false` = none, or a subset list) - e.g. the `server` mixin adds
+    `express`/`tsoa` + `dev`/`start` tasks. Consumers apply their own AFTER
+    construction with `applyToProjects(...)` (see `.projenrc.ts`), so user mixins run
+    after the defaults.
+- **Names**: `PackageIdentifier.of(scope, relPath)`
   (`project.ts`): normalized, lowercased, the root-relative path dash-joined as
   `@<scope>/<seg-seg-...>` (e.g. `workspaces/shared/core` → `@dbx-tools/shared-core`,
   `workspaces/cli/dbx-tools` → `@dbx-tools/cli-dbx-tools`). The `scope` option
@@ -438,16 +540,16 @@ workspaces/
 projen/                                   # the projen engine (`@dbx-tools/projen`), top-level, NOT a workspace member
   index.ts                                # generated barrel (public API surface)
   src/
-    project.ts                            # DBXToolsProject + DBXToolsNode/TypeScriptProject + PackageIdentifier/naming, applyCompilerOptions/applyTasks, SHARED_COMPILER_OPTIONS, root init
-    project-predicate.ts                  # predicate namespace (hasName/hasTag/inRelPath, .and/.or/.negate)
-    mixin.ts                              # mixin() factory (tag table lives in tags.ts)
-    pnpm-workspace.ts                     # DBXToolsPNPMWorkspace (YamlFile) + IPnpmWorkspace + Catalog/DEFAULT_CATALOG
+    project.ts                            # DBXToolsProject + DBXToolsNode/TypeScriptProject + PackageIdentifier/naming, applyToProjects, applyCompilerOptions/applyTasks, SHARED_COMPILER_OPTIONS, root init
+    project-predicate.ts                  # projectPredicate namespace (isProject/isDBXToolsProject/hasIdentifierName/hasTag/hasPath, .and/.or/.negate)
+    mixin.ts                              # mixin.create() factory (tag table lives in tags.ts)
+    pnpm-workspace.ts                     # PnpmWorkspaceState (options for projen's native PnpmWorkspaceYaml) + Catalog/DEFAULT_CATALOG + AllowBuilds/DEFAULT_ALLOW_BUILDS + DEFAULT_WORKSPACE_YAML
     tags.ts                               # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
     workspace.ts                          # discovery: scanPackages (fs) + workspacePackages (pnpm-yaml + manifest)
-    barrels.ts                            # barrelsby driver (root index.ts, header + read-only)
+    barrels.ts                            # barrel generator (root index.ts, header + read-only)
     codegen.ts, module-exports.ts         # ts-to-zod codegen + exports-map generation
     watch.ts                              # generic file-watch util (watchLoop + watchRoots) the sync --watch task watchers forward to
-    scaffold.ts                           # packageSetChanged() + runSynth({ post })
+    scaffold.ts                           # runSynth({ post })
     release.ts                            # DBXToolsRelease: bump task + tag-driven publish workflow
     openapi.ts                            # openapi generator (tsoa controllers -> spec + client)
     clean.ts, generated.ts, tsconfig.ts, vite.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
@@ -580,28 +682,103 @@ through the publish cycle. See `demo/README.md` for the full two-mode explanatio
 - **Per-package** (`package.json`, `tsconfig.json`, `.projen/*`, `README.md`,
   `.gitignore`, …): owned by that package's projen subproject.
 - **Root** (root `tsconfig*.json`, `.vscode/*`, per-package `vite.config.ts`):
-  read-only + projen marker, emitted from `files.ts`. `pnpm-workspace.yaml` is the
-  `DBXToolsPNPMWorkspace` component (`pnpm-workspace.ts`).
+  read-only + projen marker, emitted from `files.ts`. `pnpm-workspace.yaml` is
+  projen's native `javascript.PnpmWorkspaceYaml`, fed the options
+  `PnpmWorkspaceState` (`pnpm-workspace.ts`) holds; unlike the engine's own files
+  it is NOT read-only, since projen writes it with `readonly: false`.
 - **barrels** (`<root>/<tags...>/<name>/index.ts`): read-only, do-not-edit header,
-  written by barrelsby. Marked generated in `.gitattributes` (`annotateGenerated`).
+  written by the engine's own generator (`barrels.ts`). Marked generated in
+  `.gitattributes` (`annotateGenerated`).
 - **openapi** (`<root>/openapi/<name>/`): fully generated from tsoa
   controllers - spec, types, and client.
 - **cli launchers** (`<cli package>/bin/<name>.mjs`): read-only + executable,
   one per `bin/<name>.ts` entry, emitted by the `cli` tag (`cli-bin.ts`).
+- **`.github/dependabot.yml`**: a `YamlFile` declared in `.projenrc.ts`.
+- **`.github/workflows/*.yml` except `docs.yml`**: projen-owned. `docs.yml` is
+  the one hand-written workflow, so it is the only one to edit directly.
 
 Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated files.
 
 ## Gotchas
 
-- **pnpm v11** gates build scripts behind `allowBuilds` in `pnpm-workspace.yaml`
-  (NOT `onlyBuiltDependencies`) — `esbuild: true` is the default. Add allowances
-  via `project.pnpmWorkspace?.allowBuild(name)` (or `.addCatalog`/`.addPackages`, or
-  `file.addOverride(...)` for any other pnpm setting), not by editing the YAML.
+- **pnpm gates build scripts behind the `allowBuilds` MAP** in
+  `pnpm-workspace.yaml` — `esbuild: true` is the default. Do NOT switch this to
+  projen's own `allowScripts` option: for pnpm that renders
+  `onlyBuiltDependencies`, and the pnpm this repo installs with (10.33) contains
+  ZERO references to that key or to `ignoredBuiltDependencies` — its only build
+  gate is `allowBuilds`. Emitting the list would install with every build script
+  silently skipped, so keep `PnpmWorkspaceState.allowBuild` writing the map even
+  though projen's schema also types the lists. Add allowances via
+  `project.pnpmWorkspace?.allowBuild(name)` (or `.addCatalog`, or
+  the root's typed `workspaceYaml` option for any other pnpm setting), not by
+  editing the YAML. Only ALLOWANCES are declared: a dependency that is never
+  allowed needs no entry, because `strictDepBuilds` is deliberately off, so pnpm
+  warns (`Ignored build scripts: ...`) and installs. Turning it on would make
+  every unreviewed postinstall a hard failure and force a declined entry for each
+  one. A stale `node_modules` can report an allowance you just added as still
+  unreviewed; re-run with `pnpm install --force`.
+- **The `.gitignore` does NOT blanket-exclude dot-paths, and must not start
+  again.** `ignore.ignorePatterns` is called with `{ test: false, dot: false }`
+  (`project.ts`). The `dot` group is a SCANNING concern - skip `.git` and caches
+  when walking the tree - and emitting it into a `.gitignore` breaks the repo in
+  a way that hides itself. `**/.*` excludes dot-DIRECTORIES, git never descends
+  into an excluded directory, so every per-file `!/.projen/tasks.json` negation
+  projen emits to FORCE its generated files into git becomes a no-op. Files
+  already in the index keep working, so nothing appears wrong; only newly
+  generated ones are silently unaddable. That is exactly what happened here - 7
+  packages had their `.projen/*.json` committed and 27 could not - and it stayed
+  invisible for months. Ignore CONTENTS (`.idea/*`), never the directory, so a
+  later negation can still reach inside. Verify any ignore change with
+  `git add --dry-run <path>`, never `git check-ignore` alone, which reports the
+  per-file rule and hides the parent-directory one that actually decides.
+- **Dot-paths that must stay out of git are named explicitly.** The engine adds
+  the secrets and editor set (`.env`, `.env.*` with `!.env.example` /
+  `!.env.sample`, `.idea/*`); `.projenrc.ts` adds this repo's generated
+  dot-directories (`.docs-build/`, `.astro/`, `.worktrees/`). A new generated
+  dot-directory needs a line in one of those two places - it will otherwise show
+  up as untracked, which is the intended failure mode now (loud, not silent).
+- **The published tarball is an ALLOWLIST, not everything on disk.** Every
+  package gets `files: ["index.ts", "src"]` at construction
+  (`addPackageFiles`, `project.ts`); the `cli` tag adds `"bin"` for its
+  launchers. `lib/`, `test/`, `.projen/`, and `tsconfig*` are deliberately
+  withheld - none is reachable through the `exports` map, and shipping them
+  quadrupled the tarball (shared-core went 67 files -> 16). If a package needs
+  to ship a path outside `src`, add it with `addPackageFiles(p, "...")` from a
+  tag or an `applyToProjects` block; do NOT hand-edit the manifest, which is
+  projen-owned and read-only.
+- **`arethetypeswrong` is RED on node10/node16 by design.** Packages publish
+  TypeScript SOURCE (`exports` points at `index.ts`) and compile under
+  `moduleResolution: bundler`, so only the `bundler` column is green. That is
+  the supported consumption model: a bundler (Vite) or tsx, never bare Node
+  `require`/`import` of the published package. A red node16 row is therefore
+  expected output, not a regression to "fix" - changing it would mean
+  abandoning source-first resolution, which is what lets workspace packages
+  type-check against each other with no build step.
+- **Third-party GitHub Action pins live in `.projenrc.ts`, not the YAML.**
+  `root.github?.actions.set(...)` rewrites every `uses:` at synth via projen's
+  `GitHubActionsProvider`, so the generated workflows carry commit SHAs while
+  the source of truth stays in one place. Bump a pin by editing the SHA there
+  and re-synthing. This is also why Dependabot is scoped to `npm` only: a
+  `github-actions` PR would edit generated workflow files, and the next synth
+  reverts it, failing the build's self-mutation check. First-party `actions/*`
+  intentionally stay on major tags.
+- **CI installs are frozen everywhere EXCEPT `build.yml`.** `release`,
+  `projen-release`, and `docs` use `--frozen-lockfile` so a publish or deploy
+  can never resolve dependencies nothing tested. `build.yml` keeps projen's
+  mutable install because the self-mutation job exists precisely to commit a
+  regenerated lockfile back to the PR; making it frozen would turn that
+  self-healing path into a hard failure.
+- **eslint is still eslintrc, and that is projen's limit, not a choice.**
+  projen (0.101.x) emits `.eslintrc.json` and has no flat-config support, so
+  the `eslint` task sets `ESLINT_USE_FLAT_CONFIG=false` to make eslint 9 load
+  it. That escape hatch disappears in eslint 10, so the eslint major is pinned
+  until projen can emit `eslint.config.*`. Do not hand-write a flat config
+  beside the generated one - two configs is worse than one stale one.
 - **The engine is dogfooded as a normal auto-discovered package**, not a hand-
   authored special case: it lives at `workspaces/cli/dbx-tools` (tag `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
-  `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` applies (via `project.mixin(...)`) a
-  mixin matching `predicate.hasName("*/cli-dbx-tools").and(predicate.hasTag("cli"))` that:
+  `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` selects it with
+  `project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, ...)` and:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
   adds its bins - `dbx-tools` plus the short `dbxt` alias, both pointing at
   `./bin/dbx-tools.mjs` (npm exposes every `bin` key as its own command) - and
@@ -614,8 +791,10 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `workspaces/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
   package, MOVE ITS FOLDER - do not add a name override.
   The projen engine itself lives in `projen`
-  (`@dbx-tools/projen`); a `shared`/`projen` mixin adds its deps
-  (`projen`, `constructs`, `barrelsby`, `@dbx-tools/path`, ...).
+  (`@dbx-tools/projen`). It is NOT a workspace member and no mixin reaches it, so
+  it is synthesized by its own `projen/.projenrc.ts`, which declares its deps
+  inline (`projen`, `constructs`, `oxc-parser`, `@dbx-tools/path`, ...) - edit
+  that `deps: [...]` list, then re-synth from inside `projen/`.
 - **A CLI's `bin` points at a generated `.mjs` launcher, never the `.ts` entry.**
   Node can't run the `.ts` directly, and the obvious fix - a
   `#!/usr/bin/env -S npx tsx` shebang - only works inside a workspace checkout,
@@ -660,17 +839,38 @@ dbx-tools-model-proxy`, or just install it.
   each package's tag tsconfig), not a `dbx-tools` command - the tag `lib`/`types`
   overrides are what make misuse fail. Check one package with `pnpm exec projen
 compile` (or `pnpm compile`) in its dir, or all of them with `pnpm -r compile`.
-- **Tool bins are resolved lazily** (a memoized function, not a module-level
-  const): `barrels.ts` resolves barrelsby this way. Resolving eagerly broke merely
-  _importing_ the engine (which the barrel pulls in) whenever a consumer's install
-  of that tool was an unusual version with a narrower `exports` map.
+- **Heavy tools are resolved lazily** (a memoized `require`, not a module-level
+  import): `module-exports.ts` loads `oxc-parser` this way, and `codegen.ts` /
+  `openapi.ts` do the same for `typescript` / `ts-to-zod` / `tsoa`. Resolving
+  eagerly broke merely _importing_ the engine (which the barrel pulls in) whenever
+  a consumer's install of that tool was an unusual version with a narrower
+  `exports` map.
+- **Prefer projen's own type guards over `instanceof` for projen classes.**
+  `projectPredicate.isProject` calls `Project.isProject(c)`, which tests for
+  `Symbol.for("projen.Project")` (stamped by every `Project` constructor) instead
+  of an identity check against one loaded class. That matters here because the
+  engine pins its OWN `projen` dependency (`PROJEN_VERSION`) separately from a
+  consuming root's, so two copies can resolve and `instanceof` would fail
+  silently. Engine-owned classes (`DBXToolsNodeProject` /
+  `DBXToolsTypeScriptProject`) carry no such symbol and correctly stay on
+  `instanceof`. Same reasoning for tree walks: `project.node.findAll()` is
+  projen/constructs' native preorder walk, so there is no hand-rolled recursion
+  over `subprojects`.
+- **There is exactly ONE TypeScript parser in the engine: `oxc-parser`**, behind
+  `module-exports.ts`. Both of the barrel generator's AST needs go through it -
+  `moduleStatements(file)` (is this file a module at all; what does a hand-authored
+  `exports.ts` declare) and `moduleExports(file)` (the package-unique names to
+  hoist). An earlier version parsed the same files a second time with
+  `@typescript-eslint/typescript-estree`; both emit the same ESTree node types, so
+  that dep was dropped. Add new static analysis on `moduleStatements`, not a
+  second parser.
 - Repo is `type: module`. Packages get a `module: ESNext` + `moduleResolution:
 bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   default `module: CommonJS` breaks the ESM sources' `import.meta`; `bundler`
   honors the `exports` map, so a bare `@dbx-tools/<pkg>` import resolves to that
   package's ROOT `index.ts` barrel — packages type-check against each other with
   no build step. Cross-package imports still need the workspace dep declared
-  (`p.addDeps("@dbx-tools/shared-core@workspace:*")` in a `project.mixin(...)`) and MUST
+  (`p.addDeps("@dbx-tools/shared-core@workspace:*")` in an `applyToProjects(...)`) and MUST
   use the package name (`@dbx-tools/path`), never a relative path into
   another package's `src/` (e.g. `../../../../node/path/src/find`).
 - Everything runs on portable Node: subprocesses use `execFileSync(process.execPath, …)`;

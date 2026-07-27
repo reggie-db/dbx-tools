@@ -14,16 +14,19 @@ packages:
   - workspaces/node/genie
   - workspaces/node/model
   - workspaces/node/path
+  - workspaces/node/teams
   - workspaces/shared/core
   - workspaces/shared/email
   - workspaces/shared/genie
   - workspaces/shared/mastra
   - workspaces/shared/model
   - workspaces/shared/sdk-model
+  - workspaces/shared/teams
   - workspaces/ui/appkit
   - workspaces/ui/branding
   - workspaces/ui/email
   - workspaces/ui/mastra
+  - workspaces/ui/teams
 catalog:
   react: ^19.2.4
   react-dom: ^19.2.4
@@ -72,16 +75,14 @@ catalog:
   echarts-for-react: ^3.0.2
   shiki: ^3.0.0
   sql-formatter: ^15.6.9
+  adaptivecards: ^3.0.5
+catalogMode: manual
+overrides:
+  glob: ^13.0.0
+verifyDepsBeforeRun: warn
 allowBuilds:
   esbuild: true
   "@databricks/appkit-ui": true
   "@databricks/appkit": true
   "@google/genai": true
   protobufjs: true
-  agent-browser: false
-  bufferutil: false
-  edgedriver: false
-  geckodriver: false
-  onnxruntime-node: false
-overrides:
-  glob: ^13.0.0

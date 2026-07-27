@@ -1,0 +1,92 @@
+/*
+ * @dbx-tools/ui-teams stylesheet.
+ *
+ * Import once from the host app's Tailwind entry, after Tailwind and
+ * your AppKit-UI theme:
+ *
+ *   @import "tailwindcss";
+ *   @import "@databricks/appkit-ui/styles.css";
+ *   @import "@dbx-tools/ui-teams/styles.css";
+ *
+ * The gallery UI styles exclusively with AppKit semantic tokens and
+ * inherits the host app's theme. The rendered Adaptive Card itself is
+ * styled by the `adaptivecards` renderer's own host config; the small
+ * rules below only give the mount container sane spacing and let the
+ * card's own colors show through on both light and dark themes.
+ *
+ * Pulls shared styling from `@dbx-tools/ui-appkit` and registers this
+ * package's React components with Tailwind via `@source`.
+ */
+
+@import "@dbx-tools/ui-appkit/styles.css";
+
+@source "./react";
+
+.ac-container {
+  --ac-font-family: inherit;
+}
+
+.ac-container .ac-adaptiveCard {
+  border-radius: var(--radius, 0.5rem);
+  background: var(--card, #fff);
+  color: var(--card-foreground, inherit);
+  padding: 0.75rem 1rem;
+}
+
+/*
+ * Restore markdown block styling inside a rendered card.
+ *
+ * A `TextBlock` is markdown, and the host markdown processor (`marked`, wired
+ * up in `adaptive-card.tsx`) emits real `<ul>` / `<ol>` / `<p>` elements. But
+ * Tailwind's preflight resets list-style and margins globally, so a bulleted
+ * list in a card renders as unmarked, unindented lines. These rules re-apply
+ * list markers and paragraph spacing to card-rendered markdown ONLY, scoped
+ * under `.ac-textBlock` so nothing outside a card is affected.
+ */
+.ac-textBlock ul,
+.ac-textBlock ol {
+  margin: 0.25rem 0;
+  padding-inline-start: 1.25rem;
+}
+
+.ac-textBlock ul {
+  list-style: disc outside;
+}
+
+.ac-textBlock ol {
+  list-style: decimal outside;
+}
+
+.ac-textBlock li {
+  display: list-item;
+}
+
+.ac-textBlock p {
+  margin: 0.25rem 0;
+}
+
+/*
+ * The renderer sets `line-height` INLINE on the `TextBlock` container to the
+ * value the card's host config asked for, but the host app's base typography
+ * sets a taller `line-height` on `p` itself, which wins over the inherited
+ * container value. That double-spaces every card paragraph and makes a wrapped
+ * `FactSet` title look like two separate rows. Inheriting puts the renderer's
+ * own metrics back in charge.
+ */
+.ac-textBlock p,
+.ac-textBlock li {
+  line-height: inherit;
+}
+
+.ac-textBlock p:first-child {
+  margin-top: 0;
+}
+
+.ac-textBlock p:last-child {
+  margin-bottom: 0;
+}
+
+.ac-textBlock a {
+  color: var(--primary, #0b6bcb);
+  text-decoration: underline;
+}

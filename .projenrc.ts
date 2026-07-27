@@ -10,12 +10,13 @@
  * own `demo/.projenrc.ts` + nested pnpm workspace, consuming the published
  * `@dbx-tools/*` packages) - it is NOT part of this synth.
  *
- * Per-package tweaks are MIXINS applied with `project.mixin(...)` (constructs-
- * native, across the subtree; the built-in tag mixins already ran during
- * construction). `synth()` is called manually because this repo adds a thin `dbx-tools`
- * root task first (see below); a normal consumer constructs, `with(...)`s, synths.
+ * Per-package tweaks are MIXINS applied with `project.applyToProjects(root, {...},
+ * cb)` (constructs-native, across the subtree; the built-in tag mixins already ran
+ * during construction). `synth()` is called manually because this repo adds a thin
+ * `dbx-tools` root task first (see below); a normal consumer constructs,
+ * `applyToProjects`es, synths.
  */
-import { JsonFile } from "projen";
+import { JsonFile, YamlFile } from "projen";
 import { mixin, project, project as projectApi } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
@@ -27,6 +28,13 @@ const root = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
   workspacePackageRoots: ["workspaces"],
+  // Any pnpm-workspace setting the engine does not manage itself, typed by
+  // projen's own `PnpmWorkspaceYamlSchema`. `overrides` forces every transitive
+  // glob onto v13: older majors are deprecated upstream (10.x now ships under
+  // the `legacy-v10` tag), so without this a dependency asking for glob@7/9/10
+  // both re-installs a second copy and prints a deprecation warning on every
+  // install.
+  workspaceYaml: { overrides: { glob: "^13.0.0" } },
   github: true,
   buildWorkflow: true,
   // No projen-managed release component: releasing is a `bump` task (added by
@@ -54,22 +62,80 @@ const root = new projectApi.DBXToolsNodeProject({
 });
 
 // ---------------------------------------------------------------------------
+// Generated dot-directories
+// ---------------------------------------------------------------------------
+// The engine deliberately no longer blanket-ignores dot-paths - `**/.*` also
+// excluded the DIRECTORIES holding generated files, which silently voided every
+// `!` negation projen emits for them. So the dot-directories this repo actually
+// generates are named here instead. Whole directories, since nothing inside any
+// of them is ever committed.
+root.gitignore.addPatterns(".docs-build/", ".astro/", ".worktrees/", ".kanna/", ".polly/");
+
+// ---------------------------------------------------------------------------
+// GitHub Actions: pin third-party actions to immutable commits
+// ---------------------------------------------------------------------------
+// A moving tag (`@v5`) is resolved at run time, so whoever can move the tag
+// decides what executes in CI with this repo's token. A commit SHA cannot be
+// moved. First-party `actions/*` stay on major tags deliberately: GitHub owns
+// both the runner and that org, so the tag adds no third-party trust boundary.
+//
+// The pins live here, not in the emitted YAML, because projen owns those files
+// and rewrites every `uses:` through this provider at synth. Bump a pin by
+// editing the SHA below and re-synthing - a Dependabot PR against the generated
+// workflow would be reverted by the next synth.
+root.github?.actions.set(
+  "pnpm/action-setup",
+  "pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320", // v5.0.0
+);
+root.github?.actions.set(
+  "amannn/action-semantic-pull-request",
+  "amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50", // v6.1.1
+);
+
+// Least privilege at the workflow level: a job that omits its own
+// `permissions:` inherits read-only instead of the repo-wide token default.
+// Jobs that genuinely need more still declare it (self-mutation's
+// `contents: write`), and a job-level block replaces this one outright.
+// The two tag-driven release workflows set their own - the engine authors them
+// during preSynthesize, after this file has finished evaluating.
+for (const name of ["build", "pull-request-lint"]) {
+  root.tryFindObjectFile(`.github/workflows/${name}.yml`)?.addOverride("permissions", {
+    contents: "read",
+  });
+}
+
+// Superseded PR runs are just wasted runner time. Grouping by workflow AND ref
+// keeps a push to one PR from cancelling another PR's build.
+//
+// No `merge_group` trigger is needed on these: merges are gated by Mergify's
+// own queue (`.mergify.yml`), not GitHub's native merge queue, so nothing ever
+// dispatches a `merge_group` event here.
+for (const name of ["build", "pull-request-lint"]) {
+  root.tryFindObjectFile(`.github/workflows/${name}.yml`)?.addOverride("concurrency", {
+    group: "${{ github.workflow }}-${{ github.ref }}",
+    "cancel-in-progress": true,
+  });
+}
+
+// Without an explicit cap a wedged runner burns the full 6-hour default before
+// anyone finds out.
+for (const job of ["build", "self-mutation"]) {
+  root
+    .tryFindObjectFile(".github/workflows/build.yml")
+    ?.addOverride(`jobs.${job}.timeout-minutes`, 30);
+}
+root
+  .tryFindObjectFile(".github/workflows/pull-request-lint.yml")
+  ?.addOverride("jobs.validate.timeout-minutes", 10);
+
+
+// ---------------------------------------------------------------------------
 // pnpm workspace: build-script allowances + version overrides
 // ---------------------------------------------------------------------------
 root.pnpmWorkspace?.allowBuild("@databricks/appkit-ui");
 root.pnpmWorkspace?.allowBuild("@databricks/appkit");
-root.pnpmWorkspace?.allowBuild("@google/genai", true);
-root.pnpmWorkspace?.allowBuild("protobufjs", true);
-root.pnpmWorkspace?.allowBuild("agent-browser", false);
-root.pnpmWorkspace?.allowBuild("bufferutil", false);
-root.pnpmWorkspace?.allowBuild("edgedriver", false);
-root.pnpmWorkspace?.allowBuild("geckodriver", false);
-root.pnpmWorkspace?.allowBuild("onnxruntime-node", false);
-// Force every transitive glob onto v13. Older majors are deprecated upstream (10.x now
-// ships under the `legacy-v10` tag), so without this a dependency asking for glob@7/9/10
-// both re-installs a second copy and prints a deprecation warning on every install.
-root.pnpmWorkspace?.addOverride("overrides.glob", "^13.0.0");
-
+root.pnpmWorkspace?.allowBuild("@google/genai");
+root.pnpmWorkspace?.allowBuild("protobufjs");
 // Catalog pins for the app add-on runtime deps (not engine toolchain): the
 // email add-on's markdown renderer and the Mastra agent framework the tools
 // build on.
@@ -103,6 +169,9 @@ root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
 root.pnpmWorkspace?.addCatalog("echarts-for-react", "^3.0.2");
 root.pnpmWorkspace?.addCatalog("shiki", "^3.0.0");
 root.pnpmWorkspace?.addCatalog("sql-formatter", "^15.6.9");
+// The Adaptive Cards JavaScript renderer, used by the `ui-teams` package to
+// render Teams cards in the browser. Browser-only (loaded in ui-tagged code).
+root.pnpmWorkspace?.addCatalog("adaptivecards", "^3.0.5");
 
 
 // ---------------------------------------------------------------------------
@@ -273,6 +342,26 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
 });
 
+// node-teams: server-side Teams Adaptive Card add-on. A deterministic builder
+// compiles the small `CardSpec` a model drafts into a valid Adaptive Card 1.5
+// document, exposed as the `create_teams_card` Mastra tool + the AppKit `teams`
+// plugin (which also mounts card-build / card-post routes and can POST a card
+// to a Teams incoming webhook). Consumes the browser-safe shared-teams contract.
+// AppKit + Mastra are runtime deps. Mirrors the node-email add-on's shape.
+project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => {
+  p.addDeps(
+    "@dbx-tools/shared-teams@workspace:*",
+    "@databricks/appkit@catalog:",
+    "@mastra/core@catalog:",
+    // Validates the Bot Framework JWT on an inbound Teams request against the
+    // Azure Bot Service JWKS. `jose` is the runtime-agnostic verifier with no
+    // native build step, unlike `jsonwebtoken` + `jwks-rsa`.
+    "jose@^6.2.3",
+    "zod@catalog:",
+  );
+  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
+});
+
 // node-appkit-mastra: the AppKit Mastra agent layer - agents, memory, MCP, observability,
 // the Genie/model/chart/history tooling, and the AppKit `mastra` plugin +
 // Express server. One package: nearly every module needs @mastra/core and the
@@ -334,6 +423,14 @@ project.applyToProjects(root, { identifierName: "shared-model", tags: "shared" }
 // + result + sender options). Pure zod, shared by the server sender, Mastra
 // tool, and React approval UI.
 project.applyToProjects(root, { identifierName: "shared-email", tags: "shared" }, (p) => {
+  p.addDeps("zod@catalog:");
+});
+
+// shared-teams: browser-safe zod wire contract for the Teams add-on - the
+// high-level `CardSpec` a model drafts, the compiled `AdaptiveCard` envelope,
+// and the `CardResult`. Pure zod, shared by the server card builder, the Mastra
+// tool, and the React Adaptive Cards renderer.
+project.applyToProjects(root, { identifierName: "shared-teams", tags: "shared" }, (p) => {
   p.addDeps("zod@catalog:");
 });
 
@@ -465,6 +562,26 @@ project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) =>
     "@dbx-tools/ui-appkit@workspace:*",
     "lucide-react@catalog:",
     "streamdown@catalog:",
+  );
+  // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
+  // tag's component-library default.
+});
+
+// ui-teams: the React surface for the Teams add-on - an `AdaptiveCardView` that
+// renders a compiled Adaptive Card with the `adaptivecards` JavaScript renderer,
+// and a self-contained `AdaptiveCardGallery` dev tool that edits a `CardSpec`,
+// compiles it through the server's `/api/teams/card` route, and previews the
+// card live. Consumes the browser-safe shared-teams contract and renders
+// through ui-appkit's UI kit. `ui`-tagged (React + jsx from the ui tag).
+project.applyToProjects(root, { identifierName: "ui-teams", tags: "ui" }, (p) => {
+  p.addDeps(
+    "@dbx-tools/shared-teams@workspace:*",
+    "@dbx-tools/ui-appkit@workspace:*",
+    "adaptivecards@catalog:",
+    // The `adaptivecards` renderer ships no markdown parser - a `TextBlock` is
+    // markdown per the spec, but the host supplies the implementation - so the
+    // card view installs `marked` as its `onProcessMarkdown` processor.
+    "marked@catalog:",
   );
   // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
   // tag's component-library default.

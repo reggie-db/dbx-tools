@@ -13,9 +13,18 @@ import { relative } from "path";
 import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
 import { project } from "..";
 
-/** Guard: the construct is a projen {@link Project} - the base every builder here starts from. */
+/**
+ * Guard: the construct is a projen {@link Project} - the base every builder here
+ * starts from.
+ *
+ * Uses projen's own `Project.isProject` rather than `instanceof`. It tests for
+ * `Symbol.for("projen.Project")`, which every `Project` constructor stamps on
+ * itself, so it still matches when a construct came from a SECOND resolved copy
+ * of projen - the engine pins its own `projen` dependency separately from the
+ * consuming root's, which is exactly the case `instanceof` fails silently.
+ */
 export function isProject(): Predicate<IConstruct, Project> {
-  return predicate.create((c: IConstruct): c is Project => c instanceof Project);
+  return predicate.create((c: IConstruct): c is Project => Project.isProject(c));
 }
 
 /** Guard: the construct is a {@link DBXToolsProject} (a DBXTools Node or TypeScript project). */
@@ -38,32 +47,6 @@ function projectMatchers(...inputs: OneOrMany<PathMatchInput>): Sequence<PathMat
     .cache();
 }
 
-/**
- * Matches projects whose raw projen {@link Project.name} matches every glob in
- * `patterns` (e.g. `@dbx-tools/ui-mastra`, `*-mastra`). Tests `project.name`
- * verbatim, without normalizing through {@link PackageIdentifier} - use the
- * `hasIdentifier*` variants to match the parsed scope/name instead.
- */
-export function hasName(...patterns: OneOrMany<PathMatchInput>): Predicate<IConstruct, Project> {
-  const matchers = projectMatchers(...patterns);
-  return isProject().and((p) => matchers.every((matcher) => matcher(p.name)));
-}
-
-/**
- * Matches projects whose parsed npm name matches every glob in `patterns` (e.g.
- * `*\/shared-core`, `@dbx-tools/*`): tested against the full `@scope/name` from
- * {@link PackageIdentifier}.
- */
-export function hasIdentifierPackageName(
-  ...patterns: OneOrMany<PathMatchInput>
-): Predicate<IConstruct, Project> {
-  const matchers = projectMatchers(...patterns);
-  return isProject().and((p) => {
-    const packageName = project.identifier(p).packageName;
-    return matchers.every((matcher) => matcher(packageName));
-  });
-}
-
 /** Matches projects whose parsed unscoped name (from {@link PackageIdentifier}) matches every glob. */
 export function hasIdentifierName(
   ...patterns: OneOrMany<PathMatchInput>
@@ -72,17 +55,6 @@ export function hasIdentifierName(
   return isProject().and((p) => {
     const name = project.identifier(p).name;
     return matchers.every((matcher) => matcher(name));
-  });
-}
-
-/** Matches projects whose parsed npm scope (from {@link PackageIdentifier}) matches every glob. */
-export function hasIdentifierScope(
-  ...patterns: OneOrMany<PathMatchInput>
-): Predicate<IConstruct, Project> {
-  const matchers = projectMatchers(...patterns);
-  return isProject().and((p) => {
-    const scope = project.identifier(p).scope;
-    return scope && matchers.every((matcher) => matcher(scope));
   });
 }
 

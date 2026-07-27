@@ -65,6 +65,14 @@ export interface DBXToolsReleaseOptions {
  * npm has no CI OIDC provider off-CI and would fail with `provider: null`. This
  * CI workflow turns it on with `npm_config_provenance=true`, backed by the
  * `id-token: write` permission that lets npm mint the OIDC token.
+ *
+ * Registry AUTH is still `NPM_TOKEN`, deliberately. OIDC here mints the
+ * provenance attestation only; full npm trusted publishing would additionally
+ * replace the token, but it has to be registered per package on npmjs.com
+ * against an exact repo + workflow filename, and this repo publishes 26 of
+ * them. That is a considered deferral, not an oversight - do not "fix" it by
+ * dropping the token without doing the registrations first, or every publish
+ * fails.
  */
 export class DBXToolsRelease extends Component {
   private readonly tagPrefix: string;
@@ -103,12 +111,22 @@ export class DBXToolsRelease extends Component {
    * (no bump math).
    */
   private authorReleaseWorkflow(project: DBXToolsNodeProject): void {
-    const workflow = new GithubWorkflow(project.github!, "release");
+    const workflow = new GithubWorkflow(project.github!, "release", {
+      // Serialize publishes so two tags landing together cannot race to the
+      // registry, but never cancel a run already in flight: a half-published
+      // release is worse than a queued one.
+      limitConcurrency: true,
+      concurrencyOptions: { group: "release", cancelInProgress: false },
+    });
+    // Read-only floor for any job that does not declare its own permissions;
+    // the publish job below overrides it with the `id-token` it needs.
+    workflow.file?.addOverride("permissions", { contents: "read" });
     workflow.on({ push: { tags: [`${this.tagPrefix}*`] } });
     workflow.addJob("publish", {
       runsOn: ["ubuntu-latest"],
       // `id-token: write` lets npm mint the OIDC token for provenance attestation.
       permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+      timeoutMinutes: 30,
       env: { CI: "true" },
       steps: [
         { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
@@ -118,7 +136,10 @@ export class DBXToolsRelease extends Component {
           uses: "actions/setup-node@v6",
           with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
         },
-        { name: "Install", run: "pnpm install --no-frozen-lockfile" },
+        // Frozen: what gets published must be built from the exact dependency
+        // set recorded at the tagged commit. A drifting lockfile here would
+        // publish against resolutions nothing ever tested, so fail instead.
+        { name: "Install", run: "pnpm install --frozen-lockfile" },
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Set it on
         // every package (manifests are projen-readonly, so unlock them first).
         {
@@ -156,12 +177,17 @@ export class DBXToolsRelease extends Component {
     project: DBXToolsNodeProject,
     { name, directory, tagPrefix }: StandaloneRelease,
   ): void {
-    const workflow = new GithubWorkflow(project.github!, name);
+    const workflow = new GithubWorkflow(project.github!, name, {
+      limitConcurrency: true,
+      concurrencyOptions: { group: name, cancelInProgress: false },
+    });
+    workflow.file?.addOverride("permissions", { contents: "read" });
     workflow.on({ push: { tags: [`${tagPrefix}*`] } });
     workflow.addJob("publish", {
       runsOn: ["ubuntu-latest"],
       // `id-token: write` lets npm mint the OIDC token for provenance attestation.
       permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+      timeoutMinutes: 30,
       defaults: { run: { workingDirectory: directory } },
       env: { CI: "true" },
       steps: [
@@ -172,7 +198,10 @@ export class DBXToolsRelease extends Component {
           uses: "actions/setup-node@v6",
           with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
         },
-        { name: "Install", run: "pnpm install --no-frozen-lockfile" },
+        // Frozen: what gets published must be built from the exact dependency
+        // set recorded at the tagged commit. A drifting lockfile here would
+        // publish against resolutions nothing ever tested, so fail instead.
+        { name: "Install", run: "pnpm install --frozen-lockfile" },
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. package.json
         // is projen-generated read-only, so unlock it before `npm version` writes.
         {

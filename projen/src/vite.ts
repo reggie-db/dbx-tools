@@ -7,7 +7,7 @@
  * beside it (default {@link DEFAULT_VITE_OVERRIDES}: `vite.config.override.js`) and, when present, merges that module's default export
  * over the generated config with Vite's `mergeConfig` - in listed order, so later
  * files win and absent ones are skipped. A package thus tweaks Vite WITHOUT editing
- * the projen-owned file; pass `overridePaths` to change the chain.
+ * the projen-owned file.
  *
  * The override modules are `.js` because Vite loads them via a plain dynamic
  * `import()` at config time. Being a package-ROOT file (not under `src/`), the
@@ -23,18 +23,7 @@ import { type Project, TextFile } from "projen";
  */
 const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js"];
 
-/** Options for {@link ViteConfigFile}. */
-export interface ViteConfigFileOptions {
-  /**
-   * Unmanaged override modules (relative to the generated `vite.config.ts`) whose
-   * default export is merged over the generated config at Vite startup, in order -
-   * later entries win, absent files are skipped. Defaults to
-   * {@link DEFAULT_VITE_OVERRIDES}.
-   */
-  readonly overridePaths?: string[];
-}
-
-/** Render the generated `vite.config.ts` source with `overridePaths` inlined. */
+/** Render the generated `vite.config.ts` source with the override chain inlined. */
 function renderViteConfig(overridePaths: string[]): string {
   const overrides = overridePaths.map((path) => `  ${JSON.stringify(path)},`).join("\n");
   return String.raw`
@@ -92,11 +81,11 @@ export default defineConfig(async (configEnv: ConfigEnv) => {
  * chain described in the module docstring).
  */
 export class ViteConfigFile extends TextFile {
-  constructor(project: Project, options: ViteConfigFileOptions = {}) {
+  constructor(project: Project) {
     super(project, "vite.config.ts", {
       marker: true,
       readonly: true,
-      lines: renderViteConfig(options.overridePaths ?? DEFAULT_VITE_OVERRIDES).split("\n"),
+      lines: renderViteConfig(DEFAULT_VITE_OVERRIDES).split("\n"),
     });
   }
 }

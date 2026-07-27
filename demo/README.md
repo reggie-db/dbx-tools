@@ -28,6 +28,7 @@ await createApp({
     genie(),
     lakebase(),
     email(), // approval-gated send_email tool transport
+    teams(), // create_teams_card tool + /api/teams/card route
     mastra({ storage: true, memory: true, agents: support }),
   ],
   cache: { enabled: true },
@@ -35,7 +36,8 @@ await createApp({
 ```
 
 The agent is one `createAgent({...})` that spreads the Genie toolkit
-(`...plugins.genie?.toolkit()`) and adds `send_email: emailTool()`.
+(`...plugins.genie?.toolkit()`) and adds `send_email: emailTool()` and
+`create_teams_card: teamsCardTool()`.
 
 ## The whole client page
 
@@ -49,6 +51,50 @@ export default Stream;
 
 `MastraChat` wires itself from the Mastra plugin's published client config — no
 transport code, no streaming plumbing.
+
+The **Cards** page (`app/appkit-demo/src/pages/Cards.tsx`) has two tabs over the
+`teams()` plugin. **Chat** is a Teams conversation: `<TeamsChat/>` posts a Bot
+Framework activity to `/api/teams/messages` — the same endpoint a real Teams
+channel calls — and the Mastra agent answers with Adaptive Card attachments,
+which render like a Teams channel. **Card builder** is the lower-level view: edit a `CardSpec` (or
+pick a sample), compile it through `/api/teams/card`, and see the document
+render. Both use the `adaptivecards` JavaScript renderer — the same one Teams
+preview tools embed.
+
+The Cards page answers with the SAME content the Stream page does - ask both
+"what were inside sales PSPW and gross margin this week?" and both call Genie and
+report the same numbers. That is the point of the endpoint: the agent, its tools,
+and its data are identical, and only the presentation changes (a card instead of
+streamed markdown). See
+[`@dbx-tools/teams`](../workspaces/node/teams/README.md) for the two-pass turn
+that makes it so.
+
+The demo registers the plugin as `teams({ allowUnauthenticated: true })`, which
+serves `/messages` with no Bot Service token validation and replies in the HTTP
+response, so the page works with no Azure Bot registration. That option is
+ignored unless `NODE_ENV=development` (which the local dev server sets). A real
+deployment sets `TEAMS_APP_ID` / `TEAMS_APP_PASSWORD` instead and gets the
+JWT-validated, Connector-delivered path — see
+[`@dbx-tools/teams`](../workspaces/node/teams/README.md).
+
+```tsx
+// app/appkit-demo/src/pages/Cards.tsx
+import { AdaptiveCardGallery, TeamsChat } from "@dbx-tools/ui-teams/react";
+
+const Cards = () => <TeamsChat className="h-full" />;
+export default Cards;
+```
+
+Because the endpoint speaks the real Bot Framework envelope, the same route the
+chat uses can be driven with `curl` — a bare activity, exactly what Bot Service
+posts:
+
+```bash
+curl -X POST http://localhost:6868/api/teams/messages \
+  -H 'content-type: application/json' \
+  -d '{"type":"message","text":"summarize today",
+       "from":{"id":"user-1"},"conversation":{"id":"conv-1"}}'
+```
 
 ## Setup
 
@@ -82,6 +128,13 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
    ```
 
    The server serves the client's built `dist/` on the same port as the API.
+
+   Run the server with `NODE_ENV=development` locally. Outside a Databricks App
+   nothing sets the `x-forwarded-access-token` header, and AppKit's `asUser(req)`
+   only falls back to the service principal in development mode - otherwise the
+   first user-scoped route (e.g. `GET /api/mastra/models`, which the chat UI
+   calls on load) throws `AuthenticationError` from inside the handler and takes
+   the process down.
 
 ## Two dev modes
 

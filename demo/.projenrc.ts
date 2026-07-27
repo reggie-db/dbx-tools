@@ -132,6 +132,9 @@ projectApi.applyToProjects(project, { identifierName: "server-appkit-demo", tags
     dep("@dbx-tools/appkit-mastra"),
     dep("@dbx-tools/email"),
     dep("@dbx-tools/appkit-web-search"),
+    // Teams Adaptive Card add-on: the `teams()` plugin + `create_teams_card`
+    // tool, plus the `/api/teams/card` route the Cards page previews through.
+    dep("@dbx-tools/teams"),
     // The portable brand context, so the server themes generated charts with
     // the same brand the client UI and email layouts use.
     dep("@dbx-tools/shared-core"),
@@ -182,6 +185,9 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
     dep("@dbx-tools/ui-appkit"),
     dep("@dbx-tools/ui-branding"),
     dep("@dbx-tools/ui-mastra"),
+    // Renders the Teams Adaptive Cards the server builds (the `adaptivecards`
+    // JavaScript renderer) on the Cards page.
+    dep("@dbx-tools/ui-teams"),
     "react-router-dom@catalog:",
   );
   p.addDevDeps("@tailwindcss/vite@catalog:", "tailwindcss@catalog:");

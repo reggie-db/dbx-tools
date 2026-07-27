@@ -2,6 +2,7 @@
 @import "@dbx-tools/ui-appkit/styles.css";
 /* Feature UI styles: Streamdown base, Tailwind `@source`, shiki shim. */
 @import "@dbx-tools/ui-mastra/styles.css";
+@import "@dbx-tools/ui-teams/styles.css";
 
 html,
 body,

@@ -13,7 +13,7 @@ import { feedback, thread } from "@dbx-tools/shared-mastra";
 import {
   MASTRA_RESOURCE_ID_KEY,
   MASTRA_THREAD_ID_KEY,
-  type RequestContext,
+  RequestContext,
 } from "@mastra/core/request-context";
 import { MastraServer as MastraServerExpress } from "@mastra/express";
 import { trace } from "@opentelemetry/api";
@@ -39,6 +39,78 @@ import { extractModelOverride, MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig }
  * attach feedback to.
  */
 const INVALID_TRACE_ID = "0".repeat(32);
+
+/**
+ * Stamp the AppKit user (plus the resource id and trace metadata) onto
+ * `requestContext`.
+ *
+ * Split out of {@link MastraServer} because the HTTP middleware is not the only
+ * caller that needs it: an out-of-band turn (a Teams activity arriving on
+ * another plugin's route, a scheduled job) drives `agent.generate` directly, and
+ * without this stamp every user-scoped tool - `ask_genie` above all - fails with
+ * "invoke the tool from an agent turn served by the mastra plugin". Those
+ * callers build a context with {@link createRequestContext} instead of a
+ * request.
+ *
+ * Idempotent: returns immediately when the user and resource id are already
+ * present, so the middleware can call it over a context another layer stamped.
+ */
+export async function stampRequestContextUser(requestContext: RequestContext): Promise<void> {
+  if ([MASTRA_USER_KEY, MASTRA_RESOURCE_ID_KEY].every((key) => requestContext.get(key))) return;
+  const executionContext = getExecutionContext();
+  const user: User = {
+    id: executionContextUserId(executionContext),
+    executionContext,
+  };
+  requestContext.set(MASTRA_USER_KEY, user);
+  requestContext.set(MASTRA_RESOURCE_ID_KEY, user.id);
+  // AppKit's `UserContext` surfaces display name / email only on
+  // OBO requests. Service-context calls (background tasks, server
+  // start-up) leave these undefined and we skip the stamp so
+  // downstream trace metadata stays absent rather than empty.
+  let userName: string | undefined;
+  let email: string | undefined;
+  if ("isUserContext" in executionContext) {
+    userName = executionContext.userName;
+    email = executionContext.userEmail;
+  } else if (process.env.NODE_ENV === "development") {
+    const currentUser = await executionContext.client.currentUser.me();
+    userName = currentUser?.userName;
+    email = currentUser?.emails?.filter((email) => email.primary).find((email) => email.value)
+      ?.value as string;
+  }
+  if (userName) {
+    requestContext.set(MASTRA_USER_NAME_KEY, userName);
+  }
+  if (email) {
+    requestContext.set(MASTRA_USER_EMAIL_KEY, email);
+  }
+}
+
+/**
+ * Build the `RequestContext` a NON-HTTP agent turn needs.
+ *
+ * Everything Mastra's tools read off the context is stamped the same way the
+ * request middleware stamps it - the AppKit user (so `ask_genie` and the model
+ * resolver can mint user-scoped tokens), the memory thread / resource pair, and
+ * a request id so the turn's spans join up in traces. The result is passed as
+ * `requestContext` to `agent.generate` / `agent.stream`.
+ *
+ * This is what makes a card turn answer with the SAME data a chat turn does: the
+ * difference between the two endpoints is presentation, not capability.
+ */
+export async function createRequestContext(
+  options: { threadId?: string; resourceId?: string; requestId?: string } = {},
+): Promise<RequestContext> {
+  const requestContext = new RequestContext();
+  await stampRequestContextUser(requestContext);
+  if (options.threadId) requestContext.set(MASTRA_THREAD_ID_KEY, options.threadId);
+  // Stamped AFTER the user so an explicit resource id (a channel member, say)
+  // wins over the ambient identity `stampRequestContextUser` defaulted to.
+  if (options.resourceId) requestContext.set(MASTRA_RESOURCE_ID_KEY, options.resourceId);
+  requestContext.set(MASTRA_REQUEST_ID_KEY, options.requestId ?? hash.id());
+  return requestContext;
+}
 
 /**
  * `@mastra/express` subclass that stamps `RequestContext` with the
@@ -92,35 +164,7 @@ export class MastraServer extends MastraServerExpress {
   }
 
   async configureRequestContextUser(requestContext: RequestContext) {
-    if ([MASTRA_USER_KEY, MASTRA_RESOURCE_ID_KEY].every((key) => requestContext.get(key))) return;
-    const executionContext = getExecutionContext();
-    const user: User = {
-      id: executionContextUserId(executionContext),
-      executionContext,
-    };
-    requestContext.set(MASTRA_USER_KEY, user);
-    requestContext.set(MASTRA_RESOURCE_ID_KEY, user.id);
-    // AppKit's `UserContext` surfaces display name / email only on
-    // OBO requests. Service-context calls (background tasks, server
-    // start-up) leave these undefined and we skip the stamp so
-    // downstream trace metadata stays absent rather than empty.
-    let userName: string | undefined;
-    let email: string | undefined;
-    if ("isUserContext" in executionContext) {
-      userName = executionContext.userName;
-      email = executionContext.userEmail;
-    } else if (process.env.NODE_ENV === "development") {
-      const currentUser = await executionContext.client.currentUser.me();
-      userName = currentUser?.userName;
-      email = currentUser?.emails?.filter((email) => email.primary).find((email) => email.value)
-        ?.value as string;
-    }
-    if (userName) {
-      requestContext.set(MASTRA_USER_NAME_KEY, userName);
-    }
-    if (email) {
-      requestContext.set(MASTRA_USER_EMAIL_KEY, email);
-    }
+    await stampRequestContextUser(requestContext);
   }
 
   /**

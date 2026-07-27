@@ -42,9 +42,11 @@ function loadConfig(dbxToolsConfig: DBXToolsConfig, pkg: javascript.NodePackage)
 }
 
 /**
- * Owns a package's in-memory `dbxToolsConfig` object. Callers mutate it with
- * {@link readField} / {@link setField}; each {@link setField} writes through
- * `project.package.addField`.
+ * Owns a package's in-memory `dbxToolsConfig` object. Callers mutate it
+ * directly - push to {@link DBXToolsConfig.tags}, or assign any other key
+ * through the index signature. Every own key (i.e. not inherited from
+ * `Component`) is collected by {@link DBXToolsConfig.data} and written through
+ * `project.package.addField` at synth, so nothing is cached on a field.
  */
 export class DBXToolsConfig extends Component {
   private readonly inheritedKeys: ReadonlySet<string>;

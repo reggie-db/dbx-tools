@@ -46,6 +46,11 @@
     "./env-export": "./src/env-export.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "index.ts",
+    "src",
+    "bin"
+  ],
   "dbxToolsConfig": {
     "tags": [
       "cli"

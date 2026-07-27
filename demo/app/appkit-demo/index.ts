@@ -4,5 +4,6 @@
 
 export * as App from "./src/App";
 export * as ErrorBoundary from "./src/ErrorBoundary";
+export * as pagesCards from "./src/pages/Cards";
 export * as pagesConversations from "./src/pages/Conversations";
 export * as pagesStream from "./src/pages/Stream";

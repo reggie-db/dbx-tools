@@ -388,6 +388,33 @@ plugin.mastra({
 Use `mcp: false` to disable MCP. Turn on `tools: true` only for ambient tools
 that are safe outside an in-process chat turn.
 
+## Driving A Turn From Outside The Routes
+
+Another plugin (or a scheduled job) can run an agent turn directly, but a raw
+`agent.generate(prompt)` loses everything the HTTP middleware stamps - most
+visibly the AppKit user, which every user-scoped tool reads. `ask_genie` then
+fails with "invoke the tool from an agent turn served by the mastra plugin", so
+the turn answers "the data source is unreachable" where the chat routes answer
+with real data.
+
+`exports().createRequestContext()` builds the missing context:
+
+```ts
+const mastra = context.getPlugins()?.get("mastra")?.exports();
+const requestContext = await mastra.createRequestContext({
+  threadId: conversationId,
+  resourceId: userId,
+});
+const result = await mastra.getDefault().generate(prompt, { requestContext });
+```
+
+The AppKit user, the memory thread / resource pair, and a request id (so the
+turn's spans join up in traces) are stamped exactly as the request middleware
+stamps them. Call it inside an `asUser(req)` scope to inherit the caller's OBO
+identity; outside one it resolves to the service principal.
+[`@dbx-tools/teams`](../teams) uses this so a Teams card turn has the same tool
+reach - and therefore the same answer - as a chat turn.
+
 ## API Gate
 
 The stock `@mastra/express` app has broad management routes. The plugin's

@@ -39,6 +39,10 @@
     ".": "./index.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "index.ts",
+    "src"
+  ],
   "codegen": {
     "inputs": [
       "node_modules/@databricks/sdk-experimental/dist/apis/dashboards/model.d.ts"

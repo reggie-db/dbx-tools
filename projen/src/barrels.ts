@@ -29,20 +29,16 @@
  * required under `isolatedModules`. Names a hand-authored `exports.ts` declares
  * are never hoisted (that file wins).
  *
- * The result gets an optional caller {@link BarrelModifier}, then a do-not-edit
- * header + read-only bit (see `./generated`).
+ * The result gets a do-not-edit header + read-only bit (see `./generated`).
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { extname, join } from "node:path";
+import { join } from "node:path";
 import { find } from "@dbx-tools/path";
 import { string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
 import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
-import { moduleExports } from "./module-exports";
+import { moduleExports, moduleStatements } from "./module-exports";
 import { isModuleFile, toPosix, workspacePackages } from "./workspace";
-
-const require = createRequire(import.meta.url);
 
 /**
  * A `src`-relative posix path excluded from the root barrel:
@@ -77,41 +73,10 @@ const EXPORT_STATEMENT_TYPES = new Set([
   "TSExportAssignment",
 ]);
 
-// Lazy so importing this module during synth does not require the parser yet.
-let parseFn:
-  ((code: string, options?: Record<string, unknown>) => { body: { type: string }[] }) | undefined;
-function parseModuleExports(code: string, file: string): { body: { type: string }[] } {
-  parseFn ??= require("@typescript-eslint/typescript-estree").parse;
-  const ext = extname(file).toLowerCase();
-  return parseFn!(code, {
-    filePath: file,
-    jsx: ext === ".tsx" || ext === ".jsx",
-    loc: false,
-    range: false,
-    errorOnUnknownASTType: false,
-  });
-}
-
 /** True when the file has at least one top-level export statement. */
 function hasExport(file: string): boolean {
-  let source: string;
-  try {
-    source = readFileSync(file, "utf8");
-  } catch {
-    return false;
-  }
-
-  try {
-    return parseModuleExports(source, file).body.some((stmt) =>
-      EXPORT_STATEMENT_TYPES.has(stmt.type),
-    );
-  } catch {
-    return false;
-  }
+  return moduleStatements(file).some((stmt) => EXPORT_STATEMENT_TYPES.has(stmt.type));
 }
-
-/** Transform applied to a package's barrel contents before it is written. */
-export type BarrelModifier = (content: string, ctx: { readonly packageDir: string }) => string;
 
 /**
  * The do-not-edit banner stamped on every generated barrel. Deliberately stable
@@ -225,12 +190,7 @@ const CUSTOM_EXPORTS_FILE = "exports.ts";
  */
 function customExportNames(file: string): Set<string> {
   const names = new Set<string>();
-  let body: Array<Record<string, any>>;
-  try {
-    body = parseModuleExports(readFileSync(file, "utf8"), file).body as Array<Record<string, any>>;
-  } catch {
-    return names;
-  }
+  const body = moduleStatements(file) as ReadonlyArray<Record<string, any>>;
   const add = (node: Record<string, any> | undefined | null): void => {
     if (node && typeof node.name === "string") names.add(node.name);
     else if (node && typeof node.value === "string") names.add(node.value);
@@ -273,7 +233,7 @@ function mergeCustomExports(content: string, pkgDir: string): string {
  * adding a new named export) leaves the namespace `export * as … from "./src/x"`
  * list identical, so it is a no-op.
  */
-function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
+function generateForPackage(pkgDir: string): number {
   const srcDir = join(pkgDir, "src");
   if (!existsSync(srcDir)) return 0;
 
@@ -289,7 +249,7 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
   // `src/**/index.ts` (those are hand-authored subpath entries behind a package's
   // `./sub` export, not modules to namespace into the root barrel). `findFiles`
   // yields posix paths relative to `srcDir`; `hasExport` parses each via
-  // typescript-estree and needs the absolute path.
+  // `moduleStatements` and needs the absolute path.
   const candidates = [...find.findFiles("**/*", { cwd: srcDir })]
     .map(toPosix)
     .filter(isModuleFile)
@@ -327,7 +287,6 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
       return `export * as ${modulePathToNamespace(modulePath)} from "${modulePath}";`;
     })
     .join("\n");
-  if (modifier) content = modifier(content, { packageDir: pkgDir });
   // Hoist package-unique named exports to the top level. Names a hand-authored
   // `exports.ts` declares are suppressed so that file stays authoritative.
   const customPath = join(pkgDir, CUSTOM_EXPORTS_FILE);
@@ -358,9 +317,9 @@ function generateForPackage(pkgDir: string, modifier?: BarrelModifier): number {
  * Returns the number of barrels whose contents actually changed (an unchanged
  * export surface is a no-op), so callers can stay quiet when nothing moved.
  */
-export function generateBarrels(opts: { dirs?: string[]; modifier?: BarrelModifier } = {}): number {
+export function generateBarrels(opts: { dirs?: string[] } = {}): number {
   const dirs = opts.dirs ?? workspacePackages().map((p) => p.dir);
   let total = 0;
-  for (const dir of dirs) total += generateForPackage(dir, opts.modifier);
+  for (const dir of dirs) total += generateForPackage(dir);
   return total;
 }

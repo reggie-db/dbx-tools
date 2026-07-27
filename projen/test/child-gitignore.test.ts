@@ -82,3 +82,33 @@ describe("child .gitignore", () => {
     assert.ok(lines.includes("node_modules/"));
   });
 });
+
+describe("root .gitignore dot-path policy", () => {
+  it("never blanket-excludes dot-paths", () => {
+    // `**/.*` excludes dot-DIRECTORIES, and git will not descend into an
+    // excluded directory - which silently voids every `!/.projen/...` negation
+    // projen emits to force its generated files INTO git. The damage is
+    // invisible (indexed files keep working, new ones are unaddable), so guard
+    // the pattern itself rather than waiting for a package to lose its metadata.
+    const lines = read(".gitignore");
+    assert.ok(!lines.includes("**/.*"), "blanket dot exclusion is back");
+    assert.ok(!lines.includes("**/.*/**"), "blanket dot-directory exclusion is back");
+  });
+
+  it("still ignores secrets, while keeping the example env trackable", () => {
+    const lines = read(".gitignore");
+    assert.ok(lines.includes(".env"));
+    assert.ok(lines.includes(".env.*"));
+    // Negations must come after the pattern they override; last match wins.
+    assert.ok(lines.indexOf("!.env.example") > lines.indexOf(".env.*"));
+  });
+
+  it("leaves projen's own generated-file negations able to apply", () => {
+    // Each negation targets a file inside a dot-directory, so it only works
+    // while no pattern excludes that directory.
+    const lines = read(".gitignore");
+    assert.ok(lines.includes("!/.projen/tasks.json"));
+    const excludesDotDir = lines.some((l) => /^\*{0,2}\/?\.\*(\/\*{1,2})?$/.test(l));
+    assert.ok(!excludesDotDir, "a pattern excludes dot-directories, voiding negations");
+  });
+});

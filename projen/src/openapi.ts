@@ -25,7 +25,13 @@ import type * as ts from "typescript";
 import { find } from "@dbx-tools/path";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated";
 import { log } from "@dbx-tools/shared-core";
-import { type WorkspacePackage, isModuleFile, repoRoot, workspacePackages } from "./workspace";
+import {
+  type WorkspacePackage,
+  isModuleFile,
+  repoRoot,
+  toPosix,
+  workspacePackages,
+} from "./workspace";
 
 const logger = log.logger("projen:openapi");
 
@@ -60,7 +66,7 @@ function controllerPackages(): WorkspacePackage[] {
 
 /** True if the changed path is a source file that matches {@link TSOA_IMPORT}. */
 export function isTsoaController(path: string): boolean {
-  const posix = path.replace(/\\/g, "/");
+  const posix = toPosix(path);
   return (
     !posix.includes(`/${OPENAPI_TAG}/`) &&
     isModuleFile(path) &&

@@ -17,7 +17,7 @@ import { generateBarrels } from "./barrels";
 import { generateCodegen } from "./codegen";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config";
 import { resolvePkgRoot } from "./engine-root";
-import { DBXToolsPNPMWorkspace, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
+import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
 import { DBXToolsRelease, type StandaloneRelease } from "./release";
 import { AGNOSTIC_COMPILER_OPTIONS, WORKSPACE_TAG_MIXINS, type WorkspaceTag } from "./tags";
 import { DBXToolsRootTsconfig } from "./tsconfig";
@@ -45,11 +45,13 @@ export interface DBXToolsProject extends javascript.NodeProject {
   readonly dbxToolsConfig: DBXToolsConfig;
   /** npm scope (the `@scope` in `@scope/pkg`), without the leading `@`. */
   readonly scope: string;
-  /** Parsed `package.json` `name` (optional scope + unscoped name). */
-  readonly packageIdentifier: PackageIdentifier;
 
-  /** The `pnpm-workspace.yaml` file component - only a tree ROOT has one. */
-  pnpmWorkspace?: DBXToolsPNPMWorkspace;
+  /**
+   * The `pnpm-workspace.yaml` catalog / member / build-allowance state - only a
+   * tree ROOT has one. The FILE itself is owned by projen's native
+   * `javascript.PnpmWorkspaceYaml`; this is the state it renders.
+   */
+  pnpmWorkspace?: PnpmWorkspaceState;
   /** Root projenrc tsconfigs - only a tree ROOT has one. */
   rootTsconfig?: DBXToolsRootTsconfig;
   /** Root `.vscode/*` - only a tree ROOT has one. */
@@ -67,26 +69,9 @@ export class PackageIdentifier {
     this.name = name;
   }
 
-  /** Replace the scope (leading `@` is optional) and return `this`. */
-  public withScope(scope: string): this {
-    const normalized = scope.replace(/^@/, "").trim();
-    this.scope = normalized || undefined;
-    return this;
-  }
-
-  /** Replace the unscoped package name and return `this`. */
-  public withName(name: string): this {
-    this.name = name;
-    return this;
-  }
-
   /** Full npm name (`@scope/name` or bare `name`). */
   public get packageName(): string {
     return this.scope ? `@${this.scope}/${this.name}` : this.name;
-  }
-
-  public toString(): string {
-    return this.packageName;
   }
 
   /**
@@ -161,19 +146,6 @@ function applyRepository(project: javascript.NodeProject, override?: string): vo
   });
 }
 
-/**
- * Stamp the standard `publishConfig` on a child package's manifest so
- * `pnpm -r publish` publishes it under public npm access. Provenance is
- * intentionally NOT set here: pnpm honors `publishConfig.provenance` over any
- * CLI flag / env var / .npmrc, so a hardcoded `true` would break local
- * (verdaccio) publishes, which have no CI OIDC provider (`provider: null`).
- * Provenance is enabled per-run in CI via `npm_config_provenance=true` (see
- * {@link DBXToolsRelease}).
- */
-function applyPublishConfig(project: javascript.NodeProject): void {
-  project.package.addField("publishConfig", { access: "public" });
-}
-
 /** Inherit a parent's package manager, else pnpm. */
 function inheritedPackageManager(
   parent: javascript.NodeProject | undefined,
@@ -225,6 +197,15 @@ export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, T
  */
 export function applyExports(pkg: javascript.NodeProject, exports: Record<string, string>): void {
   pkg.package.addField("exports", exports);
+  // Keep the legacy entry points honest about the map that just replaced them.
+  // A subpath-only surface (the `ui` tag's `./react` + `./styles.css`) has no
+  // `.` export, so the constructor's `main`/`types` would keep advertising a
+  // root entry that every exports-aware resolver ignores - the contradiction
+  // publint reports as "exports is missing the root entrypoint".
+  if (!exports["."]) {
+    pkg.package.addField("main", undefined);
+    pkg.package.addField("types", undefined);
+  }
 }
 
 /**
@@ -245,6 +226,22 @@ export function addExports(pkg: javascript.NodeProject, exports: Record<string, 
     ...exports,
     ...(packageJson !== undefined ? { "./package.json": packageJson } : {}),
   });
+}
+
+/**
+ * MERGE entries onto a package's npm `files` allowlist - the only paths that
+ * ship in the published tarball. npm always includes `package.json`, `README`,
+ * and `LICENSE` on top of whatever is listed, so those are never declared here.
+ *
+ * The baseline (`index.ts` + `src`, set at construction) is the source-first
+ * entry surface the `exports` map actually resolves to. A tag adds what its own
+ * layout ships outside `src` - the `cli` tag its `bin/` launchers. Everything
+ * else the build leaves behind (`lib/`, `test/`, `.projen/`, `tsconfig*`) is
+ * unreachable through `exports` and is deliberately withheld.
+ */
+export function addPackageFiles(pkg: javascript.NodeProject, ...entries: string[]): void {
+  const current = (pkg.package.manifest.files ?? []) as string[];
+  pkg.package.addField("files", [...new Set([...current, ...entries])]);
 }
 
 /**
@@ -292,6 +289,15 @@ const PRETTIER_SETTINGS: javascript.PrettierSettings = {
 };
 
 /**
+ * The `projen` version every generated manifest pins.
+ *
+ * Kept as one constant so the root's devDependency and this engine's own
+ * dependency can never drift apart - a synth run loads the engine from one copy
+ * of projen and the tasks execute against another otherwise.
+ */
+export const PROJEN_VERSION = "^0.101.16";
+
+/**
  * The engine's opinionated `NodeProject` defaults. A caller's own options override
  * these (they are spread AFTER this). Root-only concerns key off `options.parent`,
  * NOT the class: only the tree ROOT (no parent) turns on projen's built-in Prettier
@@ -303,8 +309,27 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
   const isRoot = options.parent === undefined;
   return {
     packageManager: javascript.NodePackageManager.PNPM,
+    // Pinned rather than left to projen's "latest": 0.101.16 is the first release
+    // whose `NodePackage` owns `pnpm-workspace.yaml` natively, and this engine
+    // writes that file itself ({@link DBXToolsPNPMWorkspace}). Floating would let
+    // an install cross that boundary silently, so the version the engine is known
+    // to co-exist with is stated here and bumped deliberately.
+    projenVersion: PROJEN_VERSION,
     defaultReleaseBranch: "main",
     projenrcJs: false,
+    // Every CHILD is a publishable workspace package, so it needs
+    // `publishConfig.access: public` - projen renders that from `npmAccess`
+    // whenever the value differs from the name's default, and every child here is
+    // scoped (`@dbx-tools/*`), whose default is RESTRICTED. Root-only exclusion is
+    // deliberate: a root's name is unscoped, so PUBLIC *is* its default and projen
+    // would omit the key - except that `npmProvenance` then defaults on and forces
+    // the block to render, giving the root a `publishConfig` it does not have
+    // today. Provenance is never written to a manifest here (projen only reads it
+    // in its own `Publisher`, and `release: false` means none exists); the
+    // tag-driven `release` workflow opts in per-run via `npm_config_provenance`
+    // instead, so LOCAL publishes to a verdaccio still work with no CI OIDC
+    // provider. See {@link DBXToolsRelease}.
+    ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
     buildWorkflow: false,
     release: false,
     jest: false,
@@ -450,7 +475,7 @@ export interface DBXToolsTypeScriptProjectOptions
 export class DBXToolsNodeProject extends javascript.NodeProject implements DBXToolsProject {
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
-  pnpmWorkspace?: DBXToolsPNPMWorkspace;
+  pnpmWorkspace?: PnpmWorkspaceState;
   rootTsconfig?: DBXToolsRootTsconfig;
   vsCode?: DBXToolsVsCode;
 
@@ -460,12 +485,23 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
       options.release && options.releaseTrigger === undefined
         ? { releaseTrigger: ReleaseTrigger.tagged({ tags: ["v*"] }) }
         : {};
+    // Before `super`, since `NodePackage` creates the native
+    // `javascript.PnpmWorkspaceYaml` from these options inside the base
+    // constructor and `this` is unreachable until it returns. Given nothing,
+    // projen writes no workspace file at all - it never derives members from
+    // `project.subprojects` (see `pnpm-workspace.ts`).
+    const pnpmWorkspace = new PnpmWorkspaceState(options);
     super({
       ...defaultProjectOptions(options),
       ...releaseDefaults,
+      pnpmOptions: {
+        ...options.pnpmOptions,
+        workspaceYamlOptions: pnpmWorkspace.options,
+      },
       name,
     });
 
+    this.pnpmWorkspace = pnpmWorkspace;
     this.scope = scope;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     initProject(this, options);
@@ -473,11 +509,10 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
 
   public override preSynthesize(): void {
     super.preSynthesize();
+    // Members come from the attached subprojects, which the root's scan appends
+    // after construction - so the list is filled here, not in the constructor.
+    this.pnpmWorkspace?.resolveMembers(this);
     preSynthesizeProject(this);
-  }
-
-  public get packageIdentifier(): PackageIdentifier {
-    return identifier(this);
   }
 }
 
@@ -494,7 +529,7 @@ export class DBXToolsTypeScriptProject
 {
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
-  pnpmWorkspace?: DBXToolsPNPMWorkspace;
+  pnpmWorkspace?: PnpmWorkspaceState;
   rootTsconfig?: DBXToolsRootTsconfig;
   vsCode?: DBXToolsVsCode;
 
@@ -532,6 +567,7 @@ export class DBXToolsTypeScriptProject
       ".": "./index.ts",
       "./package.json": "./package.json",
     });
+    addPackageFiles(this, "index.ts", "src");
     this.testTask.exec("tsx --test 'test/**/*.test.ts'");
     if (options.viteConfig ?? false) new ViteConfigFile(this);
     initProject(this, options);
@@ -540,10 +576,6 @@ export class DBXToolsTypeScriptProject
   public override preSynthesize(): void {
     super.preSynthesize();
     preSynthesizeProject(this);
-  }
-
-  public get packageIdentifier(): PackageIdentifier {
-    return identifier(this);
   }
 }
 
@@ -727,12 +759,6 @@ function initProject(
     // Stamp `repository` (with this package's `directory` subpath) so a published
     // package passes npm provenance validation.
     applyRepository(project, options.repository);
-    // Every child is a publishable workspace package: publish under public
-    // access. Provenance is deliberately omitted so LOCAL publishes (e.g. a
-    // verdaccio) work without a CI OIDC provider; the tag-driven `release`
-    // workflow opts in via `npm_config_provenance=true` (see DBXToolsRelease).
-    // A `private` package still sets this but `pnpm -r publish` skips it.
-    applyPublishConfig(project);
     // Only a ROOT configures the workspace; a child just swaps its default-laden
     // `.gitignore` for a fresh one that carries package-specific patterns only.
     swapChildGitignore(project, options);
@@ -769,11 +795,6 @@ function initProject(
     project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
   }
 
-  // Newer projen auto-creates a `pnpm-workspace.yaml` for a pnpm NodeProject;
-  // drop it first so our own `DBXToolsPNPMWorkspace` (the source of truth) can
-  // claim the path without projen's "already a file under pnpm-workspace.yaml".
-  project.tryRemoveFile("pnpm-workspace.yaml");
-  project.pnpmWorkspace = new DBXToolsPNPMWorkspace(project, options);
   project.rootTsconfig = new DBXToolsRootTsconfig(project);
   project.vsCode = new DBXToolsVsCode(project);
 
@@ -783,7 +804,19 @@ function initProject(
     formatTask.prependExec("prettier . --write", { receiveArgs: true });
   }
 
-  project.gitignore.addPatterns(...[...ignore.ignorePatterns({ test: false })]);
+  // `dot: false` for the same reason as `test: false`: the dot group is a
+  // SCANNING concern (skip `.git` and caches when walking the tree), and a
+  // blanket `**/.*` in a `.gitignore` is both wrong and actively harmful. A repo
+  // legitimately commits `.github/`, `.projen/tasks.json`, `.vscode/settings.json`,
+  // `.editorconfig`. Worse, `**/.*` excludes those DIRECTORIES, and git refuses
+  // to re-include a file whose parent directory is excluded - so every per-file
+  // `!/.github/...` negation projen emits for its own generated files silently
+  // does nothing, and the file cannot be added at all.
+  project.gitignore.addPatterns(...[...ignore.ignorePatterns({ test: false, dot: false })]);
+  // What the dot group was actually earning here, named explicitly: secrets and
+  // local editor state. Both ignore CONTENTS (`.idea/*`) rather than the
+  // directory, so a later `!` negation can still reach a file inside.
+  project.gitignore.addPatterns(".env", ".env.*", "!.env.example", "!.env.sample", ".idea/*");
   const roots = options.workspacePackageRoots ?? DEFAULT_WORKSPACE_PACKAGE_ROOTS;
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
@@ -945,16 +978,21 @@ function swapChildGitignore(
 }
 
 function preSynthesizeProject(project: javascript.NodeProject): void {
+  // `Project.files` is OWN-project only (its `components` getter filters on the
+  // project's own node path), so reaching a child's files means walking the tree.
+  // `node.findAll()` is projen/constructs' native preorder walk - self first, then
+  // descendants - which is the order the subproject recursion produced.
+  const subtree = project.node.findAll().filter(Project.isProject);
   if (project.prettier) {
     const ignorePatterns = new Set<string>();
-    for (const p of projects(project)) {
+    for (const p of subtree) {
       p.files.forEach((file) => {
         if (file.readonly) ignorePatterns.add(file.path);
       });
     }
     ignorePatterns.forEach((pattern) => project.prettier!.addIgnorePattern(pattern));
   }
-  for (const p of projects(project)) {
+  for (const p of subtree) {
     if (!p.parent) continue;
     // A child's `.gitignore` survives ONLY when it carries custom patterns (see
     // swapChildGitignore). `.gitattributes` is always dropped - the root's
@@ -973,35 +1011,18 @@ function preSynthesizeProject(project: javascript.NodeProject): void {
   }
 }
 
-function* projects(project: Project): Generator<Project> {
-  yield project;
-  for (const sub of project.subprojects) {
-    yield* projects(sub);
-  }
-}
-
 /**
  * Filters selecting which projects an {@link applyToProjects} call runs its
  * callback(s) on. All provided filters are AND-ed; every string value is a glob
  * (or list of globs) matched by the corresponding {@link projectPredicate}
  * helper - prefix a glob with `!` to negate it. Omitted filters impose no
  * constraint.
+ *
+ * The selection is always DBXTools CHILD projects: plain projen `Project`s and
+ * tree roots never match, so the callback receives the richer
+ * {@link DBXToolsProject} type.
  */
 export interface ApplyToProjectsOptions {
-  /**
-   * Include non-DBXTools projects (plain projen `Project`s) in the selection.
-   * Defaults to `false` - only {@link DBXToolsProject}s match, so the callback
-   * receives the richer type.
-   */
-  includeNonDBXToolsProjects?: boolean;
-  /** Include tree ROOT projects (those with no parent). Defaults to `false` (children only). */
-  includeRoots?: boolean;
-  /** Match the raw projen {@link Project.name} verbatim ({@link projectPredicate.hasName}). */
-  name?: PathMatchInput | OneOrMany<PathMatchInput>;
-  /** Match the parsed full npm name `@scope/name` ({@link projectPredicate.hasIdentifierPackageName}). */
-  identifierPackageName?: PathMatchInput | OneOrMany<PathMatchInput>;
-  /** Match the parsed npm scope ({@link projectPredicate.hasIdentifierScope}). */
-  identifierScope?: PathMatchInput | OneOrMany<PathMatchInput>;
   /** Match the parsed unscoped name ({@link projectPredicate.hasIdentifierName}). */
   identifierName?: PathMatchInput | OneOrMany<PathMatchInput>;
   /** Match every listed tag on `dbxToolsConfig.tags` ({@link projectPredicate.hasTag}). */
@@ -1010,16 +1031,6 @@ export interface ApplyToProjectsOptions {
   path?: PathMatchInput | OneOrMany<PathMatchInput>;
 }
 
-/** {@link ApplyToProjectsOptions} for the default DBXTools-only selection (callback gets {@link DBXToolsProject}). */
-type ApplyToDBXToolsProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
-  includeNonDBXToolsProjects?: false;
-};
-
-/** {@link ApplyToProjectsOptions} opting into all projen projects (callback gets the base {@link Project}). */
-type ApplyToAllProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
-  includeNonDBXToolsProjects: true;
-};
-
 /**
  * Run one or more callbacks against every project in `construct`'s subtree that
  * matches the given {@link ApplyToProjectsOptions} filters - the ergonomic
@@ -1027,9 +1038,7 @@ type ApplyToAllProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXTool
  * predicate from the options and applies it via `construct.with(...)`.
  *
  * Call with just callback(s) to match every DBXTools child project, or pass an
- * options object first to narrow by name/scope/tag/path. With
- * `includeNonDBXToolsProjects: true` the callbacks receive the base
- * {@link Project}; otherwise they receive the narrowed {@link DBXToolsProject}.
+ * options object first to narrow by name/tag/path.
  *
  * @example
  * // Add a dep to one package selected by unscoped name + tag:
@@ -1045,38 +1054,17 @@ type ApplyToAllProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXTool
 export function applyToProjects(
   construct: IConstruct,
   ...args:
-    | [ApplyToDBXToolsProjectsOptions, ...OneOrMany<(project: DBXToolsProject) => void>]
+    | [ApplyToProjectsOptions, ...OneOrMany<(project: DBXToolsProject) => void>]
     | OneOrMany<(project: DBXToolsProject) => void>
-): void;
-
-export function applyToProjects(
-  construct: IConstruct,
-  ...args: [ApplyToAllProjectsOptions, ...OneOrMany<(project: Project) => void>]
-): void;
-
-export function applyToProjects<P extends Project>(
-  construct: IConstruct,
-  ...args:
-    [ApplyToProjectsOptions, ...OneOrMany<(project: P) => void>] | OneOrMany<(project: P) => void>
 ): void {
   const [first, ...rest] = args;
   const hasOptions = typeof first !== "function";
   const options = hasOptions ? (first as ApplyToProjectsOptions) : undefined;
   const callbacks = (hasOptions ? rest : args) as OneOrMany<(project: Project) => void>;
-  let pred = projectPredicate.isProject();
-  if (!options?.includeNonDBXToolsProjects) pred = pred.and(projectPredicate.isDBXToolsProject());
-  if (!options?.includeRoots) pred = pred.and((p) => p.parent != null);
-  if (options?.identifierPackageName)
-    pred = pred.and(
-      projectPredicate.hasIdentifierPackageName(
-        ...object.toOneOrMany(options.identifierPackageName),
-      ),
-    );
-  if (options?.name) pred = pred.and(projectPredicate.hasName(...object.toOneOrMany(options.name)));
-  if (options?.identifierScope)
-    pred = pred.and(
-      projectPredicate.hasIdentifierScope(...object.toOneOrMany(options.identifierScope)),
-    );
+  let pred = projectPredicate
+    .isProject()
+    .and(projectPredicate.isDBXToolsProject())
+    .and((p) => p.parent != null);
   if (options?.identifierName)
     pred = pred.and(
       projectPredicate.hasIdentifierName(...object.toOneOrMany(options.identifierName)),

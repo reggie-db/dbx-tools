@@ -44,6 +44,10 @@
     ".": "./index.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "index.ts",
+    "src"
+  ],
   "peerDependenciesMeta": {
     "@databricks/appkit": {
       "optional": true

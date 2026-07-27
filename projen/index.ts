@@ -23,16 +23,11 @@ export * as vite from "./src/vite";
 export * as vscode from "./src/vscode";
 export * as watch from "./src/watch";
 export * as workspace from "./src/workspace";
-export type { BarrelModifier } from "./src/barrels";
 export type { DBXToolsConfigOptions } from "./src/dbx-tools-config";
 export type { HeaderOpts } from "./src/generated";
 export type { ConstructsMixin } from "./src/mixin";
-export type { ModuleExport } from "./src/module-exports";
-export type {
-  Catalog,
-  PnpmWorkspaceConfig,
-  DBXToolsPNPMWorkspaceOptions,
-} from "./src/pnpm-workspace";
+export type { ModuleStatement, ModuleExport } from "./src/module-exports";
+export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace";
 export type {
   DBXToolsProject,
   DBXToolsProjectOptions,
@@ -41,6 +36,5 @@ export type {
 } from "./src/project";
 export type { StandaloneRelease, DBXToolsReleaseOptions } from "./src/release";
 export type { WorkspaceTag } from "./src/tags";
-export type { ViteConfigFileOptions } from "./src/vite";
 export type { IgnoreGroupOptions } from "./src/watch";
 export type { WorkspacePackage } from "./src/workspace";

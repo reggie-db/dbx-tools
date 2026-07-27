@@ -44,18 +44,22 @@ new package membership.
 ## Customize Packages With Mixins
 
 ```ts
-import { mixin, project as projectApi, projectPredicate } from "@dbx-tools/projen";
+import { project as projectApi } from "@dbx-tools/projen";
 
 const project = new projectApi.DBXToolsNodeProject();
 
-project.with(
-  mixin.mixin(projectPredicate.hasTag("shared"), (pkg) => {
-    pkg.addDeps("zod@catalog:");
-  }),
-);
+projectApi.applyToProjects(project, { tags: "shared" }, (pkg) => {
+  pkg.addDeps("zod@catalog:");
+});
 
 project.synth();
 ```
+
+`applyToProjects` AND-s its `{ identifierName, tags, path }` globs (prefix a glob
+with `!` to negate) into one predicate over the DBXTools child packages, then
+applies it as a `constructs` mixin across the subtree. Drop to
+`mixin.create(predicate, fn)` + `project.with(...)` only when you need a
+predicate those three filters cannot express.
 
 Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
 `ui`, and `openapi`. Repo-specific mixins layer package-specific dependencies,
@@ -106,8 +110,25 @@ project.pnpmWorkspace?.addCatalog("react", "^19");
 project.pnpmWorkspace?.allowBuild("esbuild");
 ```
 
-`pnpmWorkspace.DBXToolsPNPMWorkspace` owns `pnpm-workspace.yaml`, package
-members, catalog entries, overrides, and build-script allowlists.
+projen's native `javascript.PnpmWorkspaceYaml` writes `pnpm-workspace.yaml`;
+`pnpmWorkspace.PnpmWorkspaceState` supplies the options it renders and tracks
+package members, catalog entries, and build-script allowances. Any other pnpm
+setting goes through the root's `workspaceYaml` option, which is projen's typed
+`PnpmWorkspaceYamlOptions`:
+
+```ts
+new DBXToolsNodeProject({ workspaceYaml: { overrides: { glob: "^13.0.0" } } });
+```
+
+`allowBuild` writes pnpm's `allowBuilds` map rather than projen's own
+`allowScripts` option, which for pnpm renders `onlyBuiltDependencies` - a key
+current pnpm does not read, so the list would leave every build script skipped.
+Only allowances are declared; a dependency that is never allowed needs no entry,
+because pnpm warns and moves on.
+
+The engine also applies `catalogMode: manual` (keeps `pnpm add` out of the
+generated catalog) and `verifyDepsBeforeRun: warn`. The file is emitted for the
+tree ROOT only; a member package never gets a nested one.
 
 ## Clean And Watch Generated Files
 

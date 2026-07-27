@@ -39,6 +39,10 @@
     ".": "./index.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "index.ts",
+    "src"
+  ],
   "dbxToolsConfig": {
     "tags": [
       "node"

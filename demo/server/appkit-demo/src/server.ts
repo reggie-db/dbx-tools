@@ -10,6 +10,7 @@ import {
   plugin as webSearchPlugin,
   tool as webSearchToolModule,
 } from "@dbx-tools/appkit-web-search";
+import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,8 @@ const { GENIE_INSTRUCTIONS } = mastraGenie;
 const { mastra } = mastraPlugin;
 const { webSearch } = webSearchPlugin;
 const { webSearchTool, webFetchTool } = webSearchToolModule;
+const { teams } = teamsPlugin;
+const { teamsCardTool } = teamsToolModule;
 const { defaultBrandContext } = sharedBrand;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
@@ -145,6 +148,11 @@ const support = createAgent({
       // via got-scraping. Both honor the plugin's optional URL allow-list.
       web_search: webSearchTool(),
       web_fetch: webFetchTool(),
+      // Build a Microsoft Teams Adaptive Card from a short structured
+      // description. Pure transform (no side effects), so it is not
+      // approval-gated; the returned card is previewed on the Cards page and
+      // can be posted to a Teams webhook via the `teams()` plugin.
+      create_teams_card: teamsCardTool(),
     };
   },
 });
@@ -173,6 +181,19 @@ await createAppAuto({
     // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,
     // or `allowedUrls` to restrict which sites are reachable.
     webSearch(),
+    // Teams Adaptive Card runtime for the `create_teams_card` tool. Mounts
+    // `POST /api/teams/card` (the Cards page previews through it),
+    // `POST /api/teams/post`, and the Bot Framework messaging endpoint
+    // `POST /api/teams/messages`. Set TEAMS_WEBHOOK_URL to enable posting to a
+    // Teams channel.
+    //
+    // `allowUnauthenticated` lets the Cards page talk to `/messages` - the same
+    // route a real Teams channel would call - with no Azure Bot registration, so
+    // the demo renders live cards out of the box. It is honored ONLY when
+    // NODE_ENV=development (which this demo runs under locally); a real
+    // deployment sets TEAMS_APP_ID / TEAMS_APP_PASSWORD instead and gets the
+    // JWT-validated, Connector-delivered path.
+    teams({ allowUnauthenticated: true }),
     mastra({
       storage: true,
       memory: true,

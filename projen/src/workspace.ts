@@ -85,11 +85,6 @@ function nestingTagsFromSegments(segments: readonly string[]): string[] {
 /** Matches a barrel `index.<ext>` (as a basename or a posix path tail). */
 const BARREL_RE = /(^|\/)index\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
-/** True if the path is a generated barrel `index.<ext>`. */
-export function isBarrel(file: string): boolean {
-  return BARREL_RE.test(toPosix(file));
-}
-
 /** Basenames this toolchain generates (projen manifests/tsconfigs + vite config). */
 const GENERATED_BASENAMES = new Set([
   "package.json",
@@ -250,8 +245,6 @@ export interface WorkspacePackage {
   readonly relPath: string;
   /** Absolute package directory. */
   readonly dir: string;
-  /** The npm name from `package.json` (`@dbx-tools/ui-app`), else the folder name. */
-  readonly name: string;
   /** Resolved tags from `package.json` `dbxToolsConfig.tags`, else the path candidates. */
   readonly tags: string[];
 }
@@ -278,13 +271,10 @@ function readDbxToolsConfig(dir: string): Record<string, unknown> | undefined {
   return object.isRecord(config) ? config : undefined;
 }
 
-/** Read `<dir>/package.json`'s `name` + `dbxToolsConfig.tags` (each `undefined` if absent). */
-function readManifest(dir: string): { name?: string; tags?: string[] } {
+/** Read `<dir>/package.json`'s `dbxToolsConfig.tags` (`undefined` if absent). */
+function readManifestTags(dir: string): string[] | undefined {
   const tags = readDbxToolsConfig(dir)?.tags;
-  return {
-    name: string.trimToNull(readPackageManifest(dir)?.name) ?? undefined,
-    tags: Array.isArray(tags) ? (tags as string[]) : undefined,
-  };
+  return Array.isArray(tags) ? (tags as string[]) : undefined;
 }
 
 /**
@@ -299,9 +289,9 @@ export function syncResynthPaths(projectRoot: string = repoRoot): string[] {
 
 /**
  * The recorded workspace members from `pnpm-workspace.yaml` (the source of truth),
- * each augmented with the `name` + `tags` read back from its `package.json`. This is
- * what every post-synth command (barrels, watch, openapi) uses: the manifest is
- * authoritative, so it reflects any synth-time name override or resolved tag set.
+ * each augmented with the `tags` read back from its `package.json`. This is what
+ * every post-synth command (barrels, watch, openapi) uses: the manifest is
+ * authoritative, so it reflects the resolved tag set.
  * Sorted by path.
  */
 export function workspacePackages(projectRoot: string = repoRoot): WorkspacePackage[] {
@@ -309,14 +299,12 @@ export function workspacePackages(projectRoot: string = repoRoot): WorkspacePack
   for (const member of readWorkspaceMembers(projectRoot)) {
     const pkg = packageOfMember(projectRoot, member);
     if (!pkg) continue;
-    const manifest = readManifest(pkg.dir);
     out.push({
       path: pkg.memberPath,
       root: pkg.root,
       relPath: pkg.relPath,
       dir: pkg.dir,
-      name: manifest.name ?? pkg.name,
-      tags: manifest.tags ?? pkg.tagCandidates,
+      tags: readManifestTags(pkg.dir) ?? pkg.tagCandidates,
     });
   }
   return out.sort((a, b) => a.path.localeCompare(b.path));

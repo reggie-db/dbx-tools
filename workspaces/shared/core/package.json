@@ -41,6 +41,10 @@
     ".": "./index.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "index.ts",
+    "src"
+  ],
   "peerDependenciesMeta": {
     "consola": {
       "optional": true

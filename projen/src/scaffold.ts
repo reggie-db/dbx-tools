@@ -1,32 +1,9 @@
 /**
- * Scaffold helpers: decide when a re-synth is due, and run it.
- *
- * The root project (`DBXToolsNodeProject`) discovers packages by scanning the
- * filesystem at synth and records them in `pnpm-workspace.yaml` (the source of
- * truth). During `sync --watch`, this compares the live filesystem against that
- * record to decide whether the package SET changed (a package was added/removed)
- * and a full re-synth is needed - versus a content edit, where only barrels rebuild.
+ * Runs a projen re-synth, for the `sync` task and its watchers.
  */
 import { join } from "node:path";
 import { exec } from "@dbx-tools/core";
-import { recordedRoots, repoRoot, scanPackages, workspacePackages } from "./workspace";
-
-/** Member paths that currently exist on disk (scan of the recorded roots). */
-function currentPackages(): string[] {
-  return scanPackages(repoRoot, recordedRoots()).map((p) => p.memberPath);
-}
-
-/** Member paths recorded by the last synth (read from `pnpm-workspace.yaml`). */
-function recordedPackages(): string[] {
-  return workspacePackages(repoRoot).map((p) => p.path);
-}
-
-/** True if the set of package folders on disk differs from the recorded set. */
-export function packageSetChanged(): boolean {
-  const now = currentPackages();
-  const then = recordedPackages();
-  return now.length !== then.length || now.some((d, i) => d !== then[i]);
-}
+import { repoRoot } from "./workspace";
 
 /**
  * Re-run projen synth by executing `.projenrc.ts` with `node --import tsx` (no

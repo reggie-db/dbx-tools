@@ -31,6 +31,29 @@ function parseSync(filename: string, source: string): ReturnType<typeof OxcParse
   return parseSyncFn(filename, source);
 }
 
+/** A parsed top-level statement, narrowed to the discriminant every caller reads. */
+export type ModuleStatement = { readonly type: string };
+
+/**
+ * `file`'s top-level statements, or `[]` when it cannot be read or parsed. The
+ * single parse entry point for the whole engine: the barrel generator reads the
+ * same oxc AST to decide whether a file exports anything at all and to read a
+ * hand-authored `exports.ts`, so there is exactly one TypeScript parser here.
+ */
+export function moduleStatements(file: string): readonly ModuleStatement[] {
+  let source: string;
+  try {
+    source = readFileSync(file, "utf8");
+  } catch {
+    return [];
+  }
+  try {
+    return parseSync(file, source).program.body;
+  } catch {
+    return [];
+  }
+}
+
 /** One exported name plus whether it is type-only (needs `export type`). */
 export interface ModuleExport {
   readonly name: string;
@@ -46,19 +69,7 @@ const TYPE_DECLARATIONS = new Set(["TSInterfaceDeclaration", "TSTypeAliasDeclara
  * module the parser chokes on simply contributes no hoisted names.
  */
 export function moduleExports(file: string): ModuleExport[] {
-  let source: string;
-  try {
-    source = readFileSync(file, "utf8");
-  } catch {
-    return [];
-  }
-
-  let body: readonly { type: string }[];
-  try {
-    body = parseSync(file, source).program.body;
-  } catch {
-    return [];
-  }
+  const body = moduleStatements(file);
 
   // Dedupe within the module: an overloaded `export function f(...)` declares
   // `f` once per signature, but it's a single exported name. First occurrence

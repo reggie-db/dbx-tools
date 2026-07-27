@@ -60,14 +60,9 @@ export function listGeneratedFiles(root: string = repoRoot): string[] {
 export function listNodeModulesDirs(root: string = repoRoot): string[] {
   if (!existsSync(root)) return [];
   const rel = (f: string): string => toPosix(relative(root, f));
-  const dirs = new Set<string>();
-  for (const match of find.findFiles("**/node_modules", {
-    cwd: root,
-    ignoreOptions: { dot: false },
-  })) {
-    dirs.add(join(root, match));
-  }
-  return [...dirs].sort((a, b) => rel(a).localeCompare(rel(b)));
+  return [...find.findFiles("**/node_modules", { cwd: root, ignoreOptions: { dot: false } })]
+    .map((match) => join(root, match))
+    .sort((a, b) => rel(a).localeCompare(rel(b)));
 }
 
 /**

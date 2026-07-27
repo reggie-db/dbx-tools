@@ -1,9 +1,10 @@
 /**
  * Mixin factory for `constructs` {@link ConstructsMixin}.
  *
- * Apply with `project.with(...)` across the subtree. Package-targeting mixins
- * compose the `predicate.hasName` / `predicate.hasTag` / `predicate.inRelPath`
- * builders from `./project`.
+ * Apply with `construct.with(...)` across the subtree. Package-targeting mixins
+ * compose the `projectPredicate.hasIdentifierName` / `hasTag` / `hasPath`
+ * builders from `./project-predicate`; `project.applyToProjects` is the
+ * ergonomic front-end that assembles those and applies the mixin for you.
  */
 import type { Predicate } from "@dbx-tools/shared-core";
 import type { IConstruct, IMixin as ConstructsMixin } from "constructs";

@@ -1,3 +1,4 @@
+import Cards from "@/pages/Cards";
 import Conversations from "@/pages/Conversations";
 import Stream from "@/pages/Stream";
 import { Button, Separator } from "@dbx-tools/ui-appkit/react";
@@ -28,6 +29,12 @@ const ROUTES: RouteDef[] = [
     label: "Conversations",
     description: "Multi-conversation storage with thread switcher",
     element: <Conversations />,
+  },
+  {
+    path: "/cards",
+    label: "Cards",
+    description: "A simulated Teams chat where the agent answers in Adaptive Cards",
+    element: <Cards />,
   },
 ];
 

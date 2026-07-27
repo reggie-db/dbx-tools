@@ -35,14 +35,12 @@
     "streamdown": "catalog:",
     "tailwindcss": "catalog:"
   },
-  "main": "index.ts",
   "license": "UNLICENSED",
   "publishConfig": {
     "access": "public"
   },
   "version": "0.0.0",
   "packageManager": "pnpm@10.33.0",
-  "types": "index.ts",
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",
@@ -50,6 +48,10 @@
     "./vite": "./src/vite.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "index.ts",
+    "src"
+  ],
   "dbxToolsConfig": {
     "tags": [
       "ui"

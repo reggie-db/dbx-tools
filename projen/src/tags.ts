@@ -8,7 +8,7 @@
  * reserved for the npm `@scope/` in package names.)
  *
  * Mixin factories live in {@link ./mixin}; package predicates live in {@link ./project}
- * ({@link projectPredicate.hasTag}, {@link projectPredicate.hasIdentifierPackageName}).
+ * ({@link projectPredicate.hasTag}).
  * The per-tag table is {@link WORKSPACE_TAG_MIXINS}. Apply with the constructs-native `project.with(...)`
  * across the subtree; the root applies built-in tag mixins during construction and
  * callers add their own afterward.
@@ -18,6 +18,7 @@ import { DependencyType, javascript } from "projen";
 import { addCliBinLaunchers } from "./cli-bin";
 import { create } from "./mixin";
 import {
+  addPackageFiles,
   applyCompilerOptions,
   applyExports,
   applyIncludes,
@@ -135,6 +136,9 @@ export const WORKSPACE_TAG_MIXINS = {
       ...srcModuleExports(p),
       "./package.json": "./package.json",
     });
+    // A CLI is the one shape whose entry point lives outside `src`, so its
+    // launchers have to be added to the tarball allowlist explicitly.
+    addPackageFiles(p, "bin");
   }),
   server: create(projectPredicate.hasTag("server"), (p) => {
     // A Node/Express service. tsoa's decorators (@Route/@Get/...) also drive
