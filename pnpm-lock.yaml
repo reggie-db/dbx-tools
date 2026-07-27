@@ -61,8 +61,8 @@ catalogs:
       specifier: ^5.0.5
       version: 5.0.6
     '@types/node':
-      specifier: ^24.6.0
-      version: 24.13.3
+      specifier: ^26.0.1
+      version: 26.1.2
     '@types/react':
       specifier: ^19.2.2
       version: 19.2.17
@@ -143,7 +143,7 @@ importers:
   .:
     devDependencies:
       '@dbx-tools/projen':
-        specifier: link:/Users/reggie.pierce/Projects/github-reggie-db/dbx-tools/projen
+        specifier: link:/home/dependabot/dependabot-updater/repo/projen
         version: link:projen
       '@dbx-tools/shared-core':
         specifier: workspace:*
@@ -198,7 +198,7 @@ importers:
         version: 1.7.0
       '@databricks/appkit':
         specifier: 'catalog:'
-        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.0))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.0))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@dbx-tools/appkit':
         specifier: workspace:*
         version: link:../../node/appkit
@@ -214,7 +214,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -242,7 +242,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -276,7 +276,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -301,10 +301,10 @@ importers:
     devDependencies:
       '@databricks/appkit':
         specifier: 'catalog:'
-        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -316,7 +316,7 @@ importers:
     dependencies:
       '@databricks/appkit':
         specifier: 'catalog:'
-        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@databricks/sdk-experimental':
         specifier: 'catalog:'
         version: 0.17.0
@@ -389,7 +389,7 @@ importers:
         version: 5.0.6
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       '@types/pg':
         specifier: ^8
         version: 8.15.6
@@ -404,7 +404,7 @@ importers:
     dependencies:
       '@databricks/appkit':
         specifier: 'catalog:'
-        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@dbx-tools/model':
         specifier: workspace:*
         version: link:../model
@@ -435,7 +435,7 @@ importers:
         version: 7.0.15
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -454,7 +454,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -479,7 +479,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -501,7 +501,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -513,7 +513,7 @@ importers:
     dependencies:
       '@databricks/appkit':
         specifier: 'catalog:'
-        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@dbx-tools/shared-core':
         specifier: workspace:*
         version: link:../../shared/core
@@ -541,7 +541,7 @@ importers:
         version: 7.0.15
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       '@types/nodemailer':
         specifier: ^7
         version: 7.0.12
@@ -569,10 +569,10 @@ importers:
     devDependencies:
       '@databricks/appkit':
         specifier: 'catalog:'
-        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -584,7 +584,7 @@ importers:
     dependencies:
       '@databricks/appkit':
         specifier: 'catalog:'
-        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@dbx-tools/appkit':
         specifier: workspace:*
         version: link:../appkit
@@ -600,7 +600,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -628,7 +628,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -640,7 +640,7 @@ importers:
     dependencies:
       '@databricks/appkit':
         specifier: 'catalog:'
-        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+        version: 0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       '@dbx-tools/shared-core':
         specifier: workspace:*
         version: link:../../shared/core
@@ -665,7 +665,7 @@ importers:
         version: 7.0.15
       '@types/node':
         specifier: 'catalog:'
-        version: 24.13.3
+        version: 26.1.2
       tsx:
         specifier: ^4.23.0
         version: 4.23.0
@@ -3805,6 +3805,9 @@ packages:
 
   '@types/node@24.13.3':
     resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+
+  '@types/node@26.1.2':
+    resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
 
   '@types/nodemailer@7.0.12':
     resolution: {integrity: sha512-80vKwiIsVSyFA1rRovH59jNPLBOuc6dRZIHEu40gXTkBkZnQv8vog1xSGEb9j5q/tdMAs5ivvDR2pLTU0hGHXA==}
@@ -7286,6 +7289,9 @@ packages:
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
+  undici-types@8.3.0:
+    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
+
   undici@7.28.0:
     resolution: {integrity: sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA==}
     engines: {node: '>=20.18.1'}
@@ -8005,7 +8011,7 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
 
-  '@databricks/appkit@0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.0))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)':
+  '@databricks/appkit@0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.0))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)':
     dependencies:
       '@ast-grep/napi': 0.37.0
       '@clack/prompts': 1.0.1
@@ -8040,7 +8046,7 @@ snapshots:
       pg: 8.18.0
       picocolors: 1.1.1
       semver: 7.7.3
-      vite: rolldown-vite@7.1.14(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@24.13.3)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+      vite: rolldown-vite@7.1.14(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.1.2)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       ws: 8.21.0(bufferutil@4.1.0)
       zod: 4.3.6
     transitivePeerDependencies:
@@ -8091,7 +8097,7 @@ snapshots:
       - utf-8-validate
       - yaml
 
-  '@databricks/appkit@0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@24.13.3)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)':
+  '@databricks/appkit@0.43.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@libsql/client@0.17.4(bufferutil@4.1.0))(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@types/node@26.1.2)(@types/pg@8.15.6)(bufferutil@4.1.0)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)':
     dependencies:
       '@ast-grep/napi': 0.37.0
       '@clack/prompts': 1.0.1
@@ -8126,7 +8132,7 @@ snapshots:
       pg: 8.18.0
       picocolors: 1.1.1
       semver: 7.7.3
-      vite: rolldown-vite@7.1.14(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@24.13.3)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+      vite: rolldown-vite@7.1.14(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.1.2)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
       ws: 8.21.0(bufferutil@4.1.0)
       zod: 4.3.6
     transitivePeerDependencies:
@@ -11772,6 +11778,10 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
+  '@types/node@26.1.2':
+    dependencies:
+      undici-types: 8.3.0
+
   '@types/nodemailer@7.0.12':
     dependencies:
       '@types/node': 24.13.3
@@ -15229,7 +15239,7 @@ snapshots:
 
   robust-predicates@3.0.3: {}
 
-  rolldown-vite@7.1.14(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@24.13.3)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0):
+  rolldown-vite@7.1.14(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@types/node@26.1.2)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0):
     dependencies:
       '@oxc-project/runtime': 0.92.0
       fdir: 6.5.0(picomatch@4.0.5)
@@ -15239,7 +15249,7 @@ snapshots:
       rolldown: 1.0.0-beta.41(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 24.13.3
+      '@types/node': 26.1.2
       fsevents: 2.3.3
       jiti: 2.7.0
       tsx: 4.23.0
@@ -15767,6 +15777,8 @@ snapshots:
       which-boxed-primitive: 1.1.1
 
   undici-types@7.18.2: {}
+
+  undici-types@8.3.0: {}
 
   undici@7.28.0: {}
 
