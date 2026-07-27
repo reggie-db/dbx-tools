@@ -26,7 +26,16 @@ function withBase(sitePath) {
 
 const rm = (p) => fs.rmSync(p, { recursive: true, force: true });
 const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
-const read = (p) => fs.readFileSync(p, "utf8");
+/**
+ * Content fenced off as GitHub-only. A README is both the repo landing page and
+ * the source of a generated page here, so anything that only makes sense on
+ * GitHub - the link TO this site, most obviously - is fenced rather than
+ * duplicated into the site as a self-reference.
+ */
+const DOCS_IGNORE =
+  /[ \t]*<!--\s*docs-site:ignore:start\s*-->[\s\S]*?<!--\s*docs-site:ignore:end\s*-->[ \t]*\n*/g;
+
+const read = (p) => fs.readFileSync(p, "utf8").replace(DOCS_IGNORE, "");
 const write = (p, text) => {
   mkdir(path.dirname(p));
   fs.writeFileSync(p, text);

@@ -1,3 +1,10 @@
+<!-- docs-site:ignore:start -->
+
+**[Documentation](https://reggie-db.github.io/dbx-tools/)** - full package
+reference, guides, and API docs.
+
+<!-- docs-site:ignore:end -->
+
 # dbx-tools
 
 Companion packages for Databricks developers building Databricks Apps, AppKit

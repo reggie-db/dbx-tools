@@ -182,6 +182,12 @@ Docs site rules:
 - Generated files under `.docs-build/` are build artifacts; never commit them.
 - If navigation is wrong, update the generator. If prose is wrong, update the
   source README.
+- Content that belongs on GitHub but not on the site goes between
+  `<!-- docs-site:ignore:start -->` and `<!-- docs-site:ignore:end -->`. The
+  generator's `read()` strips those blocks from every source it loads, so a
+  README stays one file instead of forking into a repo version and a site
+  version. The root README's link TO the site is the reason this exists: on the
+  site it would be a self-reference. Works in any README, not just the root.
 
 ## Native AppKit overlap guidance
 
