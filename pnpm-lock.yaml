@@ -94,8 +94,8 @@ catalogs:
       specifier: ^5.1.0
       version: 5.2.1
     lucide-react:
-      specifier: ^0.554.0
-      version: 0.554.0
+      specifier: ^1.21.0
+      version: 1.27.0
     marked:
       specifier: ^18.0.5
       version: 18.0.5
@@ -143,7 +143,7 @@ importers:
   .:
     devDependencies:
       '@dbx-tools/projen':
-        specifier: link:/Users/reggie.pierce/Projects/github-reggie-db/dbx-tools/projen
+        specifier: link:/home/dependabot/dependabot-updater/repo/projen
         version: link:projen
       '@dbx-tools/shared-core':
         specifier: workspace:*
@@ -908,7 +908,7 @@ importers:
         version: link:../appkit
       lucide-react:
         specifier: 'catalog:'
-        version: 0.554.0(react@19.2.7)
+        version: 1.27.0(react@19.2.7)
       react:
         specifier: 'catalog:'
         version: 19.2.7
@@ -972,7 +972,7 @@ importers:
         version: 3.0.5(echarts@6.0.0)(react@19.2.7)
       lucide-react:
         specifier: 'catalog:'
-        version: 0.554.0(react@19.2.7)
+        version: 1.27.0(react@19.2.7)
       marked:
         specifier: 'catalog:'
         version: 18.0.5
@@ -5978,6 +5978,11 @@ packages:
 
   lucide-react@0.554.0:
     resolution: {integrity: sha512-St+z29uthEJVx0Is7ellNkgTEhaeSoA42I7JjOCBCrc5X6LYMGSv0P/2uS5HDLTExP5tpiqRD2PyUEOS6s9UXA==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  lucide-react@1.27.0:
+    resolution: {integrity: sha512-rJicGl/3Fly/E0rOH1YmPZ6e49JCnKknh1ox1vpHnkfjujAkKA6sqUZvH3MTAaXXjgexyUwgNwTJzTtYuAFYJw==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -14148,6 +14153,10 @@ snapshots:
       yallist: 3.1.1
 
   lucide-react@0.554.0(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+
+  lucide-react@1.27.0(react@19.2.7):
     dependencies:
       react: 19.2.7
 
