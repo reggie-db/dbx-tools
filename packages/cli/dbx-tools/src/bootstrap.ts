@@ -5,16 +5,42 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { intro, outro } from "@clack/prompts";
 import { exec } from "@dbx-tools/core";
 import { json } from "@dbx-tools/shared-core";
 import { resolvePnpmArgv, runPnpm } from "./pnpm";
 import { rootLabel } from "./root";
 
-// Pin to `@latest` explicitly: a bare `@dbx-tools/projen` can land on a stray
-// `0.0.0` (whose `^0.0.0` caret then can't reach any real release), leaving the
-// workspace on a stale engine. `@latest` always takes the newest published.
-const DEFAULT_PROJEN_SPECIFIER = "@dbx-tools/projen@latest";
+/** Fallback when this CLI's own version isn't a real release (an in-repo `0.0.0`). */
+const FALLBACK_PROJEN_SPECIFIER = "@dbx-tools/projen@latest";
+
+/**
+ * Install the engine at THIS CLI's own version. The two are released together by
+ * the root `bump`, so the matching engine always exists on the registry.
+ *
+ * Not `@latest`, and not a bare `@dbx-tools/projen`. A bare specifier can land on
+ * a stray `0.0.0`, whose `^0.0.0` caret then reaches no real release. `@latest`
+ * has a subtler failure: pnpm 11 applies a `minimumReleaseAge` delay, so for the
+ * first day after a release it deliberately resolves a dist-tag to the newest
+ * version OLDER than the threshold and merely notes the newer one
+ * (`+ @dbx-tools/projen 0.1.24 (0.3.42 is available)`). A bootstrap run right
+ * after a release therefore installed a months-old engine against a current CLI,
+ * which is how `sync --watch` died on an engine predating its `concurrently`
+ * dependency. An explicit range admits only the version we want, so the age
+ * heuristic has nothing older to fall back to.
+ */
+function defaultProjenSpecifier(): string {
+  try {
+    const manifestPath = fileURLToPath(new URL("../package.json", import.meta.url));
+    const version = json.parseRecord(readFileSync(manifestPath, "utf8"))?.version;
+    return typeof version === "string" && version !== "0.0.0"
+      ? `@dbx-tools/projen@^${version}`
+      : FALLBACK_PROJEN_SPECIFIER;
+  } catch {
+    return FALLBACK_PROJEN_SPECIFIER;
+  }
+}
 
 // Reach the class through its module NAMESPACE. Current engines also hoist it
 // flat, but every engine ever published exports the namespace, and this template
@@ -49,7 +75,7 @@ allowBuilds:
  */
 export function bootstrapWorkspace(
   root: string,
-  projenSpecifier: string = DEFAULT_PROJEN_SPECIFIER,
+  projenSpecifier: string = defaultProjenSpecifier(),
 ): void {
   intro(`Bootstrapping dbx-tools workspace in ${rootLabel(root)}`);
 
@@ -75,7 +101,7 @@ export function bootstrapWorkspace(
  */
 export function seedToolchain(
   root: string,
-  projenSpecifier: string = DEFAULT_PROJEN_SPECIFIER,
+  projenSpecifier: string = defaultProjenSpecifier(),
 ): void {
   const manifestPath = join(root, "package.json");
   if (!existsSync(manifestPath)) {

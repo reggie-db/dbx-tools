@@ -742,6 +742,19 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   it (a `sync --watch` died on the engine's then-undeclared `concurrently`).
   Releasing the engine alone is still `cd projen && pnpm run bump`; nothing about
   the version numbers being equal means a package change implies an engine change.
+- **Never install a just-released version through a dist-tag.** pnpm 11 enforces a
+  `minimumReleaseAge` delay, so for roughly a day after a publish `@latest`
+  resolves to the newest version OLDER than the threshold and only NOTES the new
+  one: `+ @dbx-tools/projen 0.1.24 (0.3.42 is available)`. It is not a cache -
+  clearing `~/Library/Caches/pnpm/**/metadata` changes nothing, and the registry's
+  `dist-tags` correctly say `0.3.42` the whole time. An explicit range admits only
+  the version you want, leaving the heuristic nothing older to fall back to, so
+  `bootstrap.ts` asks for `@dbx-tools/projen@^<this CLI's own version>` (see
+  `defaultProjenSpecifier`) rather than `@latest`. That is only sound because the
+  root bump releases both at ONE version - if the two ever diverge again, this
+  specifier starts requesting an engine that was never published. `--config.minimumReleaseAge=0`
+  overrides it ad hoc, but do not bake that into any shipped command; it exists to
+  blunt a supply-chain attack.
 - **The engine's `@dbx-tools/*` deps must be a REAL published range, never `*`.**
   `projen/.pnpmfile.cjs` rewrites them to `link:../packages/...` in-repo, so the
   declared range is inert here and drifts unnoticed - but it ships verbatim in
