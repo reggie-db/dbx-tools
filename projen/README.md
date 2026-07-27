@@ -55,11 +55,16 @@ projectApi.applyToProjects(project, { tags: "shared" }, (pkg) => {
 project.synth();
 ```
 
-`applyToProjects` AND-s its `{ identifierName, tags, path }` globs (prefix a glob
-with `!` to negate) into one predicate over the DBXTools child packages, then
-applies it as a `constructs` mixin across the subtree. Drop to
-`mixin.create(predicate, fn)` + `project.with(...)` only when you need a
-predicate those three filters cannot express.
+`applyToProjects` AND-s its globs (prefix a glob with `!` to negate) into one
+predicate over the DBXTools child packages, then applies it as a `constructs`
+mixin across the subtree. Filter on the folder (`path`), the tags (`tags`), or
+the name from whichever angle fits: `name` matches the raw projen name verbatim,
+while `identifierPackageName`, `identifierScope`, and `identifierName` match the
+parsed `@scope/name`, its scope, and its unscoped half. Two flags widen the
+selection past DBXTools children - `includeRoots` for the tree root and
+`includeNonDBXToolsProjects` for plain projen projects (which widens the callback
+parameter to `Project`). Drop to `mixin.create(predicate, fn)` +
+`project.with(...)` only when you need a predicate the filters cannot express.
 
 Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
 `ui`, and `openapi`. Repo-specific mixins layer package-specific dependencies,

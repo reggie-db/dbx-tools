@@ -1018,11 +1018,25 @@ function preSynthesizeProject(project: javascript.NodeProject): void {
  * helper - prefix a glob with `!` to negate it. Omitted filters impose no
  * constraint.
  *
- * The selection is always DBXTools CHILD projects: plain projen `Project`s and
- * tree roots never match, so the callback receives the richer
- * {@link DBXToolsProject} type.
+ * By default the selection is DBXTools CHILD projects, so the callback receives
+ * the richer {@link DBXToolsProject} type; `includeNonDBXToolsProjects` and
+ * `includeRoots` widen it.
  */
 export interface ApplyToProjectsOptions {
+  /**
+   * Include non-DBXTools projects (plain projen `Project`s) in the selection.
+   * Defaults to `false` - only {@link DBXToolsProject}s match, so the callback
+   * receives the richer type.
+   */
+  includeNonDBXToolsProjects?: boolean;
+  /** Include tree ROOT projects (those with no parent). Defaults to `false` (children only). */
+  includeRoots?: boolean;
+  /** Match the raw projen {@link Project.name} verbatim ({@link projectPredicate.hasName}). */
+  name?: PathMatchInput | OneOrMany<PathMatchInput>;
+  /** Match the parsed full npm name `@scope/name` ({@link projectPredicate.hasIdentifierPackageName}). */
+  identifierPackageName?: PathMatchInput | OneOrMany<PathMatchInput>;
+  /** Match the parsed npm scope ({@link projectPredicate.hasIdentifierScope}). */
+  identifierScope?: PathMatchInput | OneOrMany<PathMatchInput>;
   /** Match the parsed unscoped name ({@link projectPredicate.hasIdentifierName}). */
   identifierName?: PathMatchInput | OneOrMany<PathMatchInput>;
   /** Match every listed tag on `dbxToolsConfig.tags` ({@link projectPredicate.hasTag}). */
@@ -1031,6 +1045,16 @@ export interface ApplyToProjectsOptions {
   path?: PathMatchInput | OneOrMany<PathMatchInput>;
 }
 
+/** {@link ApplyToProjectsOptions} for the default DBXTools-only selection (callback gets {@link DBXToolsProject}). */
+type ApplyToDBXToolsProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
+  includeNonDBXToolsProjects?: false;
+};
+
+/** {@link ApplyToProjectsOptions} opting into all projen projects (callback gets the base {@link Project}). */
+type ApplyToAllProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXToolsProjects"> & {
+  includeNonDBXToolsProjects: true;
+};
+
 /**
  * Run one or more callbacks against every project in `construct`'s subtree that
  * matches the given {@link ApplyToProjectsOptions} filters - the ergonomic
@@ -1038,7 +1062,9 @@ export interface ApplyToProjectsOptions {
  * predicate from the options and applies it via `construct.with(...)`.
  *
  * Call with just callback(s) to match every DBXTools child project, or pass an
- * options object first to narrow by name/tag/path.
+ * options object first to narrow by name/scope/tag/path. With
+ * `includeNonDBXToolsProjects: true` the callbacks receive the base
+ * {@link Project}; otherwise they receive the narrowed {@link DBXToolsProject}.
  *
  * @example
  * // Add a dep to one package selected by unscoped name + tag:
@@ -1054,17 +1080,38 @@ export interface ApplyToProjectsOptions {
 export function applyToProjects(
   construct: IConstruct,
   ...args:
-    | [ApplyToProjectsOptions, ...OneOrMany<(project: DBXToolsProject) => void>]
+    | [ApplyToDBXToolsProjectsOptions, ...OneOrMany<(project: DBXToolsProject) => void>]
     | OneOrMany<(project: DBXToolsProject) => void>
+): void;
+
+export function applyToProjects(
+  construct: IConstruct,
+  ...args: [ApplyToAllProjectsOptions, ...OneOrMany<(project: Project) => void>]
+): void;
+
+export function applyToProjects<P extends Project>(
+  construct: IConstruct,
+  ...args:
+    [ApplyToProjectsOptions, ...OneOrMany<(project: P) => void>] | OneOrMany<(project: P) => void>
 ): void {
   const [first, ...rest] = args;
   const hasOptions = typeof first !== "function";
   const options = hasOptions ? (first as ApplyToProjectsOptions) : undefined;
   const callbacks = (hasOptions ? rest : args) as OneOrMany<(project: Project) => void>;
-  let pred = projectPredicate
-    .isProject()
-    .and(projectPredicate.isDBXToolsProject())
-    .and((p) => p.parent != null);
+  let pred = projectPredicate.isProject();
+  if (!options?.includeNonDBXToolsProjects) pred = pred.and(projectPredicate.isDBXToolsProject());
+  if (!options?.includeRoots) pred = pred.and((p) => p.parent != null);
+  if (options?.identifierPackageName)
+    pred = pred.and(
+      projectPredicate.hasIdentifierPackageName(
+        ...object.toOneOrMany(options.identifierPackageName),
+      ),
+    );
+  if (options?.name) pred = pred.and(projectPredicate.hasName(...object.toOneOrMany(options.name)));
+  if (options?.identifierScope)
+    pred = pred.and(
+      projectPredicate.hasIdentifierScope(...object.toOneOrMany(options.identifierScope)),
+    );
   if (options?.identifierName)
     pred = pred.and(
       projectPredicate.hasIdentifierName(...object.toOneOrMany(options.identifierName)),

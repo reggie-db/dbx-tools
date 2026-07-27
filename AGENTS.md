@@ -500,7 +500,10 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   `match.toPathMatcher`, `→ Project`), `projectPredicate.hasTag(tag, ...tags)` (all tags
   required, `→ DBXToolsProject`), and `projectPredicate.hasPath("workspaces/**", ...)`
   (root-relative folder glob, `→ Project`), plus the `isProject()` /
-  `isDBXToolsProject()` guards. Compose them with `.and()`/`.or()`/`.negate()` - e.g.
+  `isDBXToolsProject()` guards. Three more match the name from a different angle:
+  `hasName` (the RAW projen `project.name`, verbatim, no `PackageIdentifier`
+  normalizing), `hasIdentifierPackageName` (the parsed full `@scope/name`), and
+  `hasIdentifierScope` (the parsed scope alone). Compose them with `.and()`/`.or()`/`.negate()` - e.g.
   `projectPredicate.hasIdentifierName("shared-core").and(projectPredicate.hasTag("node"))`
   - keeping `hasTag` in the same `.and(...)` (or last when chaining) so its
     `DBXToolsProject` narrowing survives (a later non-tag `.and` re-widens to `Project`).
@@ -508,9 +511,13 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
     `construct.with(...)`. A `FileBase` guard as the predicate targets any generated file.
     **`project.applyToProjects(construct, options?, ...callbacks)` is the ergonomic
     front-end** and what `.projenrc.ts` actually uses: it AND-s the
-    `{ identifierName, tags, path }` globs into one predicate (each a glob or list,
-    `!` to negate), always scoped to DBXTools CHILD projects, then applies the mixin
-    for you. The root applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
+    `{ name, identifierPackageName, identifierScope, identifierName, tags, path }`
+    globs into one predicate (each a glob or list, `!` to negate), then applies the
+    mixin for you. Selection defaults to DBXTools CHILD projects, so the callback
+    receives the richer `DBXToolsProject`; `includeRoots: true` adds the parentless
+    tree root, and `includeNonDBXToolsProjects: true` adds plain projen `Project`s
+    and (via an overload) widens the callback parameter to `Project`, which drops
+    `dbxToolsConfig`. The root applies the built-in tag mixins (**`WORKSPACE_TAG_MIXINS`**,
     `tags.ts`) during its own construction, selected by the `defaultTagMixins` option
     (omit = all, `false` = none, or a subset list) - e.g. the `server` mixin adds
     `express`/`tsoa` + `dev`/`start` tasks. Consumers apply their own AFTER
@@ -541,7 +548,7 @@ projen/                                   # the projen engine (`@dbx-tools/proje
   index.ts                                # generated barrel (public API surface)
   src/
     project.ts                            # DBXToolsProject + DBXToolsNode/TypeScriptProject + PackageIdentifier/naming, applyToProjects, applyCompilerOptions/applyTasks, SHARED_COMPILER_OPTIONS, root init
-    project-predicate.ts                  # projectPredicate namespace (isProject/isDBXToolsProject/hasIdentifierName/hasTag/hasPath, .and/.or/.negate)
+    project-predicate.ts                  # projectPredicate namespace (isProject/isDBXToolsProject/hasName/hasIdentifierPackageName/hasIdentifierScope/hasIdentifierName/hasTag/hasPath, .and/.or/.negate)
     mixin.ts                              # mixin.create() factory (tag table lives in tags.ts)
     pnpm-workspace.ts                     # PnpmWorkspaceState (options for projen's native PnpmWorkspaceYaml) + Catalog/DEFAULT_CATALOG + AllowBuilds/DEFAULT_ALLOW_BUILDS + DEFAULT_WORKSPACE_YAML
     tags.ts                               # WORKSPACE_TAG_MIXINS (one IMixin per tag) + AGNOSTIC_COMPILER_OPTIONS
@@ -758,9 +765,7 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `root.github?.actions.set(...)` rewrites every `uses:` at synth via projen's
   `GitHubActionsProvider`, so the generated workflows carry commit SHAs while
   the source of truth stays in one place. Bump a pin by editing the SHA there
-  and re-synthing. This is also why Dependabot is scoped to `npm` only: a
-  `github-actions` PR would edit generated workflow files, and the next synth
-  reverts it, failing the build's self-mutation check. First-party `actions/*`
+  and re-synthing. First-party `actions/*`
   intentionally stay on major tags.
 - **CI installs are frozen everywhere EXCEPT `build.yml`.** `release`,
   `projen-release`, and `docs` use `--frozen-lockfile` so a publish or deploy
