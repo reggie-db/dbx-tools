@@ -2,10 +2,10 @@ import { Stats } from "fs";
 import { isAbsolute, relative, resolve } from "path";
 import { ChokidarOptions, MatchFunction, watch } from "chokidar";
 import { hasMagic } from "glob";
-import { findFiles, type FileFindOptions } from "./find";
-import { ignorePathMatcher } from "./ignore";
-import { pathMatchTests } from "./match";
-import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan";
+import { findFiles, type FileFindOptions } from "./find.ts";
+import { ignorePathMatcher } from "./ignore.ts";
+import { pathMatchTests } from "./match.ts";
+import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan.ts";
 
 export interface FileWatchOptions
   extends Omit<ChokidarOptions, "ignored">, Omit<FileScanOptions, "ignore"> {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ValidationError } from "@databricks/appkit";
-import { nextPollDelay, parsePort, parseSslMode, pollDelay } from "../src/lakebase-resolver";
+import { nextPollDelay, parsePort, parseSslMode, pollDelay } from "../src/lakebase-resolver.ts";
 
 describe("PGPORT validation", () => {
   it("accepts a numeric string and a number", () => {

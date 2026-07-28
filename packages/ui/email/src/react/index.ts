@@ -10,8 +10,8 @@ export {
   EmailPreview,
   type EmailApprovalCardProps,
   type EmailPreviewProps,
-} from "./email-approval-card";
-export { EmailBody, type EmailBodyProps } from "./email-body";
-export { EmailComposeView, type EmailComposeProps } from "./email-compose";
-export { attachmentNames, joinAddresses, parseAddresses } from "./fields";
-export type { EmailDraft } from "./fields";
+} from "./email-approval-card.tsx";
+export { EmailBody, type EmailBodyProps } from "./email-body.tsx";
+export { EmailComposeView, type EmailComposeProps } from "./email-compose.tsx";
+export { attachmentNames, joinAddresses, parseAddresses } from "./fields.ts";
+export type { EmailDraft } from "./fields.ts";

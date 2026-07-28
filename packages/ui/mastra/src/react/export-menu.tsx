@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
 } from "@dbx-tools/ui-appkit/react";
 import { DownloadIcon, FileTextIcon } from "lucide-react";
-import type { ExportFormat } from "../support/export";
+import type { ExportFormat } from "../support/export.ts";
 
 // Shared export affordance: a download button that opens a small menu of
 // output formats. Reused for both the whole-conversation export (header,

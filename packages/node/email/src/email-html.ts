@@ -22,8 +22,8 @@
 
 import { string } from "@dbx-tools/shared-core";
 import juice from "juice";
-import type { EmailBrand } from "./brand";
-import { markdownToHtml } from "./markdown";
+import type { EmailBrand } from "./brand.ts";
+import { markdownToHtml } from "./markdown.ts";
 
 /**
  * Rendered height of the header logo. Fixed rather than intrinsic because

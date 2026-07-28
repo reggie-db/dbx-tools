@@ -27,8 +27,8 @@ import type { RequestContext } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
-import type { MastraPluginConfig } from "./config";
-import { buildModel } from "./model";
+import type { MastraPluginConfig } from "./config.ts";
+import { buildModel } from "./model.ts";
 
 /** Fast / small chat tier used for both titling and summaries. */
 const SUMMARY_MODEL_CLASS = model.ModelClass.ChatFast;

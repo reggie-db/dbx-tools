@@ -5,9 +5,9 @@ import type {
   PendingApproval,
   QueuedSteer,
   ToolEvent,
-} from "../react/types";
+} from "../react/types.ts";
 
-export type { QueuedSteer } from "../react/types";
+export type { QueuedSteer } from "../react/types.ts";
 
 /** Session-scoped transcript + stream state for one conversation thread. */
 export type ThreadSession = {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { rewriteServingResponseBody } from "../src/serving-sanitize";
+import { rewriteServingResponseBody } from "../src/serving-sanitize.ts";
 
 /**
  * Trimmed copy of a real Databricks-hosted Gemini reply: `content` is the

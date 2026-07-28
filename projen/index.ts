@@ -2,55 +2,95 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as barrels from "./src/barrels";
-export * as clean from "./src/clean";
-export * as cliBin from "./src/cli-bin";
-export * as codegen from "./src/codegen";
-export * as dbxToolsConfig from "./src/dbx-tools-config";
-export * as engineRoot from "./src/engine-root";
-export * as generated from "./src/generated";
-export * as mixin from "./src/mixin";
-export * as moduleExports from "./src/module-exports";
-export * as openapi from "./src/openapi";
-export * as packages from "./src/packages";
-export * as pnpmWorkspace from "./src/pnpm-workspace";
-export * as project from "./src/project";
-export * as projectPredicate from "./src/project-predicate";
-export * as release from "./src/release";
-export * as scaffold from "./src/scaffold";
-export * as tags from "./src/tags";
-export * as tsconfig from "./src/tsconfig";
-export * as vite from "./src/vite";
-export * as vscode from "./src/vscode";
-export * as watch from "./src/watch";
-export { generateBarrels } from "./src/barrels";
-export { listGeneratedFiles, listNodeModulesDirs, removePaths } from "./src/clean";
-export { CliBinLauncher, addCliBinLaunchers } from "./src/cli-bin";
-export { generateCodegen } from "./src/codegen";
-export { DBXToolsConfig } from "./src/dbx-tools-config";
-export type { DBXToolsConfigOptions } from "./src/dbx-tools-config";
-export { resolvePkgRoot } from "./src/engine-root";
-export { makeWritable, makeReadonly, isReadonly, header, stampGenerated } from "./src/generated";
-export type { HeaderOpts } from "./src/generated";
-export { create } from "./src/mixin";
-export type { ConstructsMixin } from "./src/mixin";
-export { moduleStatements } from "./src/module-exports";
-export type { ModuleStatement, ModuleExport } from "./src/module-exports";
-export { isTsoaController, generateOpenapi } from "./src/openapi";
-export { repoRoot, DEFAULT_PACKAGE_ROOTS, projectName, toPosix, isGeneratedFile, isModuleFile, DiscoveredPackage, scanPackages, readPackageManifest, syncResynthPaths, recordedPackages, recordedRoots } from "./src/packages";
-export type { RecordedPackage } from "./src/packages";
-export { PnpmWorkspaceState } from "./src/pnpm-workspace";
-export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace";
-export { PackageIdentifier, identifier, applyCompilerOptions, applyIncludes, applyTasks, applyExports, addExports, addPackageFiles, srcModuleExports, PROJEN_VERSION, DBXToolsNodeProject, DBXToolsTypeScriptProject, taskScript, applyToProjects } from "./src/project";
-export type { DBXToolsProject, DBXToolsProjectOptions, DBXToolsTypeScriptProjectOptions, ApplyToProjectsOptions } from "./src/project";
-export { isProject, isDBXToolsProject, hasName, hasIdentifierPackageName, hasIdentifierName, hasIdentifierScope, hasTag, hasPath } from "./src/project-predicate";
-export { DBXToolsRelease } from "./src/release";
-export type { StandaloneRelease, DBXToolsReleaseOptions } from "./src/release";
-export { runSynth } from "./src/scaffold";
-export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags";
-export type { PackageTag } from "./src/tags";
-export { DBXToolsRootTsconfig } from "./src/tsconfig";
-export { ViteConfigFile } from "./src/vite";
-export { DBXToolsVsCode } from "./src/vscode";
-export { watchRoots, watchLoop } from "./src/watch";
-export type { IgnoreGroupOptions } from "./src/watch";
+export * as barrels from "./src/barrels.ts";
+export * as clean from "./src/clean.ts";
+export * as codegen from "./src/codegen.ts";
+export * as dbxToolsConfig from "./src/dbx-tools-config.ts";
+export * as engineRoot from "./src/engine-root.ts";
+export * as generated from "./src/generated.ts";
+export * as mixin from "./src/mixin.ts";
+export * as moduleExports from "./src/module-exports.ts";
+export * as openapi from "./src/openapi.ts";
+export * as packages from "./src/packages.ts";
+export * as pnpmWorkspace from "./src/pnpm-workspace.ts";
+export * as project from "./src/project.ts";
+export * as projectPredicate from "./src/project-predicate.ts";
+export * as release from "./src/release.ts";
+export * as scaffold from "./src/scaffold.ts";
+export * as tags from "./src/tags.ts";
+export * as tsconfig from "./src/tsconfig.ts";
+export * as vite from "./src/vite.ts";
+export * as vscode from "./src/vscode.ts";
+export * as watch from "./src/watch.ts";
+export { generateBarrels } from "./src/barrels.ts";
+export { listGeneratedFiles, listNodeModulesDirs, removePaths } from "./src/clean.ts";
+export { generateCodegen } from "./src/codegen.ts";
+export { DBXToolsConfig } from "./src/dbx-tools-config.ts";
+export type { DBXToolsConfigOptions } from "./src/dbx-tools-config.ts";
+export { resolvePkgRoot } from "./src/engine-root.ts";
+export { makeWritable, makeReadonly, isReadonly, header, stampGenerated } from "./src/generated.ts";
+export type { HeaderOpts } from "./src/generated.ts";
+export { create } from "./src/mixin.ts";
+export type { ConstructsMixin } from "./src/mixin.ts";
+export { moduleStatements } from "./src/module-exports.ts";
+export type { ModuleStatement, ModuleExport } from "./src/module-exports.ts";
+export { isTsoaController, generateOpenapi } from "./src/openapi.ts";
+export {
+  repoRoot,
+  DEFAULT_PACKAGE_ROOTS,
+  projectName,
+  toPosix,
+  isGeneratedFile,
+  isModuleFile,
+  DiscoveredPackage,
+  scanPackages,
+  readPackageManifest,
+  syncResynthPaths,
+  recordedPackages,
+  recordedRoots,
+} from "./src/packages.ts";
+export type { RecordedPackage } from "./src/packages.ts";
+export { PnpmWorkspaceState } from "./src/pnpm-workspace.ts";
+export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace.ts";
+export {
+  PackageIdentifier,
+  identifier,
+  applyCompilerOptions,
+  applyIncludes,
+  applyTasks,
+  applyExports,
+  addExports,
+  addPackageFiles,
+  srcModuleExports,
+  PROJEN_VERSION,
+  DBXToolsNodeProject,
+  DBXToolsTypeScriptProject,
+  taskScript,
+  applyToProjects,
+} from "./src/project.ts";
+export type {
+  DBXToolsProject,
+  DBXToolsProjectOptions,
+  DBXToolsTypeScriptProjectOptions,
+  ApplyToProjectsOptions,
+} from "./src/project.ts";
+export {
+  isProject,
+  isDBXToolsProject,
+  hasName,
+  hasIdentifierPackageName,
+  hasIdentifierName,
+  hasIdentifierScope,
+  hasTag,
+  hasPath,
+} from "./src/project-predicate.ts";
+export { DBXToolsRelease } from "./src/release.ts";
+export type { StandaloneRelease, DBXToolsReleaseOptions } from "./src/release.ts";
+export { runSynth } from "./src/scaffold.ts";
+export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
+export type { PackageTag } from "./src/tags.ts";
+export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";
+export { ViteConfigFile } from "./src/vite.ts";
+export { DBXToolsVsCode } from "./src/vscode.ts";
+export { watchRoots, watchLoop } from "./src/watch.ts";
+export type { IgnoreGroupOptions } from "./src/watch.ts";

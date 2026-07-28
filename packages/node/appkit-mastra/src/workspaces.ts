@@ -21,8 +21,8 @@ import {
   type WorkspaceFilesystem,
 } from "@mastra/core/workspace";
 
-import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY, type User } from "./config";
-import { DatabricksWorkspaceFilesystem, emptyFilesystem } from "./filesystems";
+import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY, type User } from "./config.ts";
+import { DatabricksWorkspaceFilesystem, emptyFilesystem } from "./filesystems.ts";
 
 /* ------------------------------ constants ------------------------------ */
 

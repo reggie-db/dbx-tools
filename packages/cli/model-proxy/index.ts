@@ -2,14 +2,14 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as backend from "./src/backend";
-export * as cli from "./src/cli";
-export * as defaults from "./src/defaults";
-export * as server from "./src/server";
-export { DatabricksBackend } from "./src/backend";
-export type { BackendOptions } from "./src/backend";
-export { buildProgram, runCli, CommanderError } from "./src/cli";
-export { DEFAULT_BIND_HOST, DEFAULT_PORT, DEFAULT_RETRY, resolveRetryConfig } from "./src/defaults";
-export type { RetryConfig } from "./src/defaults";
-export { createProxyServer, parseRetryAfterMs, backoffDelayMs, startProxyServer } from "./src/server";
-export type { ProxyServerOptions, StartProxyOptions } from "./src/server";
+export * as backend from "./src/backend.ts";
+export * as cli from "./src/cli.ts";
+export * as defaults from "./src/defaults.ts";
+export * as server from "./src/server.ts";
+export { DatabricksBackend } from "./src/backend.ts";
+export type { BackendOptions } from "./src/backend.ts";
+export { buildProgram, runCli, CommanderError } from "./src/cli.ts";
+export { DEFAULT_BIND_HOST, DEFAULT_PORT, DEFAULT_RETRY, resolveRetryConfig } from "./src/defaults.ts";
+export type { RetryConfig } from "./src/defaults.ts";
+export { createProxyServer, parseRetryAfterMs, backoffDelayMs, startProxyServer } from "./src/server.ts";
+export type { ProxyServerOptions, StartProxyOptions } from "./src/server.ts";

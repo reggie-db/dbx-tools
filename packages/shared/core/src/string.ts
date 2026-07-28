@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { fnvHashWithOptions } from "./hash";
+import { fnvHashWithOptions } from "./hash.ts";
 
 /**
  * Options controlling {@link tokenizeWithOptions}. All default off except

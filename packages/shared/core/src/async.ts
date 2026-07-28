@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { deepEqual } from "./object";
+import { deepEqual } from "./object.ts";
 
 /**
  * Per-iteration context handed to {@link PollProducer} and the

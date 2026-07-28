@@ -2,6 +2,6 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as email from "./src/email";
-export { emailAttachmentSchema, emailMessageSchema, emailResultSchema, emailSendersSchema } from "./src/email";
-export type { EmailAttachment, EmailMessage, EmailResult, EmailSenders } from "./src/email";
+export * as email from "./src/email.ts";
+export { emailAttachmentSchema, emailMessageSchema, emailResultSchema, emailSendersSchema } from "./src/email.ts";
+export type { EmailAttachment, EmailMessage, EmailResult, EmailSenders } from "./src/email.ts";

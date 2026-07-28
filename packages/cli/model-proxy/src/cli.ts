@@ -23,9 +23,9 @@ import type { Server } from "node:http";
 import { classify, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { Command, CommanderError } from "commander";
 
-import { DatabricksBackend, type BackendOptions } from "./backend";
-import { DEFAULT_BIND_HOST, DEFAULT_PORT, resolveRetryConfig } from "./defaults";
-import { startProxyServer } from "./server";
+import { DatabricksBackend, type BackendOptions } from "./backend.ts";
+import { DEFAULT_BIND_HOST, DEFAULT_PORT, resolveRetryConfig } from "./defaults.ts";
+import { startProxyServer } from "./server.ts";
 
 /**
  * Default terminal client for `chat`, launched via `bunx`. OpenHarness is an

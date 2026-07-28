@@ -11,7 +11,7 @@ import {
   runCardTurn,
   type AgentResult,
   type CardAgentLike,
-} from "../src/conversation";
+} from "../src/conversation.ts";
 
 /**
  * Agent stub recording every call, so a turn's inputs are assertable.

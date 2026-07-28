@@ -6,8 +6,8 @@
     "directory": "packages/cli/appkit-env"
   },
   "bin": {
-    "dbx-tools-appkit-env": "./bin/dbx-tools-appkit-env.mjs",
-    "dbxt-appkit-env": "./bin/dbx-tools-appkit-env.mjs"
+    "dbx-tools-appkit-env": "./bin/dbx-tools-appkit-env.ts",
+    "dbxt-appkit-env": "./bin/dbx-tools-appkit-env.ts"
   },
   "scripts": {
     "build": "projen build",
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
@@ -30,8 +31,7 @@
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
-    "commander": "catalog:",
-    "tsx": "catalog:"
+    "commander": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -39,6 +39,10 @@
     "access": "public",
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
+    "bin": {
+      "dbx-tools-appkit-env": "./lib/bin/dbx-tools-appkit-env.js",
+      "dbxt-appkit-env": "./lib/bin/dbx-tools-appkit-env.js"
+    },
     "exports": {
       ".": {
         "types": "./lib/index.d.ts",

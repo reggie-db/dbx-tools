@@ -39,7 +39,7 @@
 
 import { error, hash, json, log, object, string } from "@dbx-tools/shared-core";
 import { activity as activityContract, card } from "@dbx-tools/shared-teams";
-import { buildAdaptiveCard } from "./builder";
+import { buildAdaptiveCard } from "./builder.ts";
 
 const logger = log.logger("teams:conversation");
 

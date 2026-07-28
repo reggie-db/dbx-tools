@@ -7,7 +7,7 @@
 // with AppKit tokens.
 
 export type { Activity, AdaptiveCard, CardResult, CardSpec } from "@dbx-tools/shared-teams";
-export { TeamsChat, DEFAULT_STARTERS, type TeamsChatProps } from "./teams-chat";
-export { AdaptiveCardView, type AdaptiveCardViewProps } from "./adaptive-card";
-export { AdaptiveCardGallery, type AdaptiveCardGalleryProps } from "./adaptive-card-gallery";
-export { CARD_SAMPLES, type CardSample } from "./samples";
+export { TeamsChat, DEFAULT_STARTERS, type TeamsChatProps } from "./teams-chat.tsx";
+export { AdaptiveCardView, type AdaptiveCardViewProps } from "./adaptive-card.tsx";
+export { AdaptiveCardGallery, type AdaptiveCardGalleryProps } from "./adaptive-card-gallery.tsx";
+export { CARD_SAMPLES, type CardSample } from "./samples.ts";

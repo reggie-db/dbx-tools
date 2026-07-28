@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { ResolvedEmailConfig } from "../src/config";
+import type { ResolvedEmailConfig } from "../src/config.ts";
 import {
   assertSenderAllowed,
   deriveSenderAddress,
@@ -8,7 +8,7 @@ import {
   listSenderOptions,
   parseAllowedSenders,
   resolveSenderAddress,
-} from "../src/sender";
+} from "../src/sender.ts";
 
 /** A resolved outbox config with only the sender fields under test set. */
 function outboxConfig(sender: Partial<ResolvedEmailConfig> = {}): ResolvedEmailConfig {

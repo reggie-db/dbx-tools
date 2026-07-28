@@ -7,7 +7,7 @@ import {
   resolveEmailConfig,
   type ResolvedSmtpConfig,
   type SenderPolicy,
-} from "../src/config";
+} from "../src/config.ts";
 
 /** Every env var {@link resolveEmailConfig} reads, cleared between cases. */
 const ENV_KEYS = [

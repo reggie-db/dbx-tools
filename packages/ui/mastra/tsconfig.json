@@ -31,6 +31,8 @@
     "types": [],
     "moduleResolution": "bundler",
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "jsx": "react-jsx"
   },
   "include": [

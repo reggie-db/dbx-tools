@@ -9,9 +9,9 @@ import {
   ensureEngineCurrent,
   runInitialSynth,
   seedToolchain,
-} from "./bootstrap";
-import { ensureWorkspaceReady, runPnpm, runProjen } from "./pnpm";
-import { findWorkspaceRoot, needsBootstrap, needsToolchain } from "./root";
+} from "./bootstrap.ts";
+import { ensureWorkspaceReady, runPnpm, runProjen } from "./pnpm.ts";
+import { findWorkspaceRoot, needsBootstrap, needsToolchain } from "./root.ts";
 
 /**
  * Prepare the workspace at `root`, then run `pnpm exec projen` with `projenArgs`.

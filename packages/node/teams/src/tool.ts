@@ -17,7 +17,7 @@
 import { log, string } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import { createTool } from "@mastra/core/tools";
-import { buildCard } from "./runtime";
+import { buildCard } from "./runtime.ts";
 
 const logger = log.logger("teams/tool/create-card");
 

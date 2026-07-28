@@ -26,9 +26,9 @@
 
 import { error, log } from "@dbx-tools/shared-core";
 import { activity as activityContract } from "@dbx-tools/shared-teams";
-import { connectorToken, isAllowedServiceUrl } from "./auth";
-import { sendActivity, sendTyping } from "./connector";
-import { runCardTurn, type CardAgentLike, type CardContextFactory } from "./conversation";
+import { connectorToken, isAllowedServiceUrl } from "./auth.ts";
+import { sendActivity, sendTyping } from "./connector.ts";
+import { runCardTurn, type CardAgentLike, type CardContextFactory } from "./conversation.ts";
 
 const logger = log.logger("teams:messaging");
 

@@ -15,7 +15,7 @@
  * takes priority. This keeps the barrel auto-generated while letting you add or
  * override individual exports.
  *
- * Each eligible module becomes `export * as <name> from "./src/x"` (camelCase
+ * Each eligible module becomes `export * as <name> from "./src/x.ts"` (camelCase
  * namespace from its path segments; invalid identifiers suffixed with `Module`),
  * sorted by module path.
  *
@@ -40,9 +40,15 @@ import { join } from "node:path";
 import { find } from "@dbx-tools/path";
 import { string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
-import { header, makeReadonly, makeWritable, stampGenerated, type HeaderOpts } from "./generated";
-import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports";
-import { isModuleFile, toPosix, recordedPackages } from "./packages";
+import {
+  header,
+  makeReadonly,
+  makeWritable,
+  stampGenerated,
+  type HeaderOpts,
+} from "./generated.ts";
+import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports.ts";
+import { isModuleFile, toPosix, recordedPackages } from "./packages.ts";
 
 /**
  * A `src`-relative posix path excluded from the root barrel:
@@ -149,8 +155,7 @@ function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<strin
   const seen = new Map<string, { count: number; modulePath: string }>();
   const perModule = new Map<string, ModuleExport[]>();
   for (const { modulePath } of namespaces) {
-    const abs = join(pkgDir, modulePath.replace(/^\.\//, ""));
-    const exports = moduleExports(withTsExt(abs));
+    const exports = moduleExports(join(pkgDir, modulePath.replace(/^\.\//, "")));
     perModule.set(modulePath, exports);
     for (const { name } of exports) {
       const prior = seen.get(name);
@@ -175,14 +180,6 @@ function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<strin
   }
   if (lines.length === 0) return content;
   return `${content.replace(/\n+$/, "")}\n${lines.join("\n")}\n`;
-}
-
-/** Resolve a barrel module path (`./src/x`, extensionless) to its on-disk `.ts(x)` file. */
-function withTsExt(absNoExt: string): string {
-  for (const ext of [".ts", ".tsx", ".mts", ".cts"]) {
-    if (existsSync(absNoExt + ext)) return absNoExt + ext;
-  }
-  return `${absNoExt}.ts`;
 }
 
 /** Hand-authored override barrel: a sibling of the generated `index.ts`. */
@@ -229,7 +226,7 @@ function mergeCustomExports(content: string, pkgDir: string): string {
     const ns = /^export \* as (\w+) from /.exec(line)?.[1];
     return !(ns && overridden.has(ns));
   });
-  return `${kept.join("\n").replace(/\n+$/, "")}\nexport * from "./exports";\n`;
+  return `${kept.join("\n").replace(/\n+$/, "")}\nexport * from "./exports.ts";\n`;
 }
 
 /**
@@ -285,11 +282,14 @@ function generateForPackage(pkgDir: string): number {
   // Unlock the read-only barrel so the rewrite below can replace it.
   makeWritable(rootBarrel);
 
-  // `./src/<path-without-ext>` namespaced by its path segments (camelCase; invalid
-  // identifiers suffixed with `Module`).
+  // `./src/<path>` with the module's REAL extension, namespaced by its path
+  // segments (camelCase; invalid identifiers suffixed with `Module`). The
+  // extension is written because `tsc` rewrites it on emit
+  // (`rewriteRelativeImportExtensions`) - an extensionless specifier would be
+  // copied through verbatim and Node's ESM resolver cannot probe for it.
   let content = modulePaths
     .map((stem) => {
-      const modulePath = `./src/${stem}`;
+      const modulePath = `./src/${byModulePath.get(stem)!}`;
       return `export * as ${modulePathToNamespace(modulePath)} from "${modulePath}";`;
     })
     .join("\n");

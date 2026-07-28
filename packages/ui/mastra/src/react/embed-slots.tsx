@@ -3,10 +3,10 @@ import { Spinner } from "@dbx-tools/ui-appkit/react";
 import ReactECharts from "echarts-for-react";
 import { ClockIcon } from "lucide-react";
 import { useMemo } from "react";
-import { DataGrid, humanizeLabel } from "./data-grid";
-import { AssistantMarkdown } from "./markdown";
-import { normalizeChartOption } from "../support/chart-option";
-import { useChartFetch, useStatementFetch } from "../support/mastra-client";
+import { DataGrid, humanizeLabel } from "./data-grid.tsx";
+import { AssistantMarkdown } from "./markdown.tsx";
+import { normalizeChartOption } from "../support/chart-option.ts";
+import { useChartFetch, useStatementFetch } from "../support/mastra-client.ts";
 
 // Inline embed slots: chart / data tables resolved from `[chart:<id>]`
 // and `[data:<id>]` markers in the assistant's prose, plus the splitter

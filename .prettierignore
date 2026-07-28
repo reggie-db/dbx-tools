@@ -55,8 +55,5 @@
 tsconfig.base.json
 tsconfig.json
 tsconfig.projen.json
-bin/dbx-tools-appkit-env.mjs
 package.json
 test/tsconfig.json
-bin/dbx-tools.mjs
-bin/dbx-tools-model-proxy.mjs

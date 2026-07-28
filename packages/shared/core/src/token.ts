@@ -7,9 +7,9 @@
  * @module
  */
 
-import { forEachHeaderValue, type HeaderLike } from "./http";
-import * as json from "./json";
-import { isLevelEnabled, logger } from "./log";
+import { forEachHeaderValue, type HeaderLike } from "./http.ts";
+import * as json from "./json.ts";
+import { isLevelEnabled, logger } from "./log.ts";
 
 const BEARER_PREFIX_REGEX = /^bearer\s+/i;
 const SPLIT_REGEX = /\s+|\s*,\s*/;

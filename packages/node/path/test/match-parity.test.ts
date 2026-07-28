@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import { join, relative, sep, isAbsolute } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { findFiles } from "../src/find";
-import { watchFiles } from "../src/watch";
+import { findFiles } from "../src/find.ts";
+import { watchFiles } from "../src/watch.ts";
 
 const FIXTURE_SOURCE = fileURLToPath(new URL("fixtures/sample-tree", import.meta.url));
 

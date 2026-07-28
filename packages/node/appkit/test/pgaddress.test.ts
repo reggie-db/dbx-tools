@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseAddress, parseResourcePath, SSL_MODES } from "../src/pgaddress";
+import { parseAddress, parseResourcePath, SSL_MODES } from "../src/pgaddress.ts";
 
 describe("pgaddress parseAddress", () => {
   it("returns nothing for empty and unrecognized input", () => {

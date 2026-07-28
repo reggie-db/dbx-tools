@@ -33,7 +33,7 @@ import {
 } from "@dbx-tools/shared-model";
 import Fuse from "fuse.js";
 
-import { MODEL_CLASS_ORDER } from "./classes";
+import { MODEL_CLASS_ORDER } from "./classes.ts";
 
 const { ModelClass } = model;
 

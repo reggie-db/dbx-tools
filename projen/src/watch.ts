@@ -17,7 +17,7 @@
 import { isAbsolute, resolve } from "node:path";
 import { watch as fileScan } from "@dbx-tools/path";
 import { log } from "@dbx-tools/shared-core";
-import { isGeneratedFile, recordedRoots, repoRoot } from "./packages";
+import { isGeneratedFile, recordedRoots, repoRoot } from "./packages.ts";
 
 const logger = log.logger("projen:watch");
 const DEBOUNCE_MS = 250;

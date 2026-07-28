@@ -231,8 +231,8 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
 // the bins are declared, as `dbx-tools-<name>` plus the short `dbxt-<name>`.
 project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" }, (p) => {
   p.package.addBin({
-    [`${SCOPE}-appkit-env`]: "./bin/dbx-tools-appkit-env.mjs",
-    "dbxt-appkit-env": "./bin/dbx-tools-appkit-env.mjs",
+    [`${SCOPE}-appkit-env`]: "./bin/dbx-tools-appkit-env.ts",
+    "dbxt-appkit-env": "./bin/dbx-tools-appkit-env.ts",
   });
   p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
 });
@@ -458,7 +458,7 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, (p) => {
   p.package.addField("name", `@${SCOPE}/cli`);
   p.package.file.readonly = false;
-  p.package.addBin({ [SCOPE]: "./bin/dbx-tools.mjs", dbxt: "./bin/dbx-tools.mjs" });
+  p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbxt: "./bin/dbx-tools.ts" });
   p.addDeps("@dbx-tools/core@workspace:*", "pnpm");
 });
 
@@ -472,8 +472,8 @@ project.applyToProjects(
   { identifierName: "cli-model-proxy", tags: "cli" },
   (p) => {
     p.package.addBin({
-      [`${SCOPE}-model-proxy`]: "./bin/dbx-tools-model-proxy.mjs",
-      "dbxt-model-proxy": "./bin/dbx-tools-model-proxy.mjs",
+      [`${SCOPE}-model-proxy`]: "./bin/dbx-tools-model-proxy.ts",
+      "dbxt-model-proxy": "./bin/dbx-tools-model-proxy.ts",
     });
     p.addDeps(
       "@dbx-tools/model@workspace:*",

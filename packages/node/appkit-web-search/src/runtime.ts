@@ -25,8 +25,8 @@ import {
   resolveWebSearchConfig,
   type ResolvedWebSearchConfig,
   type WebSearchPluginConfig,
-} from "./config";
-import type { WebSearchExecutionSettings } from "./defaults";
+} from "./config.ts";
+import type { WebSearchExecutionSettings } from "./defaults.ts";
 
 const logger = log.logger("web-search/runtime");
 

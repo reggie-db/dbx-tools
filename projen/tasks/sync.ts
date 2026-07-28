@@ -2,7 +2,7 @@
 import { fileURLToPath } from "node:url";
 import concurrently from "concurrently";
 import { log } from "@dbx-tools/shared-core";
-import { runSynth } from "../src/scaffold";
+import { runSynth } from "../src/scaffold.ts";
 
 const logger = log.logger("projen:sync");
 

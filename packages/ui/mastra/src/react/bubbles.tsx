@@ -24,13 +24,13 @@ import {
   XIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { MarkdownWithEmbeds } from "./embed-slots";
-import { ExportMenu } from "./export-menu";
-import { FeedbackControls } from "./feedback-controls";
-import { ToolMarkdown } from "./markdown";
-import { SuggestionPills } from "./suggestion-pills";
-import { collectSuggestions } from "./suggestions";
-import { ToolSessionPill, humanizeToolName } from "./tool-pill";
+import { MarkdownWithEmbeds } from "./embed-slots.tsx";
+import { ExportMenu } from "./export-menu.tsx";
+import { FeedbackControls } from "./feedback-controls.tsx";
+import { ToolMarkdown } from "./markdown.tsx";
+import { SuggestionPills } from "./suggestion-pills.tsx";
+import { collectSuggestions } from "./suggestions.ts";
+import { ToolSessionPill, humanizeToolName } from "./tool-pill.tsx";
 import type {
   ApprovalDecision,
   ChatStatus,
@@ -39,8 +39,8 @@ import type {
   FeedbackValue,
   PendingApproval,
   ToolEvent,
-} from "./types";
-import { copyText } from "../support/clipboard";
+} from "./types.ts";
+import { copyText } from "../support/clipboard.ts";
 
 // User / assistant message bubbles plus the inline approval card and
 // the helpers that surface approval-gated tool calls out of a message's

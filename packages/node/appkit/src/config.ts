@@ -21,7 +21,7 @@ import { functionModule, json, object, log, string } from "@dbx-tools/shared-cor
 import { parse as parseYamlText } from "yaml";
 import { z } from "zod";
 
-import { isAppEnv } from "./databricks";
+import { isAppEnv } from "./databricks.ts";
 
 const logger = log.logger("config");
 

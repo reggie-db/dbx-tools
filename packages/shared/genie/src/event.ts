@@ -36,7 +36,7 @@ import {
   type GenieChatLocation,
   type GenieMessage,
   type GenieThought,
-} from "./genie-model";
+} from "./genie-model.ts";
 
 /* ----------------------------- contract ---------------------------- */
 

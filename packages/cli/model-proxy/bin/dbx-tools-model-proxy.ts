@@ -1,9 +1,9 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env node
 /**
  * `dbx-tools-model-proxy` entry: a local OpenAI-compatible proxy in front of Databricks
  * Model Serving. Delegates to the commander program in `../src/cli`.
  */
-import { CommanderError, runCli } from "../src/cli";
+import { CommanderError, runCli } from "../src/cli.ts";
 
 runCli(process.argv).catch((err: unknown) => {
   if (err instanceof CommanderError) process.exit(err.exitCode);

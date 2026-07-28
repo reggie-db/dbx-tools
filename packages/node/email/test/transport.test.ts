@@ -10,8 +10,8 @@ import {
   MAX_ATTACHMENT_COUNT,
   MAX_ATTACHMENTS_TOTAL_BYTES,
   MAX_BODY_CHARS,
-} from "../src/defaults";
-import { resetEmailRuntime, sendEmail } from "../src/transport";
+} from "../src/defaults.ts";
+import { resetEmailRuntime, sendEmail } from "../src/transport.ts";
 
 // The runtime is a process-wide singleton built from the environment on first
 // use, so the outbox mode has to be in place before any test sends.

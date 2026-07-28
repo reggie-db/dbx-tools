@@ -2,8 +2,8 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as App from "./src/App";
-export * as ErrorBoundary from "./src/ErrorBoundary";
-export * as pagesCards from "./src/pages/Cards";
-export * as pagesConversations from "./src/pages/Conversations";
-export * as pagesStream from "./src/pages/Stream";
+export * as App from "./src/App.tsx";
+export * as ErrorBoundary from "./src/ErrorBoundary.tsx";
+export * as pagesCards from "./src/pages/Cards.tsx";
+export * as pagesConversations from "./src/pages/Conversations.tsx";
+export * as pagesStream from "./src/pages/Stream.tsx";

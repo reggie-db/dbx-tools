@@ -12,8 +12,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project";
-import { PACKAGE_TAG_MIXINS } from "../src/tags";
+import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
+import { PACKAGE_TAG_MIXINS } from "../src/tags.ts";
 
 let outdir: string;
 let config: string;

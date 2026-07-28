@@ -54,12 +54,12 @@ import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
-import type { MastraTools } from "./agents";
-import { chartPlannerRequestSchema, prepareChart } from "./chart";
-import { MASTRA_USER_KEY, resolveUserKey } from "./config";
-import type { MastraPluginConfig, User } from "./config";
-import { fetchStatementData } from "./statement";
-import { safeWrite } from "./writer";
+import type { MastraTools } from "./agents.ts";
+import { chartPlannerRequestSchema, prepareChart } from "./chart.ts";
+import { MASTRA_USER_KEY, resolveUserKey } from "./config.ts";
+import type { MastraPluginConfig, User } from "./config.ts";
+import { fetchStatementData } from "./statement.ts";
+import { safeWrite } from "./writer.ts";
 
 const logger = log.logger("mastra/genie");
 

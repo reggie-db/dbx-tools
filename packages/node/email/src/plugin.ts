@@ -52,17 +52,17 @@ import {
   type EmailResult,
   type EmailSenders,
 } from "@dbx-tools/shared-email";
-import { EMAIL_CONFIG_SCHEMA, type EmailPluginConfig } from "./config";
-import { EMAIL_SENDERS_SETTINGS, EMAIL_VERIFY_SETTINGS } from "./defaults";
-import { isSenderAllowed, listSenderOptions, resolveSenderAddress } from "./sender";
-import { SEND_EMAIL_DESCRIPTION } from "./tool";
+import { EMAIL_CONFIG_SCHEMA, type EmailPluginConfig } from "./config.ts";
+import { EMAIL_SENDERS_SETTINGS, EMAIL_VERIFY_SETTINGS } from "./defaults.ts";
+import { isSenderAllowed, listSenderOptions, resolveSenderAddress } from "./sender.ts";
+import { SEND_EMAIL_DESCRIPTION } from "./tool.ts";
 import {
   getEmailRuntime,
   resetEmailRuntime,
   sendEmail,
   setEmailExecutor,
   verifyEmailTransport,
-} from "./transport";
+} from "./transport.ts";
 
 /** Mount-relative route (under `/api/email`) for the sender-options lookup. */
 const SENDERS_ROUTE = "/senders";

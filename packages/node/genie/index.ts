@@ -2,9 +2,9 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as chat from "./src/chat";
-export * as space from "./src/space";
-export { genieChat, genieEventChat } from "./src/chat";
-export type { GenieChatOptions } from "./src/chat";
-export { getGenieSpace, genieSampleQuestions } from "./src/space";
-export type { GetGenieSpaceOptions } from "./src/space";
+export * as chat from "./src/chat.ts";
+export * as space from "./src/space.ts";
+export { genieChat, genieEventChat } from "./src/chat.ts";
+export type { GenieChatOptions } from "./src/chat.ts";
+export { getGenieSpace, genieSampleQuestions } from "./src/space.ts";
+export type { GetGenieSpaceOptions } from "./src/space.ts";

@@ -22,8 +22,8 @@ import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
-import type { MastraAgentDefinition, MastraTools } from "./agents";
-import type { GenieSpacesConfig } from "./genie";
+import type { MastraAgentDefinition, MastraTools } from "./agents.ts";
+import type { GenieSpacesConfig } from "./genie.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the

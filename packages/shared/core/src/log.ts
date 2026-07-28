@@ -32,8 +32,8 @@
  * @module
  */
 
-import { memoize } from "./function";
-import { type NameLike, toBoolean } from "./object";
+import { memoize } from "./function.ts";
+import { type NameLike, toBoolean } from "./object.ts";
 
 /** `process`-shaped view off `globalThis`, so no node types are needed. */
 interface ProcessLike {

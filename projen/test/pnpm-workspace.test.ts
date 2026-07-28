@@ -19,7 +19,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { before, describe, it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project";
+import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
 
 let outdir: string;
 let yaml: string;

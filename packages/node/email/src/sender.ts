@@ -24,7 +24,7 @@
 import { ConfigurationError, ValidationError } from "@databricks/appkit";
 import { log, net } from "@dbx-tools/shared-core";
 
-import type { ResolvedEmailConfig } from "./config";
+import type { ResolvedEmailConfig } from "./config.ts";
 
 const logger = log.logger("email/sender");
 

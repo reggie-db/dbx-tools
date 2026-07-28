@@ -8,8 +8,8 @@ import {
   cn,
 } from "@dbx-tools/ui-appkit/react";
 import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
-import { SqlBlock, ToolMarkdown } from "./markdown";
-import type { ToolEvent, ToolProgress } from "./types";
+import { SqlBlock, ToolMarkdown } from "./markdown.tsx";
+import type { ToolEvent, ToolProgress } from "./types.ts";
 
 // Consolidated tool-session pill and its Genie progress detail view:
 // groups the wire events one assistant turn produced into per-sub-call

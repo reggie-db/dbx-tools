@@ -2,9 +2,9 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as activity from "./src/activity";
-export * as card from "./src/card";
-export { ADAPTIVE_CARD_CONTENT_TYPE, ACTIVITY_TYPES, channelAccountSchema, conversationAccountSchema, cardAttachmentSchema, activitySchema, activityRequestSchema, activityResponseSchema, toCardAttachment, cardsOf } from "./src/activity";
-export type { ActivityType, ChannelAccount, ConversationAccount, CardAttachment, Activity, ActivityRequest, ActivityResponse } from "./src/activity";
-export { ADAPTIVE_CARD_VERSION, ADAPTIVE_CARD_SCHEMA_URL, cardFactSchema, cardActionSchema, cardSpecSchema, adaptiveCardSchema, cardResultSchema } from "./src/card";
-export type { CardFact, CardAction, CardSpec, AdaptiveCard, CardResult } from "./src/card";
+export * as activity from "./src/activity.ts";
+export * as card from "./src/card.ts";
+export { ADAPTIVE_CARD_CONTENT_TYPE, ACTIVITY_TYPES, channelAccountSchema, conversationAccountSchema, cardAttachmentSchema, activitySchema, activityRequestSchema, activityResponseSchema, toCardAttachment, cardsOf } from "./src/activity.ts";
+export type { ActivityType, ChannelAccount, ConversationAccount, CardAttachment, Activity, ActivityRequest, ActivityResponse } from "./src/activity.ts";
+export { ADAPTIVE_CARD_VERSION, ADAPTIVE_CARD_SCHEMA_URL, cardFactSchema, cardActionSchema, cardSpecSchema, adaptiveCardSchema, cardResultSchema } from "./src/card.ts";
+export type { CardFact, CardAction, CardSpec, AdaptiveCard, CardResult } from "./src/card.ts";

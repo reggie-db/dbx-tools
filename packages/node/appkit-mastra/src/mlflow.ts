@@ -22,7 +22,7 @@
 import { appkit } from "@dbx-tools/appkit";
 import { async, error, log } from "@dbx-tools/shared-core";
 import { feedback } from "@dbx-tools/shared-mastra";
-import { databricksFetch, readResponseJson, readResponseText } from "./rest";
+import { databricksFetch, readResponseJson, readResponseText } from "./rest.ts";
 
 const logger = log.logger("mastra/mlflow");
 

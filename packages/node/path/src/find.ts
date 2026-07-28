@@ -1,8 +1,8 @@
 import { object, type Sequence } from "@dbx-tools/shared-core";
 import { globIterateSync, IgnoreLike, type GlobOptionsWithFileTypesUnset } from "glob";
-import { ignorePathMatcher } from "./ignore";
-import { PathMatcher, PathMatchInput, pathMatchTests, toPathMatcher } from "./match";
-import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan";
+import { ignorePathMatcher } from "./ignore.ts";
+import { PathMatcher, PathMatchInput, pathMatchTests, toPathMatcher } from "./match.ts";
+import { FileScanIgnoreOptions, FileScanOptions, FOLLOW_SYMLINKS_DEFAULT } from "./scan.ts";
 
 type FileFindIgnore = PathMatchInput | readonly PathMatchInput[] | IgnoreLike;
 

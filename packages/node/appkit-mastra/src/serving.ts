@@ -15,7 +15,7 @@ import { serving as nodeServing } from "@dbx-tools/model";
 import { string } from "@dbx-tools/shared-core";
 import { override } from "@dbx-tools/shared-mastra";
 
-import type { MastraPluginConfig } from "./config";
+import type { MastraPluginConfig } from "./config.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the

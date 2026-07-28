@@ -1,9 +1,9 @@
 #!/usr/bin/env -S npx tsx
 import { sep } from "node:path";
-import { generateBarrels } from "../src/barrels";
+import { generateBarrels } from "../src/barrels.ts";
 import { log, string } from "@dbx-tools/shared-core";
-import { watchLoop, watchRoots } from "../src/watch";
-import { recordedPackages } from "../src/packages";
+import { watchLoop, watchRoots } from "../src/watch.ts";
+import { recordedPackages } from "../src/packages.ts";
 
 const logger = log.logger("projen:barrels");
 

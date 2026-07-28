@@ -32,7 +32,7 @@ import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/reque
 import type { ContextWithMastra } from "@mastra/core/server";
 import { registerApiRoute } from "@mastra/core/server";
 
-import { clampPerPage, parseIntParam } from "./pagination";
+import { clampPerPage, parseIntParam } from "./pagination.ts";
 
 const logger = log.logger("mastra/history");
 

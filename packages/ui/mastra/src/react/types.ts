@@ -1,8 +1,8 @@
 import type { GenieWriterEvent } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
-import type { ExportFormat } from "../support/export";
+import type { ExportFormat } from "../support/export.ts";
 
-export type { ExportFormat } from "../support/export";
+export type { ExportFormat } from "../support/export.ts";
 
 // Public types for the chat UI: the controlled `ChatView` props plus
 // the supporting tool-event / approval shapes a host transport feeds

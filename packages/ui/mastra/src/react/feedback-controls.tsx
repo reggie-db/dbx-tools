@@ -12,7 +12,7 @@ import {
 } from "@dbx-tools/ui-appkit/react";
 import { MessageSquareTextIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 import { useState } from "react";
-import type { FeedbackSubmission, FeedbackValue } from "./types";
+import type { FeedbackSubmission, FeedbackValue } from "./types.ts";
 
 // Per-message feedback action row: thumbs up/down that log immediately,
 // plus a separate comment affordance that opens a popover for freeform

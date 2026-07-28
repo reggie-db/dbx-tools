@@ -490,12 +490,12 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   - `ui` → Vite/React (DOM + `vite/client` types, jsx, `vite.config.ts`)
   - `server` → Node (`@types/node`, `tsoa` + `experimentalDecorators`, no DOM)
   - `node` → Node (`@types/node`, no DOM)
-  - `cli` → Node + `commander` + `@clack/prompts` + a RUNTIME `tsx`; a generated
-    `bin/<name>.mjs` launcher per `bin/<name>.ts` entry (see Gotchas); a
-    package-rooted tsconfig (`rootDir: "."` + `index.ts`/`bin/**/*.ts` includes,
-    since a CLI compiles code outside `src/`); and a DERIVED `exports` map (`.`,
-    a `./<module>` subpath per top-level `src` module, `./package.json`). A CLI
-    should need no per-package tsconfig or exports config.
+  - `cli` → Node + `commander` + `@clack/prompts` (no `tsx`: the published bin is
+    the compiled `lib/bin/<name>.js`, see Gotchas); `index.ts`/`bin/**/*.ts`
+    tsconfig includes, since a CLI compiles code outside `src/`; and a DERIVED
+    `exports` map (`.`, a `./<module>` subpath per top-level `src` module,
+    `./package.json`). A CLI should need no per-package tsconfig or exports
+    config.
   - `shared` → agnostic (the `AGNOSTIC_COMPILER_OPTIONS` floor: no DOM, no Node)
   - `openapi` → generated, read-only clients (`openapi-fetch`, DOM libs)
     Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
@@ -723,8 +723,6 @@ through the publish cycle. See `demo/README.md` for the full two-mode explanatio
   `.gitattributes` (`annotateGenerated`).
 - **openapi** (`<root>/openapi/<name>/`): fully generated from tsoa
   controllers - spec, types, and client.
-- **cli launchers** (`<cli package>/bin/<name>.mjs`): read-only + executable,
-  one per `bin/<name>.ts` entry, emitted by the `cli` tag (`cli-bin.ts`).
 - **`.github/workflows/*.yml` except `docs.yml`**: projen-owned. `docs.yml` is
   the one hand-written workflow, so it is the only one to edit directly.
 
@@ -843,7 +841,7 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
 - **The published tarball is an ALLOWLIST, not everything on disk.** Every
   package gets `files: ["index.ts", "src"]` at construction
   (`addPackageFiles`, `project.ts`); the `cli` tag adds `"bin"` for its
-  launchers, and `applyCompiledPublish` adds `"lib"`. `test/`, `.projen/`, and
+  entries, and `applyCompiledPublish` adds `"lib"`. `test/`, `.projen/`, and
   `tsconfig*` are deliberately withheld - none is reachable through either
   `exports` map, and shipping them quadrupled the tarball. Source ships
   ALONGSIDE the compiled output rather than instead of it: it is cheap, and it
@@ -862,15 +860,18 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   substitutes `publishConfig`'s `main`/`types`/`exports` into the manifest at
   pack time, so the tarball advertises `lib/` while the workspace keeps its
   source entry points. Nothing about how the repo builds changed.
-  Two details make the emitted tree loadable, and both are easy to undo by
-  accident. `rootDir: "."` is what compiles the package-ROOT `index.ts` barrel
-  at all - projen's default `rootDir: "src"` leaves it out, which is why `lib/`
-  had no `index.js` for so long. And `tasks/emit.ts` runs after `tsc`, which
-  never rewrites specifiers: sources are written for `moduleResolution:
-bundler` and emit `from "./http"`, so the pass resolves each relative
-  specifier against what was actually emitted and appends the extension. Doing
-  it afterwards is what keeps ~800 import sites free of a hand-maintained
-  `.js` suffix.
+  Two compiler options make the emitted tree loadable, and both are plain `tsc`.
+  `rootDir: "."` is what compiles the package-ROOT `index.ts` barrel at all -
+  projen's default `rootDir: "src"` leaves it out, which is why `lib/` had no
+  `index.js` for so long. And `rewriteRelativeImportExtensions` (paired with
+  `allowImportingTsExtensions`, both in `SHARED_COMPILER_OPTIONS`, so EVERY
+  package gets them) turns the `./http.ts` specifiers this repo writes into the
+  `./http.js` Node's ESM resolver requires. That pairing is the whole mechanism:
+  relative imports carry their REAL extension in source, and `tsc` rewrites it on
+  emit. There is deliberately no post-processing pass over `lib/` - an earlier
+  version shipped one (`tasks/emit.ts`) that walked the emitted tree appending
+  extensions, which this replaces outright. Do not reintroduce it; if an emitted
+  specifier looks wrong, the source is missing its extension.
   Setting `publishConfig` REPLACES the field projen renders `access` into, so
   it is carried over from `pkg.package.npmAccess` explicitly; drop it and every
   scoped package publishes restricted.
@@ -958,27 +959,24 @@ bundler` and emit `from "./http"`, so the pass resolves each relative
   it is synthesized by its own `projen/.projenrc.ts`, which declares its deps
   inline (`projen`, `constructs`, `oxc-parser`, `@dbx-tools/path`, ...) - edit
   that `deps: [...]` list, then re-synth from inside `projen/`.
-- **A CLI's `bin` points at a generated `.mjs` launcher, never the `.ts` entry.**
-  Node can't run the `.ts` directly, and the obvious fix - a
-  `#!/usr/bin/env -S npx tsx` shebang - only works inside a workspace checkout,
-  because `npx` resolves tsx from the CALLER'S cwd. After `npm i -g
-@dbx-tools/cli` that cwd is unrelated to the package, so every first run
-  stalled to download tsx (and failed outright offline). So the `cli` tag makes
-  `tsx` a RUNTIME dep (not the baseline devDep, which it removes) and emits
-  `bin/<name>.mjs` beside each `bin/<name>.ts` (`cli-bin.ts`,
-  `addCliBinLaunchers`). The launcher reaches tsx through a bare
-  `import { register } from "tsx/esm/api"`, which NODE resolves relative to the
-  launcher's own location - i.e. the CLI's own `node_modules` - then hands off to
-  the `.ts`. Entries are discovered by scanning `bin/` at synth, so a new CLI
-  only needs its `.ts` file plus a `package.json` bin naming the `.mjs`.
-  The compiled `lib/bin/<name>.js` now exists and is loadable once INSTALLED,
-  but it is deliberately not the bin target, because it does not work in the
-  workspace: in-repo, a sibling `@dbx-tools/*` import resolves to that
-  package's SOURCE entry, so running the compiled bin here dies on a `.ts` it
-  cannot load. Pointing `bin` at it would mean a launcher that behaves
-  differently depending on whether it is inside `node_modules` - so the tsx
-  launcher stays, and `tsx` stays a runtime dep. A CLI's bin is executed, never
-  imported, so this costs consumers an install-size hit and nothing else.
+- **A CLI's `bin` is its `.ts` entry in the workspace and the emitted
+  `lib/bin/<name>.js` in the tarball**, swapped by `publishConfig.bin`
+  (`publish.ts`) exactly like `exports`. There is no launcher file and no runtime
+  `tsx`: the published bin is plain JavaScript with a `#!/usr/bin/env node`
+  shebang that `tsc` copies through, so an installed CLI runs with nothing extra
+  in the tree (verified by installing a tarball into a project with no `tsx`).
+  An earlier design generated a `bin/<name>.mjs` shim that called
+  `register()` from `tsx/esm/api` and made `tsx` a runtime dependency of every
+  CLI. Both are gone; do not reintroduce either. Note `publishConfig.bin` has to
+  RESOLVE the manifest field, because projen renders `bin` lazily
+  (`bin: () => this.renderBin()`) and keeps the map private - reading
+  `manifest.bin` directly hands you the function and silently finds no entries.
+  In-repo, run a CLI through its root task (`pnpm dbxt ...`, which is
+  `tsx <bin>/<name>.ts`) rather than the bin path: neither the `.ts` entry nor
+  the compiled one runs under bare `node` in the workspace, because a sibling
+  `@dbx-tools/*` import resolves to that package's SOURCE and at least one of
+  those sources uses non-erasable syntax. That only affects the checkout - a
+  consumer's install resolves the same imports to `lib/`.
 - **CLI command names are `dbx-tools-<name>` plus a short `dbxt-<name>` alias**,
   and the `bin/` entry file is named after the primary command - so
   `bin/dbx-tools-model-proxy.ts` backs `dbx-tools-model-proxy` /

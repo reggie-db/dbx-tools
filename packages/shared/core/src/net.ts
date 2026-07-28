@@ -14,7 +14,7 @@
  * @module
  */
 
-import type { NonFunctionKeys } from "./object";
+import type { NonFunctionKeys } from "./object.ts";
 
 const LOCAL_HOST_URL = new URL("http://localhost");
 const URL_SCHEME_DEFAULT = "https";

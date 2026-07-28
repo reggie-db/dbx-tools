@@ -23,8 +23,8 @@ import {
   cn,
 } from "@dbx-tools/ui-appkit/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AdaptiveCardView } from "./adaptive-card";
-import { CARD_SAMPLES } from "./samples";
+import { AdaptiveCardView } from "./adaptive-card.tsx";
+import { CARD_SAMPLES } from "./samples.ts";
 
 /** Props for {@link AdaptiveCardGallery}. */
 export interface AdaptiveCardGalleryProps {

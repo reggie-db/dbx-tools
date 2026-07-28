@@ -1,5 +1,5 @@
-import { IgnorePatternOptions } from "./ignore";
-import { PathMatchInput } from "./match";
+import { IgnorePatternOptions } from "./ignore.ts";
+import { PathMatchInput } from "./match.ts";
 
 export const FOLLOW_SYMLINKS_DEFAULT = false;
 

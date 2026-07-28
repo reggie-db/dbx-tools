@@ -34,9 +34,6 @@
             "tsc",
             "--build"
           ]
-        },
-        {
-          "exec": "tsx ../../../projen/tasks/emit.ts lib"
         }
       ]
     },

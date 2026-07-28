@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ConfigurationError } from "@databricks/appkit";
-import { data, instance, require as requirePlugin, type PluginContextLike } from "../src/plugin";
+import { data, instance, require as requirePlugin, type PluginContextLike } from "../src/plugin.ts";
 
 class FakeLakebasePlugin {
   exports() {

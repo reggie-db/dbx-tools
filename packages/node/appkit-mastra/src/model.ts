@@ -30,9 +30,9 @@ import { model } from "@dbx-tools/shared-model";
 import type { MastraModelConfig } from "@mastra/core/llm";
 import type { RequestContext } from "@mastra/core/request-context";
 
-import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config";
-import { MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving";
-import { rewriteServingBody, rewriteServingResponseBody } from "./serving-sanitize";
+import { MASTRA_USER_KEY, type MastraPluginConfig, type User } from "./config.ts";
+import { rewriteServingBody, rewriteServingResponseBody } from "./serving-sanitize.ts";
+import { MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving.ts";
 
 type ModelClass = model.ModelClass;
 const { parseModelClass } = classes;

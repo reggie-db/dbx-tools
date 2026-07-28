@@ -13,8 +13,8 @@ import {
 } from "@dbx-tools/ui-appkit/react";
 import { EyeIcon, PaperclipIcon, PencilIcon, SendIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { EmailBody } from "./email-body";
-import { joinAddresses, parseAddresses, type EmailDraft } from "./fields";
+import { EmailBody } from "./email-body.tsx";
+import { joinAddresses, parseAddresses, type EmailDraft } from "./fields.ts";
 
 // A standard, editable email compose form usable outside a chat bubble
 // (a settings page, a standalone "send" view, etc.). It shares the

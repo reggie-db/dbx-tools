@@ -4,7 +4,7 @@ import {
   UNSUPPORTED_CHAT_FIELDS,
   chatContentToText,
   stripUnsupportedChatFields,
-} from "../src/openai-chat";
+} from "../src/openai-chat.ts";
 
 describe("chatContentToText", () => {
   it("passes a string through and flattens typed parts", () => {

@@ -20,13 +20,13 @@ export {
   useMastraSuggestions,
   useMastraThreads,
   useStatementFetch,
-} from "../support/mastra-client";
-export type { ByIdFetchState } from "../support/mastra-client";
-export { ChatView } from "./chat-view";
-export { ExportMenu } from "./export-menu";
-export { MastraChat, useMastraChat } from "./mastra-chat";
-export type { MastraChatProps, UseMastraChatOptions } from "./mastra-chat";
-export { ThreadSidebar } from "./thread-sidebar";
+} from "../support/mastra-client.ts";
+export type { ByIdFetchState } from "../support/mastra-client.ts";
+export { ChatView } from "./chat-view.tsx";
+export { ExportMenu } from "./export-menu.tsx";
+export { MastraChat, useMastraChat } from "./mastra-chat.tsx";
+export type { MastraChatProps, UseMastraChatOptions } from "./mastra-chat.tsx";
+export { ThreadSidebar } from "./thread-sidebar.tsx";
 export type {
   ApprovalDecision,
   ChatModelOption,
@@ -40,4 +40,4 @@ export type {
   ThreadSummary,
   ToolEvent,
   ToolProgress,
-} from "./types";
+} from "./types.ts";

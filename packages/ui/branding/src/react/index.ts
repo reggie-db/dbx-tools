@@ -5,5 +5,5 @@ export {
   useBrand,
   type BrandImageProps,
   type BrandProviderProps,
-} from "./brand";
+} from "./brand.tsx";
 export type { BrandContext, BrandContextInput } from "@dbx-tools/shared-core";

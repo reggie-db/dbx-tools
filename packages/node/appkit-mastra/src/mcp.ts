@@ -15,8 +15,8 @@
 import type { Agent } from "@mastra/core/agent";
 import { MCPServer } from "@mastra/mcp";
 
-import type { MastraTools } from "./agents";
-import type { MastraMcpConfig, MastraPluginConfig } from "./config";
+import type { MastraTools } from "./agents.ts";
+import type { MastraMcpConfig, MastraPluginConfig } from "./config.ts";
 
 /** MCP server version advertised when the caller doesn't pin one. */
 const DEFAULT_MCP_VERSION = "1.0.0";

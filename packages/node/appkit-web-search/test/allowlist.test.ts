@@ -5,15 +5,15 @@ import {
   normalizeUrlPattern,
   parseAllowedUrls,
   toUrlAllowList,
-} from "../src/allowlist";
-import { approvalMatches, resolveWebSearchConfig, toApprovalPolicy } from "../src/config";
-import { htmlToText } from "../src/html-text";
+} from "../src/allowlist.ts";
+import { approvalMatches, resolveWebSearchConfig, toApprovalPolicy } from "../src/config.ts";
+import { htmlToText } from "../src/html-text.ts";
 import {
   detectWebSearchProvider,
   supportsWebSearch,
   webSearchToolSpec,
   WEB_SEARCH_PROVIDERS,
-} from "../src/provider";
+} from "../src/provider.ts";
 
 describe("web-search allow-list", () => {
   it("strips the scheme from entries, leaving host / path verbatim", () => {

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ConfigurationError } from "@databricks/appkit";
 
-import { MASTRA_CONFIG_SCHEMA } from "../src/config";
-import { normalizeGenieSpaces } from "../src/genie";
-import { invalidFields } from "../src/validation";
+import { MASTRA_CONFIG_SCHEMA } from "../src/config.ts";
+import { normalizeGenieSpaces } from "../src/genie.ts";
+import { invalidFields } from "../src/validation.ts";
 
 describe("mastra config schema", () => {
   it("describes every published property", () => {

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { describe, it } from "node:test";
 
-import type { DatabricksBackend } from "../src/backend";
-import { DEFAULT_RETRY, resolveRetryConfig } from "../src/defaults";
-import { backoffDelayMs, createProxyServer, parseRetryAfterMs } from "../src/server";
+import type { DatabricksBackend } from "../src/backend.ts";
+import { DEFAULT_RETRY, resolveRetryConfig } from "../src/defaults.ts";
+import { backoffDelayMs, createProxyServer, parseRetryAfterMs } from "../src/server.ts";
 
 /** Listen on an ephemeral port and resolve the bound port. */
 async function listen(server: Server): Promise<number> {

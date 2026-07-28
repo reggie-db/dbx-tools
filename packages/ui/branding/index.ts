@@ -2,11 +2,11 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as browser from "./src/browser";
-export * as generatedAssets from "./src/generated/assets";
-export * as reactBrand from "./src/react/brand";
-export { resolveBrandAsset, brandCssVariables, applyBrandContext } from "./src/browser";
-export type { BrandAssetResolver, ApplyBrandContextOptions } from "./src/browser";
-export { dbxToolsAssetSvg, dbxToolsAssetDataUrls } from "./src/generated/assets";
-export { BrandProvider, useBrand, BrandIcon, BrandLogo } from "./src/react/brand";
-export type { BrandProviderProps, BrandImageProps } from "./src/react/brand";
+export * as browser from "./src/browser.ts";
+export * as generatedAssets from "./src/generated/assets.ts";
+export * as reactBrand from "./src/react/brand.tsx";
+export { resolveBrandAsset, brandCssVariables, applyBrandContext } from "./src/browser.ts";
+export type { BrandAssetResolver, ApplyBrandContextOptions } from "./src/browser.ts";
+export { dbxToolsAssetSvg, dbxToolsAssetDataUrls } from "./src/generated/assets.ts";
+export { BrandProvider, useBrand, BrandIcon, BrandLogo } from "./src/react/brand.tsx";
+export type { BrandProviderProps, BrandImageProps } from "./src/react/brand.tsx";

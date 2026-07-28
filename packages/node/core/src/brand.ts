@@ -2,8 +2,8 @@
 import { readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, resolve } from "node:path";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
-import { statSync } from "./file";
-import { resolveProjectRoots } from "./project";
+import { statSync } from "./file.ts";
+import { resolveProjectRoots } from "./project.ts";
 
 const BRAND_CONTEXT_FILES = [
   "branding/brand.yaml",

@@ -1,8 +1,8 @@
 #!/usr/bin/env -S npx tsx
 import { relative } from "node:path";
-import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean";
+import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean.ts";
 import { log, string } from "@dbx-tools/shared-core";
-import { repoRoot, toPosix } from "../src/packages";
+import { repoRoot, toPosix } from "../src/packages.ts";
 
 const logger = log.logger("projen:clean");
 const yes = process.argv.includes("-y") || process.argv.includes("--yes");

@@ -5,8 +5,8 @@ import {
   classifyEndpoints,
   endpointCapabilities,
   versionTuple,
-} from "../src/classify";
-import { ModelClass, type ModelProfile, type ServingEndpointSummary } from "../src/model";
+} from "../src/classify.ts";
+import { ModelClass, type ModelProfile, type ServingEndpointSummary } from "../src/model.ts";
 
 const CHAT_TASK = "llm/v1/chat";
 const EMBEDDING_TASK = "llm/v1/embeddings";

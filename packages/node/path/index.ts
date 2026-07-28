@@ -2,20 +2,20 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as find from "./src/find";
-export * as ignore from "./src/ignore";
-export * as match from "./src/match";
-export * as pattern from "./src/pattern";
-export * as scan from "./src/scan";
-export * as watch from "./src/watch";
-export { findFiles } from "./src/find";
-export type { FileFindOptions } from "./src/find";
-export { ignorePatterns, ignorePathMatcher } from "./src/ignore";
-export type { IgnorePatternOptions } from "./src/ignore";
-export { pathMatchTests, toPathMatcher } from "./src/match";
-export type { PathMatchPredicate, PathMatcher, PathMatchInput } from "./src/match";
-export { directoryNamePattern, fileExtensionPattern } from "./src/pattern";
-export { FOLLOW_SYMLINKS_DEFAULT } from "./src/scan";
-export type { FileScanOptions, FileScanIgnoreOptions } from "./src/scan";
-export { watchFiles } from "./src/watch";
-export type { FileWatchOptions } from "./src/watch";
+export * as find from "./src/find.ts";
+export * as ignore from "./src/ignore.ts";
+export * as match from "./src/match.ts";
+export * as pattern from "./src/pattern.ts";
+export * as scan from "./src/scan.ts";
+export * as watch from "./src/watch.ts";
+export { findFiles } from "./src/find.ts";
+export type { FileFindOptions } from "./src/find.ts";
+export { ignorePatterns, ignorePathMatcher } from "./src/ignore.ts";
+export type { IgnorePatternOptions } from "./src/ignore.ts";
+export { pathMatchTests, toPathMatcher } from "./src/match.ts";
+export type { PathMatchPredicate, PathMatcher, PathMatchInput } from "./src/match.ts";
+export { directoryNamePattern, fileExtensionPattern } from "./src/pattern.ts";
+export { FOLLOW_SYMLINKS_DEFAULT } from "./src/scan.ts";
+export type { FileScanOptions, FileScanIgnoreOptions } from "./src/scan.ts";
+export { watchFiles } from "./src/watch.ts";
+export type { FileWatchOptions } from "./src/watch.ts";

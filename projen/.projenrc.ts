@@ -60,6 +60,10 @@ const project = new typescript.TypeScriptProject({
       target: "ES2022",
       lib: ["ES2022"],
       skipLibCheck: true,
+      // This package ships SOURCE (run through tsx), so it never emits - but its
+      // own modules carry the same explicit `.ts` specifiers the packages use,
+      // which the compiler only accepts with this on.
+      allowImportingTsExtensions: true,
     },
     include: ["index.ts", "src/**/*.ts", "tasks/**/*.ts"],
   },

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 import { SignJWT, exportJWK, generateKeyPair, type CryptoKey } from "jose";
-import { resetTeamsAuth, verifyBotToken } from "../src/auth";
+import { resetTeamsAuth, verifyBotToken } from "../src/auth.ts";
 
 /**
  * Inbound-token verification, exercised against a LOCAL key set.

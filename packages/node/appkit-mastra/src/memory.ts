@@ -36,10 +36,10 @@ import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
 import { Pool, type PoolConfig } from "pg";
 
-import type { MastraAgentDefinition, MastraMemoryConfigOverride } from "./agents";
-import type { MastraPluginConfig } from "./config";
-import { agentStorageSchemaName } from "./storage-schema";
-import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize";
+import type { MastraAgentDefinition, MastraMemoryConfigOverride } from "./agents.ts";
+import type { MastraPluginConfig } from "./config.ts";
+import { agentStorageSchemaName } from "./storage-schema.ts";
+import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 
 const logger = log.logger("mastra/memory");
 

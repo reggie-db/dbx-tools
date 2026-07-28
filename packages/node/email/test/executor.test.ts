@@ -5,14 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { EmailMessage } from "@dbx-tools/shared-email";
-import { EMAIL_SEND_SETTINGS, type EmailExecutionSettings } from "../src/defaults";
+import { EMAIL_SEND_SETTINGS, type EmailExecutionSettings } from "../src/defaults.ts";
 import {
   getEmailRuntime,
   resetEmailRuntime,
   sendEmail,
   setEmailExecutor,
   type EmailExecutor,
-} from "../src/transport";
+} from "../src/transport.ts";
 
 // The runtime is a process-wide singleton built from the environment on first
 // use, so the outbox mode has to be in place before any test sends.

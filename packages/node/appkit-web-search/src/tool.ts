@@ -29,9 +29,9 @@ import {
   toApprovalPolicy,
   type ApprovalGate,
   type ApprovalPolicy,
-} from "./config";
-import { runWebFetch } from "./fetch";
-import { getWebSearchRuntime } from "./runtime";
+} from "./config.ts";
+import { runWebFetch } from "./fetch.ts";
+import { getWebSearchRuntime } from "./runtime.ts";
 import {
   webFetchRequestSchema,
   webFetchResultSchema,
@@ -39,8 +39,8 @@ import {
   webSearchResultSchema,
   WEB_FETCH_TOOL_DESCRIPTION,
   WEB_SEARCH_TOOL_DESCRIPTION,
-} from "./schema";
-import { resolveWebSearchContext, runWebSearch } from "./search";
+} from "./schema.ts";
+import { resolveWebSearchContext, runWebSearch } from "./search.ts";
 
 /**
  * Validate a tool call's arguments at the runtime boundary. Mastra checks the

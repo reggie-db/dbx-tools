@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env node
 /**
  * `dbx-tools-appkit-env`: run AppKit auto-config and print the env vars it added or
  * changed. Snapshots `process.env`, runs auto-config, diffs, and writes
@@ -15,7 +15,7 @@ import {
   formatEnvExport,
   parseEnvExportFormat,
   snapshotEnv,
-} from "../src/env-export";
+} from "../src/env-export.ts";
 
 const logger = log.logger("appkit-env");
 

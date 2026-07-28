@@ -9,7 +9,7 @@ import {
   isChatClass,
   MODEL_CLASS_ORDER,
   parseModelClass,
-} from "../src/classes";
+} from "../src/classes.ts";
 
 const { ModelClass } = model;
 

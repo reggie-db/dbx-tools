@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 import { intro, outro } from "@clack/prompts";
 import { exec } from "@dbx-tools/core";
 import { json } from "@dbx-tools/shared-core";
-import { resolvePnpmArgv, runPnpm } from "./pnpm";
-import { rootLabel } from "./root";
+import { resolvePnpmArgv, runPnpm } from "./pnpm.ts";
+import { rootLabel } from "./root.ts";
 
 /** Fallback when this CLI's own version isn't a real release (an in-repo `0.0.0`). */
 const FALLBACK_PROJEN_SPECIFIER = "@dbx-tools/projen@latest";

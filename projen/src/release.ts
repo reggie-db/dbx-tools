@@ -7,7 +7,7 @@
 import { Component } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
-import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project";
+import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
 
 /**
  * A standalone project that lives in a repo SUBDIRECTORY but is NOT a member of

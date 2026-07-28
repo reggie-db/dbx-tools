@@ -2,10 +2,10 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as cloud from "./src/cloud";
-export * as net from "./src/net";
-export * as workspace from "./src/workspace";
-export { RANGE_CACHE_TTL_MS, CloudProvider, resolveCloudLocation, loadProviderRanges } from "./src/cloud";
-export type { CloudLocation } from "./src/cloud";
-export { getPublicIp, resolveHostIps } from "./src/net";
-export { getWorkspaceUrl, getWorkspaceId } from "./src/workspace";
+export * as cloud from "./src/cloud.ts";
+export * as net from "./src/net.ts";
+export * as workspace from "./src/workspace.ts";
+export { RANGE_CACHE_TTL_MS, CloudProvider, resolveCloudLocation, loadProviderRanges } from "./src/cloud.ts";
+export type { CloudLocation } from "./src/cloud.ts";
+export { getPublicIp, resolveHostIps } from "./src/net.ts";
+export { getWorkspaceUrl, getWorkspaceId } from "./src/workspace.ts";

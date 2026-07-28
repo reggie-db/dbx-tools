@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { card } from "@dbx-tools/shared-teams";
-import { buildAdaptiveCard, buildCardResult } from "../src/builder";
-import { resolveTeamsConfig } from "../src/config";
+import { buildAdaptiveCard, buildCardResult } from "../src/builder.ts";
+import { resolveTeamsConfig } from "../src/config.ts";
 
 describe("adaptive card builder", () => {
   it("compiles a minimal spec into a valid Adaptive Card envelope", () => {

@@ -47,10 +47,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
 import type * as ts from "typescript";
-import { lazyRequire } from "./_lazy-require";
-import { header, isReadonly, makeReadonly, makeWritable } from "./generated";
+import { lazyRequire } from "./_lazy-require.ts";
+import { header, isReadonly, makeReadonly, makeWritable } from "./generated.ts";
 import { log, object } from "@dbx-tools/shared-core";
-import { readPackageManifest, repoRoot, recordedPackages } from "./packages";
+import { readPackageManifest, repoRoot, recordedPackages } from "./packages.ts";
 
 const logger = log.logger("projen:codegen");
 
@@ -322,8 +322,12 @@ export function generateCodegen(): string[] {
     .map((p) => ({ dir: p.dir, inputs: codegenInputs(p.dir) }))
     .filter((t): t is { dir: string; inputs: string[] } => t.inputs !== undefined);
 
+  // Nothing to generate is the NORMAL case for a workspace that declares no
+  // `codegen` inputs, and this runs on every synth - so it stays silent rather
+  // than printing a line about work that was never asked for. `debug` keeps it
+  // reachable when someone is actually chasing why codegen produced nothing.
   if (targets.length === 0) {
-    logger.info("no packages declare a `codegen` field");
+    logger.debug("no packages declare a `codegen` field");
     return [];
   }
 

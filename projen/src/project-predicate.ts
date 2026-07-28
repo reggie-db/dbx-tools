@@ -7,8 +7,8 @@ import {
 } from "@dbx-tools/shared-core";
 import { IConstruct } from "constructs";
 import { Project } from "projen";
-import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project";
-import { toPosix } from "./packages";
+import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project.ts";
+import { toPosix } from "./packages.ts";
 import { relative } from "node:path";
 import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
 import { project } from "..";

@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { Project } from "projen";
-import { applyToProjects, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project";
+import { applyToProjects, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
 
 let outdir: string;
 let root: DBXToolsNodeProject;

@@ -1,7 +1,7 @@
 import { Button } from "@dbx-tools/ui-appkit/react";
 import { CheckIcon, MailIcon, XIcon } from "lucide-react";
-import { EmailBody } from "./email-body";
-import { attachmentNames, joinAddresses, type EmailDraft } from "./fields";
+import { EmailBody } from "./email-body.tsx";
+import { attachmentNames, joinAddresses, type EmailDraft } from "./fields.ts";
 
 // Presentational pieces for an outbound email awaiting a human Approve /
 // Deny: the field preview (To / Cc / Subject / Body / Files, body
@@ -11,7 +11,7 @@ import { attachmentNames, joinAddresses, type EmailDraft } from "./fields";
 // `EmailComposeView` in `./email-compose`; both share `./fields` and
 // `./email-body`.
 
-export type { EmailDraft } from "./fields";
+export type { EmailDraft } from "./fields.ts";
 
 /** Props for {@link EmailPreview}. */
 export interface EmailPreviewProps {

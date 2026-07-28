@@ -40,7 +40,7 @@
  */
 import { relative } from "node:path";
 import { javascript, type Project } from "projen";
-import { toPosix } from "./packages";
+import { toPosix } from "./packages.ts";
 
 /**
  * The pnpm `catalog:` version registry: dependency name -> version range. A

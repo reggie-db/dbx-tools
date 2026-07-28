@@ -31,12 +31,12 @@ import {
 import { invoke, resolve, serving } from "@dbx-tools/model";
 import { log, object, string } from "@dbx-tools/shared-core";
 import { openaiChat, openaiResponses } from "@dbx-tools/shared-model";
-import { MODEL_ENV, SERVING_ENDPOINT_ENV, type ResolvedWebSearchConfig } from "./config";
-import { toCallSettings, webSearchExecuteDefaults } from "./defaults";
-import { detectWebSearchProvider, supportsWebSearch, webSearchToolSpec } from "./provider";
-import { executeRead } from "./runtime";
-import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema";
-import { runScrapeSearch } from "./scrape";
+import { MODEL_ENV, SERVING_ENDPOINT_ENV, type ResolvedWebSearchConfig } from "./config.ts";
+import { toCallSettings, webSearchExecuteDefaults } from "./defaults.ts";
+import { detectWebSearchProvider, supportsWebSearch, webSearchToolSpec } from "./provider.ts";
+import { executeRead } from "./runtime.ts";
+import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema.ts";
+import { runScrapeSearch } from "./scrape.ts";
 
 type WorkspaceClientLike = serving.WorkspaceClientLike;
 const logger = log.logger("web-search/search");

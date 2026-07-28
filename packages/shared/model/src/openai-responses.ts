@@ -44,7 +44,7 @@
 
 import { string } from "@dbx-tools/shared-core";
 
-import { type ChatMessage, type ChatToolCall, chatContentToText } from "./openai-chat";
+import { type ChatMessage, type ChatToolCall, chatContentToText } from "./openai-chat.ts";
 
 /**
  * Lower a Responses request body to a chat-completions body. Returns the chat

@@ -24,7 +24,7 @@
 import { createLakebasePool, getWorkspaceClient, ValidationError } from "@databricks/appkit";
 import { error, log } from "@dbx-tools/shared-core";
 
-import { isAppEnv } from "./databricks";
+import { isAppEnv } from "./databricks.ts";
 
 const defaultLogger = log.logger("provision");
 

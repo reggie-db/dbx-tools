@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { exec } from "@dbx-tools/core";
 import { functionModule } from "@dbx-tools/shared-core";
-import { needsInstall } from "./root";
+import { needsInstall } from "./root.ts";
 
 /** A package.json `bin` field: either a single command string, or a name -> path map. */
 type BinField = string | Record<string, string>;

@@ -1,9 +1,9 @@
 #!/usr/bin/env -S npx tsx
-import { generateBarrels } from "../src/barrels";
+import { generateBarrels } from "../src/barrels.ts";
 import { log, string } from "@dbx-tools/shared-core";
-import { generateOpenapi, isTsoaController } from "../src/openapi";
-import { runSynth } from "../src/scaffold";
-import { watchLoop, watchRoots } from "../src/watch";
+import { generateOpenapi, isTsoaController } from "../src/openapi.ts";
+import { runSynth } from "../src/scaffold.ts";
+import { watchLoop, watchRoots } from "../src/watch.ts";
 
 const logger = log.logger("projen:openapi");
 

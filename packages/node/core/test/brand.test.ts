@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { brand } from "../index";
+import { brand } from "../index.ts";
 
 describe("brand files", () => {
   it("loads YAML and discovers the conventional branding path", async () => {

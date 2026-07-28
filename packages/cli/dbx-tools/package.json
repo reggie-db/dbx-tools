@@ -6,8 +6,8 @@
     "directory": "packages/cli/dbx-tools"
   },
   "bin": {
-    "dbx-tools": "./bin/dbx-tools.mjs",
-    "dbxt": "./bin/dbx-tools.mjs"
+    "dbx-tools": "./bin/dbx-tools.ts",
+    "dbxt": "./bin/dbx-tools.ts"
   },
   "scripts": {
     "build": "projen build",
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
@@ -30,8 +31,7 @@
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:",
-    "pnpm": "catalog:",
-    "tsx": "catalog:"
+    "pnpm": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -39,6 +39,10 @@
     "access": "public",
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
+    "bin": {
+      "dbx-tools": "./lib/bin/dbx-tools.js",
+      "dbxt": "./lib/bin/dbx-tools.js"
+    },
     "exports": {
       ".": {
         "types": "./lib/index.d.ts",

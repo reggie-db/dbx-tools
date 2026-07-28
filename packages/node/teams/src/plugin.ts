@@ -51,19 +51,24 @@ import {
 } from "@databricks/appkit/beta";
 import { error, log, object, string } from "@dbx-tools/shared-core";
 import { activity as activityContract, card } from "@dbx-tools/shared-teams";
-import { verifyBotToken } from "./auth";
-import { TEAMS_CONFIG_SCHEMA, type TeamsPluginConfig } from "./config";
-import { promptOf, resolveCardAgent, resolveCardContextFactory, runCardTurn } from "./conversation";
-import { TEAMS_BUILD_SETTINGS, TEAMS_POST_SETTINGS, TEAMS_TURN_SETTINGS } from "./defaults";
-import { deliverTurn, resolveServiceUrl } from "./messaging";
+import { verifyBotToken } from "./auth.ts";
+import { TEAMS_CONFIG_SCHEMA, type TeamsPluginConfig } from "./config.ts";
+import {
+  promptOf,
+  resolveCardAgent,
+  resolveCardContextFactory,
+  runCardTurn,
+} from "./conversation.ts";
+import { TEAMS_BUILD_SETTINGS, TEAMS_POST_SETTINGS, TEAMS_TURN_SETTINGS } from "./defaults.ts";
+import { deliverTurn, resolveServiceUrl } from "./messaging.ts";
 import {
   buildCard,
   getTeamsRuntime,
   postCard,
   resetTeamsRuntime,
   setTeamsExecutor,
-} from "./runtime";
-import { CREATE_CARD_DESCRIPTION } from "./tool";
+} from "./runtime.ts";
+import { CREATE_CARD_DESCRIPTION } from "./tool.ts";
 
 /** Mount-relative route (under `/api/teams`) for compiling a card. */
 const CARD_ROUTE = "/card";

@@ -26,14 +26,14 @@ import { createTool } from "@mastra/core/tools";
 import type { Workspace } from "@mastra/core/workspace";
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
-import { buildRenderDataTool } from "./chart";
-import type { MastraPluginConfig } from "./config";
-import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie";
-import type { MemoryBuilder } from "./memory";
-import { buildModel } from "./model";
-import { ResultProcessor, stripStaleChartsProcessor } from "./processors";
-import { buildSummarizeTool } from "./summarize";
-import { createWorkspace } from "./workspaces";
+import { buildRenderDataTool } from "./chart.ts";
+import type { MastraPluginConfig } from "./config.ts";
+import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
+import type { MemoryBuilder } from "./memory.ts";
+import { buildModel } from "./model.ts";
+import { ResultProcessor, stripStaleChartsProcessor } from "./processors.ts";
+import { buildSummarizeTool } from "./summarize.ts";
+import { createWorkspace } from "./workspaces.ts";
 
 /**
  * Tool record accepted by every Mastra `Agent.tools` field and by the

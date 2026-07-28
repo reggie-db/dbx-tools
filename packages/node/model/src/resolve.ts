@@ -29,15 +29,15 @@ import {
   type ServingEndpointSummary,
 } from "@dbx-tools/shared-model";
 
-import { CHAT_CLASS_ORDER, classesAtOrBelow, MODEL_CLASS_ORDER } from "./classes";
-import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback";
+import { CHAT_CLASS_ORDER, classesAtOrBelow, MODEL_CLASS_ORDER } from "./classes.ts";
+import { FALLBACK_MODEL_IDS, modelsForClass } from "./fallback.ts";
 import {
   listServingEndpoints,
   searchServingEndpoints,
   type ResolvedModel,
   type ResolveModelOptions,
   type WorkspaceClientLike,
-} from "./serving";
+} from "./serving.ts";
 
 type ModelClass = model.ModelClass;
 

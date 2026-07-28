@@ -3,8 +3,8 @@ import { feedback, type MastraThread } from "@dbx-tools/shared-mastra";
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChatView } from "./chat-view";
-import { dedupeSuggestions } from "./suggestions";
+import { ChatView } from "./chat-view.tsx";
+import { dedupeSuggestions } from "./suggestions.ts";
 import type {
   ApprovalDecision,
   ChatViewProps,
@@ -13,16 +13,16 @@ import type {
   ThreadSummary,
   ToolEvent,
   ToolProgress,
-} from "./types";
-import { exportChat, type EmbedResolver, type ExportFormat } from "../support/export";
+} from "./types.ts";
+import { exportChat, type EmbedResolver, type ExportFormat } from "../support/export.ts";
 import {
   useMastraClient,
   useMastraDefaultModel,
   useMastraModels,
   useMastraSuggestions,
   useMastraThreads,
-} from "../support/mastra-client";
-import type { MastraStreamResponse } from "../support/mastra-stream";
+} from "../support/mastra-client.ts";
+import type { MastraStreamResponse } from "../support/mastra-stream.ts";
 import {
   createThreadSession,
   DEFAULT_THREAD_SESSION_KEY,
@@ -33,7 +33,7 @@ import {
   sessionKey,
   terminateRunningToolEvents,
   type ThreadSession,
-} from "../support/thread-sessions";
+} from "../support/thread-sessions.ts";
 
 // Self-contained drop-in chat. `useMastraChat` drives the conversation
 // over `@mastra/client-js`: `agent.stream()` returns a Response

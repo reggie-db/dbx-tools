@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { brand } from "../index";
+import { brand } from "../index.ts";
 
 describe("brand context", () => {
   it("fills dbx tools defaults", () => {

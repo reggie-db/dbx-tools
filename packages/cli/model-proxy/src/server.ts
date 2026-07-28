@@ -36,8 +36,8 @@ import { async as asyncUtil, error, json, log } from "@dbx-tools/shared-core";
 import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 import { Agent } from "undici";
 
-import type { DatabricksBackend } from "./backend";
-import { DEFAULT_BIND_HOST, DEFAULT_PORT, DEFAULT_RETRY, type RetryConfig } from "./defaults";
+import type { DatabricksBackend } from "./backend.ts";
+import { DEFAULT_BIND_HOST, DEFAULT_PORT, DEFAULT_RETRY, type RetryConfig } from "./defaults.ts";
 
 const { chatToResponsesRequest, responseToChatCompletion, sanitizeOpenResponsesRequest } =
   openaiResponses;

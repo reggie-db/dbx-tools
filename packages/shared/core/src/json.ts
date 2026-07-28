@@ -19,7 +19,7 @@
  * @module
  */
 
-import { isRecord } from "./object";
+import { isRecord } from "./object.ts";
 
 /**
  * Parse JSON text, returning `fallback` (default `undefined`) instead of

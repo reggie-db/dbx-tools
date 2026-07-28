@@ -30,7 +30,7 @@ import {
   DownloadIcon,
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
-import { downloadFile } from "../support/download";
+import { downloadFile } from "../support/download.ts";
 
 // Interactive result table plus the cell/label/CSV helpers it and the
 // markdown table renderer share. Built on `@tanstack/react-table` over

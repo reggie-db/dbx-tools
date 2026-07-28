@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ValidationError } from "@databricks/appkit";
-import { cacheGrantStatements } from "../src/provision";
+import { cacheGrantStatements } from "../src/provision.ts";
 
 describe("cache schema grants", () => {
   it("quotes the schema and an email-shaped role", () => {

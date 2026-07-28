@@ -31,8 +31,8 @@ import {
   applyLakebaseToEnv,
   resolveLakebaseConnection,
   type LakebaseConnection,
-} from "./lakebase-resolver";
-import { provisionCacheSchema } from "./provision";
+} from "./lakebase-resolver.ts";
+import { provisionCacheSchema } from "./provision.ts";
 
 type AppKitCreateAppConfig = NonNullable<Parameters<typeof appkitCreateApp>[0]>;
 type AppKitPlugins = NonNullable<AppKitCreateAppConfig["plugins"]>;

@@ -28,10 +28,14 @@ import {
   MASTRA_USER_NAME_KEY,
   type MastraPluginConfig,
   type User,
-} from "./config";
-import { resolveFeedbackEnabled } from "./mlflow";
+} from "./config.ts";
+import { resolveFeedbackEnabled } from "./mlflow.ts";
 
-import { extractModelOverride, MASTRA_MODEL_OVERRIDE_KEY, resolveServingConfig } from "./serving";
+import {
+  extractModelOverride,
+  MASTRA_MODEL_OVERRIDE_KEY,
+  resolveServingConfig,
+} from "./serving.ts";
 /**
  * OpenTelemetry's sentinel for "no valid trace" - 32 zero hex chars.
  * `trace.getActiveSpan()` returns a non-recording span with this id

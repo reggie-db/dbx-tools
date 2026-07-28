@@ -25,8 +25,8 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import type * as ts from "typescript";
 import { find } from "@dbx-tools/path";
-import { lazyRequire } from "./_lazy-require";
-import { makeReadonly, makeWritable, stampGenerated } from "./generated";
+import { lazyRequire } from "./_lazy-require.ts";
+import { makeReadonly, makeWritable, stampGenerated } from "./generated.ts";
 import { log } from "@dbx-tools/shared-core";
 import {
   type RecordedPackage,
@@ -34,7 +34,7 @@ import {
   repoRoot,
   toPosix,
   recordedPackages,
-} from "./packages";
+} from "./packages.ts";
 
 const logger = log.logger("projen:openapi");
 
@@ -86,15 +86,21 @@ export function isTsoaController(path: string): boolean {
  */
 export async function generateOpenapi(): Promise<string[]> {
   const pkgs = controllerPackages();
+  // Same reasoning as codegen's empty case: a workspace with no tsoa controllers
+  // is not a condition worth a line on every synth.
   if (pkgs.length === 0) {
-    logger.info("no tsoa controllers found in any server/node package");
+    logger.debug("no tsoa controllers found in any server/node package");
     return [];
   }
 
   // Lazy, resilient loads: tsoa + typescript are CJS (require), openapi-typescript
   // is ESM (dynamic import).
   const require = createRequire(import.meta.url);
-  const { generateSpec } = lazyRequire<typeof import("tsoa")>(require, "tsoa", "openapi generation");
+  const { generateSpec } = lazyRequire<typeof import("tsoa")>(
+    require,
+    "tsoa",
+    "openapi generation",
+  );
   const tsRuntime = lazyRequire<typeof ts>(require, "typescript", "openapi generation");
   const { default: openapiTS, astToString } = await import("openapi-typescript");
 

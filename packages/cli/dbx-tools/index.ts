@@ -2,11 +2,11 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as bootstrap from "./src/bootstrap";
-export * as cli from "./src/cli";
-export * as pnpm from "./src/pnpm";
-export * as root from "./src/root";
-export { ensureEngineCurrent, bootstrapWorkspace, seedToolchain, runInitialSynth } from "./src/bootstrap";
-export { runCli } from "./src/cli";
-export { resolvePnpmArgv, runPnpm, ensureWorkspaceReady, runProjen } from "./src/pnpm";
-export { findWorkspaceRoot, needsBootstrap, needsInstall, needsToolchain, workspaceRoot, rootLabel } from "./src/root";
+export * as bootstrap from "./src/bootstrap.ts";
+export * as cli from "./src/cli.ts";
+export * as pnpm from "./src/pnpm.ts";
+export * as root from "./src/root.ts";
+export { ensureEngineCurrent, bootstrapWorkspace, seedToolchain, runInitialSynth } from "./src/bootstrap.ts";
+export { runCli } from "./src/cli.ts";
+export { resolvePnpmArgv, runPnpm, ensureWorkspaceReady, runProjen } from "./src/pnpm.ts";
+export { findWorkspaceRoot, needsBootstrap, needsInstall, needsToolchain, workspaceRoot, rootLabel } from "./src/root.ts";

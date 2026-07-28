@@ -20,7 +20,6 @@
 /.vscode/settings.json linguist-generated
 /.vscode/tasks.json linguist-generated
 /package.json linguist-generated
-/packages/**/bin/*.mjs linguist-generated
 /packages/**/index.ts linguist-generated
 /packages/openapi/** linguist-generated
 /pnpm-lock.yaml linguist-generated

@@ -8,7 +8,7 @@ import { hash, json, string } from "@dbx-tools/shared-core";
 import { activity as activityContract, type Activity } from "@dbx-tools/shared-teams";
 import { Avatar, AvatarFallback, Button, Input, Spinner, cn } from "@dbx-tools/ui-appkit/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AdaptiveCardView } from "./adaptive-card";
+import { AdaptiveCardView } from "./adaptive-card.tsx";
 
 /** Props for {@link TeamsChat}. */
 export interface TeamsChatProps {

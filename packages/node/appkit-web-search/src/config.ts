@@ -48,7 +48,7 @@ import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
 import { serving } from "@dbx-tools/model";
 import { json, object, type OneOrMany, string } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
-import { parseAllowedUrls, toUrlAllowList, type UrlAllowList } from "./allowlist";
+import { parseAllowedUrls, toUrlAllowList, type UrlAllowList } from "./allowlist.ts";
 
 /**
  * A URL-pattern gate for per-tool approval. `true` gates every call; a

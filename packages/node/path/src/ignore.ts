@@ -18,8 +18,8 @@
 
 import { project } from "@dbx-tools/core";
 import { functionModule, object, type Sequence } from "@dbx-tools/shared-core";
-import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match";
-import { directoryNamePattern, fileExtensionPattern } from "./pattern";
+import { PathMatcher, PathMatchPredicate, toPathMatcher } from "./match.ts";
+import { directoryNamePattern, fileExtensionPattern } from "./pattern.ts";
 
 /** Toggles for each built-in ignore group; omitted flags default to `true`. */
 export type IgnorePatternOptions = {

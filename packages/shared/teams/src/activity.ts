@@ -20,7 +20,7 @@
  */
 
 import { z } from "zod";
-import { adaptiveCardSchema } from "./card";
+import { adaptiveCardSchema } from "./card.ts";
 
 /** The attachment content type Teams uses for an Adaptive Card. */
 export const ADAPTIVE_CARD_CONTENT_TYPE = "application/vnd.microsoft.card.adaptive";

@@ -22,9 +22,13 @@
 import { AppKitError, ExecutionError, type ExecutionResult } from "@databricks/appkit";
 import { async, error, log } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
-import { buildCardResult } from "./builder";
-import { resolveTeamsConfig, type ResolvedTeamsConfig, type TeamsPluginConfig } from "./config";
-import { TEAMS_BUILD_SETTINGS, TEAMS_POST_SETTINGS, type TeamsExecutionSettings } from "./defaults";
+import { buildCardResult } from "./builder.ts";
+import { resolveTeamsConfig, type ResolvedTeamsConfig, type TeamsPluginConfig } from "./config.ts";
+import {
+  TEAMS_BUILD_SETTINGS,
+  TEAMS_POST_SETTINGS,
+  type TeamsExecutionSettings,
+} from "./defaults.ts";
 
 const logger = log.logger("teams/runtime");
 

@@ -2,16 +2,16 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as classes from "./src/classes";
-export * as fallback from "./src/fallback";
-export * as invoke from "./src/invoke";
-export * as resolve from "./src/resolve";
-export * as serving from "./src/serving";
-export { CHAT_CLASS_ORDER, MODEL_CLASS_ORDER, isChatClass, parseModelClass, classesAtOrBelow } from "./src/classes";
-export { modelsForClass, modelForClass, FALLBACK_MODEL_IDS } from "./src/fallback";
-export { INVOCATIONS_SUFFIX, RESPONSES_PATH, OPEN_RESPONSES_PATH, CHAT_COMPLETIONS_PATH, invocationsUrl, responsesUrl, openResponsesUrl, chatCompletionsUrl, isResponsesOnly, responsesUpstreamUrl, authHeaders } from "./src/invoke";
-export type { AuthenticatingClientLike } from "./src/invoke";
-export { rankModels, rankModelId, rankModelIdLive, searchModels, selectModel, resolveModel } from "./src/resolve";
-export type { ResolveModelInput, ResolvedModelSelection, SelectModelInput, SearchModelsInput } from "./src/resolve";
-export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD, listServingEndpoints, listServingEndpointsUncached, clearServingEndpointsCache, searchServingEndpoints, resolveModelId } from "./src/serving";
-export type { WorkspaceClientLike, ListServingEndpointsOptions, ResolvedModel, ResolveModelOptions, ScoredEndpoint } from "./src/serving";
+export * as classes from "./src/classes.ts";
+export * as fallback from "./src/fallback.ts";
+export * as invoke from "./src/invoke.ts";
+export * as resolve from "./src/resolve.ts";
+export * as serving from "./src/serving.ts";
+export { CHAT_CLASS_ORDER, MODEL_CLASS_ORDER, isChatClass, parseModelClass, classesAtOrBelow } from "./src/classes.ts";
+export { modelsForClass, modelForClass, FALLBACK_MODEL_IDS } from "./src/fallback.ts";
+export { INVOCATIONS_SUFFIX, RESPONSES_PATH, OPEN_RESPONSES_PATH, CHAT_COMPLETIONS_PATH, invocationsUrl, responsesUrl, openResponsesUrl, chatCompletionsUrl, isResponsesOnly, responsesUpstreamUrl, authHeaders } from "./src/invoke.ts";
+export type { AuthenticatingClientLike } from "./src/invoke.ts";
+export { rankModels, rankModelId, rankModelIdLive, searchModels, selectModel, resolveModel } from "./src/resolve.ts";
+export type { ResolveModelInput, ResolvedModelSelection, SelectModelInput, SearchModelsInput } from "./src/resolve.ts";
+export { DEFAULT_MODEL_CACHE_TTL_MS, DEFAULT_FUZZY_THRESHOLD, listServingEndpoints, listServingEndpointsUncached, clearServingEndpointsCache, searchServingEndpoints, resolveModelId } from "./src/serving.ts";
+export type { WorkspaceClientLike, ListServingEndpointsOptions, ResolvedModel, ResolveModelOptions, ScoredEndpoint } from "./src/serving.ts";

@@ -17,12 +17,12 @@
 
 import { log } from "@dbx-tools/shared-core";
 import { gotScraping } from "got-scraping";
-import { assertUrlAllowed } from "./allowlist";
-import type { ResolvedWebSearchConfig } from "./config";
-import { toCallSettings, webFetchExecuteDefaults } from "./defaults";
-import { decodeHtmlEntities, htmlToText } from "./html-text";
-import { executeRead } from "./runtime";
-import type { WebFetchRequest, WebFetchResult } from "./schema";
+import { assertUrlAllowed } from "./allowlist.ts";
+import type { ResolvedWebSearchConfig } from "./config.ts";
+import { toCallSettings, webFetchExecuteDefaults } from "./defaults.ts";
+import { decodeHtmlEntities, htmlToText } from "./html-text.ts";
+import { executeRead } from "./runtime.ts";
+import type { WebFetchRequest, WebFetchResult } from "./schema.ts";
 
 const logger = log.logger("web-search/fetch");
 

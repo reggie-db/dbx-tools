@@ -16,9 +16,9 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { format as formatSql } from "sql-formatter";
 import { Streamdown } from "streamdown";
-import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid";
-import { copyText } from "../support/clipboard";
-import { createShikiPlugin, highlightToHtml } from "../support/shiki-plugin";
+import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid.tsx";
+import { copyText } from "../support/clipboard.ts";
+import { createShikiPlugin, highlightToHtml } from "../support/shiki-plugin.ts";
 
 // Markdown rendering for the chat: the streaming `Streamdown` engine
 // wired with shiki highlighting and AppKit table primitives, plus the

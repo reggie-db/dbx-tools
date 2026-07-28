@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { activity as activityContract } from "@dbx-tools/shared-teams";
-import { isAllowedServiceUrl } from "../src/auth";
-import { resolveTeamsConfig } from "../src/config";
-import { resolveServiceUrl } from "../src/messaging";
+import { isAllowedServiceUrl } from "../src/auth.ts";
+import { resolveTeamsConfig } from "../src/config.ts";
+import { resolveServiceUrl } from "../src/messaging.ts";
 
 /** An inbound activity as a channel would send it, with a `serviceUrl`. */
 const inbound = (serviceUrl?: string): activityContract.Activity =>

@@ -25,7 +25,7 @@ import { dirname, join } from "node:path";
 
 import { file } from "@dbx-tools/core";
 import { error, functionModule, hash, http, log, net } from "@dbx-tools/shared-core";
-import { resolveHostIps } from "./net";
+import { resolveHostIps } from "./net.ts";
 
 const logger = log.logger("cloud");
 

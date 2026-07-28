@@ -27,8 +27,8 @@ import { resolve } from "node:path";
 import { ConfigurationError, ValidationError, type BasePluginConfig } from "@databricks/appkit";
 import { object } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
-import type { EmailBrand } from "./brand";
-import { parseAllowedSenders } from "./sender";
+import type { EmailBrand } from "./brand.ts";
+import { parseAllowedSenders } from "./sender.ts";
 
 /** SMTP submission port used when none is configured. */
 export const DEFAULT_SMTP_PORT = 587;

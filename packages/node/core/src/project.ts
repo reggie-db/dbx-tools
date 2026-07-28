@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { hash, json, net, string } from "@dbx-tools/shared-core";
-import { statSync as stat } from "./file";
+import { statSync as stat } from "./file.ts";
 
 const ROOT_MARKERS = [
   ".projenrc.ts",

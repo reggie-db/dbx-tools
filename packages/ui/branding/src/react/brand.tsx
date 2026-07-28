@@ -7,7 +7,7 @@ import {
   useEffect,
   useMemo,
 } from "react";
-import { applyBrandContext, type BrandAssetResolver, resolveBrandAsset } from "../browser";
+import { applyBrandContext, type BrandAssetResolver, resolveBrandAsset } from "../browser.ts";
 
 interface BrandState {
   context: brand.BrandContext;

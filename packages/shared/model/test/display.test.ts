@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { toModelDisplayName } from "../src/display";
+import { toModelDisplayName } from "../src/display.ts";
 
 describe("toModelDisplayName", () => {
   it("strips a leading databricks prefix and dots the version", () => {

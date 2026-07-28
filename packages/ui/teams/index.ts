@@ -2,15 +2,15 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as reactAdaptiveCard from "./src/react/adaptive-card";
-export * as reactAdaptiveCardGallery from "./src/react/adaptive-card-gallery";
-export * as reactSamples from "./src/react/samples";
-export * as reactTeamsChat from "./src/react/teams-chat";
-export { AdaptiveCardView } from "./src/react/adaptive-card";
-export type { AdaptiveCardViewProps } from "./src/react/adaptive-card";
-export { AdaptiveCardGallery } from "./src/react/adaptive-card-gallery";
-export type { AdaptiveCardGalleryProps } from "./src/react/adaptive-card-gallery";
-export { CARD_SAMPLES } from "./src/react/samples";
-export type { CardSample } from "./src/react/samples";
-export { DEFAULT_STARTERS, TeamsChat } from "./src/react/teams-chat";
-export type { TeamsChatProps } from "./src/react/teams-chat";
+export * as reactAdaptiveCard from "./src/react/adaptive-card.tsx";
+export * as reactAdaptiveCardGallery from "./src/react/adaptive-card-gallery.tsx";
+export * as reactSamples from "./src/react/samples.ts";
+export * as reactTeamsChat from "./src/react/teams-chat.tsx";
+export { AdaptiveCardView } from "./src/react/adaptive-card.tsx";
+export type { AdaptiveCardViewProps } from "./src/react/adaptive-card.tsx";
+export { AdaptiveCardGallery } from "./src/react/adaptive-card-gallery.tsx";
+export type { AdaptiveCardGalleryProps } from "./src/react/adaptive-card-gallery.tsx";
+export { CARD_SAMPLES } from "./src/react/samples.ts";
+export type { CardSample } from "./src/react/samples.ts";
+export { DEFAULT_STARTERS, TeamsChat } from "./src/react/teams-chat.tsx";
+export type { TeamsChatProps } from "./src/react/teams-chat.tsx";

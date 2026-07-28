@@ -14,9 +14,8 @@
  * callers add their own afterward.
  */
 import type { IMixin as ConstructsMixin } from "constructs";
-import { DependencyType, javascript } from "projen";
-import { addCliBinLaunchers } from "./cli-bin";
-import { create } from "./mixin";
+import { javascript } from "projen";
+import { create } from "./mixin.ts";
 import {
   addPackageFiles,
   applyCompilerOptions,
@@ -24,9 +23,9 @@ import {
   applyIncludes,
   applyTasks,
   srcModuleExports,
-} from "./project";
-import * as projectPredicate from "./project-predicate";
-import { ViteConfigFile } from "./vite";
+} from "./project.ts";
+import * as projectPredicate from "./project-predicate.ts";
+import { ViteConfigFile } from "./vite.ts";
 
 /** Node compiler options: ES2022 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
@@ -114,19 +113,17 @@ export const PACKAGE_TAG_MIXINS = {
     });
   }),
   cli: create(projectPredicate.hasTag("cli"), (p) => {
-    // tsx is a RUNTIME dep, not a dev one: a CLI's bin is a `.ts` entry that needs
-    // the tsx loader registered before it can run, and an installed consumer
-    // (`npm i -g`) has no other source for it. Drop the baseline devDep so it isn't
-    // declared in both blocks. The generated `.mjs` launchers are what actually
-    // reach it - see {@link addCliBinLaunchers}.
-    p.deps.removeDependency("tsx", DependencyType.BUILD);
-    p.addDeps("commander@catalog:", "@clack/prompts@catalog:", "tsx@catalog:");
+    // No tsx: a CLI's `bin` resolves to its emitted `lib/bin/<name>.js` in the
+    // published tarball (see `publishConfig` in {@link applyCompiledPublish}), so
+    // the installed CLI is plain JavaScript Node runs directly - no loader to
+    // register and no launcher shim to generate. In a WORKSPACE checkout the
+    // manifest still points at the `.ts` entry, which Node type-strips on its own
+    // because the package is not under `node_modules`.
+    p.addDeps("commander@catalog:", "@clack/prompts@catalog:");
     p.addDevDeps("@types/node@catalog:");
-    addCliBinLaunchers(p);
     // A CLI compiles code OUTSIDE `src/` - its root `index.ts` barrel and the
-    // `bin/` entries - which the src-only tag default doesn't reach, so the
-    // tsconfig is rooted at the package instead.
-    applyCompilerOptions(p, { ...NODE_COMPILER_OPTIONS, rootDir: "." });
+    // `bin/` entries - which the src-only tag default doesn't reach.
+    applyCompilerOptions(p, NODE_COMPILER_OPTIONS);
     applyIncludes(p, "index.ts", "bin/**/*.ts");
     // A CLI's standard surface: the `.` root entry, a `./<module>` subpath per
     // top-level `src` module, and `./package.json`. Derived rather than declared
@@ -137,7 +134,7 @@ export const PACKAGE_TAG_MIXINS = {
       "./package.json": "./package.json",
     });
     // A CLI is the one shape whose entry point lives outside `src`, so its
-    // launchers have to be added to the tarball allowlist explicitly.
+    // `bin/` tree has to be added to the tarball allowlist explicitly.
     addPackageFiles(p, "bin");
   }),
   server: create(projectPredicate.hasTag("server"), (p) => {

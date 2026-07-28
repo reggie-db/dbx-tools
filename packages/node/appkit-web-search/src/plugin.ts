@@ -36,17 +36,22 @@ import {
   SERVING_ENDPOINT_ENV,
   WEB_SEARCH_CONFIG_SCHEMA,
   type WebSearchPluginConfig,
-} from "./config";
-import { runWebFetch } from "./fetch";
-import { getWebSearchRuntime, resetWebSearchRuntime, setWebSearchExecutor } from "./runtime";
+} from "./config.ts";
+import { runWebFetch } from "./fetch.ts";
+import { getWebSearchRuntime, resetWebSearchRuntime, setWebSearchExecutor } from "./runtime.ts";
 import {
   webFetchRequestSchema,
   webSearchRequestSchema,
   WEB_FETCH_TOOL_DESCRIPTION,
   WEB_SEARCH_TOOL_DESCRIPTION,
-} from "./schema";
-import type { WebFetchRequest, WebFetchResult, WebSearchRequest, WebSearchResult } from "./schema";
-import { resolveWebSearchContext, runWebSearch } from "./search";
+} from "./schema.ts";
+import type {
+  WebFetchRequest,
+  WebFetchResult,
+  WebSearchRequest,
+  WebSearchResult,
+} from "./schema.ts";
+import { resolveWebSearchContext, runWebSearch } from "./search.ts";
 
 const logger = log.logger("web-search");
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { async } from "../index";
+import { async } from "../index.ts";
 
 describe("async.combineAbortSignals", () => {
   it("returns undefined when every source is absent", () => {

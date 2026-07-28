@@ -2,14 +2,14 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as brand from "./src/brand";
-export * as exec from "./src/exec";
-export * as file from "./src/file";
-export * as project from "./src/project";
-export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContextJsonSchema, brandContextPrompt, findBrandContextFile, loadBrandContextFile, loadBrandContext, resolveBrandAssetPath } from "./src/brand";
-export type { BrandContext, BrandContextInput } from "./src/brand";
-export { spawn, spawnSync, shlex } from "./src/exec";
-export type { ExecStdio, LineHandler, StdioOption, ExecResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec";
-export { statSync } from "./src/file";
-export { root, parseGitRemote, resolveProjectRoots, name, repositoryUrl, npmRegistry } from "./src/project";
-export type { ProjectContext } from "./src/project";
+export * as brand from "./src/brand.ts";
+export * as exec from "./src/exec.ts";
+export * as file from "./src/file.ts";
+export * as project from "./src/project.ts";
+export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContextJsonSchema, brandContextPrompt, findBrandContextFile, loadBrandContextFile, loadBrandContext, resolveBrandAssetPath } from "./src/brand.ts";
+export type { BrandContext, BrandContextInput } from "./src/brand.ts";
+export { spawn, spawnSync, shlex } from "./src/exec.ts";
+export type { ExecStdio, LineHandler, StdioOption, ExecResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
+export { statSync } from "./src/file.ts";
+export { root, parseGitRemote, resolveProjectRoots, name, repositoryUrl, npmRegistry } from "./src/project.ts";
+export type { ProjectContext } from "./src/project.ts";

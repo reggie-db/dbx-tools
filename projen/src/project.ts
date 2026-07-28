@@ -13,17 +13,17 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
-import { generateBarrels } from "./barrels";
-import { generateCodegen } from "./codegen";
-import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config";
-import { resolvePkgRoot } from "./engine-root";
-import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
-import { applyCompiledPublish } from "./publish";
-import { DBXToolsRelease, type StandaloneRelease } from "./release";
-import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags";
-import { DBXToolsRootTsconfig } from "./tsconfig";
-import { ViteConfigFile } from "./vite";
-import { DBXToolsVsCode } from "./vscode";
+import { generateBarrels } from "./barrels.ts";
+import { generateCodegen } from "./codegen.ts";
+import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
+import { resolvePkgRoot } from "./engine-root.ts";
+import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
+import { applyCompiledPublish } from "./publish.ts";
+import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
+import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
+import { DBXToolsRootTsconfig } from "./tsconfig.ts";
+import { ViteConfigFile } from "./vite.ts";
+import { DBXToolsVsCode } from "./vscode.ts";
 import {
   DEFAULT_PACKAGE_ROOTS,
   type DiscoveredPackage,
@@ -32,7 +32,7 @@ import {
   repoRoot,
   scanPackages,
   toPosix,
-} from "./packages";
+} from "./packages.ts";
 import { mixin, projectPredicate } from "..";
 import { IConstruct } from "constructs";
 
@@ -271,11 +271,25 @@ export function srcModuleExports(pkg: javascript.NodeProject): Record<string, st
   return exports;
 }
 
-/** ESM compiler options every Node package shares regardless of tag. */
-const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
+/**
+ * ESM compiler options every package shares regardless of tag.
+ *
+ * Relative imports in this repo carry their REAL extension (`./http.ts`), which
+ * is what lets `tsc` rewrite them to `./http.js` on emit
+ * (`rewriteRelativeImportExtensions`) instead of a post-processing pass fixing up
+ * the emitted tree. Both flags belong here rather than on the publishing packages
+ * only: the specifier style is a property of the SOURCE, so a `ui` package (which
+ * publishes source and is excluded from the compiled surface) still has to accept
+ * and rewrite it.
+ */
+const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions & {
+  rewriteRelativeImportExtensions: boolean;
+} = {
   module: "ESNext",
   moduleResolution: javascript.TypeScriptModuleResolution.BUNDLER,
   skipLibCheck: true,
+  allowImportingTsExtensions: true,
+  rewriteRelativeImportExtensions: true,
 };
 
 /** Shared formatting rules, applied by projen's Prettier on whichever project is root. */
@@ -827,7 +841,6 @@ function initProject(
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/openapi/**`);
-    project.annotateGenerated(`/${root}/**/bin/*.mjs`);
   }
 
   // ESLint lives ONLY on the root and lints every package. `projectService` resolves

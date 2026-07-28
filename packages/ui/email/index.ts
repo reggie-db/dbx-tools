@@ -2,15 +2,15 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as reactEmailApprovalCard from "./src/react/email-approval-card";
-export * as reactEmailBody from "./src/react/email-body";
-export * as reactEmailCompose from "./src/react/email-compose";
-export * as reactFields from "./src/react/fields";
-export { EmailPreview, EmailApprovalCard } from "./src/react/email-approval-card";
-export type { EmailPreviewProps, EmailApprovalCardProps } from "./src/react/email-approval-card";
-export { EmailBody } from "./src/react/email-body";
-export type { EmailBodyProps } from "./src/react/email-body";
-export { EmailComposeView } from "./src/react/email-compose";
-export type { EmailComposeProps } from "./src/react/email-compose";
-export { joinAddresses, parseAddresses, attachmentNames } from "./src/react/fields";
-export type { EmailDraft } from "./src/react/fields";
+export * as reactEmailApprovalCard from "./src/react/email-approval-card.tsx";
+export * as reactEmailBody from "./src/react/email-body.tsx";
+export * as reactEmailCompose from "./src/react/email-compose.tsx";
+export * as reactFields from "./src/react/fields.ts";
+export { EmailPreview, EmailApprovalCard } from "./src/react/email-approval-card.tsx";
+export type { EmailPreviewProps, EmailApprovalCardProps } from "./src/react/email-approval-card.tsx";
+export { EmailBody } from "./src/react/email-body.tsx";
+export type { EmailBodyProps } from "./src/react/email-body.tsx";
+export { EmailComposeView } from "./src/react/email-compose.tsx";
+export type { EmailComposeProps } from "./src/react/email-compose.tsx";
+export { joinAddresses, parseAddresses, attachmentNames } from "./src/react/fields.ts";
+export type { EmailDraft } from "./src/react/fields.ts";

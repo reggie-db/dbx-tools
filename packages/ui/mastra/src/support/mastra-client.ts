@@ -21,7 +21,7 @@ import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
 import { MastraClient } from "@mastra/client-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { asMastraStreamResponse, type MastraStreamResponse } from "./mastra-stream";
+import { asMastraStreamResponse, type MastraStreamResponse } from "./mastra-stream.ts";
 
 /**
  * `@mastra/client-js` `MastraClient` extended with the Mastra plugin's

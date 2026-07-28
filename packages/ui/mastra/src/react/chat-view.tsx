@@ -47,11 +47,11 @@ import {
   XIcon,
 } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AssistantBubble, UserBubble } from "./bubbles";
-import { ExportMenu } from "./export-menu";
-import { SuggestionPills } from "./suggestion-pills";
-import { ThreadSidebar, type ThreadSidebarProps } from "./thread-sidebar";
-import type { ChatViewProps } from "./types";
+import { AssistantBubble, UserBubble } from "./bubbles.tsx";
+import { ExportMenu } from "./export-menu.tsx";
+import { SuggestionPills } from "./suggestion-pills.tsx";
+import { ThreadSidebar, type ThreadSidebarProps } from "./thread-sidebar.tsx";
+import type { ChatViewProps } from "./types.ts";
 
 // Controlled, presentational chat shell: the scroll container, header
 // (model picker + clear), empty state, transcript of message bubbles,

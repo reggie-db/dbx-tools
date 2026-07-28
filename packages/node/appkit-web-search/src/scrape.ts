@@ -20,11 +20,11 @@
 
 import { log } from "@dbx-tools/shared-core";
 import { gotScraping } from "got-scraping";
-import type { ResolvedWebSearchConfig } from "./config";
-import { scrapeSearchExecuteDefaults, toCallSettings } from "./defaults";
-import { htmlFragmentToText } from "./html-text";
-import { executeRead } from "./runtime";
-import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema";
+import type { ResolvedWebSearchConfig } from "./config.ts";
+import { scrapeSearchExecuteDefaults, toCallSettings } from "./defaults.ts";
+import { htmlFragmentToText } from "./html-text.ts";
+import { executeRead } from "./runtime.ts";
+import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema.ts";
 
 const logger = log.logger("web-search/scrape");
 

@@ -4,43 +4,51 @@
  *
  * Packages resolve each other from SOURCE - every `exports` entry points at a
  * `.ts` file, so a cross-package import type-checks with no build step and no
- * `dist` to keep in sync. That property is worth keeping, but it cannot be what
+ * `lib` to keep in sync. That property is worth keeping, but it cannot be what
  * ships: Node refuses to strip types under `node_modules`
  * (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so a published package whose
  * entry point is `index.ts` is unloadable by anything that is not a bundler.
- * Consumers papered over that by special-casing `@dbx-tools/*` into their own
- * bundle, which is a tax this repo has no business charging.
  *
  * pnpm resolves both at once. It substitutes `publishConfig`'s `main`/`types`/
- * `exports` into the manifest at pack time and drops `publishConfig` itself, so
- * the workspace keeps its source entry points while the tarball advertises the
- * compiled ones. Nothing here changes how the repo builds or type-checks; it
- * only changes what `pnpm pack` writes.
+ * `bin`/`exports` into the manifest at pack time and drops `publishConfig`
+ * itself, so the workspace keeps its source entry points while the tarball
+ * advertises the compiled ones. Nothing here changes how the repo builds or
+ * type-checks; it only changes what `pnpm pack` writes.
  *
- * Two pieces make the emitted tree actually loadable:
+ * Two compiler options make the emitted tree loadable, both native `tsc`:
  *
  * - `rootDir: "."` so the package-ROOT `index.ts` barrel is compiled at all.
  *   projen's default `rootDir: "src"` puts the barrel outside the compilation,
- *   which is why `lib/` has never had an `index.js`.
- * - a specifier pass after `tsc`, because `tsc` never rewrites import paths.
- *   Sources are written for `moduleResolution: bundler` and so import `"./http"`,
- *   which Node cannot resolve; `tasks/emit.ts` appends the extension that the
- *   emitted file actually has. Doing it after the fact keeps 800-odd import
- *   sites free of the `.js` suffix that would otherwise have to be written - and
- *   maintained - by hand.
+ *   which is why `lib/` would otherwise have no `index.js`.
+ * - `rewriteRelativeImportExtensions`, which turns the `./x.ts` specifiers this
+ *   repo writes into the `./x.js` Node's ESM resolver needs. Sources carry the
+ *   real extension (`allowImportingTsExtensions`) and `tsc` rewrites it on emit,
+ *   so no post-processing pass is involved.
  *
  * UI packages are deliberately excluded (see {@link publishesCompiled}).
  */
 import type { javascript } from "projen";
 import { typescript } from "projen";
-import { addPackageFiles, applyCompilerOptions, applyIncludes, taskScript } from "./project";
-import { isDBXToolsProject } from "./project-predicate";
+import { addPackageFiles, applyCompilerOptions, applyIncludes } from "./project.ts";
+import { isDBXToolsProject } from "./project-predicate.ts";
 
 /** Directory `tsc` emits into, and the root of every published entry point. */
 export const COMPILED_DIR = "lib";
 
-/** An `exports` target written as TypeScript source, i.e. one with a compiled twin. */
+/** An `exports`/`bin` target written as TypeScript source, i.e. with a compiled twin. */
 const TS_SOURCE = /\.tsx?$/;
+
+/**
+ * Compiler options that make a package's emitted `lib/` tree loadable by Node.
+ *
+ * Only `rootDir` here: the specifier rewriting
+ * (`allowImportingTsExtensions` + `rewriteRelativeImportExtensions`) is part of
+ * the tsconfig floor EVERY package gets, since the `.ts`-suffixed specifier style
+ * is a property of the source rather than of publishing.
+ */
+export const COMPILED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
+  rootDir: ".",
+};
 
 /**
  * Whether a package publishes compiled output rather than source.
@@ -52,15 +60,16 @@ const TS_SOURCE = /\.tsx?$/;
  * `./styles.css` plus raw SVG assets that `tsc` does not copy and could not
  * rewrite. Compiling them would mean a real asset pipeline (Vite library mode)
  * to solve a problem they do not have.
- *
- * This is the same split the downstream app build already makes on its own: its
- * client bundle resolves `@dbx-tools/ui-*` from source without complaint, while
- * its SERVER bundle is the one that had to inline `@dbx-tools/*` to avoid
- * handing Node a `.ts` entry point.
  */
 export function publishesCompiled(pkg: javascript.NodeProject): boolean {
   if (!(pkg instanceof typescript.TypeScriptProject) || !pkg.parent) return false;
-  return isDBXToolsProject(pkg) && !pkg.dbxToolsConfig.tags.includes("ui");
+  return isDBXToolsProject()(pkg) && !pkg.dbxToolsConfig.tags.includes("ui");
+}
+
+/** The `./lib/...` stem of a source path, or `undefined` if it is not TypeScript. */
+function compiledStem(target: string): string | undefined {
+  if (!TS_SOURCE.test(target)) return undefined;
+  return `./${COMPILED_DIR}/${target.replace(/^\.\//, "").replace(TS_SOURCE, "")}`;
 }
 
 /**
@@ -71,13 +80,12 @@ export function publishesCompiled(pkg: javascript.NodeProject): boolean {
  * mapping is positional: `./src/react/index.ts` -> `./lib/src/react/index.js`.
  */
 function compiledTarget(target: string): { types: string; default: string } | undefined {
-  if (!TS_SOURCE.test(target)) return undefined;
-  const stem = `./${COMPILED_DIR}/${target.replace(/^\.\//, "").replace(TS_SOURCE, "")}`;
-  return { types: `${stem}.d.ts`, default: `${stem}.js` };
+  const stem = compiledStem(target);
+  return stem ? { types: `${stem}.d.ts`, default: `${stem}.js` } : undefined;
 }
 
 /**
- * Derive `publishConfig` from the package's FINAL `exports` map.
+ * Derive `publishConfig` from the package's FINAL `exports` + `bin` maps.
  *
  * Runs at preSynthesize precisely so the tags have already installed their
  * export layouts - deriving it any earlier would mirror the constructor's bare
@@ -88,9 +96,26 @@ function publishConfig(pkg: javascript.NodeProject): Record<string, unknown> | u
   const compiled = Object.entries(exports).map(
     ([subpath, target]) => [subpath, compiledTarget(target) ?? target] as const,
   );
+
+  // A CLI's `bin` points at its `.ts` entry in-repo (Node strips types outside
+  // `node_modules`, so a workspace checkout runs it directly); the tarball has to
+  // point at the emitted `.js`, which is what lets the published CLI run with no
+  // loader installed.
+  // `bin` is rendered LAZILY (projen assigns `bin: () => this.renderBin()` and
+  // keeps the map itself private), so unlike `exports` this has to be called -
+  // reading the field directly yields the function and finds no entries.
+  const binField = pkg.package.manifest.bin as
+    Record<string, string> | (() => Record<string, string>) | undefined;
+  const bin = (typeof binField === "function" ? binField() : binField) ?? {};
+  const compiledBin = Object.entries(bin).flatMap(([name, target]) => {
+    const stem = compiledStem(target);
+    return stem ? [[name, `${stem}.js`] as const] : [];
+  });
+
   // Nothing to swap means the package ships no TypeScript entry point at all;
   // leave its manifest alone rather than writing an inert `publishConfig`.
-  if (!compiled.some(([, target]) => typeof target !== "string")) return undefined;
+  const swaps = compiled.some(([, target]) => typeof target !== "string");
+  if (!swaps && compiledBin.length === 0) return undefined;
 
   // Setting this field REPLACES whatever projen renders into it, and what projen
   // renders is `access` - dropped, every scoped package here would publish as
@@ -100,13 +125,14 @@ function publishConfig(pkg: javascript.NodeProject): Record<string, unknown> | u
   return {
     access: pkg.package.npmAccess,
     ...(typeof root === "object" ? { main: root.default, types: root.types } : {}),
+    ...(compiledBin.length ? { bin: Object.fromEntries(compiledBin) } : {}),
     exports: Object.fromEntries(compiled),
   };
 }
 
 /**
- * Give a package a compiled publish surface: emit the barrel, fix the emitted
- * specifiers, ship `lib/`, and advertise it through `publishConfig`.
+ * Give a package a compiled publish surface: emit the barrel, ship `lib/`, and
+ * advertise it through `publishConfig`.
  *
  * Idempotent - `preSynthesizeProject` reaches every package twice (once from the
  * root's walk, once from the package's own preSynthesize) and both passes must
@@ -115,21 +141,12 @@ function publishConfig(pkg: javascript.NodeProject): Record<string, unknown> | u
 export function applyCompiledPublish(pkg: javascript.NodeProject): void {
   if (!publishesCompiled(pkg)) return;
 
-  // The barrel lives at the package root, so the compilation has to start there.
-  // The `cli` tag already does this for its `bin/` tree; for everything else it
-  // is what puts an `index.js` in the emitted output for the first time.
-  applyCompilerOptions(pkg, { rootDir: "." });
+  applyCompilerOptions(pkg, COMPILED_COMPILER_OPTIONS);
   applyIncludes(pkg, "index.ts");
   addPackageFiles(pkg, COMPILED_DIR);
 
   const config = publishConfig(pkg);
   if (config) pkg.package.addField("publishConfig", config);
-
-  // `tsc` emits extensionless relative specifiers; Node ESM cannot resolve them.
-  const fixSpecifiers = taskScript(pkg, "emit.ts", COMPILED_DIR);
-  if (!pkg.compileTask.steps.some((step) => step.exec === fixSpecifiers)) {
-    pkg.compileTask.exec(fixSpecifiers);
-  }
 
   // The release workflow publishes straight after `pnpm install`, with no build
   // in between, so the compiled output has to be produced by the pack itself

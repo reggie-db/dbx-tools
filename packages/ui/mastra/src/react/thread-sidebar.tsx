@@ -17,7 +17,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useState } from "react";
-import type { ThreadSummary } from "./types";
+import type { ThreadSummary } from "./types.ts";
 
 // Presentational conversation list. Renders the threads a resource owns
 // so the user can switch between them, start a new one, rename one, and

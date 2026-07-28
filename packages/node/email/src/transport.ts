@@ -32,7 +32,7 @@ import {
 import { async, error, log } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
-import { resolveEmailConfig, type EmailPluginConfig, type ResolvedEmailConfig } from "./config";
+import { resolveEmailConfig, type EmailPluginConfig, type ResolvedEmailConfig } from "./config.ts";
 import {
   EMAIL_SEND_SETTINGS,
   MAX_ATTACHMENT_BYTES,
@@ -40,10 +40,10 @@ import {
   MAX_ATTACHMENTS_TOTAL_BYTES,
   MAX_BODY_CHARS,
   type EmailExecutionSettings,
-} from "./defaults";
-import { renderEmailHtml } from "./email-html";
-import { writeOutboxEmail } from "./outbox";
-import { assertSenderAllowed } from "./sender";
+} from "./defaults.ts";
+import { renderEmailHtml } from "./email-html.ts";
+import { writeOutboxEmail } from "./outbox.ts";
+import { assertSenderAllowed } from "./sender.ts";
 
 const logger = log.logger("email/transport");
 

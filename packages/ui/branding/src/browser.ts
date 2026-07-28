@@ -1,5 +1,5 @@
 import { brand } from "@dbx-tools/shared-core";
-import { dbxToolsAssetDataUrls } from "./generated/assets";
+import { dbxToolsAssetDataUrls } from "./generated/assets.ts";
 
 const builtInAssets = new Map<string, string>([
   [brand.DEFAULT_BRAND_ASSETS.icon.light, dbxToolsAssetDataUrls.iconLight],

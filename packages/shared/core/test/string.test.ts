@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { string } from "../index";
+import { string } from "../index.ts";
 
 describe("string.trimToEmpty", () => {
   it("trims a string", () => {

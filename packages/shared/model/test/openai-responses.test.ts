@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { ChatMessage } from "../src/openai-chat";
+import type { ChatMessage } from "../src/openai-chat.ts";
 import {
   chatToResponse,
   createResponsesStreamTranslator,
   readResponsesOutput,
   responsesToChat,
   sanitizeOpenResponsesRequest,
-} from "../src/openai-responses";
+} from "../src/openai-responses.ts";
 
 /** The `messages` a lowered Responses body produced, typed for assertions. */
 function messagesOf(body: Record<string, unknown>): ChatMessage[] {

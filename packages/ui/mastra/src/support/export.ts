@@ -28,8 +28,8 @@ import { marker as markers, type Chart, type StatementData } from "@dbx-tools/sh
 import type { UIMessage } from "ai";
 import * as echarts from "echarts";
 import { marked } from "marked";
-import { normalizeChartOption } from "./chart-option";
-import { downloadFile } from "./download";
+import { normalizeChartOption } from "./chart-option.ts";
+import { downloadFile } from "./download.ts";
 
 /**
  * Output formats {@link exportChat} can produce.

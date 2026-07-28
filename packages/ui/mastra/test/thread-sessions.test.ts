@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { QueuedSteer, ToolEvent } from "../src/react/types";
+import type { QueuedSteer, ToolEvent } from "../src/react/types.ts";
 import {
   enqueueSteer,
   removeSteer,
   reorderSteers,
   terminateRunningToolEvents,
-} from "../src/support/thread-sessions";
+} from "../src/support/thread-sessions.ts";
 
 const event = (id: string, status: ToolEvent["status"]): ToolEvent => ({
   id,

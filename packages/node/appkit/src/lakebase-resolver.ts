@@ -44,16 +44,16 @@ import {
 import { project } from "@dbx-tools/core";
 import { async, log, object, string } from "@dbx-tools/shared-core";
 import { z } from "zod";
-import { resolveConfigValue } from "./config";
+import { resolveConfigValue } from "./config.ts";
 
-import { MAX_TCP_PORT, toContext } from "./databricks";
+import { MAX_TCP_PORT, toContext } from "./databricks.ts";
 import {
   parseAddress,
   parseResourcePath,
   SSL_MODES,
   type LakebaseConnectionInputs,
   type SslMode,
-} from "./pgaddress";
+} from "./pgaddress.ts";
 
 const logger = log.logger("lakebase-resolver");
 const API_BASE = "/api/2.0/postgres";

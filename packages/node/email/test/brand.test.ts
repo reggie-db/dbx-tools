@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { brand } from "@dbx-tools/shared-core";
-import { defaultEmailBrand, emailBrandFromContext } from "../src/brand";
-import { renderEmailHtml } from "../src/email-html";
+import { defaultEmailBrand, emailBrandFromContext } from "../src/brand.ts";
+import { renderEmailHtml } from "../src/email-html.ts";
 
 describe("email brand", () => {
   it("derives accent, font, and name from a brand context", () => {

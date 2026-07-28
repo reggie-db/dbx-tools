@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { json } from "../index";
+import { json } from "../index.ts";
 
 describe("json.parse", () => {
   it("parses a well-formed document", () => {

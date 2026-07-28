@@ -26,7 +26,7 @@
  * @module
  */
 
-import { ModelClass, type ServingEndpointSummary } from "./model";
+import { ModelClass, type ServingEndpointSummary } from "./model.ts";
 
 /** Task hint Databricks stamps on chat completion endpoints. */
 const CHAT_TASK = "llm/v1/chat";

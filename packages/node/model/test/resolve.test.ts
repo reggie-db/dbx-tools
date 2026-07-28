@@ -3,9 +3,9 @@ import { describe, it } from "node:test";
 
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
-import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback";
-import { rankModels, resolveModel } from "../src/resolve";
-import { resolveModelId, searchServingEndpoints } from "../src/serving";
+import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
+import { rankModels, resolveModel } from "../src/resolve.ts";
+import { resolveModelId, searchServingEndpoints } from "../src/serving.ts";
 
 const { ModelClass } = model;
 

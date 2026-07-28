@@ -36,8 +36,8 @@ import type { RequestContext } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
-import { resolveUserKey, type MastraPluginConfig } from "./config";
-import { buildModel } from "./model";
+import { resolveUserKey, type MastraPluginConfig } from "./config.ts";
+import { buildModel } from "./model.ts";
 
 const logger = log.logger("mastra/chart");
 

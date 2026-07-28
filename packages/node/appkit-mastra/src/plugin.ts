@@ -74,32 +74,32 @@ import type { RequestContext } from "@mastra/core/request-context";
 import express from "express";
 import type { Pool } from "pg";
 
-import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents";
-import { fetchChart } from "./chart";
-import { MASTRA_CONFIG_SCHEMA, resolveUserKey, type MastraPluginConfig } from "./config";
+import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents.ts";
+import { fetchChart } from "./chart.ts";
+import { MASTRA_CONFIG_SCHEMA, resolveUserKey, type MastraPluginConfig } from "./config.ts";
 import {
   chartFetchDefaults,
   feedbackWriteDefaults,
   genieSuggestionDefaults,
   modelCatalogueDefaults,
   statementDataDefaults,
-} from "./defaults";
-import { collectSpaceSuggestions, resolveGenieSpaces } from "./genie";
-import { historyRoute } from "./history";
-import { buildMcpServer, type ResolvedMcp } from "./mcp";
-import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory";
-import { logFeedback, resolveFeedbackEnabled } from "./mlflow";
-import { buildObservability } from "./observability";
+} from "./defaults.ts";
+import { collectSpaceSuggestions, resolveGenieSpaces } from "./genie.ts";
+import { historyRoute } from "./history.ts";
+import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
+import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
+import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
+import { buildObservability } from "./observability.ts";
 import {
   attachRoutePatchMiddleware,
   createRequestContext,
   isMastraRequestAllowed,
   MastraServer,
-} from "./server";
-import { resolveServingConfig } from "./serving";
-import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement";
-import { threadsRoute } from "./threads";
-import { invalidFields } from "./validation";
+} from "./server.ts";
+import { resolveServingConfig } from "./serving.ts";
+import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
+import { threadsRoute } from "./threads.ts";
+import { invalidFields } from "./validation.ts";
 
 const GENIE_MANIFEST = plugin.data(genie).plugin.manifest;
 const LAKEBASE_MANIFEST = plugin.data(lakebase).plugin.manifest;

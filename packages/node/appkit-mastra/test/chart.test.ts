@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { z } from "zod";
 
-import { chartPlanSchema } from "../src/chart";
+import { chartPlanSchema } from "../src/chart.ts";
 
 /**
  * Walk every nested schema node, yielding each object so a test can

@@ -24,8 +24,8 @@
 import { existsSync, rmSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { find } from "@dbx-tools/path";
-import { isReadonly, makeWritable } from "./generated";
-import { repoRoot, toPosix } from "./packages";
+import { isReadonly, makeWritable } from "./generated.ts";
+import { repoRoot, toPosix } from "./packages.ts";
 
 /**
  * Basenames `clean` never removes even when they are generated/read-only. `.gitignore`

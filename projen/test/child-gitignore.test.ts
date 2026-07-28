@@ -11,7 +11,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project";
+import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
 
 let outdir: string;
 const callerPatterns = ["/seeded-via-options/"];

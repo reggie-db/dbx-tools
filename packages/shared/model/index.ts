@@ -2,17 +2,17 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as classify from "./src/classify";
-export * as display from "./src/display";
-export * as model from "./src/model";
-export * as openaiChat from "./src/openai-chat";
-export * as openaiResponses from "./src/openai-responses";
-export { endpointCapabilities, versionTuple, classifyByFamily, classifyEndpoints } from "./src/classify";
-export type { EndpointCapabilities, FamilyClass } from "./src/classify";
-export { toModelDisplayName } from "./src/display";
-export { ModelClass, ModelClassSchema, ModelProfileSchema, ServingEndpointSummarySchema, ModelQuerySchema, RankedModelSchema } from "./src/model";
-export type { ModelProfile, ServingEndpointSummary, ModelQuery, RankedModel } from "./src/model";
-export { UNSUPPORTED_CHAT_FIELDS, stripUnsupportedChatFields, chatContentToText } from "./src/openai-chat";
-export type { ChatRole, ChatContentPart, ChatToolCallFunction, ChatToolCall, ChatMessage, ChatContentToTextOptions } from "./src/openai-chat";
-export { responsesToChat, chatToResponsesRequest, chatToResponse, responseToChatCompletion, createResponsesStreamTranslator, readResponsesOutput, sanitizeResponsesTools, REASONING_TYPES, sanitizeOpenResponsesInput, sanitizeOpenResponsesRequest } from "./src/openai-responses";
-export type { ResponsesStreamTranslator, ResponsesCitation, ResponsesOutput } from "./src/openai-responses";
+export * as classify from "./src/classify.ts";
+export * as display from "./src/display.ts";
+export * as model from "./src/model.ts";
+export * as openaiChat from "./src/openai-chat.ts";
+export * as openaiResponses from "./src/openai-responses.ts";
+export { endpointCapabilities, versionTuple, classifyByFamily, classifyEndpoints } from "./src/classify.ts";
+export type { EndpointCapabilities, FamilyClass } from "./src/classify.ts";
+export { toModelDisplayName } from "./src/display.ts";
+export { ModelClass, ModelClassSchema, ModelProfileSchema, ServingEndpointSummarySchema, ModelQuerySchema, RankedModelSchema } from "./src/model.ts";
+export type { ModelProfile, ServingEndpointSummary, ModelQuery, RankedModel } from "./src/model.ts";
+export { UNSUPPORTED_CHAT_FIELDS, stripUnsupportedChatFields, chatContentToText } from "./src/openai-chat.ts";
+export type { ChatRole, ChatContentPart, ChatToolCallFunction, ChatToolCall, ChatMessage, ChatContentToTextOptions } from "./src/openai-chat.ts";
+export { responsesToChat, chatToResponsesRequest, chatToResponse, responseToChatCompletion, createResponsesStreamTranslator, readResponsesOutput, sanitizeResponsesTools, REASONING_TYPES, sanitizeOpenResponsesInput, sanitizeOpenResponsesRequest } from "./src/openai-responses.ts";
+export type { ResponsesStreamTranslator, ResponsesCitation, ResponsesOutput } from "./src/openai-responses.ts";

@@ -30,7 +30,7 @@ import {
   detectThinking,
   eventDetector,
   eventsFromMessage,
-} from "../src/event";
+} from "../src/event.ts";
 import type {
   AttachmentEvent,
   GenieAttachment,
@@ -40,7 +40,7 @@ import type {
   GenieMessage,
   GenieThought,
   ThinkingEvent,
-} from "../src/genie-model";
+} from "../src/genie-model.ts";
 
 /* ----------------------------- fixtures ---------------------------- */
 

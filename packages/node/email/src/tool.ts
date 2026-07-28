@@ -21,8 +21,8 @@ import { getExecutionContext } from "@databricks/appkit";
 import { log, string } from "@dbx-tools/shared-core";
 import { email } from "@dbx-tools/shared-email";
 import { createTool } from "@mastra/core/tools";
-import { resolveSenderAddress } from "./sender";
-import { getEmailRuntime, sendEmail } from "./transport";
+import { resolveSenderAddress } from "./sender.ts";
+import { getEmailRuntime, sendEmail } from "./transport.ts";
 
 const logger = log.logger("email/tool/send-email");
 
