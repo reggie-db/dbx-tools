@@ -242,6 +242,10 @@ The central agent drives those tools directly. Genie events stream through the
 Mastra writer using the shared contract from
 [`@dbx-tools/shared-mastra`](../../shared/mastra), so clients can show thinking,
 SQL, row counts, summaries, chart markers, and data markers as the turn runs.
+Independent `ask_genie` calls can run in parallel. One invocation owns the
+thread's reusable Genie conversation while overlapping invocations use isolated
+conversations, preventing concurrent messages from colliding in one Genie
+conversation. Sequential calls continue to reuse conversation context.
 
 ```ts
 const agent = agents.createAgent({
@@ -263,7 +267,12 @@ Both take a `userKey`: the chart cache is namespaced by the caller's identity,
 so a chart id lifted from another user's transcript resolves to nothing and the
 embed route answers `404`. Use `config.resolveUserKey()`, which reads the AppKit
 user off the Mastra request context and falls back to the ambient execution
-context.
+context. Outside a Mastra turn, where there is a request but no request context,
+use `config.attributedUserId(getExecutionContext(), requestUserId(req))` instead.
+Both spell the same rule, which matters under `genieIdentity:
+"service-principal"`: the shared credential is the app service principal, but
+charts stay keyed to the forwarded caller, so a reader that keyed off the
+credential alone would miss every chart and show it as expired.
 
 ```ts
 const userKey = config.resolveUserKey(requestContext);

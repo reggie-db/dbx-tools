@@ -101,13 +101,38 @@ export function executionContextUserId(context: appkit.ExecutionContextLike): st
 }
 
 /**
+ * Who a turn is ATTRIBUTED to, which is not always whose Databricks credential
+ * runs it. An OBO context's own user id is authoritative. Under the service
+ * principal, every caller shares one credential, so the forwarded user id is
+ * what keeps memory threads and per-user cache namespaces distinct; the service
+ * principal id is the floor when no user was forwarded.
+ *
+ * This rule has to be identical everywhere a cache key is built, so both the
+ * write side (the `RequestContext` user stamped by `stampRequestContextUser`)
+ * and the read side (the plugin's own AppKit routes, which have a request but
+ * no `RequestContext`) derive their key from this one function. When the two
+ * disagreed, a chart written under the forwarded user id was read back under
+ * the service principal id and the embed route answered 404, which the chat UI
+ * renders as an expired chart.
+ */
+export function attributedUserId(
+  executionContext: appkit.ExecutionContextLike,
+  forwardedUserId?: string,
+): string {
+  if ("isUserContext" in executionContext) return executionContextUserId(executionContext);
+  return forwardedUserId ?? executionContextUserId(executionContext);
+}
+
+/**
  * Identity every per-user cache entry is namespaced under, so an OBO result
  * cannot be read back by another caller.
  *
  * Prefers the {@link User} that {@link MastraServer} stamps on the request
- * context. The MCP transport routes do not thread that context into tool
- * execution, so those fall back to the ambient execution context (the active
- * OBO scope, or the service principal).
+ * context, whose id already follows {@link attributedUserId}. The MCP transport
+ * routes do not thread that context into tool execution, so those fall back to
+ * the ambient execution context (the active OBO scope, or the service
+ * principal). A caller holding an express request should build its key from
+ * {@link attributedUserId} instead, so the forwarded user is not lost.
  */
 export function resolveUserKey(requestContext?: RequestContext): string {
   const user = requestContext?.get(MASTRA_USER_KEY) as User | undefined;

@@ -33,7 +33,7 @@ export { tool, createAgent, FALLBACK_AGENT_ID, DEFAULT_AGENT_MAX_STEPS, DEFAULT_
 export type { MastraTools, AppKitToolOptions, ToolkitOptions, MastraPluginToolkitProvider, MastraPlugins, MastraToolsFn, MastraAgentWorkspaceResolver, MastraAgentDefinition, MastraStorageConfigOverride, MastraMemoryConfigOverride, BuiltAgents } from "./src/agents.ts";
 export { chartPlanSchema, chartPlannerRequestSchema, prepareChart, fetchChart, buildRenderDataTool } from "./src/chart.ts";
 export type { ChartPlannerRequest, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
-export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, executionContextUserId, resolveUserKey, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
+export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, executionContextUserId, attributedUserId, resolveUserKey, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
 export type { User, MastraMemoryConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
 export { normalizeDatabricksBasePath, isDbfsPath, isWorkspaceFilesPath, resolveDatabricksAbsolutePath, toDatabricksWorkspacePath, DatabricksWorkspaceFilesystem, emptyFilesystem } from "./src/filesystems.ts";

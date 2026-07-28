@@ -76,7 +76,7 @@ import type { Pool } from "pg";
 
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents.ts";
 import { fetchChart } from "./chart.ts";
-import { MASTRA_CONFIG_SCHEMA, resolveUserKey, type MastraPluginConfig } from "./config.ts";
+import { attributedUserId, MASTRA_CONFIG_SCHEMA, type MastraPluginConfig } from "./config.ts";
 import {
   chartFetchDefaults,
   feedbackWriteDefaults,
@@ -86,7 +86,12 @@ import {
 } from "./defaults.ts";
 import { collectSpaceSuggestions, resolveGenieSpaces } from "./genie.ts";
 import { historyRoute } from "./history.ts";
-import { resolveIdentityMode, useServicePrincipal, type MastraIdentityMode } from "./identity.ts";
+import {
+  requestUserId,
+  resolveIdentityMode,
+  useServicePrincipal,
+  type MastraIdentityMode,
+} from "./identity.ts";
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
 import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
 import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
@@ -565,7 +570,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const embedResolvers: Record<string, EmbedResolver> = {
       chart: (req, id, signal) => {
         const timeoutMs = parseTimeoutMs(req.query.timeoutMs);
-        return this.scopedSelf(req).fetchChartEntry(id, {
+        return this.scopedSelf(req).fetchChartEntry(req, id, {
           ...(timeoutMs !== undefined ? { timeoutMs } : {}),
           signal,
         });
@@ -908,12 +913,21 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    * (`GET /embed/chart/:id`). Runs inside the AppKit user-context proxy so the
    * lookup is namespaced to the calling identity: a chart minted for another
    * user is indistinguishable from an unknown id, and the route answers 404.
+   *
+   * The key is built from {@link attributedUserId} - the same rule that named
+   * the identity the chart was written under - rather than from the ambient
+   * execution context alone. In `service-principal` mode the ambient context is
+   * the SP for every caller, so keying off it alone missed every chart the
+   * turn had written under the forwarded user and the UI showed each one as
+   * expired. `req` is read inside the method, not at the call site, so the
+   * execution context is the scoped one.
    */
   private async fetchChartEntry(
+    req: express.Request,
     chartId: string,
     options: { timeoutMs?: number; signal: AbortSignal },
   ): Promise<ExecutionResult<Chart | undefined>> {
-    const userKey = resolveUserKey();
+    const userKey = attributedUserId(getExecutionContext(), requestUserId(req));
     return this.execute(
       (executeSignal) =>
         fetchChart(chartId, {

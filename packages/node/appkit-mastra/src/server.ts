@@ -20,7 +20,7 @@ import { trace } from "@opentelemetry/api";
 import type express from "express";
 
 import {
-  executionContextUserId,
+  attributedUserId,
   MASTRA_REQUEST_ID_KEY,
   MASTRA_SCOPES_KEY,
   MASTRA_USER_EMAIL_KEY,
@@ -91,11 +91,10 @@ export async function stampRequestContextUser(
   // attributed to can differ: in `service-principal` mode every request shares
   // the SP client, but the forwarded user id must still key the memory thread
   // and the per-user cache namespace so two callers don't share a conversation.
-  // Prefer the OBO context's own user id, then the forwarded id, then the SP id.
-  const id =
-    (isUserContext ? executionContextUserId(executionContext) : attributed.userId) ??
-    executionContextUserId(executionContext);
-  const user: User = { id, executionContext };
+  const user: User = {
+    id: attributedUserId(executionContext, attributed.userId),
+    executionContext,
+  };
   requestContext.set(MASTRA_USER_KEY, user);
   requestContext.set(MASTRA_RESOURCE_ID_KEY, user.id);
   // AppKit's `UserContext` surfaces display name / email only on

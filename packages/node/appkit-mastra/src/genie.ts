@@ -176,41 +176,44 @@ const CONVERSATION_TTL_SEC = 4 * 60 * 60;
 const CONVERSATION_CACHE_NAMESPACE = "mastra:genie:conversation";
 
 /**
- * Build the per-request {@link RequestContext} key the active
- * Genie `conversation_id` lives under for `spaceId`. Scoped by
- * space so an app calling two Genie spaces in one request keeps
- * each conversation distinct (Genie conversation ids are
- * space-scoped on the wire). The same `RequestContext` instance
- * flows from the central agent through to every `ask_genie`
- * invocation, so writes on one call are visible on the next
- * without an explicit shared ref.
+ * Per-request state for one Genie space. The reusable conversation is reserved
+ * by at most one invocation at a time. Additional concurrent invocations use
+ * isolated conversations so Mastra can execute parallel tool calls without
+ * appending multiple active messages to the same Genie conversation.
  */
+interface ConversationState {
+  conversationId?: string;
+  reusableConversationInFlight: boolean;
+}
+
+/** Build the per-request {@link RequestContext} key for one Genie space. */
 const conversationContextKey = (spaceId: string): string =>
   `mastra__genie_conversation__${spaceId}`;
 
 /**
- * Read the active Genie `conversation_id` for `spaceId` off the
- * per-request {@link RequestContext}. Returns `undefined` when no
- * conversation has been started yet this request.
+ * Read or initialize the per-space conversation state. The string branch
+ * preserves compatibility with a context populated by an older package copy.
  */
-function readContextConversationId(
-  requestContext: RequestContext,
-  spaceId: string,
-): string | undefined {
-  return requestContext.get(conversationContextKey(spaceId)) as string | undefined;
+function conversationState(requestContext: RequestContext, spaceId: string): ConversationState {
+  const key = conversationContextKey(spaceId);
+  const current = requestContext.get(key) as ConversationState | string | undefined;
+  if (current && typeof current === "object") return current;
+  const state: ConversationState = {
+    ...(typeof current === "string" ? { conversationId: current } : {}),
+    reusableConversationInFlight: false,
+  };
+  requestContext.set(key, state);
+  return state;
 }
 
 /**
- * Write the active Genie `conversation_id` for `spaceId` onto the
- * per-request {@link RequestContext}. Subsequent `ask_genie` calls
- * in this request will reuse it.
+ * Reserve the reusable conversation when it is idle. A caller that cannot
+ * reserve it gets an isolated conversation and may run in parallel.
  */
-function writeContextConversationId(
-  requestContext: RequestContext,
-  spaceId: string,
-  conversationId: string | undefined,
-): void {
-  requestContext.set(conversationContextKey(spaceId), conversationId);
+function reserveConversation(state: ConversationState): boolean {
+  if (state.reusableConversationInFlight) return false;
+  state.reusableConversationInFlight = true;
+  return true;
 }
 
 /**
@@ -296,13 +299,12 @@ async function evictCachedConversationId(cacheKey: string | undefined): Promise<
  * once per request per space.
  */
 async function ensureConversationSeeded(
-  requestContext: RequestContext,
-  spaceId: string,
+  state: ConversationState,
   cacheKey: string | undefined,
 ): Promise<void> {
-  if (readContextConversationId(requestContext, spaceId)) return;
+  if (state.conversationId) return;
   const cached = await readCachedConversationId(cacheKey);
-  if (cached) writeContextConversationId(requestContext, spaceId, cached);
+  if (cached) state.conversationId = cached;
 }
 
 /* ------------------------ prepare_chart input ------------------------ */
@@ -385,8 +387,11 @@ function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string
       complete. Genie answers best when each call covers a
       single metric / dimension / time window, so expect to
       call this tool MULTIPLE TIMES per user turn (typically
-      two to six) and let the results from earlier calls inform
-      later ones - that's the normal pattern, not the exception.
+      two to six). Independent sub-questions may be called in
+      PARALLEL; calls that depend on an earlier answer should stay
+      sequential. Parallel calls use isolated Genie conversations,
+      while sequential calls retain the reusable conversation context.
+      This is the normal pattern, not the exception.
       Do NOT try to cram a multi-part question into a single
       call; decompose first, then ask each piece.
 
@@ -442,90 +447,87 @@ function buildAskGenieTool(opts: { spaceId: string; alias: string; hint?: string
         );
       }
 
-      // Seed the active Genie `conversation_id` onto `RequestContext`
-      // from the cross-request cache when a Mastra `threadId` is
-      // present so multi-turn chats reuse the same Genie conversation
-      // (and Genie's accumulated context) across separate user turns.
-      // The same `RequestContext` is reused across every `ask_genie`
-      // call within one user turn, so `ensureConversationSeeded`
-      // hits the cache at most once per request per space.
-      const cacheKey = await conversationCacheKey(
-        spaceId,
-        threadId,
-        resolveUserKey(requestContext),
-      );
-      await ensureConversationSeeded(requestContext, spaceId, cacheKey);
-
-      // Fire the lifecycle `started` event before any LLM /
-      // network round-trip so the host UI can pop a "Thinking..."
-      // pill the instant the model decides to delegate.
-      const startedEvent: StartedEvent = {
-        type: "started",
-        spaceId,
-        content: question,
-      };
-      await safeWrite(logger, writer, startedEvent);
-
-      // Single turn of `genieEventChat`. Hoisted into a closure so
-      // we can re-run it after evicting a stale `conversation_id`
-      // without duplicating the event-loop body.
-      const runTurn = async (): Promise<GenieMessage> => {
-        const seedConversationId = readContextConversationId(requestContext, spaceId);
-        let finalMessage: GenieMessage | undefined;
-        for await (const event of chat.genieEventChat(spaceId, question, {
-          workspaceClient: client,
-          ...(seedConversationId ? { conversationId: seedConversationId } : {}),
-          ...(signal ? { context: signal } : {}),
-        })) {
-          if (event.type !== "message") {
-            await safeWrite(logger, writer, event);
-          }
-          const eventConversationId = event.conversation_id;
-          if (eventConversationId) {
-            writeContextConversationId(requestContext, spaceId, eventConversationId);
-          }
-          if (event.type === "result") {
-            finalMessage = event.message;
-          }
-        }
-        if (!finalMessage) {
-          throw ExecutionError.missingData("Genie result event");
-        }
-        return finalMessage;
-      };
-
-      let finalMessage: GenieMessage;
+      const state = conversationState(requestContext, spaceId);
+      const ownsReusableConversation = reserveConversation(state);
       try {
-        finalMessage = await runTurn();
-      } catch (err) {
-        // The seeded `conversation_id` was rejected by Genie - most
-        // commonly because it was deleted upstream, expired past
-        // Databricks' (undocumented) lifetime, or was minted in a
-        // different space. Drop both the cached id AND the
-        // per-request value so the retry calls `startConversation`,
-        // and try once more. Only retry when we *had* a seeded id -
-        // a fresh call that 404s shouldn't loop.
-        const seeded = readContextConversationId(requestContext, spaceId);
-        if (seeded && error.errorContext(err).notAccessible) {
-          logger.warn("conversation-cache:stale, resetting", {
-            spaceId,
-            conversationId: seeded,
-            error: error.errorMessage(err),
-          });
-          await evictCachedConversationId(cacheKey);
-          writeContextConversationId(requestContext, spaceId, undefined);
-          finalMessage = await runTurn();
-        } else {
-          throw err;
+        // Only the reserved lane seeds and updates the thread's reusable
+        // conversation. Concurrent lanes deliberately start fresh conversations.
+        const cacheKey = ownsReusableConversation
+          ? await conversationCacheKey(spaceId, threadId, resolveUserKey(requestContext))
+          : undefined;
+        if (ownsReusableConversation) {
+          await ensureConversationSeeded(state, cacheKey);
         }
+
+        // Each invocation keeps its conversation id locally. Only the reusable
+        // lane publishes updates to shared request and cross-request state.
+        let conversationId = ownsReusableConversation ? state.conversationId : undefined;
+
+        const startedEvent: StartedEvent = {
+          type: "started",
+          spaceId,
+          content: question,
+        };
+        await safeWrite(logger, writer, startedEvent);
+
+        const runTurn = async (): Promise<GenieMessage> => {
+          const seedConversationId = conversationId;
+          let finalMessage: GenieMessage | undefined;
+          for await (const event of chat.genieEventChat(spaceId, question, {
+            workspaceClient: client,
+            ...(seedConversationId ? { conversationId: seedConversationId } : {}),
+            ...(signal ? { context: signal } : {}),
+          })) {
+            if (event.type !== "message") {
+              await safeWrite(logger, writer, event);
+            }
+            const eventConversationId = event.conversation_id;
+            if (eventConversationId) {
+              conversationId = eventConversationId;
+              if (ownsReusableConversation) state.conversationId = eventConversationId;
+            }
+            if (event.type === "result") {
+              finalMessage = event.message;
+            }
+          }
+          if (!finalMessage) {
+            throw ExecutionError.missingData("Genie result event");
+          }
+          return finalMessage;
+        };
+
+        let finalMessage: GenieMessage;
+        try {
+          finalMessage = await runTurn();
+        } catch (err) {
+          // A rejected conversation id is stale or inaccessible. Reset this
+          // lane and retry once with a fresh Genie conversation.
+          const rejectedConversationId = conversationId;
+          if (rejectedConversationId && error.errorContext(err).notAccessible) {
+            logger.warn("conversation-cache:stale, resetting", {
+              spaceId,
+              conversationId: rejectedConversationId,
+              error: error.errorMessage(err),
+            });
+            if (ownsReusableConversation) {
+              await evictCachedConversationId(cacheKey);
+              state.conversationId = undefined;
+            }
+            conversationId = undefined;
+            finalMessage = await runTurn();
+          } else {
+            throw err;
+          }
+        }
+
+        if (ownsReusableConversation) {
+          await saveCachedConversationId(cacheKey, conversationId);
+        }
+
+        return { message: stripSuggestedQuestions(finalMessage) };
+      } finally {
+        if (ownsReusableConversation) state.reusableConversationInFlight = false;
       }
-
-      // Refresh the cache entry on every successful turn. Re-setting
-      // the same key both persists newly-minted ids (cache miss path)
-      // and extends the TTL on active conversations (sliding window).
-      await saveCachedConversationId(cacheKey, readContextConversationId(requestContext, spaceId));
-
-      return { message: stripSuggestedQuestions(finalMessage) };
     },
   });
 }
@@ -791,10 +793,13 @@ export const GENIE_INSTRUCTIONS = string.toDescription([
         Decompose the user's question into focused sub-questions
         BEFORE asking Genie anything. One sub-question per distinct
         metric, dimension, or time window. Then call \`ask_genie\`
-        once per sub-question - usually two to six calls per turn,
-        and let earlier answers inform what you ask next. Cramming
-        a multi-part question into one \`ask_genie\` call almost
-        always produces a worse answer than asking the pieces
+        once per sub-question - usually two to six calls per turn.
+        Issue independent calls in parallel to reduce latency. Keep
+        dependent calls sequential when an earlier answer determines
+        the next question. Parallel calls use isolated Genie
+        conversations; sequential calls retain conversation context.
+        Cramming a multi-part question into one \`ask_genie\` call
+        almost always produces a worse answer than asking the pieces
         separately. Only collapse to a single call when the question
         is genuinely atomic ("what was Q3 revenue?").
 
@@ -803,8 +808,9 @@ export const GENIE_INSTRUCTIONS = string.toDescription([
         regions drove the gap?" Decomposes to: (a) \`ask_genie\`
         for SKU 1234's Q3 revenue, (b) \`ask_genie\` for the
         category-average Q3 revenue, (c) \`ask_genie\` for SKU
-        1234's Q3 revenue split by region. Three focused calls,
-        each grounded in the prior results.
+        1234's Q3 revenue split by region. The first two calls are
+        independent and can run in parallel; run the regional call
+        afterward only if its wording depends on those results.
       `,
       `
         Each \`ask_genie\` call returns the terminal \`GenieMessage\`.
