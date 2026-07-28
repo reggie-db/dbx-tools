@@ -717,7 +717,9 @@ through the publish cycle. See `demo/README.md` for the full two-mode explanatio
   The generated `vite.config.ts` is tuned WITHOUT editing it: drop a
   `vite.config.override.ts` (or `.js`) beside it and its default export is merged
   over the generated config with `mergeConfig` at config load. Prefer the `.ts`
-  form; both are read, in that order, so `.ts` wins if both exist.
+  form; both are read, in that order, so `.ts` wins if both exist. The override is
+  a package-root file outside any `src/**` tsconfig, so it is ESLint-ignored like
+  the generated config - hand-author it, but the type-aware linter skips it.
 - **barrels** (`<root>/<tags...>/<name>/index.ts`): read-only, do-not-edit header,
   written by the engine's own generator (`barrels.ts`). Marked generated in
   `.gitattributes` (`annotateGenerated`).

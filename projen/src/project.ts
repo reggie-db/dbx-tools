@@ -22,7 +22,7 @@ import { applyCompiledPublish } from "./publish.ts";
 import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
-import { ViteConfigFile } from "./vite.ts";
+import { DEFAULT_VITE_OVERRIDES, ViteConfigFile } from "./vite.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
 import {
   DEFAULT_PACKAGE_ROOTS,
@@ -864,6 +864,12 @@ function initProject(
     eslint.addIgnorePattern(`${root}/**/index.ts`);
   }
   eslint.addIgnorePattern("**/vite.config.ts");
+  // The unmanaged vite overrides live at the package root, outside any `src/**`
+  // tsconfig include, so the type-aware parser cannot resolve them to a project.
+  // They are hand-authored (not generated), but ESLint still cannot parse them.
+  for (const override of DEFAULT_VITE_OVERRIDES) {
+    eslint.addIgnorePattern(`**/${override}`);
+  }
   // Codegen packages declare `codegen.inputs` via mixins after construction; ignore
   // their `src/` once manifests are known (preSynthesize), same reason as openapi.
   new EslintIgnoreCodegen(project);

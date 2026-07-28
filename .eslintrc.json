@@ -46,6 +46,8 @@
     "packages/openapi/**",
     "packages/**/index.ts",
     "**/vite.config.ts",
+    "**/vite.config.override.js",
+    "**/vite.config.override.ts",
     "packages/shared/sdk-model/src/**"
   ],
   "rules": {

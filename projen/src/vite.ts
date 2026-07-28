@@ -24,8 +24,12 @@ import { type Project, TextFile } from "projen";
  * (later wins, absent files skipped). Both extensions are accepted so an existing
  * JavaScript override keeps working; the TypeScript one is listed last so it wins
  * where a package is mid-migration and still has both.
+ *
+ * Exported because ESLint has to ignore them: an override is a package-ROOT file
+ * outside any `src/**` tsconfig include, so the type-aware parser cannot resolve
+ * it to a project - the same reason the generated `vite.config.ts` is ignored.
  */
-const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js", "vite.config.override.ts"];
+export const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js", "vite.config.override.ts"];
 
 /** Render the generated `vite.config.ts` source with the override chain inlined. */
 function renderViteConfig(overridePaths: string[]): string {

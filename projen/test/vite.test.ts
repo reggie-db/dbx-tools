@@ -67,3 +67,16 @@ describe("generated vite config", () => {
     assert.match(config, /existsSync\(overrideUrl\)/);
   });
 });
+
+describe("vite override eslint ignore", () => {
+  it("ignores every declared override file, not only the generated config", () => {
+    // projen stamps a `// ~~ Generated` header, so the file is JSONC.
+    const raw = readFileSync(join(outdir, ".eslintrc.json"), "utf8").replace(/^\s*\/\/.*$/gm, "");
+    const patterns = JSON.parse(raw).ignorePatterns as string[];
+    assert.ok(patterns.includes("**/vite.config.ts"), "the generated config stays ignored");
+    // A package-root override is outside any src tsconfig, so the type-aware
+    // parser would fail on it; both extensions must be ignored.
+    assert.ok(patterns.includes("**/vite.config.override.ts"));
+    assert.ok(patterns.includes("**/vite.config.override.js"));
+  });
+});
