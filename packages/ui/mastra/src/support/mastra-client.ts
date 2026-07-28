@@ -56,6 +56,14 @@ export class MastraPluginClient extends MastraClient {
    * feedback affordances.
    */
   readonly feedbackEnabled: boolean;
+  /**
+   * Whether the agents run their Databricks calls as the app service principal
+   * rather than on-behalf-of the signed-in user. When `true` the chat works for
+   * any caller who can open the app, so a UI that hides chat when the OBO token
+   * is absent should show it regardless. `false` (the default `"user"` identity
+   * mode) keeps the OBO-gated behavior.
+   */
+  readonly chatAlwaysAvailable: boolean;
 
   constructor(config: MastraClientConfig) {
     super({
@@ -68,6 +76,7 @@ export class MastraPluginClient extends MastraClient {
     this.defaultAgent = config.defaultAgent;
     this.agents = config.agents;
     this.feedbackEnabled = config.feedbackEnabled;
+    this.chatAlwaysAvailable = config.chatAlwaysAvailable;
   }
 
   /**

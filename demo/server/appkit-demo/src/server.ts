@@ -198,6 +198,11 @@ await createAppAuto({
       storage: true,
       memory: true,
       agents: support,
+      // Chat runs on-behalf-of the signed-in user by default, so the caller must
+      // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
+      // genieIdentity: "service-principal" here) to run the agents' Databricks
+      // calls as the app service principal instead, so any account user who can
+      // open the app can chat even without workspace membership.
       // Themes charts from the `render_data` / `prepare_chart` tools with the
       // same brand the client UI (`BrandProvider`) and email layouts use, so a
       // generated chart matches the surrounding AppKit UI instead of falling

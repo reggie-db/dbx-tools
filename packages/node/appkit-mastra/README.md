@@ -18,7 +18,9 @@ Key features:
   tools.
 - Databricks execution model: tool calls run with the active AppKit OBO client
   where available, while storage and background work use service-principal
-  connections.
+  connections. Set `genieIdentity: "service-principal"` to run the agents'
+  Databricks calls as the app service principal instead, so callers who can open
+  the app but are not workspace members can still chat.
 - Durable conversations: Lakebase-backed Mastra storage provides thread
   history, message persistence, and optional vector memory.
 - Rich data answers: Genie tools, statement fetches, chart preparation, and
@@ -452,12 +454,13 @@ Every value can also be set through plugin config, which wins. These are the
 fallbacks, so a deployment that already follows AppKit's Databricks env naming
 needs no extra wiring.
 
-| Variable                                                            | Effect                                                                    |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Model used when neither the agent nor `defaultModel` names one.           |
-| `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                         |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. |
-| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset. |
+| Variable                                                            | Effect                                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Model used when neither the agent nor `defaultModel` names one.                |
+| `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                              |
+| `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO) or `service-principal` for the agents' Databricks calls. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset.      |
+| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset.      |
 
 ## Configuration Reference
 
@@ -481,6 +484,18 @@ requiring callers to assemble a Mastra server by hand.
   mode enables feedback when tracing and an MLflow experiment are configured.
 - `mcp` controls whether agents are exposed as MCP tools and how that server is
   named.
+- `genieIdentity` picks the Databricks identity the agents' workspace calls run
+  as - the serving catalogue behind the model picker, Genie suggestions,
+  `ask_genie`, and the statement fetch behind a `[data:<id>]` embed. `"user"`
+  (default) is always on-behalf-of the signed-in user, so callers must be
+  members of the WORKSPACE, not just the Databricks account. `"service-principal"`
+  runs those calls as the app service principal instead, so any caller who can
+  open the app works even without workspace membership - useful when an app is
+  shared with an account-level group too large to add to the workspace. It
+  changes only the Databricks credential: memory threads, the per-user cache
+  namespace, and trace metadata still key off the forwarded user, at the cost
+  of per-user attribution in Genie / Unity Catalog. Falls back to
+  `MASTRA_GENIE_IDENTITY`.
 - `apiAccess` chooses the route allowlist. Keep the default scoped mode for
   deployed apps.
 

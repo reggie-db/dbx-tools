@@ -86,6 +86,7 @@ import {
 } from "./defaults.ts";
 import { collectSpaceSuggestions, resolveGenieSpaces } from "./genie.ts";
 import { historyRoute } from "./history.ts";
+import { resolveIdentityMode, useServicePrincipal, type MastraIdentityMode } from "./identity.ts";
 import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
 import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
 import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
@@ -218,6 +219,12 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    */
   private mcp: ResolvedMcp | null = null;
   /**
+   * Resolved {@link MastraIdentityMode}: the identity the chat path's Databricks
+   * calls run as. Read once at setup so an invalid `genieIdentity` fails the app
+   * boot rather than the first request, and so every request agrees.
+   */
+  private identityMode: MastraIdentityMode = "user";
+  /**
    * Dedicated service-principal Lakebase pool backing Mastra memory /
    * storage. Built once in {@link buildAgentAndServer} (outside any
    * `asUser` scope, so it never inherits a request's OBO identity) and
@@ -227,12 +234,34 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
   private servicePrincipalPool: Pool | null = null;
 
   override async setup(): Promise<void> {
+    // Resolve the identity mode up front so an invalid `genieIdentity` fails the
+    // app boot with a clear message rather than 500-ing the first chat request.
+    this.identityMode = resolveIdentityMode(this.config.genieIdentity);
     // Wait until sibling plugins (e.g. `lakebase`) finish `setup()` so
     // the lakebase pool is valid when storage/memory are enabled.
     this.context?.onLifecycle("setup:complete", async () => {
       this.applyLakebaseAutoDefaults();
       await this.buildAgentAndServer();
     });
+  }
+
+  /**
+   * The plugin instance the chat path's Databricks calls should run through for
+   * `req`, honoring {@link identityMode}.
+   *
+   * In `"user"` mode (the default) this is `this.asUser(req)` - AppKit's own
+   * proxy that runs every call inside `runInUserContext`, so `getExecutionContext()`
+   * returns the caller's OBO client, exactly as before this option existed. In
+   * `"service-principal"` mode it is `this` unwrapped, so the same methods run in
+   * the ambient service context and `getExecutionContext()` returns the app
+   * service principal's client - the same "just don't enter `asUser`" pattern
+   * AppKit's own service-context calls use. One helper covers every workspace
+   * call the chat path makes (serving catalogue, Genie suggestions, `ask_genie`
+   * via the dispatched agent turn, statement fetch, feedback), so the identity
+   * decision lives in one place.
+   */
+  private scopedSelf(req: express.Request): this {
+    return useServicePrincipal(this.identityMode, req) ? this : this.asUser(req);
   }
 
   /**
@@ -402,6 +431,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       defaultAgent: this.built?.defaultAgentId ?? FALLBACK_AGENT_ID,
       agents: Object.keys(this.built?.agents ?? {}),
       feedbackEnabled: this.feedbackEnabled(),
+      // In `service-principal` mode the chat works for any caller who can open
+      // the app, so a UI that hides chat behind an OBO-token probe should show
+      // it regardless. `"user"` mode keeps the OBO-gated behavior.
+      chatAlwaysAvailable: this.identityMode === "service-principal",
     };
     return config as unknown as Record<string, unknown>;
   }
@@ -446,7 +479,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       method: "get",
       path: routes.MASTRA_ROUTES.models,
       handler: async (req, res) => {
-        const result = await this.asUser(req).listModelsResult();
+        const result = await this.scopedSelf(req).listModelsResult();
         if (!result.ok) {
           this.sendFailure(res, result, "models", MODEL_CATALOGUE_FAILED_MESSAGE);
           return;
@@ -532,14 +565,14 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     const embedResolvers: Record<string, EmbedResolver> = {
       chart: (req, id, signal) => {
         const timeoutMs = parseTimeoutMs(req.query.timeoutMs);
-        return this.asUser(req).fetchChartEntry(id, {
+        return this.scopedSelf(req).fetchChartEntry(id, {
           ...(timeoutMs !== undefined ? { timeoutMs } : {}),
           signal,
         });
       },
       data: (req, id, signal) => {
         const limit = parseStatementLimit(req.query.limit);
-        return this.asUser(req).fetchStatement(id, {
+        return this.scopedSelf(req).fetchStatement(id, {
           ...(limit !== undefined ? { limit } : {}),
           signal,
         });
@@ -599,7 +632,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     ): Promise<void> => {
       const controller = new AbortController();
       req.on("close", () => controller.abort());
-      const result = await this.asUser(req).fetchSuggestions(controller.signal);
+      const result = await this.scopedSelf(req).fetchSuggestions(controller.signal);
       if (controller.signal.aborted) return;
       if (!result.ok) {
         // Suggestions are a non-critical enhancement; a lookup failure should
@@ -658,7 +691,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           });
           return;
         }
-        const result = await this.asUser(req).logFeedback(parsed.data);
+        const result = await this.scopedSelf(req).logFeedback(parsed.data);
         if (!result.ok) {
           this.sendFailure(res, result, "feedback", "Feedback could not be recorded");
           return;
@@ -700,10 +733,10 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       // and BIND is one), not `Function.prototype.bind` - so binding it through
       // the proxy registers a bogus route and crashes `pathToRegexp`
       // ("path must be a string ..."). This only manifests in production where
-      // an OBO token makes `userScopedSelf` return the proxy. `dispatchMastra`
+      // an OBO token makes `scopedSelf` return the proxy. `dispatchMastra`
       // is a plain method (its `.bind` is the normal one) and invokes
       // `this.mastraApp` off the real target, keeping the OBO scope active.
-      return this.asUser(req).dispatchMastra(req, res, next);
+      return this.scopedSelf(req).dispatchMastra(req, res, next);
     });
   }
 

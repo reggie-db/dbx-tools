@@ -29,6 +29,7 @@ import {
   type MastraPluginConfig,
   type User,
 } from "./config.ts";
+import { requestUserEmail, requestUserId } from "./identity.ts";
 import { resolveFeedbackEnabled } from "./mlflow.ts";
 
 import {
@@ -45,6 +46,21 @@ import {
 const INVALID_TRACE_ID = "0".repeat(32);
 
 /**
+ * Who a turn is ATTRIBUTED to, independent of which Databricks credential runs
+ * its calls. Supplied by the HTTP middleware from the forwarded user headers so
+ * that in `service-principal` mode - where every request shares the app SP's
+ * client - the memory thread, per-user cache namespace, and trace metadata
+ * still key off the real caller. Ignored in an OBO (user) context, whose own
+ * user id / email are authoritative.
+ */
+export interface AttributedIdentity {
+  /** Forwarded `x-forwarded-user` id, used when the client is the service principal. */
+  userId?: string | undefined;
+  /** Forwarded `x-forwarded-email`, used for trace metadata under the service principal. */
+  email?: string | undefined;
+}
+
+/**
  * Stamp the AppKit user (plus the resource id and trace metadata) onto
  * `requestContext`.
  *
@@ -56,27 +72,43 @@ const INVALID_TRACE_ID = "0".repeat(32);
  * callers build a context with {@link createRequestContext} instead of a
  * request.
  *
+ * The Databricks credential always comes from the ambient execution context;
+ * `attributed` only changes WHO the turn is attributed to when that context is
+ * the service principal (see {@link AttributedIdentity}).
+ *
  * Idempotent: returns immediately when the user and resource id are already
  * present, so the middleware can call it over a context another layer stamped.
  */
-export async function stampRequestContextUser(requestContext: RequestContext): Promise<void> {
+export async function stampRequestContextUser(
+  requestContext: RequestContext,
+  attributed: AttributedIdentity = {},
+): Promise<void> {
   if ([MASTRA_USER_KEY, MASTRA_RESOURCE_ID_KEY].every((key) => requestContext.get(key))) return;
   const executionContext = getExecutionContext();
-  const user: User = {
-    id: executionContextUserId(executionContext),
-    executionContext,
-  };
+  const isUserContext = "isUserContext" in executionContext;
+  // The Databricks CREDENTIAL is always the ambient execution context's client
+  // (OBO in a user context, the service principal otherwise). WHO the turn is
+  // attributed to can differ: in `service-principal` mode every request shares
+  // the SP client, but the forwarded user id must still key the memory thread
+  // and the per-user cache namespace so two callers don't share a conversation.
+  // Prefer the OBO context's own user id, then the forwarded id, then the SP id.
+  const id =
+    (isUserContext ? executionContextUserId(executionContext) : attributed.userId) ??
+    executionContextUserId(executionContext);
+  const user: User = { id, executionContext };
   requestContext.set(MASTRA_USER_KEY, user);
   requestContext.set(MASTRA_RESOURCE_ID_KEY, user.id);
   // AppKit's `UserContext` surfaces display name / email only on
   // OBO requests. Service-context calls (background tasks, server
   // start-up) leave these undefined and we skip the stamp so
-  // downstream trace metadata stays absent rather than empty.
+  // downstream trace metadata stays absent rather than empty. In
+  // `service-principal` mode the forwarded email still identifies the caller,
+  // so it is used for trace metadata even though the client is the SP.
   let userName: string | undefined;
-  let email: string | undefined;
-  if ("isUserContext" in executionContext) {
+  let email: string | undefined = attributed.email;
+  if (isUserContext) {
     userName = executionContext.userName;
-    email = executionContext.userEmail;
+    email = executionContext.userEmail ?? email;
   } else if (process.env.NODE_ENV === "development") {
     const currentUser = await executionContext.client.currentUser.me();
     userName = currentUser?.userName;
@@ -142,7 +174,7 @@ export class MastraServer extends MastraServerExpress {
     super.registerAuthMiddleware();
     this.app.use(async (req, res, next) => {
       const requestContext = res.locals.requestContext! as RequestContext;
-      await this.configureRequestContextUser(requestContext);
+      await this.configureRequestContextUser(req, requestContext);
       this.configureRequestContextThreadId(req, res, requestContext);
       this.configureRequestContextModelOverride(req, requestContext);
       this.configureRequestContextRequestId(req, res, requestContext);
@@ -167,8 +199,14 @@ export class MastraServer extends MastraServerExpress {
     });
   }
 
-  async configureRequestContextUser(requestContext: RequestContext) {
-    await stampRequestContextUser(requestContext);
+  async configureRequestContextUser(req: express.Request, requestContext: RequestContext) {
+    // Pass the forwarded caller identity so `service-principal` mode still keys
+    // memory / cache / traces per user even though the client is the app SP.
+    // In an OBO context these are ignored in favor of the context's own user.
+    await stampRequestContextUser(requestContext, {
+      userId: requestUserId(req),
+      email: requestUserEmail(req),
+    });
   }
 
   /**

@@ -24,6 +24,7 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
 import type { MastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
+import type { MastraIdentityMode } from "./identity.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the
@@ -480,6 +481,38 @@ export interface MastraPluginConfig extends BasePluginConfig {
    */
   apiAccess?: "scoped" | "full";
   /**
+   * Which Databricks identity the agents' workspace calls run as: the
+   * serving-endpoint catalogue behind the model picker, Genie suggestions,
+   * `ask_genie`, and the Statement Execution fetch behind a `[data:<id>]`
+   * embed. Falls back to `MASTRA_GENIE_IDENTITY`, then `"user"`.
+   *
+   * On-behalf-of (OBO) auth requires the caller to be a member of the
+   * WORKSPACE, not just of the Databricks account. An app shared with an
+   * account-level group can be opened by someone whose token is valid but whose
+   * every workspace call fails with `Unauthorized access to Org: <id>` - and
+   * granting workspace membership is not always possible, since a workspace
+   * caps membership well below the size of a large account's user group. The
+   * app's service principal already holds the grants the app was deployed with.
+   *
+   * - `"user"` (default): always OBO. Per-user attribution, and Genie / Unity
+   *   Catalog row filters apply per user. Correct when every caller is a
+   *   workspace member, and unchanged from before this option existed.
+   * - `"service-principal"`: always the app service principal. Needs no OBO
+   *   scopes and works for any caller who can open the app, at the cost of
+   *   per-user attribution in Genie / Unity Catalog.
+   *
+   * `"service-principal"` changes only the Databricks CREDENTIAL. Memory
+   * threads, the per-user cache namespace, and trace metadata still key off the
+   * forwarded user, so callers sharing the service principal's data access keep
+   * separate conversations and cannot read each other's threads or charts.
+   *
+   * @example An app any account user can open
+   * ```ts
+   * mastra({ genieIdentity: "service-principal", genieSpaces: { default: spaceId } });
+   * ```
+   */
+  genieIdentity?: MastraIdentityMode;
+  /**
    * Optional brand context applied to charts produced by the built-in
    * `render_data` / `prepare_chart` tools. When set, the chart planner's
    * Echarts output is themed with the brand's palette (series colors derived
@@ -597,6 +630,12 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: ["boolean", "object"],
       description:
         "Expose the registered agents over MCP. Defaults to agents-only; an object tunes the server id, advertised metadata, and whether ambient tools are exposed.",
+    },
+    genieIdentity: {
+      type: "string",
+      enum: ["user", "service-principal"],
+      description:
+        'Which Databricks identity the agents\' workspace calls (serving catalogue, Genie, statement execution) run as. "user" (default) is always OBO, so callers must be workspace members; "service-principal" always uses the app service principal, so any caller who can open the app works, at the cost of per-user attribution. Falls back to MASTRA_GENIE_IDENTITY.',
     },
     apiAccess: {
       type: "string",

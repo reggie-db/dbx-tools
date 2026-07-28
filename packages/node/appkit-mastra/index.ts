@@ -9,6 +9,7 @@ export * as defaults from "./src/defaults.ts";
 export * as filesystems from "./src/filesystems.ts";
 export * as genie from "./src/genie.ts";
 export * as history from "./src/history.ts";
+export * as identity from "./src/identity.ts";
 export * as mcp from "./src/mcp.ts";
 export * as memory from "./src/memory.ts";
 export * as mlflow from "./src/mlflow.ts";
@@ -41,6 +42,8 @@ export { DEFAULT_GENIE_ALIAS, GENIE_INSTRUCTIONS, normalizeGenieSpaces, resolveG
 export type { GenieSpaceConfig, GenieSpacesConfig } from "./src/genie.ts";
 export { loadHistory, clearHistory, historyRoute } from "./src/history.ts";
 export type { LoadHistoryOptions, ClearHistoryOptions, HistoryRouteOptions } from "./src/history.ts";
+export { IDENTITY_ENV, IDENTITY_MODES, DEFAULT_IDENTITY_MODE, resolveIdentityMode, USER_ID_HEADER, USER_EMAIL_HEADER, requestUserId, requestUserEmail, useServicePrincipal } from "./src/identity.ts";
+export type { MastraIdentityMode } from "./src/identity.ts";
 export { buildMcpServer } from "./src/mcp.ts";
 export type { ResolvedMcp } from "./src/mcp.ts";
 export { createServicePrincipalPool, needsLakebase, createMemoryBuilder, MemoryBuilder } from "./src/memory.ts";
@@ -57,7 +60,7 @@ export { stripStaleChartsProcessor, ResultProcessor } from "./src/processors.ts"
 export { databricksFetch, readResponseText, readResponseJson } from "./src/rest.ts";
 export type { DatabricksFetchInit } from "./src/rest.ts";
 export { stampRequestContextUser, createRequestContext, MastraServer, isMastraRequestAllowed, attachRoutePatchMiddleware } from "./src/server.ts";
-export type { MastraApiGateOptions } from "./src/server.ts";
+export type { AttributedIdentity, MastraApiGateOptions } from "./src/server.ts";
 export { MASTRA_MODEL_OVERRIDE_KEY, extractModelOverride, resolveServingConfig } from "./src/serving.ts";
 export type { ModelOverrideRequest } from "./src/serving.ts";
 export { rewriteServingBody, stripReasoningFromServingMessages, repairAssistantPrefill, rewriteServingResponseBody, flattenChoiceMessageContent } from "./src/serving-sanitize.ts";

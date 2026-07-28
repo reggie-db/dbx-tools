@@ -61,12 +61,19 @@ import { z } from "zod";
  *     surfaces thumbs / comment controls. Defaults to `false` so a
  *     config published by an older server (without the field) parses
  *     cleanly to "off".
+ *   - `chatAlwaysAvailable`: whether the agents' Databricks calls run as the
+ *     app service principal rather than on-behalf-of the signed-in user. When
+ *     `true` the chat works for any caller who can open the app, so a UI that
+ *     hides chat when the OBO token is absent should show it anyway. Defaults
+ *     to `false` (the OBO / `"user"` identity mode), so an older server without
+ *     the field keeps the OBO-gated behavior.
  */
 export const MastraClientConfigSchema = z.object({
   basePath: z.string(),
   defaultAgent: z.string(),
   agents: z.array(z.string()),
   feedbackEnabled: z.boolean().default(false),
+  chatAlwaysAvailable: z.boolean().default(false),
 });
 export type MastraClientConfig = z.infer<typeof MastraClientConfigSchema>;
 
