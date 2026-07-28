@@ -27,6 +27,9 @@ export { ExportMenu } from "./export-menu.tsx";
 export { MastraChat, useMastraChat } from "./mastra-chat.tsx";
 export type { MastraChatProps, UseMastraChatOptions } from "./mastra-chat.tsx";
 export { ThreadSidebar } from "./thread-sidebar.tsx";
+export type { ThreadSidebarProps } from "./thread-sidebar.tsx";
+export { ThreadTabs } from "./thread-tabs.tsx";
+export type { ThreadTabsProps } from "./thread-tabs.tsx";
 export type {
   ApprovalDecision,
   ChatModelOption,
@@ -37,6 +40,7 @@ export type {
   FeedbackValue,
   MessageFeedback,
   PendingApproval,
+  ThreadPlacement,
   ThreadSummary,
   ToolEvent,
   ToolProgress,

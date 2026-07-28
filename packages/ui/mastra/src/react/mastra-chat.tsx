@@ -10,6 +10,7 @@ import type {
   ChatViewProps,
   FeedbackSubmission,
   MessageFeedback,
+  ThreadPlacement,
   ThreadSummary,
   ToolEvent,
   ToolProgress,
@@ -192,8 +193,20 @@ export interface UseMastraChatOptions {
    * them / start new ones / delete them. On by default. Set `false` for
    * the classic single-thread chat anchored to the per-session cookie
    * (no sidebar, no thread tracking).
+   *
+   * Shorthand for {@link threadPlacement}: `false` is `"disabled"`. When both
+   * are passed, `enableThreads: false` wins.
    */
   enableThreads?: boolean;
+  /**
+   * Where conversation management renders: `"left"` / `"right"` dock the list
+   * to that edge, `"top"` shows the open conversations as an editor-style tab
+   * strip with a history menu, `"disabled"` turns thread management off, and
+   * the default `"auto"` picks `"left"` while the chat is wide enough for a
+   * side panel and `"top"` once it gets too narrow for one (measured on the
+   * chat's own width, so an embedded panel decides on its own space).
+   */
+  threadPlacement?: ThreadPlacement;
   /**
    * Enable chat export. Off by default (opt-in). When on, the header
    * shows an "Export" menu for the whole conversation and each assistant
@@ -257,7 +270,11 @@ export const useMastraChat = (
   // conversations a user owns. Each call (stream / history / clear) carries
   // its thread id per request, so many threads can run concurrently without
   // sharing routing state.
-  const enableThreads = options.enableThreads !== false;
+  // `enableThreads: false` is the legacy way to say "no thread management", so
+  // it collapses into the placement rather than living as a second flag.
+  const threadPlacement: ThreadPlacement =
+    options.enableThreads === false ? "disabled" : (options.threadPlacement ?? "auto");
+  const enableThreads = threadPlacement !== "disabled";
   // Export is opt-in (default off): the host turns it on explicitly.
   const enableExport = options.enableExport === true;
   // Feedback defaults to export's setting; an explicit option overrides.
@@ -1427,6 +1444,7 @@ export const useMastraChat = (
     hasMore: activeSession.hasMoreHistory,
     isLoadingHistory,
     onClear: handleClear,
+    threadPlacement,
     // Conversation management: hand ChatView the thread list + handlers
     // only when enabled, so the sidebar stays hidden for the classic
     // single-thread chat (ChatView keys the sidebar off these props).
@@ -1485,8 +1503,9 @@ export interface MastraChatProps extends UseMastraChatOptions {
  * history pagination, and built-in conversation management (a sidebar
  * of the resource's threads with select / new / delete, persisted
  * across reloads) - all with no host wiring. The model picker is opt-in
- * via `showModelPicker`; thread management is on by default and can be
- * turned off with `enableThreads: false`.
+ * via `showModelPicker`; thread management is on by default, laid out per
+ * `threadPlacement` (`auto` docks it left and falls back to a tab strip on a
+ * narrow chat) and turned off with `threadPlacement: "disabled"`.
  */
 export const MastraChat = ({ className, ...options }: MastraChatProps) => {
   const chat = useMastraChat(options);

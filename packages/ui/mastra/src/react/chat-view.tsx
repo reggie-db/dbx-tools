@@ -38,6 +38,7 @@ import {
   GripVerticalIcon,
   MessageSquareIcon,
   PanelLeftIcon,
+  PanelRightIcon,
   RefreshCwIcon,
   SendHorizontalIcon,
   SendIcon,
@@ -51,7 +52,9 @@ import { AssistantBubble, UserBubble } from "./bubbles.tsx";
 import { ExportMenu } from "./export-menu.tsx";
 import { SuggestionPills } from "./suggestion-pills.tsx";
 import { ThreadSidebar, type ThreadSidebarProps } from "./thread-sidebar.tsx";
+import { ThreadTabs } from "./thread-tabs.tsx";
 import type { ChatViewProps } from "./types.ts";
+import { closeThreadTab, nextActiveThreadTab, syncThreadTabs } from "../support/thread-tabs.ts";
 
 // Controlled, presentational chat shell: the scroll container, header
 // (model picker + clear), empty state, transcript of message bubbles,
@@ -74,28 +77,41 @@ const TOP_LOAD_MORE_THRESHOLD_PX = 120;
  */
 const DEFAULT_MODEL_VALUE = "__default__";
 
-/** Tailwind's `md` breakpoint (px). Below this the sidebar becomes a drawer. */
-const MOBILE_BREAKPOINT_PX = 768;
+/**
+ * Width (px) below which the chat is too narrow to give up a column to a
+ * docked conversation list. Matches Tailwind's `md` breakpoint. Under it, a
+ * `left` / `right` placement collapses to an overlay drawer and `auto`
+ * switches to the `top` tab strip.
+ */
+const SIDE_PANEL_MIN_WIDTH_PX = 768;
 
 /**
- * `true` on a phone-width viewport (< {@link MOBILE_BREAKPOINT_PX}). Tracks
- * `matchMedia` so the layout switches live on resize/rotate. SSR-safe: defaults
- * to `false` (desktop) when `window` is unavailable.
+ * `true` while the element behind `ref` is narrower than
+ * {@link SIDE_PANEL_MIN_WIDTH_PX}. Measured with a `ResizeObserver` on the
+ * chat itself rather than `matchMedia` on the viewport, so a chat embedded in
+ * a panel or split view reacts to the space it actually has - a wide window
+ * with a 400px chat column is narrow as far as the layout is concerned.
+ * Falls back to the viewport width until the first measurement lands, and is
+ * SSR-safe (assumes wide when `window` is unavailable).
  */
-const useIsMobile = (): boolean => {
-  const query = `(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`;
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window === "undefined" ? false : window.matchMedia(query).matches,
+const useIsNarrow = (ref: React.RefObject<HTMLElement | null>): boolean => {
+  const [isNarrow, setIsNarrow] = useState(() =>
+    typeof window === "undefined" ? false : window.innerWidth < SIDE_PANEL_MIN_WIDTH_PX,
   );
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mql = window.matchMedia(query);
-    const onChange = () => setIsMobile(mql.matches);
-    onChange();
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, [query]);
-  return isMobile;
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? el.clientWidth;
+      // A zero width means the chat is detached or hidden (a closed tab
+      // panel); keep the last real measurement rather than flipping layout
+      // behind the user's back.
+      if (width > 0) setIsNarrow(width < SIDE_PANEL_MIN_WIDTH_PX);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+  return isNarrow;
 };
 
 export const ChatView = ({
@@ -124,6 +140,7 @@ export const ChatView = ({
   pendingApprovalsByMessage = {},
   onClear,
   threads,
+  threadPlacement = "auto",
   activeThreadId,
   streamingThreadIds = [],
   isLoadingThreads = false,
@@ -154,6 +171,9 @@ export const ChatView = ({
   // only drives styling and lags a render behind the pointerdown, which on
   // touch dropped the first moves and made the drag feel dead.
   const draggingIdRef = useRef<string | null>(null);
+  // Root layout element, measured to decide whether the chat has room for a
+  // docked conversation list (see `useIsNarrow`).
+  const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   // Composer textarea, auto-grown with its content up to the CSS `max-h`.
@@ -396,63 +416,95 @@ export const ChatView = ({
   );
   const showClear = Boolean(onClear);
   const showExport = Boolean(onExportConversation);
-  // The conversation sidebar turns on once the host wires both the
-  // thread list and a selection handler. A header toggle lets the user
-  // show/hide it on demand. Open state is controlled when the caller
-  // supplies `sidebarOpen` + `onToggleSidebar` (the driver does this and
-  // persists the choice); otherwise the view manages a session-only
-  // open flag. Defaults to open.
-  const showSidebar = Boolean(threads && onSelectThread);
+  // Conversation management turns on once the host wires both the thread list
+  // and a selection handler, and the placement isn't `disabled`. Where it
+  // renders is `threadPlacement`, resolved below.
+  const showThreads = Boolean(threads && onSelectThread) && threadPlacement !== "disabled";
+  // Is the chat itself too narrow for a docked list? Measured on the root
+  // element, so an embedded/split-pane chat decides on its own width.
+  const isNarrow = useIsNarrow(rootRef);
+  // `auto` picks the layout for the space available: a left panel while the
+  // chat is wide, the tab strip once it is too narrow to spare a column.
+  // Every other value is honoured verbatim.
+  const placement = threadPlacement === "auto" ? (isNarrow ? "top" : "left") : threadPlacement;
+  const tabbedThreads = showThreads && placement === "top";
+  // A docked list. Narrow chats render it as an overlay drawer on the same
+  // edge instead of an inline column, so the transcript keeps its width.
+  const dockedSide = placement === "right" ? "right" : "left";
+  const dockedThreads = showThreads && (placement === "left" || placement === "right");
+  // Docked-panel open state, controlled when the caller supplies
+  // `sidebarOpen` + `onToggleSidebar` (the driver does this and persists the
+  // choice); otherwise the view manages a session-only flag. Defaults to open.
   const [internalSidebarOpen, setInternalSidebarOpen] = useState(true);
-  // Desktop inline-sidebar open state (persisted by the driver when it
-  // supplies `sidebarOpen`/`onToggleSidebar`, else a session-only flag).
-  const desktopSidebarOpen = sidebarOpenProp ?? internalSidebarOpen;
-  const toggleDesktopSidebar = () => {
+  const inlineSidebarOpen = sidebarOpenProp ?? internalSidebarOpen;
+  const toggleInlineSidebar = () => {
     if (onToggleSidebar) onToggleSidebar();
     else setInternalSidebarOpen((open) => !open);
   };
-  // Are we on a phone-width viewport (< md / 768px)? Drives whether the
-  // sidebar renders inline (desktop) or as an overlay drawer (mobile), and
-  // which open-state the header toggle flips.
-  const isMobile = useIsMobile();
-  // Mobile drawer is a SESSION-only, default-closed state so a persisted
-  // "open" desktop preference never auto-opens the drawer over the chat on a
-  // phone. Reset closed whenever we drop back to a mobile viewport.
-  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  // The overlay drawer is SESSION-only and default-closed so a persisted
+  // "open" preference never auto-opens a drawer over a narrow chat. Reset
+  // closed whenever the chat widens back out to an inline panel.
+  const [drawerOpen, setDrawerOpen] = useState(false);
   useEffect(() => {
-    if (!isMobile) setMobileDrawerOpen(false);
-  }, [isMobile]);
-  // Unified state/handlers the render + header use, resolved by viewport.
-  const sidebarOpen = isMobile ? mobileDrawerOpen : desktopSidebarOpen;
+    if (!isNarrow) setDrawerOpen(false);
+  }, [isNarrow]);
+  // Unified state/handlers the render + header use, resolved by width.
+  const sidebarOpen = isNarrow ? drawerOpen : inlineSidebarOpen;
   const toggleSidebar = () => {
-    if (isMobile) setMobileDrawerOpen((open) => !open);
-    else toggleDesktopSidebar();
+    if (isNarrow) setDrawerOpen((open) => !open);
+    else toggleInlineSidebar();
   };
   // The top bar carries only the sidebar toggle; the model picker, export, and
   // clear controls live in a toolbar row below the composer, closer to where
-  // the user is typing. The toggle is a mobile hamburger, or a desktop "show"
-  // affordance while the inline sidebar is collapsed - so the bar renders only
-  // when that toggle would actually be visible (an open desktop sidebar has its
-  // own hide button, leaving nothing for the bar to hold).
-  const showSidebarToggle = showSidebar && (isMobile || !desktopSidebarOpen);
+  // the user is typing. The toggle is a narrow-layout hamburger, or a "show"
+  // affordance while the inline panel is collapsed - so the bar renders only
+  // when that toggle would actually be visible (an open inline panel has its
+  // own hide button, leaving nothing for the bar to hold, and the tab strip
+  // needs no toggle at all).
+  const showSidebarToggle = dockedThreads && (isNarrow || !inlineSidebarOpen);
   const showHeader = showSidebarToggle;
   const showComposerToolbar = showModelDisplay || showExport || showClear;
+  // Collapse icon points at the edge the panel lives on, matching the hide
+  // button inside the panel itself.
+  const SidebarToggleIcon = dockedSide === "right" ? PanelRightIcon : PanelLeftIcon;
 
-  // Props shared by the mobile drawer and the desktop inline sidebar - the two
-  // render the SAME `ThreadSidebar`, differing only in framing (overlay vs.
-  // inline) and, on mobile, closing the drawer after select / new. Building
-  // the prop bag once keeps the two call sites from drifting.
-  const sidebarProps: ThreadSidebarProps = {
+  // The conversation list itself, shared by all three thread surfaces - the
+  // overlay drawer, the inline panel, and the tab strip's history menu all
+  // render the SAME `ThreadSidebar`, differing only in framing (and, for the
+  // transient ones, closing themselves after select / new). Building the bag
+  // once keeps the call sites from drifting; framing props (`onHide`, `side`,
+  // `className`) are added per site.
+  const threadListProps: Omit<ThreadSidebarProps, "onHide" | "side" | "className"> = {
     threads: threads ?? [],
     ...(activeThreadId ? { activeThreadId } : {}),
     streamingThreadIds,
     isLoading: isLoadingThreads,
     onSelect: (id) => onSelectThread?.(id),
-    onHide: toggleSidebar,
     ...(onNewThread ? { onNew: onNewThread } : {}),
     ...(onDeleteThread ? { onDelete: onDeleteThread } : {}),
     ...(onRenameThread ? { onRename: onRenameThread } : {}),
     ...(onCancelThread ? { onCancel: onCancelThread } : {}),
+  };
+
+  // Which conversations are open as tabs in the `top` placement (session
+  // state; the strip reseeds from the newest conversations on the next load).
+  // The sync keeps the list in step with the thread list and the selection,
+  // and returns the same array when nothing changed so this effect settles.
+  const [openTabIds, setOpenTabIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!tabbedThreads) return;
+    setOpenTabIds((prev) => syncThreadTabs(prev, threads ?? [], activeThreadId));
+  }, [tabbedThreads, threads, activeThreadId]);
+
+  // Close a tab. Closing the ACTIVE one has to move the selection too, or the
+  // sync above would immediately reopen it: switch to a neighbouring tab, or
+  // start a fresh conversation when that was the last one open.
+  const closeTab = (threadId: string) => {
+    const fallback = nextActiveThreadTab(openTabIds, threadId);
+    setOpenTabIds((prev) => closeThreadTab(prev, threadId));
+    if (threadId !== activeThreadId) return;
+    if (fallback) onSelectThread?.(fallback);
+    else onNewThread?.();
   };
 
   // Clear confirmation is an AppKit `AlertDialog` (a real modal), plus an
@@ -475,34 +527,47 @@ export const ChatView = ({
   return (
     <TooltipProvider delayDuration={200}>
       {/*
-       * Outer row hosts the optional conversation sidebar beside the
-       * chat column. The chat column owns the vertical layout and the
+       * Outer row hosts the optional docked conversation list beside the
+       * chat column (`flex-row-reverse` puts it on the right edge without a
+       * second render path). The chat column owns the vertical layout and the
        * scroll; the centered `max-w-4xl` framing lives on each section
-       * (header, transcript, suggestions, composer) instead of the
+       * (tabs, header, transcript, suggestions, composer) instead of the
        * outer shell, so the scroll area's scrollbar sits at the far
        * right - outside the centered column - and the composer lines up
        * with the message column regardless of whether a scrollbar is
        * showing.
        */}
-      <div className={cn("flex h-full min-h-0", className)}>
-        {showSidebar &&
-          (isMobile
+      <div
+        ref={rootRef}
+        className={cn(
+          "flex h-full min-h-0",
+          dockedThreads && dockedSide === "right" && "flex-row-reverse",
+          className,
+        )}
+      >
+        {dockedThreads &&
+          (isNarrow
             ? /*
-               * Mobile: a fixed overlay drawer with a tap-to-close backdrop, so
-               * the conversation list never eats horizontal space from the chat
-               * on a phone. Selecting a thread / starting a new one also closes
-               * the drawer so the transcript comes back into view. Session-only
-               * + default closed (see `mobileDrawerOpen`).
+               * Narrow: a fixed overlay drawer on the docked edge with a
+               * tap-to-close backdrop, so the conversation list never eats
+               * horizontal space from an already-cramped chat. Selecting a
+               * thread / starting a new one also closes the drawer so the
+               * transcript comes back into view. Session-only + default closed
+               * (see `drawerOpen`).
                */
-              mobileDrawerOpen && (
-                <div className="fixed inset-0 z-40 flex">
+              drawerOpen && (
+                <div
+                  className={cn("fixed inset-0 z-40 flex", dockedSide === "right" && "justify-end")}
+                >
                   <div
                     className="absolute inset-0 bg-black/50"
                     onClick={toggleSidebar}
                     aria-hidden="true"
                   />
                   <ThreadSidebar
-                    {...sidebarProps}
+                    {...threadListProps}
+                    onHide={toggleSidebar}
+                    side={dockedSide}
                     onSelect={(id) => {
                       onSelectThread?.(id);
                       toggleSidebar();
@@ -520,23 +585,38 @@ export const ChatView = ({
                 </div>
               )
             : /*
-               * Desktop: an inline flex child sharing the row with the chat
-               * column, using the persisted open/hide preference. Same
-               * `sidebarProps` as mobile - only the framing + close-on-select
-               * differ.
+               * Wide: an inline flex child sharing the row with the chat
+               * column, using the persisted open/hide preference. Same list as
+               * the drawer - only the framing + close-on-select differ.
                */
-              desktopSidebarOpen && <ThreadSidebar {...sidebarProps} />)}
+              inlineSidebarOpen && (
+                <ThreadSidebar {...threadListProps} onHide={toggleSidebar} side={dockedSide} />
+              ))}
         <div className="flex h-full min-w-0 flex-1 flex-col">
+          {tabbedThreads && (
+            /*
+             * `top` placement: the open conversations as an editor-style tab
+             * strip, with the rest reachable through its history menu. Takes
+             * the place of both the docked panel and the header toggle.
+             */
+            <ThreadTabs {...threadListProps} openThreadIds={openTabIds} onCloseTab={closeTab} />
+          )}
           {showHeader && (
             /*
-             * Slim top bar holding the sidebar toggle. On mobile the toggle is
-             * a persistent hamburger (the overlay drawer has no always-visible
-             * hide button); on desktop it's a "show" affordance rendered only
-             * while the inline sidebar is collapsed (an open sidebar has its
-             * own hide button). `showHeader` already tracks that visibility, so
-             * the bar never renders empty.
+             * Slim top bar holding the docked panel's toggle. On a narrow chat
+             * it's a persistent hamburger (the overlay drawer has no
+             * always-visible hide button); otherwise it's a "show" affordance
+             * rendered only while the inline panel is collapsed (an open panel
+             * has its own hide button). `showHeader` already tracks that
+             * visibility, so the bar never renders empty.
              */
-            <div className="mx-auto flex w-full max-w-4xl items-center gap-2 px-3 pb-2 pt-1 text-xs text-muted-foreground md:gap-3 md:px-6">
+            <div
+              className={cn(
+                "mx-auto flex w-full max-w-4xl items-center gap-2 px-3 pb-2 pt-1 text-xs text-muted-foreground md:gap-3 md:px-6",
+                // Keep the toggle on the same edge as the panel it opens.
+                dockedSide === "right" && "justify-end",
+              )}
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -546,7 +626,7 @@ export const ChatView = ({
                     onClick={toggleSidebar}
                     aria-label={sidebarOpen ? "Hide conversations" : "Show conversations"}
                   >
-                    <PanelLeftIcon className="size-4" />
+                    <SidebarToggleIcon className="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>

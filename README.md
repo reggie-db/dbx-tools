@@ -125,7 +125,7 @@ Use `@dbx-tools/ui-mastra` on the client side for the matching chat UI:
 import { MastraChat } from "@dbx-tools/ui-mastra/react";
 
 export function App() {
-  return <MastraChat agentId="analyst" enableThreads showModelPicker />;
+  return <MastraChat agentId="analyst" threadPlacement="auto" showModelPicker />;
 }
 ```
 

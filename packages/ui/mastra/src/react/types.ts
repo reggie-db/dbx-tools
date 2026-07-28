@@ -87,6 +87,21 @@ export type ThreadSummary = {
   updatedAt?: string;
 };
 
+/**
+ * Where conversation management lives in the chat's layout, and whether it
+ * exists at all:
+ *
+ * - `disabled` - no thread UI (the classic single-thread chat).
+ * - `auto` - `left` while the chat is wide enough for a side panel, `top`
+ *   once it gets too narrow for one. Measured off the chat's own width, so
+ *   an embedded panel switches on its own space rather than the viewport's.
+ * - `left` / `right` - a conversation list docked to that edge, collapsing to
+ *   an overlay drawer on the same edge when the chat is narrow.
+ * - `top` - a tab strip of open conversations above the transcript, with a
+ *   history menu listing every other conversation.
+ */
+export type ThreadPlacement = "disabled" | "auto" | "left" | "right" | "top";
+
 export type ChatViewProps = {
   messages: UIMessage[];
   status: ChatStatus;
@@ -217,6 +232,13 @@ export type ChatViewProps = {
    * the classic single-thread chat with no sidebar.
    */
   threads?: ThreadSummary[];
+  /**
+   * Where the conversation list renders (or `"disabled"` to hide it even when
+   * {@link threads} and {@link onSelectThread} are wired). Defaults to
+   * `"auto"`: a left side panel while the chat is wide, a tab strip once it
+   * is too narrow for one. See {@link ThreadPlacement}.
+   */
+  threadPlacement?: ThreadPlacement;
   /** Id of the currently-active thread, highlighted in the sidebar. */
   activeThreadId?: string;
   /**
@@ -265,7 +287,8 @@ export type ChatViewProps = {
    * this together with {@link onToggleSidebar} to control and persist
    * the show/hide choice from the host (the driver does this so the
    * choice survives reloads). The header toggle is shown whenever the
-   * sidebar is enabled, regardless of who owns the state.
+   * sidebar is enabled, regardless of who owns the state. Only applies to
+   * the `left` / `right` placements; the `top` tab strip is always visible.
    */
   sidebarOpen?: boolean;
   /**

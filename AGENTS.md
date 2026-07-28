@@ -214,10 +214,12 @@ why to use this package anyway:
   needs Mastra stream handling, approvals, thread sidebar, model picker,
   feedback, exports, `[chart:<id>]` / `[data:<id>]` embeds, or the features the
   native AppKit chat surface lacks: CONCURRENT multi-thread streaming (run many
-  conversations at once, switch freely, cancel any one), and a mid-turn STEERING
+  conversations at once, switch freely, cancel any one), a mid-turn STEERING
   QUEUE (submit while running to enqueue; queue drains oldest-first, or send any
-  item now to interrupt). Native AppKit UI is enough for general components or
-  native Genie/Serving hooks.
+  item now to interrupt), and a PLACEABLE conversation surface
+  (`threadPlacement`: `left`/`right` dock, `top` editor-style tabs, `disabled`,
+  or `auto` choosing from the chat's own measured width). Native AppKit UI is
+  enough for general components or native Genie/Serving hooks.
 - `@dbx-tools/genie`: use when Genie is one capability inside an agent or
   custom backend and you need async iterators, snapshot diffing, typed events,
   custom SSE/logging/tests, or chart/data planning. Native AppKit Genie is the
@@ -333,6 +335,9 @@ each was previously duplicated across sibling files:
 - `ui/mastra` `src/support/clipboard.ts` and `src/support/download.ts` - copy
   (with the insecure-context `execCommand` fallback) and blob download. Do not
   touch `navigator.clipboard` or `URL.createObjectURL` directly in a component.
+- `ui/mastra` `src/support/thread-labels.ts` - `threadTitle` / `relativeTime`,
+  shared by `ThreadSidebar` and `ThreadTabs` so a conversation row and a tab
+  never disagree about how an untitled thread reads.
 
 When a helper is worth sharing, add it to the module map in the owning package's
 README as well; the docs site is generated from those READMEs, so an undocumented
@@ -1177,3 +1182,22 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   didn't fold queued messages into the live turn, so enqueue + interrupt-restart
   is the reliable model. Cancelling / superseding a run settles stuck `running`
   tool pills via `terminateRunningToolEvents` (thread-sessions.ts).
+- **Thread placement is ONE option with THREE surfaces, all the same list.**
+  `threadPlacement` (`disabled` | `auto` | `left` | `right` | `top`) picks
+  where conversation management renders; `enableThreads: false` collapses into
+  `disabled` so the older flag keeps working. `left`/`right` dock
+  `ThreadSidebar` inline (its `side` prop only flips the divider + collapse
+  icon) and fall back to an overlay drawer on the same edge below
+  `SIDE_PANEL_MIN_WIDTH_PX`; `top` renders `ThreadTabs`, whose history menu is
+  that SAME `ThreadSidebar` in a popover - so rename/delete/cancel are written
+  once. `ChatView` builds one `threadListProps` bag and adds only framing per
+  site; do not fork a second list component.
+  `auto` measures the CHAT ROOT with a `ResizeObserver` (`useIsNarrow`), not
+  `matchMedia` - an embedded/split-pane chat has to switch on its own width, and
+  a zero measurement (hidden panel) is ignored rather than flipping the layout.
+  The open-tab set is session state driven by the pure helpers in
+  `support/thread-tabs.ts`; `syncThreadTabs` returns its INPUT array when
+  nothing changed, which is what keeps the effect that calls it from looping.
+  Closing the ACTIVE tab must move the selection in the same handler
+  (`nextActiveThreadTab`, else `onNewThread`) - the sync always keeps a tab for
+  the active thread, so closing without reselecting just reopens it.

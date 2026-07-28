@@ -12,12 +12,14 @@ import {
   Loader2Icon,
   MessageSquarePlusIcon,
   PanelLeftIcon,
+  PanelRightIcon,
   PencilIcon,
   SquareIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useState } from "react";
 import type { ThreadSummary } from "./types.ts";
+import { relativeTime, threadTitle } from "../support/thread-labels.ts";
 
 // Presentational conversation list. Renders the threads a resource owns
 // so the user can switch between them, start a new one, rename one, and
@@ -51,6 +53,11 @@ export interface ThreadSidebarProps {
   onCancel?: (threadId: string) => void;
   /** Collapse the sidebar. Renders the hide button in the header when provided. */
   onHide?: () => void;
+  /**
+   * Edge the sidebar is docked to. Only affects framing - which side carries
+   * the divider, and which way the collapse icon points. Defaults to `left`.
+   */
+  side?: "left" | "right";
   /** Extra classes merged onto the sidebar root. */
   className?: string;
 }
@@ -76,8 +83,12 @@ export const ThreadSidebar = ({
   onRename,
   onCancel,
   onHide,
+  side = "left",
   className,
 }: ThreadSidebarProps) => {
+  // The collapse icon points at the edge the panel lives on, so the same
+  // button reads as "tuck this away" on either side.
+  const HideIcon = side === "right" ? PanelRightIcon : PanelLeftIcon;
   // Thread id armed for deletion (first trash click). A second click on
   // the same row confirms; clicking elsewhere / another row resets it.
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -119,7 +130,8 @@ export const ThreadSidebar = ({
   return (
     <div
       className={cn(
-        "flex h-full w-64 shrink-0 flex-col border-r border-border bg-background",
+        "flex h-full w-64 shrink-0 flex-col border-border bg-background",
+        side === "right" ? "border-l" : "border-r",
         className,
       )}
     >
@@ -148,7 +160,7 @@ export const ThreadSidebar = ({
                   aria-label="Hide conversations"
                   className={cn("size-8 shrink-0", !onNew && "ml-auto")}
                 >
-                  <PanelLeftIcon className="size-4" />
+                  <HideIcon className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Hide conversations</TooltipContent>
@@ -315,28 +327,3 @@ export const ThreadSidebar = ({
     </div>
   );
 };
-
-/** Title for a thread row, falling back to a placeholder when unnamed. */
-function threadTitle(thread: ThreadSummary): string {
-  const title = thread.title?.trim();
-  return title && title.length > 0 ? title : "New conversation";
-}
-
-/**
- * Render an ISO-8601 timestamp as a coarse "time ago" hint
- * (`just now`, `5m ago`, `3h ago`, `2d ago`, or a locale date for
- * anything older than a week). Invalid input renders nothing.
- */
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "";
-  const diffMs = Date.now() - then;
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(then).toLocaleDateString();
-}

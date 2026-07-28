@@ -27,6 +27,9 @@ Key features:
   the server plugin.
 - Conversation sidebar with new, select, rename, delete, active-thread, and
   background-streaming states, plus a per-row cancel for a running thread.
+- Placeable conversation UI: dock the list left or right, switch to an
+  editor-style tab strip across the top, turn it off, or let `auto` pick between
+  a side panel and tabs from the chat's own width.
 - Concurrent threads: run several conversations at once, switch between them
   while each keeps streaming, and cancel any one independently (per-thread abort
   - routing, no shared client state).
@@ -80,7 +83,7 @@ export function App() {
     <MastraChat
       agentId="analyst"
       showModelPicker
-      enableThreads
+      threadPlacement="auto"
       enableExport
       enableFeedback
       className="h-dvh"
@@ -100,10 +103,47 @@ Useful options:
 - `showModelPicker` fetches `/models` and sends `X-Mastra-Model` overrides.
 - `suggestions` overrides Genie starter questions; omit it to auto-fetch
   `/suggestions`, or pass `[]` to hide suggestions.
-- `enableThreads` turns on persisted conversation selection and the sidebar.
+- `threadPlacement` chooses where conversation management renders, or turns it
+  off. See [Place The Conversation List](#place-the-conversation-list).
+- `enableThreads: false` is the older shorthand for
+  `threadPlacement: "disabled"`.
 - `enableExport` adds whole-conversation and per-message export affordances.
 - `enableFeedback` enables thumbs/comment controls when the server reports
   MLflow feedback is available and a turn produced a trace id.
+
+## Place The Conversation List
+
+Conversation management is on by default. Where it lives is one option:
+
+```tsx
+<MastraChat threadPlacement="top" />
+```
+
+| `threadPlacement` | Layout                                                                     |
+| ----------------- | -------------------------------------------------------------------------- |
+| `auto` (default)  | `left` while the chat is wide, `top` once it is too narrow for a panel     |
+| `left` / `right`  | List docked to that edge, collapsing to an overlay drawer on a narrow chat |
+| `top`             | Tab strip of open conversations, with a history menu for the rest          |
+| `disabled`        | No thread UI - the classic single-thread chat on the session cookie        |
+
+The docked placements render the sidebar as an inline column with a persisted
+show/hide toggle. Below 768px of chat width the panel becomes an overlay drawer
+on the same edge, so the transcript never loses room; the drawer is
+session-scoped and starts closed, and closes itself after a selection.
+
+The `top` placement is the editor-tab model: each open conversation is a tab with
+its title, a spinner while it streams in the background, and a close affordance
+that only takes the tab off the strip (the conversation stays in history). A `+`
+starts a fresh conversation and a history button opens the full list - the same
+sidebar, framed as a menu - so rename, delete, and cancel still work on anything
+not currently tabbed. Closing the active tab moves to a neighbouring one, or
+starts a fresh conversation when it was the last tab open. The open set is
+session state; the strip reseeds from the most recent conversations on the next
+load.
+
+`auto` measures the chat's own element rather than the viewport, so a chat
+embedded in a split view or side panel switches to tabs on the space it actually
+has instead of waiting for the window to shrink.
 
 ## Use The Headless Driver
 
@@ -114,7 +154,7 @@ export function CustomChat() {
   const chat = useMastraChat({
     agentId: "analyst",
     showModelPicker: true,
-    enableThreads: true,
+    threadPlacement: "left",
   });
 
   return <ChatView {...chat} className="h-full" />;
@@ -233,11 +273,19 @@ touching `navigator.clipboard` or `URL.createObjectURL` again.
   `useMastraDefaultModel`, `useMastraSuggestions`, `useMastraThreads`,
   `useChartFetch`, `useStatementFetch` - route/config hooks for controlled
   clients.
-- `ThreadSidebar` - controlled conversation list.
+- `ThreadSidebar` - controlled conversation list, dockable to either edge.
+- `ThreadTabs` - conversation tab strip plus history menu for the `top`
+  placement; reuses `ThreadSidebar` for the menu itself.
 - `ExportMenu` - shared export format menu.
+- `src/support/thread-tabs.ts` - pure open-tab bookkeeping (`syncThreadTabs`,
+  `closeThreadTab`, `nextActiveThreadTab`) so the strip's state is testable
+  without a DOM.
+- `src/support/thread-labels.ts` - `threadTitle` / `relativeTime`, shared by
+  the sidebar and the tab strip so a row and a tab never disagree about how an
+  untitled or freshly-updated conversation reads.
 - Types - `ChatViewProps`, `MastraChatProps`, `UseMastraChatOptions`,
-  `ThreadSummary`, `ToolEvent`, `ToolProgress`, `PendingApproval`,
-  `FeedbackSubmission`, and related UI contract types.
+  `ThreadPlacement`, `ThreadSummary`, `ToolEvent`, `ToolProgress`,
+  `PendingApproval`, `FeedbackSubmission`, and related UI contract types.
 
 Server-side routes and event production live in
 [`@dbx-tools/appkit-mastra`](../../node/appkit-mastra). Browser-safe route,
