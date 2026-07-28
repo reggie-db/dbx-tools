@@ -25,9 +25,10 @@
  * `LOG_BUN_CONSOLE_DISABLED`.
  *
  * Browser-safe: `process` / `Bun` / `window` / `document` are all reached
- * through `globalThis` and guarded, and consola / `node:util` load lazily, so
- * the module works in any runtime. Consola is an optional peer; the module
- * loads fine without it.
+ * through `globalThis` and guarded, consola loads lazily, and `node:util` is
+ * imported ONLY on a host that has `process.stderr` - never in a browser,
+ * where the specifier is unresolvable - so the module works in any runtime.
+ * Consola is an optional peer; the module loads fine without it.
  *
  * @module
  */
@@ -178,17 +179,24 @@ const createConsolaLoggerFactory = memoize(async (): Promise<LoggerFactory | und
  *
  * When `process.stderr` is available, formats each line and writes only to
  * stderr. Bun `inspect` formats each argument when enabled; otherwise
- * `util.formatWithOptions` when `node:util` loads, or a `JSON.stringify`
- * fallback when it does not. When stderr is unavailable, binds
- * {@link createFormatter} prefixes into global `console.*` calls.
+ * `util.inspect` when `node:util` loads, or a `JSON.stringify` fallback when
+ * it does not. When stderr is unavailable (every browser), binds
+ * {@link createFormatter} prefixes into global `console.*` calls and skips the
+ * `node:util` import entirely.
  */
 async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<LoggerFactory> {
   // Indirect specifier so this browser-safe module doesn't statically pull in
   // node types: `node:util` is optional (the JSON fallback covers its absence).
   const nodeUtil = "node:util";
-  const utils: { inspect?: any } | undefined = await import(/* @vite-ignore */ nodeUtil).catch(
-    () => undefined,
-  );
+  // Gated, not just caught: the indirect specifier defeats bundler analysis by
+  // design, so a client build emits a literal `import("node:util")` that no
+  // browser can resolve, and the caught rejection still surfaced as a console
+  // error. `utils` only feeds the stderr branch of the emitter below, so no
+  // stderr means the import has nothing to serve and is skipped outright.
+  const utils: { inspect?: any } | undefined =
+    globalProcessStdErr === undefined
+      ? undefined
+      : await import(/* @vite-ignore */ nodeUtil).catch(() => undefined);
   const bunInspect =
     globalBun !== undefined && !toBoolean(globalBun.env?.LOG_BUN_CONSOLE_DISABLED)
       ? globalBun.inspect
