@@ -157,16 +157,21 @@ export class PnpmWorkspaceState {
   private readonly packages: string[] = [];
   private readonly catalog: Catalog;
   private readonly allowBuilds: AllowBuilds;
+  private readonly overrides: Record<string, string>;
 
   constructor(options: DBXToolsPNPMWorkspaceOptions = {}) {
     this.catalog = { ...DEFAULT_CATALOG, ...options.catalog };
     this.allowBuilds = { ...DEFAULT_ALLOW_BUILDS, ...options.allowBuilds };
+    // Seeded even when empty so `addOverride` has a reference projen already
+    // captured; projen's `omitEmpty` drops the key while it stays empty.
+    this.overrides = { ...options.workspaceYaml?.overrides };
     this.options = {
       ...DEFAULT_WORKSPACE_YAML,
       ...options.workspaceYaml,
       packages: this.packages,
       catalog: this.catalog,
       allowBuilds: this.allowBuilds,
+      overrides: this.overrides,
     };
   }
 
@@ -183,6 +188,22 @@ export class PnpmWorkspaceState {
    */
   public allowBuild(name: string): void {
     this.allowBuilds[name] = true;
+  }
+
+  /**
+   * Force every resolution of `name` to `version`, workspace-wide (pnpm
+   * `overrides`) - the escape hatch for a transitive dependency you do not
+   * declare, e.g. pinning past an unmet peer range a dependency has not yet
+   * widened.
+   *
+   * Blunt by design: it applies to EVERY package in the workspace, including
+   * ones whose declared range excludes it, so reach for a catalog entry first
+   * when the dependency is one you actually declare.
+   *
+   * Note this is a pnpm override, unrelated to projen's `FileBase.addOverride`.
+   */
+  public addOverride(name: string, version: string): void {
+    this.overrides[name] = version;
   }
 
   /**

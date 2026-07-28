@@ -406,10 +406,14 @@ over `packages`). It autofixes, so it can reformat too.
   root, default `["packages"]`) and the file's `packages:` list is filled from
   `project.subprojects` in the root's `preSynthesize` (so member order/timing
   never matters) — every discovered package becomes a real subproject, no manual
-  member list. Mutate it through the typed methods
-  `project.pnpmWorkspace?.addCatalog(name, version)` / `.allowBuild(name)` — or,
-  for any other pnpm setting, the root's
-  `workspaceYaml` option, which is projen's fully typed `PnpmWorkspaceYamlOptions`
+  member list.  Mutate it through the typed methods
+ `project.pnpmWorkspace?.addCatalog(name, version)` / `.allowBuild(name)` /
+ `.addOverride(name, version)` (a pnpm `overrides` pin, unrelated to projen's
+ `FileBase.addOverride`; `overrides` is seeded empty in the constructor so the
+ mutator has the reference projen captured, and `omitEmpty` drops the key while
+ it stays empty) — or,
+ for any other pnpm setting, the root's
+ `workspaceYaml` option, which is projen's fully typed `PnpmWorkspaceYamlOptions`
   (`overrides`, `packageExtensions`, `catalogs`, …) rather than an
   `addOverride("...")` string path. Never edit the YAML.
   Because projen spreads `workspaceYamlOptions` inside `NodePackage`'s own
@@ -755,6 +759,18 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   specifier starts requesting an engine that was never published. `--config.minimumReleaseAge=0`
   overrides it ad hoc, but do not bake that into any shipped command; it exists to
   blunt a supply-chain attack.
+- **An established workspace pins its engine forever unless the CLI moves it.**
+  Bootstrap installs the engine once; every later `dbxt` run took the
+  "established workspace" path, which only installed when `node_modules` was
+  missing and never looked at the engine's VERSION. So a workspace scaffolded
+  months earlier kept resolving its original engine no matter how current the CLI
+  invoking it was, and then failed inside that old engine's code - which is what
+  made a `sync --watch` die on a `concurrently` the installed engine predated,
+  and an `addOverride` call fail against a `PnpmWorkspaceState` that had not
+  gained it yet. `ensureEngineCurrent` (`bootstrap.ts`, called from `cli.ts`) now
+  re-adds the engine when the installed one is BEHIND this CLI. It compares
+  versions and only moves forward, so an older CLI cannot downgrade a workspace,
+  and an in-repo `0.0.0` build is a no-op.
 - **The engine's `@dbx-tools/*` deps must be a REAL published range, never `*`.**
   `projen/.pnpmfile.cjs` rewrites them to `link:../packages/...` in-repo, so the
   declared range is inert here and drifts unnoticed - but it ships verbatim in

@@ -31,15 +31,58 @@ const FALLBACK_PROJEN_SPECIFIER = "@dbx-tools/projen@latest";
  * heuristic has nothing older to fall back to.
  */
 function defaultProjenSpecifier(): string {
+  const version = ownVersion();
+  return version ? `@dbx-tools/projen@^${version}` : FALLBACK_PROJEN_SPECIFIER;
+}
+
+/** This CLI's own released version, or `undefined` for an in-repo `0.0.0` build. */
+function ownVersion(): string | undefined {
   try {
     const manifestPath = fileURLToPath(new URL("../package.json", import.meta.url));
     const version = json.parseRecord(readFileSync(manifestPath, "utf8"))?.version;
-    return typeof version === "string" && version !== "0.0.0"
-      ? `@dbx-tools/projen@^${version}`
-      : FALLBACK_PROJEN_SPECIFIER;
+    return typeof version === "string" && version !== "0.0.0" ? version : undefined;
   } catch {
-    return FALLBACK_PROJEN_SPECIFIER;
+    return undefined;
   }
+}
+
+/** Compare `x.y.z` triples; returns <0, 0, or >0. Missing parts count as 0. */
+function compareVersions(a: string, b: string): number {
+  const parts = (v: string) => v.split(".").map((p) => Number.parseInt(p, 10) || 0);
+  const [x, y] = [parts(a), parts(b)];
+  return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+}
+
+/** Version of the engine currently installed at `root`, if any. */
+function installedEngineVersion(root: string): string | undefined {
+  try {
+    const manifest = join(root, "node_modules", "@dbx-tools", "projen", "package.json");
+    const version = json.parseRecord(readFileSync(manifest, "utf8"))?.version;
+    return typeof version === "string" ? version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Upgrade an established workspace whose installed engine predates this CLI.
+ *
+ * Bootstrapping pins the engine once, and nothing afterwards revisits it - so a
+ * workspace created months ago kept resolving its original engine no matter how
+ * current the CLI invoking it was, and failed inside the OLD engine's code
+ * (`sync --watch` dying on a `concurrently` that engine never declared). The two
+ * are released in lockstep, so this CLI's version is exactly the engine it
+ * expects.
+ *
+ * Only ever moves FORWARD: an engine at or ahead of this CLI is left alone, so
+ * an older CLI cannot downgrade a workspace.
+ */
+export function ensureEngineCurrent(root: string): void {
+  const expected = ownVersion();
+  if (!expected) return;
+  const installed = installedEngineVersion(root);
+  if (installed && compareVersions(installed, expected) >= 0) return;
+  runPnpm(["add", "-D", defaultProjenSpecifier()], root);
 }
 
 // Reach the class through its module NAMESPACE. Current engines also hoist it

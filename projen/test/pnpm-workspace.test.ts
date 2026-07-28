@@ -46,6 +46,8 @@ before(() => {
   root.pnpmWorkspace?.addCatalog("@scoped/name", "^2.0.0");
   root.pnpmWorkspace?.addCatalog("socket.io", "^4.8.1");
   root.pnpmWorkspace?.allowBuild("esbuild");
+  root.pnpmWorkspace?.addOverride("zod", "^4.3.6");
+  root.pnpmWorkspace?.addOverride("socket.io", "^4.8.1");
   root.synth();
 
   yaml = readFileSync(join(outdir, "pnpm-workspace.yaml"), "utf8");
@@ -93,6 +95,17 @@ describe("pnpm-workspace.yaml", () => {
   it("passes any other pnpm setting through projen's typed schema", () => {
     assert.match(yaml, /^overrides:$/m);
     assert.match(yaml, /^ {2}glob: \^13\.0\.0$/m);
+  });
+
+  it("carries overrides added after construction, without dropping constructed ones", () => {
+    // `overrides` is seeded in the constructor purely so this reference is the
+    // one projen captured; a key added later must still reach the file, and must
+    // not displace what `workspaceYaml` passed in.
+    assert.match(yaml, /^ {2}zod: \^4\.3\.6$/m);
+    assert.match(yaml, /^ {2}glob: \^13\.0\.0$/m);
+    // Same dotted-name guard as the catalog: a plain object key, never a
+    // projen `addOverride` path that would split into `socket: { io: ... }`.
+    assert.match(yaml, /^ {2}socket\.io: \^4\.8\.1$/m);
   });
 
   it("is emitted for the ROOT only, never a member package", () => {

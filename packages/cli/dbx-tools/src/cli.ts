@@ -4,7 +4,12 @@
  * @module
  */
 import { Command } from "commander";
-import { bootstrapWorkspace, runInitialSynth, seedToolchain } from "./bootstrap";
+import {
+  bootstrapWorkspace,
+  ensureEngineCurrent,
+  runInitialSynth,
+  seedToolchain,
+} from "./bootstrap";
 import { ensureWorkspaceReady, runPnpm, runProjen } from "./pnpm";
 import { findWorkspaceRoot, needsBootstrap, needsToolchain } from "./root";
 
@@ -19,7 +24,8 @@ import { findWorkspaceRoot, needsBootstrap, needsToolchain } from "./root";
  *     the toolchain, then run the INITIAL synth directly (the projen tasks the
  *     args would name, like `sync`, don't exist until `.projenrc.ts` has run
  *     once), and install. Don't forward `projenArgs` - the synth is the work.
- *   - otherwise (established workspace) -> ensure deps, then forward to projen.
+ *   - otherwise (established workspace) -> ensure deps, bring the engine up to
+ *     this CLI's version, then forward to projen.
  */
 async function prepareAndRunProjen(projenArgs: string[], startDir?: string): Promise<void> {
   const root = await findWorkspaceRoot(startDir);
@@ -34,6 +40,7 @@ async function prepareAndRunProjen(projenArgs: string[], startDir?: string): Pro
     return;
   }
   ensureWorkspaceReady(root);
+  ensureEngineCurrent(root);
   runProjen(projenArgs, root);
 }
 
