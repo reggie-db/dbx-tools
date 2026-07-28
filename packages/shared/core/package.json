@@ -12,6 +12,7 @@
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "prepack": "projen prepack",
     "test": "projen test",
     "watch": "projen watch",
     "projen": "projen"
@@ -31,7 +32,16 @@
   "main": "index.ts",
   "license": "UNLICENSED",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "main": "./lib/index.js",
+    "types": "./lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "version": "0.0.0",
   "packageManager": "pnpm@10.33.0",
@@ -43,7 +53,8 @@
   },
   "files": [
     "index.ts",
-    "src"
+    "src",
+    "lib"
   ],
   "peerDependenciesMeta": {
     "consola": {

@@ -406,14 +406,14 @@ over `packages`). It autofixes, so it can reformat too.
   root, default `["packages"]`) and the file's `packages:` list is filled from
   `project.subprojects` in the root's `preSynthesize` (so member order/timing
   never matters) — every discovered package becomes a real subproject, no manual
-  member list.  Mutate it through the typed methods
- `project.pnpmWorkspace?.addCatalog(name, version)` / `.allowBuild(name)` /
- `.addOverride(name, version)` (a pnpm `overrides` pin, unrelated to projen's
- `FileBase.addOverride`; `overrides` is seeded empty in the constructor so the
- mutator has the reference projen captured, and `omitEmpty` drops the key while
- it stays empty) — or,
- for any other pnpm setting, the root's
- `workspaceYaml` option, which is projen's fully typed `PnpmWorkspaceYamlOptions`
+  member list. Mutate it through the typed methods
+  `project.pnpmWorkspace?.addCatalog(name, version)` / `.allowBuild(name)` /
+  `.addOverride(name, version)` (a pnpm `overrides` pin, unrelated to projen's
+  `FileBase.addOverride`; `overrides` is seeded empty in the constructor so the
+  mutator has the reference projen captured, and `omitEmpty` drops the key while
+  it stays empty) — or,
+  for any other pnpm setting, the root's
+  `workspaceYaml` option, which is projen's fully typed `PnpmWorkspaceYamlOptions`
   (`overrides`, `packageExtensions`, `catalogs`, …) rather than an
   `addOverride("...")` string path. Never edit the YAML.
   Because projen spreads `workspaceYamlOptions` inside `NodePackage`'s own
@@ -569,9 +569,10 @@ projen/                                   # the projen engine (`@dbx-tools/proje
     watch.ts                              # generic file-watch util (watchLoop + watchRoots) the sync --watch task watchers forward to
     scaffold.ts                           # runSynth({ post })
     release.ts                            # DBXToolsRelease: bump task + tag-driven publish workflow
+    publish.ts                            # compiled publish surface: publishConfig + rootDir/prepack wiring (publishesCompiled excludes `ui`)
     openapi.ts                            # openapi generator (tsoa controllers -> spec + client)
     clean.ts, generated.ts, tsconfig.ts, vite.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
-  tasks/                                  # projen task scripts (bump, sync, barrels, openapi, projenrc, clean)
+  tasks/                                  # projen task scripts (bump, sync, barrels, openapi, projenrc, clean, emit)
 example-packages/
   cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ ui/app/   # seed examples, each a real subproject
 ```
@@ -838,20 +839,57 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
 - **The published tarball is an ALLOWLIST, not everything on disk.** Every
   package gets `files: ["index.ts", "src"]` at construction
   (`addPackageFiles`, `project.ts`); the `cli` tag adds `"bin"` for its
-  launchers. `lib/`, `test/`, `.projen/`, and `tsconfig*` are deliberately
-  withheld - none is reachable through the `exports` map, and shipping them
-  quadrupled the tarball (shared-core went 67 files -> 16). If a package needs
-  to ship a path outside `src`, add it with `addPackageFiles(p, "...")` from a
-  tag or an `applyToProjects` block; do NOT hand-edit the manifest, which is
-  projen-owned and read-only.
-- **`arethetypeswrong` is RED on node10/node16 by design.** Packages publish
-  TypeScript SOURCE (`exports` points at `index.ts`) and compile under
-  `moduleResolution: bundler`, so only the `bundler` column is green. That is
-  the supported consumption model: a bundler (Vite) or tsx, never bare Node
-  `require`/`import` of the published package. A red node16 row is therefore
-  expected output, not a regression to "fix" - changing it would mean
-  abandoning source-first resolution, which is what lets packages
-  type-check against each other with no build step.
+  launchers, and `applyCompiledPublish` adds `"lib"`. `test/`, `.projen/`, and
+  `tsconfig*` are deliberately withheld - none is reachable through either
+  `exports` map, and shipping them quadrupled the tarball. Source ships
+  ALONGSIDE the compiled output rather than instead of it: it is cheap, and it
+  keeps stack traces and go-to-definition landing on real code. If a package
+  needs to ship a path outside `src`, add it with `addPackageFiles(p, "...")`
+  from a tag or an `applyToProjects` block; do NOT hand-edit the manifest,
+  which is projen-owned and read-only.
+- **A package resolves from SOURCE in-repo and from COMPILED output once
+  published, and `publishConfig` is what keeps both true** (`publish.ts`). The
+  workspace `exports` points at `index.ts`, which is what lets packages
+  type-check against each other with no build step. That cannot be what ships:
+  Node refuses to strip types under `node_modules`
+  (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so for a long time every
+  consumer had to special-case `@dbx-tools/*` into its own bundle just to hand
+  Node something loadable - a tax this repo has no business charging. pnpm
+  substitutes `publishConfig`'s `main`/`types`/`exports` into the manifest at
+  pack time, so the tarball advertises `lib/` while the workspace keeps its
+  source entry points. Nothing about how the repo builds changed.
+  Two details make the emitted tree loadable, and both are easy to undo by
+  accident. `rootDir: "."` is what compiles the package-ROOT `index.ts` barrel
+  at all - projen's default `rootDir: "src"` leaves it out, which is why `lib/`
+  had no `index.js` for so long. And `tasks/emit.ts` runs after `tsc`, which
+  never rewrites specifiers: sources are written for `moduleResolution:
+bundler` and emit `from "./http"`, so the pass resolves each relative
+  specifier against what was actually emitted and appends the extension. Doing
+  it afterwards is what keeps ~800 import sites free of a hand-maintained
+  `.js` suffix.
+  Setting `publishConfig` REPLACES the field projen renders `access` into, so
+  it is carried over from `pkg.package.npmAccess` explicitly; drop it and every
+  scoped package publishes restricted.
+  `prepack` (spawning `compile`) is what guarantees the output exists - the
+  release workflow publishes straight after `pnpm install` with no build step
+  in between.
+- **UI packages deliberately still publish source.** The exclusion in
+  `publishesCompiled` is about consumers, not convenience: the problem is that
+  Node cannot load raw TypeScript, and a browser package is never loaded by
+  Node. UI packages reach their consumer through Vite, which reads their source
+  happily, and they export `./styles.css` plus raw SVG assets that `tsc`
+  neither copies nor rewrites - compiling them would mean a real asset pipeline
+  (Vite library mode) to solve a problem they do not have. Downstream builds
+  already split exactly this way on their own: the client bundle resolves
+  `@dbx-tools/ui-*` from source, while the SERVER bundle was the one that had
+  to inline `@dbx-tools/*`.
+- **`arethetypeswrong` is GREEN except for the CJS row, which is correct.**
+  Packages are ESM-only, so `node16 (from CJS)` reports "ESM (dynamic import
+  only)" - that is what an ESM-only package is supposed to look like, not a
+  regression. `node10`, `node16 (from ESM)`, and `bundler` are all green. If a
+  row other than the CJS one goes red, the compiled emit or the specifier pass
+  broke; check that `lib/index.js` exists and that no relative specifier in
+  `lib/**` is still extensionless.
 - **`pnpm-lock.yaml` is UNTRACKED, and nothing in CI may depend on it existing.**
   It is covered by `.gitignore`'s `**/*-lock.yaml`, but it had been committed
   before that rule existed and an ignore rule cannot untrack an already-tracked
@@ -929,9 +967,14 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   launcher's own location - i.e. the CLI's own `node_modules` - then hands off to
   the `.ts`. Entries are discovered by scanning `bin/` at synth, so a new CLI
   only needs its `.ts` file plus a `package.json` bin naming the `.mjs`.
-  Compiled `lib/` output is NOT a usable bin target: the sources use
-  extensionless imports (`moduleResolution: bundler`), which Node ESM can't
-  resolve without tsx.
+  The compiled `lib/bin/<name>.js` now exists and is loadable once INSTALLED,
+  but it is deliberately not the bin target, because it does not work in the
+  workspace: in-repo, a sibling `@dbx-tools/*` import resolves to that
+  package's SOURCE entry, so running the compiled bin here dies on a `.ts` it
+  cannot load. Pointing `bin` at it would mean a launcher that behaves
+  differently depending on whether it is inside `node_modules` - so the tsx
+  launcher stays, and `tsx` stays a runtime dep. A CLI's bin is executed, never
+  imported, so this costs consumers an install-size hit and nothing else.
 - **CLI command names are `dbx-tools-<name>` plus a short `dbxt-<name>` alias**,
   and the `bin/` entry file is named after the primary command - so
   `bin/dbx-tools-model-proxy.ts` backs `dbx-tools-model-proxy` /

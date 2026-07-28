@@ -18,6 +18,7 @@ import { generateCodegen } from "./codegen";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config";
 import { resolvePkgRoot } from "./engine-root";
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace";
+import { applyCompiledPublish } from "./publish";
 import { DBXToolsRelease, type StandaloneRelease } from "./release";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags";
 import { DBXToolsRootTsconfig } from "./tsconfig";
@@ -234,10 +235,15 @@ export function addExports(pkg: javascript.NodeProject, exports: Record<string, 
  * and `LICENSE` on top of whatever is listed, so those are never declared here.
  *
  * The baseline (`index.ts` + `src`, set at construction) is the source-first
- * entry surface the `exports` map actually resolves to. A tag adds what its own
- * layout ships outside `src` - the `cli` tag its `bin/` launchers. Everything
- * else the build leaves behind (`lib/`, `test/`, `.projen/`, `tsconfig*`) is
- * unreachable through `exports` and is deliberately withheld.
+ * entry surface the workspace's own `exports` map resolves to. A tag adds what
+ * its layout ships outside `src` - the `cli` tag its `bin/` launchers - and
+ * {@link applyCompiledPublish} adds `lib/`, which is what the PUBLISHED
+ * `exports` resolves to. Source ships alongside the compiled output rather than
+ * instead of it: it costs little, and it keeps stack traces and go-to-definition
+ * landing on real code for consumers that want it.
+ *
+ * Everything else the build leaves behind (`test/`, `.projen/`, `tsconfig*`) is
+ * unreachable through either map and is deliberately withheld.
  */
 export function addPackageFiles(pkg: javascript.NodeProject, ...entries: string[]): void {
   const current = (pkg.package.manifest.files ?? []) as string[];
@@ -994,6 +1000,10 @@ function preSynthesizeProject(project: javascript.NodeProject): void {
   }
   for (const p of subtree) {
     if (!p.parent) continue;
+    // Swap the source entry points for compiled ones in the PUBLISHED manifest
+    // only. Runs here rather than in the constructor so the tags have already
+    // installed their `exports` layouts for it to mirror.
+    if (p instanceof javascript.NodeProject) applyCompiledPublish(p);
     // A child's `.gitignore` survives ONLY when it carries custom patterns (see
     // swapChildGitignore). `.gitattributes` is always dropped - the root's
     // annotateGenerated globs cover the children. Runs once from the root's
