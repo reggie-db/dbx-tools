@@ -714,6 +714,10 @@ through the publish cycle. See `demo/README.md` for the full two-mode explanatio
   projen's native `javascript.PnpmWorkspaceYaml`, fed the options
   `PnpmWorkspaceState` (`pnpm-workspace.ts`) holds; unlike the engine's own files
   it is NOT read-only, since projen writes it with `readonly: false`.
+  The generated `vite.config.ts` is tuned WITHOUT editing it: drop a
+  `vite.config.override.ts` (or `.js`) beside it and its default export is merged
+  over the generated config with `mergeConfig` at config load. Prefer the `.ts`
+  form; both are read, in that order, so `.ts` wins if both exist.
 - **barrels** (`<root>/<tags...>/<name>/index.ts`): read-only, do-not-edit header,
   written by the engine's own generator (`barrels.ts`). Marked generated in
   `.gitattributes` (`annotateGenerated`).

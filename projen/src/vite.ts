@@ -4,24 +4,28 @@
  * {@link ViteConfigFile} extends projen's `TextFile` and emits a generated,
  * read-only Vite config: the React plugin plus a runtime OVERRIDE chain. At Vite
  * startup the generated config looks for each unmanaged override module sitting
- * beside it (default {@link DEFAULT_VITE_OVERRIDES}: `vite.config.override.js`) and, when present, merges that module's default export
- * over the generated config with Vite's `mergeConfig` - in listed order, so later
- * files win and absent ones are skipped. A package thus tweaks Vite WITHOUT editing
- * the projen-owned file.
+ * beside it (see {@link DEFAULT_VITE_OVERRIDES}) and, when present, merges that
+ * module's default export over the generated config with Vite's `mergeConfig` - in
+ * listed order, so later files win and absent ones are skipped. A package thus
+ * tweaks Vite WITHOUT editing the projen-owned file.
  *
- * The override modules are `.js` because Vite loads them via a plain dynamic
- * `import()` at config time. Being a package-ROOT file (not under `src/`), the
- * generated `vite.config.ts` is excluded from the package's `tsconfig` `include`, so
- * its `node:*` usage never trips the `ui` package's `compile` under the DOM-only
- * tsconfig; Vite transpiles it with esbuild and runs it in Node at config time.
+ * An override may be written in TypeScript or JavaScript. The generated config
+ * reaches it through a dynamic `import()` of a runtime-computed URL, which Vite's
+ * config bundling cannot inline and so leaves for Node to execute - and Node
+ * strips types from a `.ts` file outside `node_modules` on its own. Being a
+ * package-ROOT file (not under `src/`), neither the generated `vite.config.ts`
+ * nor the override is in the package's `tsconfig` `include`, so their `node:*`
+ * usage never trips the `ui` package's `compile` under the DOM-only tsconfig.
  */
 import { type Project, TextFile } from "projen";
 
 /**
  * Default unmanaged override modules, merged over the generated config in order
- * (later wins, absent files skipped): a package's `vite.config.override.js`.
+ * (later wins, absent files skipped). Both extensions are accepted so an existing
+ * JavaScript override keeps working; the TypeScript one is listed last so it wins
+ * where a package is mid-migration and still has both.
  */
-const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js"];
+const DEFAULT_VITE_OVERRIDES = ["vite.config.override.js", "vite.config.override.ts"];
 
 /** Render the generated `vite.config.ts` source with the override chain inlined. */
 function renderViteConfig(overridePaths: string[]): string {
