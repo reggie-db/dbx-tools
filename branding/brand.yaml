@@ -12,17 +12,17 @@ assets:
     dark: ./assets/logo-dark.svg
   favicon: ./assets/icon-light.svg
 colors:
-  primary: "#FF3621"
-  primaryHover: "#D92D18"
-  accent: "#2EB88A"
-  foreground: "#0B2026"
+  primary: "#FF3621" # Lava
+  primaryHover: "#98102A" # Maroon
+  accent: "#00A972" # Databricks green
+  foreground: "#1B3139" # Navy
   background: "#FFFFFF"
-  surface: "#F6F7F8"
-  muted: "#5F6B70"
-  border: "#DCE2E5"
+  surface: "#F9F7F4" # Oat light
+  muted: "#618794" # Slate
+  border: "#E4E2DD" # Warm hairline
 typography:
-  sans: Inter, ui-sans-serif, system-ui, sans-serif
-  mono: ui-monospace, SFMono-Regular, Menlo, monospace
+  sans: "'DM Sans', ui-sans-serif, system-ui, sans-serif"
+  mono: "'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
 voice:
   audience:
     - Databricks developers

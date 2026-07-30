@@ -31,7 +31,7 @@ describe("renderEmailHtml branding", () => {
   it("inlines the brand accent and font, not the default blue", () => {
     const html = renderEmailHtml({ subject: "S", body: "b", brand: defaultEmailBrand });
     assert.ok(html.includes(defaultEmailBrand.accent));
-    assert.ok(html.includes("Inter"));
+    assert.ok(html.includes(defaultEmailBrand.fontFamily));
     assert.ok(!html.includes("#0b6bcb"));
   });
 

@@ -34,13 +34,13 @@ export const BrandAssetSetSchema = z
 export const BrandColorsSchema = z
   .object({
     primary: color.default("#FF3621").describe("Primary action and identity color."),
-    primaryHover: color.default("#D92D18").describe("Primary hover or pressed color."),
-    accent: color.default("#2EB88A").describe("Secondary accent color."),
-    foreground: color.default("#0B2026").describe("Default text and mark color."),
+    primaryHover: color.default("#98102A").describe("Primary hover or pressed color."),
+    accent: color.default("#00A972").describe("Secondary accent color."),
+    foreground: color.default("#1B3139").describe("Default text and mark color."),
     background: color.default("#FFFFFF").describe("Default page background."),
-    surface: color.default("#F6F7F8").describe("Secondary surface background."),
-    muted: color.default("#5F6B70").describe("Muted text color."),
-    border: color.default("#DCE2E5").describe("Default border color."),
+    surface: color.default("#F9F7F4").describe("Secondary surface background."),
+    muted: color.default("#618794").describe("Muted text color."),
+    border: color.default("#E4E2DD").describe("Default border color."),
   })
   .strict()
   .prefault({});
@@ -89,8 +89,8 @@ export const BrandContextSchema = z
     colors: BrandColorsSchema,
     typography: z
       .object({
-        sans: nonBlankString.default("Inter, ui-sans-serif, system-ui, sans-serif"),
-        mono: nonBlankString.default("ui-monospace, SFMono-Regular, Menlo, monospace"),
+        sans: nonBlankString.default("'DM Sans', ui-sans-serif, system-ui, sans-serif"),
+        mono: nonBlankString.default("'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace"),
       })
       .strict()
       .prefault({}),

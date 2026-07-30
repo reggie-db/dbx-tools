@@ -8,7 +8,7 @@ const sourceRoot = path.join(brandingRoot, "assets");
 const targetRoot = path.resolve(
   brandingRoot,
   "..",
-  "workspaces",
+  "packages",
   "ui",
   "branding",
   "src",
