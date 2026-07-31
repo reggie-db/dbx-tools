@@ -423,8 +423,8 @@ export function scratchFS(prefix: string, options: OsFileSystemOptions = {}): Lo
  *
  * @example
  * ```ts
- * const tools = await rebuildFS("databricks-aitools", (scratch) =>
- *   installInto(scratch.root),
+ * const skills = await rebuildFS("agent-skills", (scratch) =>
+ *   downloadInto(scratch.root),
  * );
  * ```
  */

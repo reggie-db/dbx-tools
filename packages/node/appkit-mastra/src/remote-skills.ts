@@ -1,19 +1,24 @@
 /**
  * Startup provisioning of remote Agent-Skill sources for a Mastra workspace.
  *
- * A {@link RemoteSkillSource} names WHERE a `SKILL.md` tree comes from - a
- * GitHub `owner/repo`, any git / GitLab URL, or a direct download URL - and
- * optional per-source policy. {@link provisionRemoteSkills} materializes every
- * source into a local `SKILL.md` tree at app boot and returns the directories
- * to hand Mastra as extra skill scan paths.
+ * A {@link RemoteSkillSource} names WHERE a `SKILL.md` tree comes from - the
+ * {@link AITOOLS_SOURCE} constant, a GitHub `owner/repo`, any git / GitLab URL,
+ * or a direct download URL - and optional per-source policy.
+ * {@link provisionRemoteSkills} materializes every source into a local
+ * `SKILL.md` tree at app boot and returns the directories to hand Mastra as
+ * extra skill scan paths.
  *
  * Resolution per source, in order:
  *
- * 1. the OPTIONAL `skills` npm CLI (peer dep): if installed, each source is
+ * 1. the {@link AITOOLS_SOURCE} constant (`"aitools"`): Databricks' own skill
+ *    set, read straight from the public repo the `databricks aitools` CLI
+ *    sources from. No CLI, no Databricks auth - which is what makes it usable
+ *    inside a Databricks App container, where the CLI is not installed;
+ * 2. the OPTIONAL `skills` npm CLI (peer dep): if installed, each source is
  *    copied into a staging dir with `skills add <source> --agent <dir> --copy`,
  *    which understands every source format the ecosystem does (GitHub
  *    shorthand, git URLs, archive/download URLs);
- * 2. otherwise a plain {@link fetch} of the source URL (built with
+ * 3. otherwise a plain {@link fetch} of the source URL (built with
  *    {@link net.urlBuilder}), writing the downloaded `SKILL.md` to a staging
  *    dir.
  *
@@ -35,7 +40,7 @@
 
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join, posix } from "node:path";
+import { dirname, join, posix } from "node:path";
 import type { WorkspaceClient } from "@databricks/sdk-experimental";
 import { appkit } from "@dbx-tools/appkit";
 import type { WorkspaceClientLike } from "@dbx-tools/appkit";
@@ -43,7 +48,8 @@ import { exec } from "@dbx-tools/core";
 import { DatabricksFileSystem } from "@dbx-tools/databricks";
 import { localFS, type LocalFileSystem } from "@dbx-tools/fs";
 import { find } from "@dbx-tools/path";
-import { error, hash, log, net, string } from "@dbx-tools/shared-core";
+import { error, hash, json, log, net, object, string } from "@dbx-tools/shared-core";
+import type { OneOrMany } from "@dbx-tools/shared-core";
 import type { FileSystem } from "@dbx-tools/shared-fs";
 
 const logger = log.logger("mastra/remote-skills");
@@ -68,20 +74,55 @@ const DEFAULT_MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 /** Stable temp directory holding one rebuilt skill tree per remote source. */
 const LOCAL_SKILLS_DIR = "mastra-local-skills";
 
+/* ------------------------------ AI Tools ------------------------------ */
+
+/**
+ * Source constant selecting Databricks' own AI Tools skill set.
+ *
+ * @example
+ * mastra({ remoteSkills: "aitools" });
+ */
+export const AITOOLS_SOURCE = "aitools";
+
+/** The {@link AITOOLS_SOURCE} literal, for callers spelling the union out. */
+export type AiToolsSource = typeof AITOOLS_SOURCE;
+
+/**
+ * The PUBLIC repo `databricks aitools install` sources from. Reading it
+ * directly is what lets an app get the same skills the CLI installs without
+ * the CLI - which a Databricks App container does not ship.
+ */
+const AITOOLS_REPO = "databricks/databricks-agent-skills";
+
+/** Repo ref the skills are read from. Override per source with `ref`. */
+const AITOOLS_REF = "main";
+
+/** Skill files downloaded at once; the set is ~30 skills of a few files each. */
+const AITOOLS_CONCURRENCY = 8;
+
+/** The subset of the repo's generated `manifest.json` this module reads. */
+interface AiToolsManifest {
+  skills?: Record<string, { files?: string[]; repo_dir?: string }>;
+}
+
 /* -------------------------------- types -------------------------------- */
 
 /**
  * One remote skill source and its per-source policy.
  *
- * `source` is anything the `skills` ecosystem understands: a GitHub
- * `owner/repo` shorthand, a full GitHub / GitLab / git URL, or a direct
- * download URL to a `SKILL.md` or archive.
+ * `source` is {@link AITOOLS_SOURCE} or anything the `skills` ecosystem
+ * understands: a GitHub `owner/repo` shorthand, a full GitHub / GitLab / git
+ * URL, or a direct download URL to a `SKILL.md` or archive.
  */
 export interface RemoteSkillSourceOptions {
-  /** GitHub shorthand, git / GitLab URL, or a direct download URL. */
-  source: string;
-  /** Install only these skill names from the source (CLI path only). */
+  /** `"aitools"`, a GitHub shorthand, a git / GitLab URL, or a download URL. */
+  source: net.UrlLike | AiToolsSource;
+  /** Install only these skill names from the source. */
   skills?: string | string[];
+  /** Include experimental skills. `"aitools"` only. */
+  experimental?: boolean;
+  /** Pin the repo ref (tag / branch / sha). `"aitools"` only; defaults to `main`. */
+  ref?: string;
   /** Override the byte ceiling on a direct-fetch download for this source. */
   maxDownloadBytes?: number;
   /**
@@ -92,22 +133,26 @@ export interface RemoteSkillSourceOptions {
 }
 
 /**
- * A remote skill source: a bare source string (GitHub shorthand / URL) or a
- * {@link RemoteSkillSourceOptions} with per-source policy.
+ * A remote skill source: the {@link AITOOLS_SOURCE} constant, a URL-like
+ * (string / `URL` / `{ url }`), or a {@link RemoteSkillSourceOptions} bag with
+ * per-source policy.
  */
-export type RemoteSkillSource = string | RemoteSkillSourceOptions;
+export type RemoteSkillSource = net.UrlLike | AiToolsSource | RemoteSkillSourceOptions;
 
 /**
- * The workspace `remoteSkills` option. A single source, a list, or a
- * {@link ProvisionRemoteSkillsOptions} bag when top-level policy is needed.
+ * The workspace `remoteSkills` option: one source, a non-empty list of them, or
+ * a {@link ProvisionRemoteSkillsOptions} bag when top-level policy is needed.
  */
 export type RemoteSkillsOption =
-  RemoteSkillSource | RemoteSkillSource[] | ProvisionRemoteSkillsOptions;
+  RemoteSkillSource | OneOrMany<RemoteSkillSource> | ProvisionRemoteSkillsOptions;
+
+/** A source entry with its `source` flattened to a plain string. */
+type NormalizedSource = Omit<RemoteSkillSourceOptions, "source"> & { source: string };
 
 /** Top-level remote-skills provisioning options. */
 export interface ProvisionRemoteSkillsOptions {
   /** Sources to materialize at startup. */
-  sources: RemoteSkillSource | RemoteSkillSource[];
+  sources: RemoteSkillSource | OneOrMany<RemoteSkillSource>;
   /**
    * Fail app startup when a source can't be resolved. Defaults to `true`. A
    * per-source `failOnError` wins over this.
@@ -147,26 +192,42 @@ export function normalizeRemoteSkillsOption(
   option: RemoteSkillsOption | undefined,
 ): ProvisionRemoteSkillsOptions | undefined {
   if (option === undefined) return undefined;
-  if (typeof option === "string") return { sources: [option] };
-  if (Array.isArray(option)) return option.length > 0 ? { sources: option } : undefined;
-  if (isProvisionOptions(option)) {
-    const sources = Array.isArray(option.sources) ? option.sources : [option.sources];
-    return sources.length > 0 ? { ...option, sources } : undefined;
-  }
-  // A lone RemoteSkillSourceOptions object.
-  return { sources: [option] };
+  const bag = isProvisionOptions(option) ? option : undefined;
+  const sources = toSourceList(bag ? bag.sources : (option as RemoteSkillSource));
+  // An empty list is the same as no configuration at all.
+  if (!object.isOneOrMany(sources)) return undefined;
+  return { ...bag, sources };
 }
 
 /** A `sources`-bearing bag is the top-level options shape, not a single source. */
-function isProvisionOptions(
-  value: RemoteSkillSourceOptions | ProvisionRemoteSkillsOptions,
-): value is ProvisionRemoteSkillsOptions {
-  return "sources" in value;
+function isProvisionOptions(value: unknown): value is ProvisionRemoteSkillsOptions {
+  return object.isRecord(value) && "sources" in value;
 }
 
-/** Coerce a source entry to its normalized {@link RemoteSkillSourceOptions}. */
-function toSourceOptions(source: RemoteSkillSource): RemoteSkillSourceOptions {
-  return typeof source === "string" ? { source } : source;
+/** One source or many, as a plain array. A source is never itself an array. */
+function toSourceList(
+  input: RemoteSkillSource | OneOrMany<RemoteSkillSource>,
+): RemoteSkillSource[] {
+  return Array.isArray(input) ? [...input] : [input];
+}
+
+/** Flatten a source entry - string, `URL`, `{ url }`, or options bag - to a {@link NormalizedSource}. */
+function toSourceOptions(source: RemoteSkillSource): NormalizedSource {
+  if (typeof source === "string") return { source };
+  if (source instanceof URL) return { source: source.toString() };
+  if ("source" in source) return { ...source, source: toSourceString(source.source) };
+  return { source: source.url };
+}
+
+/** A {@link net.UrlLike} as the plain string the staging paths work with. */
+function toSourceString(source: net.UrlLike): string {
+  if (typeof source === "string") return source;
+  return source instanceof URL ? source.toString() : source.url;
+}
+
+/** True when a source selects the built-in Databricks AI Tools skill set. */
+function isAiToolsSource(source: string): boolean {
+  return source.trim().toLowerCase() === AITOOLS_SOURCE;
 }
 
 /**
@@ -265,15 +326,83 @@ function resolveDatabricksBasePath(
  * `skills` CLI and falling back to a direct fetch.
  */
 async function stageSource(
-  sourceOptions: RemoteSkillSourceOptions,
+  sourceOptions: NormalizedSource,
   stagingRoot: string,
   options: ProvisionRemoteSkillsOptions,
 ): Promise<string> {
   const target = join(stagingRoot, `src-${hash.id()}`);
   await mkdir(target, { recursive: true });
+  // AI Tools resolves from a known repo layout, so it never needs the CLI.
+  if (isAiToolsSource(sourceOptions.source)) return stageAiTools(sourceOptions, target, options);
   const viaCli = await stageViaSkillsCli(sourceOptions, target);
   if (viaCli) return viaCli;
   return stageViaFetch(sourceOptions, target, options);
+}
+
+/**
+ * Materialize the Databricks AI Tools skills into `target`.
+ *
+ * Reads the repo's own generated `manifest.json` (which names each skill's
+ * files and whether it lives under `skills/` or `experimental/`) and downloads
+ * them - the same thing `databricks aitools install` does, minus the CLI and
+ * minus any Databricks auth, since the repo is public.
+ */
+async function stageAiTools(
+  sourceOptions: NormalizedSource,
+  target: string,
+  options: ProvisionRemoteSkillsOptions,
+): Promise<string> {
+  const maxBytes = resolveMaxBytes(sourceOptions, options);
+  const ref = string.trimToNull(sourceOptions.ref) ?? AITOOLS_REF;
+  const manifest = json.parse(
+    (await download(aiToolsRawUrl(ref, "manifest.json"), maxBytes)).toString("utf8"),
+    undefined,
+  ) as AiToolsManifest | undefined;
+
+  const wanted = new Set(string.parseList(sourceOptions.skills));
+  const selected = Object.entries(manifest?.skills ?? {}).filter(([name, entry]) =>
+    wanted.size > 0
+      ? wanted.has(name)
+      : entry.repo_dir !== "experimental" || sourceOptions.experimental === true,
+  );
+  if (selected.length === 0) {
+    throw new Error(`no matching skills in ${AITOOLS_REPO}@${ref}`);
+  }
+
+  const files = selected.flatMap(([name, entry]) =>
+    (entry.files ?? []).map((file) => ({
+      url: aiToolsRawUrl(ref, `${entry.repo_dir ?? "skills"}/${name}/${file}`),
+      path: join(target, name, ...file.split("/")),
+    })),
+  );
+  await mapConcurrent(files, AITOOLS_CONCURRENCY, async (item) => {
+    const body = await download(item.url, maxBytes);
+    await mkdir(dirname(item.path), { recursive: true });
+    await writeFile(item.path, body);
+  });
+
+  logger.debug("aitools:staged", { ref, skills: selected.length, files: files.length });
+  return target;
+}
+
+/** Raw-content URL for a path in the AI Tools repo at `ref`. */
+function aiToolsRawUrl(ref: string, path: string): string {
+  return `https://raw.githubusercontent.com/${AITOOLS_REPO}/${ref}/${path}`;
+}
+
+/** Run `worker` over `items`, at most `limit` in flight. */
+async function mapConcurrent<T>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      await worker(items[cursor++]!);
+    }
+  });
+  await Promise.all(runners);
 }
 
 /**
@@ -282,7 +411,7 @@ async function stageSource(
  * CLI is absent (so the caller can fall back to a fetch).
  */
 async function stageViaSkillsCli(
-  sourceOptions: RemoteSkillSourceOptions,
+  sourceOptions: NormalizedSource,
   target: string,
 ): Promise<string | undefined> {
   const cli = await resolveSkillsCli();
@@ -338,7 +467,7 @@ async function resolveSkillsCli(): Promise<{ command: string; args: string[] } |
  * Used when the `skills` CLI isn't installed; supports a direct `SKILL.md` URL.
  */
 async function stageViaFetch(
-  sourceOptions: RemoteSkillSourceOptions,
+  sourceOptions: NormalizedSource,
   target: string,
   options: ProvisionRemoteSkillsOptions,
 ): Promise<string> {
@@ -348,23 +477,33 @@ async function stageViaFetch(
       `source "${sourceOptions.source}" is not a URL and the optional "skills" package is not installed`,
     );
   }
-  const maxBytes =
-    sourceOptions.maxDownloadBytes ?? options.maxDownloadBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES;
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(
-      `download failed: ${response.status} ${response.statusText} (${url.toString()})`,
-    );
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.byteLength > maxBytes) {
-    throw new Error(`download exceeds ${maxBytes} bytes (${url.toString()})`);
-  }
+  const buffer = await download(url.toString(), resolveMaxBytes(sourceOptions, options));
   const name = string.toSlug(deriveSkillName(url.toString())) || "remote-skill";
   const skillDir = join(target, name);
   await mkdir(skillDir, { recursive: true });
   await writeFile(join(skillDir, "SKILL.md"), buffer);
   return target;
+}
+
+/** The effective download ceiling: per-source, then top-level, then the default. */
+function resolveMaxBytes(
+  sourceOptions: NormalizedSource,
+  options: ProvisionRemoteSkillsOptions,
+): number {
+  return sourceOptions.maxDownloadBytes ?? options.maxDownloadBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES;
+}
+
+/** GET a URL, failing loudly on a non-2xx status or an oversized body. */
+async function download(url: string, maxBytes: number): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`download failed: ${response.status} ${response.statusText} (${url})`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.byteLength > maxBytes) {
+    throw new Error(`download exceeds ${maxBytes} bytes (${url})`);
+  }
+  return buffer;
 }
 
 /** Derive a skill directory name from a download URL's last path segment. */

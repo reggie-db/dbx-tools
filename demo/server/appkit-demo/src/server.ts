@@ -290,10 +290,10 @@ await createAppAuto({
       // generated chart matches the surrounding AppKit UI instead of falling
       // back to Echarts' defaults.
       brand: defaultBrandContext,
-      // Fold Databricks AI Tools skills into the agents: "auto" runs the
-      // `databricks` CLI (`databricks aitools install --path`) when it's
-      // installed, and logs-and-moves-on when the CLI isn't available.
-      databricksAITools: "auto",
+      // Fold Databricks' own AI Tools skills into the agents. Read straight
+      // from the public databricks/databricks-agent-skills repo, so this works
+      // in a deployed App container where the `databricks` CLI is absent.
+      remoteSkills: "aitools",
     }),
   ],
   cache: {

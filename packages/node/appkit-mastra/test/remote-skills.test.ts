@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { normalizeRemoteSkillsOption, provisionRemoteSkills } from "../src/remote-skills.ts";
+import {
+  AITOOLS_SOURCE,
+  normalizeRemoteSkillsOption,
+  provisionRemoteSkills,
+} from "../src/remote-skills.ts";
 
 describe("normalizeRemoteSkillsOption", () => {
   it("returns undefined for missing / empty input", () => {
@@ -36,6 +40,17 @@ describe("normalizeRemoteSkillsOption", () => {
       failOnError: false,
       userEmail: "user@example.com",
     });
+  });
+
+  it("accepts URL-like sources alongside the aitools constant", () => {
+    const url = new URL("https://example.com/SKILL.md");
+    const normalized = normalizeRemoteSkillsOption([AITOOLS_SOURCE, url, { url: "https://x/y" }]);
+    assert.deepEqual(normalized?.sources, [AITOOLS_SOURCE, url, { url: "https://x/y" }]);
+  });
+
+  it("exposes aitools as a plain constant callers can spell out", () => {
+    assert.equal(AITOOLS_SOURCE, "aitools");
+    assert.deepEqual(normalizeRemoteSkillsOption("aitools")?.sources, ["aitools"]);
   });
 });
 

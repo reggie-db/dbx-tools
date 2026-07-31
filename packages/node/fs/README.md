@@ -41,7 +41,7 @@ await work.init(); // only needed when handing the root to `node:fs` or a subpro
 // Regenerate on every boot, but into ONE stable directory: the callback writes
 // into a scratch root that replaces the stable one only on success, so restarts
 // don't pile up directories and a failed rebuild keeps the last good tree.
-const tools = await localFS.rebuildFS("databricks-aitools", (scratch) => installInto(scratch.root));
+const skills = await localFS.rebuildFS("agent-skills", (scratch) => downloadInto(scratch.root));
 ```
 
 ## Module map

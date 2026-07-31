@@ -77,7 +77,6 @@ import type { Pool } from "pg";
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents.ts";
 import { fetchChart } from "./chart.ts";
 import { attributedUserId, MASTRA_CONFIG_SCHEMA, type MastraPluginConfig } from "./config.ts";
-import { provisionDatabricksAITools } from "./databricks-aitools.ts";
 import {
   chartFetchDefaults,
   feedbackWriteDefaults,
@@ -1012,24 +1011,12 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       });
     }
 
-    // Fold Databricks AI Tools skills (`databricks aitools`) in as extra local
-    // skill scan paths: reuse the CLI's installed tree when present, else shell
-    // out to the CLI to materialize a curated set.
-    const aiTools = await provisionDatabricksAITools(this.config.databricksAITools);
-    if (aiTools.localSkillPaths.length > 0) {
-      this.logger.info("databricks ai tools provisioned", {
-        source: aiTools.source,
-        localSkillPaths: aiTools.localSkillPaths.length,
-      });
-    }
-    const extraSkillPaths = [...provisioned.localSkillPaths, ...aiTools.localSkillPaths];
-
     this.built = await buildAgents({
       config: this.config,
       context: this.context,
       memoryBuilder,
       log: this.logger,
-      extraSkillPaths,
+      extraSkillPaths: provisioned.localSkillPaths,
     });
 
     // `mastra.server.apiRoutes` is only honored by Mastra's standalone
