@@ -690,30 +690,42 @@ that it skips `projen/` (not a workspace member), which needs
 
 ## Working on the packages via the `demo/` app
 
-`demo/` is a standalone downstream CONSUMER: it installs `@dbx-tools/*` from the
-registry in `demo/.npmrc` (a local verdaccio), so by default it runs PUBLISHED
-package versions, not your working tree. To iterate on the CLIENT UI packages
-against the running demo WITHOUT a bump/publish/reinstall each time, set
-`DBX_TOOLS_LINK=1` on the install:
+`demo/` is a standalone downstream CONSUMER: it can install `@dbx-tools/*` from the
+registry in `demo/.npmrc` (a local verdaccio), exactly as an external app would.
+That mode is OPT-IN, not the default. In this checkout the packages are usually
+what you are editing, and a demo quietly running a published copy of code you just
+changed is the expensive surprise - you restart, see the old behavior, and go
+looking for the bug in the wrong place. So a plain install source-links the CLIENT:
 
 ```sh
-DBX_TOOLS_LINK=1 pnpm install           # client resolves @dbx-tools/* from packages source
+pnpm install                            # client resolves @dbx-tools/* from packages source
 # server (serves dist/, unchanged) + a client build-watch that rebuilds on UI edits:
 pnpm --filter @dbx-tools/demo-appkit-server dev
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch
-pnpm install                            # restore the registry-consumer resolution
+DBX_TOOLS_LINK=0 pnpm install           # consumer mode: published versions
 ```
 
-**The mode switch is RESOLVE-time, not a file edit.** `demo/.pnpmfile.cjs` reads
-`DBX_TOOLS_LINK=1` and rewrites the client's `@dbx-tools/*` specifiers to `link:`
-paths under `../packages/**`; the env var on the install is the ENTIRE interface,
-with no wrapper task or script. Nothing on disk changes, so there is no restore
-step and link mode leaves `git status` clean. Do NOT reintroduce a script that
-edits manifests to do this: an earlier `demo/scripts/dev-link.mjs` rewrote the app
-`package.json` and `pnpm-workspace.yaml` in place, which meant clearing projen's
-read-only bit, inserting marker comments, and keeping a sidecar of the pristine
-contents - and since `pnpm-workspace.yaml` is COMMITTED, a forgotten undo landed
-local dev state in git.
+**The switch is defined ONCE, in the repo-root hook.** `.pnpmfile.cjs` exports
+`linkEnabled()`, which reads `DBX_TOOLS_LINK` and treats `0` / `false` / `off` /
+`no` as opt-out; `demo/.pnpmfile.cjs` calls it rather than re-deriving what counts
+as "on". Do not add a second env-var check in a sibling workspace. The links that
+are NOT a choice stay unconditional and never consult it: the root's link to
+`projen/`, and `projen/`'s link to `../packages`. `.projenrc.ts` imports the engine
+by source path, so an unlinked install of either cannot synth at all.
+
+**The mode switch is RESOLVE-time, not a file edit.** The hook rewrites the
+client's `@dbx-tools/*` specifiers to `link:` paths under `../packages/**`; the env
+var on the install is the ENTIRE interface, with no wrapper task or script. Nothing
+on disk changes, so neither mode needs a restore step and both leave `git status`
+clean. Do NOT reintroduce a script that edits manifests to do this: an earlier
+`demo/scripts/dev-link.mjs` rewrote the app `package.json` and `pnpm-workspace.yaml`
+in place, which meant clearing projen's read-only bit, inserting marker comments,
+and keeping a sidecar of the pristine contents - and since `pnpm-workspace.yaml` is
+COMMITTED, a forgotten undo landed local dev state in git.
+
+A demo folder copied OUT of this repo has neither the root hook nor `../packages`,
+so it installs from the registry with no env var involved. That is why the hook
+runs its existence checks BEFORE asking `linkEnabled()`.
 
 Two non-obvious constraints in that hook:
 
@@ -1117,16 +1129,38 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   break dark mode. To theme a host: wrap in `<BrandProvider applyToDocument>`
   (pass `context` for a non-default brand). New semantic tokens to re-skin go in
   `brand-bridge.css`, not per-component.
-- **Chart branding is server-side, on the Echarts option.** The `[data-brand]`
-  CSS bridge can't reach an Echarts chart (it renders to canvas, not styled
-  DOM), so charts are themed the way email is: by inlining brand values at build
-  time. `mastra({ brand })` takes a portable `BrandContext`; the chart planner
-  (`appkit-mastra/src/chart.ts` `planToEchartsOption`) merges a
-  `brandChartTheme(brand)` into every spec (`themed(...)`) - a series `color`
-  cycle seeded from `colors.primary`/`colors.accent` plus a colorblind-friendly
-  spread, and a base `textStyle` (font `typography.sans`, color
-  `colors.foreground`). Omit `brand` for the default Echarts look. Add new
-  themed properties in `brandChartTheme`/`themed`, not per-chart-type.
+- **A chart is branded on the SERVER and themed on the CLIENT, and the split is
+  the point.** The `[data-brand]` CSS bridge can't reach an Echarts chart (it
+  renders to canvas, not styled DOM), so anything it needs has to be inlined on
+  the option itself - but only HALF of that is knowable server-side.
+  BRAND (theme-independent) is inlined at plan time: `mastra({ brand })` takes a
+  portable `BrandContext` and the planner (`appkit-mastra/src/chart.ts`
+  `planToEchartsOption`) merges `brandChartTheme(brand)` into every spec
+  (`themed(...)`) - a series `color` cycle seeded from
+  `colors.primary`/`colors.accent` plus a colorblind-friendly spread, and the
+  `typography.sans` font stack. Omit `brand` for the default Echarts look.
+  CHROME (tick labels, axis names, grid lines, tooltip) is resolved at RENDER
+  time by `ui-mastra`'s `support/chart-theme.ts`, which reads AppKit's
+  `--chart-axis-label` / `--chart-axis-title` / `--chart-grid` /
+  `--chart-tooltip-bg` (plus `--popover-foreground` / `--border`) off the chart's
+  own element and hands a `ChartChrome` to `normalizeChartOption`. It reads the
+  ELEMENT, not `:root`, so a theme scoped to an embedded chat panel wins, and it
+  re-resolves on both a root `.dark`/`.light` mutation and a
+  `prefers-color-scheme` change. `brandChartTheme` deliberately sets NO text
+  color: it used to bake `colors.foreground`, a single light value, which
+  rendered near-black labels on a dark chat surface. The PDF export pins
+  `LIGHT_CHART_CHROME` because its document forces `color-scheme: light`.
+  Add a brand property in `brandChartTheme`/`themed`; add a theme-dependent one
+  in `ChartChrome` + `normalizeChrome`. Never per-chart-type.
+- **Don't paint a chat surface with a TRANSLUCENT theme token.** The chart frame
+  was `bg-background/40` and composited against whatever the host painted
+  underneath, so an embedded chat whose host disagrees with AppKit's resolved
+  theme (a light app that never set `.light`, so AppKit's
+  `@media (prefers-color-scheme: dark) { :root:not(.light) }` fallback darkened
+  its tokens) drew charts on a muddy mid-grey plate belonging to neither theme.
+  Opaque `bg-card`/`bg-background` degrades honestly. A host embedding the chat
+  in a surface it controls should pin `.light` or `.dark` on `:root` rather than
+  leaving AppKit on the OS preference.
 - **Web search uses the Databricks NATIVE tool + its own model.**
   `appkit-web-search` `web_search` does NOT scrape — it POSTs the query to a
   serving endpoint with the provider's web-search tool spec attached and the

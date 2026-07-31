@@ -2,10 +2,14 @@
  * Mastra workspace factory for Databricks Apps.
  *
  * Builds a per-request {@link Workspace} whose filesystem is a
- * {@link CompositeFilesystem} over Databricks paths resolved from the
- * OBO client on {@link MASTRA_USER_KEY}. Optional mount resolver
- * contributions merge extra filesystems and skill scan roots; built-in
- * Assistant skill trees are toggled with `assistantSkills` (on by default).
+ * {@link CompositeFilesystem} over the NAMED skill folders resolved for that
+ * request. A skill folder maps a name to a location plus its readable /
+ * writable policy: a Databricks path mounted through the OBO client on
+ * {@link MASTRA_USER_KEY}, or any {@link WorkspaceFilesystem} a consuming
+ * library already owns. {@link DEFAULT_SKILL_FOLDERS} supplies the Assistant
+ * trees, and `skillFolders` merges over it - same name overrides, `false`
+ * disables, a new name adds. Optional mount resolvers contribute further
+ * filesystems and skill scan roots on top.
  *
  * Databricks mounts use `@dbx-tools/databricks` {@link DatabricksFileSystem}
  * wrapped by {@link filesystems}; missing roots fall back to
@@ -16,7 +20,7 @@
 
 import type { WorkspaceClient } from "@databricks/sdk-experimental";
 import { DatabricksFileSystem } from "@dbx-tools/databricks";
-import { log, string, token } from "@dbx-tools/shared-core";
+import { error, log, string, token } from "@dbx-tools/shared-core";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
   CompositeFilesystem,
@@ -28,17 +32,9 @@ import {
 
 import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY, type User } from "./config.ts";
 import { scratchFilesystem, filesystems } from "./filesystems.ts";
+import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-paths.ts";
 
 /* ------------------------------ constants ------------------------------ */
-
-/** Shared Assistant skills tree in the workspace namespace. */
-const ASSISTANT_SHARED_SKILLS_PATH = "/Workspace/.assistant/skills";
-
-/** Composite mount for {@link ASSISTANT_SHARED_SKILLS_PATH}. */
-const ASSISTANT_WORKSPACE_SKILLS_MOUNT = "/workspace_skills";
-
-/** Composite mount for the caller's `/.assistant/skills` tree. */
-const ASSISTANT_USER_SKILLS_MOUNT = "/workspace_user_skills";
 
 /** OAuth scopes that gate Databricks workspace file mounts. */
 const WORKSPACE_FILE_SCOPES = ["workspace", "workspace.workspace", "all-apis"] as const;
@@ -47,22 +43,59 @@ const logger = log.logger("mastra/workspaces");
 
 /* -------------------------------- types -------------------------------- */
 
-/** Per-request context for mount resolvers. */
-interface WorkspaceMountContext {
+/** Per-request context for mount and skill-folder resolvers. */
+export interface WorkspaceMountContext {
   requestContext?: RequestContext;
 }
 
+/**
+ * A skill-folder field given either directly or as a per-request resolver.
+ * A resolver returning `undefined` skips the folder for that request.
+ */
+export type SkillFolderValue<T> =
+  T | ((context: WorkspaceMountContext) => T | undefined | Promise<T | undefined>);
+
+/**
+ * One named skill-folder location and its read / write policy.
+ *
+ * Give {@link path} for a Databricks workspace tree (mounted through the
+ * request's OBO client), or {@link filesystem} for a mount the consumer builds
+ * itself. {@link filesystem} wins when both are set.
+ */
+export interface SkillFolderOptions {
+  /** Absolute Databricks workspace path for this folder. */
+  path?: SkillFolderValue<string>;
+  /** Ready-made mount, for locations the OBO client cannot reach. */
+  filesystem?: SkillFolderValue<WorkspaceFilesystem>;
+  /**
+   * Scan this mount for `SKILL.md` files. Defaults to `true`; `false` mounts
+   * the location for file tools without adding it to skill discovery.
+   */
+  readable?: boolean;
+  /**
+   * Allow writes to a {@link path} mount (and create the root when missing).
+   * Defaults to `false`. A supplied {@link filesystem} carries its own
+   * read-only flag instead.
+   */
+  writable?: boolean;
+  /** Mount point in the composite namespace. Defaults to `/<name>`. */
+  mount?: string;
+}
+
 /** Mount map plus optional Mastra skill scan roots for one resolver. */
-interface WorkspaceMountContribution {
+export interface WorkspaceMountContribution {
   mounts: Record<string, WorkspaceFilesystem>;
   /** Paths within the composite namespace where `SKILL.md` files are scanned. */
   skillPaths?: string[];
 }
 
 /** Contributes filesystem mounts (and optional skill paths) for one request. */
-type WorkspaceMountResolver = (
+export type WorkspaceMountResolver = (
   context: WorkspaceMountContext,
 ) => WorkspaceMountContribution | Promise<WorkspaceMountContribution>;
+
+/** Names carried by {@link DEFAULT_SKILL_FOLDERS}. */
+export type DefaultSkillFolderName = "workspace-team" | "workspace-team-app";
 
 /** Options for {@link createWorkspace}. */
 export interface CreateWorkspaceOptions {
@@ -71,11 +104,17 @@ export interface CreateWorkspaceOptions {
   /** Display name; derived from `id` when omitted. */
   name?: string;
   /**
-   * Mount read-only Assistant skill trees from `/Workspace/.assistant/skills`
-   * and `/Users/<email>/.assistant/skills`. Defaults to `true`.
+   * Start from {@link DEFAULT_SKILL_FOLDERS}. Defaults to `true`; `false`
+   * starts from an empty map, leaving only the {@link skillFolders} given here.
    */
   assistantSkills?: boolean;
-  /** Extra per-request mount resolvers (run after built-in options). */
+  /**
+   * Named skill folders merged over {@link DEFAULT_SKILL_FOLDERS}: a matching
+   * name overrides that default, `false` disables it, and any other name adds
+   * a folder.
+   */
+  skillFolders?: Record<string, SkillFolderOptions | false>;
+  /** Extra per-request mount resolvers (run after the skill-folder mounts). */
   mounts?: WorkspaceMountResolver[];
   /** Replace the auto-built dynamic skills resolver. */
   skills?: SkillsResolver;
@@ -93,18 +132,56 @@ export interface CreateWorkspaceOptions {
   extraSkillPaths?: string[];
 }
 
+/* ------------------------------- defaults ------------------------------- */
+
+/**
+ * The skill folders every workspace starts with.
+ *
+ * - `workspace-team` - the shared workspace Assistant tree, read-only because
+ *   writing it is a workspace-admin action.
+ * - `workspace-team-app` - the requesting user's own Assistant tree, writable
+ *   so the app can save skills back to it. Skipped when the request carries no
+ *   user email.
+ */
+export const DEFAULT_SKILL_FOLDERS: Readonly<Record<DefaultSkillFolderName, SkillFolderOptions>> = {
+  "workspace-team": {
+    path: ASSISTANT_SHARED_SKILLS_PATH,
+    readable: true,
+    writable: false,
+  },
+  "workspace-team-app": {
+    path: ({ requestContext }) => {
+      const email = resolveScopedEmail(requestContext);
+      return email ? userAssistantSkillsPath(email) : undefined;
+    },
+    readable: true,
+    writable: true,
+  },
+};
+
 /**
  * Create a Mastra {@link Workspace} with per-request Databricks mounts.
  *
- * @example Assistant skills only (default for agents in this plugin)
+ * @example Default skill folders only
  * ```ts
  * createWorkspace()
  * ```
  *
- * @example Assistant skills plus a custom mount resolver
+ * @example Override a default, drop another, and add a location of your own
  * ```ts
  * createWorkspace({
- *   assistantSkills: true,
+ *   skillFolders: {
+ *     "workspace-team": { path: "/Workspace/Shared/team-skills" },
+ *     "workspace-team-app": false,
+ *     runbooks: { path: "/Workspace/Shared/runbooks/skills", writable: true },
+ *     volume: { filesystem: myVolumeFilesystem },
+ *   },
+ * })
+ * ```
+ *
+ * @example Skill folders plus a custom mount resolver
+ * ```ts
+ * createWorkspace({
  *   mounts: [
  *     async ({ requestContext }) => ({
  *       mounts: { "/data": myFilesystem },
@@ -116,20 +193,22 @@ export interface CreateWorkspaceOptions {
  */
 export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace {
   const { id, name } = resolveWorkspaceIdentity(options);
-  const resolvers = buildMountResolvers(options);
+  const skillFolders = resolveSkillFolders(options);
+  const folderNames = Object.keys(skillFolders);
+  const resolvers = buildMountResolvers(skillFolders, options.mounts);
   const extraSkillPaths = options.extraSkillPaths ?? [];
   const skills =
     options.skills ??
     (resolvers.length > 0 || extraSkillPaths.length > 0
       ? buildWorkspaceSkillsResolver(resolvers, extraSkillPaths)
       : undefined);
-  const checkSkillFileMtime = options.checkSkillFileMtime ?? options.assistantSkills !== false;
+  const checkSkillFileMtime = options.checkSkillFileMtime ?? folderNames.length > 0;
   const bm25 = options.bm25 !== false;
   logger.debug("workspace:create", {
     id,
     name,
     resolverCount: resolvers.length,
-    assistantSkills: options.assistantSkills !== false,
+    skillFolders: folderNames,
     customMountResolvers: options.mounts?.length ?? 0,
     customSkillsResolver: Boolean(options.skills),
     checkSkillFileMtime,
@@ -151,15 +230,28 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
   });
 }
 
-/* ---------------------------- private helpers ---------------------------- */
-
 /**
- * Map an OBO user email to their Assistant skills directory in the
- * workspace namespace.
+ * Merge the configured skill folders over {@link DEFAULT_SKILL_FOLDERS}.
+ *
+ * `assistantSkills: false` drops the defaults, and a `false` value removes one
+ * entry by name.
  */
-function userAssistantSkillsPath(userEmail: string): string {
-  return `/Users/${userEmail.trim()}/.assistant/skills`;
+export function resolveSkillFolders(
+  options: Pick<CreateWorkspaceOptions, "assistantSkills" | "skillFolders"> = {},
+): Record<string, SkillFolderOptions> {
+  const merged: Record<string, SkillFolderOptions> =
+    options.assistantSkills === false ? {} : { ...DEFAULT_SKILL_FOLDERS };
+  for (const [name, folder] of Object.entries(options.skillFolders ?? {})) {
+    if (folder === false) {
+      delete merged[name];
+    } else {
+      merged[name] = folder;
+    }
+  }
+  return merged;
 }
+
+/* ---------------------------- private helpers ---------------------------- */
 
 /**
  * Return whether the request token carries a scope that allows workspace
@@ -173,61 +265,81 @@ function hasWorkspaceFileScope(requestContext: RequestContext | undefined): bool
 }
 
 /**
- * Built-in mount resolver for Assistant `SKILL.md` trees.
+ * Mount resolver for the named skill folders.
  *
- * Mounts {@link ASSISTANT_SHARED_SKILLS_PATH} when scope checks pass and
- * `/Users/<email>/.assistant/skills` when {@link MASTRA_USER_EMAIL_KEY} is
- * set. Returns empty mounts when the OBO user or client is missing.
- * Mastra owns filesystem initialization.
+ * Gates on workspace file scope (or development mode), then mounts every
+ * folder whose location resolves for this request.
  */
-async function resolveAssistantSkillsMounts(
+async function resolveSkillFolderMounts(
+  skillFolders: Record<string, SkillFolderOptions>,
   context: WorkspaceMountContext,
 ): Promise<WorkspaceMountContribution> {
   const mounts: Record<string, WorkspaceFilesystem> = {};
+  const skillPaths: string[] = [];
   const requestContext = context.requestContext;
 
-  if (!shouldMountAssistantSkills(requestContext)) {
-    logger.debug("assistant-skills:skipped", {
+  if (!requestContext || !shouldMountSkillFolders(requestContext)) {
+    logger.debug("skill-folders:skipped", {
       reason: !requestContext ? "no-request-context" : "missing-workspace-scope",
       nodeEnv: process.env.NODE_ENV,
-      scopes: context.requestContext?.get(MASTRA_SCOPES_KEY),
+      scopes: requestContext?.get(MASTRA_SCOPES_KEY),
     });
-    return { mounts, skillPaths: [] };
+    return { mounts, skillPaths };
   }
 
-  const user = requestContext!.get(MASTRA_USER_KEY) as User | undefined;
+  const user = requestContext.get(MASTRA_USER_KEY) as User | undefined;
   const client = user?.executionContext.client as WorkspaceClient | undefined;
-  if (!client) {
-    logger.debug("assistant-skills:skipped", {
-      reason: "missing-obo-client",
-      userId: user?.id,
-    });
-    return { mounts, skillPaths: [] };
+
+  for (const [name, folder] of Object.entries(skillFolders)) {
+    const filesystem = await resolveSkillFolderFilesystem(name, folder, context, client);
+    if (!filesystem) continue;
+    const mount = folder.mount ?? `/${name}`;
+    mounts[mount] = filesystem;
+    if (folder.readable !== false) skillPaths.push(mount);
   }
 
-  mounts[ASSISTANT_WORKSPACE_SKILLS_MOUNT] = await databricksFilesystem(
-    client,
-    ASSISTANT_SHARED_SKILLS_PATH,
-  );
-
-  const email = resolveScopedEmail(requestContext);
-  if (email) {
-    mounts[ASSISTANT_USER_SKILLS_MOUNT] = await databricksFilesystem(
-      client,
-      userAssistantSkillsPath(email),
-      false,
-    );
-  }
-
-  logger.debug("assistant-skills:mounted", {
-    sharedPath: ASSISTANT_SHARED_SKILLS_PATH,
-    sharedMount: ASSISTANT_WORKSPACE_SKILLS_MOUNT,
-    userMount: email ? ASSISTANT_USER_SKILLS_MOUNT : undefined,
-    userPath: email ? userAssistantSkillsPath(email) : undefined,
+  logger.debug("skill-folders:mounted", {
     mountKeys: Object.keys(mounts),
+    skillPaths,
   });
 
-  return { mounts, skillPaths: Object.keys(mounts) };
+  return { mounts, skillPaths };
+}
+
+/**
+ * Resolve one skill folder to a Mastra filesystem, or `undefined` to skip it
+ * for this request.
+ */
+async function resolveSkillFolderFilesystem(
+  name: string,
+  folder: SkillFolderOptions,
+  context: WorkspaceMountContext,
+  client: WorkspaceClient | undefined,
+): Promise<WorkspaceFilesystem | undefined> {
+  if (folder.filesystem !== undefined) {
+    return resolveSkillFolderValue(folder.filesystem, context);
+  }
+  // A path mount needs the request's OBO client to reach the workspace.
+  if (folder.path === undefined || !client) {
+    logger.debug("skill-folder:skipped", {
+      name,
+      reason: folder.path === undefined ? "no-location" : "missing-obo-client",
+    });
+    return undefined;
+  }
+  const root = string.trimToNull(await resolveSkillFolderValue(folder.path, context));
+  if (!root) return undefined;
+  return databricksFilesystem(client, root, folder.writable !== true);
+}
+
+/** Read a {@link SkillFolderValue}, calling it when it is a per-request resolver. */
+function resolveSkillFolderValue<T>(
+  value: SkillFolderValue<T>,
+  context: WorkspaceMountContext,
+): T | undefined | Promise<T | undefined> {
+  return typeof value === "function"
+    ? (value as (context: WorkspaceMountContext) => T | undefined | Promise<T | undefined>)(context)
+    : value;
 }
 
 /**
@@ -249,19 +361,21 @@ function resolveWorkspaceIdentity(options: CreateWorkspaceOptions): {
   return { id, name };
 }
 
-/** Collect built-in and caller-supplied mount resolvers for one workspace. */
-function buildMountResolvers(options: CreateWorkspaceOptions): WorkspaceMountResolver[] {
+/** Collect the skill-folder resolver and any caller-supplied ones. */
+function buildMountResolvers(
+  skillFolders: Record<string, SkillFolderOptions>,
+  mounts: WorkspaceMountResolver[] | undefined,
+): WorkspaceMountResolver[] {
   const resolvers: WorkspaceMountResolver[] = [];
-  const { assistantSkills = true, mounts } = options;
-  if (assistantSkills) {
-    resolvers.push(resolveAssistantSkillsMounts);
+  const folderCount = Object.keys(skillFolders).length;
+  if (folderCount > 0) {
+    resolvers.push((context) => resolveSkillFolderMounts(skillFolders, context));
   }
   if (mounts?.length) {
     resolvers.push(...mounts);
   }
   logger.debug("mounts:resolvers", {
-    assistantSkills,
-    builtInResolver: assistantSkills,
+    skillFolderCount: folderCount,
     customResolverCount: mounts?.length ?? 0,
     totalResolverCount: resolvers.length,
   });
@@ -269,23 +383,19 @@ function buildMountResolvers(options: CreateWorkspaceOptions): WorkspaceMountRes
 }
 
 /**
- * Gate Assistant skill mounts on request context.
+ * Gate skill-folder mounts on the request's token.
  *
  * Always allows mounts in development; in other environments requires
  * {@link hasWorkspaceFileScope}.
  */
-function shouldMountAssistantSkills(
-  requestContext: RequestContext | undefined,
-): requestContext is RequestContext {
-  if (!requestContext) return false;
+function shouldMountSkillFolders(requestContext: RequestContext): boolean {
   if (process.env.NODE_ENV === "development") return true;
   return hasWorkspaceFileScope(requestContext);
 }
 
 /** Read the trimmed OBO user email stamped on {@link MASTRA_USER_EMAIL_KEY}. */
 function resolveScopedEmail(requestContext: RequestContext | undefined): string | undefined {
-  const email = requestContext?.get(MASTRA_USER_EMAIL_KEY) as string | undefined;
-  return email?.trim() || undefined;
+  return string.trimToNull(requestContext?.get(MASTRA_USER_EMAIL_KEY)) ?? undefined;
 }
 
 /**
@@ -313,7 +423,7 @@ async function databricksFilesystem(
     logger.debug("databricks-mount:scratch-fallback", {
       root,
       readOnly,
-      error: err instanceof Error ? err.message : String(err),
+      error: error.errorMessage(err),
     });
   }
   return scratchFilesystem();

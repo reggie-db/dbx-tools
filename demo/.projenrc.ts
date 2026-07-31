@@ -204,10 +204,10 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
   // `src/index.css` `@import`s `@databricks/appkit-ui/styles.css` and the pages
   // import its components, so the app uses it DIRECTLY and must declare it.
   // Undeclared, it resolved only by accident: pnpm hoisted the copy that the
-  // published `@dbx-tools/ui-appkit` tarball dragged in. That breaks the moment
-  // `ui-appkit` is source-linked (`DBX_TOOLS_LINK=1 pnpm install`), because a
-  // `link:`ed package's own dependencies come from the main repo's tree, not the
-  // demo's - surfacing as `Can't resolve '@databricks/appkit-ui/styles.css'`.
+  // published `@dbx-tools/ui-appkit` tarball dragged in. That breaks whenever
+  // `ui-appkit` is source-linked, which a plain `pnpm install` now does, because
+  // a `link:`ed package's own dependencies come from the main repo's tree, not
+  // the demo's - surfacing as `Can't resolve '@databricks/appkit-ui/styles.css'`.
   p.addDeps("@databricks/appkit-ui@catalog:");
 });
 
@@ -215,8 +215,8 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
 // `**/.*` ignore would otherwise drop them. `.npmrc` points installs at the
 // registry the `@dbx-tools/*` packages live on; `.env.example` is the config
 // template a user copies to `.env`; `.pnpmfile.cjs` resolves the client's
-// `@dbx-tools/*` deps to `../packages` source when `DBX_TOOLS_LINK=1` is set on
-// the install, and leaves them on the registry otherwise.
+// `@dbx-tools/*` deps to `../packages` source by default, and leaves them on the
+// registry when the install opts out with `DBX_TOOLS_LINK=0`.
 project.gitignore.include("/.npmrc", "/.env.example", "/.pnpmfile.cjs");
 
 // Gitignore all generated files so the committed demo is hand-authored source

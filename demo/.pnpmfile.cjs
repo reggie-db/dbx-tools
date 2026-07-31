@@ -1,17 +1,20 @@
 /**
  * Resolve the demo's CLIENT `@dbx-tools/*` dependencies to the local source under
- * `../packages/` when `DBX_TOOLS_LINK=1` is set, instead of the registry in
- * `.npmrc`.
+ * `../packages/`, instead of the registry in `.npmrc`.
  *
- * The demo is a real downstream CONSUMER: by default every `@dbx-tools/*` package
- * installs as a normal versioned dependency, exactly as an external app would.
- * That is the right mode when the demo is the thing under development. When the
- * PACKAGES are what you are editing, the bump -> publish -> update -> rebuild loop
- * is too slow, so this hook points the client at source and a `vite build --watch`
- * picks up every edit:
+ * The demo is a real downstream CONSUMER, so installing published versions is a
+ * mode it has to keep. It is not the DEFAULT one, though: beside the packages in
+ * this checkout, the common case is editing them, and a demo silently running a
+ * published copy of the code you just changed is the more expensive surprise -
+ * you restart, see the old behavior, and go looking for the bug in the wrong
+ * place. So linking is on unless you opt out, and a `vite build --watch` picks
+ * up every edit:
  *
- *   DBX_TOOLS_LINK=1 pnpm install    # client resolves @dbx-tools/* from source
- *   pnpm install                     # back to the registry consumer
+ *   pnpm install                     # client resolves @dbx-tools/* from source
+ *   DBX_TOOLS_LINK=0 pnpm install    # consumer mode: published versions
+ *
+ * The switch itself lives in the repo-root hook ({@link linkEnabled}) so both
+ * workspaces read one env var rather than each deciding what counts as "on".
  *
  * A resolve-time hook rather than a script, because the toggle then mutates
  * NOTHING. An earlier `scripts/dev-link.mjs` rewrote the app manifest and
@@ -46,13 +49,12 @@
  * `projen/`. Required through a guard, unlike `projen/`: this folder is designed to
  * be copied out and run on its own (see `.projenrc.ts`), and out there neither the
  * root hook nor `../packages` exists. Link mode simply becomes unavailable, which is
- * the correct outcome - there would be no source to link to - and the default
- * registry install keeps working.
+ * the correct outcome - there would be no source to link to - and the copy installs
+ * from the registry with no env var involved. That guard is also why the existence
+ * checks run BEFORE the switch: out there, there is nothing to ask.
  */
 const fs = require("node:fs");
 const path = require("node:path");
-
-const LINK = process.env.DBX_TOOLS_LINK === "1";
 
 const demoRoot = __dirname;
 const packagesRoot = path.join(demoRoot, "..", "packages");
@@ -64,9 +66,12 @@ const sharedHookPath = path.join(demoRoot, "..", ".pnpmfile.cjs");
 const PASSTHROUGH = { readPackage: (pkg) => pkg };
 
 function resolveHooks() {
-  if (!LINK || !fs.existsSync(sharedHookPath) || !fs.existsSync(packagesRoot)) return PASSTHROUGH;
+  // Existence first, then the switch: a copied-out demo has no root hook to ask.
+  if (!fs.existsSync(sharedHookPath) || !fs.existsSync(packagesRoot)) return PASSTHROUGH;
 
   const shared = require(sharedHookPath);
+  if (!shared.linkEnabled()) return PASSTHROUGH;
+
   const clientManifest = shared.readJson(path.join(clientDir, "package.json"));
   if (!clientManifest) return PASSTHROUGH;
 

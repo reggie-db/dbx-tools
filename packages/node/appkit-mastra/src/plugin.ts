@@ -103,10 +103,10 @@ import {
   isMastraRequestAllowed,
   MastraServer,
 } from "./server.ts";
-import { attachChatTurnTraceIo } from "./trace-io.ts";
 import { resolveServingConfig } from "./serving.ts";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
 import { threadsRoute } from "./threads.ts";
+import { attachChatTurnTraceIo } from "./trace-io.ts";
 import { invalidFields } from "./validation.ts";
 
 const GENIE_MANIFEST = plugin.data(genie).plugin.manifest;

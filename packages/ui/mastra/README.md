@@ -233,6 +233,41 @@ The UI understands the extra events produced by
 - MLflow trace headers enable per-message feedback controls when the server
   reports feedback is available.
 
+## Chart Theming
+
+An ECharts chart draws to a canvas, so it inherits nothing from CSS the way its
+frame does: a dark theme re-skins the border around the chart while the axis
+labels, grid lines, and tooltip inside keep whatever colors the spec was born
+with. And the spec is born on the server, in
+[`@dbx-tools/appkit-mastra`](../../node/appkit-mastra), which cannot know the
+reader's theme.
+
+So the two halves are split. The planner inlines only what is
+theme-independent - the brand's series palette and font stack. Everything
+theme-dependent is resolved here at render time by `src/support/chart-theme.ts`,
+which reads AppKit's `--chart-axis-label`, `--chart-axis-title`, `--chart-grid`,
+and `--chart-tooltip-bg` (plus `--popover-foreground` and `--border` for the
+tooltip) into a `ChartChrome`, and `normalizeChartOption` paints it onto the
+axes, title, legend, and tooltip. Nothing to configure: a chart follows the
+theme wherever it renders.
+
+Two details worth knowing if you embed the chat:
+
+- Tokens are read off the **chart's own element**, not `:root`, so a theme
+  scoped to a subtree - a chat panel inside an otherwise-light app - wins. The
+  value re-resolves when a `.dark` / `.light` class lands on the document root
+  and when the OS `prefers-color-scheme` flips, so a live theme switch recolors
+  charts in place.
+- AppKit darkens its tokens under `@media (prefers-color-scheme: dark)` for any
+  `:root` that is not explicitly `.light`. If your host renders its own light
+  chrome, pin `.light` (or `.dark`) on `:root` rather than leaving AppKit on the
+  OS preference, or the chat will read as half-dark while everything around it
+  stays light.
+
+The PDF export is the one caller that does not follow the page: it pins
+`LIGHT_CHART_CHROME`, because its document forces `color-scheme: light` on a
+white body for printing.
+
 ## Export Conversations
 
 ```tsx
@@ -283,6 +318,13 @@ touching `navigator.clipboard` or `URL.createObjectURL` again.
 - `src/support/thread-labels.ts` - `threadTitle` / `relativeTime`, shared by
   the sidebar and the tab strip so a row and a tab never disagree about how an
   untitled or freshly-updated conversation reads.
+- `src/support/chart-theme.ts` - `ChartChrome`, `LIGHT_CHART_CHROME`,
+  `resolveChartChrome`, and the `useChartChrome` hook that keeps an inline
+  chart's colors in step with the active theme.
+- `src/support/chart-option.ts` - `normalizeChartOption`, the pure pass that
+  patches layout (compact ticks, axis-name placement, title/grid spacing) and
+  an optional `ChartChrome` into a planner spec, shared by the inline chart and
+  the PDF export so both read the same.
 - Types - `ChatViewProps`, `MastraChatProps`, `UseMastraChatOptions`,
   `ThreadPlacement`, `ThreadSummary`, `ToolEvent`, `ToolProgress`,
   `PendingApproval`, `FeedbackSubmission`, and related UI contract types.

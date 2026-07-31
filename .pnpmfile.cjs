@@ -6,7 +6,9 @@
  * the root of the install it is performing, so `projen/` and `demo/` (each its
  * own workspace, with its own lockfile and store) never see this file as a hook.
  * They `require` it instead and call {@link createLinkHook}, which is why the
- * link-rewriting logic lives here once rather than three times.
+ * link-rewriting logic lives here once rather than three times. {@link linkEnabled}
+ * is here for the same reason: the opt-out env var is one switch, so it is read
+ * in one place rather than re-derived per workspace.
  *
  * This workspace's own job: link the projen engine (`@dbx-tools/projen`) from
  * the in-repo `projen/` project instead of a registry. The engine used to be
@@ -37,6 +39,32 @@ const DEP_FIELDS = [
   "peerDependencies",
   "optionalDependencies",
 ];
+
+/** Env var that turns source linking off for an install that offers the choice. */
+const LINK_ENV = "DBX_TOOLS_LINK";
+
+/** Values of {@link LINK_ENV} that mean "install published copies instead". */
+const LINK_OPT_OUT = new Set(["0", "false", "off", "no"]);
+
+/**
+ * Whether an install that CAN resolve to local source should do so.
+ *
+ * Opt-OUT, not opt-in. Inside this checkout the packages are usually the thing
+ * being edited, so source is the useful default and a stale published copy is
+ * the surprise - someone edits a package, restarts, and watches the old code
+ * run. `DBX_TOOLS_LINK=0 pnpm install` gets the registry back, which is what a
+ * consumer-mode check wants.
+ *
+ * The switch lives here so the workspaces that offer the choice spell it once.
+ * Callers with no choice do not consult it: this file's own engine link and
+ * `projen/`'s link to `../packages` are unconditional, because `.projenrc.ts`
+ * imports the engine by source path and an unlinked install of either cannot
+ * synth at all.
+ */
+function linkEnabled() {
+  const raw = process.env[LINK_ENV];
+  return raw === undefined || !LINK_OPT_OUT.has(raw.trim().toLowerCase());
+}
 
 /** Parse a JSON file, or return `undefined` when it is missing / malformed. */
 function readJson(file) {
@@ -200,6 +228,7 @@ module.exports = {
   }),
   // Shared surface for the sibling workspaces' pnpmfiles.
   SCOPE,
+  linkEnabled,
   createLinkHook,
   scanPackages,
   scopedDeps,

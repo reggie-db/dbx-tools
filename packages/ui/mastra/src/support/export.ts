@@ -29,6 +29,7 @@ import type { UIMessage } from "ai";
 import * as echarts from "echarts";
 import { marked } from "marked";
 import { normalizeChartOption } from "./chart-option.ts";
+import { LIGHT_CHART_CHROME } from "./chart-theme.ts";
 import { downloadFile } from "./download.ts";
 
 /**
@@ -295,7 +296,12 @@ function markdownToHtml(md: string): string {
  * via server-side rendering (no DOM). The JSON-safe planner spec is run
  * through {@link normalizeChartOption} first - same as the live inline
  * chart - so the export gets compact value ticks, conventionally-placed
- * axis names, and legible category labels rather than a raw spec. Returns
+ * axis names, and legible category labels rather than a raw spec.
+ *
+ * The theme is pinned LIGHT rather than read from the page: the document
+ * this SVG lands in forces `color-scheme: light` on a white body because
+ * it is headed for a printer or a PDF, so a chart themed for the
+ * reader's dark UI would come out as pale labels on white. Returns
  * `null` when the id is unknown / expired / still processing, or if
  * rendering throws.
  */
@@ -310,7 +316,9 @@ async function chartSvg(resolver: EmbedResolver, id: string): Promise<string | n
       height: CHART_HEIGHT_PX,
     });
     try {
-      instance.setOption(normalizeChartOption(chart.result.option) as echarts.EChartsCoreOption);
+      instance.setOption(
+        normalizeChartOption(chart.result.option, LIGHT_CHART_CHROME) as echarts.EChartsCoreOption,
+      );
       return instance.renderToSVGString();
     } finally {
       instance.dispose();

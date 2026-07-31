@@ -2,10 +2,11 @@ import { marker as markers, type ParsedMarker } from "@dbx-tools/shared-mastra";
 import { Spinner } from "@dbx-tools/ui-appkit/react";
 import ReactECharts from "echarts-for-react";
 import { ClockIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { DataGrid, humanizeLabel } from "./data-grid.tsx";
 import { AssistantMarkdown } from "./markdown.tsx";
 import { normalizeChartOption } from "../support/chart-option.ts";
+import { useChartChrome } from "../support/chart-theme.ts";
 import { useChartFetch, useStatementFetch } from "../support/mastra-client.ts";
 
 // Inline embed slots: chart / data tables resolved from `[chart:<id>]`
@@ -19,9 +20,16 @@ import { useChartFetch, useStatementFetch } from "../support/mastra-client.ts";
  * is fixed so Echarts has a deterministic canvas regardless of
  * the parent's flex layout. `not-prose` opts out of Tailwind
  * Typography.
+ *
+ * The surface is OPAQUE (`bg-card`, not a translucent
+ * `bg-background/40`). A partially transparent theme token composites
+ * against whatever the host painted underneath, so an embedded chat
+ * whose host surface disagrees with AppKit's resolved theme - a light
+ * app that never opted out of AppKit's `prefers-color-scheme: dark`
+ * fallback, say - renders the chart on a muddy mid-grey plate that
+ * matches neither theme.
  */
-const CHART_FRAME_CLASSES =
-  "not-prose my-3 max-w-full rounded border border-border/60 bg-background/40 p-2";
+const CHART_FRAME_CLASSES = "not-prose my-3 max-w-full rounded border border-border bg-card p-2";
 const CHART_HEIGHT_PX = 320;
 
 /**
@@ -73,44 +81,48 @@ const ExpiredSlot = ({ type }: { type: string }) => (
  */
 const ChartSlot = ({ chartId }: { chartId: string }) => {
   const { data: chart, loading, error } = useChartFetch(chartId);
+  // Resolved off the frame itself, so a theme scoped to this subtree
+  // (an embedded chat panel) wins over the document root's.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const chrome = useChartChrome(frameRef);
   // Patch presentation (compact ticks, axis-name placement, legible
-  // category labels) into the JSON-safe planner spec before rendering,
-  // matching the export path. Memoized on the resolved option identity.
+  // category labels) and the current theme's chrome into the JSON-safe
+  // planner spec before rendering. Memoized on the resolved option and
+  // the theme, so a light/dark switch recolors the chart in place.
   const option = useMemo(
-    () => (chart?.result ? normalizeChartOption(chart.result.option) : undefined),
-    [chart?.result],
+    () => (chart?.result ? normalizeChartOption(chart.result.option, chrome) : undefined),
+    [chart?.result, chrome],
   );
-  if (option) {
-    return (
-      <div className={CHART_FRAME_CLASSES}>
+  // Settled 404 (unknown / TTL-expired id) -> small "expired" notice.
+  // Hard-error / non-terminal payloads render nothing.
+  if (!option && !loading) {
+    return !error && chart === undefined ? <ExpiredSlot type="chart" /> : null;
+  }
+  // One frame for both states: the chart's footprint is known ahead of
+  // time, so an in-flight fetch reserves it with a spinner rather than
+  // collapsing, and the chart fades in without shifting the prose
+  // below. Keeping it a single element also keeps `frameRef` mounted
+  // across the transition, so the theme is already resolved when the
+  // spec lands.
+  return (
+    <div ref={frameRef} className={CHART_FRAME_CLASSES}>
+      {option ? (
         <ReactECharts
           option={option}
           style={{ height: CHART_HEIGHT_PX, width: "100%" }}
           notMerge
           lazyUpdate
         />
-      </div>
-    );
-  }
-  // In-flight fetch: the chart's footprint is known ahead of time, so
-  // reserve the same frame + height with a spinner instead of
-  // collapsing - the chart fades in without shifting the prose below.
-  if (loading) {
-    return (
-      <div className={CHART_FRAME_CLASSES}>
+      ) : (
         <div
           className="flex items-center justify-center"
           style={{ height: CHART_HEIGHT_PX, width: "100%" }}
         >
           <Spinner className="size-5 text-muted-foreground" />
         </div>
-      </div>
-    );
-  }
-  // Settled 404 (unknown / TTL-expired id) -> small "expired" notice.
-  // Hard-error / non-terminal payloads render nothing.
-  if (!error && chart === undefined) return <ExpiredSlot type="chart" />;
-  return null;
+      )}
+    </div>
+  );
 };
 
 /**

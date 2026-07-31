@@ -144,32 +144,43 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
 Which mode you want depends on whether you're building a CONSUMING project or
 working on the `@dbx-tools/*` packages themselves.
 
-### Consumer mode (default) — for consuming projects
-
-`@dbx-tools/*` install as normal versioned packages from the registry in
-[`.npmrc`](.npmrc). This is exactly how a downstream app consumes them, so it's
-the right mode when the demo (or your own app) is the thing under development and
-the packages are a fixed dependency. To pick up a new package version you
-bump/publish it, then `pnpm update "@dbx-tools/*" --latest` and rebuild.
-
-### Dev-link mode — for iterating on the CLIENT UI packages in THIS repo
+### Dev-link mode (default) — for iterating on the CLIENT UI packages in THIS repo
 
 When you're editing the UI package source in `../packages/ui/**`, the
 bump → publish → update → rebuild loop is too slow. Link mode points the client
 app's `@dbx-tools/*` deps at that source instead, so a `vite build --watch`
-rebuilds the bundle on every edit:
+rebuilds the bundle on every edit. Beside the packages this is the common case,
+so it is what a plain install gives you:
 
 ```bash
-DBX_TOOLS_LINK=1 pnpm install                              # client resolves @dbx-tools/* from source
+pnpm install                                               # client resolves @dbx-tools/* from source
 pnpm --filter @dbx-tools/demo-appkit-server dev            # server (unchanged, serves dist/)
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch  # rebuild dist/ on UI source edits
 # edit anything under ../packages/ui/**/src, refresh the browser — no republish.
-
-pnpm install                                               # restore the registry consumer mode
 ```
 
+### Consumer mode — for consuming projects
+
+`@dbx-tools/*` install as normal versioned packages from the registry in
+[`.npmrc`](.npmrc). This is exactly how a downstream app consumes them, so it's
+the right mode when the demo (or your own app) is the thing under development and
+the packages are a fixed dependency, and it's what you want when checking that
+the PUBLISHED packages actually work. Opt in with the env var:
+
+```bash
+DBX_TOOLS_LINK=0 pnpm install                              # published versions
+```
+
+To pick up a new package version you bump/publish it, then
+`pnpm update "@dbx-tools/*" --latest` and rebuild.
+
+A copy of this folder taken OUT of the repo has no `../packages` to link against,
+so it installs from the registry with no env var involved.
+
 The mode is carried entirely by the `DBX_TOOLS_LINK` env var on the install, so
-there is nothing to remember beyond those two commands.
+there is nothing to remember beyond those two commands. The var is read in one
+place, the repo-root [`.pnpmfile.cjs`](../.pnpmfile.cjs)'s `linkEnabled()`, which
+treats `0`, `false`, `off`, and `no` as opt-out.
 
 The switch happens at RESOLVE time, in [`.pnpmfile.cjs`](.pnpmfile.cjs), so
 nothing on disk changes: no manifest is rewritten, no workspace member is added,
@@ -193,7 +204,8 @@ this because Vite bundles from source and dedupes React
 (`app/appkit-demo/vite.config.override.js`); tsx has no equivalent. Unifying it
 needs one shared store, meaning one workspace, which is the standalone-consumer
 property this demo exists to show. So server changes still go through
-bump → publish → `pnpm update` → restart; only the UI packages source-link.
+bump → publish → `pnpm update` → restart; only the UI packages source-link, in
+either mode.
 
 Note this scoping is by CONSUMER, not by package name: the server also depends on
 `@dbx-tools/shared-core`, which the client pulls too, so only the client app and

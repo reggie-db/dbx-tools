@@ -47,12 +47,58 @@ function succeeds(command, args) {
   return result.status === 0;
 }
 
+const NPMJS_REGISTRY = "https://registry.npmjs.org";
+
+/**
+ * A non-default registry to force onto npm and pnpm, or null when the effective
+ * one is already public npmjs.
+ *
+ * Both channels are consulted because they disagree: `npm config get registry`
+ * sees `.npmrc` files, while a container may only export `npm_config_registry`.
+ * This is a standalone installer that runs before any `@dbx-tools` package is
+ * available, so it cannot reuse `@dbx-tools/core`'s resolver.
+ */
+function registryOverride() {
+  const candidates = [
+    spawnSync("npm", ["config", "get", "registry"], {
+      encoding: "utf8",
+      env: process.env,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).stdout,
+    process.env.npm_config_registry,
+    process.env.NPM_CONFIG_REGISTRY,
+  ];
+
+  for (const candidate of candidates) {
+    const url = candidate?.trim();
+    if (!url || url === "undefined" || !/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) continue;
+    if (url === NPMJS_REGISTRY || url.startsWith(`${NPMJS_REGISTRY}/`)) continue;
+    return url;
+  }
+  return null;
+}
+
+const registry = registryOverride();
+
+/**
+ * `--registry <url>` when an override is in play, else nothing.
+ *
+ * pnpm ignores `npm_config_registry` from the environment (npm honors it), so a
+ * flag is the only channel that reaches both. Callers place it where the tool
+ * expects: for npm/npx, before the package name.
+ */
+function registryArgs() {
+  return registry ? ["--registry", registry] : [];
+}
+
 /** Run a setup command and fail on a nonzero exit. */
 function run(command, args, cwd = process.cwd()) {
   log(`running ${command} ${args.join(" ")}`);
   const result = spawnSync(command, args, {
     cwd,
-    env: process.env,
+    env: registry
+      ? { ...process.env, npm_config_registry: registry, NPM_CONFIG_REGISTRY: registry }
+      : process.env,
     stdio: ["inherit", 2, 2],
   });
 
@@ -97,7 +143,7 @@ if (!succeeds("dbxt", ["--help"]) || !succeeds("dbx-tools", ["--help"])) {
   globalPackages.push(CLI_PACKAGE);
 }
 if (globalPackages.length > 0) {
-  run("npm", ["install", "--global", ...globalPackages]);
+  run("npm", ["install", "--global", ...registryArgs(), ...globalPackages]);
   run("mise", ["reshim"]);
 }
 
@@ -112,7 +158,9 @@ if (!succeeds("dbxt", ["--help"]) || !succeeds("dbx-tools", ["--help"])) {
 log(`using pnpm ${installedPnpmVersion}`);
 log("dbxt and dbx-tools commands are ready");
 if (root) {
-  run("pnpm", ["install", "--no-frozen-lockfile", "--force"], root);
+  // `install` resolves packages so it takes the flag; `exec` forwards trailing
+  // arguments to projen, so it must not.
+  run("pnpm", ["install", "--no-frozen-lockfile", "--force", ...registryArgs()], root);
   run("pnpm", ["exec", "projen"], root);
   log("dbx-tools development environment is ready");
 } else {

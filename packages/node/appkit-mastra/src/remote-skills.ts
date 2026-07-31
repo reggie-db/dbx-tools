@@ -61,15 +61,9 @@ import { error, hash, json, log, net, object, string } from "@dbx-tools/shared-c
 import type { OneOrMany } from "@dbx-tools/shared-core";
 import type { FileSystem } from "@dbx-tools/shared-fs";
 
+import { ASSISTANT_SHARED_SKILLS_PATH, userAssistantSkillsPath } from "./skill-paths.ts";
+
 const logger = log.logger("mastra/remote-skills");
-
-/** Shared Assistant skills tree in the Databricks workspace (default target). */
-const ASSISTANT_SHARED_SKILLS_PATH = "/Workspace/.assistant/skills";
-
-/** Assistant skills directory for a specific Databricks user. */
-function userAssistantSkillsPath(userEmail: string): string {
-  return `/Users/${userEmail.trim()}/.assistant/skills`;
-}
 
 /**
  * Agent id the `skills` CLI installs a bare `SKILL.md` tree under.

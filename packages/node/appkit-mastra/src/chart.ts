@@ -28,7 +28,7 @@
  */
 
 import { AppKitError, CacheManager, ExecutionError } from "@databricks/appkit";
-import { async, error, hash, log, string, type BrandContext } from "@dbx-tools/shared-core";
+import { async, error, hash, json, log, string, type BrandContext } from "@dbx-tools/shared-core";
 import { wire, type Chart, type ChartResult } from "@dbx-tools/shared-mastra";
 import { model } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
@@ -70,22 +70,23 @@ const CHART_FAILED_MESSAGE = "Chart generation failed";
  * One series data point. Wide variant set so the planner agent can
  * faithfully pass through whatever the SQL row set contained
  * (numbers, stringified numbers, nulls for missing measurements,
- * `[x, y]` tuples for scatter, `{name, value}` slices for pie)
- * without the structured-output guard rejecting the whole plan.
+ * `[x, y]` tuples for scatter, `[x, y, value]` triples for heatmap,
+ * `{name, value}` slices for pie / funnel / treemap) without the
+ * structured-output guard rejecting the whole plan.
  *
  * Three layers of tolerance:
  *
  *   1. {@link z.preprocess} normalizes wire shapes BEFORE union
  *      dispatch: stringified numbers parse to numbers, finite
- *      checks reject `NaN` / `Infinity`, 2-element arrays coerce
+ *      checks reject `NaN` / `Infinity`, 2-/3-element arrays coerce
  *      tuple components, and `{value}` objects with missing /
  *      stringified `value` get coerced or rejected uniformly.
  *      Anything not handleable becomes `null`.
  *   2. The union accepts `null` as a first-class variant. Echarts
  *      renders null as a gap on bar / line / area (which is the
- *      right visual signal for "missing reading"). Scatter and
- *      pie filter nulls in {@link planToEchartsOption} because
- *      Echarts crashes on null tuples / slices.
+ *      right visual signal for "missing reading"). Scatter, heatmap,
+ *      and slice charts filter nulls in {@link planToEchartsOption}
+ *      because Echarts crashes on null tuples / slices.
  *   3. {@link z.union#catch} backstops the whole thing: if
  *      preprocess somehow produces a shape that still doesn't
  *      match any variant, the bad item becomes `null` instead of
@@ -101,10 +102,11 @@ const chartDataPointSchema = z
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
       }
-      if (Array.isArray(v) && v.length === 2) {
-        const x = typeof v[0] === "number" ? v[0] : Number(v[0]);
-        const y = typeof v[1] === "number" ? v[1] : Number(v[1]);
-        return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null;
+      // Scatter `[x, y]` or heatmap `[xIndex, yIndex, value]`. Coerce
+      // stringified components; reject if any component is non-finite.
+      if (Array.isArray(v) && (v.length === 2 || v.length === 3)) {
+        const nums = v.map((c) => (typeof c === "number" ? c : Number(c)));
+        return nums.every((n) => Number.isFinite(n)) ? nums : null;
       }
       if (typeof v === "object" && v !== null && "value" in v) {
         const obj = v as { name?: unknown; value: unknown };
@@ -122,19 +124,25 @@ const chartDataPointSchema = z
     z.union([
       z.number(),
       z.null(),
-      // `[x, y]` scatter point. Modelled as a length-constrained
-      // homogeneous array rather than `z.tuple`: Zod emits a tuple as
-      // JSON Schema 2020-12 `prefixItems`, and Databricks' Gemini
-      // endpoints reject a `response_json_schema` containing it
-      // ("must be a boolean or an object", since `items` is absent).
-      // `z.array(z.number()).length(2)` emits `items` + `minItems` /
-      // `maxItems`, which every provider understands, and validates
-      // the same two-number shape.
-      z.array(z.number()).length(2),
+      // `[x, y]` scatter or `[x, y, value]` heatmap cell. Modelled as a
+      // length-constrained homogeneous array rather than `z.tuple`:
+      // Zod emits a tuple as JSON Schema 2020-12 `prefixItems`, and
+      // Databricks' Gemini endpoints reject a `response_json_schema`
+      // containing it ("must be a boolean or an object", since
+      // `items` is absent). `minItems` / `maxItems` + `items` is what
+      // every provider understands.
+      z.array(z.number()).min(2).max(3),
       z.object({ name: z.string(), value: z.number() }),
     ]),
   )
   .catch(null);
+
+/** Per-series mark type used by `combo` charts (bar + line overlay). */
+const seriesMarkTypeSchema = z
+  .union([z.literal("bar"), z.literal("line"), z.literal("area")])
+  .describe(
+    "Mark type for this series. Required for `combo` (mix bar and line/area); ignored for other chart types.",
+  );
 
 /**
  * Compact, model-friendly representation of an Echarts spec. The
@@ -162,8 +170,9 @@ export const chartPlanSchema = z.object({
     .optional()
     .describe(
       string.toDescription(`
-        Axis label below the chart. Used for bar / line / area / scatter;
-        ignored for pie.
+        Axis label for the primary (usually bottom / value) axis.
+        Used for bar / horizontalBar / line / area / combo / waterfall
+        / scatter / heatmap; ignored for pie / funnel / treemap / radar.
       `),
     ),
   yAxisLabel: z
@@ -171,8 +180,9 @@ export const chartPlanSchema = z.object({
     .optional()
     .describe(
       string.toDescription(`
-        Axis label to the left of the chart. Used for bar / line / area /
-        scatter; ignored for pie.
+        Axis label for the secondary (usually left) axis. Used for
+        bar / horizontalBar / line / area / combo / waterfall /
+        scatter / heatmap; ignored for pie / funnel / treemap / radar.
       `),
     ),
   categories: z
@@ -180,9 +190,22 @@ export const chartPlanSchema = z.object({
     .optional()
     .describe(
       string.toDescription(`
-        X-axis category labels for \`bar\` / \`line\` / \`area\` charts
-        (one per data point in each series). Omit for \`scatter\` (uses
-        [x, y] tuples) and \`pie\` (each slice carries its own \`name\`).
+        Primary category labels. For \`bar\` / \`horizontalBar\` /
+        \`line\` / \`area\` / \`combo\` / \`waterfall\`: one label per
+        data point. For \`heatmap\`: x-axis categories. For \`radar\`:
+        indicator names. Omit for \`scatter\` (\`[x, y]\` tuples) and
+        slice charts (\`pie\` / \`funnel\` / \`treemap\`, each slice
+        carries its own \`name\`).
+      `),
+    ),
+  yCategories: z
+    .array(z.string())
+    .optional()
+    .describe(
+      string.toDescription(`
+        Y-axis (row) labels for \`heatmap\`. Optional - when omitted the
+        row labels come from the series names, which is the preferred
+        way to build a heatmap. Omit for every other chart type.
       `),
     ),
   series: z
@@ -193,22 +216,51 @@ export const chartPlanSchema = z.object({
             Legend name for this series.
           `),
         ),
+        type: seriesMarkTypeSchema.optional(),
+        yAxisIndex: z
+          .union([z.literal(0), z.literal(1)])
+          .optional()
+          .describe(
+            "Which y-axis to bind (0 = left, 1 = right). Use on `combo` when series have different units or scales.",
+          ),
         data: z.array(chartDataPointSchema).describe(
           string.toDescription(`
-            Data points. For \`bar\` / \`line\` / \`area\`, an array of
-            numbers aligned to \`categories\`. For \`scatter\`, an array
-            of \`[x, y]\` numeric tuples. For \`pie\`, an array of
-            \`{name, value}\` objects.
+            Data points. For category charts (\`bar\` / \`horizontalBar\`
+            / \`line\` / \`area\` / \`combo\` / \`waterfall\` / \`radar\`),
+            an array of numbers aligned to \`categories\`; for
+            \`waterfall\` those numbers are signed deltas (one series
+            only - never a cumulative base series). For \`heatmap\`,
+            one series per matrix row, holding that row's numbers
+            aligned to \`categories\`. For \`scatter\`, an array of
+            \`[x, y]\` numeric tuples. For \`pie\` / \`funnel\` /
+            \`treemap\`, an array of \`{name, value}\` objects.
           `),
         ),
       }),
     )
-    .min(1)
+    .default([])
     .describe(
       string.toDescription(`
-        One or more series to plot. Pie charts use exactly one series;
-        bar/line/area can stack multiple series sharing the same
-        \`categories\` axis.
+        One or more series to plot. Required for every chart type
+        except \`custom\`, which carries its series inside \`option\`.
+        Slice charts (\`pie\` / \`funnel\` / \`treemap\`) and
+        \`waterfall\` / \`heatmap\` use exactly one series; \`bar\` /
+        \`line\` / \`area\` / \`combo\` / \`radar\` / \`scatter\` can
+        carry multiple series.
+      `),
+    ),
+  option: z
+    .string()
+    .optional()
+    .describe(
+      string.toDescription(`
+        Required for \`custom\`, ignored for every other chart type. A
+        COMPLETE Echarts option, as a JSON object encoded in a string:
+        \`series\` (each with its own \`type\` and that series' own data
+        shape) plus whatever else the chart needs - a coordinate system,
+        \`visualMap\`, axes. Plain JSON values only, never a JavaScript
+        function. A centered title is filled in when the object omits
+        one.
       `),
     ),
 });
@@ -288,18 +340,58 @@ const CHART_PLANNER_INSTRUCTIONS = string.toDescription(`
 
   When in doubt between bar and line, prefer bar for unordered
   categories and line for ordered ones (dates, time buckets, ranks).
-  Never pick pie for more than 7 slices.
+  Prefer \`horizontalBar\` when category labels are long. Prefer
+  \`combo\` when one measure is a count/volume and another is a
+  rate/trend. Prefer \`waterfall\` for bridges of signed deltas.
+  Prefer \`scatter\` when correlating two numeric fields (no
+  category axis). Prefer \`heatmap\` for a category x category
+  matrix. Prefer \`radar\` for scoring the same entities across a
+  fixed set of dimensions. Never pick pie for more than 7 slices
+  (use \`treemap\` instead). Prefer \`funnel\` for ordered conversion
+  stages.
 
-  For bar / line / area: pick one column as the category axis (usually
-  the only string-valued column) and one or more numeric columns as
-  series. Sort categories by the primary series value descending unless
-  the data is naturally ordered (dates, ranks).
+  For bar / horizontalBar / line / area / combo / waterfall: pick one
+  column as the category axis (usually the only string-valued column)
+  and one or more numeric columns as series. Sort categories by the
+  primary series value descending unless the data is naturally ordered
+  (dates, ranks, funnel stages, waterfall steps). For \`combo\`, set
+  each series' \`type\` to \`bar\`, \`line\`, or \`area\`, and use
+  \`yAxisIndex: 1\` when a series needs a second scale.
 
-  For pie: pick the category column for slice names and one numeric
-  column for slice values. Emit a single series.
+  For waterfall, emit exactly ONE series holding the signed step values
+  (deltas), one per category, in order - positive for a rise, negative
+  for a drop. Do NOT add a cumulative / running-total / base series and
+  do NOT convert the deltas into running totals yourself; the running
+  total is computed for you, and a hand-built base series renders as a
+  plain bar chart instead of a bridge.
 
-  For scatter: pick two numeric columns and emit \`[x, y]\` tuples in a
-  single series.
+  For pie / funnel / treemap: pick the category column for slice names
+  and one numeric column for slice values. Emit a single series of
+  \`{name, value}\` objects.
+
+  For scatter: pick two numeric columns and emit \`[x, y]\` tuples in
+  one or more series (one series per group if a grouping column exists).
+
+  For heatmap: pick two category columns and one numeric measure. Put
+  the x-axis categories in \`categories\`, then emit ONE SERIES PER ROW
+  of the matrix - the series \`name\` is the row label and \`data\` is
+  the row's numbers, one per entry in \`categories\`, in the same order.
+  Do not compute cell indices.
+
+  For radar: \`categories\` are the indicator names; each series is an
+  array of numbers (one value per indicator).
+
+  For anything the types above cannot express - a sankey, boxplot,
+  candlestick, sunburst, gauge, network graph, calendar, parallel-
+  coordinates plot, or any other Echarts series - use \`custom\` and
+  hand-write the whole Echarts option into \`option\` as a JSON string.
+  Include every part that chart needs: the series with their own
+  \`type\` and data shape, plus any coordinate system, \`visualMap\`,
+  or axes. Leave \`series\`, \`categories\`, and the axis labels out;
+  they are ignored for \`custom\`. Prefer a listed type whenever one
+  genuinely fits - \`custom\` gives up the shared tooltip, legend, and
+  grid defaults, so it is the answer for an unsupported chart shape,
+  not a way to restyle a supported one.
 
   Keep series names human-readable (use the column name; title case it
   lightly if needed). Keep titles concise; do not repeat the user's
@@ -575,13 +667,21 @@ export async function fetchChart(
 
 /**
  * The slice of an Echarts option that carries brand identity: the series
- * color cycle and the base text style (font family + foreground color).
- * Derived from a {@link BrandContext} by {@link brandChartTheme} and merged
- * into every spec by {@link planToEchartsOption}.
+ * color cycle and the base font stack. Derived from a {@link BrandContext}
+ * by {@link brandChartTheme} and merged into every spec by
+ * {@link planToEchartsOption}.
+ *
+ * Deliberately carries no text COLOR. A spec is planned here, on the
+ * server, and read later in a browser whose light/dark theme this code
+ * cannot know; baking in the brand's single (light) foreground produced
+ * near-black labels that disappeared against a dark chat surface. The
+ * renderer resolves chrome colors from AppKit's live CSS tokens instead
+ * (`@dbx-tools/ui-mastra`'s `chart-theme` + `normalizeChartOption`),
+ * leaving this theme the parts that read the same in either mode.
  */
 interface ChartTheme {
   color: string[];
-  textStyle: { fontFamily: string; color: string };
+  textStyle: { fontFamily: string };
 }
 
 /**
@@ -623,17 +723,171 @@ function brandColorCycle(primary: string, accent: string): string[] {
 
 /**
  * Derive an Echarts {@link ChartTheme} from a brand context: the primary +
- * accent colors seed the series cycle, the sans stack becomes the base font,
- * and the brand foreground becomes the base text color.
+ * accent colors seed the series cycle and the sans stack becomes the base
+ * font. Text colors are the renderer's job - see {@link ChartTheme}.
  */
 function brandChartTheme(brand: BrandContext): ChartTheme {
   return {
     color: brandColorCycle(brand.colors.primary, brand.colors.accent),
-    textStyle: { fontFamily: brand.typography.sans, color: brand.colors.foreground },
+    textStyle: { fontFamily: brand.typography.sans },
   };
 }
 
 /* ----------------------------- echarts expansion ----------------------------- */
+
+type NamedSlice = { name: string; value: number };
+type ScatterPoint = [number, number];
+type HeatmapCell = [number, number, number];
+
+/** Keep only `{name, value}` slices; drop nulls / bare numbers / tuples. */
+function namedSlices(data: ChartPlan["series"][number]["data"]): NamedSlice[] {
+  return data.filter(
+    (d): d is NamedSlice => d !== null && typeof d === "object" && !Array.isArray(d),
+  );
+}
+
+/** Keep only finite numbers (category / radar / waterfall series). */
+function numericPoints(data: ChartPlan["series"][number]["data"]): number[] {
+  return data.filter((d): d is number => typeof d === "number" && Number.isFinite(d));
+}
+
+/** Keep only `[x, y]` scatter tuples. */
+function scatterPoints(data: ChartPlan["series"][number]["data"]): ScatterPoint[] {
+  return data.filter(
+    (d): d is ScatterPoint => Array.isArray(d) && d.length === 2,
+  ) as ScatterPoint[];
+}
+
+/** Keep only `[xIndex, yIndex, value]` heatmap cells. */
+function heatmapCells(data: ChartPlan["series"][number]["data"]): HeatmapCell[] {
+  return data.filter((d): d is HeatmapCell => Array.isArray(d) && d.length === 3) as HeatmapCell[];
+}
+
+/**
+ * Resolve a heatmap's cells and row labels from either shape the
+ * planner may produce.
+ *
+ * The documented shape is ONE series of `[xIndex, yIndex, value]`
+ * triples, but index arithmetic is exactly the kind of bookkeeping a
+ * fast model gets wrong, and the failure is silent (every cell is
+ * dropped and the grid renders empty). So the row-per-series shape it
+ * already produces reliably for bar charts - one series per matrix
+ * row, numbers aligned to `categories` - is accepted too and turned
+ * into triples here.
+ *
+ * Row order reads top-to-bottom: Echarts' category y-axis counts index
+ * 0 from the BOTTOM, so a row-derived matrix reverses both the axis
+ * labels and the row indices, putting the first series at the top the
+ * way the model listed it.
+ */
+function heatmapMatrix(plan: ChartPlan): { cells: HeatmapCell[]; yCategories: string[] } {
+  const triples = heatmapCells(plan.series[0]?.data ?? []);
+  if (triples.length > 0) {
+    return { cells: triples, yCategories: plan.yCategories ?? [] };
+  }
+  const rows = plan.series.map((s) => ({ name: s.name, values: numericPoints(s.data) }));
+  const labels = plan.yCategories ?? rows.map((r) => r.name);
+  const lastRow = rows.length - 1;
+  return {
+    cells: rows.flatMap((row, rowIndex) =>
+      row.values.map((value, columnIndex): HeatmapCell => [columnIndex, lastRow - rowIndex, value]),
+    ),
+    yCategories: [...labels].reverse(),
+  };
+}
+
+/** Sequential light-to-brand ramp for heatmap intensity. */
+const HEATMAP_RAMP = ["#EAF1FE", "#9CBDF7", "#4C86EE", "#2463EB", "#14387F"];
+
+/** Above this many cells, printed values overlap and are suppressed. */
+const HEATMAP_LABEL_MAX_CELLS = 60;
+
+/** Rising step fill (emerald) and falling step fill (rose). */
+const WATERFALL_INCREASE_COLOR = "#2EB88A";
+const WATERFALL_DECREASE_COLOR = "#DD2C4D";
+
+/** Series names the waterfall expansion emits. */
+const WATERFALL_HELPER_NAME = "Running total";
+const WATERFALL_INCREASE_NAME = "Increase";
+const WATERFALL_DECREASE_NAME = "Decrease";
+
+/**
+ * A model asked for a bridge often builds the running total itself and
+ * hands back a cumulative-base series alongside the deltas - which
+ * renders as two plain bar series, not a waterfall (the base bars are
+ * the tall ones). The base is recognizable by name, so it is dropped
+ * here and the running total recomputed from the deltas.
+ */
+const WATERFALL_BASE_NAME = /\b(base|cumulative|running|helper|total|start(ing)?)\b/i;
+
+/**
+ * Pick the signed-delta series out of a waterfall plan, ignoring any
+ * cumulative-base series the planner built by hand
+ * ({@link WATERFALL_BASE_NAME}). Falls back to the first series when
+ * every name looks like a base, since dropping them all would leave
+ * nothing to plot.
+ */
+function waterfallDeltaSeries(
+  series: ChartPlan["series"],
+): ChartPlan["series"][number] | undefined {
+  return series.find((s) => !WATERFALL_BASE_NAME.test(s.name)) ?? series[0];
+}
+
+/**
+ * Build the stacked transparent-base + increase + decrease series that
+ * Echarts uses for a waterfall (it has no native waterfall type).
+ * Values are signed deltas; the transparent helper carries the running
+ * total so each visible bar starts where the previous one ended.
+ *
+ * The helper is `silent`, so with an item-triggered tooltip it is
+ * invisible to both the eye and the pointer - the alternative, an axis
+ * tooltip that hides the helper row, needs a function formatter, and
+ * this spec has to survive JSON serialization to the browser.
+ */
+function waterfallSeries(values: number[]): Array<Record<string, unknown>> {
+  const helpers: number[] = [];
+  const increases: Array<number | "-"> = [];
+  const decreases: Array<number | "-"> = [];
+  let cumulative = 0;
+  for (const value of values) {
+    if (value >= 0) {
+      helpers.push(cumulative);
+      increases.push(value);
+      decreases.push("-");
+    } else {
+      helpers.push(cumulative + value);
+      increases.push("-");
+      decreases.push(-value);
+    }
+    cumulative += value;
+  }
+  const transparent = { borderColor: "transparent", color: "transparent" };
+  return [
+    {
+      name: WATERFALL_HELPER_NAME,
+      type: "bar",
+      stack: "total",
+      silent: true,
+      itemStyle: transparent,
+      emphasis: { itemStyle: transparent },
+      data: helpers,
+    },
+    {
+      name: WATERFALL_INCREASE_NAME,
+      type: "bar",
+      stack: "total",
+      itemStyle: { color: WATERFALL_INCREASE_COLOR },
+      data: increases,
+    },
+    {
+      name: WATERFALL_DECREASE_NAME,
+      type: "bar",
+      stack: "total",
+      itemStyle: { color: WATERFALL_DECREASE_COLOR },
+      data: decreases,
+    },
+  ];
+}
 
 /**
  * Expand a {@link ChartPlan} into a full Echarts `EChartsOption`
@@ -646,7 +900,7 @@ function brandChartTheme(brand: BrandContext): ChartTheme {
  * color cycle and base text style (see {@link brandChartTheme}); otherwise
  * Echarts' defaults apply.
  */
-function planToEchartsOption(
+export function planToEchartsOption(
   plan: ChartPlan,
   fallbackTitle: string,
   brand?: BrandContext,
@@ -656,25 +910,41 @@ function planToEchartsOption(
   const theme = brand ? brandChartTheme(brand) : undefined;
   const themed = (option: Record<string, unknown>): Record<string, unknown> =>
     theme ? { ...theme, ...option } : option;
+  const title = { text: baseTitle, left: "center" };
+  const legend = { bottom: 0 };
 
-  if (plan.chartType === "pie") {
-    // Echarts crashes on null pie slices - filter them out.
-    // `{name, value}` slices are the only valid pie data shape,
-    // so drop bare numbers / tuples / nulls the planner may
-    // have leaked into a pie series.
-    const slices = (plan.series[0]?.data ?? []).filter(
-      (d): d is { name: string; value: number } =>
-        d !== null && typeof d === "object" && !Array.isArray(d),
-    );
+  if (plan.chartType === "custom") {
+    // The option arrives as a JSON STRING, not a nested object: this plan is
+    // the planner's provider-enforced structured output, and a free-form
+    // object becomes an unconstrained `additionalProperties` schema that
+    // strict OpenAI and Gemini endpoints reject - which would break EVERY
+    // chart, not just this one (same class of hazard as the `prefixItems`
+    // note on `chartDataPointSchema`). A malformed string costs one chart.
+    // Nothing here is eval'd; a string-valued Echarts formatter is a
+    // template, not code.
+    const option = json.parseRecord(plan.option);
+    if (!option) {
+      throw new Error('chartType "custom" needs an `option` holding a JSON object');
+    }
+    // Title is the one default worth filling: every other branch guarantees
+    // one and the renderer reserves grid space for it. A title the model set
+    // wins, as does every other field it declared.
+    return themed({ title, ...option });
+  }
+
+  if (plan.chartType === "pie" || plan.chartType === "funnel" || plan.chartType === "treemap") {
+    const slices = namedSlices(plan.series[0]?.data ?? []);
+    const seriesType = plan.chartType;
     return themed({
-      title: { text: baseTitle, left: "center" },
+      title,
       tooltip: { trigger: "item" },
-      legend: { bottom: 0 },
+      legend: seriesType === "treemap" ? undefined : legend,
       series: [
         {
           name: plan.series[0]?.name ?? baseTitle,
-          type: "pie",
-          radius: ["35%", "65%"],
+          type: seriesType,
+          ...(seriesType === "pie" ? { radius: ["35%", "65%"] } : {}),
+          ...(seriesType === "funnel" ? { sort: "descending" } : {}),
           data: slices,
         },
       ],
@@ -686,17 +956,165 @@ function planToEchartsOption(
     // `[x, y]` tuples. Bare numbers / objects / nulls from a
     // mismatched plan get dropped silently.
     return themed({
-      title: { text: baseTitle, left: "center" },
+      title,
       tooltip: { trigger: "item" },
-      legend: { bottom: 0 },
+      legend,
       grid,
       xAxis: { type: "value", name: plan.xAxisLabel },
       yAxis: { type: "value", name: plan.yAxisLabel },
       series: plan.series.map((s) => ({
         name: s.name,
         type: "scatter",
-        data: s.data.filter((d): d is [number, number] => Array.isArray(d) && d.length === 2),
+        data: scatterPoints(s.data),
       })),
+    });
+  }
+
+  if (plan.chartType === "heatmap") {
+    const { cells, yCategories } = heatmapMatrix(plan);
+    const values = cells.map((c) => c[2]);
+    const min = values.length > 0 ? Math.min(...values) : 0;
+    const max = values.length > 0 ? Math.max(...values) : 1;
+    return themed({
+      title,
+      tooltip: { position: "top" },
+      // The visualMap ramp sits below the plot, so the grid gives up
+      // more bottom room than an axis-only chart needs.
+      grid: { ...grid, bottom: 72 },
+      xAxis: {
+        type: "category",
+        data: plan.categories ?? [],
+        name: plan.xAxisLabel,
+        splitArea: { show: true },
+      },
+      yAxis: {
+        type: "category",
+        data: yCategories,
+        name: plan.yAxisLabel,
+        splitArea: { show: true },
+      },
+      visualMap: {
+        // Echarts hides every cell when min === max (a uniform matrix),
+        // so a degenerate range is widened by one.
+        min,
+        max: max > min ? max : min + 1,
+        calculable: true,
+        orient: "horizontal",
+        left: "center",
+        bottom: 8,
+        inRange: { color: HEATMAP_RAMP },
+      },
+      series: [
+        {
+          name: plan.series[0]?.name ?? baseTitle,
+          type: "heatmap",
+          data: cells,
+          // Printed cell values are unreadable once the grid is dense.
+          label: { show: cells.length <= HEATMAP_LABEL_MAX_CELLS },
+          emphasis: { itemStyle: { shadowBlur: 10, shadowColor: "rgba(0, 0, 0, 0.3)" } },
+        },
+      ],
+    });
+  }
+
+  if (plan.chartType === "radar") {
+    const indicators = (plan.categories ?? []).map((name, index) => {
+      const peak = Math.max(
+        0,
+        ...plan.series.map((s) => {
+          const nums = numericPoints(s.data);
+          return nums[index] ?? 0;
+        }),
+      );
+      return { name, max: peak > 0 ? peak : 1 };
+    });
+    return themed({
+      title,
+      tooltip: { trigger: "item" },
+      legend,
+      radar: { indicator: indicators },
+      series: [
+        {
+          type: "radar",
+          data: plan.series.map((s) => ({
+            name: s.name,
+            value: numericPoints(s.data),
+          })),
+        },
+      ],
+    });
+  }
+
+  if (plan.chartType === "waterfall") {
+    const values = numericPoints(waterfallDeltaSeries(plan.series)?.data ?? []);
+    return themed({
+      title,
+      // Item-triggered so the transparent `silent` offset bars never
+      // surface in a tooltip (see `waterfallSeries`).
+      tooltip: { trigger: "item" },
+      // Only the two visible steps belong in the legend.
+      legend: { ...legend, data: [WATERFALL_INCREASE_NAME, WATERFALL_DECREASE_NAME] },
+      grid,
+      xAxis: {
+        type: "category",
+        data: plan.categories ?? [],
+        name: plan.xAxisLabel,
+      },
+      yAxis: { type: "value", name: plan.yAxisLabel },
+      series: waterfallSeries(values),
+    });
+  }
+
+  if (plan.chartType === "horizontalBar") {
+    return themed({
+      title,
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      legend,
+      grid,
+      xAxis: { type: "value", name: plan.xAxisLabel },
+      yAxis: {
+        type: "category",
+        data: plan.categories ?? [],
+        name: plan.yAxisLabel,
+      },
+      series: plan.series.map((s) => ({
+        name: s.name,
+        type: "bar",
+        data: s.data,
+      })),
+    });
+  }
+
+  if (plan.chartType === "combo") {
+    const usesRightAxis = plan.series.some((s) => s.yAxisIndex === 1);
+    return themed({
+      title,
+      tooltip: { trigger: "axis" },
+      legend,
+      grid,
+      xAxis: {
+        type: "category",
+        data: plan.categories ?? [],
+        name: plan.xAxisLabel,
+      },
+      yAxis: usesRightAxis
+        ? [
+            { type: "value", name: plan.yAxisLabel },
+            { type: "value", name: undefined },
+          ]
+        : { type: "value", name: plan.yAxisLabel },
+      series: plan.series.map((s) => {
+        const mark = s.type ?? "bar";
+        const seriesType = mark === "area" ? "line" : mark;
+        return {
+          name: s.name,
+          type: seriesType,
+          data: s.data,
+          yAxisIndex: s.yAxisIndex ?? 0,
+          smooth: seriesType === "line",
+          ...(mark === "area" ? { areaStyle: {} } : {}),
+        };
+      }),
     });
   }
 
@@ -704,9 +1122,9 @@ function planToEchartsOption(
   const isArea = plan.chartType === "area";
   const seriesType = plan.chartType === "bar" ? "bar" : "line";
   return themed({
-    title: { text: baseTitle, left: "center" },
+    title,
     tooltip: { trigger: "axis" },
-    legend: { bottom: 0 },
+    legend,
     grid,
     xAxis: {
       type: "category",

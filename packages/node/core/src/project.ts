@@ -289,23 +289,31 @@ export function repositoryUrl(
  * {@link net.UrlBuilder}, or `undefined` when npm is absent or prints no URL.
  * Cached per `cwd` via {@link projectContextCommand}.
  */
-export function npmRegistry(cwd?: string | null, options?: { overrideOnly?: boolean, envVars?: boolean }): net.UrlBuilder | undefined {
+export function npmRegistry(
+  cwd?: string | null,
+  options?: { overrideOnly?: boolean; envVars?: boolean },
+): net.UrlBuilder | undefined {
   const candidates = (function* () {
-    yield projectContextCommand("npm", ["config", "get", "registry"], cwd ?? undefined).output?.trim();
+    yield projectContextCommand(
+      "npm",
+      ["config", "get", "registry"],
+      cwd ?? undefined,
+    ).output?.trim();
     if (typeof process !== "undefined" && process?.env) {
       const envKey = "npm_config_registry";
       if (options?.envVars) {
-        yield process.env[envKey]
-        yield process.env[envKey.toUpperCase()]
+        yield process.env[envKey];
+        yield process.env[envKey.toUpperCase()];
       }
     }
-  })()
+  })();
   for (const candidate of candidates) {
     if (candidate) {
       const url = net.urlBuilder(candidate);
-      if (!url) continue;
-      else if (options?.overrideOnly) {
-        const npmjsRegistryUrl = "https://registry.npmjs.org"
+      if (!url) {
+        continue;
+      } else if (options?.overrideOnly) {
+        const npmjsRegistryUrl = "https://registry.npmjs.org";
         const registryUrl = url.toString();
         if (registryUrl === npmjsRegistryUrl || registryUrl.startsWith(npmjsRegistryUrl + "/")) {
           continue;

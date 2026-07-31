@@ -25,9 +25,9 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, unlinkSync, writeFileSync } from "node:fs";
-import { createInterface } from "node:readline";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_DATABASE = "databricks_postgres";

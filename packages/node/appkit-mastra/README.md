@@ -210,11 +210,39 @@ Every `agents.createAgent()` gets a default Mastra `Workspace` from
 current OBO user's `WorkspaceClient`, so Mastra can discover Assistant-style
 `SKILL.md` files at request time.
 
+Locations are a named map (`skillFolders`), so an app refers to a tree by name
+rather than repeating a path. Each name mounts at `/<name>` in the workspace
+namespace (override with `mount`) and carries its own policy: `readable`
+(scanned for `SKILL.md`, default `true`) and `writable` (default `false`).
+`DEFAULT_SKILL_FOLDERS` supplies these:
+
+| Name                 | Location                           | Readable | Writable |
+| -------------------- | ---------------------------------- | -------- | -------- |
+| `workspace-team`     | `/Workspace/.assistant/skills`     | yes      | no       |
+| `workspace-team-app` | `/Users/<email>/.assistant/skills` | yes      | yes      |
+
+A consuming library merges over that map: a matching name overrides the
+default, `false` disables it, and any other name adds a location. A folder
+points at a Databricks `path` (a literal, or a function resolving one per
+request) or supplies a ready `filesystem` for anything the OBO client cannot
+reach.
+
 ```ts
 const agent = agents.createAgent({
   instructions: "Use mounted workspace skills when relevant.",
   workspace: workspaces.createWorkspace({
-    assistantSkills: true,
+    skillFolders: {
+      // Point an existing name somewhere else.
+      "workspace-team": { path: "/Workspace/Shared/team-skills" },
+      // Drop a default entirely.
+      "workspace-team-app": false,
+      // Add an app-owned tree the agent may write back to.
+      runbooks: { path: "/Workspace/Shared/runbooks/skills", writable: true },
+      // Mount for file tools without adding it to skill discovery.
+      templates: { path: "/Workspace/Shared/templates", readable: false },
+      // Any Mastra filesystem works, including per-request ones.
+      volume: { filesystem: ({ requestContext }) => volumeFor(requestContext) },
+    },
     mounts: [
       async () => ({
         mounts: { "/reference": myFilesystem },
@@ -225,9 +253,12 @@ const agent = agents.createAgent({
 });
 ```
 
-Production workspace mounts require a forwarded token with `workspace`,
-`workspace.workspace`, or `all-apis` scope. Development mode skips that gate for
-local iteration.
+A folder whose location resolves to `undefined` is skipped for that request,
+which is how `workspace-team-app` drops out when no user email is stamped.
+`assistantSkills: false` starts from an empty map, leaving only the
+`skillFolders` given. Production workspace mounts require a forwarded token
+with `workspace`, `workspace.workspace`, or `all-apis` scope. Development mode
+skips that gate for local iteration.
 
 ## Remote Skills
 
@@ -409,6 +440,41 @@ Agents can return `[chart:<id>]` and `[data:<statement_id>]` markers in prose.
 The embed route resolves them later, which avoids forcing the language model to
 inline large tables or wait for chart planning before continuing its answer.
 
+### Chart Types And Hand-Written Charts
+
+The planner does not emit a raw Echarts option. It fills a small plan (chart
+type, categories, series) that `planToEchartsOption` expands, so tooltip,
+legend, grid, and brand defaults stay consistent and a fast model has few ways
+to go wrong. The vocabulary is `bar`, `horizontalBar`, `line`, `area`, `combo`,
+`waterfall`, `scatter`, `heatmap`, `radar`, `pie`, `funnel`, `treemap`.
+
+Some of those are Echarts series types and some are not. `heatmap`, `radar`,
+`pie`, `funnel`, `treemap`, and `scatter` map to native series. `area` compiles
+to a line with an `areaStyle`, `horizontalBar` to a bar with swapped axes,
+`combo` to per-series types, and `waterfall` to the stacked transparent-helper
+bars Echarts documents, since it has no waterfall series.
+
+For a chart the plan cannot express at all - sankey, boxplot, candlestick,
+sunburst, gauge, network graph, calendar, parallel coordinates, a `custom`
+series - the planner picks `custom` and hand-writes the entire Echarts option
+into the plan's `option` field. That option is passed through as-is: no axes,
+tooltip, or legend are grafted on, and only a centered title is filled in when
+the object omits one. A configured `brand` theme still applies underneath, so
+anything the option sets wins over it.
+
+`option` is a JSON object encoded in a **string**, not a nested object, and
+that is deliberate. The plan is the planner's provider-enforced structured
+output, so a free-form object would become an unconstrained
+`additionalProperties` schema, which strict OpenAI and Gemini serving endpoints
+reject outright. That would break every chart rather than one. A string is
+universally representable, and a malformed one fails only its own chart. Values
+must be plain JSON: a string-valued Echarts formatter is treated as a template,
+and nothing in the option is ever evaluated as code.
+
+Prefer a listed type whenever one fits. `custom` trades the shared defaults for
+reach, so it is the answer for an unsupported chart shape, not a way to restyle
+a supported one.
+
 ### Brand The Charts
 
 Pass a `brand` to the plugin to theme every generated chart with your brand's
@@ -424,9 +490,17 @@ plugin.mastra({ agents, storage: true, brand: brand.defaultBrandContext });
 libraries, so charts, email, and the chat UI theme from one source. The chart
 planner derives an Echarts theme from it: a series color cycle seeded from
 `colors.primary` / `colors.accent` (plus a colorblind-friendly spread so
-many-series charts stay legible) and a base text style from `typography.sans` /
-`colors.foreground`. Charts render to canvas, so this is applied server-side on
-the Echarts option rather than through the browser `[data-brand]` CSS bridge.
+many-series charts stay legible) and the `typography.sans` font stack. Charts
+render to canvas, so this is applied server-side on the Echarts option rather
+than through the browser `[data-brand]` CSS bridge.
+
+What the planner does **not** set is any text color. A spec is planned here and
+read later in a browser whose light/dark theme the server cannot know, so the
+brand's single (light) foreground would produce near-black labels on a dark chat
+surface. The renderer resolves tick labels, axis names, grid lines, and the
+tooltip from AppKit's live CSS tokens instead - see
+[`@dbx-tools/ui-mastra`](../../ui/mastra)'s chart theming. Brand identity is the
+same in either mode; chrome is not.
 
 ## Model Selection
 
@@ -716,10 +790,12 @@ client that talks to these routes.
 - `defaults` - cache / retry / timeout settings for the plugin's own outbound
   calls, one constant per call site with its reasoning.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
-- `workspaces` / `filesystems` - Mastra workspace creation; `filesystems(fs)`
-  wraps any `@dbx-tools/shared-fs` `FileSystem` (including
-  `@dbx-tools/databricks` / `@dbx-tools/fs`) as a Mastra mount, with
-  `scratchFilesystem` (fresh `tmpFS` + random id) when no other mount resolves.
+- `workspaces` / `filesystems` - Mastra workspace creation with named
+  `skillFolders` (defaults `workspace-team` / `workspace-team-app`, overridable
+  by consumers); `filesystems(fs)` wraps any `@dbx-tools/shared-fs`
+  `FileSystem` (including `@dbx-tools/databricks` / `@dbx-tools/fs`) as a
+  Mastra mount, with `scratchFilesystem` (fresh `tmpFS` + random id) when no
+  other mount resolves.
 - `remote-skills` - startup provisioning of remote `SKILL.md` sources into the
   Databricks Assistant skills tree (or a local temp dir): the `"aitools"`
   constant reads Databricks' own skill repo directly, and any other source goes

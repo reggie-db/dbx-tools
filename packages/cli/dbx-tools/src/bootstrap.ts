@@ -7,9 +7,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { intro, outro } from "@clack/prompts";
-import { exec } from "@dbx-tools/core";
+import { exec, project } from "@dbx-tools/core";
 import { json } from "@dbx-tools/shared-core";
-import { resolvePnpmArgv, runPnpm } from "./pnpm.ts";
+import { childEnv, resolvePnpmArgv, runPnpm } from "./pnpm.ts";
 import { rootLabel } from "./root.ts";
 
 /** Fallback when this CLI's own version isn't a real release (an in-repo `0.0.0`). */
@@ -157,7 +157,30 @@ export function seedToolchain(
     writeFileSync(workspaceFile, WORKSPACE_SEED);
   }
 
+  seedRegistry(root);
+
   runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", projenSpecifier], root);
+}
+
+/**
+ * Pin a non-default registry into the new root's `.npmrc`.
+ *
+ * The CLI already forces `--registry` onto the pnpm invocations it makes itself,
+ * but a bootstrapped workspace outlives this process: every later `pnpm install`
+ * the developer (or projen's post-synth step) runs is on its own. pnpm ignores
+ * `npm_config_registry` from the environment, so without a file on disk those
+ * runs revert to `https://registry.npmjs.org/` - which is a hard failure where
+ * the custom registry was the only reachable one.
+ *
+ * Only writes for an actual override, never creates a file just to name npmjs,
+ * and never overwrites an existing `.npmrc` (the developer's own wins).
+ */
+function seedRegistry(root: string): void {
+  const registry = project.npmRegistry(null, { overrideOnly: true, envVars: true })?.toString();
+  if (!registry) return;
+  const npmrc = join(root, ".npmrc");
+  if (existsSync(npmrc)) return;
+  writeFileSync(npmrc, `registry=${registry}\n`);
 }
 
 /**
@@ -195,9 +218,12 @@ function normalizeSeedManifest(manifestPath: string): void {
  */
 export function runInitialSynth(root: string): void {
   const [command, ...prefix] = resolvePnpmArgv();
+  // No `--registry` here: this is `pnpm exec`, whose trailing arguments belong to
+  // tsx. The registry reaches anything nested through `childEnv` and the seeded
+  // `.npmrc` instead.
   exec.spawnSync(command, [...prefix, "exec", "tsx", ".projenrc.ts"], {
     cwd: root,
-    env: { ...process.env, PROJEN_DISABLE_POST: "true" },
+    env: childEnv({ PROJEN_DISABLE_POST: "true" }),
     check: true,
   });
 }

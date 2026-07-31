@@ -322,15 +322,55 @@ export const ChartTypeSchema = z
         "comparing a numeric value across a small/medium set of discrete categories (top-N, ranking, group-by)",
       ),
     z
+      .literal("horizontalBar")
+      .describe(
+        "same as bar but categories on the y-axis - prefer when category labels are long or there are many categories",
+      ),
+    z
       .literal("line")
       .describe(
         "ordered-axis trend (time series, sequence, rank) where the x-axis has natural order",
       ),
     z.literal("area").describe("stacked-trend emphasis - cumulative or composition over time"),
     z
+      .literal("combo")
+      .describe(
+        "mixed bar + line (or area) series on shared categories - e.g. volume bars with a rate/trend line; set each series' `type`",
+      ),
+    z
+      .literal("waterfall")
+      .describe(
+        "bridge / running-total of signed step values (start -> deltas -> end) across ordered categories",
+      ),
+    z
       .literal("scatter")
       .describe("two-numeric-axis correlations between fields (e.g. price vs. quantity)"),
+    z
+      .literal("heatmap")
+      .describe(
+        "matrix intensity across two category axes - x labels in `categories`, one series per matrix row holding that row's values",
+      ),
+    z
+      .literal("radar")
+      .describe(
+        "multi-dimension comparison across a fixed set of axes (one indicator per category, one or more series of values)",
+      ),
     z.literal("pie").describe("parts-of-a-whole when 2-7 categories sum to a meaningful total"),
+    z
+      .literal("funnel")
+      .describe(
+        "ordered stages that shrink (conversion, pipeline, attrition) - `{name, value}` slices",
+      ),
+    z
+      .literal("treemap")
+      .describe(
+        "parts-of-a-whole as nested rectangles when there are more than ~7 categories or a flat hierarchy of `{name, value}` slices",
+      ),
+    z
+      .literal("custom")
+      .describe(
+        "escape hatch for a chart none of the above can express (sankey, boxplot, candlestick, sunburst, gauge, network graph, calendar, parallel, ...) - hand-write the complete Echarts option instead of a plan",
+      ),
   ])
   .describe("The chart shape that best matches the data and intent.");
 export type ChartType = z.infer<typeof ChartTypeSchema>;

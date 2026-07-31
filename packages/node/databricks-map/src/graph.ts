@@ -1,1 +1,1 @@
-export const graph = "COOL"
+export const graph = "COOL";
