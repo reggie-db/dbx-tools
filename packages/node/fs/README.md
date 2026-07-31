@@ -1,4 +1,4 @@
-# `@dbx-tools/fs`
+# @dbx-tools/fs
 
 Node local-disk `FileSystem` implementation of the `@dbx-tools/shared-fs`
 contract. Built on `BaseFileSystem`, so this package only owns host separator
@@ -16,13 +16,13 @@ Key features:
 - Optional read-only mode
 - Native append / copy / rename via Node when available
 
-## Why use this over native Node `fs`
+## Why Use This Over Native Node fs
 
 Use this when callers should speak the portable `FileSystem` interface (the same
 surface FTP, object storage, or Databricks mounts can implement) rather than
 Node APIs directly. Reach for `node:fs` when you only need one-off local I/O.
 
-## Quick start
+## Quick Start
 
 ```ts
 import { LocalFileSystem, localFS } from "@dbx-tools/fs";
@@ -44,7 +44,7 @@ await work.init(); // only needed when handing the root to `node:fs` or a subpro
 const skills = await localFS.rebuildFS("agent-skills", (scratch) => downloadInto(scratch.root));
 ```
 
-## Module map
+## Modules
 
 | Export                             | Role                                                   |
 | ---------------------------------- | ------------------------------------------------------ |

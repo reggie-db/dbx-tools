@@ -1,4 +1,4 @@
-# `@dbx-tools/shared-fs`
+# @dbx-tools/shared-fs
 
 Browser-safe filesystem contract and abstract base for rooted storage backends.
 
@@ -21,11 +21,11 @@ Key features:
   (`posixPath.toPosix`, `posixPath.join`, …)
 - Typed `FileSystemError` codes for portable failure handling
 
-## Why use this
+## Why Use This
 
 Use this when multiple backends (local disk, object storage, Databricks volumes, in-memory) should share one API. Node hosts implement concrete adapters such as `@dbx-tools/fs` (`LocalFileSystem`).
 
-## Quick start
+## Quick Start
 
 ```ts
 import type { FileSystem } from "@dbx-tools/shared-fs";
@@ -35,7 +35,7 @@ const mem = new MemoryFileSystem();
 await mem.writeFile("note.txt", "hi");
 ```
 
-## Module map
+## Modules
 
 | Export                                   | Role                                                       |
 | ---------------------------------------- | ---------------------------------------------------------- |
