@@ -344,26 +344,30 @@ project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => 
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
 });
 
-// node-ai-search: a Meilisearch-style shortcut over Databricks AI Search
+// node-search: a Meilisearch-style shortcut over Databricks AI Search
 // (Vector Search). A friendly SearchClient wraps the low-level
 // `vectorSearchIndexes.queryIndex` request + columnar response; the AppKit
-// `ai-search` plugin adds `search` / `universal_search` / (opt-in)
-// `add_documents` tools, `/api/ai-search` routes for a browser search box, and a
+// `search` plugin adds `search` / `universal_search` / (opt-in)
+// `add_documents` tools, `/api/search` routes for a browser search box, and a
 // `clientConfig` catalogue. Reuses node-model to resolve an embedding endpoint
-// for index creation. Consumes the browser-safe shared-ai-search contract.
+// for index creation. Consumes the browser-safe shared-search contract.
 // Mirrors the node-email add-on's shape.
-project.applyToProjects(root, { identifierName: "ai-search", tags: "node" }, (p) => {
+project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-ai-search@workspace:*",
+    "@dbx-tools/shared-search@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/model@workspace:*",
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
+    // pg powers the Lakebase full-text FALLBACK backend (a Postgres tsvector
+    // index) used when no Vector Search endpoint is configured. Pinned the same
+    // way node-appkit-mastra pins its Lakebase pool.
+    "pg@^8.22.0",
     "zod@catalog:",
   );
-  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
+  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7", "@types/pg@^8");
 });
 
 // node-appkit-mastra: the AppKit Mastra agent layer - agents, memory, MCP, observability,
@@ -446,12 +450,12 @@ project.applyToProjects(root, { identifierName: "shared-teams", tags: "shared" }
   p.addDeps("zod@catalog:");
 });
 
-// shared-ai-search: browser-safe zod wire contract for the AI Search add-on -
+// shared-search: browser-safe zod wire contract for the AI Search add-on -
 // the search request / hit / result shapes, the universal-search request, the
 // document + upsert shapes, and the index-catalogue client config. Pure zod,
 // shared by the server client, the Mastra tools, the routes, and the React
 // search box.
-project.applyToProjects(root, { identifierName: "shared-ai-search", tags: "shared" }, (p) => {
+project.applyToProjects(root, { identifierName: "shared-search", tags: "shared" }, (p) => {
   p.addDeps("zod@catalog:");
 });
 
@@ -608,14 +612,14 @@ project.applyToProjects(root, { identifierName: "ui-teams", tags: "ui" }, (p) =>
   // tag's component-library default.
 });
 
-// ui-ai-search: the React surface for the AI Search add-on - a debounced
+// ui-search: the React surface for the AI Search add-on - a debounced
 // search-as-you-type `SearchBox`, a `SearchResults` list, and the `useSearch`
 // hook they share, all reading the plugin's client config through AppKit's
 // `usePluginClientConfig`. Presentational; consumes the browser-safe
-// shared-ai-search contract and renders through ui-appkit's UI kit. `ui`-tagged.
-project.applyToProjects(root, { identifierName: "ui-ai-search", tags: "ui" }, (p) => {
+// shared-search contract and renders through ui-appkit's UI kit. `ui`-tagged.
+project.applyToProjects(root, { identifierName: "ui-search", tags: "ui" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-ai-search@workspace:*",
+    "@dbx-tools/shared-search@workspace:*",
     "@dbx-tools/ui-appkit@workspace:*",
     "lucide-react@catalog:",
   );

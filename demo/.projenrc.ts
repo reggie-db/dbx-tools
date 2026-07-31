@@ -135,10 +135,10 @@ projectApi.applyToProjects(project, { identifierName: "server-appkit-demo", tags
     // Teams Adaptive Card add-on: the `teams()` plugin + `create_teams_card`
     // tool, plus the `/api/teams/card` route the Cards page previews through.
     dep("@dbx-tools/teams"),
-    // AI Search (Vector Search) add-on: the `aiSearch()` plugin + `search` /
-    // `universal_search` tools, plus the `/api/ai-search` routes a search box
+    // AI Search (Vector Search) add-on: the `search()` plugin + `search` /
+    // `universal_search` tools, plus the `/api/search` routes a search box
     // reads. Zero-config against DATABRICKS_VECTOR_SEARCH_INDEX.
-    dep("@dbx-tools/ai-search"),
+    dep("@dbx-tools/search"),
     // The portable brand context, so the server themes generated charts with
     // the same brand the client UI and email layouts use.
     dep("@dbx-tools/shared-core"),
@@ -193,8 +193,8 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
     // JavaScript renderer) on the Cards page.
     dep("@dbx-tools/ui-teams"),
     // The AI Search `SearchBox` / `SearchResults` (search-as-you-type over the
-    // server's `aiSearch()` index) on the Search page.
-    dep("@dbx-tools/ui-ai-search"),
+    // server's `search()` index) on the Search page.
+    dep("@dbx-tools/ui-search"),
     "react-router-dom@catalog:",
   );
   p.addDevDeps("@tailwindcss/vite@catalog:", "tailwindcss@catalog:");

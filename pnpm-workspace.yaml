@@ -4,7 +4,6 @@ packages:
   - packages/cli/appkit-env
   - packages/cli/dbx-tools
   - packages/cli/model-proxy
-  - packages/node/ai-search
   - packages/node/appkit
   - packages/node/appkit-mastra
   - packages/node/appkit-web-search
@@ -15,20 +14,21 @@ packages:
   - packages/node/genie
   - packages/node/model
   - packages/node/path
+  - packages/node/search
   - packages/node/teams
-  - packages/shared/ai-search
   - packages/shared/core
   - packages/shared/email
   - packages/shared/genie
   - packages/shared/mastra
   - packages/shared/model
   - packages/shared/sdk-model
+  - packages/shared/search
   - packages/shared/teams
-  - packages/ui/ai-search
   - packages/ui/appkit
   - packages/ui/branding
   - packages/ui/email
   - packages/ui/mastra
+  - packages/ui/search
   - packages/ui/teams
 catalog:
   react: ^19.2.4

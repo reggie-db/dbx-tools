@@ -5,6 +5,7 @@
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as config from "./src/config.ts";
+export * as databricksAitools from "./src/databricks-aitools.ts";
 export * as defaults from "./src/defaults.ts";
 export * as filesystems from "./src/filesystems.ts";
 export * as genie from "./src/genie.ts";
@@ -36,6 +37,8 @@ export { chartPlanSchema, chartPlannerRequestSchema, prepareChart, fetchChart, b
 export type { ChartPlannerRequest, PrepareChartOptions, FetchChartOptions } from "./src/chart.ts";
 export { MASTRA_USER_KEY, MASTRA_USER_NAME_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_REQUEST_ID_KEY, MASTRA_SCOPES_KEY, TRACE_REQUEST_CONTEXT_KEYS, executionContextUserId, attributedUserId, resolveUserKey, MASTRA_CONFIG_SCHEMA } from "./src/config.ts";
 export type { User, MastraMemoryConfig, MastraMcpConfig, MastraPluginConfig } from "./src/config.ts";
+export { normalizeDatabricksAIToolsOption, provisionDatabricksAITools } from "./src/databricks-aitools.ts";
+export type { DatabricksAIToolsMode, DatabricksAIToolsOptions, DatabricksAIToolsOption, ProvisionedDatabricksAITools } from "./src/databricks-aitools.ts";
 export { modelCatalogueDefaults, genieSuggestionDefaults, statementDataDefaults, chartFetchDefaults, feedbackWriteDefaults } from "./src/defaults.ts";
 export { normalizeDatabricksBasePath, isDbfsPath, isWorkspaceFilesPath, resolveDatabricksAbsolutePath, toDatabricksWorkspacePath, DatabricksWorkspaceFilesystem, emptyFilesystem } from "./src/filesystems.ts";
 export type { DatabricksMkdirsMode, DatabricksWorkspaceFilesystemOptions } from "./src/filesystems.ts";

@@ -11,7 +11,7 @@ import {
   tool as webSearchToolModule,
 } from "@dbx-tools/appkit-web-search";
 import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
-import { plugin as aiSearchPlugin, tool as aiSearchToolModule } from "@dbx-tools/ai-search";
+import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,9 +28,9 @@ const { webSearch } = webSearchPlugin;
 const { webSearchTool, webFetchTool } = webSearchToolModule;
 const { teams } = teamsPlugin;
 const { teamsCardTool } = teamsToolModule;
-const { aiSearch } = aiSearchPlugin;
+const { search } = searchPlugin;
 const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, syncIndexTool } =
-  aiSearchToolModule;
+  searchToolModule;
 const { defaultBrandContext } = sharedBrand;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
@@ -157,14 +157,14 @@ const support = createAgent({
       // approval-gated; the returned card is previewed on the Cards page and
       // can be posted to a Teams webhook via the `teams()` plugin.
       create_teams_card: teamsCardTool(),
-      // Databricks AI Search (Vector Search) from `@dbx-tools/ai-search`.
+      // Databricks AI Search (Vector Search) from `@dbx-tools/search`.
       // `search` looks up the most relevant rows in the app's configured
       // index (hybrid semantic + keyword) under the caller's identity;
       // `universal_search` fans a query across every configured index and
       // merges the hits. Autocomplete is just a small-`limit` `search`.
       search: searchTool(),
       universal_search: universalSearchTool(),
-      // Write surface (enabled below via `aiSearch({ allowWrite: true })`):
+      // Write surface (enabled below via `search({ allowWrite: true })`):
       // `add_documents` upserts rows into a direct-access index,
       // `create_index` provisions a new Vector Search index (inferring the
       // endpoint, embedding model, key, and text column), and `sync_index`
@@ -224,10 +224,10 @@ await createAppAuto({
     // works with no Delta table, no warehouse, and no vectors to compute. The
     // first boot is slow (endpoint creation takes minutes) and runs in the
     // background, so the server is up immediately; later boots are no-ops.
-    // Mounts `POST /api/ai-search`, `/universal`, `GET /indexes`, and (with
+    // Mounts `POST /api/search`, `/universal`, `GET /indexes`, and (with
     // `allowWrite`) `/documents`, `/index`, `/index/sync`; the UI reads the
-    // catalogue via `usePluginClientConfig("aiSearch")`.
-    aiSearch({
+    // catalogue via `usePluginClientConfig("search")`.
+    search({
       allowWrite: true,
       index: "reggie_pierce_aws_catalog.ai_search.docs",
       endpoint: "dbx-tools-demo-vs",
@@ -239,7 +239,7 @@ await createAppAuto({
             id: "1",
             title: "Databricks AI Search overview",
             text: "AI Search (Vector Search) indexes documents and finds the most relevant ones for a query using hybrid semantic + keyword matching.",
-            url: "https://docs.databricks.com/aws/en/ai-search/ai-search",
+            url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
           },
           {
             id: "2",
@@ -257,7 +257,7 @@ await createAppAuto({
             id: "4",
             title: "Autocomplete and universal search",
             text: "Autocomplete is a small-limit search over one index; universal search fans a query across every configured index and merges the hits.",
-            url: "https://docs.databricks.com/aws/en/ai-search/ai-search",
+            url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
           },
           {
             id: "5",
@@ -282,6 +282,11 @@ await createAppAuto({
       // generated chart matches the surrounding AppKit UI instead of falling
       // back to Echarts' defaults.
       brand: defaultBrandContext,
+      // Fold Databricks AI Tools skills (`databricks aitools install`) into the
+      // agents when they're available locally: "auto" reuses the CLI's
+      // installed skills tree (~/.databricks/aitools/skills) or the `databricks`
+      // CLI if present, and silently no-ops otherwise.
+      databricksAITools: "auto",
     }),
   ],
   cache: {

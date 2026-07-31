@@ -26,6 +26,7 @@ import type { MastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import type { MastraIdentityMode } from "./identity.ts";
 import type { RemoteSkillsOption } from "./remote-skills.ts";
+import type { DatabricksAIToolsOption } from "./databricks-aitools.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the
@@ -580,6 +581,28 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * ```
    */
   remoteSkills?: RemoteSkillsOption;
+
+  /**
+   * Fold Databricks AI Tools skills (`databricks aitools`) into every
+   * default-workspace agent as extra local skill scan paths.
+   *
+   * `false` (default) off; `"auto"` enables only when the CLI's installed
+   * skills tree (`~/.databricks/aitools/skills`) exists or the `databricks`
+   * CLI is resolvable, else silently no-op; `true` requires one of those and
+   * fails startup otherwise. Pass an options bag to select `skills`, include
+   * `experimental` skills, `refresh` from the CLI, or set an explicit `path`.
+   *
+   * Reuses the already-installed global tree when present (no CLI call);
+   * otherwise runs `databricks aitools install --path <dir> --skills-only` to
+   * materialize a resolved, agent-agnostic set into a temp dir.
+   *
+   * @example
+   * ```ts
+   * mastra({ databricksAITools: "auto" });
+   * mastra({ databricksAITools: { skills: ["databricks-core", "databricks-jobs"] } });
+   * ```
+   */
+  databricksAITools?: DatabricksAIToolsOption;
 }
 
 /**
@@ -602,6 +625,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
       type: ["string", "array", "object"],
       description:
         "Remote Agent-Skill sources provisioned at startup (GitHub owner/repo, git/GitLab URL, or a direct SKILL.md/archive URL). Prefers the optional `skills` npm CLI, else a direct fetch; fails startup on error unless failOnError:false. Written to the Databricks user Assistant skills folder, or a local temp dir when no workspace is writable.",
+    },
+    databricksAITools: {
+      type: ["boolean", "string", "object"],
+      description:
+        'Fold Databricks AI Tools skills (databricks aitools) into agents as extra local skill paths. false (default) off; "auto" enables when the installed tree or the databricks CLI is available; true requires one and fails startup otherwise. An object selects skills, experimental, refresh, or path.',
     },
     storage: {
       type: ["boolean", "object"],

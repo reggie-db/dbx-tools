@@ -276,6 +276,46 @@ optional peer to enable the richest source formats:
 pnpm add skills
 ```
 
+## Databricks AI Tools
+
+[Databricks AI Tools](https://github.com/databricks/databricks-agent-skills) are
+Databricks-owned Agent-Skill trees installed and kept up to date through the
+Databricks CLI (`databricks aitools install`). `databricksAITools` folds them
+into every default-workspace agent as extra local skill scan paths, so an agent
+gets first-class Databricks skills (bundles, jobs, SQL, Genie One, and more)
+without anyone hand-copying `SKILL.md` files.
+
+```ts
+mastra({
+  agents: { assistant: agents.createAgent({ instructions: "..." }) },
+  // "auto": on when the CLI's installed tree or the `databricks` CLI is present.
+  databricksAITools: "auto",
+});
+
+// Or a curated subset, fetched fresh from the CLI:
+mastra({
+  databricksAITools: { skills: ["databricks-core", "databricks-jobs"] },
+});
+```
+
+The option is `false | true | "auto" | DatabricksAIToolsOptions`:
+
+- `false` (default) - off.
+- `"auto"` - enable only when the CLI's installed tree
+  (`~/.databricks/aitools/skills`) exists OR the `databricks` CLI is resolvable;
+  otherwise silently no-op. The "on if the CLI is around" default.
+- `true` - require it: fail app startup (subject to `failOnError`) when neither
+  the installed tree nor the CLI can supply skills.
+- an options bag with `skills` (a subset), `experimental`, `refresh` (re-run the
+  CLI even when a tree exists), `path` (an explicit output dir), or `cli`.
+
+It never reimplements the CLI's sourcing. It reuses the already-installed global
+tree when present (no CLI call), and otherwise shells out to `databricks aitools
+install --path <dir> --skills-only` to materialize a resolved, agent-agnostic
+skill set into a temp dir. Because these skills track the local CLI install, they
+are added as LOCAL scan paths for the current process rather than uploaded to the
+workspace.
+
 ## Genie Tools
 
 `genie.buildGenieTools()` and `plugins.genie.toolkit()` expose tools for:
@@ -533,6 +573,9 @@ requiring callers to assemble a Mastra server by hand.
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
   list, or an options bag with `failOnError`, `userEmail`, and
   `databricksBasePath`.
+- `databricksAITools` folds Databricks AI Tools skills into agents (see
+  [Databricks AI Tools](#databricks-ai-tools)). `false` (default), `"auto"`,
+  `true`, or an options bag (`skills`, `experimental`, `refresh`, `path`).
 - `genieSpaces` maps aliases to Genie Space IDs (or to
   `{ spaceId, hint }` objects). Those aliases flow into tool names,
   suggestions, and chart/data workflows. An alias present with no space id is a
@@ -586,6 +629,9 @@ client that talks to these routes.
 - `remote-skills` - startup provisioning of remote `SKILL.md` sources into the
   Databricks Assistant skills tree (or a local temp dir), via the optional
   `skills` CLI or a direct fetch.
+- `databricks-aitools` - startup provisioning of Databricks AI Tools skills as
+  extra local skill paths, reusing the CLI's installed tree or shelling out to
+  `databricks aitools install --path`.
 - `mcp` - MCP server construction.
 - `observability` / `mlflow` - tracing and feedback.
 - `server` / `rest` / `processors` - Express dispatch, Databricks REST helpers,

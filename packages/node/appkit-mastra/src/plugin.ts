@@ -97,6 +97,7 @@ import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "
 import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
 import { buildObservability } from "./observability.ts";
 import { provisionRemoteSkills } from "./remote-skills.ts";
+import { provisionDatabricksAITools } from "./databricks-aitools.ts";
 import {
   attachRoutePatchMiddleware,
   createRequestContext,
@@ -1011,12 +1012,24 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       });
     }
 
+    // Fold Databricks AI Tools skills (`databricks aitools`) in as extra local
+    // skill scan paths: reuse the CLI's installed tree when present, else shell
+    // out to the CLI to materialize a curated set.
+    const aiTools = await provisionDatabricksAITools(this.config.databricksAITools);
+    if (aiTools.localSkillPaths.length > 0) {
+      this.logger.info("databricks ai tools provisioned", {
+        source: aiTools.source,
+        localSkillPaths: aiTools.localSkillPaths.length,
+      });
+    }
+    const extraSkillPaths = [...provisioned.localSkillPaths, ...aiTools.localSkillPaths];
+
     this.built = await buildAgents({
       config: this.config,
       context: this.context,
       memoryBuilder,
       log: this.logger,
-      extraSkillPaths: provisioned.localSkillPaths,
+      extraSkillPaths,
     });
 
     // `mastra.server.apiRoutes` is only honored by Mastra's standalone

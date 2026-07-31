@@ -1,0 +1,299 @@
+/**
+ * A Lakebase (Postgres) full-text search backend - the FALLBACK used when no
+ * Databricks Vector Search endpoint/index is configured but a Lakebase pool is
+ * available. It provisions a single table per index, indexes a generated
+ * `tsvector`, and answers queries with `websearch_to_tsquery` + `ts_rank`.
+ *
+ * The whole point is parity: this backend returns the EXACT same
+ * `@dbx-tools/shared-search` shapes (`SearchResult` / `SearchHit` /
+ * `UpsertResult`) as the Vector Search backend, so the client, the Mastra
+ * tools, the routes, and the React search box cannot tell which one answered.
+ * A hit's `id` is the primary key, its `score` is the text-rank, and `fields`
+ * is the stored document minus the internal columns.
+ *
+ * The Postgres pool is built the same way `@dbx-tools/appkit-mastra` builds its
+ * memory pool: the AppKit `lakebase` plugin resolves a service-principal
+ * `PoolConfig` (connection target + OAuth token-refresh `password` callback),
+ * and this backend constructs a `pg.Pool` from it. It never re-implements auth.
+ *
+ * @module
+ */
+
+import { ExecutionError } from "@databricks/appkit";
+import { log, object, string } from "@dbx-tools/shared-core";
+import { Pool, type PoolConfig } from "pg";
+import type {
+  SearchDocument,
+  SearchHit,
+  SearchResult,
+  UpsertResult,
+} from "@dbx-tools/shared-search";
+
+const logger = log.logger("search/lakebase");
+
+/** The internal columns every search table carries, excluded from a hit's `fields`. */
+const RESERVED_COLUMNS = new Set(["id", "search_text", "document", "search_vector"]);
+
+/** Options for a single-index Lakebase search (mirrors the client's `SearchOptions`). */
+export interface LakebaseSearchOptions {
+  limit?: number;
+  scoreThreshold?: number;
+  signal?: AbortSignal;
+}
+
+/** Options for provisioning a Lakebase-backed index. */
+export interface LakebaseProvisionOptions {
+  /** Text column embedded into the search vector. Defaults to `text`. */
+  textColumn?: string;
+  /** Documents to seed when the table is empty. */
+  seed?: SearchDocument[];
+  signal?: AbortSignal;
+}
+
+/**
+ * A Postgres full-text backend. One instance is shared across indexes; each
+ * index maps to a table whose name is derived from the index reference.
+ */
+export class LakebaseSearchBackend {
+  private pool: Pool | undefined;
+  private poolPromise: Promise<Pool> | undefined;
+  private readonly provisioned = new Set<string>();
+
+  constructor(
+    private readonly pgConfigFactory: () => Promise<PoolConfig> | PoolConfig,
+    private readonly schema = "public",
+    /** How a pool is built from the resolved config. Overridable for tests. */
+    private readonly poolFactory: (config: PoolConfig) => Pool = (config) => new Pool(config),
+  ) {}
+
+  /** Lazily build (and cache) the pg pool from the resolved Lakebase config. */
+  private async getPool(): Promise<Pool> {
+    if (this.pool) return this.pool;
+    this.poolPromise ??= (async () => {
+      const config = await this.pgConfigFactory();
+      const pool = this.poolFactory(config);
+      this.pool = pool;
+      return pool;
+    })();
+    return this.poolPromise;
+  }
+
+  /** Close the pool so a restarted app rebuilds it. */
+  async close(): Promise<void> {
+    const pool = this.pool;
+    this.pool = undefined;
+    this.poolPromise = undefined;
+    this.provisioned.clear();
+    if (pool) await pool.end();
+  }
+
+  /**
+   * Search a Lakebase-backed index. Returns hits sorted most-relevant-first,
+   * shaped identically to the Vector Search backend.
+   */
+  async search(
+    index: string,
+    query: string,
+    options: LakebaseSearchOptions = {},
+  ): Promise<SearchResult> {
+    const text = string.trimToEmpty(query);
+    const table = this.tableFor(index);
+    const limit = options.limit ?? 10;
+    const pool = await this.getPool();
+
+    // `websearch_to_tsquery` accepts a bare search box string (quoted phrases,
+    // `or`, `-term`); an empty query returns the most recent rows so an empty
+    // search box still shows content, matching a keyword index's behavior.
+    const sql = text
+      ? `SELECT id, document, ts_rank(search_vector, websearch_to_tsquery('english', $1)) AS score
+           FROM ${table}
+          WHERE search_vector @@ websearch_to_tsquery('english', $1)
+          ORDER BY score DESC
+          LIMIT $2`
+      : `SELECT id, document, 0::float4 AS score FROM ${table} ORDER BY id LIMIT $2`;
+    const params = text ? [text, limit] : [limit];
+
+    const { rows } = await this.query<{ id: string; document: unknown; score: number }>(
+      pool,
+      sql,
+      params,
+      options.signal,
+    );
+    const hits: SearchHit[] = rows
+      .map((row) => ({
+        id: String(row.id),
+        score: Number(row.score) || 0,
+        fields: this.toFields(row.document),
+      }))
+      .filter((hit) => options.scoreThreshold === undefined || hit.score >= options.scoreThreshold);
+    return { query: text, index, hits, count: hits.length };
+  }
+
+  /**
+   * Ensure the table + full-text index exist and seed documents when empty.
+   * Idempotent, so it is safe to call on every boot.
+   */
+  async provision(index: string, options: LakebaseProvisionOptions = {}): Promise<number> {
+    const table = this.tableFor(index);
+    const pool = await this.getPool();
+    await this.ensureTable(pool, table, options.signal);
+
+    const { rows } = await this.query<{ count: string }>(
+      pool,
+      `SELECT count(*)::text AS count FROM ${table}`,
+      [],
+      options.signal,
+    );
+    const existing = Number(rows[0]?.count ?? "0");
+    const seed = options.seed ?? [];
+    if (existing === 0 && seed.length > 0) {
+      await this.upsert(pool, table, seed, options.textColumn ?? "text", options.signal);
+      logger.info("index-seeded", { index, table, count: seed.length });
+      return seed.length;
+    }
+    return existing;
+  }
+
+  /** Add or update documents by primary key. */
+  async addDocuments(
+    index: string,
+    documents: SearchDocument[],
+    textColumn = "text",
+    signal?: AbortSignal,
+  ): Promise<UpsertResult> {
+    const table = this.tableFor(index);
+    const pool = await this.getPool();
+    await this.ensureTable(pool, table, signal);
+    await this.upsert(pool, table, documents, textColumn, signal);
+    return { index, count: documents.length };
+  }
+
+  /** Delete documents by primary key. */
+  async deleteDocuments(
+    index: string,
+    ids: Array<string | number>,
+    signal?: AbortSignal,
+  ): Promise<UpsertResult> {
+    const table = this.tableFor(index);
+    const pool = await this.getPool();
+    await this.query(pool, `DELETE FROM ${table} WHERE id = ANY($1)`, [ids.map(String)], signal);
+    return { index, count: ids.length };
+  }
+
+  /** Create the table + GIN index once per table (memoized across calls). */
+  private async ensureTable(pool: Pool, table: string, signal?: AbortSignal): Promise<void> {
+    if (this.provisioned.has(table)) return;
+    // `document` holds the whole row; `search_text` is the indexed text; the
+    // generated `search_vector` keeps the tsvector in lockstep with it so a
+    // write never has to compute the vector by hand.
+    await this.query(pool, `CREATE SCHEMA IF NOT EXISTS ${this.ident(this.schema)}`, [], signal);
+    await this.query(
+      pool,
+      `CREATE TABLE IF NOT EXISTS ${table} (
+         id text PRIMARY KEY,
+         search_text text NOT NULL DEFAULT '',
+         document jsonb NOT NULL DEFAULT '{}'::jsonb,
+         search_vector tsvector GENERATED ALWAYS AS (to_tsvector('english', search_text)) STORED
+       )`,
+      [],
+      signal,
+    );
+    await this.query(
+      pool,
+      `CREATE INDEX IF NOT EXISTS ${this.ident(`${this.bareName(table)}_fts`)}
+         ON ${table} USING gin (search_vector)`,
+      [],
+      signal,
+    );
+    this.provisioned.add(table);
+    logger.info("index-created", { table });
+  }
+
+  /** Upsert rows: the whole document as jsonb + a flattened text blob to index. */
+  private async upsert(
+    pool: Pool,
+    table: string,
+    documents: SearchDocument[],
+    textColumn: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    for (const doc of documents) {
+      const id = string.trimToNull(String(doc.id ?? doc.ID ?? "")) ?? undefined;
+      if (id === undefined) {
+        throw new ExecutionError("search (lakebase): a document is missing an `id`", {
+          context: { operation: "addDocuments" },
+        });
+      }
+      const searchText = this.searchText(doc, textColumn);
+      await this.query(
+        pool,
+        `INSERT INTO ${table} (id, search_text, document)
+           VALUES ($1, $2, $3::jsonb)
+         ON CONFLICT (id) DO UPDATE
+           SET search_text = EXCLUDED.search_text, document = EXCLUDED.document`,
+        [id, searchText, JSON.stringify(doc)],
+        signal,
+      );
+    }
+  }
+
+  /** The text a row is indexed by: the text column first, then any other string field. */
+  private searchText(doc: SearchDocument, textColumn: string): string {
+    const primary = string.trimToEmpty(String(doc[textColumn] ?? ""));
+    const rest = Object.entries(doc)
+      .filter(([key, value]) => key !== textColumn && key !== "id" && typeof value === "string")
+      .map(([, value]) => value as string);
+    return [primary, ...rest].filter(Boolean).join("\n");
+  }
+
+  /** A hit's `fields`: the stored document minus the reserved/internal keys. */
+  private toFields(document: unknown): Record<string, unknown> {
+    if (!object.isRecord(document)) return {};
+    const fields: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(document)) {
+      if (RESERVED_COLUMNS.has(key)) continue;
+      fields[key] = value;
+    }
+    return fields;
+  }
+
+  /** The fully-qualified table name for an index reference. */
+  private tableFor(index: string): string {
+    return `${this.ident(this.schema)}.${this.ident(this.bareName(index))}`;
+  }
+
+  /** A safe bare table name derived from an index reference. */
+  private bareName(reference: string): string {
+    const last = reference.split(".").filter(Boolean).pop() ?? reference;
+    const slug = last
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    return slug.length > 0 ? slug : "documents";
+  }
+
+  /** Quote a Postgres identifier. */
+  private ident(name: string): string {
+    return `"${name.replace(/"/g, '""')}"`;
+  }
+
+  /** Run one query under external cancellation. */
+  private async query<T>(
+    pool: Pool,
+    sql: string,
+    params: unknown[],
+    signal?: AbortSignal,
+  ): Promise<{ rows: T[] }> {
+    if (signal?.aborted) throw ExecutionError.canceled();
+    const client = await pool.connect();
+    const onAbort = () => void client.release(true);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    try {
+      const result = await client.query(sql, params);
+      return { rows: result.rows as T[] };
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+      client.release();
+    }
+  }
+}
