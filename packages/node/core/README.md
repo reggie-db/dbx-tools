@@ -50,6 +50,10 @@ if (result.exitCode !== 0) {
 stdio. It accepts string stdin and abort signals, making it useful for CLIs and
 watch tasks.
 
+When an executable is missing, `spawn()` and `spawnSync()` return
+`exec.COMMAND_NOT_FOUND_EXIT_CODE` (`127`) unless `check: true` is set. With
+`check: true`, they throw like any other non-zero exit.
+
 Prefer `spawn()` over ad hoc `child_process` calls when command output needs to
 be captured, streamed line-by-line, or aborted consistently from higher-level
 tooling.

@@ -48,6 +48,9 @@ import {
 import * as readline from "node:readline";
 import { Readable } from "node:stream";
 
+/** Shell-compatible exit code returned when an executable cannot be found. */
+export const COMMAND_NOT_FOUND_EXIT_CODE = 127;
+
 /** Stdio mode for a subprocess fd. */
 export type ExecStdio = "inherit" | "pipe" | "ignore";
 
@@ -230,6 +233,11 @@ function formatSyncCapturedText(
  */
 function commandLabel(command: string, args: string[]): string {
   return `\`${command} ${args.join(" ")}\``;
+}
+
+/** Return whether Node failed to spawn because the executable was not found. */
+function isCommandNotFoundError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 /**
@@ -478,7 +486,8 @@ function linesFromCapturedOutput(output: string): string[] {
  * @param args - Arguments passed verbatim to the executable
  * @param options - Spawn, stdio, and check options
  * @returns Exit code, captured line arrays, and trimmed `stdout` / `stderr` getters
- * @throws When spawn fails, line reads fail, or `check` is true and exit code is non-zero
+ * @throws When spawn fails for a reason other than a missing executable, line
+ * reads fail, or `check` is true and exit code is non-zero
  */
 export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult> {
   const { command, commandArgs, options = {} } = parseSpawnArgs(args);
@@ -501,16 +510,23 @@ export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult
   queueLineReads(reads, proc.stderr, stderrHandler);
 
   let exitCode = 1;
+  let commandNotFoundError: NodeJS.ErrnoException | undefined;
   try {
     exitCode = await waitForExit(proc);
     await Promise.all(reads);
   } catch (err) {
     await Promise.allSettled(reads);
-    throw err;
+    if (!isCommandNotFoundError(err)) throw err;
+    commandNotFoundError = err;
+    exitCode = COMMAND_NOT_FOUND_EXIT_CODE;
   }
 
   const result = createExecResult(exitCode, stdoutLines, stderrLines, trim);
-  if (check && result.exitCode !== 0) throw execError(command, commandArgs, result);
+  if (check && result.exitCode !== 0) {
+    const err = execError(command, commandArgs, result);
+    if (commandNotFoundError) err.cause = commandNotFoundError;
+    throw err;
+  }
   return result;
 }
 
@@ -524,7 +540,8 @@ export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult
  * @param args - Arguments passed verbatim to the executable
  * @param spawnSync - Spawn, stdio, and check options
  * @returns Exit code, captured line arrays, and trimmed `stdout` / `stderr` getters
- * @throws When spawn fails or `check` is true and exit code is non-zero
+ * @throws When spawn fails for a reason other than a missing executable, or
+ * `check` is true and exit code is non-zero
  */
 export function spawnSync(...args: SpawnArgs<SyncExecOptions>): ExecResult {
   const { command, commandArgs, options = {} } = parseSpawnArgs(args);
@@ -542,17 +559,16 @@ export function spawnSync(...args: SpawnArgs<SyncExecOptions>): ExecResult {
     input: typeof stdin === "string" ? stdin : undefined,
   });
 
-  const exitCode = result.status ?? 1;
+  const commandNotFound = isCommandNotFoundError(result.error);
+  const exitCode = commandNotFound ? COMMAND_NOT_FOUND_EXIT_CODE : (result.status ?? 1);
   const stdoutText = captureStdout ? capturedText(result.stdout) : undefined;
   const stderrText = captureStderr ? capturedText(result.stderr) : undefined;
   const execResult = createSyncExecResult(exitCode, stdoutText, stderrText, trim);
 
-  if (result.error) {
-    if (check || execResult.exitCode !== 0) {
-      const err = execError(command, commandArgs, execResult);
-      err.cause = result.error;
-      throw err;
-    }
+  if (result.error && (!commandNotFound || check)) {
+    const err = execError(command, commandArgs, execResult);
+    err.cause = result.error;
+    throw err;
   }
 
   if (check && execResult.exitCode !== 0) throw execError(command, commandArgs, execResult);
