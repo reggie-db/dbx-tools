@@ -23,7 +23,7 @@
  */
 
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
-import type { SearchMode } from "@dbx-tools/shared-ai-search";
+import type { SearchDocument, SearchMode } from "@dbx-tools/shared-ai-search";
 import { object, string } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 
@@ -88,6 +88,40 @@ export interface AiSearchPluginConfig extends BasePluginConfig {
   timeoutMs?: number;
   /** Enable the write surface (`add_documents` tool + `POST /documents`). Off by default. */
   allowWrite?: boolean;
+  /**
+   * Provision a REAL index at boot: ensure the endpoint + index exist and seed
+   * documents when the index is empty. Runs in the background during `setup()`
+   * (a slow first-time endpoint/index build never blocks the server) using the
+   * boot-time SDK auth (env / config profile). Idempotent - safe every boot.
+   *
+   * The default is a MANAGED direct-access index (Databricks embeds the text
+   * column), so `documents` are plain rows and search-by-text works with no
+   * Delta table, no warehouse, and no vectors to compute. Point it at a
+   * `sourceTable` to provision a Delta Sync index instead.
+   */
+  ensureOnSetup?: EnsureOnSetupConfig;
+}
+
+/** Boot-time provisioning + seeding for a single index (see `ensureOnSetup`). */
+export interface EnsureOnSetupConfig {
+  /** UC name of the index to ensure (catalog.schema.index). Defaults to the plugin's `index`. */
+  index?: string;
+  /** Vector Search endpoint to host it on. Defaults to the plugin's `endpoint`. */
+  endpoint?: string;
+  /** Primary-key column. Defaults to `id`. */
+  primaryKey?: string;
+  /** Text column Databricks embeds (managed direct-access). Defaults to `text`. */
+  textColumn?: string;
+  /** Embedding model endpoint. Fuzzy-matched; defaults to the best embedding endpoint. */
+  embeddingModel?: string;
+  /** For a Delta Sync index instead of managed direct-access: the source Delta table. */
+  sourceTable?: string;
+  /** Column -> type map for the managed direct-access `schema_json`. Inferred from `documents` when omitted. */
+  schema?: Record<string, string>;
+  /** Documents to seed when the index is empty. Plain `{ id, text, ... }` rows for a managed index. */
+  documents?: SearchDocument[];
+  /** Max time to wait for endpoint + index readiness. Defaults to 20 minutes. */
+  timeoutMs?: number;
 }
 
 /** A fully resolved index entry (the plugin-known form). */
@@ -110,6 +144,7 @@ export interface ResolvedAiSearchConfig {
   basePath: string;
   timeoutMs: number;
   allowWrite: boolean;
+  ensureOnSetup?: EnsureOnSetupConfig;
 }
 
 /** JSON Schema the plugin manifest publishes for {@link AiSearchPluginConfig}. */
@@ -159,6 +194,24 @@ export const AI_SEARCH_CONFIG_SCHEMA: JSONSchema7 = {
     allowWrite: {
       type: "boolean",
       description: "Enable the document write surface (add_documents tool + route).",
+    },
+    ensureOnSetup: {
+      type: "object",
+      description:
+        "Provision a real index at boot: ensure the endpoint + index exist and seed " +
+        "documents when empty. Runs in the background during setup using boot-time auth.",
+      additionalProperties: true,
+      properties: {
+        index: { type: "string" },
+        endpoint: { type: "string" },
+        primaryKey: { type: "string" },
+        textColumn: { type: "string" },
+        embeddingModel: { type: "string" },
+        sourceTable: { type: "string" },
+        schema: { type: "object", additionalProperties: { type: "string" } },
+        documents: { type: "array", items: { type: "object", additionalProperties: true } },
+        timeoutMs: { type: "number" },
+      },
     },
   },
 };
@@ -271,6 +324,7 @@ export function resolveAiSearchConfig(config: AiSearchPluginConfig = {}): Resolv
     basePath: DEFAULT_BASE_PATH,
     timeoutMs: resolvePositiveInt(config.timeoutMs, "AI_SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
     allowWrite: config.allowWrite ?? object.toBoolean(process.env.AI_SEARCH_WRITE) ?? false,
+    ...(config.ensureOnSetup ? { ensureOnSetup: config.ensureOnSetup } : {}),
   };
 }
 

@@ -105,9 +105,21 @@ describe("ai-search index lifecycle", () => {
     assert.equal(cols[0].name, "embedding");
   });
 
-  it("requires a dimension for a direct-access index", async () => {
+  it("creates a MANAGED direct-access index by default (Databricks embeds a text column)", async () => {
     const fake = fakeClient();
-    await assert.rejects(() => makeClient(fake).createIndex("main.docs.bad", {}));
+    await makeClient(fake).createIndex("main.docs.managed", {});
+    const create = fake.calls.find((c) => c.op === "createIndex")?.request as Record<
+      string,
+      unknown
+    >;
+    assert.equal(create.index_type, "DIRECT_ACCESS");
+    const spec = create.direct_access_index_spec as Record<string, unknown>;
+    const sources = spec.embedding_source_columns as Array<Record<string, unknown>>;
+    assert.equal(sources[0].name, "text");
+    assert.ok(sources[0].embedding_model_endpoint_name, "resolves an embedding model");
+    const schema = JSON.parse(spec.schema_json as string) as Record<string, string>;
+    assert.equal(schema.id, "string");
+    assert.equal(schema.text, "string");
   });
 
   it("ensureIndex returns the existing index without creating", async () => {

@@ -224,7 +224,82 @@ export class AiSearchPlugin extends Plugin<AiSearchPluginConfig> implements Tool
       mode: config.mode,
       allowWrite: config.allowWrite,
       basePath: this.basePath,
+      ensureOnSetup: config.ensureOnSetup
+        ? (config.ensureOnSetup.index ?? config.defaultIndex)
+        : "off",
     });
+    // Provision a real index in the BACKGROUND so a slow first-time endpoint or
+    // index build never blocks the server from coming up.
+    if (config.ensureOnSetup) void this.runEnsureOnSetup(config);
+  }
+
+  /**
+   * Ensure the endpoint + index exist and seed them, honoring `ensureOnSetup`.
+   * Uses boot-time SDK auth (env / config profile) via the client's
+   * out-of-request fallback. Failures are logged, never thrown - a search app
+   * should still start even if provisioning is slow or a permission is missing.
+   */
+  private async runEnsureOnSetup(
+    config: ReturnType<typeof getAiSearchRuntime>["config"],
+  ): Promise<void> {
+    const spec = config.ensureOnSetup;
+    if (!spec) return;
+    const index = string.trimToNull(spec.index) ?? config.defaultIndex;
+    if (!index) {
+      logger.warn("ensure-skipped", {
+        reason: "no index name (set `index` or `ensureOnSetup.index`)",
+      });
+      return;
+    }
+    const documents = spec.documents ?? [];
+    // Infer a managed-direct-access schema from the first seed row when not given.
+    const schema =
+      spec.schema ??
+      (documents.length > 0 && !spec.sourceTable
+        ? this.inferSchema(documents[0], spec.primaryKey ?? "id", spec.textColumn ?? "text")
+        : undefined);
+    try {
+      logger.info("ensure-start", { index });
+      const { client } = getAiSearchRuntime();
+      const info = await client.provision(index, {
+        ...(spec.endpoint ? { endpoint: spec.endpoint } : {}),
+        ...(spec.primaryKey ? { primaryKey: spec.primaryKey } : {}),
+        ...(spec.textColumn ? { embeddingSourceColumn: spec.textColumn } : {}),
+        ...(spec.embeddingModel ? { embeddingModel: spec.embeddingModel } : {}),
+        ...(spec.sourceTable ? { sourceTable: spec.sourceTable } : {}),
+        ...(schema ? { schema } : {}),
+        ...(spec.timeoutMs ? { timeoutMs: spec.timeoutMs } : {}),
+        ...(documents.length > 0 ? { seed: documents } : {}),
+      });
+      logger.info("ensure-ready", {
+        index: info.name,
+        ready: info.ready,
+        rowCount: info.rowCount ?? 0,
+      });
+    } catch (cause) {
+      logger.warn("ensure-failed", { index, message: errorUtil.errorMessage(cause) });
+    }
+  }
+
+  /** Build a Vector Search `schema_json` map from a seed document's value types. */
+  private inferSchema(
+    doc: Record<string, unknown>,
+    primaryKey: string,
+    textColumn: string,
+  ): Record<string, string> {
+    const schema: Record<string, string> = { [primaryKey]: "string", [textColumn]: "string" };
+    for (const [key, value] of Object.entries(doc)) {
+      if (key in schema) continue;
+      schema[key] =
+        typeof value === "number"
+          ? Number.isInteger(value)
+            ? "int"
+            : "double"
+          : typeof value === "boolean"
+            ? "boolean"
+            : "string";
+    }
+    return schema;
   }
 
   /** Drop the shared runtime so a restarted app re-resolves config. */

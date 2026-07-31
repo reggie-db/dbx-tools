@@ -216,16 +216,58 @@ await createAppAuto({
     // JWT-validated, Connector-delivered path.
     teams({ allowUnauthenticated: true }),
     // AI Search (Vector Search) runtime for the `search` / `universal_search`
-    // tools and a browser search box. Zero-config here: it reads the default
-    // index from DATABRICKS_VECTOR_SEARCH_INDEX / AI_SEARCH_INDEX. To go
-    // deeper, pass `{ index, indexes, columns, mode }`. Mounts
-    // `POST /api/ai-search`, `POST /api/ai-search/universal`, and
-    // `GET /api/ai-search/indexes`, and surfaces its index catalogue to the UI
-    // via `usePluginClientConfig("aiSearch")`. `allowWrite: true` turns on the
-    // document + index write tools/routes (`POST /api/ai-search/documents`,
-    // `POST /api/ai-search/index`, `POST /api/ai-search/index/sync`); leave it
-    // off for a read-only search surface.
-    aiSearch({ allowWrite: true }),
+    // tools and a browser search box. `ensureOnSetup` provisions a REAL index on
+    // boot using the boot-time SDK auth (the DATABRICKS_CONFIG_PROFILE in
+    // `.env`): it ensures the Vector Search endpoint + a MANAGED direct-access
+    // index exist and seeds the dummy docs below when the index is empty. Managed
+    // means Databricks embeds the `text` column on write AND on query, so search
+    // works with no Delta table, no warehouse, and no vectors to compute. The
+    // first boot is slow (endpoint creation takes minutes) and runs in the
+    // background, so the server is up immediately; later boots are no-ops.
+    // Mounts `POST /api/ai-search`, `/universal`, `GET /indexes`, and (with
+    // `allowWrite`) `/documents`, `/index`, `/index/sync`; the UI reads the
+    // catalogue via `usePluginClientConfig("aiSearch")`.
+    aiSearch({
+      allowWrite: true,
+      index: "reggie_pierce_aws_catalog.ai_search.docs",
+      endpoint: "dbx-tools-demo-vs",
+      columns: ["title", "text", "url"],
+      ensureOnSetup: {
+        embeddingModel: "databricks-gte-large-en",
+        documents: [
+          {
+            id: "1",
+            title: "Databricks AI Search overview",
+            text: "AI Search (Vector Search) indexes documents and finds the most relevant ones for a query using hybrid semantic + keyword matching.",
+            url: "https://docs.databricks.com/aws/en/ai-search/ai-search",
+          },
+          {
+            id: "2",
+            title: "Delta Sync indexes",
+            text: "A Delta Sync index computes embeddings from a source Delta table and keeps the index in sync as rows change.",
+            url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
+          },
+          {
+            id: "3",
+            title: "Direct access indexes",
+            text: "A direct-access index lets you upsert documents yourself; with managed embeddings Databricks embeds a text column on write and query.",
+            url: "https://docs.databricks.com/aws/en/generative-ai/create-query-vector-search",
+          },
+          {
+            id: "4",
+            title: "Autocomplete and universal search",
+            text: "Autocomplete is a small-limit search over one index; universal search fans a query across every configured index and merges the hits.",
+            url: "https://docs.databricks.com/aws/en/ai-search/ai-search",
+          },
+          {
+            id: "5",
+            title: "Unity Catalog governance",
+            text: "Indexes are Unity Catalog objects, so search runs under the caller's identity and SELECT permissions on the index apply.",
+            url: "https://docs.databricks.com/aws/en/data-governance/unity-catalog",
+          },
+        ],
+      },
+    }),
     mastra({
       storage: true,
       memory: true,

@@ -39,7 +39,7 @@ import type {
   SearchResult,
   UpsertResult,
 } from "@dbx-tools/shared-ai-search";
-import { log, string } from "@dbx-tools/shared-core";
+import { async as asyncUtil, log, string } from "@dbx-tools/shared-core";
 import { ModelClass } from "@dbx-tools/shared-model";
 import {
   DEFAULT_MODE,
@@ -183,10 +183,27 @@ export interface CreateIndexOptions {
   embeddingModel?: string;
   /** Vector Search endpoint to host the index on. Defaults to the plugin's `endpoint`. */
   endpoint?: string;
-  /** For a direct-access index: the embedding vector dimension (required, no source table). */
+  /** For a direct-access index: the embedding vector dimension (self-managed vectors, no source table). */
   embeddingDimension?: number;
   /** For a direct-access index: the column the vector is stored in. Defaults to `embedding`. */
   embeddingVectorColumn?: string;
+  /**
+   * For a direct-access index: let Databricks MANAGE embeddings from a text
+   * column. Set this (with an `embeddingModel`) instead of `embeddingDimension`
+   * to get a text-searchable direct-access index you upsert plain rows into
+   * (`{ id, text, ... }`) - Databricks embeds the text column on write AND on
+   * query, so no vectors or source table are needed. This is the lightest real
+   * index: no Delta table, no warehouse.
+   */
+  managedEmbeddings?: boolean;
+  /**
+   * For a MANAGED direct-access index: the column-name -> type map used to
+   * build the index `schema_json` (types: `string`, `int`, `long`, `float`,
+   * `double`, `boolean`, `date`, `timestamp`). Must include the primary key and
+   * the embedding source column. Defaults to `{ id: "string", text: "string" }`
+   * merged with the resolved key/source-column names.
+   */
+  schema?: Record<string, string>;
   /** Sync mode for a Delta Sync index. `TRIGGERED` (default) syncs on demand; `CONTINUOUS` keeps fresh. */
   pipelineType?: "TRIGGERED" | "CONTINUOUS";
   /** Extra columns to sync alongside the embedding source (Delta Sync). */
@@ -201,6 +218,23 @@ export interface EnsureEndpointOptions {
   wait?: boolean;
   /** External cancellation. */
   signal?: AbortSignal;
+}
+
+/**
+ * Options for {@link SearchClient.provision} - a one-call "make this index real
+ * and searchable" used at boot or in a seed script. It ensures the endpoint,
+ * ensures the index, and (optionally) seeds documents when the index is empty.
+ */
+export interface ProvisionOptions extends CreateIndexOptions {
+  /** Documents to seed when the index has no rows yet. Skipped if it already has data. */
+  seed?: SearchDocument[];
+  /**
+   * Wait for the endpoint AND index to come online before returning (needed
+   * before seeding). Defaults to true. Endpoint creation can take many minutes.
+   */
+  wait?: boolean;
+  /** How long to wait for readiness before giving up. Defaults to 20 minutes. */
+  timeoutMs?: number;
 }
 
 /**
@@ -428,24 +462,54 @@ export class SearchClient {
     }
     const primaryKey = options.primaryKey ?? "id";
     const direct = !options.sourceTable;
+    const sourceColumn = options.embeddingSourceColumn ?? "text";
+    // A direct-access index is MANAGED (Databricks embeds a text column) when
+    // asked explicitly or when no self-managed vector dimension is given.
+    const managed = direct && (options.managedEmbeddings || !options.embeddingDimension);
 
-    if (direct && !options.embeddingDimension) {
+    if (direct && !managed && !options.embeddingDimension) {
       throw new ExecutionError(
-        "ai-search: a direct-access index needs `embeddingDimension` (or pass `sourceTable` for Delta Sync)",
+        "ai-search: a self-managed direct-access index needs `embeddingDimension` " +
+          "(or set `managedEmbeddings` for a text-searchable one, or `sourceTable` for Delta Sync)",
         { context: { operation: "createIndex" } },
       );
     }
 
-    const embeddingModel = direct
-      ? undefined
-      : ((await this.resolveEmbeddingModel(options.embeddingModel, options.signal)) ?? undefined);
-    if (!direct && !embeddingModel) {
+    // Delta Sync and MANAGED direct-access both embed a text column, so both
+    // resolve an embedding model; a self-managed direct-access index does not.
+    const needsModel = !direct || managed;
+    const embeddingModel = needsModel
+      ? ((await this.resolveEmbeddingModel(options.embeddingModel, options.signal)) ?? undefined)
+      : undefined;
+    if (needsModel && !embeddingModel) {
       throw new ExecutionError(
         "ai-search: could not resolve an embedding model; pass `embeddingModel`",
         { context: { operation: "createIndex" } },
       );
     }
-    const sourceColumn = options.embeddingSourceColumn ?? "text";
+
+    const directSpec = managed
+      ? {
+          direct_access_index_spec: {
+            embedding_source_columns: [
+              { name: sourceColumn, embedding_model_endpoint_name: embeddingModel },
+            ],
+            schema_json: JSON.stringify(
+              options.schema ?? { [primaryKey]: "string", [sourceColumn]: "string" },
+            ),
+          },
+        }
+      : {
+          direct_access_index_spec: {
+            embedding_vector_columns: [
+              {
+                name: options.embeddingVectorColumn ?? "embedding",
+                embedding_dimension: options.embeddingDimension,
+              },
+            ],
+            ...(options.schema ? { schema_json: JSON.stringify(options.schema) } : {}),
+          },
+        };
 
     await this.withClient("createIndex", options.signal, (client, context) =>
       client.vectorSearchIndexes.createIndex(
@@ -455,16 +519,7 @@ export class SearchClient {
           primary_key: primaryKey,
           index_type: direct ? "DIRECT_ACCESS" : "DELTA_SYNC",
           ...(direct
-            ? {
-                direct_access_index_spec: {
-                  embedding_vector_columns: [
-                    {
-                      name: options.embeddingVectorColumn ?? "embedding",
-                      embedding_dimension: options.embeddingDimension,
-                    },
-                  ],
-                },
-              }
+            ? directSpec
             : {
                 delta_sync_index_spec: {
                   source_table: options.sourceTable,
@@ -500,6 +555,57 @@ export class SearchClient {
     } catch {
       return this.createIndex(name, options);
     }
+  }
+
+  /**
+   * Ensure an index exists, is online, and (optionally) holds seed data - the
+   * "wire up a real index on boot" path. Idempotent and cheap to call every
+   * boot: it creates the endpoint and index only if missing, waits for them to
+   * come online, and seeds documents ONLY when the index is still empty.
+   *
+   * For the demo/dummy-data case this needs no Delta table and no warehouse:
+   * the default is a MANAGED direct-access index (Databricks embeds the `text`
+   * column on write and query), so seeding is just an `addDocuments` of plain
+   * rows and search-by-text works immediately.
+   */
+  async provision(name: string, options: ProvisionOptions = {}): Promise<IndexInfo> {
+    const wait = options.wait ?? true;
+    const timeoutMs = options.timeoutMs ?? 20 * 60 * 1000;
+    const endpoint = options.endpoint ?? this.config.endpoint;
+    if (endpoint) await this.ensureEndpoint(endpoint, { wait, signal: options.signal });
+
+    const { seed: _seed, wait: _wait, timeoutMs: _timeoutMs, ...createOptions } = options;
+    let info = await this.ensureIndex(name, createOptions);
+
+    if (wait && !info.ready) info = await this.waitForIndexReady(name, timeoutMs, options.signal);
+
+    const seed = options.seed ?? [];
+    if (seed.length > 0 && (info.rowCount ?? 0) === 0) {
+      await this.addDocuments(name, seed, options.signal);
+      logger.info("index-seeded", { index: name, count: seed.length });
+      info = await this.getIndex(name, options.signal);
+    }
+    return info;
+  }
+
+  /** Poll an index until it reports ready, or throw after {@link timeoutMs}. */
+  private async waitForIndexReady(
+    name: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<IndexInfo> {
+    const deadline = Date.now() + timeoutMs;
+    let info = await this.getIndex(name, signal);
+    while (!info.ready) {
+      if (Date.now() > deadline) {
+        throw new ExecutionError(`ai-search: index ${name} did not come online in time`, {
+          context: { operation: "provision" },
+        });
+      }
+      await asyncUtil.sleep(5000, signal);
+      info = await this.getIndex(name, signal);
+    }
+    return info;
   }
 
   /** Trigger a sync of a Delta Sync index from its source table. */

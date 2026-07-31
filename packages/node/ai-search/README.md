@@ -43,9 +43,15 @@ needs - so search is one plugin and, in the simple case, zero config.
   [`@dbx-tools/model`](../model): a loose name fuzzy-matches the live catalogue,
   or the best embedding endpoint is chosen automatically.
 - Index lifecycle without the ceremony: `createIndex` / `ensureIndex` (Delta
-  Sync from a source table, or direct-access with a dimension), `syncIndex`,
+  Sync from a source table, self-managed direct-access with a dimension, or a
+  managed direct-access index that embeds a text column - no Delta table or
+  warehouse), `provision` (ensure + seed in one idempotent call), `syncIndex`,
   `deleteIndex`, `listIndexes`, and `ensureEndpoint` - each inferring the
   endpoint, embedding model, primary key, and columns from sensible defaults.
+- Wire up a real index on boot with `ensureOnSetup`: the plugin provisions the
+  endpoint + index and seeds documents in the background using the app's SDK
+  auth (env or `DATABRICKS_CONFIG_PROFILE`), so a fresh deployment is searchable
+  with no manual setup.
 
 ## Why Use This Over Native AppKit
 
@@ -135,9 +141,25 @@ await client.ensureIndex("main.support.docs", {
 await client.syncIndex("main.support.docs");
 await client.deleteIndex("main.support.docs");
 
-// Direct-access index you write vectors to yourself (no source table).
+// Managed direct-access index (the lightest REAL index): Databricks embeds a
+// text column on write AND query, so no Delta table, no warehouse, no vectors.
+await client.createIndex("main.support.docs", {
+  endpoint: "my-vs-endpoint",
+  // managed by default when no embeddingDimension is given
+});
+await client
+  .index("main.support.docs")
+  .addDocuments([{ id: "1", text: "AI Search finds the most relevant documents for a query." }]);
+
+// Self-managed direct-access index you write vectors to yourself.
 await client.createIndex("main.support.vectors", { embeddingDimension: 1024 });
 await client.index("main.support.vectors").addDocuments([{ id: "1", embedding: [/* … */] }]);
+
+// One call to make an index real AND seeded (idempotent - safe every boot).
+await client.provision("main.support.docs", {
+  endpoint: "my-vs-endpoint",
+  seed: [{ id: "1", text: "Databricks AI Search overview", url: "https://…" }],
+});
 ```
 
 The `SearchIndex` handle mirrors these: `index.ensure(opts)`, `index.sync()`,
@@ -150,6 +172,34 @@ common Delta Sync case, or an `embeddingDimension` for a direct-access index),
 and `sync_index` refreshes a Delta Sync index from its source table. They are
 gated because they change infrastructure, so grant them only where a caller
 should be able to set up or refresh indexes.
+
+### Provision a real index on boot
+
+`ensureOnSetup` makes the plugin wire up a real index when the app starts, using
+the boot-time SDK auth (env vars or a `DATABRICKS_CONFIG_PROFILE`). It ensures
+the endpoint + index exist and seeds documents only when the index is empty, all
+in the background so a slow first-time endpoint build never blocks the server.
+The default is a managed direct-access index, so the seed rows are plain
+objects and search-by-text works immediately - no Delta table, no warehouse.
+
+```ts
+aiSearch({
+  index: "main.support.docs",
+  endpoint: "my-vs-endpoint",
+  ensureOnSetup: {
+    embeddingModel: "databricks-gte-large-en", // optional; best embedding endpoint otherwise
+    documents: [
+      { id: "1", title: "Overview", text: "AI Search finds relevant docs.", url: "https://…" },
+      { id: "2", title: "Indexes", text: "Delta Sync vs. direct access." },
+    ],
+    // schema inferred from the first row; primaryKey/textColumn default to id/text
+  },
+});
+```
+
+Idempotent: later boots see the endpoint, index, and rows already present and do
+nothing. Point `ensureOnSetup.sourceTable` at a Delta table to provision a Delta
+Sync index instead of a managed direct-access one.
 
 ## Configuration
 
@@ -167,6 +217,7 @@ default.
 | `embeddingModel` | `AI_SEARCH_EMBEDDING_MODEL`                         | best embedding endpoint | Embedding endpoint for index creation.                                                     |
 | `timeoutMs`      | `AI_SEARCH_TIMEOUT_MS`                              | `30000`                 | Per-call timeout.                                                                          |
 | `allowWrite`     | `AI_SEARCH_WRITE`                                   | `false`                 | Enable the write tools (`add_documents` / `create_index` / `sync_index`) and their routes. |
+| `ensureOnSetup`  | –                                                   | –                       | Provision the endpoint + index and seed documents at boot (background).                    |
 
 ## Modules
 
