@@ -39,16 +39,14 @@
  *   - `false`: never publish locally.
  *   - a URL: always publish to that registry.
  */
-import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
-import { resolve } from "node:path";
-import { Command, Option } from "commander";
 import { exec, project } from "@dbx-tools/core";
 import { log, net } from "@dbx-tools/shared-core";
+import { Command, Option } from "commander";
+import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;
-const WORKSPACE_CONCURRENCY = String(availableParallelism());
 type Level = (typeof LEVELS)[number];
 
 /** A standalone in-repo project released alongside the root, on its own tag prefix. */
@@ -231,7 +229,7 @@ program
       const tags = prefixes.map((prefix) => `${prefix}${version}`);
       logger.info(
         `bump ${base.join(".")} -> ${version} (${opts.level}); tags ${tags.join(", ")}` +
-          `${tagged.length ? "" : " [no remote tag]"}`,
+        `${tagged.length ? "" : " [no remote tag]"}`,
       );
       for (const t of tagged) {
         if (compareSemver(t.version, base) < 0) {
@@ -281,9 +279,7 @@ program
         logger.info("skipped local publish (--no-version left package.json unbumped)");
       }
       if (publishToLocalRegistry) {
-        logger.info(
-          `publishing ${version} to local registry ${localRegistry} with concurrency ${WORKSPACE_CONCURRENCY}`,
-        );
+        logger.info(`publishing ${version} to local registry ${localRegistry}`);
         const runIn = (cwd: string, command: string, args: string[]) =>
           exec.spawnSync(command, args, {
             cwd,
@@ -303,7 +299,6 @@ program
         runInRepo("chmod", ["-R", "u+w", "."]);
         runInRepo("pnpm", [
           "-r",
-          `--workspace-concurrency=${WORKSPACE_CONCURRENCY}`,
           "exec",
           "npm",
           "version",
@@ -316,7 +311,6 @@ program
         // attest. CI turns it on with `npm_config_provenance=true`.
         runInRepo("pnpm", [
           "-r",
-          `--workspace-concurrency=${WORKSPACE_CONCURRENCY}`,
           "publish",
           "--registry",
           localRegistry,

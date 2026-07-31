@@ -7,8 +7,35 @@
 import { spawnSync } from "child_process";
 import { Component } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
-import { JobPermission } from "projen/lib/github/workflows-model";
+import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
+
+const NODE_VERSION = "lts/*";
+const PNPM_VERSION = "10.33.0";
+
+interface PublishWorkflow {
+  readonly name: string;
+  readonly tagPrefix: string;
+  readonly steps: readonly JobStep[];
+  readonly workingDirectory?: string;
+}
+
+/** Shared checkout and toolchain setup for every npm publish workflow. */
+function publishSetupSteps(): JobStep[] {
+  const npmRegistry = spawnSync("npm", ["config", "get", "registry"]);
+  const registryUrl = (npmRegistry.stdout?.toString() ?? "").trim() || "https://registry.npmjs.org/";
+  return [
+    { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
+    { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: PNPM_VERSION } },
+    {
+      name: "Setup Node.js",
+      uses: "actions/setup-node@v6",
+      with: { "node-version": NODE_VERSION, "registry-url": registryUrl },
+    },
+    // The lockfile is intentionally untracked and may be absent or stale in CI.
+    { name: "Install", run: "pnpm install --no-frozen-lockfile" },
+  ];
+}
 
 /**
  * A standalone project that lives in a repo SUBDIRECTORY but is NOT a member of
@@ -116,6 +143,33 @@ export class DBXToolsRelease extends Component {
     }
   }
 
+  /** Author the common tag trigger, concurrency policy, permissions, and publish job. */
+  private authorPublishWorkflow(
+    project: DBXToolsNodeProject,
+    { name, tagPrefix, steps, workingDirectory }: PublishWorkflow,
+  ): void {
+    const workflow = new GithubWorkflow(project.github!, name, {
+      // Serialize publishes so two tags landing together cannot race to the
+      // registry, but never cancel a run already in flight: a half-published
+      // release is worse than a queued one.
+      limitConcurrency: true,
+      concurrencyOptions: { group: name, cancelInProgress: false },
+    });
+    // Read-only floor for any job that does not declare its own permissions;
+    // the publish job below overrides it with the `id-token` it needs.
+    workflow.file?.addOverride("permissions", { contents: "read" });
+    workflow.on({ push: { tags: [`${tagPrefix}*`] } });
+    workflow.addJob("publish", {
+      runsOn: ["ubuntu-latest"],
+      // `id-token: write` lets npm mint the OIDC token for provenance attestation.
+      permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+      timeoutMinutes: 30,
+      env: { CI: "true" },
+      steps: [...publishSetupSteps(), ...steps],
+      ...(workingDirectory ? { defaults: { run: { workingDirectory } } } : {}),
+    });
+  }
+
   /**
    * Emit the `release` GitHub workflow: push `<prefix>1.2.3` and every
    * publishable package is published to npm at 1.2.3. Setting the
@@ -123,39 +177,10 @@ export class DBXToolsRelease extends Component {
    * (no bump math).
    */
   private authorReleaseWorkflow(project: DBXToolsNodeProject): void {
-    const workflow = new GithubWorkflow(project.github!, "release", {
-      // Serialize publishes so two tags landing together cannot race to the
-      // registry, but never cancel a run already in flight: a half-published
-      // release is worse than a queued one.
-      limitConcurrency: true,
-      concurrencyOptions: { group: "release", cancelInProgress: false },
-    });
-    // Read-only floor for any job that does not declare its own permissions;
-    // the publish job below overrides it with the `id-token` it needs.
-    workflow.file?.addOverride("permissions", { contents: "read" });
-    workflow.on({ push: { tags: [`${this.tagPrefix}*`] } });
-    workflow.addJob("publish", {
-      runsOn: ["ubuntu-latest"],
-      // `id-token: write` lets npm mint the OIDC token for provenance attestation.
-      permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
-      timeoutMinutes: 30,
-      env: { CI: "true" },
+    this.authorPublishWorkflow(project, {
+      name: "release",
+      tagPrefix: this.tagPrefix,
       steps: [
-        { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
-        { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: "10.33.0" } },
-        {
-          name: "Setup Node.js",
-          uses: "actions/setup-node@v6",
-          with: {
-            "node-version": "lts/*",
-            "registry-url": getRegistryUrl()
-          },
-        },
-        // NOT frozen. The lockfile is gitignored by policy (it can carry a
-        // private-registry fingerprint), so CI often has none or a stale one -
-        // and `--frozen-lockfile` turns that into a hard release failure rather
-        // than resolving. A blocked publish is worse here than a resolved one.
-        { name: "Install", run: "pnpm install --no-frozen-lockfile" },
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Set it on
         // every package (manifests are projen-readonly, so unlock them first).
         {
@@ -193,32 +218,11 @@ export class DBXToolsRelease extends Component {
     project: DBXToolsNodeProject,
     { name, directory, tagPrefix }: StandaloneRelease,
   ): void {
-    const workflow = new GithubWorkflow(project.github!, name, {
-      limitConcurrency: true,
-      concurrencyOptions: { group: name, cancelInProgress: false },
-    });
-    workflow.file?.addOverride("permissions", { contents: "read" });
-    workflow.on({ push: { tags: [`${tagPrefix}*`] } });
-    workflow.addJob("publish", {
-      runsOn: ["ubuntu-latest"],
-      // `id-token: write` lets npm mint the OIDC token for provenance attestation.
-      permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
-      timeoutMinutes: 30,
-      defaults: { run: { workingDirectory: directory } },
-      env: { CI: "true" },
+    this.authorPublishWorkflow(project, {
+      name,
+      tagPrefix,
+      workingDirectory: directory,
       steps: [
-        { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
-        { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: "10.33.0" } },
-        {
-          name: "Setup Node.js",
-          uses: "actions/setup-node@v6",
-          with: { "node-version": "lts/*", "registry-url": getRegistryUrl() },
-        },
-        // NOT frozen. The lockfile is gitignored by policy (it can carry a
-        // private-registry fingerprint), so CI often has none or a stale one -
-        // and `--frozen-lockfile` turns that into a hard release failure rather
-        // than resolving. A blocked publish is worse here than a resolved one.
-        { name: "Install", run: "pnpm install --no-frozen-lockfile" },
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. package.json
         // is projen-generated read-only, so unlock it before `npm version` writes.
         {
@@ -239,7 +243,4 @@ export class DBXToolsRelease extends Component {
   }
 }
 
-function getRegistryUrl(): string {
-  const npmRegistry = spawnSync("npm", ["config", "get", "registry"]);
-  return (npmRegistry.stdout?.toString() ?? "").trim() || "https://registry.npmjs.org/";
-}
+
