@@ -13,6 +13,13 @@ env:
     valueFrom: mlflow-experiment
   - name: MLFLOW_TRACKING_URI
     value: databricks
+  # Apps ingress stamps traceparent on every request. Without this, every HTTP
+  # span is a child of a platform span that never lands in UC OTel tables, so
+  # MLflow's `*_trace_unified` view silently drops every chat turn. Harmless
+  # locally (no OTLP sidecar). Pair with `telemetry_export_destinations` on the
+  # app resource in databricks.yml once the experiment has a UC trace location.
+  - name: OTEL_PROPAGATORS
+    value: none
   # SMTP for the approval-gated `send_email` tool. The values live in the
   # `dbx-tools-demo` Databricks secret scope so no credential is committed
   # here; grant the app's service principal READ on that scope.

@@ -133,6 +133,14 @@ resources:
         #
         # The matching `valueFrom: mlflow-experiment` in app.yaml resolves to
         # the experiment id, so the id is declared once, here.
+        #
+        # To also persist OTel spans into the experiment's UC trace location
+        # (required for chat turns to show up as MLflow traces - managed MLflow
+        # has no OTLP ingest), add `telemetry_export_destinations` on this app
+        # pointing at that location's `${target}_otel_{spans,logs,metrics}`
+        # tables, set `OTEL_PROPAGATORS=none` (already in app.yaml), and grant
+        # the app SP USE_CATALOG / USE_SCHEMA / SELECT / MODIFY. See
+        # `@dbx-tools/appkit-mastra` README "Databricks Apps -> Unity Catalog".
         - name: mlflow-experiment
           experiment:
             experiment_id: "798709075143130"

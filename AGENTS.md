@@ -1117,6 +1117,22 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   default on). Native is always preferred. `search.ts` calls the serving REST
   surface through the OBO client's `apiClient.request({payload})` (same pattern
   as `appkit/src/lakebase-resolver.ts`). `web_fetch` also uses got-scraping.
+- **Apps OTel / MLflow traces go through Unity Catalog, not OTLP-to-workspace.**
+  Managed MLflow has no OTLP ingest (`/api/2.0/mlflow/v1/traces` 404s). On a
+  Databricks App, declare `telemetry_export_destinations` (unity_catalog,
+  all three of `traces_table` / `logs_table` / `metrics_table`) pointing at the
+  MLflow experiment's existing UC trace location (`${schema}.${target}_otel_*`)
+  so the platform injects a local OTLP sidecar. Set `OTEL_PROPAGATORS=none`:
+  Apps ingress stamps `traceparent` on every request, and without that the UC
+  `*_trace_unified` view (root = empty `parent_span_id`) silently drops every
+  chat turn. `@dbx-tools/appkit-mastra` owns no exporter - `OtelBridge` rides
+  AppKit's global tracer, and `traceIo.attachChatTurnTraceIo` (auto-wired on
+  the Mastra sub-app) copies turn I/O onto the root span as `mlflow.spanInputs`
+  / `mlflow.spanOutputs` because Mastra's `mastra.agent_run.*` attrs sit on a
+  child the view never reads. Do not adopt `mlflow-tracing` TS SDK for this
+  path (it steals the global provider and writes a different store). Details
+  live in `packages/node/appkit-mastra/README.md` under Feedback And
+  Observability.
 - **Generated API-docs links are ABSOLUTE, base-prefixed, and verify-and-drop.**
   Starlight serves every content page at a trailing-slash directory route
   (`/api/<pkg>/namespace-x/`), so a bare relative link between flat sibling

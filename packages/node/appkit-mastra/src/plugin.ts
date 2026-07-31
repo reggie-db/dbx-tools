@@ -103,6 +103,7 @@ import {
   isMastraRequestAllowed,
   MastraServer,
 } from "./server.ts";
+import { attachChatTurnTraceIo } from "./trace-io.ts";
 import { resolveServingConfig } from "./serving.ts";
 import { fetchStatementData, STATEMENT_ROW_CAP } from "./statement.ts";
 import { threadsRoute } from "./threads.ts";
@@ -1061,6 +1062,12 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     });
     this.mastraApp = express();
     attachRoutePatchMiddleware(this.mastraApp);
+    // Stamp chat request/response onto the HTTP root span so MLflow's
+    // UC `*_trace_unified` view can surface them (Mastra's own
+    // `mastra.agent_run.*` attributes sit on a child span the view
+    // never reads). Must run before `MastraServer.init` so the layer
+    // sits ahead of the agent routes.
+    attachChatTurnTraceIo(this.mastraApp);
     this.mastraServer = new MastraServer(this.config, {
       app: this.mastraApp,
       mastra: this.mastra,

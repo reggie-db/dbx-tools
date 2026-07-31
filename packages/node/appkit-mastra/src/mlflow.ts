@@ -5,7 +5,9 @@
  *
  * Feedback attaches to a trace, and the plugin's spans reach MLflow
  * through the same OTel pipeline as every other AppKit span (see
- * `observability.ts`). MLflow derives its trace id from the OpenTelemetry
+ * `observability.ts`). On Databricks Apps that pipeline is the UC
+ * sidecar injected by `telemetry_export_destinations`, not a direct
+ * workspace OTLP URL. MLflow derives its trace id from the OpenTelemetry
  * trace id (`tr-<hex(otelTraceId)>`), so the server stamps the active
  * trace id on each turn's response and the client sends it back here.
  *

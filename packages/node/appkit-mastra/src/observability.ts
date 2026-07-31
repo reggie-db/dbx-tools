@@ -30,6 +30,15 @@
  * registered at all (unless `observability: true` forces it on), so
  * Mastra does not emit `[OtelBridge] No OTEL span found` warnings.
  *
+ * On Databricks Apps the supported sink is Unity Catalog via
+ * `telemetry_export_destinations` (the platform injects the local OTLP
+ * sidecar). Managed MLflow has no OTLP ingest endpoint - do not point
+ * `OTEL_EXPORTER_OTLP_*` at the workspace host. Set
+ * `OTEL_PROPAGATORS=none` so Apps ingress `traceparent` does not hide
+ * every request-scoped root span from the UC `*_trace_unified` view.
+ * Chat request/response on that root span is stamped by
+ * `traceIo.attachChatTurnTraceIo` (see `trace-io.ts`).
+ *
  * @module
  */
 
@@ -39,6 +48,7 @@ import { Observability } from "@mastra/observability";
 import { OtelBridge } from "@mastra/otel-bridge";
 
 import { TRACE_REQUEST_CONTEXT_KEYS } from "./config.ts";
+import { mlflowEnabled } from "./mlflow.ts";
 
 const logger = log.logger("mastra/observability");
 
@@ -127,11 +137,17 @@ export async function buildObservability(
     : otelBase
       ? `${otelBase.replace(/\/+$/, "")}/v1/traces`
       : undefined;
+  // `mlflowEnabled` is the same gate that flips chat feedback on, so the
+  // boot line is the one-glance check that both halves of the Apps UC
+  // pipeline (OTLP sidecar + experiment id) are present.
+  const feedback = mlflowEnabled();
   logger.info("Mastra observability wired through OTel bridge", {
     serviceName,
     requestContextKeys,
     otelBase: otelBase ?? "<unset>",
     resolvedTracesUrl: resolvedTracesUrl ?? "<unset>",
+    feedback,
+    observability: feedback ? "mlflow" : "otel",
   });
 
   return new Observability({

@@ -484,7 +484,10 @@ operations aligned around the same conversation id.
 `observability.buildObservability()` wires Mastra tracing when OTLP export is
 configured. `mlflow.resolveFeedbackEnabled()` turns MLflow feedback on when both
 trace export and an MLflow experiment are configured, unless the plugin config
-forces a value.
+forces a value. The plugin also stamps each chat turn's request/response onto
+the HTTP root span via `traceIo.attachChatTurnTraceIo()` so MLflow's UC
+`*_trace_unified` view can show them (Mastra's own `mastra.agent_run.*`
+attributes sit on a child span that view never reads).
 
 ```ts
 plugin.mastra({
@@ -496,6 +499,65 @@ plugin.mastra({
 `mlflow.logFeedback()` logs a human assessment against the active MLflow trace.
 The response header name and request/response schemas live in
 [`@dbx-tools/shared-mastra`](../../shared/mastra).
+
+### Databricks Apps -> Unity Catalog (the supported path)
+
+Managed MLflow has **no** OTLP ingest endpoint. Do not set
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to the workspace host - probes of
+`/api/2.0/mlflow/v1/traces`, `/otlp/v1/traces`, and similar paths 404. The
+mechanism that works is Databricks Apps telemetry: declare
+`telemetry_export_destinations` on the app resource so the platform injects a
+local OTLP sidecar (`OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4314`,
+`OTEL_EXPORTER_OTLP_PROTOCOL=grpc`) and persists spans to Unity Catalog. Point
+the three tables at the MLflow experiment's existing UC trace location (do not
+invent a parallel table set):
+
+```yaml
+variables:
+  telemetry_schema:
+    default: my_catalog.my-traces-schema
+  mlflow_experiment_id:
+    default: "123456789"
+
+resources:
+  apps:
+    my_app:
+      # ...
+      config:
+        env:
+          - name: MLFLOW_EXPERIMENT_ID
+            value: ${var.mlflow_experiment_id}
+          # Apps ingress stamps traceparent on every request. Without this,
+          # every HTTP span is a child of a platform span that never lands in
+          # the UC tables, so `*_trace_unified` (root = empty parent_span_id)
+          # discards every chat turn.
+          - name: OTEL_PROPAGATORS
+            value: none
+      telemetry_export_destinations:
+        - unity_catalog:
+            traces_table: ${var.telemetry_schema}.${bundle.target}_otel_spans
+            logs_table: ${var.telemetry_schema}.${bundle.target}_otel_logs
+            metrics_table: ${var.telemetry_schema}.${bundle.target}_otel_metrics
+```
+
+All three table fields are required. The app service principal needs
+`USE_CATALOG` / `USE_SCHEMA` / `SELECT` / `MODIFY` on that catalog.schema (the
+Apps API also tries to grant access and fails with 403 if you lack `MANAGE` on
+the catalog). Reject `mlflow-tracing` TypeScript SDK for this path: it claims
+the global provider AppKit already owns and writes to a different store.
+
+Success in the boot log looks like:
+
+```
+[observability] Mastra observability wired through OTel bridge {
+  otelBase: 'http://localhost:4314', feedback: true, observability: 'mlflow'
+}
+```
+
+Verify with SQL against the UC `*_trace_unified` view (the REST
+`traces/search` API only covers the experiment store, not UC-backed traces).
+Schema names with hyphens need backticks; `attributes` is a `VARIANT`, so use
+`attributes:['key']::string` rather than `map_keys()`.
 
 ## MCP Exposure
 
@@ -580,13 +642,14 @@ Every value can also be set through plugin config, which wins. These are the
 fallbacks, so a deployment that already follows AppKit's Databricks env naming
 needs no extra wiring.
 
-| Variable                                                            | Effect                                                                         |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Model used when neither the agent nor `defaultModel` names one.                |
-| `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                              |
-| `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO) or `service-principal` for the agents' Databricks calls. |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset.      |
-| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset.      |
+| Variable                                                            | Effect                                                                                                                  |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Model used when neither the agent nor `defaultModel` names one.                                                         |
+| `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                                                                       |
+| `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO) or `service-principal` for the agents' Databricks calls.                                          |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. On Apps, the telemetry sidecar injects these. |
+| `OTEL_PROPAGATORS`                                                  | Set to `none` on Databricks Apps so ingress `traceparent` does not hide every chat trace from UC `*_trace_unified`.     |
+| `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset.                                               |
 
 ## Configuration Reference
 
@@ -664,7 +727,8 @@ client that talks to these routes.
   `.metadata.json` so a source is re-downloaded at most once a day
   (`refreshTtlMs`).
 - `mcp` - MCP server construction.
-- `observability` / `mlflow` - tracing and feedback.
+- `observability` / `mlflow` / `traceIo` - tracing, feedback, and stamping chat
+  turn I/O onto the HTTP root span for MLflow's UC `*_trace_unified` view.
 - `server` / `rest` / `processors` - Express dispatch, Databricks REST helpers,
   stream/result processors.
 
