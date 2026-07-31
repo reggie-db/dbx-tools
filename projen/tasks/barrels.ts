@@ -19,11 +19,28 @@ if (process.argv.includes("--watch")) {
   watchLoop("barrels", watchRoots(), (changed) => {
     const pkgDirs = recordedPackages().map((p) => p.dir);
     const dirs = new Set<string>();
+    const unowned: string[] = [];
     for (const p of changed) {
       const owner = ownerPackageDir(p, pkgDirs);
       if (owner) dirs.add(owner);
+      else unowned.push(p);
     }
-    const n = generateBarrels(dirs.size ? { dirs: [...dirs] } : {});
+    // A change under a package root that no RECORDED package owns is almost always a
+    // NEW package folder: it has no `pnpm-workspace.yaml` member yet, so there is no
+    // barrel for this watcher to target and only a re-synth can create one. Say so,
+    // rather than rebuilding every barrel in the repo - the previous fallback, which
+    // did a full-repo sweep on behalf of a file it could not barrel anyway, and in
+    // doing so raced the projenrc watcher's own post-synth sweep.
+    if (dirs.size === 0) {
+      if (unowned.length) {
+        logger.warn(
+          `no recorded package owns ${string.pluralize(unowned.length, "change")}; ` +
+            "run `pnpm exec projen` (or touch .projenrc.ts) to pick up a new package folder",
+        );
+      }
+      return;
+    }
+    const n = generateBarrels({ dirs: [...dirs] });
     if (n) logger.success(`rebuilt ${string.pluralize(n, "barrel")}`);
   });
 } else {

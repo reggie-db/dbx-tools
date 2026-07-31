@@ -155,33 +155,49 @@ bump/publish it, then `pnpm update "@dbx-tools/*" --latest` and rebuild.
 ### Dev-link mode — for iterating on the CLIENT UI packages in THIS repo
 
 When you're editing the UI package source in `../packages/ui/**`, the
-bump → publish → update → rebuild loop is too slow. `dev-link` adds the
-client-reachable packages (`ui-*` + the browser-safe `shared-*` they
-pull) as pnpm workspace members and points the client app's `@dbx-tools/*` deps
-at that source, so a `vite build --watch` rebuilds the bundle on every edit:
+bump → publish → update → rebuild loop is too slow. Link mode points the client
+app's `@dbx-tools/*` deps at that source instead, so a `vite build --watch`
+rebuilds the bundle on every edit:
 
 ```bash
-node scripts/dev-link.mjs                                  # link client UI source
+DBX_TOOLS_LINK=1 pnpm install                              # client resolves @dbx-tools/* from source
 pnpm --filter @dbx-tools/demo-appkit-server dev            # server (unchanged, serves dist/)
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch  # rebuild dist/ on UI source edits
 # edit anything under ../packages/ui/**/src, refresh the browser — no republish.
 
-node scripts/dev-link.mjs --unlink                         # restore the registry consumer mode
+pnpm install                                               # restore the registry consumer mode
 ```
 
-`dev-link` discovers the linked set automatically — the closure of the client
-app's `@dbx-tools/*` deps followed through each package's own deps — so it needs
-no maintenance as packages are added or renamed. It edits only transient,
-gitignored files (`pnpm-workspace.yaml`, the app manifest, a `.dev-link.json`
-sidecar); run `--unlink` (or discard the changes) before committing.
+The mode is carried entirely by the `DBX_TOOLS_LINK` env var on the install, so
+there is nothing to remember beyond those two commands.
 
-**Client only, on purpose.** The SERVER packages are NOT linked: their
-transitive `@databricks/appkit` / `@mastra/*` would resolve to a second
-physical install (same version, different peer-hash) than the demo's, so
-singletons like AppKit's `CacheManager` initialize in one copy and are read
-from the other. The browser build sidesteps this via vite's React `dedupe`,
-which has no server-side (tsx) equivalent. So server changes still go through
+The switch happens at RESOLVE time, in [`.pnpmfile.cjs`](.pnpmfile.cjs), so
+nothing on disk changes: no manifest is rewritten, no workspace member is added,
+and there is no state file to restore. Link mode leaves `git status` clean, which
+is the point. An earlier `scripts/dev-link.mjs` edited the app manifest and
+`pnpm-workspace.yaml` in place, and both are projen-generated and read-only while
+`pnpm-workspace.yaml` is also committed, so a forgotten undo landed local dev
+state in git.
+
+The linked set is discovered automatically, as the closure of the client app's
+`@dbx-tools/*` deps followed through each source package's own, so packages
+added, removed, or renamed need no edit.
+
+**Client only, on purpose.** The SERVER packages are NOT linked. A `link:`ed
+package resolves its own dependencies from the MAIN repo's `node_modules`, which
+is a different physical install from the demo's: the two trees currently hold
+`@databricks/appkit@0.43.1` under different peer-hashes, and `@mastra/core` at
+different versions outright. Singletons like AppKit's `CacheManager` then
+initialize in one copy and are read from the other. The browser build sidesteps
+this because Vite bundles from source and dedupes React
+(`app/appkit-demo/vite.config.override.js`); tsx has no equivalent. Unifying it
+needs one shared store, meaning one workspace, which is the standalone-consumer
+property this demo exists to show. So server changes still go through
 bump → publish → `pnpm update` → restart; only the UI packages source-link.
+
+Note this scoping is by CONSUMER, not by package name: the server also depends on
+`@dbx-tools/shared-core`, which the client pulls too, so only the client app and
+the packages reachable from it are rewritten.
 
 ## Required env
 

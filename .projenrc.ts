@@ -286,6 +286,12 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
   p.addDeps("@dbx-tools/databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
 });
 
+// node-databricks-map: early / unfinished. Keep it out of `pnpm -r publish`
+// until it has a real surface.
+project.applyToProjects(root, { identifierName: "databricks-map", tags: "node" }, (p) => {
+  p.package.addField("private", true);
+});
+
 // node-email: server-side email add-on - SMTP transport (nodemailer) / local
 // outbox, markdown->HTML rendering (marked + juice), on-behalf-of sender
 // derivation, the approval-gated `send_email` Mastra tool, and the AppKit
@@ -676,6 +682,12 @@ for (const task of [SCOPE, "dbxt"]) {
     receiveArgs: true,
   });
 }
+
+
+root.addTask("demo", {
+  exec: "cd demo && NODE_ENV=development pnpm --filter @dbx-tools/demo-appkit-server dev",
+  description: "Run the demo",
+});
 
 // Both tag-driven release workflows are authored by the engine's
 // `DBXToolsRelease` component (see `projen/src/release.ts`):

@@ -693,26 +693,53 @@ that it skips `projen/` (not a workspace member), which needs
 `demo/` is a standalone downstream CONSUMER: it installs `@dbx-tools/*` from the
 registry in `demo/.npmrc` (a local verdaccio), so by default it runs PUBLISHED
 package versions, not your working tree. To iterate on the CLIENT UI packages
-against the running demo WITHOUT a bump/publish/reinstall each time, use dev-link:
+against the running demo WITHOUT a bump/publish/reinstall each time, set
+`DBX_TOOLS_LINK=1` on the install:
 
 ```sh
-node demo/scripts/dev-link.mjs          # link the client UI packages to packages source
+DBX_TOOLS_LINK=1 pnpm install           # client resolves @dbx-tools/* from packages source
 # server (serves dist/, unchanged) + a client build-watch that rebuilds on UI edits:
 pnpm --filter @dbx-tools/demo-appkit-server dev
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch
-node demo/scripts/dev-link.mjs --unlink # restore the registry-consumer resolution
+pnpm install                            # restore the registry-consumer resolution
 ```
 
-`dev-link` adds the client-reachable packages (the closure of the
-client app's `@dbx-tools/*` deps: `ui-*` + browser-safe `shared-*`) as pnpm
-workspace members and switches the client app's deps to `workspace:*`; it edits
-only transient, gitignored files (`pnpm-workspace.yaml`, the app manifest, a
-`.dev-link.json` sidecar), and `--unlink` restores them. It is deliberately
-CLIENT-ONLY: linking the SERVER packages double-installs their `@databricks/appkit`
-/ `@mastra/*` (same version, different peer-hash) so AppKit singletons like
-`CacheManager` break ("not initialized"); the browser build avoids this via
-vite's React `dedupe`, which tsx has no equivalent for. Server changes still go
-through the publish cycle. See `demo/README.md` for the full two-mode explanation.
+**The mode switch is RESOLVE-time, not a file edit.** `demo/.pnpmfile.cjs` reads
+`DBX_TOOLS_LINK=1` and rewrites the client's `@dbx-tools/*` specifiers to `link:`
+paths under `../packages/**`; the env var on the install is the ENTIRE interface,
+with no wrapper task or script. Nothing on disk changes, so there is no restore
+step and link mode leaves `git status` clean. Do NOT reintroduce a script that
+edits manifests to do this: an earlier `demo/scripts/dev-link.mjs` rewrote the app
+`package.json` and `pnpm-workspace.yaml` in place, which meant clearing projen's
+read-only bit, inserting marker comments, and keeping a sidecar of the pristine
+contents - and since `pnpm-workspace.yaml` is COMMITTED, a forgotten undo landed
+local dev state in git.
+
+Two non-obvious constraints in that hook:
+
+- **The `link:` paths must be RELATIVE** (pnpm records a specifier verbatim in the
+  lockfile, so absolute ones pin it to one machine's home directory), and pnpm
+  resolves them against TWO different bases: a workspace MEMBER's dep resolves
+  against that member's own directory, while a transitively-linked package's dep
+  resolves against the directory holding `pnpm-lock.yaml`. Using the package's own
+  directory for both is what produced `Installing a dependency from a
+non-existent directory: <repo>/core`.
+- **Scoping is by CONSUMER, not by dependency name.** The server app also depends
+  on `@dbx-tools/shared-core`, which the client pulls too, so filtering on the dep
+  name alone would link the server's copy as a side effect. Only the client app
+  and the closure reachable from it are rewritten.
+
+It is deliberately CLIENT-ONLY. A `link:`ed package resolves its own deps from the
+MAIN repo's `node_modules`, a different physical install from the demo's: the two
+trees hold `@databricks/appkit@0.43.1` under different peer-hashes and
+`@mastra/core` at different versions outright, so AppKit singletons like
+`CacheManager` break ("not initialized"). The browser build avoids this because
+Vite bundles from source and dedupes React, which tsx has no equivalent for.
+`injected: true` does NOT rescue it - pnpm ignores it on an `overrides: link:`
+specifier, and the workspace-member form that honors it makes the demo install
+repoint the main repo's own `packages/*/node_modules` into the demo's store.
+Server changes still go through the publish cycle. See `demo/README.md` for the
+full two-mode explanation.
 
 ## Generated files — DO NOT edit by hand
 

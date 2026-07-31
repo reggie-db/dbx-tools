@@ -36,19 +36,13 @@
  * The result gets a do-not-edit header + read-only bit (see `./generated`).
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { find } from "@dbx-tools/path";
 import { string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
-import {
-  header,
-  makeReadonly,
-  makeWritable,
-  stampGenerated,
-  type HeaderOpts,
-} from "./generated.ts";
+import { header, makeReadonly, makeWritable, type HeaderOpts } from "./generated.ts";
 import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports.ts";
-import { isModuleFile, toPosix, recordedPackages } from "./packages.ts";
+import { isModuleFile, toPosix, recordedPackages, repoRoot } from "./packages.ts";
 
 /**
  * A `src`-relative posix path excluded from the root barrel:
@@ -292,9 +286,6 @@ function generateForPackage(pkgDir: string): number {
     return 0;
   }
 
-  // Unlock the read-only barrel so the rewrite below can replace it.
-  makeWritable(rootBarrel);
-
   // `./src/<path>` with the module's REAL extension, namespaced by its path
   // segments (camelCase; invalid identifiers suffixed with `Module`). The
   // extension is written because `tsc` rewrites it on emit
@@ -315,19 +306,59 @@ function generateForPackage(pkgDir: string): number {
   content = mergeCustomExports(content, pkgDir);
 
   // The barrel only *changes* when its set of exporting modules does. If the
-  // stamped result matches what's already on disk, restore the read-only bit we
-  // cleared above and report no change (0) - this keeps the watcher quiet on
-  // ordinary in-file edits (which leave the export * as … list identical).
+  // stamped result matches what's already on disk, leave the file - and its
+  // read-only bit - completely untouched and report no change (0). This keeps the
+  // watcher quiet on ordinary in-file edits (which leave the export * as … list
+  // identical), and it is also what keeps a no-op cycle off the read-only bit
+  // entirely: see {@link writeBarrel} for why unlocking a barrel we are not about
+  // to rewrite is what produced spurious EACCES failures.
   content = `${content.replace(/\n+$/, "")}\n`;
   const next = `${header(BARREL_HEADER)}\n${content}`;
-  if (before === next) {
-    makeReadonly(rootBarrel);
-    return 0;
-  }
+  if (before === next) return 0;
 
-  writeFileSync(rootBarrel, content);
-  stampGenerated(rootBarrel, BARREL_HEADER);
+  // Written whole (header included) rather than via `stampGenerated`, which would
+  // re-read and rewrite the file to prepend the same header - a second write, and
+  // therefore a second window in which the read-only bit can come back. `next` is
+  // byte-for-byte what the comparison above accepted, so the two cannot drift.
+  writeBarrel(rootBarrel, next);
+  makeReadonly(rootBarrel);
   return 1;
+}
+
+/**
+ * Attempts at unlocking and writing a barrel before giving up. A sibling process
+ * can restore the read-only bit between the two.
+ */
+const WRITE_ATTEMPTS = 3;
+
+/**
+ * Unlock a read-only barrel and replace it, retrying on `EACCES`.
+ *
+ * The unlock cannot be hoisted to the top of {@link generateForPackage}: several
+ * processes write barrels concurrently under `sync --watch` (the barrels watcher,
+ * and the projenrc watcher's post-synth `generateBarrels()` sweep), so any gap
+ * between `makeWritable` and the write is a window in which another process's
+ * `makeReadonly` lands and this write fails with
+ * `EACCES: permission denied, open '<pkg>/index.ts'`. The gap used to span all of
+ * the oxc parsing done for export hoisting, which made it wide enough to hit
+ * routinely. Keeping the unlock adjacent to the write shrinks it to nothing much,
+ * and a retry absorbs what is left.
+ *
+ * Do NOT "simplify" this back to a single unlock-then-write: the failure is
+ * timing-dependent, so it looks fine until a full-repo sweep runs against a
+ * concurrent one.
+ */
+function writeBarrel(file: string, content: string): void {
+  for (let attempt = 1; ; attempt++) {
+    makeWritable(file);
+    try {
+      writeFileSync(file, content);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "EACCES" || attempt >= WRITE_ATTEMPTS) throw err;
+    }
+  }
 }
 
 /**
@@ -335,10 +366,30 @@ function generateForPackage(pkgDir: string): number {
  * `pnpm-workspace.yaml` - the source of truth, read via `recordedPackages()`).
  * Returns the number of barrels whose contents actually changed (an unchanged
  * export surface is a no-op), so callers can stay quiet when nothing moved.
+ *
+ * Every package is attempted even if an earlier one fails, and the failures are
+ * re-thrown together as an `AggregateError` naming each package. Letting the first
+ * failure propagate instead abandoned every package after it in the iteration
+ * order, so one unwritable barrel silently left the rest of the repo stale with
+ * nothing in the log to say which packages had been skipped.
  */
 export function generateBarrels(opts: { dirs?: string[] } = {}): number {
   const dirs = opts.dirs ?? recordedPackages().map((p) => p.dir);
   let total = 0;
-  for (const dir of dirs) total += generateForPackage(dir);
+  const failures: { dir: string; err: unknown }[] = [];
+  for (const dir of dirs) {
+    try {
+      total += generateForPackage(dir);
+    } catch (err) {
+      failures.push({ dir, err });
+    }
+  }
+  if (failures.length) {
+    const names = failures.map((f) => relative(repoRoot, f.dir) || f.dir);
+    throw new AggregateError(
+      failures.map((f) => f.err),
+      `${string.pluralize(failures.length, "barrel")} failed: ${names.join(", ")}`,
+    );
+  }
   return total;
 }

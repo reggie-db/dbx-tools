@@ -201,13 +201,23 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
   // `@databricks/appkit-ui`'s stylesheet `@import`s `tw-animate-css`, so the
   // app (which owns the Tailwind build) must provide it.
   p.addDeps("tw-animate-css@catalog:");
+  // `src/index.css` `@import`s `@databricks/appkit-ui/styles.css` and the pages
+  // import its components, so the app uses it DIRECTLY and must declare it.
+  // Undeclared, it resolved only by accident: pnpm hoisted the copy that the
+  // published `@dbx-tools/ui-appkit` tarball dragged in. That breaks the moment
+  // `ui-appkit` is source-linked (`DBX_TOOLS_LINK=1 pnpm install`), because a
+  // `link:`ed package's own dependencies come from the main repo's tree, not the
+  // demo's - surfacing as `Can't resolve '@databricks/appkit-ui/styles.css'`.
+  p.addDeps("@databricks/appkit-ui@catalog:");
 });
 
 // Force-track the hand-authored dotfiles a consumer needs: projen's default
 // `**/.*` ignore would otherwise drop them. `.npmrc` points installs at the
 // registry the `@dbx-tools/*` packages live on; `.env.example` is the config
-// template a user copies to `.env`.
-project.gitignore.include("/.npmrc", "/.env.example");
+// template a user copies to `.env`; `.pnpmfile.cjs` resolves the client's
+// `@dbx-tools/*` deps to `../packages` source when `DBX_TOOLS_LINK=1` is set on
+// the install, and leaves them on the registry otherwise.
+project.gitignore.include("/.npmrc", "/.env.example", "/.pnpmfile.cjs");
 
 // Gitignore all generated files so the committed demo is hand-authored source
 // only - a copied folder regenerates them via `dbx-tools sync` / `pnpm install`.

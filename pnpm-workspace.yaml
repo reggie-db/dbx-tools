@@ -9,6 +9,7 @@ packages:
   - packages/node/appkit-web-search
   - packages/node/core
   - packages/node/databricks
+  - packages/node/databricks-map
   - packages/node/databricks-zerobus
   - packages/node/email
   - packages/node/fs

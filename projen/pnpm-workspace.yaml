@@ -1,0 +1,12 @@
+# pnpm workspace ROOT MARKER. Hand-authored, not generated.
+#
+# `projen/` sits inside the repo but is deliberately NOT a member of the root
+# pnpm workspace (the root links to it instead, via the repo `.pnpmfile.cjs`).
+# pnpm decides which workspace an install belongs to by walking UP for the
+# nearest `pnpm-workspace.yaml`, so without this file `pnpm install` here climbs
+# to the repo root and installs all 33 root projects instead of this one - and
+# `projen/.pnpmfile.cjs` never loads, because pnpm reads the hook from the
+# workspace root it settled on.
+#
+# `packages` is empty on purpose: this project has no members, it IS the root.
+packages: []

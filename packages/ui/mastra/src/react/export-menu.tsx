@@ -30,18 +30,22 @@ const FORMATS: ReadonlyArray<{
  * {@link ExportFormat}. `iconOnly` renders a compact icon trigger (used
  * inside message bubbles) with the label surfaced as a tooltip; the
  * default renders an icon + "Export" text button (used in the header).
+ * `disabled` renders the trigger inert, for when there is nothing complete
+ * to export yet (a thread whose history is still loading).
  */
 export const ExportMenu = ({
   onExport,
   iconOnly = false,
   tooltip = "Export",
+  disabled = false,
 }: {
   onExport: (format: ExportFormat) => void;
   iconOnly?: boolean;
   tooltip?: string;
+  disabled?: boolean;
 }) => {
   const trigger = iconOnly ? (
-    <Button type="button" size="icon" variant="ghost" className="size-7">
+    <Button type="button" size="icon" variant="ghost" className="size-7" disabled={disabled}>
       <DownloadIcon className="size-3" />
     </Button>
   ) : (
@@ -50,6 +54,7 @@ export const ExportMenu = ({
       size="sm"
       variant="outline"
       className="h-7 gap-1 rounded-full px-2.5 text-xs [&_svg]:size-3"
+      disabled={disabled}
     >
       <DownloadIcon className="size-3" />
       Export

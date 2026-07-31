@@ -118,6 +118,15 @@
         }
       ]
     },
+    "demo": {
+      "name": "demo",
+      "description": "Run the demo",
+      "steps": [
+        {
+          "exec": "cd demo && NODE_ENV=development pnpm --filter @dbx-tools/demo-appkit-server dev"
+        }
+      ]
+    },
     "eject": {
       "name": "eject",
       "description": "Remove projen from the project",

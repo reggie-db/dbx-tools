@@ -26,7 +26,24 @@
   --primary: var(--brand-color-primary);
   --primary-foreground: var(--brand-color-background);
   --ring: var(--brand-color-primary);
-  --accent: var(--brand-color-accent);
+  /*
+   * `--accent` is a SURFACE, not an identity color. In AppKit / shadcn it is the
+   * subtle hover + selected background (light theme `oklch(0.967 0.001 286)`,
+   * i.e. near-white) paired with a near-black `--accent-foreground`. Assigning
+   * the brand accent to it at full strength therefore put dark text on saturated
+   * `#00A972` in every hover and every selected row - the selected conversation
+   * in `ThreadSidebar`, which styles off `bg-accent text-accent-foreground`, was
+   * the worst of it.
+   *
+   * So tint rather than replace: a low percentage of the brand accent mixed into
+   * the CURRENT `--background`. Because `--background` is a neutral this bridge
+   * deliberately leaves to AppKit, the mix follows the active theme on its own -
+   * a pale wash in light mode, a deep one in dark - which keeps AppKit's own
+   * per-theme `--accent-foreground` (near-black / near-white) readable against
+   * it. That is also why `--accent-foreground` is NOT set here: pinning it would
+   * break whichever theme it was not chosen for.
+   */
+  --accent: color-mix(in oklab, var(--brand-color-accent) 18%, var(--background));
   --sidebar-primary: var(--brand-color-primary);
   --sidebar-primary-foreground: var(--brand-color-background);
   --sidebar-ring: var(--brand-color-primary);

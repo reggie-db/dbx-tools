@@ -95,7 +95,12 @@ barrels.generateBarrels();
 
 `generateCodegen()` reads `package.json` `codegen.inputs` and writes generated
 schema modules. `generateBarrels()` writes package-root `index.ts` barrels with
-module namespaces and flat unique type exports.
+module namespaces and flat unique type exports, returning the number that
+actually changed. A barrel whose export surface is unchanged is left untouched,
+read-only bit included, so concurrent writers never collide over it. Every
+package is attempted even if one fails; the failures are re-thrown together as an
+`AggregateError` naming each package, rather than the first one abandoning the
+rest of the sweep.
 
 ## Generate OpenAPI Clients
 

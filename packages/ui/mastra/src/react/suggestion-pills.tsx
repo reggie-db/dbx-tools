@@ -10,6 +10,12 @@ export interface SuggestionPillsProps {
   questions: string[];
   /** Invoked with the question text when a pill is clicked. */
   onSelect?: (question: string) => void;
+  /**
+   * Render the pills inert. Used while a thread's history is still loading,
+   * where a click would start a turn against a transcript that has not
+   * arrived yet.
+   */
+  disabled?: boolean;
   /** Extra classes for the wrapping flex row (layout / spacing). */
   className?: string;
 }
@@ -18,9 +24,14 @@ export interface SuggestionPillsProps {
  * Render a flex-wrapped row of suggestion pills. Pills grow vertically
  * for long questions (`h-auto` + `whitespace-normal`) and keep a
  * capsule shape that scales cleanly when text wraps to multiple lines.
- * Disabled when no `onSelect` is provided.
+ * Disabled when no `onSelect` is provided, or when `disabled` is set.
  */
-export const SuggestionPills = ({ questions, onSelect, className }: SuggestionPillsProps) => {
+export const SuggestionPills = ({
+  questions,
+  onSelect,
+  disabled = false,
+  className,
+}: SuggestionPillsProps) => {
   if (questions.length === 0) return null;
   return (
     <div className={cn("flex flex-wrap gap-1.5", className)}>
@@ -32,7 +43,7 @@ export const SuggestionPills = ({ questions, onSelect, className }: SuggestionPi
           variant="outline"
           className="h-auto max-w-full whitespace-normal rounded-2xl px-3 py-1.5 text-left text-xs font-normal leading-snug"
           onClick={() => onSelect?.(q)}
-          disabled={!onSelect}
+          disabled={disabled || !onSelect}
         >
           {q}
         </Button>

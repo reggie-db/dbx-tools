@@ -452,14 +452,19 @@ export async function provisionRemoteSkills(
         if (cached && isFresh(cached, resolveRefreshTtl(sourceOptions, options))) {
           skillNames.push(...cached.skills);
           if (!destination) localSkillPaths.push(cacheFS.root);
-          logger.debug("source:cached", {
+          logger.info("remote skill ready", {
             source: sourceOptions.source,
+            destination: databricksBasePath ?? cacheFS.root,
             downloadedAt: cached.downloadedAt,
             skills: cached.skills,
+            cached: true,
           });
           continue;
         }
 
+        logger.info("installing remote skill", {
+          source: sourceOptions.source,
+        });
         staging ??= await initializedScratch("mastra-remote-skills");
         const stagedDir = await stageSource(sourceOptions, staging.root, options);
         const staged = await collectSkillDirs(stagedDir);
@@ -482,9 +487,9 @@ export async function provisionRemoteSkills(
           localSkillPaths.push(await persistLocally(key, staged, record));
         }
         skillNames.push(...record.skills);
-        logger.debug("source:provisioned", {
+        logger.info("remote skill installed", {
           source: sourceOptions.source,
-          destination: databricksBasePath ?? "local-temp",
+          destination: databricksBasePath ?? localSkillPaths.at(-1),
           skills: record.skills,
         });
       } catch (err) {

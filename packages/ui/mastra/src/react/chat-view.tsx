@@ -342,6 +342,12 @@ export const ChatView = ({
     e.preventDefault();
     const text = input.trim();
     if (!text) return;
+    // The composer is disabled while history loads, but Enter-to-send routes
+    // here directly and a disabled textarea still receives no keydown only as
+    // long as the browser agrees - so gate the action itself too. Sending now
+    // would race the fetch and append a turn to a transcript that is about to
+    // be replaced by the loaded one.
+    if (isLoadingHistory) return;
     // Submitting while a turn streams is a steer: the driver hands the text
     // to the live run (or interrupts + resends). Idle submits start a turn.
     sendMessage({ text });
@@ -758,6 +764,7 @@ export const ChatView = ({
             <SuggestionPills
               questions={suggestions}
               onSelect={(s) => sendMessage({ text: s })}
+              disabled={isLoadingHistory}
               className="mx-auto w-full max-w-4xl px-4 pb-2 md:px-6"
             />
           )}
@@ -876,8 +883,9 @@ export const ChatView = ({
                     handleSubmit(e as unknown as React.FormEvent);
                   }
                 }}
-                placeholder="Send a message..."
+                placeholder={isLoadingHistory ? "Loading history..." : "Send a message..."}
                 rows={1}
+                disabled={isLoadingHistory}
                 className="max-h-48 text-base md:text-sm"
               />
               <InputGroupAddon align="inline-end">
@@ -904,7 +912,7 @@ export const ChatView = ({
                       type="submit"
                       size="icon-sm"
                       variant="default"
-                      disabled={!input.trim()}
+                      disabled={!input.trim() || isLoadingHistory}
                       aria-label={isRunning ? "Send now (interrupts)" : "Send message"}
                     >
                       <SendIcon className="size-3" />
@@ -920,6 +928,7 @@ export const ChatView = ({
                     <Select
                       value={model ? model : DEFAULT_MODEL_VALUE}
                       onValueChange={(v) => onModelChange?.(v === DEFAULT_MODEL_VALUE ? "" : v)}
+                      disabled={isLoadingHistory}
                     >
                       <SelectTrigger
                         size="sm"
@@ -945,6 +954,7 @@ export const ChatView = ({
                   <ExportMenu
                     onExport={(format) => void onExportConversation?.(format)}
                     tooltip="Export conversation"
+                    disabled={isLoadingHistory}
                   />
                 )}
                 {showClear && (
@@ -956,6 +966,7 @@ export const ChatView = ({
                           variant="outline"
                           size="sm"
                           onClick={() => setClearOpen(true)}
+                          disabled={isLoadingHistory}
                           className="h-7 gap-1 rounded-full px-2.5 text-xs [&_svg]:size-3"
                         >
                           <Trash2Icon className="size-3" />

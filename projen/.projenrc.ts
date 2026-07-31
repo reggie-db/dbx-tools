@@ -160,5 +160,8 @@ project.addTask("bump", {
 // pnpm, which then dies parsing it). Same approach the engine uses on consumers.
 new typescript.ProjenrcTs(project, { runner: typescript.TypeScriptRunner.tsx() });
 project.defaultTask?.reset("tsx .projenrc.ts");
-
+project.addTask("demo", {
+  exec: `tsx tasks/demo.ts`,
+  description: "Run the demo",
+});
 project.synth();
