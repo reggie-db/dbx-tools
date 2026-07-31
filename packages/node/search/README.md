@@ -213,10 +213,26 @@ When you have **no** Vector Search endpoint configured but the AppKit `lakebase`
 plugin is registered, the plugin transparently falls back to a Postgres
 full-text index. It provisions one table per index (a generated `tsvector`
 column with a GIN index), seeds the same `ensureOnSetup.documents`, and answers
-queries with `websearch_to_tsquery` + `ts_rank`. The pool is built from the
+queries with a prefix `to_tsquery` + `ts_rank`. The pool is built from the
 `lakebase` plugin's service-principal config exactly like
 [`@dbx-tools/appkit-mastra`](../appkit-mastra) builds its memory pool - no auth
 is re-implemented.
+
+Queries are compiled from the search box rather than handed to
+`websearch_to_tsquery`, which is too literal for type-ahead in two ways:
+
+- **Punctuation.** Postgres indexes `racetrac-store-intelligence` as the
+  compound lexeme _plus_ its parts, but compiles a hyphenated **query** to the
+  compound alone - so `store-intelligence` matches nothing while
+  `store intelligence` matches everything. The query is split on punctuation,
+  so both spellings (and `.` / `_` in a table reference) behave the same.
+- **Prefixes.** Every term is matched as a prefix, so `intel` reaches
+  `intelligence` and `store intel` finds `racetrac-store-intelligence`.
+
+All terms must match. When none do, the search relaxes instead of returning an
+empty box: any single term counts, plus a substring pass that catches a
+fragment which is not a prefix (`telligence`). The substring pass cannot use
+the GIN index, so it only runs after the indexed pass finds nothing.
 
 The point is parity: the client returns the identical `SearchResult` /
 `SearchHit` (`{ id, score, fields }`) / `UpsertResult` shapes, so the agent

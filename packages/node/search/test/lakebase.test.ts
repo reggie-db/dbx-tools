@@ -1,12 +1,24 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Pool } from "pg";
-import { LakebaseSearchBackend } from "../src/lakebase.ts";
+import { LakebaseSearchBackend, toSearchTerms, toTsQuery } from "../src/lakebase.ts";
+
+/** Lexemes a Postgres text-search parser would emit for a stored row. */
+const lexemes = (text: string): string[] =>
+  text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
 
 /**
  * A fake pg pool that records every SQL statement and answers `SELECT`s from a
  * canned table. Enough to exercise provisioning, seeding, and search without a
  * real Postgres.
+ *
+ * Search emulates the parts of Postgres the backend actually relies on: a
+ * `term:*` tsquery matches a row when some lexeme STARTS WITH `term` (which is
+ * also why a hyphenated document is reachable by its parts), and an `ILIKE`
+ * pattern matches anywhere in the row's text.
  */
 function fakePool() {
   const statements: Array<{ sql: string; params: unknown[] }> = [];
@@ -26,13 +38,33 @@ function fakePool() {
         else rows.push({ id, search_text: searchText, document: doc });
         return { rows: [] };
       }
+      if (text.includes("ORDER BY ID LIMIT")) {
+        // Empty-query browse: every row, oldest id first.
+        return { rows: rows.map((r) => ({ id: r.id, document: r.document, score: 0 })) };
+      }
       if (text.startsWith("SELECT ID, DOCUMENT")) {
-        // Search: return rows whose search_text contains the query term.
-        const term = String((params as string[])[0] ?? "").toLowerCase();
-        const hits = rows
-          .filter((r) => r.search_text.toLowerCase().includes(term))
-          .map((r, i) => ({ id: r.id, document: r.document, score: 1 - i * 0.1 }));
-        return { rows: hits };
+        const tsquery = String(params[0] ?? "");
+        const likes = Array.isArray(params[1]) ? (params[1] as string[]) : undefined;
+        const terms = tsquery
+          .split(/[&|]/)
+          .map((term) => term.trim().replace(/:\*$/, ""))
+          .filter(Boolean);
+        const hasPrefix = (row: (typeof rows)[number], term: string) =>
+          lexemes(row.search_text).some((lexeme) => lexeme.startsWith(term));
+        const matches = rows.filter((row) => {
+          // The relaxed pass is the one that carries ILIKE patterns.
+          if (likes) {
+            const haystack = row.search_text.toLowerCase();
+            return (
+              terms.some((term) => hasPrefix(row, term)) ||
+              likes.some((like) => haystack.includes(like.replaceAll("%", "")))
+            );
+          }
+          return terms.every((term) => hasPrefix(row, term));
+        });
+        return {
+          rows: matches.map((r, i) => ({ id: r.id, document: r.document, score: 1 - i * 0.1 })),
+        };
       }
       return { rows: [] };
     },
@@ -105,5 +137,105 @@ describe("lakebase search backend", () => {
     await be.addDocuments("support", [{ id: "1", text: "one updated" }]);
     assert.equal(fake.rows.length, 1);
     assert.equal(fake.rows[0].search_text.includes("one updated"), true);
+  });
+});
+
+describe("lakebase query compilation", () => {
+  it("splits a query on punctuation, not just whitespace", () => {
+    assert.deepEqual(toSearchTerms("store-intelligence"), ["store", "intelligence"]);
+    assert.deepEqual(toSearchTerms("entdata_pos_dev.gk_omnipos"), [
+      "entdata",
+      "pos",
+      "dev",
+      "gk",
+      "omnipos",
+    ]);
+    assert.deepEqual(toSearchTerms("  Store   Intel  "), ["store", "intel"]);
+    assert.deepEqual(toSearchTerms("---"), []);
+  });
+
+  it("compiles every term as a prefix", () => {
+    assert.equal(toTsQuery(["store", "intel"]), "store:* & intel:*");
+    assert.equal(toTsQuery(["store", "intel"], "|"), "store:* | intel:*");
+  });
+
+  it("cannot carry tsquery operators out of user input", () => {
+    // Splitting on non-alphanumerics is what makes injection impossible.
+    const compiled = toTsQuery(toSearchTerms("a & b | !c (d):* '"));
+    assert.equal(compiled, "a:* & b:* & c:* & d:*");
+  });
+});
+
+describe("lakebase search permissiveness", () => {
+  const seeded = async () => {
+    const { be, fake } = backend();
+    await be.provision("docs", {
+      seed: [
+        { id: "1", title: "racetrac-store-intelligence", text: "store intelligence for racetrac" },
+        { id: "2", title: "billing", text: "invoice and billing" },
+      ],
+    });
+    return { be, fake };
+  };
+
+  it("matches a hyphenated document from a partial, spaced query", async () => {
+    const { be } = await seeded();
+    const result = await be.search("docs", "store intel");
+    assert.deepEqual(
+      result.hits.map((h) => h.id),
+      ["1"],
+    );
+  });
+
+  it("treats a hyphenated query the same as a spaced one", async () => {
+    const { be } = await seeded();
+    const hyphenated = await be.search("docs", "store-intelligence");
+    const spaced = await be.search("docs", "store intelligence");
+    assert.deepEqual(
+      hyphenated.hits.map((h) => h.id),
+      spaced.hits.map((h) => h.id),
+    );
+    assert.equal(hyphenated.count, 1);
+  });
+
+  it("matches a single partial term", async () => {
+    const { be } = await seeded();
+    const result = await be.search("docs", "intel");
+    assert.deepEqual(
+      result.hits.map((h) => h.id),
+      ["1"],
+    );
+  });
+
+  it("relaxes to any term when no row matches all of them", async () => {
+    const { be, fake } = await seeded();
+    const before = fake.statements.length;
+    const result = await be.search("docs", "racetrac billing");
+
+    // Both passes ran, and the relaxed one found each single-term match.
+    assert.equal(fake.statements.length - before, 2);
+    assert.deepEqual(result.hits.map((h) => h.id).sort(), ["1", "2"]);
+  });
+
+  it("stops after the precise pass when it finds something", async () => {
+    const { be, fake } = await seeded();
+    const before = fake.statements.length;
+    await be.search("docs", "racetrac");
+    assert.equal(fake.statements.length - before, 1);
+  });
+
+  it("falls back to a substring for a fragment that is not a prefix", async () => {
+    const { be } = await seeded();
+    const result = await be.search("docs", "telligence");
+    assert.deepEqual(
+      result.hits.map((h) => h.id),
+      ["1"],
+    );
+  });
+
+  it("returns rows for an empty or punctuation-only query", async () => {
+    const { be } = await seeded();
+    assert.equal((await be.search("docs", "")).count, 2);
+    assert.equal((await be.search("docs", "  --  ")).count, 2);
   });
 });

@@ -2,7 +2,13 @@
  * A Lakebase (Postgres) full-text search backend - the FALLBACK used when no
  * Databricks Vector Search endpoint/index is configured but a Lakebase pool is
  * available. It provisions a single table per index, indexes a generated
- * `tsvector`, and answers queries with `websearch_to_tsquery` + `ts_rank`.
+ * `tsvector`, and answers queries with a prefix `to_tsquery` + `ts_rank`.
+ *
+ * Queries are compiled rather than passed through `websearch_to_tsquery`,
+ * because a search box needs two things that function does not give:
+ * punctuation-insensitivity (so `store-intelligence` matches the same rows as
+ * `store intelligence`) and prefix matching (so `intel` reaches
+ * `intelligence`). See {@link toSearchTerms} / {@link toTsQuery}.
  *
  * The whole point is parity: this backend returns the EXACT same
  * `@dbx-tools/shared-search` shapes (`SearchResult` / `SearchHit` /
@@ -34,11 +40,48 @@ const logger = log.logger("search/lakebase");
 /** The internal columns every search table carries, excluded from a hit's `fields`. */
 const RESERVED_COLUMNS = new Set(["id", "search_text", "document", "search_vector"]);
 
+/**
+ * Split a search-box string into the alphanumeric terms a tsquery is built from.
+ *
+ * Splitting on punctuation is what makes `store-intelligence` behave like
+ * `store intelligence`. Postgres indexes a hyphenated word as the compound
+ * lexeme PLUS each of its parts, but compiles a hyphenated QUERY to the
+ * compound alone - so `store-intelligence` demands a `store-intellig` lexeme
+ * that a document titled `racetrac-store-intelligence` does not have, and the
+ * search silently returns nothing while `store intelligence` returns
+ * everything. Same for `.` and `_` in a table reference.
+ */
+export function toSearchTerms(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/**
+ * Compile terms into a `to_tsquery` input where every term is a PREFIX, so a
+ * partially typed word still matches (`intel:*` reaches `intelligence`).
+ *
+ * Terms carry only letters and digits by construction, so none of tsquery's
+ * operators (`& | ! ( ) : *`) can survive from user input into the compiled
+ * string.
+ */
+export function toTsQuery(terms: readonly string[], operator: "&" | "|" = "&"): string {
+  return terms.map((term) => `${term}:*`).join(` ${operator} `);
+}
+
 /** Options for a single-index Lakebase search (mirrors the client's `SearchOptions`). */
 export interface LakebaseSearchOptions {
   limit?: number;
   scoreThreshold?: number;
   signal?: AbortSignal;
+}
+
+/** One raw search row before it is shaped into a {@link SearchHit}. */
+interface SearchRow {
+  id: string;
+  document: unknown;
+  score: number;
 }
 
 /** Options for provisioning a Lakebase-backed index. */
@@ -100,25 +143,59 @@ export class LakebaseSearchBackend {
     const table = this.tableFor(index);
     const limit = options.limit ?? 10;
     const pool = await this.getPool();
+    const terms = toSearchTerms(text);
 
-    // `websearch_to_tsquery` accepts a bare search box string (quoted phrases,
-    // `or`, `-term`); an empty query returns the most recent rows so an empty
-    // search box still shows content, matching a keyword index's behavior.
-    const sql = text
-      ? `SELECT id, document, ts_rank(search_vector, websearch_to_tsquery('english', $1)) AS score
-           FROM ${table}
-          WHERE search_vector @@ websearch_to_tsquery('english', $1)
-          ORDER BY score DESC
-          LIMIT $2`
-      : `SELECT id, document, 0::float4 AS score FROM ${table} ORDER BY id LIMIT $2`;
-    const params = text ? [text, limit] : [limit];
+    // An empty (or punctuation-only) box returns rows rather than nothing, so
+    // the UI shows content before the user types - as a keyword index would.
+    if (terms.length === 0) {
+      const { rows } = await this.query<SearchRow>(
+        pool,
+        `SELECT id, document, 0::float4 AS score FROM ${table} ORDER BY id LIMIT $1`,
+        [limit],
+        options.signal,
+      );
+      return this.toResult(text, index, rows, options);
+    }
 
-    const { rows } = await this.query<{ id: string; document: unknown; score: number }>(
+    // Precise pass: every term must match, each as a prefix.
+    const strict = await this.query<SearchRow>(
       pool,
-      sql,
-      params,
+      `SELECT id, document, ts_rank(search_vector, to_tsquery('english', $1)) AS score
+         FROM ${table}
+        WHERE search_vector @@ to_tsquery('english', $1)
+        ORDER BY score DESC
+        LIMIT $2`,
+      [toTsQuery(terms), limit],
       options.signal,
     );
+    if (strict.rows.length > 0) return this.toResult(text, index, strict.rows, options);
+
+    // Nothing matched EVERY term, so relax rather than return an empty box:
+    // any one term is enough, and an `ILIKE` pass additionally catches a
+    // fragment that is not a prefix (`telligence`) or a token the text-search
+    // parser split differently than expected. Substring matching cannot use
+    // the GIN index, which is why it only runs once the indexed pass fails.
+    const relaxed = await this.query<SearchRow>(
+      pool,
+      `SELECT id, document, ts_rank(search_vector, to_tsquery('english', $1)) AS score
+         FROM ${table}
+        WHERE search_vector @@ to_tsquery('english', $1)
+           OR search_text ILIKE ANY($2::text[])
+        ORDER BY score DESC
+        LIMIT $3`,
+      [toTsQuery(terms, "|"), terms.map((term) => `%${term}%`), limit],
+      options.signal,
+    );
+    return this.toResult(text, index, relaxed.rows, options);
+  }
+
+  /** Shape raw rows into the `SearchResult` both backends return. */
+  private toResult(
+    query: string,
+    index: string,
+    rows: SearchRow[],
+    options: LakebaseSearchOptions,
+  ): SearchResult {
     const hits: SearchHit[] = rows
       .map((row) => ({
         id: String(row.id),
@@ -126,7 +203,7 @@ export class LakebaseSearchBackend {
         fields: this.toFields(row.document),
       }))
       .filter((hit) => options.scoreThreshold === undefined || hit.score >= options.scoreThreshold);
-    return { query: text, index, hits, count: hits.length };
+    return { query, index, hits, count: hits.length };
   }
 
   /**
