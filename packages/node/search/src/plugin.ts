@@ -40,8 +40,8 @@ import {
   type ToolRegistry,
 } from "@databricks/appkit/beta";
 import { plugin as pluginLookup } from "@dbx-tools/appkit";
-import { search as searchContract, type SearchClientConfig } from "@dbx-tools/shared-search";
 import { error as errorUtil, log, string } from "@dbx-tools/shared-core";
+import { search as searchContract, type SearchClientConfig } from "@dbx-tools/shared-search";
 import {
   SEARCH_CONFIG_SCHEMA,
   DATABRICKS_INDEX_ENV,
@@ -50,8 +50,8 @@ import {
   resolveSearchConfig,
   type SearchPluginConfig,
 } from "./config.ts";
-import { LakebaseSearchBackend } from "./lakebase.ts";
 import { toCreateIndexOptions } from "./index-tools.ts";
+import { LakebaseSearchBackend } from "./lakebase.ts";
 import { toDocumentArray } from "./query.ts";
 import { getSearchRuntime, resetSearchRuntime } from "./runtime.ts";
 import {

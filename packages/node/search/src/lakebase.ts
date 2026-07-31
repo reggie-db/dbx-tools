@@ -27,13 +27,13 @@
 
 import { ExecutionError } from "@databricks/appkit";
 import { log, object, string } from "@dbx-tools/shared-core";
-import { Pool, type PoolConfig } from "pg";
 import type {
   SearchDocument,
   SearchHit,
   SearchResult,
   UpsertResult,
 } from "@dbx-tools/shared-search";
+import { Pool, type PoolConfig } from "pg";
 
 const logger = log.logger("search/lakebase");
 
@@ -41,7 +41,9 @@ const logger = log.logger("search/lakebase");
 const RESERVED_COLUMNS = new Set(["id", "search_text", "document", "search_vector"]);
 
 /**
- * Split a search-box string into the alphanumeric terms a tsquery is built from.
+ * Split a search-box string into the terms a tsquery is built from, using the
+ * shared `@dbx-tools/shared-core` tokenizer so the splitting rules stay
+ * consistent with the rest of the toolkit.
  *
  * Splitting on punctuation is what makes `store-intelligence` behave like
  * `store intelligence`. Postgres indexes a hyphenated word as the compound
@@ -50,12 +52,18 @@ const RESERVED_COLUMNS = new Set(["id", "search_text", "document", "search_vecto
  * that a document titled `racetrac-store-intelligence` does not have, and the
  * search silently returns nothing while `store intelligence` returns
  * everything. Same for `.` and `_` in a table reference.
+ *
+ * `camelCase: false` is load-bearing rather than a default: the camelCase
+ * splitter also breaks digit runs, turning `gpt4` into `gpt` + `4` and `s3`
+ * into `s` + `3`. Postgres indexes each of those as ONE lexeme, so no lexeme
+ * ever starts with the trailing digits and the precise pass could not match
+ * them. Keeping punctuation as the only boundary mirrors how the index was
+ * built.
  */
 export function toSearchTerms(query: string): string[] {
-  return query
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
+  return [
+    ...string.tokenizeWithOptions({ lowerCase: true, camelCase: false, distinct: true }, query),
+  ];
 }
 
 /**

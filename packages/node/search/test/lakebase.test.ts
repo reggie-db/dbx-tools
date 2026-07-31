@@ -154,6 +154,18 @@ describe("lakebase query compilation", () => {
     assert.deepEqual(toSearchTerms("---"), []);
   });
 
+  it("keeps a trailing digit run attached, as the index does", () => {
+    // The camelCase splitter would yield `gpt` + `4`, but Postgres indexes
+    // `gpt4` as one lexeme - no lexeme starts with `4`, so the split form
+    // could never match.
+    assert.deepEqual(toSearchTerms("gpt4"), ["gpt4"]);
+    assert.deepEqual(toSearchTerms("s3 bucket"), ["s3", "bucket"]);
+  });
+
+  it("drops repeated terms", () => {
+    assert.deepEqual(toSearchTerms("store STORE store-intelligence"), ["store", "intelligence"]);
+  });
+
   it("compiles every term as a prefix", () => {
     assert.equal(toTsQuery(["store", "intel"]), "store:* & intel:*");
     assert.equal(toTsQuery(["store", "intel"], "|"), "store:* | intel:*");

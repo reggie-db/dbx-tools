@@ -23,8 +23,8 @@
  */
 
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
-import type { SearchDocument, SearchMode } from "@dbx-tools/shared-search";
 import { object, string } from "@dbx-tools/shared-core";
+import type { SearchDocument, SearchMode } from "@dbx-tools/shared-search";
 import type { JSONSchema7 } from "json-schema";
 
 /** The default index, honoring AppKit's standard Vector Search binding name. */

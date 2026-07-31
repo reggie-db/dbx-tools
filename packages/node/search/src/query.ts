@@ -19,8 +19,8 @@
  */
 
 import { ValidationError } from "@databricks/appkit";
-import type { SearchHit, SearchMode } from "@dbx-tools/shared-search";
 import { json, object } from "@dbx-tools/shared-core";
+import type { SearchHit, SearchMode } from "@dbx-tools/shared-search";
 
 /** The column name Databricks Vector Search returns the relevance score under. */
 const SCORE_COLUMN = "__db_score";

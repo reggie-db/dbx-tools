@@ -7,8 +7,8 @@
  * @module
  */
 
-import { search } from "@dbx-tools/shared-search";
 import { string } from "@dbx-tools/shared-core";
+import { search } from "@dbx-tools/shared-search";
 
 /** Description the model reads for the `search` tool. */
 export const SEARCH_TOOL_DESCRIPTION = string.toDescription(`

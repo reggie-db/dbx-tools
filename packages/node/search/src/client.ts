@@ -32,6 +32,8 @@ import { ExecutionError, getExecutionContext } from "@databricks/appkit";
 import { Context } from "@databricks/sdk-experimental";
 import { appkit, databricks } from "@dbx-tools/appkit";
 import { invoke, resolve as modelResolve, serving } from "@dbx-tools/model";
+import { async as asyncUtil, json, log, string } from "@dbx-tools/shared-core";
+import { ModelClass } from "@dbx-tools/shared-model";
 import type {
   SearchDocument,
   SearchHit,
@@ -39,8 +41,6 @@ import type {
   SearchResult,
   UpsertResult,
 } from "@dbx-tools/shared-search";
-import { async as asyncUtil, json, log, string } from "@dbx-tools/shared-core";
-import { ModelClass } from "@dbx-tools/shared-model";
 import {
   DEFAULT_MODE,
   DEFAULT_PAGE_SIZE,
@@ -49,6 +49,7 @@ import {
   resolveIndexName,
   type ResolvedSearchConfig,
 } from "./config.ts";
+import type { LakebaseSearchBackend } from "./lakebase.ts";
 import {
   compileFilter,
   toHits,
@@ -56,7 +57,6 @@ import {
   toRequestColumns,
   type QueryResponseLike,
 } from "./query.ts";
-import type { LakebaseSearchBackend } from "./lakebase.ts";
 
 type WorkspaceClientLike = appkit.WorkspaceClientLike;
 const logger = log.logger("search/client");

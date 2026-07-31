@@ -77,6 +77,7 @@ import type { Pool } from "pg";
 import { buildAgents, FALLBACK_AGENT_ID, type BuiltAgents } from "./agents.ts";
 import { fetchChart } from "./chart.ts";
 import { attributedUserId, MASTRA_CONFIG_SCHEMA, type MastraPluginConfig } from "./config.ts";
+import { provisionDatabricksAITools } from "./databricks-aitools.ts";
 import {
   chartFetchDefaults,
   feedbackWriteDefaults,
@@ -97,7 +98,6 @@ import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "
 import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
 import { buildObservability } from "./observability.ts";
 import { provisionRemoteSkills } from "./remote-skills.ts";
-import { provisionDatabricksAITools } from "./databricks-aitools.ts";
 import {
   attachRoutePatchMiddleware,
   createRequestContext,

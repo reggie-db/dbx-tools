@@ -23,10 +23,10 @@ import { MASTRA_RESOURCE_ID_KEY, MASTRA_THREAD_ID_KEY } from "@mastra/core/reque
 import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
 import type { MastraAgentDefinition, MastraTools } from "./agents.ts";
+import type { DatabricksAIToolsOption } from "./databricks-aitools.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import type { MastraIdentityMode } from "./identity.ts";
 import type { RemoteSkillsOption } from "./remote-skills.ts";
-import type { DatabricksAIToolsOption } from "./databricks-aitools.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the
