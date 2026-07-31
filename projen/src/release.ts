@@ -13,6 +13,7 @@ import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
 const NODE_VERSION = "lts/*";
 const PNPM_VERSION = "10.33.0";
 
+
 interface PublishWorkflow {
   readonly name: string;
   readonly tagPrefix: string;
@@ -20,17 +21,26 @@ interface PublishWorkflow {
   readonly workingDirectory?: string;
 }
 
+let _registryUrl: string | undefined;
+function getRegistryUrl(): string {
+  if (_registryUrl === undefined) {
+    //const npmRegistry = spawnSync("npm", ["config", "get", "registry"]);
+    //_registryUrl = (npmRegistry.stdout?.toString() ?? "").trim() || "https://registry.npmjs.org/";
+    _registryUrl = ""
+  }
+  return _registryUrl
+}
+
 /** Shared checkout and toolchain setup for every npm publish workflow. */
 function publishSetupSteps(): JobStep[] {
-  const npmRegistry = spawnSync("npm", ["config", "get", "registry"]);
-  const registryUrl = (npmRegistry.stdout?.toString() ?? "").trim() || "https://registry.npmjs.org/";
+  const registryUrl = getRegistryUrl();
   return [
     { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
     { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: PNPM_VERSION } },
     {
       name: "Setup Node.js",
       uses: "actions/setup-node@v6",
-      with: { "node-version": NODE_VERSION, "registry-url": registryUrl },
+      with: { "node-version": NODE_VERSION, ...(registryUrl ? { "registry-url": registryUrl } : {}) },
     },
     // The lockfile is intentionally untracked and may be absent or stale in CI.
     { name: "Install", run: "pnpm install --no-frozen-lockfile" },

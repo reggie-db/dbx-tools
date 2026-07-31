@@ -29,7 +29,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
-          registry-url: http://localhost:4873/
       - name: Install
         run: pnpm install --no-frozen-lockfile
       - name: Set version from tag
