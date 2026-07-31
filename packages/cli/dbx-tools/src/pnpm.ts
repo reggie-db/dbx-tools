@@ -5,9 +5,11 @@
  */
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { exec } from "@dbx-tools/core";
-import { functionModule } from "@dbx-tools/shared-core";
+import { exec, project } from "@dbx-tools/core";
+import { functionModule, log } from "@dbx-tools/shared-core";
 import { needsInstall } from "./root.ts";
+
+const logger = log.logger("dbx-tools:pnpm");
 
 /** A package.json `bin` field: either a single command string, or a name -> path map. */
 type BinField = string | Record<string, string>;
@@ -71,7 +73,16 @@ export const resolvePnpmArgv = functionModule.memoize(resolvePnpmArgvImpl);
 /** Run pnpm with inherited stdio from `cwd`. */
 export function runPnpm(args: string[], cwd: string): void {
   const [command, ...prefix] = resolvePnpmArgv();
-  exec.spawnSync(command, [...prefix, ...args], { cwd, check: true });
+  const env = { ...process.env };
+  const registryUrl = project.npmRegistry()?.toString();
+  logger.info(`running pnpm with registry url: ${registryUrl}`);
+  if (registryUrl) {
+    [false, true].forEach(upperCase => {
+      const key = "npm_config_registry"
+      env[upperCase ? key.toUpperCase() : key] = registryUrl;
+    });
+  }
+  exec.spawnSync(command, [...prefix, ...args], { cwd, check: true, env: env });
 }
 
 /** Install workspace dependencies when `node_modules` or projen is missing. */
