@@ -5,8 +5,7 @@
 export * as browser from "./src/browser.ts";
 export * as generatedAssets from "./src/generated/assets.ts";
 export * as reactBrand from "./src/react/brand.tsx";
-export { resolveBrandAsset, brandCssVariables, applyBrandContext } from "./src/browser.ts";
+export { resolveBrandAsset } from "./src/browser.ts";
 export type { BrandAssetResolver, ApplyBrandContextOptions } from "./src/browser.ts";
 export { dbxToolsAssetSvg, dbxToolsAssetDataUrls } from "./src/generated/assets.ts";
-export { BrandProvider, useBrand, BrandIcon, BrandLogo } from "./src/react/brand.tsx";
 export type { BrandProviderProps, BrandImageProps } from "./src/react/brand.tsx";

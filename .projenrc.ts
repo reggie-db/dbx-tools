@@ -274,6 +274,7 @@ project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-fs@workspace:*",
     "@databricks/sdk-experimental@catalog:",
   );
 });
@@ -380,6 +381,9 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@dbx-tools/shared-mastra@workspace:*",
     "@dbx-tools/shared-genie@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
+    "@dbx-tools/shared-fs@workspace:*",
+    "@dbx-tools/databricks@workspace:*",
+    "@dbx-tools/fs@workspace:*",
     "@dbx-tools/genie@workspace:*",
     "@dbx-tools/model@workspace:*",
     "@dbx-tools/appkit@workspace:*",
@@ -428,6 +432,12 @@ project.applyToProjects(root, { identifierName: "path", tags: "node" }, (p) => {
     "chokidar@^4.0.3",
     "minimatch@^10.2.5",
   );
+});
+
+// node-fs: local-disk FileSystem implementation of the shared-fs contract.
+// shared-fs stays browser-safe (types only); the Node runtime lives here.
+project.applyToProjects(root, { identifierName: "fs", tags: "node" }, (p) => {
+  p.addDeps("@dbx-tools/shared-fs@workspace:*", "@dbx-tools/appkit@workspace:*");
 });
 
 // shared-model: browser-safe zod wire contracts + pure endpoint classifier.

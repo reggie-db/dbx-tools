@@ -3,9 +3,13 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as cloud from "./src/cloud.ts";
+export * as databricksFS from "./src/databricks-fs.ts";
+export * as databricksPath from "./src/databricks-path.ts";
 export * as net from "./src/net.ts";
 export * as workspace from "./src/workspace.ts";
-export { RANGE_CACHE_TTL_MS, CloudProvider, resolveCloudLocation, loadProviderRanges } from "./src/cloud.ts";
+export { RANGE_CACHE_TTL_MS, CloudProvider } from "./src/cloud.ts";
 export type { CloudLocation } from "./src/cloud.ts";
-export { getPublicIp, resolveHostIps } from "./src/net.ts";
-export { getWorkspaceUrl, getWorkspaceId } from "./src/workspace.ts";
+export { DatabricksFileSystem } from "./src/databricks-fs.ts";
+export type { DatabricksFileSystemOptions } from "./src/databricks-fs.ts";
+export type { DatabricksFilesBackend, NormalizeDatabricksRootOptions, ResolveDatabricksRootOptions } from "./src/databricks-path.ts";
+export { getPublicIp } from "./src/net.ts";

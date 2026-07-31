@@ -10,11 +10,49 @@ Key features:
 
 - Workspace URL and numeric workspace id resolution from AppKit context,
   Databricks SDK config, env, and config files.
+- `DatabricksFileSystem` (`FileSystem` over workspace files, UC volumes, and DBFS)
+  with intelligent roots: `/Workspace/...`, `/Volumes/...` (also `/Volume/...` and
+  `catalog.schema.volume`), `~` → `/Workspace/Users/<userName>`, and `/dbfs/...`.
+- `tryGetWorkspaceClient` / `getWorkspaceClient` / `getCurrentUserName` for client
+  and home-path resolution.
 - Cloud provider/region detection by resolving workspace hosts against public
   AWS, Azure, and GCP IP feeds.
 - In-process and on-disk caching for cloud IP range feeds.
 - DNS A/AAAA lookup helpers for Databricks and adjacent service hosts.
 - Memoized outbound public-IP discovery for setup and diagnostics.
+
+## Databricks filesystem
+
+```ts
+import { DatabricksFileSystem } from "@dbx-tools/databricks";
+
+// Unity Catalog volume via three-part id
+const volume = new DatabricksFileSystem({ root: "main.default.assets" });
+await volume.writeFile("notes/hello.txt", "hi");
+
+// Workspace home (resolves ~ via currentUser.me / AppKit userName)
+const home = await DatabricksFileSystem.create({ root: "~" });
+const entries = await home.readdir(".");
+```
+
+Roots are normalized before use:
+
+| Input                                                       | Normalized root                   | API       |
+| ----------------------------------------------------------- | --------------------------------- | --------- |
+| `catalog.schema.volume`                                     | `/Volumes/catalog/schema/volume`  | UC Files  |
+| `/Volume/...`                                               | `/Volumes/...`                    | UC Files  |
+| `~` / `~/...`                                               | `/Workspace/Users/<userName>/...` | Workspace |
+| `/Workspace/...`, `/Users/...`, `/Repos/...`, `/Shared/...` | unchanged (POSIX)                 | Workspace |
+| `/dbfs/...`                                                 | unchanged (POSIX)                 | DBFS      |
+
+`~` expansion uses `getCurrentUserName()` (AppKit context `userName`, else
+`currentUser.me()` via `tryGetWorkspaceClient` / `getWorkspaceClient`). Prefer
+`DatabricksFileSystem.create({ root: "~" })` when the username is not known up
+front.
+
+Built on `@dbx-tools/shared-fs` `BaseFileSystem`, so portable behavior (parents,
+recursion, encoding, error mapping) is shared with `LocalFileSystem` /
+`MemoryFileSystem`.
 
 ## Resolve Workspace Identity
 
@@ -61,7 +99,8 @@ short-lived reuse.
 
 ## Modules
 
-- `workspace` - workspace URL and numeric id resolution.
+- `databricks-fs` / `databricks-path` - rooted `FileSystem` over workspace / volumes / DBFS.
+- `workspace` - workspace URL/id, `tryGetWorkspaceClient` / `getWorkspaceClient`, and current username.
 - `cloud` - provider/region detection from public cloud IP ranges.
 - `net` - DNS A/AAAA resolution and outbound public-IP discovery.
 

@@ -41,3 +41,17 @@ describe("string.parseList", () => {
     );
   });
 });
+
+describe("string tokenize capitalize overrides", () => {
+  it("uppercases ai and fs when capitalizing", () => {
+    assert.deepEqual(
+      [...string.tokenizeWithOptions({ lowerCase: true, capitalize: true }, "local-fs")],
+      ["Local", "FS"],
+    );
+    assert.deepEqual(
+      [...string.tokenizeWithOptions({ lowerCase: true, capitalize: true }, "ai-tools")],
+      ["AI", "Tools"],
+    );
+    assert.equal(string.toLabel("local-fs"), "Local FS");
+  });
+});

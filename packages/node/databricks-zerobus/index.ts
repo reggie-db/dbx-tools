@@ -3,4 +3,3 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as zerobus from "./src/zerobus.ts";
-export { createSdk, createStream } from "./src/zerobus.ts";

@@ -98,9 +98,19 @@ const BARREL_HEADER: HeaderOpts = {
   source: "the exporting modules in ./src",
 };
 
-/** `pnpm-workspace` -> `pnpmWorkspace`; nested paths join in camelCase. */
+/** `pnpm-workspace` -> `pnpmWorkspace`; `local-fs` -> `localFS` (`fs` -> `FS`). */
 function kebabToCamel(segment: string): string {
-  return segment.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+  const tokens = [...string.tokenizeWithOptions({ lowerCase: true, capitalize: true }, segment)];
+  if (tokens.length === 0) return segment;
+  const [first, ...rest] = tokens;
+  // Standalone acronym modules (`fs`, `ai`) stay lowercase so they match
+  // Node-style namespaces (`import * as fs`). Trailing / mid acronyms keep
+  // their override casing (`localFS`).
+  const head =
+    rest.length === 0 && first === first.toUpperCase()
+      ? first.toLowerCase()
+      : first.charAt(0).toLowerCase() + first.slice(1);
+  return head + rest.join("");
 }
 
 /** Derive a valid namespace identifier from a relocated barrel module path. */
@@ -134,9 +144,11 @@ function namespaceLines(content: string): { ns: string; modulePath: string }[] {
 /**
  * Append hoisted top-level re-exports for every export that is UNIQUE across the
  * package's modules - `export type { ... }` for types, `export { ... }` for
- * values. A name declared by two or more modules is ambiguous and left
- * namespace-only. `suppress` names (a hand-authored `exports.ts` surface) are
- * never hoisted so that file stays authoritative.
+ * non-function values (classes, consts, enums, …). `export function` names are
+ * never hoisted; they stay namespace-only (`posixPath.toPosix`). A name declared
+ * by two or more modules is ambiguous and left namespace-only. `suppress` names
+ * (a hand-authored `exports.ts` surface) are never hoisted so that file stays
+ * authoritative.
  */
 function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<string>): string {
   const namespaces = namespaceLines(content);
@@ -148,14 +160,15 @@ function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<strin
   const blocked = new Set<string>(suppress);
   for (const { ns } of namespaces) blocked.add(ns);
 
-  // Uniqueness is tallied over types AND values together - name -> { count,
-  // owning module } - so a name any two modules share stays namespace-only
-  // whichever kind each one is. `moduleExports` already dedupes within a module,
-  // so a count above one always means more than one module.
+  // Uniqueness is tallied over hoistable types AND values together - name ->
+  // { count, owning module }. Functions are excluded from hoisting and from
+  // this tally so they do not block a same-named type/class in another module.
   const seen = new Map<string, { count: number; modulePath: string }>();
   const perModule = new Map<string, ModuleExport[]>();
   for (const { modulePath } of namespaces) {
-    const exports = moduleExports(join(pkgDir, modulePath.replace(/^\.\//, "")));
+    const exports = moduleExports(join(pkgDir, modulePath.replace(/^\.\//, ""))).filter(
+      (e) => !e.isFunction,
+    );
     perModule.set(modulePath, exports);
     for (const { name } of exports) {
       const prior = seen.get(name);

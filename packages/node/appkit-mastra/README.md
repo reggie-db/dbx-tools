@@ -288,7 +288,7 @@ without anyone hand-copying `SKILL.md` files.
 ```ts
 mastra({
   agents: { assistant: agents.createAgent({ instructions: "..." }) },
-  // "auto": on when the CLI's installed tree or the `databricks` CLI is present.
+  // "auto": runs the `databricks` CLI when installed, moves on quietly if not.
   databricksAITools: "auto",
 });
 
@@ -301,20 +301,19 @@ mastra({
 The option is `false | true | "auto" | DatabricksAIToolsOptions`:
 
 - `false` (default) - off.
-- `"auto"` - enable only when the CLI's installed tree
-  (`~/.databricks/aitools/skills`) exists OR the `databricks` CLI is resolvable;
-  otherwise silently no-op. The "on if the CLI is around" default.
-- `true` - require it: fail app startup (subject to `failOnError`) when neither
-  the installed tree nor the CLI can supply skills.
-- an options bag with `skills` (a subset), `experimental`, `refresh` (re-run the
-  CLI even when a tree exists), `path` (an explicit output dir), or `cli`.
+- `"auto"` - run the `databricks` CLI when it's installed; if the CLI isn't
+  available, log and move on (never fails startup). The "on if the CLI is
+  around" default.
+- `true` - require the CLI: fail app startup (subject to `failOnError`) when it
+  isn't available or produces nothing.
+- an options bag with `skills` (a subset), `experimental`, `path` (an explicit
+  output dir), or `cli` (a custom CLI path).
 
-It never reimplements the CLI's sourcing. It reuses the already-installed global
-tree when present (no CLI call), and otherwise shells out to `databricks aitools
-install --path <dir> --skills-only` to materialize a resolved, agent-agnostic
-skill set into a temp dir. Because these skills track the local CLI install, they
-are added as LOCAL scan paths for the current process rather than uploaded to the
-workspace.
+The `databricks` CLI is the source of truth - it never reimplements the CLI's
+sourcing. It shells out to `databricks aitools install --path <dir>` to
+materialize a resolved, agent-agnostic skill set (`<name>/SKILL.md` trees) into a
+temp dir. Because these skills track the local CLI install, they are added as
+LOCAL scan paths for the current process rather than uploaded to the workspace.
 
 ## Genie Tools
 
@@ -575,7 +574,7 @@ requiring callers to assemble a Mastra server by hand.
   `databricksBasePath`.
 - `databricksAITools` folds Databricks AI Tools skills into agents (see
   [Databricks AI Tools](#databricks-ai-tools)). `false` (default), `"auto"`,
-  `true`, or an options bag (`skills`, `experimental`, `refresh`, `path`).
+  `true`, or an options bag (`skills`, `experimental`, `path`, `cli`).
 - `genieSpaces` maps aliases to Genie Space IDs (or to
   `{ spaceId, hint }` objects). Those aliases flow into tool names,
   suggestions, and chart/data workflows. An alias present with no space id is a
@@ -624,14 +623,16 @@ client that talks to these routes.
 - `defaults` - cache / retry / timeout settings for the plugin's own outbound
   calls, one constant per call site with its reasoning.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
-- `workspaces` / `filesystems` - Mastra workspace creation and Databricks
-  Workspace file adapters.
+- `workspaces` / `filesystems` - Mastra workspace creation; `filesystems(fs)`
+  wraps any `@dbx-tools/shared-fs` `FileSystem` (including
+  `@dbx-tools/databricks` / `@dbx-tools/fs`) as a Mastra mount, with
+  `scratchFilesystem` (fresh `tmpFS` + random id) when no other mount resolves.
 - `remote-skills` - startup provisioning of remote `SKILL.md` sources into the
   Databricks Assistant skills tree (or a local temp dir), via the optional
   `skills` CLI or a direct fetch.
 - `databricks-aitools` - startup provisioning of Databricks AI Tools skills as
-  extra local skill paths, reusing the CLI's installed tree or shelling out to
-  `databricks aitools install --path`.
+  extra local skill paths by shelling out to `databricks aitools install
+--path`.
 - `mcp` - MCP server construction.
 - `observability` / `mlflow` - tracing and feedback.
 - `server` / `rest` / `processors` - Express dispatch, Databricks REST helpers,

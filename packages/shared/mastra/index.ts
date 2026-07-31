@@ -10,7 +10,6 @@ export * as thread from "./src/thread.ts";
 export * as wire from "./src/wire.ts";
 export { MLFLOW_TRACE_ID_HEADER, DEFAULT_FEEDBACK_NAME, DEFAULT_COMMENT_NAME, MastraFeedbackValueSchema, MastraFeedbackRequestSchema, MastraFeedbackResponseSchema } from "./src/feedback.ts";
 export type { MastraFeedbackValue, MastraFeedbackRequest, MastraFeedbackResponse } from "./src/feedback.ts";
-export { isUuid, parseMarkers, stripIncompleteMarkerTail } from "./src/marker.ts";
 export type { MarkerType, ParsedMarker } from "./src/marker.ts";
 export { MODEL_OVERRIDE_HEADER, MODEL_OVERRIDE_QUERY, MODEL_OVERRIDE_BODY_FIELDS } from "./src/override.ts";
 export { MASTRA_ROUTES } from "./src/routes.ts";

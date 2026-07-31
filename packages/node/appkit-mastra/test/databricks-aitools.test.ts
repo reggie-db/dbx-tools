@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
@@ -9,8 +6,6 @@ import {
   provisionDatabricksAITools,
 } from "../src/databricks-aitools.ts";
 
-const INSTALLED_TREE = join(homedir(), ".databricks", "aitools", "skills");
-const treeExists = existsSync(INSTALLED_TREE);
 const BOGUS_CLI = "definitely-not-a-real-databricks-cli";
 
 describe("normalizeDatabricksAIToolsOption", () => {
@@ -48,41 +43,24 @@ describe("provisionDatabricksAITools", () => {
     assert.deepEqual(await provisionDatabricksAITools(false), { localSkillPaths: [] });
   });
 
-  it("auto mode with a bogus CLI never throws", async () => {
-    const result = await provisionDatabricksAITools({
-      mode: "auto",
-      refresh: true,
-      cli: BOGUS_CLI,
-    });
-    assert.ok(Array.isArray(result.localSkillPaths));
+  it("auto mode logs and moves on when the CLI is unavailable", async () => {
+    const result = await provisionDatabricksAITools({ mode: "auto", cli: BOGUS_CLI });
+    assert.deepEqual(result, { localSkillPaths: [] });
   });
 
-  it("require mode with failOnError:false always skips instead of throwing", async () => {
-    // With refresh forcing a CLI fetch and a bogus CLI, the fetch fails; the
-    // installed-tree fallback may still supply paths, but it must never throw.
+  it("require mode fails when the CLI is unavailable", async () => {
+    await assert.rejects(
+      provisionDatabricksAITools({ mode: "require", cli: BOGUS_CLI }),
+      /Databricks AI Tools required|failed to provision/,
+    );
+  });
+
+  it("require mode with failOnError:false skips instead of throwing", async () => {
     const result = await provisionDatabricksAITools({
       mode: "require",
-      refresh: true,
       cli: BOGUS_CLI,
       failOnError: false,
     });
-    assert.ok(Array.isArray(result.localSkillPaths));
-  });
-
-  it("reuses the installed tree when present (no refresh)", async (t) => {
-    if (!treeExists) return t.skip("no installed aitools tree on this machine");
-    const result = await provisionDatabricksAITools("auto");
-    assert.equal(result.source, "installed");
-    assert.deepEqual(result.localSkillPaths, [INSTALLED_TREE]);
-  });
-
-  it("require mode fails when nothing can supply skills", async (t) => {
-    if (treeExists) {
-      return t.skip("installed tree present; require mode is satisfied by it");
-    }
-    await assert.rejects(
-      provisionDatabricksAITools({ mode: "require", refresh: true, cli: BOGUS_CLI }),
-      /Databricks AI Tools|failed to provision/,
-    );
+    assert.deepEqual(result, { localSkillPaths: [] });
   });
 });

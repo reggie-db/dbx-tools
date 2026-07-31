@@ -27,23 +27,24 @@
  * discovered by the built-in Assistant-skills mount. Pass `userEmail` (or an
  * explicit `databricksBasePath`) to target `/Users/<email>/.assistant/skills`
  * instead. When no Databricks client is resolvable at startup, the tree is
- * written to a local temp dir and returned as an extra local skill path for
- * the current process.
+ * written under {@link localFS.tmpFS} and returned as an extra local skill path
+ * for the current process.
  *
  * @module
  */
 
-import { mkdtemp, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
+import type { WorkspaceClient } from "@databricks/sdk-experimental";
 import { appkit } from "@dbx-tools/appkit";
 import type { WorkspaceClientLike } from "@dbx-tools/appkit";
-import { spawn } from "@dbx-tools/core";
-import { findFiles } from "@dbx-tools/path";
-import { error, log, net, string } from "@dbx-tools/shared-core";
-
-import { DatabricksWorkspaceFilesystem } from "./filesystems.ts";
+import { exec } from "@dbx-tools/core";
+import { DatabricksFileSystem } from "@dbx-tools/databricks";
+import { localFS, type LocalFileSystem } from "@dbx-tools/fs";
+import { find } from "@dbx-tools/path";
+import { error, hash, log, net, string } from "@dbx-tools/shared-core";
+import type { FileSystem } from "@dbx-tools/shared-fs";
 
 const logger = log.logger("mastra/remote-skills");
 
@@ -169,8 +170,8 @@ function toSourceOptions(source: RemoteSkillSource): RemoteSkillSourceOptions {
  * Materialize every configured remote skill source at app startup.
  *
  * Writes each resolved `SKILL.md` tree to the Databricks user Assistant skills
- * folder when a writable workspace is available, else to a local temp dir
- * returned in {@link ProvisionedRemoteSkills.localSkillPaths}.
+ * folder when a writable workspace is available, else under
+ * {@link localFS.tmpFS} returned in {@link ProvisionedRemoteSkills.localSkillPaths}.
  */
 export async function provisionRemoteSkills(
   option: RemoteSkillsOption | undefined,
@@ -183,12 +184,17 @@ export async function provisionRemoteSkills(
   const client = options.client ?? appkit.tryGetExecutionContext()?.client;
   const databricksBasePath = resolveDatabricksBasePath(options, client);
   const destination = databricksBasePath
-    ? new DatabricksWorkspaceFilesystem({ client, basePath: databricksBasePath, readOnly: false })
+    ? new DatabricksFileSystem({
+        client: client as WorkspaceClient,
+        root: databricksBasePath,
+        readOnly: false,
+        createRoot: true,
+      })
     : undefined;
 
   const localSkillPaths: string[] = [];
   const skillNames: string[] = [];
-  let staging: string | undefined;
+  let staging: LocalFileSystem | undefined;
 
   try {
     const sources = Array.isArray(options.sources) ? options.sources : [options.sources];
@@ -196,8 +202,8 @@ export async function provisionRemoteSkills(
       const sourceOptions = toSourceOptions(entry);
       const failOnError = sourceOptions.failOnError ?? failDefault;
       try {
-        staging ??= await mkdtemp(join(tmpdir(), "mastra-remote-skills-"));
-        const stagedDir = await stageSource(sourceOptions, staging, options);
+        staging ??= await createTempFs("mastra-remote-skills");
+        const stagedDir = await stageSource(sourceOptions, staging.root, options);
         const staged = await collectSkillDirs(stagedDir);
         if (staged.length === 0) {
           throw new Error(`no SKILL.md found for source "${sourceOptions.source}"`);
@@ -229,7 +235,9 @@ export async function provisionRemoteSkills(
       }
     }
   } finally {
-    if (staging) await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+    if (staging) {
+      await rm(staging.root, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 
   return { localSkillPaths, databricksBasePath, skillNames };
@@ -250,15 +258,16 @@ function resolveDatabricksBasePath(
 }
 
 /**
- * Stage one source into a fresh dir under `staging`, preferring the optional
+ * Stage one source into a fresh dir under `stagingRoot`, preferring the optional
  * `skills` CLI and falling back to a direct fetch.
  */
 async function stageSource(
   sourceOptions: RemoteSkillSourceOptions,
-  staging: string,
+  stagingRoot: string,
   options: ProvisionRemoteSkillsOptions,
 ): Promise<string> {
-  const target = await mkdtemp(join(staging, "src-"));
+  const target = join(stagingRoot, `src-${hash.id()}`);
+  await mkdir(target, { recursive: true });
   const viaCli = await stageViaSkillsCli(sourceOptions, target);
   if (viaCli) return viaCli;
   return stageViaFetch(sourceOptions, target, options);
@@ -290,7 +299,7 @@ async function stageViaSkillsCli(
   }
   if (string.parseList(sourceOptions.skills).length === 0) args.push("--skill", "*");
 
-  const result = await spawn(cli.command, args, {
+  const result = await exec.spawn(cli.command, args, {
     cwd: target,
     stdout: "capture",
     stderr: "capture",
@@ -390,27 +399,35 @@ async function collectSkillDirs(root: string): Promise<StagedSkillDir[]> {
 }
 
 /** Upload each staged skill directory into the Databricks destination tree. */
-async function uploadSkillDirs(
-  destination: DatabricksWorkspaceFilesystem,
-  dirs: StagedSkillDir[],
-): Promise<void> {
-  await destination.init?.();
+async function uploadSkillDirs(destination: FileSystem, dirs: StagedSkillDir[]): Promise<void> {
+  await destination.init();
   for (const dir of dirs) {
-    for (const relative of findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
+    for (const relative of find.findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
       const buffer = await readFile(join(dir.absolutePath, relative));
-      const remotePath = posix.join("/", dir.name, relative.split(/[\\/]/).join("/"));
+      const remotePath = posix.join(dir.name, relative.split(/[\\/]/).join("/"));
       await destination.writeFile(remotePath, buffer, { overwrite: true });
     }
   }
 }
 
-/** Copy staged skill dirs into a persistent local temp dir; return its path. */
+/** Copy staged skill dirs into a {@link localFS.tmpFS} tree; return its root path. */
 async function persistLocally(dirs: StagedSkillDir[]): Promise<string> {
-  const base = await mkdtemp(join(tmpdir(), "mastra-local-skills-"));
+  const local = await createTempFs("mastra-local-skills");
   for (const dir of dirs) {
-    await cp(dir.absolutePath, join(base, dir.name), { recursive: true });
+    for (const relative of find.findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
+      const buffer = await readFile(join(dir.absolutePath, relative));
+      const remotePath = posix.join(dir.name, relative.split(/[\\/]/).join("/"));
+      await local.writeFile(remotePath, buffer, { overwrite: true });
+    }
   }
-  return base;
+  return local.root;
+}
+
+/** Create and initialize a unique {@link localFS.tmpFS} scratch filesystem. */
+async function createTempFs(prefix: string): Promise<LocalFileSystem> {
+  const fs = localFS.tmpFS(`${prefix}-${hash.id()}`);
+  await fs.init();
+  return fs;
 }
 
 /** Best-effort existence check. */

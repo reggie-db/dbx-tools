@@ -14,8 +14,7 @@ export * as runtime from "./src/runtime.ts";
 export * as tool from "./src/tool.ts";
 export { BOT_OPENID_METADATA, resetTeamsAuth, verifyBotToken, connectorToken, isAllowedServiceUrl } from "./src/auth.ts";
 export type { VerifiedBotToken, VerifyOptions } from "./src/auth.ts";
-export { buildAdaptiveCard, buildCardResult } from "./src/builder.ts";
-export { CARD_VERSION_ENV, WEBHOOK_URL_ENV, AGENT_PLUGIN_ENV, APP_ID_ENVS, APP_PASSWORD_ENVS, APP_TENANT_ENVS, ALLOW_UNAUTHENTICATED_ENV, DEFAULT_AGENT_PLUGIN, TEAMS_CONFIG_SCHEMA, resolveTeamsConfig } from "./src/config.ts";
+export { CARD_VERSION_ENV, WEBHOOK_URL_ENV, AGENT_PLUGIN_ENV, APP_ID_ENVS, APP_PASSWORD_ENVS, APP_TENANT_ENVS, ALLOW_UNAUTHENTICATED_ENV, DEFAULT_AGENT_PLUGIN, TEAMS_CONFIG_SCHEMA } from "./src/config.ts";
 export type { TeamsPluginConfig, ResolvedTeamsConfig } from "./src/config.ts";
 export { sendActivity, sendTyping } from "./src/connector.ts";
 export type { ConnectorTarget } from "./src/connector.ts";
@@ -26,7 +25,6 @@ export type { TeamsExecuteConfig, TeamsExecutionSettings } from "./src/defaults.
 export { resolveServiceUrl, deliverTurn } from "./src/messaging.ts";
 export type { BotCredentials, DeliverTurnOptions } from "./src/messaging.ts";
 export { TeamsPlugin, teams } from "./src/plugin.ts";
-export { getTeamsRuntime, setTeamsExecutor, resetTeamsRuntime, buildCard, postCard } from "./src/runtime.ts";
 export type { TeamsExecutor, TeamsRuntime } from "./src/runtime.ts";
-export { CREATE_CARD_DESCRIPTION, teamsCardTool } from "./src/tool.ts";
+export { CREATE_CARD_DESCRIPTION } from "./src/tool.ts";
 export type { TeamsCardToolOptions } from "./src/tool.ts";

@@ -586,15 +586,14 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * Fold Databricks AI Tools skills (`databricks aitools`) into every
    * default-workspace agent as extra local skill scan paths.
    *
-   * `false` (default) off; `"auto"` enables only when the CLI's installed
-   * skills tree (`~/.databricks/aitools/skills`) exists or the `databricks`
-   * CLI is resolvable, else silently no-op; `true` requires one of those and
-   * fails startup otherwise. Pass an options bag to select `skills`, include
-   * `experimental` skills, `refresh` from the CLI, or set an explicit `path`.
+   * `false` (default) off; `"auto"` runs the `databricks` CLI when it's
+   * installed and logs-and-continues when it isn't (never fails startup);
+   * `true` requires the CLI and fails startup otherwise. Pass an options bag to
+   * select `skills`, include `experimental` skills, or set an explicit `path`.
    *
-   * Reuses the already-installed global tree when present (no CLI call);
-   * otherwise runs `databricks aitools install --path <dir> --skills-only` to
-   * materialize a resolved, agent-agnostic set into a temp dir.
+   * Runs `databricks aitools install --path <dir>` to materialize a resolved,
+   * agent-agnostic set (`<name>/SKILL.md` trees) into a temp dir the agents
+   * then scan. The CLI is the source of truth.
    *
    * @example
    * ```ts
@@ -629,7 +628,7 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     databricksAITools: {
       type: ["boolean", "string", "object"],
       description:
-        'Fold Databricks AI Tools skills (databricks aitools) into agents as extra local skill paths. false (default) off; "auto" enables when the installed tree or the databricks CLI is available; true requires one and fails startup otherwise. An object selects skills, experimental, refresh, or path.',
+        'Fold Databricks AI Tools skills (databricks aitools) into agents as extra local skill paths. false (default) off; "auto" runs the databricks CLI when installed and logs-and-continues otherwise; true requires the CLI and fails startup otherwise. An object selects skills, experimental, or path.',
     },
     storage: {
       type: ["boolean", "object"],

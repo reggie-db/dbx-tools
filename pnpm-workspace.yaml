@@ -11,6 +11,7 @@ packages:
   - packages/node/databricks
   - packages/node/databricks-zerobus
   - packages/node/email
+  - packages/node/fs
   - packages/node/genie
   - packages/node/model
   - packages/node/path
@@ -18,6 +19,7 @@ packages:
   - packages/node/teams
   - packages/shared/core
   - packages/shared/email
+  - packages/shared/fs
   - packages/shared/genie
   - packages/shared/mastra
   - packages/shared/model

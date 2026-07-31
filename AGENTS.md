@@ -310,7 +310,8 @@ second package, put it in shared-core rather than duplicating it.
 
 Node-only equivalents live in `@dbx-tools/core` (`exec.spawn`/`spawnSync`,
 `project.root`/`name`/`repositoryUrl`/`npmRegistry`) and `@dbx-tools/path`
-(`findFiles`, `watchFiles`, `toPathMatcher`, `ignorePatterns`). The projen
+(`find.findFiles`, `watch.watchFiles`, `match.toPathMatcher`,
+`ignore.ignorePatterns`). The projen
 engine uses these too - it must not re-probe `npm prefix` / `git rev-parse` on
 its own.
 
@@ -676,13 +677,16 @@ Barrels re-export every exporting file under `src/` except names starting with
 `_`; a package's barrel lives at its ROOT (`index.ts`), re-exporting `./src/*`.
 Each module gets an `export * as <ns>` line, and on top of that every name that
 is UNIQUE across the package is HOISTED flat as well - `export { ... }` for
-values, `export type { ... }` for types - so `DBXToolsNodeProject` and
-`projectApi.DBXToolsNodeProject` both resolve. Uniqueness is counted over values
-and types together, and a name colliding with a namespace or declared by a
-hand-authored `exports.ts` is skipped, so anything ambiguous stays reachable only
-through its namespace. Widening what gets hoisted grows the flat surface of every
-package at once; regenerate with `pnpm run barrels` and note that it skips
-`projen/` (not a workspace member), which needs `generateBarrels({ dirs: ["projen"] })`.
+non-function values (classes, consts, enums, …), `export type { ... }` for
+types - so `DBXToolsNodeProject` and `projectApi.DBXToolsNodeProject` both
+resolve. `export function` names are never hoisted; they stay reachable only
+through their namespace (`posixPath.toPosix`). Uniqueness is counted over
+hoistable values and types together, and a name colliding with a namespace or
+declared by a hand-authored `exports.ts` is skipped, so anything ambiguous stays
+reachable only through its namespace. Widening what gets hoisted grows the flat
+surface of every package at once; regenerate with `pnpm run barrels` and note
+that it skips `projen/` (not a workspace member), which needs
+`generateBarrels({ dirs: ["projen"] })`.
 
 ## Working on the packages via the `demo/` app
 
@@ -1135,8 +1139,9 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   (`...-4-6` -> "4.6"), glues size units (`120b` -> "120B"), and uppercases
   acronyms (GPT/GTE/BGE/OSS/AI). The UI picker shows `displayName ?? name`. Add
   new strip prefixes / acronyms / size units in `shared-model/src/display.ts`.
-  The `v<digit>` version marker (`v2` -> "V2") is kept as one token by a
-  `shared-core` tokenizer override, alongside the `ai` -> "AI" one.
+  const `v<digit>` version marker (`v2` -> "V2") is kept as one token by a
+  `shared-core` tokenizer override, alongside the `ai` -> "AI" and `fs` -> "FS"
+  ones.
 - **Default-model endpoint.** The picker labels its default option (the model
   used when the client pins none) from `GET /default-model` (and
   `/default-model/:agentId` - agent-scoped by the same `/:agentId` path-suffix

@@ -16,7 +16,8 @@
  * Each name carries whether it is TYPE-only (`interface` / `type` alias /
  * `export type { ... }`), so the barrel can emit `export type { ... }` for it -
  * required under `isolatedModules`, where re-exporting a type through a value
- * `export { ... }` is a hard error (TS1205).
+ * `export { ... }` is a hard error (TS1205). `export function` names are marked
+ * `isFunction` so the barrel leaves them namespace-only.
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -58,10 +59,15 @@ export function moduleStatements(file: string): readonly ModuleStatement[] {
 export interface ModuleExport {
   readonly name: string;
   readonly isType: boolean;
+  /** `export function` / `export async function` - never hoisted to the barrel. */
+  readonly isFunction: boolean;
 }
 
 /** Declaration node types that are inherently type-only. */
 const TYPE_DECLARATIONS = new Set(["TSInterfaceDeclaration", "TSTypeAliasDeclaration"]);
+
+/** Declaration node types that are functions (not hoisted). */
+const FUNCTION_DECLARATIONS = new Set(["FunctionDeclaration", "TSDeclareFunction"]);
 
 /**
  * Parse `file` and return its own top-level named exports (see the module
@@ -102,18 +108,26 @@ export function moduleExports(file: string): ModuleExport[] {
     const decl = node.declaration;
     if (decl) {
       if (decl.id?.name) {
-        push({ name: decl.id.name, isType: stmtIsType || TYPE_DECLARATIONS.has(decl.type) });
+        push({
+          name: decl.id.name,
+          isType: stmtIsType || TYPE_DECLARATIONS.has(decl.type),
+          isFunction: FUNCTION_DECLARATIONS.has(decl.type),
+        });
       }
       for (const d of decl.declarations ?? []) {
         if (d.id?.type === "Identifier" && d.id.name) {
-          push({ name: d.id.name, isType: stmtIsType });
+          push({ name: d.id.name, isType: stmtIsType, isFunction: false });
         }
       }
     }
     for (const spec of node.specifiers ?? []) {
       const name = spec.exported?.name ?? spec.exported?.value;
       if (!name) continue;
-      push({ name, isType: stmtIsType || spec.exportKind === "type" });
+      push({
+        name,
+        isType: stmtIsType || spec.exportKind === "type",
+        isFunction: false,
+      });
     }
   }
   return [...byName.values()];

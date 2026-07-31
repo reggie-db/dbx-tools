@@ -3,43 +3,33 @@
  *
  * Databricks AI Tools (`databricks aitools`) are Databricks-owned Agent-Skill
  * (`SKILL.md`) trees installed and kept up to date through the Databricks CLI.
- * The CLI installs them globally under `~/.databricks/aitools/skills/<name>/`
- * (with a `.state.json` manifest) and can also write a resolved, agent-agnostic
- * copy to any directory with `databricks aitools install --path <dir>
- * --skills-only`.
- *
- * {@link provisionDatabricksAITools} folds those skills into a Mastra workspace
- * as extra LOCAL skill scan paths so an agent can use them without anyone
- * hand-copying `SKILL.md` files. It never reimplements the CLI's sourcing: it
- * either points Mastra at the already-installed global tree, or shells out to
- * the CLI to materialize a curated subset into a temp dir.
+ * {@link provisionDatabricksAITools} shells out to the CLI
+ * (`databricks aitools install --path <dir>`) to materialize a resolved,
+ * agent-agnostic skill set into a directory, then hands it to Mastra as an
+ * extra LOCAL skill scan path - so an agent gets first-class Databricks skills
+ * without anyone hand-copying `SKILL.md` files. It never reimplements the CLI's
+ * sourcing; the CLI is the source of truth.
  *
  * The option is `false | true | "auto" | DatabricksAIToolsOptions`:
  *
  * - `false` (default) - off.
- * - `"auto"` - enable only when the global tree already exists OR the
- *   `databricks` CLI is resolvable; otherwise silently no-op. The "on if the
- *   CLI is around" default.
- * - `true` - required: fail startup (subject to `failOnError`) when neither the
- *   installed tree nor the CLI can supply skills.
- * - an options bag for a specific `skills` subset, `experimental` skills, a
- *   `refresh` that re-runs the CLI even when a tree exists, or an explicit
- *   `path`.
+ * - `"auto"` - run the CLI when it's installed; if the `databricks` CLI isn't
+ *   available, log and move on (never fails startup). The "on if the CLI is
+ *   around" default.
+ * - `true` (`"require"`) - require the CLI: fail startup (subject to
+ *   `failOnError`) when it isn't available or produces nothing.
+ * - an options bag for a specific `skills` subset, `experimental` skills, an
+ *   explicit output `path`, or a custom `cli` path.
  *
  * @module
  */
 
-import { mkdtemp } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
-import { spawn } from "@dbx-tools/core";
-import { error, log, string } from "@dbx-tools/shared-core";
+import { exec } from "@dbx-tools/core";
+import { localFS } from "@dbx-tools/fs";
+import { error, hash, log, string } from "@dbx-tools/shared-core";
 
 const logger = log.logger("mastra/databricks-aitools");
-
-/** Global skills tree the `databricks aitools` CLI installs into. */
-const GLOBAL_AITOOLS_SKILLS_PATH = join(homedir(), ".databricks", "aitools", "skills");
 
 /** The Databricks CLI binary name; resolved on `PATH`. */
 const DATABRICKS_CLI = "databricks";
@@ -52,8 +42,8 @@ export type DatabricksAIToolsMode = "auto" | "require";
 /** Options for {@link provisionDatabricksAITools}. */
 export interface DatabricksAIToolsOptions {
   /**
-   * `"auto"` (default) enables only when the installed tree exists or the CLI
-   * is resolvable; `"require"` fails startup when neither can supply skills.
+   * `"auto"` (default) runs the CLI when installed and logs-and-continues when
+   * it isn't; `"require"` fails startup when the CLI can't supply skills.
    */
   mode?: DatabricksAIToolsMode;
   /** Install only these skill names (comma/space list or array). */
@@ -61,13 +51,8 @@ export interface DatabricksAIToolsOptions {
   /** Include experimental skills when the CLI has to fetch. */
   experimental?: boolean;
   /**
-   * Re-run the CLI to (re)materialize skills into a fresh dir even when the
-   * global tree already exists. Defaults to `false` (reuse the installed tree).
-   */
-  refresh?: boolean;
-  /**
    * Explicit directory to materialize skills into with the CLI. Defaults to a
-   * temp dir. Ignored when the installed global tree is used as-is.
+   * fresh {@link localFS.tmpFS} root.
    */
   path?: string;
   /** Absolute path to the `databricks` CLI. Defaults to `databricks` on PATH. */
@@ -87,7 +72,7 @@ export interface ProvisionedDatabricksAITools {
   /** Extra LOCAL skill scan paths to hand Mastra. Empty when disabled/unresolved. */
   localSkillPaths: string[];
   /** How the skills were sourced, for logging. */
-  source?: "installed" | "cli";
+  source?: "cli";
 }
 
 /* ------------------------------- helpers ------------------------------- */
@@ -121,36 +106,25 @@ export async function provisionDatabricksAITools(
 
   const mode = options.mode ?? "auto";
   const failOnError = options.failOnError ?? mode === "require";
-  const wantsCliFetch =
-    options.refresh === true ||
-    options.path !== undefined ||
-    string.parseList(options.skills).length > 0 ||
-    options.experimental === true;
 
   try {
-    // Fast path: reuse the already-installed global tree, no CLI call.
-    if (!wantsCliFetch && installedTreeExists()) {
-      logger.debug("using installed aitools tree", { path: GLOBAL_AITOOLS_SKILLS_PATH });
-      return { localSkillPaths: [GLOBAL_AITOOLS_SKILLS_PATH], source: "installed" };
-    }
-
+    // The `databricks` CLI is the source of truth. When it's resolvable, run
+    // `databricks aitools install --path <dir>` to materialize a fresh,
+    // agent-agnostic skill set into a dir Mastra can scan.
     const cliPath = await resolveCli(options.cli);
     if (cliPath) {
       const dir = await materializeViaCli(cliPath, options);
       if (dir) return { localSkillPaths: [dir], source: "cli" };
     }
 
-    // Nothing fetched. Fall back to the installed tree if it's there.
-    if (installedTreeExists()) {
-      return { localSkillPaths: [GLOBAL_AITOOLS_SKILLS_PATH], source: "installed" };
-    }
-
+    // CLI not installed (or produced nothing). "auto" logs and moves on;
+    // "require" fails startup unless `failOnError: false`.
     if (failOnError) {
       throw new Error(
-        `Databricks AI Tools requested but no installed skills tree at "${GLOBAL_AITOOLS_SKILLS_PATH}" and the "${DATABRICKS_CLI}" CLI is not resolvable. Install with \`databricks aitools install\`, or set databricksAITools: "auto".`,
+        `Databricks AI Tools required but the "${DATABRICKS_CLI}" CLI is not available. Install the Databricks CLI (\`databricks aitools install\`), or set databricksAITools: "auto".`,
       );
     }
-    logger.debug("databricks aitools unavailable; skipping");
+    logger.info("databricks CLI not available; skipping AI Tools skills");
     return empty;
   } catch (err) {
     if (failOnError) {
@@ -164,16 +138,11 @@ export async function provisionDatabricksAITools(
   }
 }
 
-/** Whether the CLI's global skills tree exists and holds at least one skill. */
-function installedTreeExists(): boolean {
-  return existsSync(GLOBAL_AITOOLS_SKILLS_PATH);
-}
-
 /** Resolve the `databricks` CLI, returning its invocation path or `undefined`. */
 async function resolveCli(cli: string | undefined): Promise<string | undefined> {
   const command = string.trimToNull(cli) ?? DATABRICKS_CLI;
   try {
-    const result = await spawn(command, ["aitools", "version"], {
+    const result = await exec.spawn(command, ["aitools", "version"], {
       stdout: "capture",
       stderr: "capture",
       check: false,
@@ -186,21 +155,22 @@ async function resolveCli(cli: string | undefined): Promise<string | undefined> 
 }
 
 /**
- * Run `databricks aitools install --path <dir> --skills-only` to materialize a
- * resolved, agent-agnostic skill set into a directory (no agents, no state).
+ * Run `databricks aitools install --path <dir>` to materialize a resolved,
+ * agent-agnostic skill set into a directory (writes `<name>/SKILL.md` trees,
+ * no agents, no state) Mastra can then scan.
  */
 async function materializeViaCli(
   cli: string,
   options: DatabricksAIToolsOptions,
 ): Promise<string | undefined> {
-  const dir =
-    string.trimToNull(options.path) ?? (await mkdtemp(join(tmpdir(), "databricks-aitools-")));
-  const args = ["aitools", "install", "--path", dir, "--skills-only"];
+  const explicit = string.trimToNull(options.path);
+  const dir = explicit ?? (await createTempInstallDir());
+  const args = ["aitools", "install", "--path", dir];
   const skills = string.parseList(options.skills);
   if (skills.length > 0) args.push("--skills", skills.join(","));
   if (options.experimental) args.push("--experimental");
 
-  const result = await spawn(cli, args, {
+  const result = await exec.spawn(cli, args, {
     stdout: "capture",
     stderr: "capture",
     check: false,
@@ -213,4 +183,11 @@ async function materializeViaCli(
   if (!existsSync(dir)) return undefined;
   logger.debug("materialized aitools skills via CLI", { path: dir, skills });
   return dir;
+}
+
+/** Fresh {@link localFS.tmpFS} root for CLI materialization. */
+async function createTempInstallDir(): Promise<string> {
+  const scratch = localFS.tmpFS(`databricks-aitools-${hash.id()}`);
+  await scratch.init();
+  return scratch.root;
 }

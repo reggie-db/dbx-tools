@@ -3,4 +3,3 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as vite from "./src/vite.ts";
-export { appkitUiVitePlugins } from "./src/vite.ts";

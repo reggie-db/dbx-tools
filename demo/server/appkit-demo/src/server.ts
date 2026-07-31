@@ -1,5 +1,5 @@
 import { genie, lakebase, server } from "@databricks/appkit";
-import { createApp } from "@dbx-tools/appkit";
+import { createApp, databricks } from "@dbx-tools/appkit";
 import {
   brand as emailBrand,
   plugin as emailPlugin,
@@ -180,12 +180,11 @@ const support = createAgent({
 
 // Bind to loopback (`127.0.0.1`) locally so the dev server isn't
 // exposed on the LAN, but fall back to `0.0.0.0` when the Databricks
-// Apps platform is running us (it sets `DATABRICKS_APP_PORT` and
-// reaches the container over the LAN-bound interface, so anything
-// else won't accept traffic). Override with `HOST=...` if you need a
-// different bind address for a local tunnel.
-const isDatabricksApp = Boolean(process.env.DATABRICKS_APP_PORT);
-const host = process.env.HOST ?? (isDatabricksApp ? "0.0.0.0" : "127.0.0.1");
+// Apps platform is running us (it reaches the container over the
+// LAN-bound interface, so anything else won't accept traffic).
+// Override with `HOST=...` if you need a different bind address for a
+// local tunnel.
+const host = process.env.HOST ?? (databricks.isAppEnv() ? "0.0.0.0" : "127.0.0.1");
 
 await createAppAuto({
   plugins: [
@@ -215,22 +214,31 @@ await createAppAuto({
     // deployment sets TEAMS_APP_ID / TEAMS_APP_PASSWORD instead and gets the
     // JWT-validated, Connector-delivered path.
     teams({ allowUnauthenticated: true }),
-    // AI Search (Vector Search) runtime for the `search` / `universal_search`
-    // tools and a browser search box. `ensureOnSetup` provisions a REAL index on
-    // boot using the boot-time SDK auth (the DATABRICKS_CONFIG_PROFILE in
-    // `.env`): it ensures the Vector Search endpoint + a MANAGED direct-access
-    // index exist and seeds the dummy docs below when the index is empty. Managed
-    // means Databricks embeds the `text` column on write AND on query, so search
-    // works with no Delta table, no warehouse, and no vectors to compute. The
-    // first boot is slow (endpoint creation takes minutes) and runs in the
-    // background, so the server is up immediately; later boots are no-ops.
+    // Search runtime for the `search` / `universal_search` tools and the browser
+    // search box. `ensureOnSetup` seeds the dummy docs below on boot (background,
+    // idempotent) using the app's SDK auth (DATABRICKS_CONFIG_PROFILE in `.env`).
+    //
+    // The backend is chosen automatically:
+    //   - Set SEARCH_ENDPOINT (+ SEARCH_INDEX) and it wires up a REAL Databricks
+    //     Vector Search index: a MANAGED direct-access index (Databricks embeds
+    //     the `text` column on write AND query - no Delta table, no warehouse).
+    //     First boot is slow (endpoint creation takes minutes), runs in the
+    //     background, and later boots are no-ops.
+    //   - Leave SEARCH_ENDPOINT unset (the default here) and, because `lakebase()`
+    //     is registered above, search falls back to a Lakebase (Postgres)
+    //     full-text index - same tools, routes, hits, and UI. This zero-Vector-
+    //     Search path is what the demo uses out of the box.
     // Mounts `POST /api/search`, `/universal`, `GET /indexes`, and (with
     // `allowWrite`) `/documents`, `/index`, `/index/sync`; the UI reads the
     // catalogue via `usePluginClientConfig("search")`.
     search({
       allowWrite: true,
-      index: "reggie_pierce_aws_catalog.ai_search.docs",
-      endpoint: "dbx-tools-demo-vs",
+      // Full UC name for the Vector Search path; the Lakebase fallback derives a
+      // Postgres table name from the last segment (`docs`).
+      index: process.env.SEARCH_INDEX ?? "reggie_pierce_aws_catalog.ai_search.docs",
+      // Only set the endpoint (-> Vector Search) when one is configured; unset
+      // means the Lakebase full-text fallback answers (see the comment above).
+      ...(process.env.SEARCH_ENDPOINT ? { endpoint: process.env.SEARCH_ENDPOINT } : {}),
       columns: ["title", "text", "url"],
       ensureOnSetup: {
         embeddingModel: "databricks-gte-large-en",
@@ -282,10 +290,9 @@ await createAppAuto({
       // generated chart matches the surrounding AppKit UI instead of falling
       // back to Echarts' defaults.
       brand: defaultBrandContext,
-      // Fold Databricks AI Tools skills (`databricks aitools install`) into the
-      // agents when they're available locally: "auto" reuses the CLI's
-      // installed skills tree (~/.databricks/aitools/skills) or the `databricks`
-      // CLI if present, and silently no-ops otherwise.
+      // Fold Databricks AI Tools skills into the agents: "auto" runs the
+      // `databricks` CLI (`databricks aitools install --path`) when it's
+      // installed, and logs-and-moves-on when the CLI isn't available.
       databricksAITools: "auto",
     }),
   ],

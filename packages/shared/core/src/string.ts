@@ -16,7 +16,8 @@ import { fnvHashWithOptions } from "./hash.ts";
  * - `distinct` - drop duplicate tokens (first occurrence wins).
  * - `lowerCase` - lowercase every token.
  * - `capitalize` - upper-case each token's first letter (then
- *   {@link TOKENIZE_OVERRIDES} fix up `ai` -> `AI` and `v2` -> `V2`).
+ *   {@link TOKENIZE_OVERRIDES} fix up `ai` -> `AI`, `fs` -> `FS`, and
+ *   `v2` -> `V2`).
  * - `omitUriScheme` - strip a leading `scheme://` before tokenizing.
  * - `omitEmailDomain` - keep only the local part of an email.
  * - `camelCase` - split on camelCase boundaries / digit runs / acronyms
@@ -56,9 +57,10 @@ const TOKENIZE_CAMEL_CASE_REGEXP = /[vV][0-9]+|[A-Z]?[a-z]+|[0-9]+|[A-Z]+(?![a-z
 const TOKENIZE_NON_ALPHANUMERIC_REGEXP = /[a-zA-Z0-9]+/g;
 const TOKENIZE_OVERRIDES: ((token: string, options: TokenizeOptions) => string)[] = [
   (token, options) => {
-    if (options.capitalize && token.toLowerCase() === "ai") {
-      return "AI";
-    }
+    if (!options.capitalize) return token;
+    const lower = token.toLowerCase();
+    if (lower === "ai") return "AI";
+    if (lower === "fs") return "FS";
     return token;
   },
   // Version marker `v2` -> `V2` when capitalizing (the leading `v` uppercases,

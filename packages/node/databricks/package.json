@@ -26,7 +26,8 @@
     "@databricks/sdk-experimental": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/core": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*"
+    "@dbx-tools/shared-core": "workspace:*",
+    "@dbx-tools/shared-fs": "workspace:*"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

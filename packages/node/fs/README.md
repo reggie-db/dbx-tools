@@ -1,0 +1,49 @@
+# `@dbx-tools/fs`
+
+Node local-disk `FileSystem` implementation of the `@dbx-tools/shared-fs`
+contract. Built on `BaseFileSystem`, so this package only owns host separator
+conversion (`toBackendPath`), Node I/O, symlink containment (`preparePath`), and
+errno mapping.
+
+Key features:
+
+- Contained-by-default path resolution under a configured root
+- `~` / `~/...` roots expand via `os.homedir()` (before `HOME`), then
+  Databricks App `/home/app`, then a created `./.home` (create failures skip)
+- Temp dirs via `os.tmpdir()` then `TMPDIR` / `TMP` / `TEMP`, else
+  `<home>/.tmp` (each candidate must pass a write/delete probe)
+- Read/write/append/copy/move plus mkdir/rmdir/readdir/stat/exists
+- Optional read-only mode
+- Native append / copy / rename via Node when available
+
+## Why use this over native Node `fs`
+
+Use this when callers should speak the portable `FileSystem` interface (the same
+surface FTP, object storage, or Databricks mounts can implement) rather than
+Node APIs directly. Reach for `node:fs` when you only need one-off local I/O.
+
+## Quick start
+
+```ts
+import { LocalFileSystem, localFS } from "@dbx-tools/fs";
+
+const local = new LocalFileSystem({ root: "./data" });
+await local.init();
+await local.writeFile("hello.txt", "hi");
+
+const home = localFS.homeFS("projects/data");
+const scratch = localFS.tmpFS("job-42");
+```
+
+## Module map
+
+| Export                             | Role                                                   |
+| ---------------------------------- | ------------------------------------------------------ |
+| `LocalFileSystem`                  | Local-disk `FileSystem<"local">`                       |
+| `LocalFileSystemOptions`           | Constructor options                                    |
+| `localFS.homeFS` / `localFS.tmpFS` | `LocalFileSystem` under resolved home / temp           |
+| `osPath.resolveLocalHome`          | Home: `homedir` → `HOME` → `/home/app` → `./.home`     |
+| `osPath.resolveLocalTemp`          | Temp: `tmpdir` → `TMPDIR`/`TMP`/`TEMP` → `<home>/.tmp` |
+| `localPath.expandLocalHomePath`    | Expand `~` against a home dir                          |
+
+Adjacent: `@dbx-tools/shared-fs` (`FileSystem` contract + `BaseFileSystem`).

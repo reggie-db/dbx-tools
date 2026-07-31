@@ -6,9 +6,12 @@
 //   own message state and transport themselves.
 // - The Mastra plugin client + hooks (model catalogue, history paging,
 //   suggestions, embed fetches) the controlled path needs.
+// - `dedupeSuggestions`: the dedupe + cap `MastraChat` applies to
+//   Genie-sourced starter questions, so another surface offering the same
+//   prompts (e.g. a Teams card chat) presents an identical list.
 //
 // Internal building blocks (bubbles, tool pills, markdown, data grid,
-// embed slots, suggestions) are intentionally not re-exported.
+// embed slots) are intentionally not re-exported.
 
 export {
   MastraPluginClient,
@@ -24,6 +27,7 @@ export {
 export type { ByIdFetchState } from "../support/mastra-client.ts";
 export { ChatView } from "./chat-view.tsx";
 export { ExportMenu } from "./export-menu.tsx";
+export { dedupeSuggestions } from "./suggestions.ts";
 export { MastraChat, useMastraChat } from "./mastra-chat.tsx";
 export type { MastraChatProps, UseMastraChatOptions } from "./mastra-chat.tsx";
 export { ThreadSidebar } from "./thread-sidebar.tsx";

@@ -7,10 +7,15 @@
  * contributions merge extra filesystems and skill scan roots; built-in
  * Assistant skill trees are toggled with `assistantSkills` (on by default).
  *
+ * Databricks mounts use `@dbx-tools/databricks` {@link DatabricksFileSystem}
+ * wrapped by {@link filesystems}; missing roots fall back to
+ * {@link scratchFilesystem}.
+ *
  * @module
  */
 
 import type { WorkspaceClient } from "@databricks/sdk-experimental";
+import { DatabricksFileSystem } from "@dbx-tools/databricks";
 import { log, string, token } from "@dbx-tools/shared-core";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
@@ -22,7 +27,7 @@ import {
 } from "@mastra/core/workspace";
 
 import { MASTRA_SCOPES_KEY, MASTRA_USER_EMAIL_KEY, MASTRA_USER_KEY, type User } from "./config.ts";
-import { DatabricksWorkspaceFilesystem, emptyFilesystem } from "./filesystems.ts";
+import { scratchFilesystem, filesystems } from "./filesystems.ts";
 
 /* ------------------------------ constants ------------------------------ */
 
@@ -175,8 +180,10 @@ function hasWorkspaceFileScope(requestContext: RequestContext | undefined): bool
  * set. Returns empty mounts when the OBO user or client is missing.
  * Mastra owns filesystem initialization.
  */
-function resolveAssistantSkillsMounts(context: WorkspaceMountContext): WorkspaceMountContribution {
-  const mounts: Record<string, DatabricksWorkspaceFilesystem> = {};
+async function resolveAssistantSkillsMounts(
+  context: WorkspaceMountContext,
+): Promise<WorkspaceMountContribution> {
+  const mounts: Record<string, WorkspaceFilesystem> = {};
   const requestContext = context.requestContext;
 
   if (!shouldMountAssistantSkills(requestContext)) {
@@ -189,7 +196,7 @@ function resolveAssistantSkillsMounts(context: WorkspaceMountContext): Workspace
   }
 
   const user = requestContext!.get(MASTRA_USER_KEY) as User | undefined;
-  const client = user?.executionContext.client;
+  const client = user?.executionContext.client as WorkspaceClient | undefined;
   if (!client) {
     logger.debug("assistant-skills:skipped", {
       reason: "missing-obo-client",
@@ -198,14 +205,14 @@ function resolveAssistantSkillsMounts(context: WorkspaceMountContext): Workspace
     return { mounts, skillPaths: [] };
   }
 
-  mounts[ASSISTANT_WORKSPACE_SKILLS_MOUNT] = databricksFilesystem(
+  mounts[ASSISTANT_WORKSPACE_SKILLS_MOUNT] = await databricksFilesystem(
     client,
     ASSISTANT_SHARED_SKILLS_PATH,
   );
 
   const email = resolveScopedEmail(requestContext);
   if (email) {
-    mounts[ASSISTANT_USER_SKILLS_MOUNT] = databricksFilesystem(
+    mounts[ASSISTANT_USER_SKILLS_MOUNT] = await databricksFilesystem(
       client,
       userAssistantSkillsPath(email),
       false,
@@ -281,17 +288,35 @@ function resolveScopedEmail(requestContext: RequestContext | undefined): string 
   return email?.trim() || undefined;
 }
 
-/** Construct a read-only {@link DatabricksWorkspaceFilesystem} for `basePath`. */
-function databricksFilesystem(
+/**
+ * Wrap a {@link DatabricksFileSystem} as a Mastra filesystem. When the root is
+ * missing (and {@link readOnly} so we will not create it), fall back to
+ * {@link scratchFilesystem} so skill scans still have a writable local mount.
+ */
+async function databricksFilesystem(
   client: WorkspaceClient,
-  basePath: string,
+  root: string,
   readOnly: boolean = true,
-): DatabricksWorkspaceFilesystem {
-  return new DatabricksWorkspaceFilesystem({
+): Promise<WorkspaceFilesystem> {
+  const fs = new DatabricksFileSystem({
     client,
-    basePath,
+    root,
     readOnly,
+    createRoot: !readOnly,
   });
+  try {
+    await fs.init();
+    if (await fs.exists(".")) {
+      return filesystems(fs, { readOnly });
+    }
+  } catch (err) {
+    logger.debug("databricks-mount:scratch-fallback", {
+      root,
+      readOnly,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return scratchFilesystem();
 }
 
 /**
@@ -329,8 +354,8 @@ async function resolveWorkspaceContribution(
 /**
  * Dynamic filesystem resolver passed to Mastra {@link Workspace}.
  *
- * Returns a {@link CompositeFilesystem} when any mount resolved; otherwise
- * {@link emptyFilesystem}.
+ * Returns a {@link CompositeFilesystem} when any mount resolved; otherwise a
+ * fresh {@link scratchFilesystem} so Mastra always has a writable local root.
  */
 async function resolveWorkspaceFilesystem(
   resolvers: WorkspaceMountResolver[],
@@ -339,10 +364,10 @@ async function resolveWorkspaceFilesystem(
   const { mounts } = await resolveWorkspaceContribution(resolvers, context);
   const mountKeys = Object.keys(mounts);
   if (mountKeys.length === 0) {
-    logger.debug("filesystem:empty", {
+    logger.debug("filesystem:scratch", {
       hasRequestContext: Boolean(context.requestContext),
     });
-    return emptyFilesystem();
+    return scratchFilesystem();
   }
   logger.debug("filesystem:composite", { mountKeys });
   return new CompositeFilesystem({ mounts });

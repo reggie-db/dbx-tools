@@ -55,6 +55,16 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/databricks",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/fs",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/genie",
       "version": "workspace:*",
       "type": "runtime"
@@ -71,6 +81,11 @@
     },
     {
       "name": "@dbx-tools/shared-core",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/shared-fs",
       "version": "workspace:*",
       "type": "runtime"
     },

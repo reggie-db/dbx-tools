@@ -65,7 +65,10 @@ The Cards page answers with the SAME content the Stream page does - ask both
 "what were inside sales PSPW and gross margin this week?" and both call Genie and
 report the same numbers. That is the point of the endpoint: the agent, its tools,
 and its data are identical, and only the presentation changes (a card instead of
-streamed markdown). See
+streamed markdown). Its starter prompts come from the same place too: the page
+reads the agent's Genie sample questions off the Mastra plugin's `/suggestions`
+route (`useMastraSuggestions` + `dedupeSuggestions`, exactly what `MastraChat`
+does), so neither page offers a prompt the agent cannot answer. See
 [`@dbx-tools/teams`](../packages/node/teams/README.md) for the two-pass turn
 that makes it so.
 

@@ -3,5 +3,4 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as envExport from "./src/env-export.ts";
-export { snapshotEnv, diffEnv, defaultEnvExportFormat, formatEnvExport, parseEnvExportFormat } from "./src/env-export.ts";
 export type { EnvExportFormat } from "./src/env-export.ts";
