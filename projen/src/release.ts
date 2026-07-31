@@ -4,6 +4,7 @@
  * the project has a GitHub component - authors the tag-driven npm publish
  * workflow that the pushed tag triggers.
  */
+import { spawnSync } from "child_process";
 import { Component } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
@@ -145,7 +146,10 @@ export class DBXToolsRelease extends Component {
         {
           name: "Setup Node.js",
           uses: "actions/setup-node@v6",
-          with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
+          with: {
+            "node-version": "lts/*",
+            "registry-url": getRegistryUrl()
+          },
         },
         // NOT frozen. The lockfile is gitignored by policy (it can carry a
         // private-registry fingerprint), so CI often has none or a stale one -
@@ -208,7 +212,7 @@ export class DBXToolsRelease extends Component {
         {
           name: "Setup Node.js",
           uses: "actions/setup-node@v6",
-          with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
+          with: { "node-version": "lts/*", "registry-url": getRegistryUrl() },
         },
         // NOT frozen. The lockfile is gitignored by policy (it can carry a
         // private-registry fingerprint), so CI often has none or a stale one -
@@ -233,4 +237,9 @@ export class DBXToolsRelease extends Component {
       ],
     });
   }
+}
+
+function getRegistryUrl(): string {
+  const npmRegistry = spawnSync("npm", ["config", "get", "registry"]);
+  return (npmRegistry.stdout?.toString() ?? "").trim() || "https://registry.npmjs.org/";
 }
