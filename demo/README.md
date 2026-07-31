@@ -144,19 +144,19 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
 Which mode you want depends on whether you're building a CONSUMING project or
 working on the `@dbx-tools/*` packages themselves.
 
-### Dev-link mode (default) — for iterating on the CLIENT UI packages in THIS repo
+### Dev-link mode (default) — for iterating on ALL packages in THIS repo
 
-When you're editing the UI package source in `../packages/ui/**`, the
-bump → publish → update → rebuild loop is too slow. Link mode points the client
-app's `@dbx-tools/*` deps at that source instead, so a `vite build --watch`
-rebuilds the bundle on every edit. Beside the packages this is the common case,
-so it is what a plain install gives you:
+When you're editing package source under `../packages/**`, the bump → publish →
+update → restart loop is too slow. Link mode points BOTH demo members at local
+`@dbx-tools/*` source, so server changes land on restart and a
+`vite build --watch` rebuilds the client bundle on every UI edit. Beside the
+packages this is the common case, so it is what a plain install gives you:
 
 ```bash
-pnpm install                                               # client resolves @dbx-tools/* from source
-pnpm --filter @dbx-tools/demo-appkit-server dev            # server (unchanged, serves dist/)
+pnpm install                                               # server + client use local source
+pnpm --filter @dbx-tools/demo-appkit-server dev            # restart for Node package edits
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch  # rebuild dist/ on UI source edits
-# edit anything under ../packages/ui/**/src, refresh the browser — no republish.
+# edit ../packages/**/src, restart/refresh as appropriate — no republish.
 ```
 
 ### Consumer mode — for consuming projects
@@ -190,26 +190,19 @@ is the point. An earlier `scripts/dev-link.mjs` edited the app manifest and
 `pnpm-workspace.yaml` is also committed, so a forgotten undo landed local dev
 state in git.
 
-The linked set is discovered automatically, as the closure of the client app's
-`@dbx-tools/*` deps followed through each source package's own, so packages
-added, removed, or renamed need no edit.
+The local set is discovered automatically from `../packages/**`, so packages
+added, removed, or renamed need no edit. The hook also resolves every EXTERNAL
+dependency declared by those source packages from the main install and links
+the demo's matching dependencies to that exact package directory. This second
+map matters on the server: linking only `@dbx-tools/*` would let direct demo
+imports load one AppKit / Mastra instance while linked sources load another,
+breaking identity-based singletons such as AppKit's `CacheManager`. Bridging the
+whole runtime graph gives both demo members and all linked sources one set of
+AppKit, Mastra, React, Zod, and other shared modules.
 
-**Client only, on purpose.** The SERVER packages are NOT linked. A `link:`ed
-package resolves its own dependencies from the MAIN repo's `node_modules`, which
-is a different physical install from the demo's: the two trees currently hold
-`@databricks/appkit@0.43.1` under different peer-hashes, and `@mastra/core` at
-different versions outright. Singletons like AppKit's `CacheManager` then
-initialize in one copy and are read from the other. The browser build sidesteps
-this because Vite bundles from source and dedupes React
-(`app/appkit-demo/vite.config.override.js`); tsx has no equivalent. Unifying it
-needs one shared store, meaning one workspace, which is the standalone-consumer
-property this demo exists to show. So server changes still go through
-bump → publish → `pnpm update` → restart; only the UI packages source-link, in
-either mode.
-
-Note this scoping is by CONSUMER, not by package name: the server also depends on
-`@dbx-tools/shared-core`, which the client pulls too, so only the client app and
-the packages reachable from it are rewritten.
+The startup `dependencies` log reports what the process actually resolved.
+Local packages read `0.0.0 (linked from packages/...)`; consumer mode reports
+published versions such as `0.6.x`.
 
 ## Required env
 

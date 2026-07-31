@@ -48,14 +48,14 @@ import { plugin } from "@dbx-tools/appkit";
 import { chat, space as genieSpace } from "@dbx-tools/genie";
 import { error, log, string } from "@dbx-tools/shared-core";
 import { genieModel, type GenieMessage } from "@dbx-tools/shared-genie";
-import { wire, type MastraWriter, type StartedEvent } from "@dbx-tools/shared-mastra";
+import type { MastraWriter, StartedEvent } from "@dbx-tools/shared-mastra";
 import type { RequestContext } from "@mastra/core/request-context";
 import { MASTRA_THREAD_ID_KEY } from "@mastra/core/request-context";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
 import type { MastraTools } from "./agents.ts";
-import { chartPlannerRequestSchema, prepareChart } from "./chart.ts";
+import { chartPlannerRequestSchema, chartToolOutputSchema, prepareChart } from "./chart.ts";
 import { MASTRA_USER_KEY, resolveUserKey } from "./config.ts";
 import type { MastraPluginConfig, User } from "./config.ts";
 import { fetchStatementData } from "./statement.ts";
@@ -687,9 +687,9 @@ function buildGetStatementTool() {
  * {@link prepareChart} that resolves the dataset by fetching the
  * Genie statement's rows on demand. The tool mints a `chartId`
  * synchronously, caches an empty placeholder, and kicks off the
- * planner in the background so the agent loop never blocks. The
- * host UI resolves `[chart:<chartId>]` markers by reading the
- * cached {@link Chart} entry (1h TTL).
+ * planner in the background so the agent loop never blocks. The result carries
+ * the complete marker to copy; the host UI resolves it by reading the cached
+ * {@link Chart} entry (1h TTL).
  *
  * Space-agnostic: a Genie `statement_id` is workspace-scoped, so
  * one shared `prepare_chart` tool covers every wired Genie space.
@@ -709,20 +709,21 @@ function buildPrepareChartTool(opts: { config: MastraPluginConfig }) {
     description: string.toDescription([
       `
         Queue a chart for the rows of a Genie statement. Mints a
-        short \`chartId\` synchronously and kicks off a BACKGROUND
+        \`chartId\` plus its complete \`marker\` synchronously and
+        kicks off a BACKGROUND
         task that fetches the statement's rows, runs the
         chart-planner to pick a chart type and Echarts spec, and
         caches the result under the \`chartId\` for one hour. The
         host UI fetches the cached chart on its own once it lands.
       `,
       `
-        To display the chart in your reply, embed
-        \`[chart:<chartId>]\` on its own line at the position you
-        want it to appear, using the EXACT \`chartId\` string this
-        call returned. Never construct a chart id yourself (it is
-        not the \`statement_id\` or any variation of it) - only a
-        value returned by this tool resolves to a real chart. The
-        tool returns immediately - do NOT wait or call it again to
+        To display the chart in your reply, copy the returned
+        \`marker\` VERBATIM onto its own line at the position you
+        want it to appear. Never construct, alter, or invent a
+        marker from \`chartId\` (and never use the \`statement_id\`
+        or any variation of it) - only the complete value returned
+        by this tool resolves to a real chart. The tool returns
+        immediately - do NOT wait or call it again to
         "check progress"; the chart resolves asynchronously on the
         host UI's side.
       `,
@@ -734,7 +735,7 @@ function buildPrepareChartTool(opts: { config: MastraPluginConfig }) {
       `,
     ]),
     inputSchema: prepareChartRequestSchema,
-    outputSchema: wire.ChartSchema.pick({ chartId: true }),
+    outputSchema: chartToolOutputSchema,
     execute: async (request, ctxRaw) => {
       const ctx = ctxRaw as ToolExecuteCtx;
       const { client, requestContext } = requireClient(ctx, toolId);
@@ -835,20 +836,20 @@ export const GENIE_INSTRUCTIONS = string.toDescription([
             `,
             `
               \`[chart:<chartId>]\` - render the rows as a chart. To
-              get a \`<chartId>\`, call \`prepare_chart\` with the
+              get one, call \`prepare_chart\` with the
               statement's id (and an optional \`title\` / one-line
               \`description\` of the insight to surface). The tool
-              returns the \`chartId\` synchronously and prepares the
-              chart spec in the background; embed the returned id as
-              \`[chart:<chartId>]\` on its own line wherever the
-              chart should appear. Use a chart when the data has a
+              returns the complete \`marker\` synchronously and
+              prepares the chart spec in the background; copy that
+              marker VERBATIM onto its own line wherever the chart
+              should appear. Use a chart when the data has a
               story a visual conveys better than a table (trends,
               rankings, distributions, parts-of-a-whole).
 
-              NEVER invent or hand-build a \`<chartId>\`. A valid
-              \`<chartId>\` is the opaque token a \`prepare_chart\`
-              call returned to you in THIS turn - nothing else. It
-              is NOT a \`statement_id\`, and it is NOT a
+              NEVER invent or hand-build a marker. A valid marker is
+              the complete opaque string a \`prepare_chart\` call
+              returned to you in THIS turn - nothing else. Its id is
+              NOT a \`statement_id\`, and it is NOT a
               \`statement_id\` prefix with a label appended (e.g.
               \`01f1...-region-fill\`). If you have not called
               \`prepare_chart\` and received an id back, do not write

@@ -29,7 +29,7 @@
 
 import { AppKitError, CacheManager, ExecutionError } from "@databricks/appkit";
 import { async, error, hash, json, log, string, type BrandContext } from "@dbx-tools/shared-core";
-import { wire, type Chart, type ChartResult } from "@dbx-tools/shared-mastra";
+import { marker, wire, type Chart, type ChartResult } from "@dbx-tools/shared-mastra";
 import { model } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
 import type { RequestContext } from "@mastra/core/request-context";
@@ -310,6 +310,24 @@ export const chartPlannerRequestSchema = z.object({
 
 export type ChartPlannerRequest = z.infer<typeof chartPlannerRequestSchema>;
 
+/**
+ * Agent-facing result of either chart-producing tool.
+ *
+ * `marker` is deliberately redundant with `chartId`: the host still keys the
+ * cache by id, while the model gets the exact opaque token to copy into prose
+ * and has no reason to invent or retype a UUID.
+ */
+export const chartToolOutputSchema = wire.ChartSchema.pick({ chartId: true }).extend({
+  marker: z
+    .string()
+    .describe(
+      "Exact embed marker. Copy this complete value verbatim onto its own line; never construct a marker from chartId.",
+    ),
+});
+
+/** Result returned synchronously while chart planning continues in the background. */
+export type ChartToolOutput = z.infer<typeof chartToolOutputSchema>;
+
 /* --------------------------- planner instructions --------------------------- */
 
 /**
@@ -558,14 +576,14 @@ export interface PrepareChartOptions {
  *   - on planner success:           `{ chartId, result }`
  *   - on data / planner failure:    `{ chartId, error }`
  */
-export async function prepareChart(opts: PrepareChartOptions): Promise<{ chartId: string }> {
+export async function prepareChart(opts: PrepareChartOptions): Promise<ChartToolOutput> {
   const chartId = hash.id();
   await writeChart({ chartId }, opts.userKey);
   logger.debug("queued", { chartId });
   // Fire-and-forget. Failures land in the cache as `error` entries;
   // never escape into an unhandled rejection.
   void runPrepareChart(chartId, opts);
-  return { chartId };
+  return { chartId, marker: marker.formatMarker("chart", chartId) };
 }
 
 async function runPrepareChart(chartId: string, opts: PrepareChartOptions): Promise<void> {
@@ -1153,9 +1171,8 @@ export function planToEchartsOption(
  * Thin wrapper over {@link prepareChart} for callers that already
  * have a dataset in hand. Mints a `chartId` synchronously, caches
  * an empty placeholder, and kicks off the chart-planner in the
- * background. Returns just the `chartId`; the host UI resolves
- * `[chart:<chartId>]` markers by hitting the plugin's
- * `/embed/chart/:id` route.
+ * background. Returns the `chartId` plus its ready-to-copy `marker`; the host
+ * UI resolves that marker through the plugin's `/embed/chart/:id` route.
  *
  * For Genie statement results, prefer the Genie agent's
  * `prepare_chart` tool, which accepts a `statement_id` and
@@ -1169,14 +1186,15 @@ export function buildRenderDataTool(config: MastraPluginConfig) {
         Submit a tabular dataset for inline rendering as a chart in
         the user's view. Pass a title, the raw rows (array of objects
         keyed by column name), and an optional one-line description
-        of the insight to highlight. Returns a short \`chartId\`;
-        the chart renders inline at the position you embed the
-        matching \`[chart:<chartId>]\` marker.
+        of the insight to highlight. Returns \`chartId\` plus the
+        complete \`marker\`; copy the returned marker VERBATIM onto
+        its own line where the chart should render. Never construct,
+        alter, or invent a chart marker yourself.
       `,
       `
-        Placement contract: embed \`[chart:<chartId>]\` on its own
-        line (blank lines above and below) wherever you want the
-        chart to appear in your reply. The chart resolves
+        Placement contract: embed the returned \`marker\` on its own
+        line (blank lines above and below) wherever you want the chart
+        to appear in your reply. The chart resolves
         asynchronously - the tool returns the id immediately and the
         host UI fetches the chart from the cache once the planner
         lands. You can call \`render_data\` multiple times in the
@@ -1192,7 +1210,7 @@ export function buildRenderDataTool(config: MastraPluginConfig) {
       `,
     ]),
     inputSchema: chartPlannerRequestSchema,
-    outputSchema: wire.ChartSchema.pick({ chartId: true }),
+    outputSchema: chartToolOutputSchema,
     execute: async (input, ctxRaw) => {
       const { title, description, data } = input as ChartPlannerRequest;
       const ctx = ctxRaw as { requestContext?: RequestContext } | undefined;

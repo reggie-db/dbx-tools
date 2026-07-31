@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { marker } from "@dbx-tools/shared-mastra";
 import { z } from "zod";
 
-import { chartPlanSchema, planToEchartsOption } from "../src/chart.ts";
+import { chartPlanSchema, chartToolOutputSchema, planToEchartsOption } from "../src/chart.ts";
 
 /**
  * Walk every nested schema node, yielding each object so a test can
@@ -64,6 +65,20 @@ describe("chart data point coercion", () => {
     assert.equal(dataPoint.parse({ nope: true }), null);
     assert.equal(dataPoint.parse([1]), null);
     assert.equal(dataPoint.parse([1, 2, 3, 4]), null);
+  });
+});
+
+describe("chart tool output", () => {
+  it("returns the exact opaque marker the model should copy", () => {
+    const chartId = "62aefc66-beda-4107-815c-b93fbf2c20f3";
+    const output = chartToolOutputSchema.parse({
+      chartId,
+      marker: marker.formatMarker("chart", chartId),
+    });
+    assert.deepEqual(output, {
+      chartId,
+      marker: `[chart:${chartId}]`,
+    });
   });
 });
 

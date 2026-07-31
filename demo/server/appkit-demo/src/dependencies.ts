@@ -15,7 +15,7 @@
  * @module
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -82,7 +82,12 @@ function describe(name: string): string {
   if (!dir) return UNRESOLVED;
   const version = readManifest(path.join(dir, "package.json"))?.version;
   const label = typeof version === "string" ? version : UNRESOLVED;
-  const real = existsSync(dir) ? path.resolve(dir) : dir;
+  let real: string;
+  try {
+    real = realpathSync(dir);
+  } catch {
+    return label;
+  }
   if (real.startsWith(`${demoRoot}${path.sep}`)) return label;
   return `${label} (linked from ${path.relative(path.dirname(demoRoot), real)})`;
 }

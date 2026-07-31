@@ -1,16 +1,14 @@
 /**
- * Resolve the demo's CLIENT `@dbx-tools/*` dependencies to the local source under
- * `../packages/`, instead of the registry in `.npmrc`.
+ * Resolve the demo SERVER and CLIENT to the local source workspace.
  *
  * The demo is a real downstream CONSUMER, so installing published versions is a
  * mode it has to keep. It is not the DEFAULT one, though: beside the packages in
  * this checkout, the common case is editing them, and a demo silently running a
  * published copy of the code you just changed is the more expensive surprise -
  * you restart, see the old behavior, and go looking for the bug in the wrong
- * place. So linking is on unless you opt out, and a `vite build --watch` picks
- * up every edit:
+ * place. So linking is on unless you opt out:
  *
- *   pnpm install                     # client resolves @dbx-tools/* from source
+ *   pnpm install                     # server + client resolve local source
  *   DBX_TOOLS_LINK=0 pnpm install    # consumer mode: published versions
  *
  * The switch itself lives in the repo-root hook ({@link linkEnabled}) so both
@@ -26,24 +24,16 @@
  * whole failure mode: the mode is an env var on one command and the working tree
  * never changes.
  *
- * CLIENT ONLY, deliberately - this is the one place that narrows what gets linked,
- * and it is not a hand-maintained list but the closure of the client app's own
- * dependencies. Linking the SERVER packages does not work: a `link:`ed package
- * resolves its own dependencies from the MAIN repo's `node_modules`, which is a
- * different physical install from the demo's. The two trees hold
- * `@databricks/appkit` at one version under different peer-hashes, and
- * `@mastra/core` at different versions outright, so singletons like AppKit's
- * `CacheManager` initialize in one copy and are read from the other
- * ("CacheManager not initialized"). The browser build sidesteps this because Vite
- * bundles from source and dedupes React (`vite.config.override.js`); tsx has no
- * equivalent. Unifying it would need ONE shared store, i.e. one workspace, which is
- * exactly the standalone-consumer property the demo exists to demonstrate. To try
- * it anyway, drop the `dependencyClosure` call below and pass `sources` straight
- * through.
- *
- * Scoping is by CONSUMER, not by dependency name: the server app also depends on
- * `@dbx-tools/shared-core`, which the client pulls too, so filtering on the name
- * alone would source-link the server's copy as a side effect.
+ * Linking only `@dbx-tools/*` is insufficient on the SERVER. Node follows each
+ * link to the main repo's real source directory, where imports resolve from the
+ * MAIN `node_modules`; meanwhile imports written directly in the demo would
+ * resolve from `demo/node_modules`. AppKit's `CacheManager`, Mastra classes,
+ * React contexts, and other identity-bearing modules would then exist twice.
+ * The root hook's `resolvedDependencySources()` bridges every external
+ * dependency declared by the source packages to the SAME package instance from
+ * the main install. The demo members, linked dbx-tools sources, and their shared
+ * runtime therefore form one module graph even though `demo/` remains a
+ * standalone pnpm workspace.
  *
  * The rewriting itself lives in the repo-root `.pnpmfile.cjs`, shared with
  * `projen/`. Required through a guard, unlike `projen/`: this folder is designed to
@@ -58,8 +48,6 @@ const path = require("node:path");
 
 const demoRoot = __dirname;
 const packagesRoot = path.join(demoRoot, "..", "packages");
-/** The one demo member whose deps are linked: the browser client (see above). */
-const clientDir = path.join(demoRoot, "app/appkit-demo");
 const sharedHookPath = path.join(demoRoot, "..", ".pnpmfile.cjs");
 
 /** Passthrough for consumer mode, and for a copied-out demo with no source beside it. */
@@ -72,25 +60,21 @@ function resolveHooks() {
   const shared = require(sharedHookPath);
   if (!shared.linkEnabled()) return PASSTHROUGH;
 
-  const clientManifest = shared.readJson(path.join(clientDir, "package.json"));
-  if (!clientManifest) return PASSTHROUGH;
-
   const sources = shared.scanPackages(packagesRoot, shared.SCOPE);
-  const entry = shared.scopedDeps(clientManifest, shared.SCOPE);
-  const linked = shared.dependencyClosure(entry, sources, shared.SCOPE);
-  if (linked.size === 0) return PASSTHROUGH;
+  if (sources.size === 0) return PASSTHROUGH;
+  const runtimes = shared.resolvedDependencySources(sources, shared.SCOPE);
+  const targets = new Map([...sources, ...runtimes]);
+  const members = shared.scanPackages(
+    [path.join(demoRoot, "app"), path.join(demoRoot, "server")],
+    shared.SCOPE,
+  );
 
   return shared.createLinkHook({
     caller: __filename,
-    sources: linked,
-    // The client app is a workspace MEMBER, so its specifiers resolve against its
-    // own directory; the linked packages are transitive, so theirs resolve against
-    // the lockfile's directory (this demo root). Everything else, the server app
-    // above all, is left alone.
-    baseFor: (name) => {
-      if (name === clientManifest.name) return clientDir;
-      return linked.has(name) ? demoRoot : undefined;
-    },
+    sources: targets,
+    // A workspace member's relative links resolve from that member. Every linked
+    // package's links are recorded relative to the demo lockfile at `demoRoot`.
+    baseFor: (name) => members.get(name) ?? (targets.has(name) ? demoRoot : undefined),
   });
 }
 

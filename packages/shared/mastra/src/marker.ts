@@ -94,6 +94,17 @@ export function isUuid(id: string): boolean {
   return UUID_RE.test(id);
 }
 
+/**
+ * Build the exact embed marker the agent should place in prose.
+ *
+ * Tool results return this complete value so the model copies one opaque token
+ * rather than reconstructing it from `type` plus `id`. Reconstruction is where
+ * valid-looking but never-minted UUIDs enter transcripts and produce a 404.
+ */
+export function formatMarker(type: MarkerType, id: string): string {
+  return `[${type}:${id}]`;
+}
+
 /** One marker found in agent prose, with its source span. */
 export interface ParsedMarker {
   /** Marker kind token (e.g. `chart`, `data`); see {@link MarkerType}. */

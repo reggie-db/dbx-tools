@@ -695,11 +695,12 @@ registry in `demo/.npmrc` (a local verdaccio), exactly as an external app would.
 That mode is OPT-IN, not the default. In this checkout the packages are usually
 what you are editing, and a demo quietly running a published copy of code you just
 changed is the expensive surprise - you restart, see the old behavior, and go
-looking for the bug in the wrong place. So a plain install source-links the CLIENT:
+looking for the bug in the wrong place. So a plain install source-links BOTH
+demo members:
 
 ```sh
-pnpm install                            # client resolves @dbx-tools/* from packages source
-# server (serves dist/, unchanged) + a client build-watch that rebuilds on UI edits:
+pnpm install                            # server + client resolve packages source
+# Restart the server for Node edits; the client watcher rebuilds on UI edits:
 pnpm --filter @dbx-tools/demo-appkit-server dev
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch
 DBX_TOOLS_LINK=0 pnpm install           # consumer mode: published versions
@@ -713,11 +714,12 @@ are NOT a choice stay unconditional and never consult it: the root's link to
 `projen/`, and `projen/`'s link to `../packages`. `.projenrc.ts` imports the engine
 by source path, so an unlinked install of either cannot synth at all.
 
-**The mode switch is RESOLVE-time, not a file edit.** The hook rewrites the
-client's `@dbx-tools/*` specifiers to `link:` paths under `../packages/**`; the env
-var on the install is the ENTIRE interface, with no wrapper task or script. Nothing
-on disk changes, so neither mode needs a restore step and both leave `git status`
-clean. Do NOT reintroduce a script that edits manifests to do this: an earlier
+**The mode switch is RESOLVE-time, not a file edit.** The hook rewrites both
+members' `@dbx-tools/*` specifiers to `link:` paths under `../packages/**`; the
+env var on the install is the ENTIRE interface, with no wrapper task or script.
+Nothing on disk changes, so neither mode needs a restore step and both leave
+`git status` clean. Do NOT reintroduce a script that edits manifests to do this:
+an earlier
 `demo/scripts/dev-link.mjs` rewrote the app `package.json` and `pnpm-workspace.yaml`
 in place, which meant clearing projen's read-only bit, inserting marker comments,
 and keeping a sidecar of the pristine contents - and since `pnpm-workspace.yaml` is
@@ -736,22 +738,20 @@ Two non-obvious constraints in that hook:
   resolves against the directory holding `pnpm-lock.yaml`. Using the package's own
   directory for both is what produced `Installing a dependency from a
 non-existent directory: <repo>/core`.
-- **Scoping is by CONSUMER, not by dependency name.** The server app also depends
-  on `@dbx-tools/shared-core`, which the client pulls too, so filtering on the dep
-  name alone would link the server's copy as a side effect. Only the client app
-  and the closure reachable from it are rewritten.
+- **Link the external runtime too.** A source-linked package resolves its own
+  dependencies from the MAIN repo's `node_modules`; without another bridge, the
+  demo's direct imports would still resolve from `demo/node_modules`, giving one
+  process two AppKit / Mastra / React instances. The root hook's
+  `resolvedDependencySources()` scans every local package manifest, resolves its
+  external dependencies from the main install, and adds those exact directories
+  to the same link map. This is what keeps identity-based singletons such as
+  AppKit's `CacheManager` coherent while the demo remains a separate workspace.
+  Do not narrow the map back to `@dbx-tools/*`.
 
-It is deliberately CLIENT-ONLY. A `link:`ed package resolves its own deps from the
-MAIN repo's `node_modules`, a different physical install from the demo's: the two
-trees hold `@databricks/appkit@0.43.1` under different peer-hashes and
-`@mastra/core` at different versions outright, so AppKit singletons like
-`CacheManager` break ("not initialized"). The browser build avoids this because
-Vite bundles from source and dedupes React, which tsx has no equivalent for.
-`injected: true` does NOT rescue it - pnpm ignores it on an `overrides: link:`
-specifier, and the workspace-member form that honors it makes the demo install
-repoint the main repo's own `packages/*/node_modules` into the demo's store.
-Server changes still go through the publish cycle. See `demo/README.md` for the
-full two-mode explanation.
+The demo server logs all resolved runtime dependency versions before AppKit
+starts. In local mode, `@dbx-tools/*` entries show `0.0.0 (linked from
+packages/...)`; in consumer mode they show the published `0.6.x` versions. See
+`demo/README.md` for the full two-mode explanation.
 
 ## Generated files — DO NOT edit by hand
 

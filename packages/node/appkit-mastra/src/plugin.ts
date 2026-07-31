@@ -595,10 +595,24 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
         const id = string.firstNonEmpty(req.params.id);
         const resolve = embedResolvers[type];
         if (!resolve) {
+          this.logger.warn("embed:unsupported", {
+            status: 404,
+            type,
+            id,
+            method: req.method,
+            path: req.path,
+          });
           res.status(404).json({ error: `unsupported embed type: ${type}` });
           return;
         }
         if (!id) {
+          this.logger.warn("embed:invalid", {
+            status: 400,
+            type,
+            method: req.method,
+            path: req.path,
+            error: "id is required",
+          });
           res.status(400).json({ error: "id is required" });
           return;
         }
@@ -616,6 +630,18 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
           return;
         }
         if (result.data === undefined) {
+          // A cache miss is security-deliberately ambiguous: unknown, expired,
+          // or owned by another identity all map to the same 404. Log the
+          // opaque id and those possible causes so a fabricated marker is
+          // diagnosable from the server without disclosing which cause applied.
+          this.logger.warn(`embed:${type}:not-found`, {
+            status: 404,
+            type,
+            id,
+            method: req.method,
+            path: req.path,
+            reason: "unknown, expired, or owned by another identity",
+          });
           res.status(404).json({ error: `${type} not found` });
           return;
         }
@@ -1005,7 +1031,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // every default-workspace agent via `extraSkillPaths`.
     const provisioned = await provisionRemoteSkills(this.config.remoteSkills);
     if (provisioned.skillNames.length > 0) {
-      this.logger.info("remote skills provisioned", {
+      this.logger.info("remote skills configured", {
         skills: provisioned.skillNames,
         databricksBasePath: provisioned.databricksBasePath,
         localSkillPaths: provisioned.localSkillPaths.length,

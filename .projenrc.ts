@@ -685,8 +685,8 @@ for (const task of [SCOPE, "dbxt"]) {
 
 
 root.addTask("demo", {
-  exec: "cd demo && NODE_ENV=development pnpm --filter @dbx-tools/demo-appkit-server dev",
-  description: "Run the demo",
+  exec: 'cd demo && pnpm run projen && NODE_ENV=development pnpm exec concurrently --kill-others --names server,client "pnpm --filter @dbx-tools/demo-appkit-server dev" "pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch"',
+  description: "Run the linked demo server and client build watcher",
 });
 
 // Both tag-driven release workflows are authored by the engine's

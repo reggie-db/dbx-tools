@@ -5,7 +5,13 @@ import {
   plugin as emailPlugin,
   tool as emailToolModule,
 } from "@dbx-tools/email";
-import { agents, genie as mastraGenie, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
+import {
+  agents,
+  genie as mastraGenie,
+  plugin as mastraPlugin,
+  type MastraAgentDefinition,
+  type MastraTools,
+} from "@dbx-tools/appkit-mastra";
 import {
   plugin as webSearchPlugin,
   tool as webSearchToolModule,
@@ -16,6 +22,11 @@ import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+
+import { logDependencies } from "./dependencies.ts";
+
+/** Default search index used by both AppKit resource validation and the plugin. */
+const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";
 
 const { createApp: createAppAuto } = createApp;
 const { email } = emailPlugin;
@@ -106,7 +117,7 @@ const clientDist =
 // Per-request overrides via `X-Mastra-Model` header, `?model=` query,
 // or body `model` field can re-target the same agent without redeploy.
 // `GET /api/mastra/models` lists the cached catalogue.
-const support = createAgent({
+const supportDefinition: MastraAgentDefinition = {
   name: "support",
   instructions: [
     "You are a data analyst helping customers explore a Databricks",
@@ -120,14 +131,19 @@ const support = createAgent({
     "",
     GENIE_INSTRUCTIONS,
   ].join("\n"),
-  tools(plugins) {
-    return {
+  tools(plugins): MastraTools {
+    // Materialize the dynamic toolkit before adding the demo tools. Building
+    // one contextually-typed object makes TypeScript recursively expand every
+    // source-linked Mastra tool schema together and exceeds its instantiation
+    // depth; Object.assign preserves the same flat runtime record without
+    // forcing that useless cross-tool type expansion.
+    const agentTools = Object.assign({}, plugins.genie?.toolkit()) as MastraTools;
+    Object.assign(agentTools, {
       // Auto-discovered AppKit `ToolProvider` plugins. `plugins.<name>`
       // is `undefined` when the plugin isn't registered, so the `?.`
-      // guard keeps this safe to copy into other apps. Spread the
+      // guard keeps this safe to copy into other apps. Include the
       // built-in Genie toolkit so the agent can ask the Genie space
       // (`DATABRICKS_GENIE_SPACE_ID`) for SQL-backed answers.
-      ...(plugins.genie?.toolkit() ?? {}),
       // Spread other toolkits once registered (uncomment alongside
       // adding `analytics()` / `files()` to the plugin list below):
       // ...plugins.analytics.toolkit(),
@@ -174,9 +190,11 @@ const support = createAgent({
       add_documents: addDocumentsTool(),
       create_index: createIndexTool(),
       sync_index: syncIndexTool(),
-    };
+    });
+    return agentTools;
   },
-});
+};
+const support = createAgent(supportDefinition);
 
 // Bind to loopback (`127.0.0.1`) locally so the dev server isn't
 // exposed on the LAN, but fall back to `0.0.0.0` when the Databricks
@@ -185,6 +203,16 @@ const support = createAgent({
 // Override with `HOST=...` if you need a different bind address for a
 // local tunnel.
 const host = process.env.HOST ?? (databricks.isAppEnv() ? "0.0.0.0" : "127.0.0.1");
+
+// Report what actually resolved before serving anything: the demo can run its
+// `@dbx-tools/*` packages from source or from the registry, and only the
+// versions on disk say which one this process got.
+logDependencies();
+
+// The search plugin's explicit `index` promotes its optional AppKit resource to
+// required. Keep resource validation and runtime config on the same resolved
+// value instead of spelling the fallback only inside the plugin options.
+process.env.SEARCH_INDEX ??= DEFAULT_SEARCH_INDEX;
 
 await createAppAuto({
   plugins: [
@@ -235,7 +263,7 @@ await createAppAuto({
       allowWrite: true,
       // Full UC name for the Vector Search path; the Lakebase fallback derives a
       // Postgres table name from the last segment (`docs`).
-      index: process.env.SEARCH_INDEX ?? "reggie_pierce_aws_catalog.ai_search.docs",
+      index: process.env.SEARCH_INDEX,
       // Only set the endpoint (-> Vector Search) when one is configured; unset
       // means the Lakebase full-text fallback answers (see the comment above).
       ...(process.env.SEARCH_ENDPOINT ? { endpoint: process.env.SEARCH_ENDPOINT } : {}),

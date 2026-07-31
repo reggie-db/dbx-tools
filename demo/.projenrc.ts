@@ -91,7 +91,7 @@ const project = new projectApi.DBXToolsNodeProject({
   // already declares for `@dbx-tools/projen`, so declaring `*` here keeps the
   // demo on the newest engine on the registry - matching how the feature deps
   // below use `@*`.
-  devDeps: ["@dbx-tools/projen@*"],
+  devDeps: ["@dbx-tools/projen@*", "concurrently@catalog:"],
 });
 
 // Runtime deps the Mastra agent framework + email add-on pull in. The
@@ -116,7 +116,7 @@ project.pnpmWorkspace?.addCatalog("react-router-dom", "^7.6.2");
 // The `@dbx-tools/*` packages resolve from the registry configured in `.npmrc`.
 // `*` (any published version) keeps the demo decoupled from a specific release;
 // pin a real range once the packages are on public npm.
-const dep = (name: string) => `${name}@*`;
+const dep = (name: string) => `${name}@latest`;
 
 // server/appkit-demo: the AppKit server. `server` tag supplies express + tsx
 // dev/start; add the feature packages it mounts and their peer runtime deps.
@@ -214,9 +214,9 @@ projectApi.applyToProjects(project, { identifierName: "app-appkit-demo", tags: "
 // Force-track the hand-authored dotfiles a consumer needs: projen's default
 // `**/.*` ignore would otherwise drop them. `.npmrc` points installs at the
 // registry the `@dbx-tools/*` packages live on; `.env.example` is the config
-// template a user copies to `.env`; `.pnpmfile.cjs` resolves the client's
-// `@dbx-tools/*` deps to `../packages` source by default, and leaves them on the
-// registry when the install opts out with `DBX_TOOLS_LINK=0`.
+// template a user copies to `.env`; `.pnpmfile.cjs` resolves both members'
+// `@dbx-tools/*` deps and shared runtimes to the main source workspace by
+// default, and leaves them on the registry when `DBX_TOOLS_LINK=0`.
 project.gitignore.include("/.npmrc", "/.env.example", "/.pnpmfile.cjs");
 
 // Gitignore all generated files so the committed demo is hand-authored source

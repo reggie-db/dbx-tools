@@ -177,39 +177,67 @@ function scanPackages(roots, scope) {
   return found;
 }
 
-/** The in-scope dependency names a manifest declares, across every dep field. */
-function scopedDeps(manifest, scope) {
-  const names = new Set();
-  for (const field of DEP_FIELDS) {
-    for (const name of Object.keys(manifest?.[field] ?? {})) {
-      if (name.startsWith(scope)) names.add(name);
-    }
+/**
+ * Directory Node resolves for package `name` when importing from `from`.
+ *
+ * Prefer `<name>/package.json`; packages that hide it behind `exports` fall
+ * back to their entry point, then walk upward to the manifest that claims the
+ * requested name. The returned real path is the package instance Node will
+ * load, not a package-local symlink to it.
+ */
+function resolvePackageDir(name, from) {
+  try {
+    return fs.realpathSync(path.dirname(require.resolve(`${name}/package.json`, { paths: [from] })));
+  } catch {
+    // The package may omit `./package.json` from `exports`.
   }
-  return names;
+  let dir;
+  try {
+    dir = path.dirname(require.resolve(name, { paths: [from] }));
+  } catch {
+    return undefined;
+  }
+  for (let parent = dir; ; dir = parent) {
+    if (readJson(path.join(dir, "package.json"))?.name === name) {
+      return fs.realpathSync(dir);
+    }
+    parent = path.dirname(dir);
+    if (parent === dir) return undefined;
+  }
 }
 
 /**
- * Narrow `sources` to the packages reachable from `entryNames`, following each
- * package's own in-scope deps. Same `Map` shape {@link createLinkHook} takes.
+ * Resolve every non-`excludedScope` dependency declared by `packages` from the
+ * declaring package's own install.
  *
- * Only needed when a workspace must link LESS than what is on disk. The demo is
- * the one such case: its client runs from source while its server stays on the
- * registry, because a linked server package would resolve its own
- * `@databricks/appkit` from the main repo's tree and break AppKit's singletons.
+ * This is the singleton bridge for a sibling workspace that source-links local
+ * packages. Node follows a package link to its REAL source directory, then
+ * resolves imports from that source workspace's `node_modules`. If the sibling
+ * app keeps its direct `@databricks/appkit`, `@mastra/*`, React, or other
+ * runtime imports on its separate install, one process can load two instances
+ * of the same library. Adding these resolved directories to the SAME
+ * {@link createLinkHook} target map makes the app and every linked package
+ * address the source workspace's package instances.
+ *
+ * First declaration wins. `scanPackages` is stable for a fixed tree, and a
+ * workspace is expected to resolve one compatible instance of a dependency;
+ * peer-hash variants later in the scan must not make the chosen bridge depend
+ * on which package pnpm happened to process last.
  */
-function dependencyClosure(entryNames, sources, scope) {
-  const reached = new Map();
-  const queue = [...entryNames];
-  while (queue.length > 0) {
-    const name = queue.shift();
-    const dir = sources.get(name);
-    if (!dir || reached.has(name)) continue;
-    reached.set(name, dir);
-    for (const dep of scopedDeps(readJson(path.join(dir, "package.json")), scope)) {
-      if (!reached.has(dep)) queue.push(dep);
+function resolvedDependencySources(packages, excludedScope) {
+  const found = new Map();
+  const entries = [...packages.entries()].sort(([a], [b]) => a.localeCompare(b));
+  for (const [, dir] of entries) {
+    const manifest = readJson(path.join(dir, "package.json"));
+    for (const field of DEP_FIELDS) {
+      for (const name of Object.keys(manifest?.[field] ?? {}).sort()) {
+        if (name.startsWith(excludedScope) || found.has(name)) continue;
+        const resolved = resolvePackageDir(name, dir);
+        if (resolved) found.set(name, resolved);
+      }
     }
   }
-  return reached;
+  return found;
 }
 
 /** npm scope every package in this project shares, including the trailing slash. */
@@ -231,7 +259,6 @@ module.exports = {
   linkEnabled,
   createLinkHook,
   scanPackages,
-  scopedDeps,
-  dependencyClosure,
+  resolvedDependencySources,
   readJson,
 };
