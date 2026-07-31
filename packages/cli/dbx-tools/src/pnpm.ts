@@ -3,16 +3,12 @@
  *
  * @module
  */
+import { exec, project } from "@dbx-tools/core";
+import { functionModule } from "@dbx-tools/shared-core";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { exec, project } from "@dbx-tools/core";
-import { functionModule, log, net } from "@dbx-tools/shared-core";
 import { needsInstall } from "./root.ts";
 
-const logger = log.logger("dbx-tools:pnpm");
-
-/** A package.json `bin` field: either a single command string, or a name -> path map. */
-type BinField = string | Record<string, string>;
 
 /** True when `pnpm --version` runs, i.e. pnpm is already on PATH. */
 function pnpmOnPath(): boolean {
@@ -28,7 +24,6 @@ function pnpmOnPath(): boolean {
     return false;
   }
 }
-
 function resolvePnpmArgvImpl(): string[] {
   const registryUrl = project.npmRegistry(null, { overrideOnly: true, envVars: true })?.toString();
   const registryArgs: string[] = registryUrl ? ["--registry", registryUrl] : [];
