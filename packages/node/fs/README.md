@@ -33,6 +33,10 @@ await local.writeFile("hello.txt", "hi");
 
 const home = localFS.homeFS("projects/data");
 const scratch = localFS.tmpFS("job-42");
+
+// A throwaway working directory no other run can collide with.
+const work = localFS.scratchFS("import-job");
+await work.init(); // only needed when handing the root to `node:fs` or a subprocess
 ```
 
 ## Module map
@@ -42,6 +46,7 @@ const scratch = localFS.tmpFS("job-42");
 | `LocalFileSystem`                  | Local-disk `FileSystem<"local">`                       |
 | `LocalFileSystemOptions`           | Constructor options                                    |
 | `localFS.homeFS` / `localFS.tmpFS` | `LocalFileSystem` under resolved home / temp           |
+| `localFS.scratchFS`                | `tmpFS` on a `<prefix>-<id>` root unique per call      |
 | `osPath.resolveLocalHome`          | Home: `homedir` → `HOME` → `/home/app` → `./.home`     |
 | `osPath.resolveLocalTemp`          | Temp: `tmpdir` → `TMPDIR`/`TMP`/`TEMP` → `<home>/.tmp` |
 | `localPath.expandLocalHomePath`    | Expand `~` against a home dir                          |

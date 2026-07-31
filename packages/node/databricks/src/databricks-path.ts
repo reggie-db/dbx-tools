@@ -38,30 +38,22 @@ export interface ResolveDatabricksRootOptions {
   client?: WorkspaceClient;
 }
 
-/** True when {@link input} is `~` or a path under `~/`. */
-export function isHomeRelativePath(input: string): boolean {
-  const trimmed = input.trim();
-  return trimmed === "~" || trimmed.startsWith("~/") || trimmed.startsWith("~\\");
-}
+/** True when {@link input} is `~` or a path under `~/`. See {@link posixPath.isHomeRelativePath}. */
+export const isHomeRelativePath = posixPath.isHomeRelativePath;
 
 /**
  * Expand `~` / `~/...` to `/Workspace/Users/<userName>/...`.
  * Non-home inputs are returned unchanged (POSIX separators only).
  */
 export function expandHomePath(input: string, userName: string): string {
-  const trimmed = input.trim();
   const name = userName.trim();
   if (!name) {
     throw new TypeError("Databricks home expansion requires a non-empty userName");
   }
-  if (!isHomeRelativePath(trimmed)) {
-    return posixPath.toPosix(trimmed);
+  if (!isHomeRelativePath(input)) {
+    return posixPath.toPosix(input.trim());
   }
-
-  const home = `/Workspace/Users/${name}`;
-  if (trimmed === "~") return home;
-  const rest = posixPath.toPosix(trimmed.slice(1)).replace(/^\/+/, "");
-  return rest ? `${home}/${rest}` : home;
+  return posixPath.expandHome(input, `/Workspace/Users/${name}`);
 }
 
 /**

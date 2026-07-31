@@ -177,23 +177,24 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
             return resolvedPath;
           } catch (inner) {
             if (inner instanceof FileSystemError) throw inner;
-            if (!isErrno(inner, "ENOENT")) throw mapNodeError(inner, resolvedPath);
+            if (!isErrno(inner, "ENOENT")) throw this.mapError(inner, resolvedPath);
             cursor = path.dirname(cursor);
           }
         }
         return resolvedPath;
       }
-      throw mapNodeError(err, resolvedPath);
+      throw this.mapError(err, resolvedPath);
     }
   }
 
+  /** Classify Node errno codes; {@link BaseFileSystem} wraps every primitive. */
+  protected override mapError(err: unknown, filePath: string): FileSystemError {
+    return baseFS.mapFileSystemError(err, filePath, nodeErrorCode);
+  }
+
   protected override async readBytesAt(resolvedPath: string): Promise<Uint8Array> {
-    try {
-      const buffer = await readFile(resolvedPath);
-      return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    } catch (err) {
-      throw mapNodeError(err, resolvedPath);
-    }
+    const buffer = await readFile(resolvedPath);
+    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   }
 
   protected override async writeBytesAt(
@@ -201,75 +202,51 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
     content: Uint8Array,
     options: Required<WriteFileOptions>,
   ): Promise<void> {
-    try {
-      await writeFile(resolvedPath, content, options.overwrite ? undefined : { flag: "wx" });
-    } catch (err) {
-      throw mapNodeError(err, resolvedPath);
-    }
+    await writeFile(resolvedPath, content, options.overwrite ? undefined : { flag: "wx" });
   }
 
   protected override async deleteFileAt(resolvedPath: string): Promise<void> {
-    try {
-      await rm(resolvedPath, { force: false });
-    } catch (err) {
-      throw mapNodeError(err, resolvedPath);
-    }
+    await rm(resolvedPath, { force: false });
   }
 
   protected override async createDirectoryAt(resolvedPath: string): Promise<void> {
-    try {
-      await mkdir(resolvedPath);
-    } catch (err) {
-      throw mapNodeError(err, resolvedPath);
-    }
+    await mkdir(resolvedPath);
   }
 
   protected override async removeDirectoryAt(resolvedPath: string): Promise<void> {
-    try {
-      await rmdir(resolvedPath);
-    } catch (err) {
-      throw mapNodeError(err, resolvedPath);
-    }
+    await rmdir(resolvedPath);
   }
 
   protected override async listDirectoryAt(resolvedPath: string): Promise<FileEntry[]> {
-    try {
-      const dirents = await readdir(resolvedPath, { withFileTypes: true });
-      const entries: FileEntry[] = [];
-      for (const dirent of dirents) {
-        const type = entryType(dirent);
-        let size: number | undefined;
-        if (type === "file" || type === "symbolic-link") {
-          try {
-            size = (await lstat(path.join(resolvedPath, dirent.name))).size;
-          } catch {
-            // Race with concurrent deletes; omit size.
-          }
+    const dirents = await readdir(resolvedPath, { withFileTypes: true });
+    const entries: FileEntry[] = [];
+    for (const dirent of dirents) {
+      const type = entryType(dirent);
+      let size: number | undefined;
+      if (type === "file" || type === "symbolic-link") {
+        try {
+          size = (await lstat(path.join(resolvedPath, dirent.name))).size;
+        } catch {
+          // Race with concurrent deletes; omit size.
         }
-        entries.push(
-          size === undefined ? { name: dirent.name, type } : { name: dirent.name, type, size },
-        );
       }
-      return entries;
-    } catch (err) {
-      throw mapNodeError(err, resolvedPath);
+      entries.push(
+        size === undefined ? { name: dirent.name, type } : { name: dirent.name, type, size },
+      );
     }
+    return entries;
   }
 
   protected override async statAt(resolvedPath: string): Promise<Omit<FileStat, "path">> {
-    try {
-      const info = await lstat(resolvedPath);
-      return {
-        name: path.basename(resolvedPath) || path.basename(this.toBackendPath(this.root)),
-        type: entryType(info),
-        size: info.size,
-        createdAt: info.birthtime,
-        modifiedAt: info.mtime,
-        accessedAt: info.atime,
-      };
-    } catch (err) {
-      throw mapNodeError(err, resolvedPath);
-    }
+    const info = await lstat(resolvedPath);
+    return {
+      name: path.basename(resolvedPath) || path.basename(this.toBackendPath(this.root)),
+      type: entryType(info),
+      size: info.size,
+      createdAt: info.birthtime,
+      modifiedAt: info.mtime,
+      accessedAt: info.atime,
+    };
   }
 
   protected override isNotFoundError(error: unknown): boolean {
@@ -282,12 +259,8 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
     resolvedPath: string,
     content: Uint8Array,
   ): Promise<boolean> {
-    try {
-      await appendFile(resolvedPath, content);
-      return true;
-    } catch (err) {
-      throw mapNodeError(err, resolvedPath);
-    }
+    await appendFile(resolvedPath, content);
+    return true;
   }
 
   protected override async tryCopyFileAt(
@@ -295,16 +268,12 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
     destinationPath: string,
     options: Required<CopyOptions>,
   ): Promise<boolean> {
-    try {
-      await cp(sourcePath, destinationPath, {
-        recursive: true,
-        force: options.overwrite,
-        errorOnExist: !options.overwrite,
-      });
-      return true;
-    } catch (err) {
-      throw mapNodeError(err, destinationPath);
-    }
+    await cp(sourcePath, destinationPath, {
+      recursive: true,
+      force: options.overwrite,
+      errorOnExist: !options.overwrite,
+    });
+    return true;
   }
 
   protected override async tryMoveFileAt(
@@ -314,18 +283,14 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
   ): Promise<boolean> {
     try {
       await rename(sourcePath, destinationPath);
-      return true;
     } catch (err) {
-      if (isErrno(err, "EXDEV")) {
-        await cp(sourcePath, destinationPath, {
-          recursive: true,
-          force: options.overwrite,
-        });
-        await rm(sourcePath, { recursive: true, force: true });
-        return true;
-      }
-      throw mapNodeError(err, destinationPath);
+      // Across devices `rename` cannot work; fall back to copy + remove. Any
+      // other failure propagates for the base class to map.
+      if (!isErrno(err, "EXDEV")) throw err;
+      await cp(sourcePath, destinationPath, { recursive: true, force: options.overwrite });
+      await rm(sourcePath, { recursive: true, force: true });
     }
+    return true;
   }
 }
 
@@ -356,25 +321,20 @@ function entryType(entry: {
   return "other";
 }
 
-function mapNodeError(err: unknown, filePath: string): FileSystemError {
-  return baseFS.mapFileSystemError(err, filePath, (e) => {
-    const code = (e as NodeJS.ErrnoException | undefined)?.code;
-    const mapped: FileSystemErrorCode | undefined =
-      code === "ENOENT"
-        ? "NOT_FOUND"
-        : code === "EEXIST"
-          ? "ALREADY_EXISTS"
-          : code === "ENOTDIR"
-            ? "NOT_DIRECTORY"
-            : code === "EISDIR"
-              ? "IS_DIRECTORY"
-              : code === "ENOTEMPTY"
-                ? "DIRECTORY_NOT_EMPTY"
-                : code === "EACCES" || code === "EPERM"
-                  ? "PERMISSION_DENIED"
-                  : undefined;
-    return mapped;
-  });
+/** Node errno -> portable {@link FileSystemErrorCode}. */
+const NODE_ERROR_CODES: Readonly<Record<string, FileSystemErrorCode>> = {
+  ENOENT: "NOT_FOUND",
+  EEXIST: "ALREADY_EXISTS",
+  ENOTDIR: "NOT_DIRECTORY",
+  EISDIR: "IS_DIRECTORY",
+  ENOTEMPTY: "DIRECTORY_NOT_EMPTY",
+  EACCES: "PERMISSION_DENIED",
+  EPERM: "PERMISSION_DENIED",
+};
+
+function nodeErrorCode(err: unknown): FileSystemErrorCode | undefined {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  return code ? NODE_ERROR_CODES[code] : undefined;
 }
 
 /**
@@ -422,12 +382,30 @@ export function tmpFS(
 }
 
 /**
+ * {@link tmpFS} under a root that is unique per call (`<prefix>-<id>`), for a
+ * scratch area no other process or run can collide with.
+ *
+ * Prefer this over minting the id at the call site - it is the one place that
+ * decides what a throwaway working directory looks like.
+ *
+ * @example
+ * ```ts
+ * const scratch = scratchFS("remote-skills");
+ * await scratch.writeFile("SKILL.md", body);
+ * ```
+ */
+export function scratchFS(
+  prefix: string,
+  options: HomeOrTempFileSystemOptions = {},
+): LocalFileSystem {
+  return tmpFS(`${prefix}-${hash.id()}`, options);
+}
+
+/**
  * Join {@link relativeRoot} under {@link base}. Empty / `.` keeps {@link base};
  * leading `~` or `/` is stripped so an absolute-looking input cannot escape.
  */
 function joinUnderBase(base: string, relativeRoot: string): string {
-  const trimmed = relativeRoot.trim();
-  if (!trimmed || trimmed === "." || trimmed === "./") return base;
-  const rest = trimmed.replace(/^~(?=[/\\]|$)/, "").replace(/^[\\/]+/, "");
+  const rest = posixPath.toRelativeSegment(relativeRoot);
   return rest ? path.resolve(base, rest) : base;
 }

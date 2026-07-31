@@ -27,7 +27,7 @@
 import { existsSync } from "node:fs";
 import { exec } from "@dbx-tools/core";
 import { localFS } from "@dbx-tools/fs";
-import { error, hash, log, string } from "@dbx-tools/shared-core";
+import { error, log, string } from "@dbx-tools/shared-core";
 
 const logger = log.logger("mastra/databricks-aitools");
 
@@ -163,8 +163,13 @@ async function materializeViaCli(
   cli: string,
   options: DatabricksAIToolsOptions,
 ): Promise<string | undefined> {
-  const explicit = string.trimToNull(options.path);
-  const dir = explicit ?? (await createTempInstallDir());
+  let dir = string.trimToNull(options.path);
+  if (!dir) {
+    // The CLI writes into `--path`, so the directory has to exist first.
+    const scratch = localFS.scratchFS("databricks-aitools");
+    await scratch.init();
+    dir = scratch.root;
+  }
   const args = ["aitools", "install", "--path", dir];
   const skills = string.parseList(options.skills);
   if (skills.length > 0) args.push("--skills", skills.join(","));
@@ -183,11 +188,4 @@ async function materializeViaCli(
   if (!existsSync(dir)) return undefined;
   logger.debug("materialized aitools skills via CLI", { path: dir, skills });
   return dir;
-}
-
-/** Fresh {@link localFS.tmpFS} root for CLI materialization. */
-async function createTempInstallDir(): Promise<string> {
-  const scratch = localFS.tmpFS(`databricks-aitools-${hash.id()}`);
-  await scratch.init();
-  return scratch.root;
 }

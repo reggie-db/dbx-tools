@@ -3,13 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { LocalFileSystem } from "../src/local-fs.ts";
 import {
   clearOsPathsCache,
   expandLocalHomePath,
   isHomeRelativePath,
   resolveLocalRoot,
 } from "../src/local-path.ts";
-import { LocalFileSystem } from "../src/local-fs.ts";
 
 describe("local-path home expansion", () => {
   it("detects home-relative paths", () => {

@@ -9,11 +9,9 @@
  * @module
  */
 
-import { hash } from "@dbx-tools/shared-core";
 import { localFS } from "@dbx-tools/fs";
-import { FileSystemError } from "@dbx-tools/shared-fs";
+import { FileSystemError, posixPath } from "@dbx-tools/shared-fs";
 import type {
-  FileContent as SharedFileContent,
   FileEntry as SharedFileEntry,
   FileStat as SharedFileStat,
   FileSystem,
@@ -167,7 +165,7 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
       if (options?.recursive === false) {
         await this.assertParentExists(inputPath);
       }
-      await this.fs.writeFile(inputPath, toSharedContent(content), {
+      await this.fs.writeFile(inputPath, content, {
         overwrite: options?.overwrite ?? true,
       });
     });
@@ -175,7 +173,7 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
 
   async appendFile(inputPath: string, content: FileContent): Promise<void> {
     return this.delegateWrite("appendFile", inputPath, () =>
-      this.fs.appendFile(inputPath, toSharedContent(content)),
+      this.fs.appendFile(inputPath, content),
     );
   }
 
@@ -258,28 +256,22 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
     }
   }
 
-  private async delegateWrite(
+  /** {@link delegate} for a mutation: refuse a read-only mount before doing any work. */
+  private delegateWrite(
     operation: string,
     path: string,
     op: () => Promise<void>,
     options?: { preferDirectory?: boolean },
   ): Promise<void> {
-    await this.ensureReady();
     if (this.readOnly) {
       throw new WorkspaceReadOnlyError(operation);
     }
-    try {
-      await op();
-    } catch (err) {
-      this.rethrow(err, path, options);
-    }
+    return this.delegate(path, op, options);
   }
 
   /** When Mastra asks for non-recursive writes, require the parent directory. */
   private async assertParentExists(inputPath: string): Promise<void> {
-    const normalized = normalizeWorkspacePath(inputPath);
-    if (normalized === "/") return;
-    const parent = parentWorkspacePath(normalized);
+    const parent = posixPath.dirname(normalizeWorkspacePath(inputPath));
     if (parent === "/" || (await this.fs.exists(parent))) return;
     throw new DirectoryNotFoundError(parent);
   }
@@ -306,9 +298,9 @@ export class MastraFileSystemAdapter extends MastraFilesystem {
   }
 }
 
-/** Fresh writable local temp mount (unique {@link hash.id} root under tmp). */
+/** Fresh writable local temp mount on a root unique to this call. */
 export function scratchFilesystem(): MastraFileSystemAdapter {
-  return filesystems(localFS.tmpFS(`mastra-${hash.id()}`));
+  return filesystems(localFS.scratchFS("mastra"));
 }
 
 /** Map a shared-fs error code onto the matching Mastra filesystem error. */
@@ -334,11 +326,6 @@ function mapSharedError(err: FileSystemError, inputPath: string, preferDirectory
   }
 }
 
-function toSharedContent(content: FileContent): SharedFileContent {
-  if (typeof content === "string") return content;
-  return content instanceof Uint8Array ? content : new Uint8Array(content);
-}
-
 function toMastraEntry(entry: SharedFileEntry): FileEntry {
   return {
     name: entry.name,
@@ -361,24 +348,12 @@ function toMastraStat(stat: SharedFileStat, inputPath: string): FileStat {
   };
 }
 
+/**
+ * Mastra namespace path (`/a/b`). A `..` that would escape clamps to the root
+ * rather than throwing - the wrapped filesystem enforces containment itself,
+ * and a mount should not fail a listing over a stray segment.
+ */
 function normalizeWorkspacePath(inputPath: string): string {
-  const trimmed = inputPath.trim();
-  if (!trimmed || trimmed === ".") return "/";
-  const withSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  const parts = withSlash.split("/").filter((part) => part.length > 0 && part !== ".");
-  const resolved: string[] = [];
-  for (const part of parts) {
-    if (part === "..") {
-      resolved.pop();
-      continue;
-    }
-    resolved.push(part);
-  }
-  return resolved.length === 0 ? "/" : `/${resolved.join("/")}`;
-}
-
-function parentWorkspacePath(absolutePath: string): string {
-  if (absolutePath === "/") return "/";
-  const idx = absolutePath.lastIndexOf("/");
-  return idx <= 0 ? "/" : absolutePath.slice(0, idx);
+  const result = posixPath.normalize(inputPath);
+  return result.ok ? result.path : "/";
 }

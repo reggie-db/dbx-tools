@@ -8,6 +8,7 @@
  */
 
 import path from "node:path";
+import { posixPath } from "@dbx-tools/shared-fs";
 import { resolveLocalHome, type ResolveOsPathsOptions } from "./os-path.ts";
 
 export {
@@ -20,25 +21,15 @@ export {
   type ResolveOsPathsOptions,
 } from "./os-path.ts";
 
-/** True when {@link input} is `~` or a path under `~/`. */
-export function isHomeRelativePath(input: string): boolean {
-  const trimmed = input.trim();
-  return trimmed === "~" || trimmed.startsWith("~/") || trimmed.startsWith("~\\");
-}
+/** True when {@link input} is `~` or a path under `~/`. See {@link posixPath.isHomeRelativePath}. */
+export const isHomeRelativePath = posixPath.isHomeRelativePath;
 
 /**
- * Expand `~` / `~/...` against {@link home}. Non-home inputs are returned
- * trimmed and unchanged.
+ * Expand `~` / `~/...` against {@link home}, joining with the HOST separator.
+ * Non-home inputs are returned trimmed and unchanged.
  */
 export function expandLocalHomePath(input: string, home: string = resolveLocalHome()): string {
-  const trimmed = input.trim();
-  if (!isHomeRelativePath(trimmed)) return trimmed;
-  if (!home.trim()) {
-    throw new TypeError("Local home expansion requires a non-empty home directory");
-  }
-  if (trimmed === "~") return home;
-  const rest = trimmed.slice(1).replace(/^[\\/]+/, "");
-  return rest ? path.join(home, rest) : home;
+  return posixPath.expandHome(input, home, path.join);
 }
 
 /**

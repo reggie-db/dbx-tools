@@ -172,3 +172,48 @@ export function relative(from: string, to: string): string | undefined {
 export function isWithinRoot(root: string, candidate: string): boolean {
   return relative(root, candidate) !== undefined;
 }
+
+/** True when {@link input} is `~` or a path under `~/` (or `~\`). */
+export function isHomeRelativePath(input: string): boolean {
+  const trimmed = input.trim();
+  return trimmed === "~" || trimmed.startsWith("~/") || trimmed.startsWith("~\\");
+}
+
+/**
+ * Expand a `~` / `~/...` input against {@link home}.
+ *
+ * Shared by every adapter that has a notion of "home", since each one differs
+ * only in what `home` is and how segments join: local disk passes
+ * `path.join`, Databricks passes a POSIX join under
+ * `/Workspace/Users/<user>`. Non-home inputs come back trimmed and unchanged.
+ *
+ * @param joinWith - Join the expanded remainder onto {@link home}. Defaults to
+ *   POSIX {@link join}.
+ */
+export function expandHome(
+  input: string,
+  home: string,
+  joinWith: (home: string, rest: string) => string = join,
+): string {
+  const trimmed = input.trim();
+  if (!isHomeRelativePath(trimmed)) return trimmed;
+  if (!home.trim()) {
+    throw new TypeError("Home expansion requires a non-empty home directory");
+  }
+  const rest = stripLeadingSeparators(trimmed.slice(1));
+  return rest ? joinWith(home, rest) : home;
+}
+
+/**
+ * Drop a leading `~` and any leading separators, so an absolute-looking or
+ * home-relative input can be joined UNDER a base rather than replacing it.
+ */
+export function toRelativeSegment(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed || trimmed === "." || trimmed === "./") return "";
+  return stripLeadingSeparators(trimmed.replace(/^~(?=[/\\]|$)/, ""));
+}
+
+function stripLeadingSeparators(input: string): string {
+  return input.replace(/^[\\/]+/, "");
+}

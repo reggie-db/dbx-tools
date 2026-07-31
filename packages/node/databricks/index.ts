@@ -11,5 +11,6 @@ export { RANGE_CACHE_TTL_MS, CloudProvider } from "./src/cloud.ts";
 export type { CloudLocation } from "./src/cloud.ts";
 export { DatabricksFileSystem } from "./src/databricks-fs.ts";
 export type { DatabricksFileSystemOptions } from "./src/databricks-fs.ts";
+export { isHomeRelativePath } from "./src/databricks-path.ts";
 export type { DatabricksFilesBackend, NormalizeDatabricksRootOptions, ResolveDatabricksRootOptions } from "./src/databricks-path.ts";
 export { getPublicIp } from "./src/net.ts";

@@ -7,5 +7,6 @@ export * as localPath from "./src/local-path.ts";
 export * as osPath from "./src/os-path.ts";
 export { LocalFileSystem } from "./src/local-fs.ts";
 export type { LocalFileSystemOptions, HomeOrTempFileSystemOptions } from "./src/local-fs.ts";
+export { isHomeRelativePath } from "./src/local-path.ts";
 export { APP_HOME } from "./src/os-path.ts";
 export type { OsPaths, ResolveOsPathsOptions } from "./src/os-path.ts";

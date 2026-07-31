@@ -6,6 +6,10 @@
  * - `/Volumes/...` (or `catalog.schema.volume` roots) → Unity Catalog Files API
  * - `/dbfs/...` → DBFS API
  *
+ * Every primitive picks its API through {@link DatabricksFileSystem.dispatch}
+ * rather than re-branching by hand, and error normalization is inherited from
+ * {@link BaseFileSystem}, so a primitive here is just the SDK call.
+ *
  * @module
  */
 
@@ -32,6 +36,15 @@ import { getWorkspaceClient } from "./workspace.ts";
 
 const DBFS_READ_CHUNK_BYTES = 1024 * 1024;
 const DBFS_PUT_MAX_BYTES = 1024 * 1024;
+
+/** Segments in `/Volumes/<catalog>/<schema>/<volume>`, provisioned out of band. */
+const VOLUME_ROOT_DEPTH = 4;
+
+/**
+ * One handler per Databricks API, keyed by {@link DatabricksFilesBackend} so
+ * adding a backend is a compile error until every call site handles it.
+ */
+type BackendHandlers<T> = Record<DatabricksFilesBackend, (client: WorkspaceClient) => Promise<T>>;
 
 /** Options for {@link DatabricksFileSystem}. */
 export interface DatabricksFileSystemOptions {
@@ -119,44 +132,41 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     this.client = this.clientOption ?? (await getWorkspaceClient());
   }
 
-  protected override async createRootDirectory(): Promise<void> {
-    await this.mkdirAbsolute(this.root);
-  }
-
-  private workspace(): WorkspaceClient {
+  /** Run the handler for `absolutePath`'s Databricks API with the live client. */
+  private dispatch<T>(absolutePath: string, handlers: BackendHandlers<T>): Promise<T> {
     if (!this.client) {
       throw new FileSystemError(
         "IO_ERROR",
         "Databricks filesystem is not initialized (no WorkspaceClient)",
+        absolutePath,
       );
     }
-    return this.client;
-  }
-
-  private backendFor(absolutePath: string): DatabricksFilesBackend {
-    return resolveDatabricksFilesBackend(absolutePath);
-  }
-
-  private mapError(err: unknown, filePath: string): FileSystemError {
-    return baseFS.mapFileSystemError(err, filePath);
-  }
-
-  protected override isNotFoundError(err: unknown): boolean {
-    if (super.isNotFoundError(err)) return true;
-    return baseFS.inferFileSystemErrorCode(err) === "NOT_FOUND";
+    return handlers[resolveDatabricksFilesBackend(absolutePath)](this.client);
   }
 
   /* ------------------------------------------------------------------ */
   /* Primitives                                                         */
   /* ------------------------------------------------------------------ */
 
+  protected override async createRootDirectory(): Promise<void> {
+    await this.createDirectoryAt(this.root);
+  }
+
   protected override async readBytesAt(resolvedPath: string): Promise<Uint8Array> {
-    try {
-      const buffer = await this.readAbsolute(resolvedPath);
-      return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    } catch (err) {
-      throw this.mapError(err, resolvedPath);
-    }
+    const buffer = await this.dispatch<Buffer>(resolvedPath, {
+      dbfs: (client) => this.readDbfsFile(client, resolvedPath),
+      workspace: async (client) => {
+        const response = await client.workspace.export({ path: resolvedPath, format: "AUTO" });
+        return decodeBase64(response.content);
+      },
+      volumes: async (client) => {
+        const response = await client.files.download({ file_path: resolvedPath });
+        return readResponseBody(
+          response.contents as globalThis.ReadableStream<Uint8Array> | undefined,
+        );
+      },
+    });
+    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   }
 
   protected override async writeBytesAt(
@@ -164,71 +174,97 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     content: Uint8Array,
     options: Required<WriteFileOptions>,
   ): Promise<void> {
-    try {
-      await this.writeAbsolute(resolvedPath, Buffer.from(content), options.overwrite);
-    } catch (err) {
-      throw this.mapError(err, resolvedPath);
-    }
+    const buffer = Buffer.from(content);
+    const overwrite = options.overwrite;
+    await this.dispatch<unknown>(resolvedPath, {
+      dbfs: (client) => this.writeDbfsFile(client, resolvedPath, buffer, overwrite),
+      workspace: (client) =>
+        client.workspace.import({
+          path: resolvedPath,
+          format: "AUTO",
+          content: buffer.toString("base64"),
+          overwrite,
+        }),
+      volumes: (client) =>
+        client.files.upload({
+          file_path: resolvedPath,
+          contents: bufferToReadableStream(buffer) as never,
+          overwrite,
+        }),
+    });
   }
 
   protected override async deleteFileAt(resolvedPath: string): Promise<void> {
-    try {
-      await this.deleteAbsoluteFile(resolvedPath);
-    } catch (err) {
-      throw this.mapError(err, resolvedPath);
-    }
+    await this.dispatch<unknown>(resolvedPath, {
+      dbfs: (client) => client.dbfs.delete({ path: resolvedPath, recursive: false }),
+      workspace: (client) => client.workspace.delete({ path: resolvedPath, recursive: false }),
+      volumes: (client) => client.files.delete({ file_path: resolvedPath }),
+    });
   }
 
   protected override async createDirectoryAt(resolvedPath: string): Promise<void> {
-    try {
-      const backend = this.backendFor(resolvedPath);
-      const client = this.workspace();
-      if (backend === "dbfs") {
-        await client.dbfs.mkdirs({ path: resolvedPath });
-        return;
-      }
-      if (backend === "workspace") {
-        await client.workspace.mkdirs({ path: resolvedPath });
-        return;
-      }
-      await client.files.createDirectory({ directory_path: resolvedPath });
-    } catch (err) {
-      throw this.mapError(err, resolvedPath);
-    }
+    await this.dispatch<unknown>(resolvedPath, {
+      dbfs: (client) => client.dbfs.mkdirs({ path: resolvedPath }),
+      workspace: (client) => client.workspace.mkdirs({ path: resolvedPath }),
+      volumes: (client) => this.createVolumeDirectories(client, resolvedPath),
+    });
   }
 
   protected override async removeDirectoryAt(resolvedPath: string): Promise<void> {
-    try {
-      const backend = this.backendFor(resolvedPath);
-      const client = this.workspace();
-      if (backend === "dbfs") {
-        await client.dbfs.delete({ path: resolvedPath, recursive: false });
-        return;
-      }
-      if (backend === "workspace") {
-        await client.workspace.delete({ path: resolvedPath, recursive: false });
-        return;
-      }
-      await client.files.deleteDirectory({ directory_path: resolvedPath });
-    } catch (err) {
-      throw this.mapError(err, resolvedPath);
-    }
+    await this.dispatch<unknown>(resolvedPath, {
+      dbfs: (client) => client.dbfs.delete({ path: resolvedPath, recursive: false }),
+      workspace: (client) => client.workspace.delete({ path: resolvedPath, recursive: false }),
+      volumes: (client) => client.files.deleteDirectory({ directory_path: resolvedPath }),
+    });
   }
 
   protected override async listDirectoryAt(resolvedPath: string): Promise<FileEntry[]> {
-    try {
-      return await this.listAbsoluteDirectory(resolvedPath);
-    } catch (err) {
-      throw this.mapError(err, resolvedPath);
-    }
+    return this.dispatch<FileEntry[]>(resolvedPath, {
+      dbfs: (client) =>
+        collect(client.dbfs.list({ path: resolvedPath }), (info) => ({
+          name: posixPath.basename(info.path ?? ""),
+          type: info.is_dir ? "directory" : "file",
+          size: info.file_size,
+        })),
+      workspace: (client) =>
+        collect(client.workspace.list({ path: resolvedPath }), (info) => ({
+          name: posixPath.basename(info.path ?? ""),
+          type: info.object_type === "DIRECTORY" ? "directory" : "file",
+        })),
+      volumes: (client) =>
+        collect(client.files.listDirectoryContents({ directory_path: resolvedPath }), (entry) => ({
+          name: entry.name ?? posixPath.basename(entry.path ?? ""),
+          type: entry.is_directory ? "directory" : "file",
+          size: entry.file_size,
+        })),
+    });
   }
 
   protected override async statAt(resolvedPath: string): Promise<Omit<FileStat, "path">> {
-    try {
-      return await this.statAbsolute(resolvedPath);
-    } catch (err) {
-      throw this.mapError(err, resolvedPath);
-    }
+    const fallbackName = posixPath.basename(resolvedPath) || posixPath.basename(this.root);
+    return this.dispatch<Omit<FileStat, "path">>(resolvedPath, {
+      dbfs: async (client) => {
+        const info = await client.dbfs.getStatus({ path: resolvedPath });
+        const modified = toDate(info.modification_time);
+        return {
+          name: posixPath.basename(info.path ?? resolvedPath) || fallbackName,
+          type: info.is_dir ? "directory" : "file",
+          size: info.file_size,
+          createdAt: modified,
+          modifiedAt: modified,
+        };
+      },
+      workspace: async (client) => {
+        const info = await client.workspace.getStatus({ path: resolvedPath });
+        return {
+          name: posixPath.basename(info.path ?? resolvedPath) || fallbackName,
+          type: info.object_type === "DIRECTORY" ? "directory" : "file",
+          createdAt: toDate(info.created_at),
+          modifiedAt: toDate(info.modified_at),
+        };
+      },
+      volumes: (client) => this.statVolumePath(client, resolvedPath, fallbackName),
+    });
   }
 
   protected override async tryMoveFileAt(
@@ -236,198 +272,81 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     destinationPath: string,
     _options: Required<CopyOptions>,
   ): Promise<boolean> {
-    if (this.backendFor(sourcePath) !== "dbfs" || this.backendFor(destinationPath) !== "dbfs") {
+    // Only DBFS exposes a server-side move; everything else falls back to the
+    // portable copy + delete in BaseFileSystem.
+    if (
+      resolveDatabricksFilesBackend(sourcePath) !== "dbfs" ||
+      resolveDatabricksFilesBackend(destinationPath) !== "dbfs"
+    ) {
       return false;
     }
-    try {
-      await this.workspace().dbfs.move({
-        source_path: sourcePath,
-        destination_path: destinationPath,
-      });
-      return true;
-    } catch (err) {
-      throw this.mapError(err, destinationPath);
-    }
+    await this.dispatch<unknown>(sourcePath, {
+      dbfs: (client) =>
+        client.dbfs.move({ source_path: sourcePath, destination_path: destinationPath }),
+      workspace: unreachableBackend,
+      volumes: unreachableBackend,
+    });
+    return true;
   }
 
   /* ------------------------------------------------------------------ */
-  /* Backend I/O                                                        */
+  /* Backend-specific I/O                                               */
   /* ------------------------------------------------------------------ */
 
-  private async mkdirAbsolute(absolutePath: string): Promise<void> {
-    const backend = this.backendFor(absolutePath);
-    const client = this.workspace();
-    if (backend === "dbfs") {
-      await client.dbfs.mkdirs({ path: absolutePath });
-      return;
-    }
-    if (backend === "workspace") {
-      await client.workspace.mkdirs({ path: absolutePath });
-      return;
-    }
-    // UC createDirectory is single-level; the volume root
-    // (`/Volumes/catalog/schema/volume`) is provisioned out of band.
+  /**
+   * UC `createDirectory` is single-level, so walk the path creating each level
+   * below the volume itself. A level that already exists is not an error.
+   */
+  private async createVolumeDirectories(
+    client: WorkspaceClient,
+    absolutePath: string,
+  ): Promise<void> {
     const parts = absolutePath.split("/").filter(Boolean);
     let current = "";
     for (let i = 0; i < parts.length; i++) {
       current = `${current}/${parts[i]}`;
-      if (i < 4) continue; // `/Volumes` .. volume name
+      if (i < VOLUME_ROOT_DEPTH) continue;
       try {
         await client.files.createDirectory({ directory_path: current });
       } catch (err) {
+        // Already present is fine; anything else is a real failure.
         try {
           await client.files.getDirectoryMetadata({ directory_path: current });
         } catch {
-          throw this.mapError(err, current);
+          throw err;
         }
       }
     }
   }
 
-  private async readAbsolute(absolutePath: string): Promise<Buffer> {
-    const backend = this.backendFor(absolutePath);
-    const client = this.workspace();
-    if (backend === "dbfs") return this.readDbfsFile(absolutePath);
-    if (backend === "workspace") {
-      const response = await client.workspace.export({ path: absolutePath, format: "AUTO" });
-      return decodeBase64(response.content);
-    }
-    const response = await client.files.download({ file_path: absolutePath });
-    return readResponseBody(response.contents as globalThis.ReadableStream<Uint8Array> | undefined);
-  }
-
-  private async writeAbsolute(
+  /** Stat a UC path: file metadata first, then a directory probe. */
+  private async statVolumePath(
+    client: WorkspaceClient,
     absolutePath: string,
-    buffer: Buffer,
-    overwrite: boolean,
-  ): Promise<void> {
-    const backend = this.backendFor(absolutePath);
-    const client = this.workspace();
-    if (backend === "dbfs") {
-      await this.writeDbfsFile(absolutePath, buffer, overwrite);
-      return;
-    }
-    if (backend === "workspace") {
-      await client.workspace.import({
-        path: absolutePath,
-        format: "AUTO",
-        content: buffer.toString("base64"),
-        overwrite,
-      });
-      return;
-    }
-    await client.files.upload({
-      file_path: absolutePath,
-      contents: bufferToReadableStream(buffer) as never,
-      overwrite,
-    });
-  }
-
-  private async deleteAbsoluteFile(absolutePath: string): Promise<void> {
-    const backend = this.backendFor(absolutePath);
-    const client = this.workspace();
-    if (backend === "dbfs") {
-      await client.dbfs.delete({ path: absolutePath, recursive: false });
-      return;
-    }
-    if (backend === "workspace") {
-      await client.workspace.delete({ path: absolutePath, recursive: false });
-      return;
-    }
-    await client.files.delete({ file_path: absolutePath });
-  }
-
-  private async listAbsoluteDirectory(absolutePath: string): Promise<FileEntry[]> {
-    const backend = this.backendFor(absolutePath);
-    const client = this.workspace();
-    const entries: FileEntry[] = [];
-
-    if (backend === "dbfs") {
-      for await (const info of client.dbfs.list({ path: absolutePath })) {
-        entries.push({
-          name: posixPath.basename(info.path ?? ""),
-          type: info.is_dir ? "directory" : "file",
-          size: info.file_size,
-        });
-      }
-      return entries;
-    }
-
-    if (backend === "workspace") {
-      for await (const info of client.workspace.list({ path: absolutePath })) {
-        entries.push({
-          name: posixPath.basename(info.path ?? ""),
-          type: info.object_type === "DIRECTORY" ? "directory" : "file",
-        });
-      }
-      return entries;
-    }
-
-    for await (const entry of client.files.listDirectoryContents({
-      directory_path: absolutePath,
-    })) {
-      entries.push({
-        name: entry.name ?? posixPath.basename(entry.path ?? ""),
-        type: entry.is_directory ? "directory" : "file",
-        size: entry.file_size,
-      });
-    }
-    return entries;
-  }
-
-  private async statAbsolute(absolutePath: string): Promise<Omit<FileStat, "path">> {
-    const backend = this.backendFor(absolutePath);
-    const client = this.workspace();
-    const name = posixPath.basename(absolutePath) || posixPath.basename(this.root);
-
-    if (backend === "dbfs") {
-      const info = await client.dbfs.getStatus({ path: absolutePath });
-      return {
-        name: posixPath.basename(info.path ?? absolutePath) || name,
-        type: info.is_dir ? "directory" : "file",
-        size: info.file_size,
-        createdAt:
-          info.modification_time !== undefined ? new Date(info.modification_time) : undefined,
-        modifiedAt:
-          info.modification_time !== undefined ? new Date(info.modification_time) : undefined,
-      };
-    }
-
-    if (backend === "workspace") {
-      const info = await client.workspace.getStatus({ path: absolutePath });
-      return {
-        name: posixPath.basename(info.path ?? absolutePath) || name,
-        type: info.object_type === "DIRECTORY" ? "directory" : "file",
-        createdAt: info.created_at !== undefined ? new Date(info.created_at) : undefined,
-        modifiedAt: info.modified_at !== undefined ? new Date(info.modified_at) : undefined,
-      };
-    }
-
+    fallbackName: string,
+  ): Promise<Omit<FileStat, "path">> {
     try {
       const metadata = await client.files.getMetadata({ file_path: absolutePath });
+      const modified = parseHttpDate(metadata["last-modified"]);
       return {
-        name,
+        name: fallbackName,
         type: "file",
         size: Number(metadata["content-length"] ?? 0),
-        createdAt: parseHttpDate(metadata["last-modified"]),
-        modifiedAt: parseHttpDate(metadata["last-modified"]),
+        createdAt: modified,
+        modifiedAt: modified,
         mimeType: metadata["content-type"],
       };
     } catch (fileErr) {
-      if (baseFS.inferFileSystemErrorCode(fileErr) !== "NOT_FOUND") {
-        // Also treat opaque "not accessible" as a directory probe candidate.
-        const code = baseFS.mapFileSystemError(fileErr, absolutePath).code;
-        if (code !== "NOT_FOUND" && code !== "PERMISSION_DENIED") {
-          throw fileErr;
-        }
-      }
+      // A directory has no file metadata, and an unreadable one reports as
+      // missing / denied - both are worth a directory probe before failing.
+      const code = baseFS.mapFileSystemError(fileErr, absolutePath).code;
+      if (code !== "NOT_FOUND" && code !== "PERMISSION_DENIED") throw fileErr;
       await client.files.getDirectoryMetadata({ directory_path: absolutePath });
-      return { name, type: "directory" };
+      return { name: fallbackName, type: "directory" };
     }
   }
 
-  private async readDbfsFile(absolutePath: string): Promise<Buffer> {
-    const client = this.workspace();
+  private async readDbfsFile(client: WorkspaceClient, absolutePath: string): Promise<Buffer> {
     const chunks: Buffer[] = [];
     let offset = 0;
     while (true) {
@@ -446,11 +365,11 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
   }
 
   private async writeDbfsFile(
+    client: WorkspaceClient,
     absolutePath: string,
     buffer: Buffer,
     overwrite: boolean,
   ): Promise<void> {
-    const client = this.workspace();
     if (buffer.length <= DBFS_PUT_MAX_BYTES) {
       await client.dbfs.put({
         path: absolutePath,
@@ -473,6 +392,18 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
 }
 
 /* ------------------------------ helpers ------------------------------ */
+
+/** Drain an SDK async iterable into a mapped array. */
+async function collect<S, T>(source: AsyncIterable<S>, map: (item: S) => T): Promise<T[]> {
+  const items: T[] = [];
+  for await (const item of source) items.push(map(item));
+  return items;
+}
+
+/** Handler for a backend a call site has already ruled out. */
+function unreachableBackend(): Promise<never> {
+  throw new FileSystemError("NOT_SUPPORTED", "Unsupported Databricks backend for this operation");
+}
 
 function decodeBase64(data: string | undefined): Buffer {
   if (!data) return Buffer.alloc(0);
@@ -500,6 +431,10 @@ function bufferToReadableStream(buffer: Buffer): globalThis.ReadableStream<Uint8
       controller.close();
     },
   });
+}
+
+function toDate(value: number | undefined): Date | undefined {
+  return value === undefined ? undefined : new Date(value);
 }
 
 function parseHttpDate(value: string | undefined): Date | undefined {

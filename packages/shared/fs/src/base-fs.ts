@@ -42,31 +42,31 @@ export type FileSystemRootSegment = string | number | boolean | bigint | object;
 export type FileSystemRootInput = FileSystemRootSegment | OneOrMany<FileSystemRootSegment>;
 
 /**
- * Safe single path component: letters, digits, `.`, `_`, `-`, `@`, `+`, or a
- * Windows drive letter (`C:`). Anything else is replaced with
- * {@link hash.fnvHash}.
+ * Characters no backend accepts inside a single path component: a separator
+ * (which would silently deepen the path) or a NUL / control character.
  *
- * `@` and `+` are included because principal names are path segments on real
- * backends - a Databricks workspace home is `/Workspace/Users/<email>`, so
- * hashing them would silently point the filesystem at a directory that does
- * not exist.
+ * This is a DENY-list on purpose. Spaces, `@`, `&`, `#`, parentheses and
+ * non-ASCII are all legal directory names on POSIX and in a Databricks
+ * workspace, and replacing one with a hash points the filesystem at a
+ * directory that does not exist - a failure that is silent and very hard to
+ * trace back. Only reject what genuinely cannot be a component.
  */
-const VALID_PATH_SEGMENT = /^(?:[A-Za-z0-9._@+-]+|[A-Za-z]:)$/;
+const UNSAFE_PATH_SEGMENT = /[\\/\u0000-\u001F\u007F]/;
 
 /**
  * Turn {@link root} into a POSIX filesystem root:
  *
  * 1. Expand one-or-many input segments
  * 2. Strings split on `/` (and `\`); objects/arrays FNV-hash as one piece
- * 3. Each resulting component that is not a {@link VALID_PATH_SEGMENT} is
- *    replaced with {@link hash.fnvHash} of that component
+ * 3. Each resulting component that cannot be a path component - see
+ *    {@link UNSAFE_PATH_SEGMENT} - is replaced with {@link hash.fnvHash}
  * 4. Join with `/` and run {@link posixPath.normalizeRoot}
  *
  * Defaults to `/`. A leading `/` on the first string segment is preserved.
  *
  * @example
  * normalizeFileSystemRoot("/cool/wow"); // "/cool/wow"
- * normalizeFileSystemRoot("path/git:@''''wow/test"); // "path/<hash>/test"
+ * normalizeFileSystemRoot("/Users/me@corp.com/My Notes"); // unchanged
  * normalizeFileSystemRoot(["/path", { user: 1 }, true]); // "/path/<hash>/true"
  */
 export function normalizeFileSystemRoot(root?: FileSystemRootInput): string {
@@ -106,17 +106,28 @@ function appendRootParts(parts: string[], segment: FileSystemRootSegment): void 
   }
 }
 
-/** Split on `/` (after `\` → `/`); drop empty pieces from leading/trailing/double slashes. */
+/**
+ * Split on `/` (after `\` → `/`); drop empty pieces from
+ * leading/trailing/double slashes and no-op `.` pieces.
+ */
 function splitPathPieces(input: string): string[] {
   return posixPath
     .toPosix(input.trim())
     .split("/")
-    .filter((piece) => piece.length > 0);
+    .filter((piece) => piece.length > 0 && piece !== ".");
 }
 
-/** Keep a valid path component; otherwise FNV-hash it. */
+/**
+ * Keep a usable path component verbatim; FNV-hash one that cannot be used.
+ *
+ * `..` is hashed rather than dropped so a root can never traverse above
+ * itself while the offending segment stays visible in the resolved root.
+ */
 function sanitizePathSegment(segment: string): string {
-  return VALID_PATH_SEGMENT.test(segment) ? segment : hash.fnvHash(segment);
+  if (segment === ".." || UNSAFE_PATH_SEGMENT.test(segment)) {
+    return hash.fnvHash(segment);
+  }
+  return segment;
 }
 
 export type FileSystemErrorCode =
@@ -280,7 +291,7 @@ export abstract class BaseFileSystem<
     return functionModule.memoize(async () => {
       this.initStarted = true;
       if (this.createRoot) {
-        await this.createRootDirectory();
+        await this.guard(this.root, () => this.createRootDirectory());
       }
       await this.onInit();
     });
@@ -381,7 +392,19 @@ export abstract class BaseFileSystem<
     options?: { allowMissing?: boolean },
   ): Promise<string> {
     await this._init();
-    return this.preparePath(this.resolvePath(inputPath), options);
+    return this.resolveNamespaceFor(this.normalizePath(inputPath), options);
+  }
+
+  /**
+   * {@link resolveFor} for a path that is ALREADY a normalized namespace path
+   * (`/a/b`). The single spelling for "namespace path to prepared backend
+   * path", so no call site has to re-derive the chain by hand.
+   */
+  private resolveNamespaceFor(
+    namespacePath: string,
+    options?: { allowMissing?: boolean },
+  ): Promise<string> {
+    return this.preparePath(this.resolveBackendPath(namespacePath), options);
   }
 
   /**
@@ -456,6 +479,26 @@ export abstract class BaseFileSystem<
     return inferFileSystemErrorCode(err) === "NOT_FOUND";
   }
 
+  /**
+   * Normalize a backend failure into a {@link FileSystemError}.
+   *
+   * Every `*At` / `try*` primitive is invoked through {@link guard}, so an
+   * adapter never writes its own try/catch and cannot forget to normalize.
+   * Override only to classify backend-specific codes (e.g. Node errno).
+   */
+  protected mapError(err: unknown, filePath: string): FileSystemError {
+    return mapFileSystemError(err, filePath);
+  }
+
+  /** Run a backend primitive, routing any failure through {@link mapError}. */
+  private async guard<T>(resolvedPath: string, operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (err) {
+      throw this.mapError(err, resolvedPath);
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /* Optional native-operation hooks                                    */
   /* ------------------------------------------------------------------ */
@@ -507,8 +550,8 @@ export abstract class BaseFileSystem<
     options: ReadFileOptions & { encoding: string },
   ): Promise<string>;
   async readFile(inputPath: string, options?: ReadFileOptions): Promise<string | Uint8Array> {
-    await this._init();
-    const content = await this.readBytesAt(await this.resolveFor(inputPath));
+    const resolvedPath = await this.resolveFor(inputPath);
+    const content = await this.guard(resolvedPath, () => this.readBytesAt(resolvedPath));
     if (options?.encoding) {
       return new TextDecoder(options.encoding).decode(content);
     }
@@ -523,16 +566,11 @@ export abstract class BaseFileSystem<
     await this._init();
     this.assertWritable("write file");
 
-    const overwrite = options.overwrite ?? true;
-    if (!overwrite && (await this.exists(inputPath))) {
-      throw new FileSystemError("ALREADY_EXISTS", `File already exists: ${inputPath}`, inputPath);
-    }
-
+    const overwrite = await this.resolveOverwrite(inputPath, options, "File");
     await this.ensureParentDirectory(inputPath);
-    await this.writeBytesAt(
-      await this.resolveFor(inputPath, { allowMissing: true }),
-      this.toBytes(content),
-      { overwrite },
+    const resolvedPath = await this.resolveFor(inputPath, { allowMissing: true });
+    await this.guard(resolvedPath, () =>
+      this.writeBytesAt(resolvedPath, this.toBytes(content), { overwrite }),
     );
   }
 
@@ -544,7 +582,7 @@ export abstract class BaseFileSystem<
     await this.ensureParentDirectory(inputPath);
     const resolvedPath = await this.resolveFor(inputPath, { allowMissing: true });
 
-    if (await this.tryAppendFileAt(resolvedPath, bytes)) {
+    if (await this.guard(resolvedPath, () => this.tryAppendFileAt(resolvedPath, bytes))) {
       return;
     }
 
@@ -561,16 +599,14 @@ export abstract class BaseFileSystem<
     await this._init();
     this.assertWritable("delete file");
 
-    try {
+    await this.ignoringMissing(options, async () => {
       const entry = await this.stat(inputPath);
       if (entry.type === "directory") {
         throw new FileSystemError("IS_DIRECTORY", `Path is a directory: ${inputPath}`, inputPath);
       }
-      await this.deleteFileAt(await this.resolveFor(inputPath));
-    } catch (error) {
-      if (options.force && this.isNotFoundError(error)) return;
-      throw error;
-    }
+      const resolvedPath = await this.resolveFor(inputPath);
+      await this.guard(resolvedPath, () => this.deleteFileAt(resolvedPath));
+    });
   }
 
   async copyFile(
@@ -578,29 +614,18 @@ export abstract class BaseFileSystem<
     destinationPath: string,
     options: CopyOptions = {},
   ): Promise<void> {
-    await this._init();
-    this.assertWritable("copy file");
+    const { source, destination, resolved } = await this.prepareTransfer(
+      "copy file",
+      sourcePath,
+      destinationPath,
+      options,
+    );
 
-    const overwrite = options.overwrite ?? true;
-    if (!overwrite && (await this.exists(destinationPath))) {
-      throw new FileSystemError(
-        "ALREADY_EXISTS",
-        `Destination already exists: ${destinationPath}`,
-        destinationPath,
-      );
-    }
-
-    await this.ensureParentDirectory(destinationPath);
-    const source = await this.resolveFor(sourcePath);
-    const destination = await this.resolveFor(destinationPath, { allowMissing: true });
-    const resolvedOptions = { overwrite };
-
-    if (await this.tryCopyFileAt(source, destination, resolvedOptions)) {
+    if (await this.guard(destination, () => this.tryCopyFileAt(source, destination, resolved))) {
       return;
     }
 
-    const content = await this.readFile(sourcePath);
-    await this.writeFile(destinationPath, content, { overwrite });
+    await this.writeFile(destinationPath, await this.readFile(sourcePath), resolved);
   }
 
   async moveFile(
@@ -608,33 +633,77 @@ export abstract class BaseFileSystem<
     destinationPath: string,
     options: CopyOptions = {},
   ): Promise<void> {
-    await this._init();
-    this.assertWritable("move file");
+    const { source, destination, resolved } = await this.prepareTransfer(
+      "move file",
+      sourcePath,
+      destinationPath,
+      options,
+    );
 
-    const overwrite = options.overwrite ?? true;
-    if (!overwrite && (await this.exists(destinationPath))) {
-      throw new FileSystemError(
-        "ALREADY_EXISTS",
-        `Destination already exists: ${destinationPath}`,
-        destinationPath,
-      );
-    }
-
-    await this.ensureParentDirectory(destinationPath);
-    const source = await this.resolveFor(sourcePath);
-    const destination = await this.resolveFor(destinationPath, { allowMissing: true });
-    const resolvedOptions = { overwrite };
-
-    if (await this.tryMoveFileAt(source, destination, resolvedOptions)) {
+    if (await this.guard(destination, () => this.tryMoveFileAt(source, destination, resolved))) {
       return;
     }
 
-    await this.copyFile(sourcePath, destinationPath, { overwrite });
+    await this.copyFile(sourcePath, destinationPath, resolved);
     const sourceStat = await this.stat(sourcePath);
     if (sourceStat.type === "directory") {
       await this.rmdir(sourcePath, { recursive: true });
     } else {
       await this.deleteFile(sourcePath);
+    }
+  }
+
+  /**
+   * Resolve the effective `overwrite` flag, rejecting when the target exists
+   * and overwriting was refused. Shared by write / copy / move so the three
+   * cannot disagree about what `overwrite: false` means.
+   */
+  private async resolveOverwrite(
+    inputPath: string,
+    options: { overwrite?: boolean },
+    label: string,
+  ): Promise<boolean> {
+    const overwrite = options.overwrite ?? true;
+    if (!overwrite && (await this.exists(inputPath))) {
+      throw new FileSystemError(
+        "ALREADY_EXISTS",
+        `${label} already exists: ${inputPath}`,
+        inputPath,
+      );
+    }
+    return overwrite;
+  }
+
+  /** Shared copy / move prologue: writability, overwrite policy, both ends resolved. */
+  private async prepareTransfer(
+    operation: string,
+    sourcePath: string,
+    destinationPath: string,
+    options: CopyOptions,
+  ): Promise<{ source: string; destination: string; resolved: Required<CopyOptions> }> {
+    await this._init();
+    this.assertWritable(operation);
+
+    const overwrite = await this.resolveOverwrite(destinationPath, options, "Destination");
+    await this.ensureParentDirectory(destinationPath);
+
+    return {
+      source: await this.resolveFor(sourcePath),
+      destination: await this.resolveFor(destinationPath, { allowMissing: true }),
+      resolved: { overwrite },
+    };
+  }
+
+  /** Run a removal, swallowing a not-found failure when `force` is set. */
+  private async ignoringMissing(
+    options: RemoveOptions,
+    operation: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await operation();
+    } catch (err) {
+      if (options.force && this.isNotFoundError(err)) return;
+      throw err;
     }
   }
 
@@ -649,11 +718,7 @@ export abstract class BaseFileSystem<
     const namespacePath = this.normalizePath(inputPath);
 
     if (!options.recursive) {
-      await this.createDirectoryAt(
-        await this.preparePath(this.resolveBackendPath(namespacePath), {
-          allowMissing: true,
-        }),
-      );
+      await this.createDirectory(namespacePath);
       return;
     }
 
@@ -671,9 +736,7 @@ export abstract class BaseFileSystem<
         }
       } catch (error) {
         if (!this.isNotFoundError(error)) throw error;
-        await this.createDirectoryAt(
-          await this.preparePath(this.resolvePath(currentPath), { allowMissing: true }),
-        );
+        await this.createDirectory(currentPath);
       }
     }
   }
@@ -682,7 +745,7 @@ export abstract class BaseFileSystem<
     await this._init();
     this.assertWritable("remove directory");
 
-    try {
+    await this.ignoringMissing(options, async () => {
       const entry = await this.stat(inputPath);
       if (entry.type !== "directory") {
         throw new FileSystemError(
@@ -692,29 +755,43 @@ export abstract class BaseFileSystem<
         );
       }
 
+      const namespacePath = this.normalizePath(inputPath);
       if (options.recursive) {
-        await this.removeDirectoryContents(this.normalizePath(inputPath));
+        await this.removeDirectoryContents(namespacePath);
       }
-
-      await this.removeDirectoryAt(await this.resolveFor(inputPath));
-    } catch (error) {
-      if (options.force && this.isNotFoundError(error)) return;
-      throw error;
-    }
+      await this.removeDirectory(namespacePath);
+    });
   }
 
   private async removeDirectoryContents(namespacePath: string): Promise<void> {
-    const entries = await this.listDirectoryAt(await this.resolveFor(namespacePath));
-
-    for (const entry of entries) {
+    for (const entry of await this.listDirectory(namespacePath)) {
       const childPath = this.joinNamespace(namespacePath, entry.name);
       if (entry.type === "directory") {
         await this.removeDirectoryContents(childPath);
-        await this.removeDirectoryAt(await this.resolveFor(childPath));
+        await this.removeDirectory(childPath);
       } else {
-        await this.deleteFileAt(await this.resolveFor(childPath));
+        const resolvedPath = await this.resolveNamespaceFor(childPath);
+        await this.guard(resolvedPath, () => this.deleteFileAt(resolvedPath));
       }
     }
+  }
+
+  /** {@link createDirectoryAt} for a namespace path, resolved and guarded. */
+  private async createDirectory(namespacePath: string): Promise<void> {
+    const resolvedPath = await this.resolveNamespaceFor(namespacePath, { allowMissing: true });
+    await this.guard(resolvedPath, () => this.createDirectoryAt(resolvedPath));
+  }
+
+  /** {@link removeDirectoryAt} for a namespace path, resolved and guarded. */
+  private async removeDirectory(namespacePath: string): Promise<void> {
+    const resolvedPath = await this.resolveNamespaceFor(namespacePath);
+    await this.guard(resolvedPath, () => this.removeDirectoryAt(resolvedPath));
+  }
+
+  /** {@link listDirectoryAt} for a namespace path, resolved and guarded. */
+  private async listDirectory(namespacePath: string): Promise<FileEntry[]> {
+    const resolvedPath = await this.resolveNamespaceFor(namespacePath);
+    return this.guard(resolvedPath, () => this.listDirectoryAt(resolvedPath));
   }
 
   async readdir(inputPath: string, options: ListOptions = {}): Promise<FileEntry[]> {
@@ -723,10 +800,7 @@ export abstract class BaseFileSystem<
     const namespacePath = this.normalizePath(inputPath);
 
     if (!options.recursive) {
-      return this.filterEntries(
-        await this.listDirectoryAt(await this.resolveFor(inputPath)),
-        options,
-      );
+      return this.filterEntries(await this.listDirectory(namespacePath), options);
     }
 
     return this.listDirectoryRecursive(namespacePath, options, 0, "");
@@ -739,10 +813,7 @@ export abstract class BaseFileSystem<
     prefix: string,
   ): Promise<FileEntry[]> {
     const maximumDepth = options.maxDepth ?? Number.POSITIVE_INFINITY;
-    const entries = this.filterEntries(
-      await this.listDirectoryAt(await this.preparePath(this.resolveBackendPath(namespacePath))),
-      options,
-    );
+    const entries = this.filterEntries(await this.listDirectory(namespacePath), options);
 
     const results: FileEntry[] = [];
 
@@ -801,7 +872,8 @@ export abstract class BaseFileSystem<
   async stat(inputPath: string): Promise<FileStat> {
     await this._init();
     const namespacePath = this.normalizePath(inputPath);
-    const entry = await this.statAt(await this.preparePath(this.resolveBackendPath(namespacePath)));
+    const resolvedPath = await this.resolveNamespaceFor(namespacePath);
+    const entry = await this.guard(resolvedPath, () => this.statAt(resolvedPath));
     return {
       ...entry,
       path: this.toRelativePath(namespacePath),

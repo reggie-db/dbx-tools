@@ -202,14 +202,14 @@ export async function provisionRemoteSkills(
       const sourceOptions = toSourceOptions(entry);
       const failOnError = sourceOptions.failOnError ?? failDefault;
       try {
-        staging ??= await createTempFs("mastra-remote-skills");
+        staging ??= await initializedScratch("mastra-remote-skills");
         const stagedDir = await stageSource(sourceOptions, staging.root, options);
         const staged = await collectSkillDirs(stagedDir);
         if (staged.length === 0) {
           throw new Error(`no SKILL.md found for source "${sourceOptions.source}"`);
         }
         if (destination && databricksBasePath) {
-          await uploadSkillDirs(destination, staged);
+          await copySkillDirs(destination, staged);
           skillNames.push(...staged.map((dir) => dir.name));
         } else {
           const localDir = await persistLocally(staged);
@@ -398,36 +398,38 @@ async function collectSkillDirs(root: string): Promise<StagedSkillDir[]> {
   return dirs;
 }
 
-/** Upload each staged skill directory into the Databricks destination tree. */
-async function uploadSkillDirs(destination: FileSystem, dirs: StagedSkillDir[]): Promise<void> {
+/**
+ * Copy every staged skill directory into {@link destination}, preserving the
+ * `<skill>/<relative>` layout. The destination is just a {@link FileSystem},
+ * so the Databricks Assistant tree and the local fallback share one copier.
+ */
+async function copySkillDirs(destination: FileSystem, dirs: StagedSkillDir[]): Promise<void> {
   await destination.init();
   for (const dir of dirs) {
     for (const relative of find.findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
       const buffer = await readFile(join(dir.absolutePath, relative));
-      const remotePath = posix.join(dir.name, relative.split(/[\\/]/).join("/"));
-      await destination.writeFile(remotePath, buffer, { overwrite: true });
+      const skillPath = posix.join(dir.name, relative.split(/[\\/]/).join("/"));
+      await destination.writeFile(skillPath, buffer, { overwrite: true });
     }
   }
 }
 
-/** Copy staged skill dirs into a {@link localFS.tmpFS} tree; return its root path. */
+/** Copy staged skill dirs into a local scratch tree; return its root path. */
 async function persistLocally(dirs: StagedSkillDir[]): Promise<string> {
-  const local = await createTempFs("mastra-local-skills");
-  for (const dir of dirs) {
-    for (const relative of find.findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
-      const buffer = await readFile(join(dir.absolutePath, relative));
-      const remotePath = posix.join(dir.name, relative.split(/[\\/]/).join("/"));
-      await local.writeFile(remotePath, buffer, { overwrite: true });
-    }
-  }
+  const local = localFS.scratchFS("mastra-local-skills");
+  await copySkillDirs(local, dirs);
   return local.root;
 }
 
-/** Create and initialize a unique {@link localFS.tmpFS} scratch filesystem. */
-async function createTempFs(prefix: string): Promise<LocalFileSystem> {
-  const fs = localFS.tmpFS(`${prefix}-${hash.id()}`);
-  await fs.init();
-  return fs;
+/**
+ * A scratch filesystem whose root exists on disk, for the paths that hand a
+ * real directory to `node:fs` or a child process rather than going through
+ * the {@link FileSystem} API.
+ */
+async function initializedScratch(prefix: string): Promise<LocalFileSystem> {
+  const scratch = localFS.scratchFS(prefix);
+  await scratch.init();
+  return scratch;
 }
 
 /** Best-effort existence check. */

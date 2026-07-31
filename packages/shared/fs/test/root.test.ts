@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { hash } from "@dbx-tools/shared-core";
-import { MemoryFileSystem } from "../src/memory-fs.ts";
 import { normalizeFileSystemRoot } from "../src/base-fs.ts";
+import { MemoryFileSystem } from "../src/memory-fs.ts";
 
 describe("normalizeFileSystemRoot", () => {
   it("keeps valid path segments and preserves a leading slash", () => {
@@ -10,11 +10,29 @@ describe("normalizeFileSystemRoot", () => {
     assert.equal(normalizeFileSystemRoot(["/cool/wow"]), "/cool/wow");
   });
 
-  it("splits strings on / and hashes invalid segments", () => {
-    const invalid = "git:@''''wow";
+  it("keeps segments that are unusual but legal on a real backend", () => {
+    // Deny-list, not allow-list: hashing one of these would silently point the
+    // filesystem at a directory that does not exist.
     assert.equal(
-      normalizeFileSystemRoot("path/git:@''''wow/test"),
-      `path/${hash.fnvHash(invalid)}/test`,
+      normalizeFileSystemRoot("/Workspace/Users/me@corp.com/My Notes"),
+      "/Workspace/Users/me@corp.com/My Notes",
+    );
+    assert.equal(normalizeFileSystemRoot("path/git:@''''wow/test"), "path/git:@''''wow/test");
+    assert.equal(normalizeFileSystemRoot("/data/rapports été (2024)"), "/data/rapports été (2024)");
+  });
+
+  it("splits on / and drops no-op . segments", () => {
+    assert.equal(normalizeFileSystemRoot("a/./b"), "a/b");
+    assert.equal(normalizeFileSystemRoot("//a//b//"), "/a/b");
+  });
+
+  it("hashes segments that cannot be a path component", () => {
+    // `..` would traverse above the root; a control character is rejected by
+    // every backend. Both stay visible as a hash rather than being dropped.
+    assert.equal(normalizeFileSystemRoot(["/root", ".."]), `/root/${hash.fnvHash("..")}`);
+    assert.equal(
+      normalizeFileSystemRoot(["/root", "a\u0000b"]),
+      `/root/${hash.fnvHash("a\u0000b")}`,
     );
   });
 
