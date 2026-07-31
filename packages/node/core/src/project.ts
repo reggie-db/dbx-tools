@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync, SpawnSyncReturns } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { hash, json, net, string } from "@dbx-tools/shared-core";
@@ -37,8 +37,11 @@ export interface ProjectContext {
  * or empty output.
  */
 function projectContextCommandOutput(command: string, args: string[], cwd: string): ProjectContext {
-  const result = spawnSync(command, args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
-  if (result.error || !result.stdout) {
+  let result: SpawnSyncReturns<any> | null = null;
+  try {
+    result = spawnSync(command, args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
+  } catch (_) { }
+  if (result === null || result.error || !result.stdout) {
     return { cwd, output: "" };
   }
   const output = result.stdout.toString().trim();
