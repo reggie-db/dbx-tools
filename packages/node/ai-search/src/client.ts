@@ -1,0 +1,590 @@
+/**
+ * A small, Meilisearch-shaped client over Databricks AI Search (Vector
+ * Search). The whole point of this module is ergonomics: the Databricks SDK's
+ * `vectorSearchIndexes.queryIndex({ index_name, columns, query_text,
+ * query_type, num_results, filters_json })` is powerful but verbose, and the
+ * response is columnar. This client hides all of that behind two objects:
+ *
+ * ```ts
+ * const client = createSearchClient();
+ * const index = client.index("main.support.docs");
+ * const { hits } = await index.search("reset my password", { limit: 5 });
+ * await index.addDocuments([{ id: "42", title: "Reset", body: "..." }]);
+ * ```
+ *
+ * `client.search(query, opts)` searches the default index; `client.index(name)`
+ * returns a handle bound to one index; `client.universalSearch(query)` fans a
+ * query across several indexes and merges the results (Meilisearch's federated
+ * / multi-search, the "universal search" the caller asked for). Everything is
+ * async and cancellable, resolves the OBO workspace client from the active
+ * AppKit execution context (falling back to a service-principal client outside
+ * a request), and returns the browser-safe shapes from
+ * `@dbx-tools/shared-ai-search`.
+ *
+ * Autocomplete is just a search with a small `limit` and the raw query text -
+ * hybrid mode already prefix-matches, so no separate endpoint is needed; the
+ * {@link SearchIndex.autocomplete} helper is a thin, self-documenting alias.
+ *
+ * @module
+ */
+
+import { ExecutionError, getExecutionContext } from "@databricks/appkit";
+import { Context } from "@databricks/sdk-experimental";
+import { appkit, databricks } from "@dbx-tools/appkit";
+import { resolve as modelResolve, serving } from "@dbx-tools/model";
+import type {
+  SearchDocument,
+  SearchHit,
+  SearchMode,
+  SearchResult,
+  UpsertResult,
+} from "@dbx-tools/shared-ai-search";
+import { log, string } from "@dbx-tools/shared-core";
+import { ModelClass } from "@dbx-tools/shared-model";
+import {
+  DEFAULT_MODE,
+  DEFAULT_PAGE_SIZE,
+  DEFAULT_TIMEOUT_MS,
+  indexConfigFor,
+  resolveIndexName,
+  type ResolvedAiSearchConfig,
+} from "./config.ts";
+import {
+  compileFilter,
+  toHits,
+  toQueryType,
+  toRequestColumns,
+  type QueryResponseLike,
+} from "./query.ts";
+
+type WorkspaceClientLike = appkit.WorkspaceClientLike;
+const logger = log.logger("ai-search/client");
+
+/** Options accepted by a single-index search. */
+export interface SearchOptions {
+  /** Maximum hits to return. Defaults to the configured page size. */
+  limit?: number;
+  /** Match mode. Defaults to the configured mode (hybrid). */
+  mode?: SearchMode;
+  /** Columns to return per hit. Defaults to the index's configured columns. */
+  columns?: readonly string[];
+  /** Attribute filters as `{ column: value }` or `{ column: { ">=": n } }`. */
+  filter?: Record<string, unknown>;
+  /** Drop hits below this score. */
+  scoreThreshold?: number;
+  /** External cancellation. */
+  signal?: AbortSignal;
+}
+
+/** Options accepted by a universal (federated) search. */
+export interface UniversalSearchOptions {
+  /** Indexes to search. Defaults to every known index. */
+  indexes?: readonly string[];
+  /** Maximum hits per index before merging. */
+  limit?: number;
+  /** Match mode. */
+  mode?: SearchMode;
+  /** External cancellation. */
+  signal?: AbortSignal;
+}
+
+/**
+ * A handle bound to one index. Modeled on Meilisearch's `client.index(uid)`:
+ * `search` / `autocomplete` read, `addDocuments` / `deleteDocuments` write (to
+ * a direct-access index), and `info` fetches the live definition.
+ */
+export class SearchIndex {
+  constructor(
+    readonly name: string,
+    private readonly client: SearchClient,
+  ) {}
+
+  /** Search this index. See {@link SearchClient.search}. */
+  search(query: string, options?: SearchOptions): Promise<SearchResult> {
+    return this.client.search(query, { ...options, index: this.name });
+  }
+
+  /**
+   * Autocomplete against this index: a search with a small default `limit` and
+   * the raw prefix as the query. Hybrid mode already handles prefixes, so this
+   * is a self-documenting alias rather than a separate code path.
+   */
+  autocomplete(prefix: string, options?: SearchOptions): Promise<SearchResult> {
+    return this.search(prefix, { limit: 5, ...options });
+  }
+
+  /** Add or update documents in this (direct-access) index. */
+  addDocuments(documents: SearchDocument[], signal?: AbortSignal): Promise<UpsertResult> {
+    return this.client.addDocuments(this.name, documents, signal);
+  }
+
+  /** Delete documents from this (direct-access) index by primary key. */
+  deleteDocuments(ids: Array<string | number>, signal?: AbortSignal): Promise<UpsertResult> {
+    return this.client.deleteDocuments(this.name, ids, signal);
+  }
+
+  /** Fetch this index's live definition (primary key, columns, readiness). */
+  info(signal?: AbortSignal): Promise<IndexInfo> {
+    return this.client.getIndex(this.name, signal);
+  }
+
+  /** Trigger a sync of this (Delta Sync) index from its source table. */
+  sync(signal?: AbortSignal): Promise<void> {
+    return this.client.syncIndex(this.name, signal);
+  }
+
+  /** Delete this index. */
+  delete(signal?: AbortSignal): Promise<void> {
+    return this.client.deleteIndex(this.name, signal);
+  }
+
+  /** Create this index if it does not exist, otherwise return the existing one. */
+  ensure(options?: CreateIndexOptions): Promise<IndexInfo> {
+    return this.client.ensureIndex(this.name, options);
+  }
+}
+
+/** A resolved live index definition. */
+export interface IndexInfo {
+  name: string;
+  endpoint?: string;
+  primaryKey?: string;
+  columns: string[];
+  ready: boolean;
+  rowCount?: number;
+}
+
+/**
+ * Options for {@link SearchClient.createIndex} / {@link SearchClient.ensureIndex}.
+ * The goal is the same as the rest of the client: name a source table and a
+ * text column, and everything else - the endpoint, the embedding model, the
+ * index type, the sync mode - has a sensible default that infers from the
+ * workspace, overridable when a deployment needs to go deeper.
+ */
+export interface CreateIndexOptions {
+  /**
+   * Source Delta table (catalog.schema.table) for a Delta Sync index. Provide
+   * this for the common case: Databricks computes and syncs embeddings from it.
+   * Omit it (and pass {@link embeddingDimension}) to create a direct-access
+   * index you write vectors to yourself.
+   */
+  sourceTable?: string;
+  /** Primary-key column. Defaults to `id`. */
+  primaryKey?: string;
+  /**
+   * The text column embeddings are computed from (Delta Sync). Defaults to the
+   * first of `text` / `content` / `body` present, else the caller must set it.
+   */
+  embeddingSourceColumn?: string;
+  /**
+   * Embedding model endpoint. A loose name is fuzzy-matched; when omitted the
+   * best embedding endpoint in the workspace is chosen ({@link resolveEmbeddingModel}).
+   */
+  embeddingModel?: string;
+  /** Vector Search endpoint to host the index on. Defaults to the plugin's `endpoint`. */
+  endpoint?: string;
+  /** For a direct-access index: the embedding vector dimension (required, no source table). */
+  embeddingDimension?: number;
+  /** For a direct-access index: the column the vector is stored in. Defaults to `embedding`. */
+  embeddingVectorColumn?: string;
+  /** Sync mode for a Delta Sync index. `TRIGGERED` (default) syncs on demand; `CONTINUOUS` keeps fresh. */
+  pipelineType?: "TRIGGERED" | "CONTINUOUS";
+  /** Extra columns to sync alongside the embedding source (Delta Sync). */
+  columnsToSync?: string[];
+  /** External cancellation. */
+  signal?: AbortSignal;
+}
+
+/** Options for {@link SearchClient.ensureEndpoint}. */
+export interface EnsureEndpointOptions {
+  /** Wait for the endpoint to come online before returning. Defaults to false. */
+  wait?: boolean;
+  /** External cancellation. */
+  signal?: AbortSignal;
+}
+
+/**
+ * The AI Search client. Construct it with {@link createSearchClient} (which
+ * reads a resolved config) or directly for one-off use. All reads resolve the
+ * OBO workspace client from the active execution context.
+ */
+export class SearchClient {
+  constructor(
+    private readonly config: ResolvedAiSearchConfig = {
+      indexes: [],
+      pageSize: DEFAULT_PAGE_SIZE,
+      mode: DEFAULT_MODE,
+      basePath: "/api/search",
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+      allowWrite: false,
+    },
+    private readonly workspaceClientFactory: () => WorkspaceClientLike = defaultWorkspaceClient,
+  ) {}
+
+  /** A handle bound to one index (by full UC name or configured alias). */
+  index(reference: string): SearchIndex {
+    const name = resolveIndexName(this.config, reference) ?? reference;
+    return new SearchIndex(name, this);
+  }
+
+  /**
+   * Search one index. `index` may be a full UC name, a configured alias, or
+   * omitted to use the default index. Returns hits sorted most-relevant-first.
+   */
+  async search(
+    query: string,
+    options: SearchOptions & { index?: string } = {},
+  ): Promise<SearchResult> {
+    const text = string.trimToEmpty(query);
+    const name = resolveIndexName(this.config, options.index);
+    if (name === null) {
+      throw new ExecutionError("ai-search: no index configured; set a default index or pass one", {
+        context: { operation: "search" },
+      });
+    }
+    const known = indexConfigFor(this.config, name);
+    const primaryKey = known?.primaryKey;
+    const columns = toRequestColumns(
+      options.columns,
+      known?.columns ?? this.config.columns,
+      primaryKey,
+    );
+    const mode = options.mode ?? this.config.mode;
+    const limit = options.limit ?? this.config.pageSize;
+
+    const response = await this.withClient("search", options.signal, async (client, context) => {
+      return client.vectorSearchIndexes.queryIndex(
+        {
+          index_name: name,
+          columns,
+          query_text: text,
+          query_type: toQueryType(mode),
+          num_results: limit,
+          ...(compileFilter(options.filter) ? { filters_json: compileFilter(options.filter) } : {}),
+          ...(options.scoreThreshold !== undefined
+            ? { score_threshold: options.scoreThreshold }
+            : {}),
+        },
+        context,
+      );
+    });
+
+    const hits = toHits(response as QueryResponseLike, primaryKey);
+    return { query: text, index: name, hits, count: hits.length };
+  }
+
+  /**
+   * Fan a query across several indexes and merge the hits, sorted by score -
+   * the "universal search" a single box over many collections needs. Each
+   * index is searched concurrently; an index that errors is logged and skipped
+   * so one bad index does not sink the whole search.
+   */
+  async universalSearch(
+    query: string,
+    options: UniversalSearchOptions = {},
+  ): Promise<SearchResult> {
+    const text = string.trimToEmpty(query);
+    const names =
+      options.indexes && options.indexes.length > 0
+        ? options.indexes.map((ref) => resolveIndexName(this.config, ref) ?? ref)
+        : this.config.indexes.map((i) => i.name);
+    const perIndex = options.limit ?? this.config.pageSize;
+
+    const settled = await Promise.allSettled(
+      names.map(async (name) => {
+        const result = await this.search(text, {
+          index: name,
+          limit: perIndex,
+          ...(options.mode ? { mode: options.mode } : {}),
+          ...(options.signal ? { signal: options.signal } : {}),
+        });
+        return result.hits.map((hit): SearchHit => ({ ...hit, index: name }));
+      }),
+    );
+
+    const hits = settled
+      .flatMap((outcome, i) => {
+        if (outcome.status === "fulfilled") return outcome.value;
+        logger.warn("universal-index-failed", { index: names[i] });
+        return [];
+      })
+      .sort((a, b) => b.score - a.score);
+
+    return { query: text, hits, count: hits.length };
+  }
+
+  /** Fetch an index's live definition. */
+  async getIndex(reference: string, signal?: AbortSignal): Promise<IndexInfo> {
+    const name = resolveIndexName(this.config, reference) ?? reference;
+    const index = await this.withClient("getIndex", signal, (client, context) =>
+      client.vectorSearchIndexes.getIndex({ index_name: name }, context),
+    );
+    const spec = index.delta_sync_index_spec ?? index.direct_access_index_spec;
+    const columns = (spec?.embedding_source_columns ?? []).map((c) => c.name ?? "").filter(Boolean);
+    return {
+      name: index.name ?? name,
+      ...(index.endpoint_name ? { endpoint: index.endpoint_name } : {}),
+      ...(index.primary_key ? { primaryKey: index.primary_key } : {}),
+      columns,
+      ready: index.status?.ready ?? false,
+      ...(index.status?.indexed_row_count !== undefined
+        ? { rowCount: index.status.indexed_row_count }
+        : {}),
+    };
+  }
+
+  /** Add or update documents in a direct-access index. */
+  async addDocuments(
+    reference: string,
+    documents: SearchDocument[],
+    signal?: AbortSignal,
+  ): Promise<UpsertResult> {
+    const name = resolveIndexName(this.config, reference) ?? reference;
+    await this.withClient("addDocuments", signal, (client, context) =>
+      client.vectorSearchIndexes.upsertDataVectorIndex(
+        { index_name: name, inputs_json: JSON.stringify(documents) },
+        context,
+      ),
+    );
+    return { index: name, count: documents.length };
+  }
+
+  /** Delete documents from a direct-access index by primary key. */
+  async deleteDocuments(
+    reference: string,
+    ids: Array<string | number>,
+    signal?: AbortSignal,
+  ): Promise<UpsertResult> {
+    const name = resolveIndexName(this.config, reference) ?? reference;
+    await this.withClient("deleteDocuments", signal, (client, context) =>
+      client.vectorSearchIndexes.deleteDataVectorIndex(
+        { index_name: name, primary_keys: ids.map(String) },
+        context,
+      ),
+    );
+    return { index: name, count: ids.length };
+  }
+
+  /**
+   * Resolve an embedding endpoint id for creating a Delta Sync index. Reuses
+   * the model resolver: a configured / passed name is fuzzy-matched against the
+   * live catalogue, otherwise the highest-ranked embedding endpoint is chosen.
+   */
+  async resolveEmbeddingModel(requested?: string, signal?: AbortSignal): Promise<string | null> {
+    const explicit = string.trimToNull(requested ?? this.config.embeddingModel);
+    // An explicit name that already looks like an endpoint id (no whitespace)
+    // is used verbatim - no need to fetch and fuzzy-match the live catalogue.
+    // A genuinely loose name (e.g. "gte large") still resolves against it.
+    if (explicit && !/\s/.test(explicit)) return explicit;
+    return this.withClient("resolveEmbeddingModel", signal, async (client) => {
+      const host = (await client.config.getHost()).toString();
+      const endpoints = await serving.listServingEndpoints(client, host);
+      const { modelId } = modelResolve.resolveModel(endpoints, {
+        ...(explicit ? { explicit } : { modelClass: ModelClass.Embedding }),
+      });
+      return string.trimToNull(modelId);
+    });
+  }
+
+  /**
+   * Create an AI Search index with as little ceremony as possible. Two shapes:
+   *
+   *   - **Delta Sync** (the default): pass `sourceTable`; Databricks computes
+   *     embeddings from the text column and keeps the index synced. The
+   *     embedding model is resolved automatically when not named.
+   *   - **Direct Access**: omit `sourceTable` and pass `embeddingDimension`;
+   *     you write vectors yourself via {@link addDocuments}.
+   *
+   * Everything else infers: the endpoint from the plugin config, the primary
+   * key (`id`), the text column (`text` / `content` / `body`), and the vector
+   * column (`embedding`). Returns the created index's {@link IndexInfo}.
+   */
+  async createIndex(name: string, options: CreateIndexOptions = {}): Promise<IndexInfo> {
+    const endpoint = options.endpoint ?? this.config.endpoint;
+    if (!endpoint) {
+      throw new ExecutionError(
+        "ai-search: no Vector Search endpoint configured; pass `endpoint` or set it on the plugin",
+        { context: { operation: "createIndex" } },
+      );
+    }
+    const primaryKey = options.primaryKey ?? "id";
+    const direct = !options.sourceTable;
+
+    if (direct && !options.embeddingDimension) {
+      throw new ExecutionError(
+        "ai-search: a direct-access index needs `embeddingDimension` (or pass `sourceTable` for Delta Sync)",
+        { context: { operation: "createIndex" } },
+      );
+    }
+
+    const embeddingModel = direct
+      ? undefined
+      : ((await this.resolveEmbeddingModel(options.embeddingModel, options.signal)) ?? undefined);
+    if (!direct && !embeddingModel) {
+      throw new ExecutionError(
+        "ai-search: could not resolve an embedding model; pass `embeddingModel`",
+        { context: { operation: "createIndex" } },
+      );
+    }
+    const sourceColumn = options.embeddingSourceColumn ?? "text";
+
+    await this.withClient("createIndex", options.signal, (client, context) =>
+      client.vectorSearchIndexes.createIndex(
+        {
+          name,
+          endpoint_name: endpoint,
+          primary_key: primaryKey,
+          index_type: direct ? "DIRECT_ACCESS" : "DELTA_SYNC",
+          ...(direct
+            ? {
+                direct_access_index_spec: {
+                  embedding_vector_columns: [
+                    {
+                      name: options.embeddingVectorColumn ?? "embedding",
+                      embedding_dimension: options.embeddingDimension,
+                    },
+                  ],
+                },
+              }
+            : {
+                delta_sync_index_spec: {
+                  source_table: options.sourceTable,
+                  pipeline_type: options.pipelineType ?? "TRIGGERED",
+                  embedding_source_columns: [
+                    { name: sourceColumn, embedding_model_endpoint_name: embeddingModel },
+                  ],
+                  ...(options.columnsToSync && options.columnsToSync.length > 0
+                    ? { columns_to_sync: options.columnsToSync }
+                    : {}),
+                },
+              }),
+        },
+        context,
+      ),
+    );
+    logger.info("index-created", {
+      index: name,
+      endpoint,
+      type: direct ? "DIRECT_ACCESS" : "DELTA_SYNC",
+    });
+    return this.getIndex(name, options.signal);
+  }
+
+  /**
+   * Create the index if it does not already exist, otherwise return the
+   * existing one. Idempotent - safe to call on every boot to guarantee an
+   * index is present.
+   */
+  async ensureIndex(name: string, options: CreateIndexOptions = {}): Promise<IndexInfo> {
+    try {
+      return await this.getIndex(name, options.signal);
+    } catch {
+      return this.createIndex(name, options);
+    }
+  }
+
+  /** Trigger a sync of a Delta Sync index from its source table. */
+  async syncIndex(reference: string, signal?: AbortSignal): Promise<void> {
+    const name = resolveIndexName(this.config, reference) ?? reference;
+    await this.withClient("syncIndex", signal, (client, context) =>
+      client.vectorSearchIndexes.syncIndex({ index_name: name }, context),
+    );
+    logger.info("index-synced", { index: name });
+  }
+
+  /** Delete an index. */
+  async deleteIndex(reference: string, signal?: AbortSignal): Promise<void> {
+    const name = resolveIndexName(this.config, reference) ?? reference;
+    await this.withClient("deleteIndex", signal, (client, context) =>
+      client.vectorSearchIndexes.deleteIndex({ index_name: name }, context),
+    );
+    logger.info("index-deleted", { index: name });
+  }
+
+  /** List the indexes hosted on a Vector Search endpoint (name + type only). */
+  async listIndexes(endpoint?: string, signal?: AbortSignal): Promise<string[]> {
+    const endpointName = endpoint ?? this.config.endpoint;
+    if (!endpointName) {
+      throw new ExecutionError("ai-search: no endpoint configured to list indexes", {
+        context: { operation: "listIndexes" },
+      });
+    }
+    return this.withClient("listIndexes", signal, async (client, context) => {
+      const names: string[] = [];
+      for await (const index of client.vectorSearchIndexes.listIndexes(
+        { endpoint_name: endpointName },
+        context,
+      )) {
+        if (index.name) names.push(index.name);
+      }
+      return names;
+    });
+  }
+
+  /**
+   * Ensure a Vector Search endpoint exists, creating a `STANDARD` one when it
+   * does not. Optionally wait for it to come online. Idempotent.
+   */
+  async ensureEndpoint(name?: string, options: EnsureEndpointOptions = {}): Promise<void> {
+    const endpoint = name ?? this.config.endpoint;
+    if (!endpoint) {
+      throw new ExecutionError("ai-search: no endpoint name to ensure", {
+        context: { operation: "ensureEndpoint" },
+      });
+    }
+    await this.withClient("ensureEndpoint", options.signal, async (client, context) => {
+      try {
+        await client.vectorSearchEndpoints.getEndpoint({ endpoint_name: endpoint }, context);
+        return;
+      } catch {
+        const waiter = await client.vectorSearchEndpoints.createEndpoint(
+          { name: endpoint, endpoint_type: "STANDARD" },
+          context,
+        );
+        logger.info("endpoint-created", { endpoint });
+        if (options.wait) await waiter.wait();
+      }
+    });
+  }
+
+  /**
+   * Resolve the workspace client and run one call under a bounded timeout. The
+   * caller's signal (if any) and a timeout are merged into one SDK `Context`
+   * via {@link appkit.databricks.toContext}, so either unwinds the request.
+   */
+  private async withClient<T>(
+    operation: string,
+    signal: AbortSignal | undefined,
+    fn: (client: WorkspaceClientLike, context?: Context) => Promise<T>,
+  ): Promise<T> {
+    const client = this.workspaceClientFactory();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.config.timeoutMs);
+    const context = databricks.toContext(controller, signal);
+    try {
+      return await fn(client, context);
+    } catch (err) {
+      if (signal?.aborted) throw ExecutionError.canceled();
+      logger.warn("execution-failed", { operation });
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/** The OBO workspace client from the active context, or a service-principal client. */
+function defaultWorkspaceClient(): WorkspaceClientLike {
+  const ctx = appkit.tryGetExecutionContext();
+  if (ctx?.client) return ctx.client;
+  // Outside a request scope (a script, a test): a fresh env-auth client.
+  return getExecutionContext().client;
+}
+
+/** Construct a {@link SearchClient} from a resolved config. */
+export function createSearchClient(
+  config?: ResolvedAiSearchConfig,
+  workspaceClientFactory?: () => WorkspaceClientLike,
+): SearchClient {
+  return new SearchClient(config, workspaceClientFactory);
+}

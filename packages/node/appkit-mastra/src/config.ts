@@ -25,6 +25,7 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 import type { MastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
 import type { MastraIdentityMode } from "./identity.ts";
+import type { RemoteSkillsOption } from "./remote-skills.ts";
 
 /**
  * `RequestContext` key under which {@link MastraServer} stores the
@@ -552,6 +553,33 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * source.
    */
   brand?: BrandContext;
+  /**
+   * Remote Agent-Skill sources materialized once at app startup. A single
+   * source, a list, or a `{ sources, failOnError?, ... }` bag.
+   *
+   * Each source is a GitHub `owner/repo`, a git / GitLab URL, or a direct
+   * `SKILL.md` / archive download URL. Resolution prefers the OPTIONAL `skills`
+   * npm CLI (a peer dep) which is copied into a temp dir and then persisted;
+   * without it, a URL source is fetched directly. A source that resolves
+   * through neither fails startup unless `failOnError: false`.
+   *
+   * Provisioned skills are written to the Databricks user's Assistant skills
+   * folder (`/Users/<email>/.assistant/skills`, the "save this as a skill"
+   * target) so they persist and are picked up by the built-in Assistant-skills
+   * mount. With no writable workspace, they go to a local temp dir instead.
+   *
+   * @example
+   * ```ts
+   * mastra({ remoteSkills: "vercel-labs/agent-skills" });
+   * mastra({
+   *   remoteSkills: {
+   *     sources: ["vercel-labs/agent-skills", "https://example.com/skill.md"],
+   *     failOnError: false,
+   *   },
+   * });
+   * ```
+   */
+  remoteSkills?: RemoteSkillsOption;
 }
 
 /**
@@ -569,6 +597,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     providerId: {
       type: "string",
       description: 'Mastra OpenAI-compatible provider id. Defaults to "databricks".',
+    },
+    remoteSkills: {
+      type: ["string", "array", "object"],
+      description:
+        "Remote Agent-Skill sources provisioned at startup (GitHub owner/repo, git/GitLab URL, or a direct SKILL.md/archive URL). Prefers the optional `skills` npm CLI, else a direct fetch; fails startup on error unless failOnError:false. Written to the Databricks user Assistant skills folder, or a local temp dir when no workspace is writable.",
     },
     storage: {
       type: ["boolean", "object"],

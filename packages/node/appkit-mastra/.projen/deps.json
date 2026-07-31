@@ -16,6 +16,11 @@
       "type": "build"
     },
     {
+      "name": "skills",
+      "version": "^1",
+      "type": "build"
+    },
+    {
       "name": "tsx",
       "version": "^4.23.0",
       "type": "build"
@@ -23,6 +28,11 @@
     {
       "name": "typescript",
       "type": "build"
+    },
+    {
+      "name": "skills",
+      "version": "^1",
+      "type": "peer"
     },
     {
       "name": "@databricks/appkit",
@@ -51,6 +61,11 @@
     },
     {
       "name": "@dbx-tools/model",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/path",
       "version": "workspace:*",
       "type": "runtime"
     },

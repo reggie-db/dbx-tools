@@ -1,9 +1,9 @@
 {
-  "name": "@dbx-tools/appkit-mastra",
+  "name": "@dbx-tools/ai-search",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
-    "directory": "packages/node/appkit-mastra"
+    "directory": "packages/node/ai-search"
   },
   "scripts": {
     "build": "projen build",
@@ -19,39 +19,20 @@
   },
   "devDependencies": {
     "@types/express": "catalog:",
+    "@types/json-schema": "^7",
     "@types/node": "catalog:",
-    "@types/pg": "^8",
-    "skills": "^1",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3"
-  },
-  "peerDependencies": {
-    "skills": "^1"
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@databricks/sdk-experimental": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
-    "@dbx-tools/core": "workspace:*",
-    "@dbx-tools/genie": "workspace:*",
     "@dbx-tools/model": "workspace:*",
-    "@dbx-tools/path": "workspace:*",
+    "@dbx-tools/shared-ai-search": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
-    "@dbx-tools/shared-genie": "workspace:*",
-    "@dbx-tools/shared-mastra": "workspace:*",
     "@dbx-tools/shared-model": "workspace:*",
-    "@mastra/ai-sdk": "catalog:",
     "@mastra/core": "catalog:",
-    "@mastra/express": "catalog:",
-    "@mastra/fastembed": "catalog:",
-    "@mastra/mcp": "catalog:",
-    "@mastra/memory": "catalog:",
-    "@mastra/observability": "catalog:",
-    "@mastra/otel-bridge": "catalog:",
-    "@mastra/pg": "catalog:",
-    "@opentelemetry/api": "catalog:",
-    "express": "catalog:",
-    "pg": "^8.22.0",
     "zod": "catalog:"
   },
   "main": "index.ts",
@@ -81,11 +62,6 @@
     "src",
     "lib"
   ],
-  "peerDependenciesMeta": {
-    "skills": {
-      "optional": true
-    }
-  },
   "dbxToolsConfig": {
     "tags": [
       "node"

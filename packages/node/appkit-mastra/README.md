@@ -229,6 +229,53 @@ Production workspace mounts require a forwarded token with `workspace`,
 `workspace.workspace`, or `all-apis` scope. Development mode skips that gate for
 local iteration.
 
+## Remote Skills
+
+Workspace skills above are discovered from files ALREADY in the Databricks
+workspace. `remoteSkills` provisions skills from OUTSIDE it at startup - a
+GitHub `owner/repo`, a git / GitLab URL, or a direct `SKILL.md` / archive
+download URL - so an app can ship with a curated skill set without anyone
+hand-uploading `SKILL.md` trees first.
+
+```ts
+mastra({
+  agents: { assistant: agents.createAgent({ instructions: "..." }) },
+  remoteSkills: [
+    "owner/skill-repo",
+    { source: "https://example.com/skills/writing.md", failOnError: false },
+  ],
+});
+```
+
+Each source is materialized at boot into an Assistant-style `SKILL.md` tree that
+the default workspace then scans, so a provisioned skill behaves exactly like
+one that was in the workspace all along. Resolution per source:
+
+- if the optional `skills` peer dependency is installed, the source is copied
+  into a staging dir with the `skills` CLI, which understands every source
+  format the ecosystem does (GitHub shorthand, git URLs, archive URLs);
+- otherwise the source URL is fetched directly and its `SKILL.md` written to the
+  staging dir. A non-URL source (e.g. bare `owner/repo`) without the `skills`
+  package installed cannot be resolved this way and fails.
+
+The default destination is the Databricks workspace Assistant skills tree
+(`/Workspace/.assistant/skills`, the same tree a "save this as a skill" action
+writes to), so provisioned skills persist across restarts and are picked up by
+the built-in Assistant-skills mount. Pass `userEmail` to target that user's
+`/Users/<email>/.assistant/skills` instead, or `databricksBasePath` for an
+explicit tree. When no Databricks client is resolvable at startup, the tree is
+written to a local temp dir and handed to Mastra as an extra local skill path
+for the current process only.
+
+A source that resolves through neither path fails app startup, so a misconfigured
+skill set is caught at boot rather than silently missing. Set `failOnError: false`
+(top-level or per-source) to log and skip a bad source instead. Install the
+optional peer to enable the richest source formats:
+
+```sh
+pnpm add skills
+```
+
 ## Genie Tools
 
 `genie.buildGenieTools()` and `plugins.genie.toolkit()` expose tools for:
@@ -482,6 +529,10 @@ requiring callers to assemble a Mastra server by hand.
   name an agent explicitly.
 - `storage` and `memory` accept `true`, `false`, or concrete Mastra Postgres /
   PgVector options. `true` resolves from `lakebase()` when present.
+- `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
+  startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
+  list, or an options bag with `failOnError`, `userEmail`, and
+  `databricksBasePath`.
 - `genieSpaces` maps aliases to Genie Space IDs (or to
   `{ spaceId, hint }` objects). Those aliases flow into tool names,
   suggestions, and chart/data workflows. An alias present with no space id is a
@@ -532,6 +583,9 @@ client that talks to these routes.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
 - `workspaces` / `filesystems` - Mastra workspace creation and Databricks
   Workspace file adapters.
+- `remote-skills` - startup provisioning of remote `SKILL.md` sources into the
+  Databricks Assistant skills tree (or a local temp dir), via the optional
+  `skills` CLI or a direct fetch.
 - `mcp` - MCP server construction.
 - `observability` / `mlflow` - tracing and feedback.
 - `server` / `rest` / `processors` - Express dispatch, Databricks REST helpers,

@@ -11,6 +11,7 @@ import {
   tool as webSearchToolModule,
 } from "@dbx-tools/appkit-web-search";
 import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
+import { plugin as aiSearchPlugin, tool as aiSearchToolModule } from "@dbx-tools/ai-search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,6 +28,9 @@ const { webSearch } = webSearchPlugin;
 const { webSearchTool, webFetchTool } = webSearchToolModule;
 const { teams } = teamsPlugin;
 const { teamsCardTool } = teamsToolModule;
+const { aiSearch } = aiSearchPlugin;
+const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, syncIndexTool } =
+  aiSearchToolModule;
 const { defaultBrandContext } = sharedBrand;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
@@ -153,6 +157,23 @@ const support = createAgent({
       // approval-gated; the returned card is previewed on the Cards page and
       // can be posted to a Teams webhook via the `teams()` plugin.
       create_teams_card: teamsCardTool(),
+      // Databricks AI Search (Vector Search) from `@dbx-tools/ai-search`.
+      // `search` looks up the most relevant rows in the app's configured
+      // index (hybrid semantic + keyword) under the caller's identity;
+      // `universal_search` fans a query across every configured index and
+      // merges the hits. Autocomplete is just a small-`limit` `search`.
+      search: searchTool(),
+      universal_search: universalSearchTool(),
+      // Write surface (enabled below via `aiSearch({ allowWrite: true })`):
+      // `add_documents` upserts rows into a direct-access index,
+      // `create_index` provisions a new Vector Search index (inferring the
+      // endpoint, embedding model, key, and text column), and `sync_index`
+      // refreshes a Delta Sync index from its source table. These are gated
+      // because they change infrastructure/data, so only enable them for a
+      // trusted demo.
+      add_documents: addDocumentsTool(),
+      create_index: createIndexTool(),
+      sync_index: syncIndexTool(),
     };
   },
 });
@@ -194,6 +215,17 @@ await createAppAuto({
     // deployment sets TEAMS_APP_ID / TEAMS_APP_PASSWORD instead and gets the
     // JWT-validated, Connector-delivered path.
     teams({ allowUnauthenticated: true }),
+    // AI Search (Vector Search) runtime for the `search` / `universal_search`
+    // tools and a browser search box. Zero-config here: it reads the default
+    // index from DATABRICKS_VECTOR_SEARCH_INDEX / AI_SEARCH_INDEX. To go
+    // deeper, pass `{ index, indexes, columns, mode }`. Mounts
+    // `POST /api/ai-search`, `POST /api/ai-search/universal`, and
+    // `GET /api/ai-search/indexes`, and surfaces its index catalogue to the UI
+    // via `usePluginClientConfig("aiSearch")`. `allowWrite: true` turns on the
+    // document + index write tools/routes (`POST /api/ai-search/documents`,
+    // `POST /api/ai-search/index`, `POST /api/ai-search/index/sync`); leave it
+    // off for a read-only search surface.
+    aiSearch({ allowWrite: true }),
     mastra({
       storage: true,
       memory: true,

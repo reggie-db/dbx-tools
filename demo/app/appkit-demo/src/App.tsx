@@ -1,5 +1,6 @@
 import Cards from "@/pages/Cards";
 import Conversations from "@/pages/Conversations";
+import Search from "@/pages/Search";
 import Stream from "@/pages/Stream";
 import { Button, Separator } from "@dbx-tools/ui-appkit/react";
 import { BrandLogo, BrandProvider } from "@dbx-tools/ui-branding/react";
@@ -35,6 +36,12 @@ const ROUTES: RouteDef[] = [
     label: "Cards",
     description: "A simulated Teams chat where the agent answers in Adaptive Cards",
     element: <Cards />,
+  },
+  {
+    path: "/search",
+    label: "Search",
+    description: "AI Search (Vector Search) instant search, universal search, and results",
+    element: <Search />,
   },
 ];
 

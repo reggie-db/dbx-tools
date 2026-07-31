@@ -3,6 +3,7 @@
 /* Feature UI styles: Streamdown base, Tailwind `@source`, shiki shim. */
 @import "@dbx-tools/ui-mastra/styles.css";
 @import "@dbx-tools/ui-teams/styles.css";
+@import "@dbx-tools/ui-ai-search/styles.css";
 
 html,
 body,

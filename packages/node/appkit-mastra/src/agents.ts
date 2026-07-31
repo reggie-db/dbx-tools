@@ -153,8 +153,27 @@ function deriveToolId(description: string): string {
  * type inference and to match the AppKit API surface.
  */
 export function createAgent<T extends MastraAgentDefinition>(def: T): T {
-  const workspace = def.workspace ?? createWorkspace();
+  if (def.workspace) return { ...def };
+  const workspace = createWorkspace();
+  markDefaultWorkspace(workspace);
   return { ...def, workspace };
+}
+
+/**
+ * Brand for a {@link Workspace} that `createAgent` built with no caller
+ * options, so {@link buildAgents} may rebuild it with startup-provisioned
+ * `extraSkillPaths` (a caller-supplied workspace is never touched).
+ */
+const DEFAULT_WORKSPACE = Symbol.for("dbx-tools/appkit-mastra/default-workspace");
+
+/** Brand `workspace` as the auto-created default. */
+function markDefaultWorkspace(workspace: Workspace): void {
+  (workspace as unknown as Record<symbol, boolean>)[DEFAULT_WORKSPACE] = true;
+}
+
+/** Whether `workspace` was auto-created by {@link createAgent}. */
+function isDefaultWorkspace(workspace: Workspace | undefined): boolean {
+  return Boolean(workspace && (workspace as unknown as Record<symbol, boolean>)[DEFAULT_WORKSPACE]);
 }
 
 /**
@@ -449,8 +468,14 @@ export async function buildAgents(opts: {
   context: plugin.PluginContextLike | undefined;
   memoryBuilder?: MemoryBuilder;
   log: log.Logger;
+  /**
+   * Local skill scan paths (remote skills provisioned to a temp dir at
+   * startup) folded into every agent that uses the auto-created default
+   * workspace.
+   */
+  extraSkillPaths?: string[];
 }): Promise<BuiltAgents> {
-  const { config, context, memoryBuilder, log } = opts;
+  const { config, context, memoryBuilder, log, extraSkillPaths } = opts;
   const definitions = resolveDefinitions(config);
   const ids = Object.keys(definitions);
   const defaultAgentId = config.defaultAgent ?? ids[0] ?? FALLBACK_AGENT_ID;
@@ -485,7 +510,11 @@ export async function buildAgents(opts: {
 
   for (const [id, def] of Object.entries(definitions)) {
     const tools = await resolveTools(def.tools, plugins, ambientTools);
-    const workspace = resolveAgentWorkspace(def.workspace);
+    let workspace = resolveAgentWorkspace(def.workspace);
+    if (extraSkillPaths?.length && isDefaultWorkspace(workspace)) {
+      workspace = createWorkspace({ extraSkillPaths });
+      markDefaultWorkspace(workspace);
+    }
     const gated = approvalGatedToolIds(tools);
     if (gated.length > 0) approvalGatedByAgent.push({ agentId: id, toolIds: gated });
     const memory = memoryBuilder?.forAgent(id, def);

@@ -1,0 +1,424 @@
+/**
+ * Startup provisioning of remote Agent-Skill sources for a Mastra workspace.
+ *
+ * A {@link RemoteSkillSource} names WHERE a `SKILL.md` tree comes from - a
+ * GitHub `owner/repo`, any git / GitLab URL, or a direct download URL - and
+ * optional per-source policy. {@link provisionRemoteSkills} materializes every
+ * source into a local `SKILL.md` tree at app boot and returns the directories
+ * to hand Mastra as extra skill scan paths.
+ *
+ * Resolution per source, in order:
+ *
+ * 1. the OPTIONAL `skills` npm CLI (peer dep): if installed, each source is
+ *    copied into a staging dir with `skills add <source> --agent <dir> --copy`,
+ *    which understands every source format the ecosystem does (GitHub
+ *    shorthand, git URLs, archive/download URLs);
+ * 2. otherwise a plain {@link fetch} of the source URL (built with
+ *    {@link net.urlBuilder}), writing the downloaded `SKILL.md` to a staging
+ *    dir.
+ *
+ * A source that resolves through neither path fails app startup, unless the
+ * source (or the top-level call) sets `failOnError: false`, in which case it is
+ * logged and skipped so one bad source never takes the app down.
+ *
+ * The default destination is the Databricks workspace Assistant skills tree
+ * (`/Workspace/.assistant/skills`, the same tree a "save this as a skill"
+ * action writes to), so provisioned skills persist across restarts and are
+ * discovered by the built-in Assistant-skills mount. Pass `userEmail` (or an
+ * explicit `databricksBasePath`) to target `/Users/<email>/.assistant/skills`
+ * instead. When no Databricks client is resolvable at startup, the tree is
+ * written to a local temp dir and returned as an extra local skill path for
+ * the current process.
+ *
+ * @module
+ */
+
+import { mkdtemp, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join, posix } from "node:path";
+import { appkit } from "@dbx-tools/appkit";
+import type { WorkspaceClientLike } from "@dbx-tools/appkit";
+import { spawn } from "@dbx-tools/core";
+import { findFiles } from "@dbx-tools/path";
+import { error, log, net, string } from "@dbx-tools/shared-core";
+
+import { DatabricksWorkspaceFilesystem } from "./filesystems.ts";
+
+const logger = log.logger("mastra/remote-skills");
+
+/** Shared Assistant skills tree in the Databricks workspace (default target). */
+const ASSISTANT_SHARED_SKILLS_PATH = "/Workspace/.assistant/skills";
+
+/** Assistant skills directory for a specific Databricks user. */
+function userAssistantSkillsPath(userEmail: string): string {
+  return `/Users/${userEmail.trim()}/.assistant/skills`;
+}
+
+/** npm agent id the `skills` CLI installs a bare `SKILL.md` tree under. */
+const SKILLS_CLI_AGENT = "agents";
+
+/** Where the `skills` CLI drops a plain `SKILL.md` tree under a target dir. */
+const SKILLS_CLI_LAYOUT = [".agents", "skills"] as const;
+
+/** Cap on a direct-fetch download body, matching the `skills` CLI default. */
+const DEFAULT_MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+
+/* -------------------------------- types -------------------------------- */
+
+/**
+ * One remote skill source and its per-source policy.
+ *
+ * `source` is anything the `skills` ecosystem understands: a GitHub
+ * `owner/repo` shorthand, a full GitHub / GitLab / git URL, or a direct
+ * download URL to a `SKILL.md` or archive.
+ */
+export interface RemoteSkillSourceOptions {
+  /** GitHub shorthand, git / GitLab URL, or a direct download URL. */
+  source: string;
+  /** Install only these skill names from the source (CLI path only). */
+  skills?: string | string[];
+  /** Override the byte ceiling on a direct-fetch download for this source. */
+  maxDownloadBytes?: number;
+  /**
+   * When `false`, a source that fails to resolve is logged and skipped instead
+   * of failing app startup. Overrides the top-level {@link ProvisionRemoteSkillsOptions.failOnError}.
+   */
+  failOnError?: boolean;
+}
+
+/**
+ * A remote skill source: a bare source string (GitHub shorthand / URL) or a
+ * {@link RemoteSkillSourceOptions} with per-source policy.
+ */
+export type RemoteSkillSource = string | RemoteSkillSourceOptions;
+
+/**
+ * The workspace `remoteSkills` option. A single source, a list, or a
+ * {@link ProvisionRemoteSkillsOptions} bag when top-level policy is needed.
+ */
+export type RemoteSkillsOption =
+  RemoteSkillSource | RemoteSkillSource[] | ProvisionRemoteSkillsOptions;
+
+/** Top-level remote-skills provisioning options. */
+export interface ProvisionRemoteSkillsOptions {
+  /** Sources to materialize at startup. */
+  sources: RemoteSkillSource | RemoteSkillSource[];
+  /**
+   * Fail app startup when a source can't be resolved. Defaults to `true`. A
+   * per-source `failOnError` wins over this.
+   */
+  failOnError?: boolean;
+  /**
+   * Absolute Databricks path that roots the destination Assistant skills tree.
+   * Defaults to the OBO user's `/Users/<email>/.assistant/skills`.
+   */
+  databricksBasePath?: string;
+  /** Auth-scoped Databricks client. Defaults to the AppKit execution context. */
+  client?: WorkspaceClientLike;
+  /** User email used to derive the default Databricks destination. */
+  userEmail?: string;
+  /** Byte ceiling on a direct-fetch download. Defaults to 10 MiB. */
+  maxDownloadBytes?: number;
+}
+
+/** What {@link provisionRemoteSkills} resolved. */
+export interface ProvisionedRemoteSkills {
+  /**
+   * Extra LOCAL skill scan paths to hand Mastra (a temp dir per source that
+   * couldn't be written to Databricks). Empty when everything landed in the
+   * Databricks Assistant tree, which the built-in mount already scans.
+   */
+  localSkillPaths: string[];
+  /** Absolute Databricks destination each source was written to, if any. */
+  databricksBasePath?: string;
+  /** Names of every skill directory that was provisioned. */
+  skillNames: string[];
+}
+
+/* ------------------------------- helpers ------------------------------- */
+
+/** Normalize the `remoteSkills` option into a flat options bag. */
+export function normalizeRemoteSkillsOption(
+  option: RemoteSkillsOption | undefined,
+): ProvisionRemoteSkillsOptions | undefined {
+  if (option === undefined) return undefined;
+  if (typeof option === "string") return { sources: [option] };
+  if (Array.isArray(option)) return option.length > 0 ? { sources: option } : undefined;
+  if (isProvisionOptions(option)) {
+    const sources = Array.isArray(option.sources) ? option.sources : [option.sources];
+    return sources.length > 0 ? { ...option, sources } : undefined;
+  }
+  // A lone RemoteSkillSourceOptions object.
+  return { sources: [option] };
+}
+
+/** A `sources`-bearing bag is the top-level options shape, not a single source. */
+function isProvisionOptions(
+  value: RemoteSkillSourceOptions | ProvisionRemoteSkillsOptions,
+): value is ProvisionRemoteSkillsOptions {
+  return "sources" in value;
+}
+
+/** Coerce a source entry to its normalized {@link RemoteSkillSourceOptions}. */
+function toSourceOptions(source: RemoteSkillSource): RemoteSkillSourceOptions {
+  return typeof source === "string" ? { source } : source;
+}
+
+/**
+ * Materialize every configured remote skill source at app startup.
+ *
+ * Writes each resolved `SKILL.md` tree to the Databricks user Assistant skills
+ * folder when a writable workspace is available, else to a local temp dir
+ * returned in {@link ProvisionedRemoteSkills.localSkillPaths}.
+ */
+export async function provisionRemoteSkills(
+  option: RemoteSkillsOption | undefined,
+): Promise<ProvisionedRemoteSkills> {
+  const options = normalizeRemoteSkillsOption(option);
+  const empty: ProvisionedRemoteSkills = { localSkillPaths: [], skillNames: [] };
+  if (!options) return empty;
+
+  const failDefault = options.failOnError !== false;
+  const client = options.client ?? appkit.tryGetExecutionContext()?.client;
+  const databricksBasePath = resolveDatabricksBasePath(options, client);
+  const destination = databricksBasePath
+    ? new DatabricksWorkspaceFilesystem({ client, basePath: databricksBasePath, readOnly: false })
+    : undefined;
+
+  const localSkillPaths: string[] = [];
+  const skillNames: string[] = [];
+  let staging: string | undefined;
+
+  try {
+    const sources = Array.isArray(options.sources) ? options.sources : [options.sources];
+    for (const entry of sources) {
+      const sourceOptions = toSourceOptions(entry);
+      const failOnError = sourceOptions.failOnError ?? failDefault;
+      try {
+        staging ??= await mkdtemp(join(tmpdir(), "mastra-remote-skills-"));
+        const stagedDir = await stageSource(sourceOptions, staging, options);
+        const staged = await collectSkillDirs(stagedDir);
+        if (staged.length === 0) {
+          throw new Error(`no SKILL.md found for source "${sourceOptions.source}"`);
+        }
+        if (destination && databricksBasePath) {
+          await uploadSkillDirs(destination, staged);
+          skillNames.push(...staged.map((dir) => dir.name));
+        } else {
+          const localDir = await persistLocally(staged);
+          localSkillPaths.push(localDir);
+          skillNames.push(...staged.map((dir) => dir.name));
+        }
+        logger.debug("source:provisioned", {
+          source: sourceOptions.source,
+          destination: databricksBasePath ?? "local-temp",
+          skills: staged.map((dir) => dir.name),
+        });
+      } catch (err) {
+        if (failOnError) {
+          throw new Error(
+            `failed to provision remote skill source "${sourceOptions.source}": ${error.errorMessage(err)}`,
+            { cause: error.toError(err) },
+          );
+        }
+        logger.warn("source:skipped", {
+          source: sourceOptions.source,
+          error: error.errorMessage(err),
+        });
+      }
+    }
+  } finally {
+    if (staging) await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+  }
+
+  return { localSkillPaths, databricksBasePath, skillNames };
+}
+
+/** Resolve the Databricks Assistant skills destination, or `undefined` for local temp. */
+function resolveDatabricksBasePath(
+  options: ProvisionRemoteSkillsOptions,
+  client: WorkspaceClientLike | undefined,
+): string | undefined {
+  if (!client) return undefined;
+  if (options.databricksBasePath) return options.databricksBasePath.trim() || undefined;
+  const email = string.trimToNull(options.userEmail);
+  // A named user targets their personal Assistant tree (the "save a skill"
+  // target); otherwise the shared workspace Assistant tree, which the built-in
+  // Assistant-skills mount already scans.
+  return email ? userAssistantSkillsPath(email) : ASSISTANT_SHARED_SKILLS_PATH;
+}
+
+/**
+ * Stage one source into a fresh dir under `staging`, preferring the optional
+ * `skills` CLI and falling back to a direct fetch.
+ */
+async function stageSource(
+  sourceOptions: RemoteSkillSourceOptions,
+  staging: string,
+  options: ProvisionRemoteSkillsOptions,
+): Promise<string> {
+  const target = await mkdtemp(join(staging, "src-"));
+  const viaCli = await stageViaSkillsCli(sourceOptions, target);
+  if (viaCli) return viaCli;
+  return stageViaFetch(sourceOptions, target, options);
+}
+
+/**
+ * Copy a source into `target` with the `skills` CLI when it is installed.
+ * Returns the dir holding the copied `SKILL.md` trees, or `undefined` when the
+ * CLI is absent (so the caller can fall back to a fetch).
+ */
+async function stageViaSkillsCli(
+  sourceOptions: RemoteSkillSourceOptions,
+  target: string,
+): Promise<string | undefined> {
+  const cli = await resolveSkillsCli();
+  if (!cli) return undefined;
+
+  const args = [
+    ...cli.args,
+    "add",
+    sourceOptions.source,
+    "--agent",
+    SKILLS_CLI_AGENT,
+    "--copy",
+    "-y",
+  ];
+  for (const skill of string.parseList(sourceOptions.skills)) {
+    args.push("--skill", skill);
+  }
+  if (string.parseList(sourceOptions.skills).length === 0) args.push("--skill", "*");
+
+  const result = await spawn(cli.command, args, {
+    cwd: target,
+    stdout: "capture",
+    stderr: "capture",
+    check: false,
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `skills CLI failed (exit ${result.exitCode}): ${result.stderr || result.stdout}`,
+    );
+  }
+  return join(target, ...SKILLS_CLI_LAYOUT);
+}
+
+/**
+ * Locate the optional `skills` CLI bin, resolved from THIS package's module
+ * graph. Returns `undefined` when the peer dep isn't installed, so the caller
+ * falls back to a direct fetch.
+ */
+async function resolveSkillsCli(): Promise<{ command: string; args: string[] } | undefined> {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkgPath = require.resolve("skills/package.json");
+    const bin = join(pkgPath, "..", "bin", "cli.mjs");
+    if (await pathExists(bin)) return { command: process.execPath, args: [bin] };
+  } catch {
+    // peer dep absent or unresolvable - fetch fallback handles it
+  }
+  return undefined;
+}
+
+/**
+ * Fetch a source URL and write the downloaded `SKILL.md` under `target`.
+ * Used when the `skills` CLI isn't installed; supports a direct `SKILL.md` URL.
+ */
+async function stageViaFetch(
+  sourceOptions: RemoteSkillSourceOptions,
+  target: string,
+  options: ProvisionRemoteSkillsOptions,
+): Promise<string> {
+  const url = net.urlBuilder(sourceOptions.source);
+  if (!url) {
+    throw new Error(
+      `source "${sourceOptions.source}" is not a URL and the optional "skills" package is not installed`,
+    );
+  }
+  const maxBytes =
+    sourceOptions.maxDownloadBytes ?? options.maxDownloadBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES;
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(
+      `download failed: ${response.status} ${response.statusText} (${url.toString()})`,
+    );
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.byteLength > maxBytes) {
+    throw new Error(`download exceeds ${maxBytes} bytes (${url.toString()})`);
+  }
+  const name = string.toSlug(deriveSkillName(url.toString())) || "remote-skill";
+  const skillDir = join(target, name);
+  await mkdir(skillDir, { recursive: true });
+  await writeFile(join(skillDir, "SKILL.md"), buffer);
+  return target;
+}
+
+/** Derive a skill directory name from a download URL's last path segment. */
+function deriveSkillName(urlString: string): string {
+  const url = net.urlBuilder(urlString);
+  const last = url?.pathname.split("/").filter(Boolean).pop() ?? "";
+  return last.replace(/\.(md|zip|tar|tgz|gz)$/i, "");
+}
+
+/** A skill directory (holding a `SKILL.md`) staged on local disk. */
+interface StagedSkillDir {
+  name: string;
+  absolutePath: string;
+}
+
+/**
+ * Collect every skill directory under `root`: a `root/SKILL.md` (root IS the
+ * skill) or each immediate child dir that contains a `SKILL.md`.
+ */
+async function collectSkillDirs(root: string): Promise<StagedSkillDir[]> {
+  if (!(await pathExists(root))) return [];
+  if (await pathExists(join(root, "SKILL.md"))) {
+    const name = posix.basename(root.split(/[\\/]/).join("/"));
+    return [{ name, absolutePath: root }];
+  }
+  const dirs: StagedSkillDir[] = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const dir = join(root, entry.name);
+    if (await pathExists(join(dir, "SKILL.md"))) {
+      dirs.push({ name: entry.name, absolutePath: dir });
+    }
+  }
+  return dirs;
+}
+
+/** Upload each staged skill directory into the Databricks destination tree. */
+async function uploadSkillDirs(
+  destination: DatabricksWorkspaceFilesystem,
+  dirs: StagedSkillDir[],
+): Promise<void> {
+  await destination.init?.();
+  for (const dir of dirs) {
+    for (const relative of findFiles("**/*", { cwd: dir.absolutePath, nodir: true })) {
+      const buffer = await readFile(join(dir.absolutePath, relative));
+      const remotePath = posix.join("/", dir.name, relative.split(/[\\/]/).join("/"));
+      await destination.writeFile(remotePath, buffer, { overwrite: true });
+    }
+  }
+}
+
+/** Copy staged skill dirs into a persistent local temp dir; return its path. */
+async function persistLocally(dirs: StagedSkillDir[]): Promise<string> {
+  const base = await mkdtemp(join(tmpdir(), "mastra-local-skills-"));
+  for (const dir of dirs) {
+    await cp(dir.absolutePath, join(base, dir.name), { recursive: true });
+  }
+  return base;
+}
+
+/** Best-effort existence check. */
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}

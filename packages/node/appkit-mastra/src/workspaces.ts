@@ -78,6 +78,14 @@ export interface CreateWorkspaceOptions {
   checkSkillFileMtime?: boolean;
   /** Enable BM25 keyword search over indexed workspace content. */
   bm25?: boolean;
+  /**
+   * Extra LOCAL skill scan paths added to every request's skill discovery.
+   * Used by the plugin to surface remote skills provisioned to a local temp
+   * dir at startup (see `remote-skills.ts`). Databricks-hosted remote skills
+   * need no entry here - they land in the Assistant tree the built-in mount
+   * already scans.
+   */
+  extraSkillPaths?: string[];
 }
 
 /**
@@ -104,8 +112,12 @@ export interface CreateWorkspaceOptions {
 export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace {
   const { id, name } = resolveWorkspaceIdentity(options);
   const resolvers = buildMountResolvers(options);
+  const extraSkillPaths = options.extraSkillPaths ?? [];
   const skills =
-    options.skills ?? (resolvers.length > 0 ? buildWorkspaceSkillsResolver(resolvers) : undefined);
+    options.skills ??
+    (resolvers.length > 0 || extraSkillPaths.length > 0
+      ? buildWorkspaceSkillsResolver(resolvers, extraSkillPaths)
+      : undefined);
   const checkSkillFileMtime = options.checkSkillFileMtime ?? options.assistantSkills !== false;
   const bm25 = options.bm25 !== false;
   logger.debug("workspace:create", {
@@ -117,6 +129,7 @@ export function createWorkspace(options: CreateWorkspaceOptions = {}): Workspace
     customSkillsResolver: Boolean(options.skills),
     checkSkillFileMtime,
     bm25,
+    extraSkillPaths: extraSkillPaths.length,
   });
 
   return new Workspace({
@@ -339,10 +352,14 @@ async function resolveWorkspaceFilesystem(
  * Build the dynamic {@link SkillsResolver} that collects `skillPaths` from
  * every mount resolver on each request.
  */
-function buildWorkspaceSkillsResolver(resolvers: WorkspaceMountResolver[]): SkillsResolver {
+function buildWorkspaceSkillsResolver(
+  resolvers: WorkspaceMountResolver[],
+  extraSkillPaths: string[] = [],
+): SkillsResolver {
   return async (context: SkillsContext) => {
     const { skillPaths } = await resolveWorkspaceContribution(resolvers, context);
-    logger.debug("skills:resolved", { skillPaths });
-    return skillPaths ?? [];
+    const merged = [...(skillPaths ?? []), ...extraSkillPaths];
+    logger.debug("skills:resolved", { skillPaths, extraSkillPaths });
+    return merged;
   };
 }

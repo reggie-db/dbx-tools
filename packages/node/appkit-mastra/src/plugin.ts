@@ -96,6 +96,7 @@ import { buildMcpServer, type ResolvedMcp } from "./mcp.ts";
 import { createMemoryBuilder, createServicePrincipalPool, needsLakebase } from "./memory.ts";
 import { logFeedback, resolveFeedbackEnabled } from "./mlflow.ts";
 import { buildObservability } from "./observability.ts";
+import { provisionRemoteSkills } from "./remote-skills.ts";
 import {
   attachRoutePatchMiddleware,
   createRequestContext,
@@ -996,11 +997,26 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
     // distinct user identities; the `asUser(req)` scope around
     // `handleChat` is what lets `getExecutionContext()` return the
     // right user inside the resolver.
+    // Materialize any remote Agent-Skill sources ONCE at startup. Runs
+    // outside a request scope, so it uses the app service principal's client
+    // and defaults to the shared workspace Assistant skills tree; a source
+    // that lands on a local temp dir (no writable workspace) is folded into
+    // every default-workspace agent via `extraSkillPaths`.
+    const provisioned = await provisionRemoteSkills(this.config.remoteSkills);
+    if (provisioned.skillNames.length > 0) {
+      this.logger.info("remote skills provisioned", {
+        skills: provisioned.skillNames,
+        databricksBasePath: provisioned.databricksBasePath,
+        localSkillPaths: provisioned.localSkillPaths.length,
+      });
+    }
+
     this.built = await buildAgents({
       config: this.config,
       context: this.context,
       memoryBuilder,
       log: this.logger,
+      extraSkillPaths: provisioned.localSkillPaths,
     });
 
     // `mastra.server.apiRoutes` is only honored by Mastra's standalone
