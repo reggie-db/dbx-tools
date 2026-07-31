@@ -53,7 +53,7 @@ export type { PerPageBounds } from "./src/pagination.ts";
 export { MastraPlugin, mastra } from "./src/plugin.ts";
 export { stripStaleChartsProcessor, ResultProcessor } from "./src/processors.ts";
 export { AITOOLS_SOURCE } from "./src/remote-skills.ts";
-export type { AiToolsSource, RemoteSkillSourceOptions, RemoteSkillSource, RemoteSkillsOption, ProvisionRemoteSkillsOptions, ProvisionedRemoteSkills } from "./src/remote-skills.ts";
+export type { AiToolsSource, RemoteSkillSourceOptions, RemoteSkillSource, RemoteSkillsOption, ProvisionRemoteSkillsOptions, ProvisionedRemoteSkills, RemoteSkillCacheEntry, RemoteSkillsMetadata } from "./src/remote-skills.ts";
 export type { DatabricksFetchInit } from "./src/rest.ts";
 export { MastraServer } from "./src/server.ts";
 export type { AttributedIdentity, MastraApiGateOptions } from "./src/server.ts";

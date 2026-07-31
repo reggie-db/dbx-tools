@@ -121,6 +121,22 @@ resources:
             branch: projects/dbx-tools-demo/branches/main
             database: projects/dbx-tools-demo/branches/main/databases/databricks-postgres
             permission: CAN_CONNECT_AND_CREATE
+        # MLflow experiment the agent's traces and user feedback land in
+        # (`/Users/reggie.pierce@databricks.com/dbx-tools-demo`).
+        #
+        # This binding is what makes the experiment writable in the deployed
+        # app. The experiment's ACL only lists its creator and `admins`, so the
+        # app service principal (`app-1glm9d dbx-tools-demo`, in no groups) gets
+        # PERMISSION_DENIED without it -- deploying the env var alone is not
+        # enough. CAN_EDIT is the lowest level that permits logging; CAN_READ
+        # only allows viewing runs and metrics.
+        #
+        # The matching `valueFrom: mlflow-experiment` in app.yaml resolves to
+        # the experiment id, so the id is declared once, here.
+        - name: mlflow-experiment
+          experiment:
+            experiment_id: "798709075143130"
+            permission: CAN_EDIT
         # SMTP + sender config for the approval-gated email tool, read from
         # the `dbx-tools-demo` secret scope and surfaced to the runtime by
         # the matching `valueFrom` entries in app.yaml.

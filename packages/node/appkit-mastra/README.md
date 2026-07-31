@@ -276,6 +276,36 @@ optional peer to enable the richest source formats:
 pnpm add skills
 ```
 
+### Refresh policy
+
+Provisioning runs on every app boot, and skill trees change rarely, so each
+provisioned tree carries a `.metadata.json` at its root recording when each
+source was last downloaded. A source is only re-downloaded once that record is
+older than a day; inside the window the existing tree is reused and no network
+call is made. The record travels with the tree rather than living in process
+memory, so a container that restarts a dozen times an hour pulls each source
+once, not a dozen times.
+
+```ts
+mastra({
+  // Re-pull at most once an hour instead of once a day.
+  remoteSkills: { sources: ["aitools"], refreshTtlMs: 60 * 60 * 1000 },
+});
+
+// Per-source, and `0` to download on every boot:
+mastra({
+  remoteSkills: {
+    sources: [{ source: "owner/skill-repo", refreshTtlMs: 0 }, "aitools"],
+  },
+});
+```
+
+The record is keyed by the source AND the options that change what it contains
+(`skills`, `experimental`, `ref`), so narrowing a skill list or moving a `ref`
+re-downloads immediately rather than serving the previous selection for a day.
+A missing or unreadable record is treated as a cache miss, never as a startup
+failure.
+
 ## Databricks AI Tools
 
 [Databricks AI Tools](https://github.com/databricks/databricks-agent-skills) are
@@ -571,8 +601,9 @@ requiring callers to assemble a Mastra server by hand.
   PgVector options. `true` resolves from `lakebase()` when present.
 - `remoteSkills` provisions `SKILL.md` sources from outside the workspace at
   startup (see [Remote Skills](#remote-skills)). Accepts a single source, a
-  list, or an options bag with `failOnError`, `userEmail`, and
-  `databricksBasePath`. A source is `"aitools"` (see
+  list, or an options bag with `failOnError`, `userEmail`,
+  `databricksBasePath`, and `refreshTtlMs` (how long a provisioned tree is
+  reused before re-downloading, a day by default). A source is `"aitools"` (see
   [Databricks AI Tools](#databricks-ai-tools)) or any URL-like.
 - `genieSpaces` maps aliases to Genie Space IDs (or to
   `{ spaceId, hint }` objects). Those aliases flow into tool names,
@@ -629,7 +660,9 @@ client that talks to these routes.
 - `remote-skills` - startup provisioning of remote `SKILL.md` sources into the
   Databricks Assistant skills tree (or a local temp dir): the `"aitools"`
   constant reads Databricks' own skill repo directly, and any other source goes
-  through the optional `skills` CLI or a direct fetch.
+  through the optional `skills` CLI or a direct fetch. Each tree carries a
+  `.metadata.json` so a source is re-downloaded at most once a day
+  (`refreshTtlMs`).
 - `mcp` - MCP server construction.
 - `observability` / `mlflow` - tracing and feedback.
 - `server` / `rest` / `processors` - Express dispatch, Databricks REST helpers,

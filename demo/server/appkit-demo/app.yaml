@@ -4,6 +4,15 @@ env:
     valueFrom: genie-space
   - name: LAKEBASE_ENDPOINT
     valueFrom: postgres
+  # MLflow experiment for agent traces and user feedback. `valueFrom` on an
+  # experiment resource resolves to the experiment id, so the id itself lives
+  # only in databricks.yml. `MLFLOW_TRACKING_URI=databricks` points the MLflow
+  # SDK at this workspace; the host and service-principal credentials are
+  # injected by the Apps runtime.
+  - name: MLFLOW_EXPERIMENT_ID
+    valueFrom: mlflow-experiment
+  - name: MLFLOW_TRACKING_URI
+    value: databricks
   # SMTP for the approval-gated `send_email` tool. The values live in the
   # `dbx-tools-demo` Databricks secret scope so no credential is committed
   # here; grant the app's service principal READ on that scope.

@@ -26,6 +26,15 @@
  * source (or the top-level call) sets `failOnError: false`, in which case it is
  * logged and skipped so one bad source never takes the app down.
  *
+ * Every provisioned tree carries a {@link METADATA_FILE} recording when each
+ * source was last downloaded, and a source is only re-downloaded once that
+ * record is older than {@link DEFAULT_REFRESH_TTL_MS} (a day). This runs at app
+ * BOOT, so without it a container that restarts a dozen times an hour re-pulls
+ * the whole AI Tools set a dozen times for content that changes rarely. The
+ * record travels WITH the tree rather than in process memory, so the reuse
+ * survives a restart - which is the only way it helps a Databricks App at all.
+ * Pass `refreshTtlMs: 0` to download on every boot.
+ *
  * The default destination is the Databricks workspace Assistant skills tree
  * (`/Workspace/.assistant/skills`, the same tree a "save this as a skill"
  * action writes to), so provisioned skills persist across restarts and are
@@ -62,8 +71,17 @@ function userAssistantSkillsPath(userEmail: string): string {
   return `/Users/${userEmail.trim()}/.assistant/skills`;
 }
 
-/** npm agent id the `skills` CLI installs a bare `SKILL.md` tree under. */
-const SKILLS_CLI_AGENT = "agents";
+/**
+ * Agent id the `skills` CLI installs a bare `SKILL.md` tree under.
+ *
+ * `universal` is the CLI's own name for "no particular agent, just the plain
+ * tree", which is what this module wants - it re-hosts the result itself. The
+ * id must be one the installed CLI knows: an unrecognized one is rejected
+ * outright (`Invalid agents: ...`), taking every non-`aitools` source down with
+ * it, since a CLI failure is a hard failure rather than a fall-through to
+ * {@link stageViaFetch}.
+ */
+const SKILLS_CLI_AGENT = "universal";
 
 /** Where the `skills` CLI drops a plain `SKILL.md` tree under a target dir. */
 const SKILLS_CLI_LAYOUT = [".agents", "skills"] as const;
@@ -73,6 +91,19 @@ const DEFAULT_MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 
 /** Stable temp directory holding one rebuilt skill tree per remote source. */
 const LOCAL_SKILLS_DIR = "mastra-local-skills";
+
+/**
+ * Bookkeeping file written at the root of every provisioned skill tree, naming
+ * when each source was last downloaded. A dotfile so the skill scanners, which
+ * look for `<dir>/SKILL.md`, never mistake it for a skill.
+ */
+const METADATA_FILE = ".metadata.json";
+
+/** Shape marker for {@link METADATA_FILE}; an unknown version is ignored, not read. */
+const METADATA_VERSION = 1;
+
+/** How long a provisioned source is reused before being downloaded again. */
+const DEFAULT_REFRESH_TTL_MS = 24 * 60 * 60 * 1000;
 
 /* ------------------------------ AI Tools ------------------------------ */
 
@@ -126,6 +157,13 @@ export interface RemoteSkillSourceOptions {
   /** Override the byte ceiling on a direct-fetch download for this source. */
   maxDownloadBytes?: number;
   /**
+   * How long this source's provisioned tree is reused before it is downloaded
+   * again, in milliseconds. Overrides the top-level
+   * {@link ProvisionRemoteSkillsOptions.refreshTtlMs}; `0` re-downloads on
+   * every boot.
+   */
+  refreshTtlMs?: number;
+  /**
    * When `false`, a source that fails to resolve is logged and skipped instead
    * of failing app startup. Overrides the top-level {@link ProvisionRemoteSkillsOptions.failOnError}.
    */
@@ -169,6 +207,12 @@ export interface ProvisionRemoteSkillsOptions {
   userEmail?: string;
   /** Byte ceiling on a direct-fetch download. Defaults to 10 MiB. */
   maxDownloadBytes?: number;
+  /**
+   * How long a provisioned tree is reused before its source is downloaded
+   * again, in milliseconds. Defaults to a day; `0` re-downloads on every boot.
+   * A per-source `refreshTtlMs` wins over this.
+   */
+  refreshTtlMs?: number;
 }
 
 /** What {@link provisionRemoteSkills} resolved. */
@@ -181,8 +225,36 @@ export interface ProvisionedRemoteSkills {
   localSkillPaths: string[];
   /** Absolute Databricks destination each source was written to, if any. */
   databricksBasePath?: string;
-  /** Names of every skill directory that was provisioned. */
+  /**
+   * Names of every skill directory now available, whether it was downloaded on
+   * this boot or reused from a still-fresh tree (see {@link METADATA_FILE}).
+   */
   skillNames: string[];
+}
+
+/**
+ * What one source's last download left behind, as recorded in
+ * {@link METADATA_FILE}.
+ */
+export interface RemoteSkillCacheEntry {
+  /** The source string this entry was downloaded from, for readability. */
+  source: string;
+  /** When the download completed, ISO-8601. */
+  downloadedAt: string;
+  /** Skill directory names the download produced. */
+  skills: string[];
+  /**
+   * The content-affecting policy that download used. Also folded into the entry
+   * KEY, so narrowing `skills` or moving `ref` misses the cache instead of
+   * silently serving the previous selection.
+   */
+  policy?: { skills?: string[]; experimental?: boolean; ref?: string };
+}
+
+/** The {@link METADATA_FILE} document: one entry per provisioned source. */
+export interface RemoteSkillsMetadata {
+  version: number;
+  sources: Record<string, RemoteSkillCacheEntry>;
 }
 
 /* ------------------------------- helpers ------------------------------- */
@@ -230,6 +302,107 @@ function isAiToolsSource(source: string): boolean {
   return source.trim().toLowerCase() === AITOOLS_SOURCE;
 }
 
+/* -------------------------------- cache -------------------------------- */
+
+/**
+ * The policy that decides what a source's download CONTAINS.
+ *
+ * Only these three change the resulting tree, so only these belong in the cache
+ * key - `failOnError` and `maxDownloadBytes` govern how a failure is handled,
+ * not what a success produces.
+ */
+function cachePolicy(sourceOptions: NormalizedSource): RemoteSkillCacheEntry["policy"] {
+  const skills = string.parseList(sourceOptions.skills);
+  const policy = {
+    ...(skills.length > 0 ? { skills: [...skills].sort() } : {}),
+    ...(sourceOptions.experimental === true ? { experimental: true } : {}),
+    ...(string.trimToNull(sourceOptions.ref) ? { ref: sourceOptions.ref!.trim() } : {}),
+  };
+  return Object.keys(policy).length > 0 ? policy : undefined;
+}
+
+/**
+ * Stable identity of a source AND its content-affecting policy.
+ *
+ * Keying on the source alone would let a changed `skills` filter or `ref` read
+ * back the previous download for a day; keying on both turns that into a miss.
+ * The skill list is sorted first so a reordered array is still the same key.
+ */
+function cacheKey(sourceOptions: NormalizedSource): string {
+  return hash.fnvHash(
+    JSON.stringify({ source: sourceOptions.source, policy: cachePolicy(sourceOptions) ?? null }),
+  );
+}
+
+/** The effective reuse window: per-source, then top-level, then a day. */
+function resolveRefreshTtl(
+  sourceOptions: NormalizedSource,
+  options: ProvisionRemoteSkillsOptions,
+): number {
+  return sourceOptions.refreshTtlMs ?? options.refreshTtlMs ?? DEFAULT_REFRESH_TTL_MS;
+}
+
+/**
+ * Read the metadata document at the root of a provisioned tree, or `undefined`
+ * when there is none, it is unreadable, or it was written by a shape this
+ * version does not know.
+ *
+ * Never throws: a missing or corrupt record is a cache MISS, which costs a
+ * download - while letting it fail would take app startup down over
+ * bookkeeping.
+ */
+async function readMetadata(fs: FileSystem): Promise<RemoteSkillsMetadata | undefined> {
+  try {
+    if (!(await fs.exists(METADATA_FILE))) return undefined;
+    const raw = await fs.readFile(METADATA_FILE, { encoding: "utf8" });
+    const parsed = json.parse(raw, undefined) as RemoteSkillsMetadata | undefined;
+    if (!object.isRecord(parsed) || parsed.version !== METADATA_VERSION) return undefined;
+    return object.isRecord(parsed.sources) ? parsed : undefined;
+  } catch (err) {
+    logger.debug("cache:unreadable", { error: error.errorMessage(err) });
+    return undefined;
+  }
+}
+
+/**
+ * Whether an entry is still inside its reuse window.
+ *
+ * A `ttlMs` of `0` disables reuse outright, and an unparseable or FUTURE
+ * timestamp counts as stale - a clock that moved backwards should cost one
+ * extra download, not pin a tree as fresh indefinitely.
+ */
+function isFresh(entry: RemoteSkillCacheEntry, ttlMs: number): boolean {
+  if (ttlMs <= 0 || !Array.isArray(entry.skills)) return false;
+  const downloadedAt = Date.parse(entry.downloadedAt ?? "");
+  if (Number.isNaN(downloadedAt)) return false;
+  const age = Date.now() - downloadedAt;
+  return age >= 0 && age < ttlMs;
+}
+
+/**
+ * Merge one source's entry into the tree's metadata document, preserving what
+ * other sources recorded - the Databricks destination is SHARED, so a blind
+ * overwrite would drop every sibling source's timestamp and re-download the
+ * lot on the next boot.
+ */
+async function writeMetadata(
+  fs: FileSystem,
+  key: string,
+  entry: RemoteSkillCacheEntry,
+): Promise<void> {
+  const current = await readMetadata(fs);
+  const next: RemoteSkillsMetadata = {
+    version: METADATA_VERSION,
+    sources: { ...current?.sources, [key]: entry },
+  };
+  await fs.writeFile(METADATA_FILE, `${JSON.stringify(next, null, 2)}\n`, { overwrite: true });
+}
+
+/** The stable local tree a source is rebuilt into, keyed by {@link cacheKey}. */
+function localSkillsFS(key: string): LocalFileSystem {
+  return localFS.tmpFS(`${LOCAL_SKILLS_DIR}/${key}`);
+}
+
 /**
  * Materialize every configured remote skill source at app startup.
  *
@@ -260,30 +433,59 @@ export async function provisionRemoteSkills(
   const skillNames: string[] = [];
   let staging: LocalFileSystem | undefined;
 
+  // The destination roots the shared metadata document, so it has to exist
+  // before the first cache READ - `copySkillDirs` would otherwise be the first
+  // thing to create it, which is too late.
+  if (destination) await destination.init();
+
   try {
     const sources = Array.isArray(options.sources) ? options.sources : [options.sources];
     for (const entry of sources) {
       const sourceOptions = toSourceOptions(entry);
       const failOnError = sourceOptions.failOnError ?? failDefault;
       try {
+        // Where this source's bookkeeping lives: the shared Databricks tree, or
+        // the source's own stable local dir.
+        const key = cacheKey(sourceOptions);
+        const cacheFS = destination ?? localSkillsFS(key);
+        const cached = (await readMetadata(cacheFS))?.sources[key];
+        if (cached && isFresh(cached, resolveRefreshTtl(sourceOptions, options))) {
+          skillNames.push(...cached.skills);
+          if (!destination) localSkillPaths.push(cacheFS.root);
+          logger.debug("source:cached", {
+            source: sourceOptions.source,
+            downloadedAt: cached.downloadedAt,
+            skills: cached.skills,
+          });
+          continue;
+        }
+
         staging ??= await initializedScratch("mastra-remote-skills");
         const stagedDir = await stageSource(sourceOptions, staging.root, options);
         const staged = await collectSkillDirs(stagedDir);
         if (staged.length === 0) {
           throw new Error(`no SKILL.md found for source "${sourceOptions.source}"`);
         }
+        const policy = cachePolicy(sourceOptions);
+        const record: RemoteSkillCacheEntry = {
+          source: sourceOptions.source,
+          downloadedAt: new Date().toISOString(),
+          skills: staged.map((dir) => dir.name),
+          ...(policy ? { policy } : {}),
+        };
         if (destination && databricksBasePath) {
           await copySkillDirs(destination, staged);
-          skillNames.push(...staged.map((dir) => dir.name));
+          // Only after the copy lands: a metadata entry written first would
+          // mark a failed provision as fresh and suppress the retry for a day.
+          await writeMetadata(destination, key, record);
         } else {
-          const localDir = await persistLocally(sourceOptions.source, staged);
-          localSkillPaths.push(localDir);
-          skillNames.push(...staged.map((dir) => dir.name));
+          localSkillPaths.push(await persistLocally(key, staged, record));
         }
+        skillNames.push(...record.skills);
         logger.debug("source:provisioned", {
           source: sourceOptions.source,
           destination: databricksBasePath ?? "local-temp",
-          skills: staged.map((dir) => dir.name),
+          skills: record.skills,
         });
       } catch (err) {
         if (failOnError) {
@@ -561,14 +763,25 @@ async function copySkillDirs(destination: FileSystem, dirs: StagedSkillDir[]): P
  * return its root path.
  *
  * A given source resolves to the same content on almost every boot, so each
- * one owns a directory named for its {@link hash.fnvHash} rather than leaving
- * a fresh scratch dir behind per restart. Keying on the source (not the
- * content) is what keeps two different sources from overwriting each other.
+ * one owns a directory named for its {@link cacheKey} rather than leaving a
+ * fresh scratch dir behind per restart. Keying on the source and its policy
+ * (not the content) is what keeps two different sources from overwriting each
+ * other.
+ *
+ * The metadata is written INSIDE the rebuild rather than after it: `rebuildFS`
+ * replaces the stable root wholesale, so anything written afterwards would
+ * survive only until the next refresh, and anything written before would be
+ * thrown away by the swap.
  */
-async function persistLocally(source: string, dirs: StagedSkillDir[]): Promise<string> {
-  const stable = await localFS.rebuildFS(`${LOCAL_SKILLS_DIR}/${hash.fnvHash(source)}`, (scratch) =>
-    copySkillDirs(scratch, dirs),
-  );
+async function persistLocally(
+  key: string,
+  dirs: StagedSkillDir[],
+  record: RemoteSkillCacheEntry,
+): Promise<string> {
+  const stable = await localFS.rebuildFS(`${LOCAL_SKILLS_DIR}/${key}`, async (scratch) => {
+    await copySkillDirs(scratch, dirs);
+    await writeMetadata(scratch, key, record);
+  });
   return stable.root;
 }
 
