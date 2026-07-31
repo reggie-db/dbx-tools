@@ -66,8 +66,13 @@ export interface LocalFileSystemOptions {
   createRoot?: boolean;
 }
 
-/** {@link LocalFileSystemOptions} without `root`, plus os-path injectables. */
-export type HomeOrTempFileSystemOptions = Omit<LocalFileSystemOptions, "root"> & {
+/**
+ * Options for the factories that take their root FROM the OS
+ * ({@link homeFS} / {@link tmpFS} / {@link scratchFS}) rather than from the
+ * caller: {@link LocalFileSystemOptions} without `root`, plus the
+ * {@link resolveOsPaths} injectables.
+ */
+export type OsFileSystemOptions = Omit<LocalFileSystemOptions, "root"> & {
   /** Forwarded to {@link resolveLocalHome} / {@link resolveLocalTemp}. */
   os?: ResolveOsPathsOptions;
 };
@@ -350,7 +355,7 @@ function nodeErrorCode(err: unknown): FileSystemErrorCode | undefined {
  */
 export function homeFS(
   relativeRoot: string = ".",
-  options: HomeOrTempFileSystemOptions = {},
+  options: OsFileSystemOptions = {},
 ): LocalFileSystem {
   const { os, ...fsOptions } = options;
   return new LocalFileSystem({
@@ -372,7 +377,7 @@ export function homeFS(
  */
 export function tmpFS(
   relativeRoot: string = ".",
-  options: HomeOrTempFileSystemOptions = {},
+  options: OsFileSystemOptions = {},
 ): LocalFileSystem {
   const { os, ...fsOptions } = options;
   return new LocalFileSystem({
@@ -394,11 +399,56 @@ export function tmpFS(
  * await scratch.writeFile("SKILL.md", body);
  * ```
  */
-export function scratchFS(
-  prefix: string,
-  options: HomeOrTempFileSystemOptions = {},
-): LocalFileSystem {
+export function scratchFS(prefix: string, options: OsFileSystemOptions = {}): LocalFileSystem {
   return tmpFS(`${prefix}-${hash.id()}`, options);
+}
+
+/**
+ * Rebuild the STABLE temp tree named by {@link key}, every call.
+ *
+ * {@link materialize} writes into a throwaway {@link scratchFS} root; only on
+ * success does that root REPLACE the stable one. Two properties fall out of
+ * that ordering, and both are the reason to prefer this over writing into the
+ * stable path directly:
+ *
+ * - repeated runs reuse ONE directory instead of leaving a new scratch behind
+ *   on every boot, and
+ * - a reader never observes a half-written tree, and a failed rebuild leaves
+ *   the previous one intact.
+ *
+ * The swap is a `rename` within the same temp root, so it is atomic.
+ *
+ * @param key - Stable temp-relative path. May be nested (`"skills/abc123"`)
+ *   to give each input its own directory.
+ *
+ * @example
+ * ```ts
+ * const tools = await rebuildFS("databricks-aitools", (scratch) =>
+ *   installInto(scratch.root),
+ * );
+ * ```
+ */
+export async function rebuildFS(
+  key: string,
+  materialize: (scratch: LocalFileSystem) => Promise<void>,
+  options: OsFileSystemOptions = {},
+): Promise<LocalFileSystem> {
+  const scratch = scratchFS(key, options);
+  await scratch.init();
+
+  try {
+    await materialize(scratch);
+  } catch (err) {
+    await rm(scratch.root, { recursive: true, force: true }).catch(() => undefined);
+    throw err;
+  }
+
+  const stable = tmpFS(key, options);
+  const stableHost = path.resolve(stable.root);
+  await rm(stableHost, { recursive: true, force: true });
+  await mkdir(path.dirname(stableHost), { recursive: true });
+  await rename(path.resolve(scratch.root), stableHost);
+  return stable;
 }
 
 /**

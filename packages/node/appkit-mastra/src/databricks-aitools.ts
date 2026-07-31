@@ -34,6 +34,9 @@ const logger = log.logger("mastra/databricks-aitools");
 /** The Databricks CLI binary name; resolved on `PATH`. */
 const DATABRICKS_CLI = "databricks";
 
+/** Stable temp directory the CLI's skill tree is rebuilt into each boot. */
+const SKILLS_CACHE_DIR = "databricks-aitools";
+
 /* -------------------------------- types -------------------------------- */
 
 /** How aggressively to enable Databricks AI Tools skills. */
@@ -163,13 +166,38 @@ async function materializeViaCli(
   cli: string,
   options: DatabricksAIToolsOptions,
 ): Promise<string | undefined> {
-  let dir = string.trimToNull(options.path);
-  if (!dir) {
-    // The CLI writes into `--path`, so the directory has to exist first.
-    const scratch = localFS.scratchFS("databricks-aitools");
-    await scratch.init();
-    dir = scratch.root;
+  const explicit = string.trimToNull(options.path);
+  let dir: string;
+
+  if (explicit) {
+    // An explicit path is the caller's to own - install straight into it.
+    await installSkills(cli, options, explicit);
+    dir = explicit;
+  } else {
+    // The resolved skill set is the same on almost every boot, so rebuild ONE
+    // stable temp tree rather than leaving a fresh scratch dir behind each
+    // time. The CLI writes into a throwaway root that only replaces the stable
+    // one on success, so a failed install keeps the previous skills usable.
+    const stable = await localFS.rebuildFS(SKILLS_CACHE_DIR, (scratch) =>
+      installSkills(cli, options, scratch.root),
+    );
+    dir = stable.root;
   }
+
+  if (!existsSync(dir)) return undefined;
+  logger.debug("materialized aitools skills via CLI", {
+    path: dir,
+    skills: string.parseList(options.skills),
+  });
+  return dir;
+}
+
+/** Run `databricks aitools install --path <dir>`, failing loudly on a non-zero exit. */
+async function installSkills(
+  cli: string,
+  options: DatabricksAIToolsOptions,
+  dir: string,
+): Promise<void> {
   const args = ["aitools", "install", "--path", dir];
   const skills = string.parseList(options.skills);
   if (skills.length > 0) args.push("--skills", skills.join(","));
@@ -185,7 +213,4 @@ async function materializeViaCli(
       `databricks aitools install failed (exit ${result.exitCode}): ${result.stderr || result.stdout}`,
     );
   }
-  if (!existsSync(dir)) return undefined;
-  logger.debug("materialized aitools skills via CLI", { path: dir, skills });
-  return dir;
 }

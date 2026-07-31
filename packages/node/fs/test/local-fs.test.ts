@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { FileSystemError } from "@dbx-tools/shared-fs";
-import { homeFS, LocalFileSystem, tmpFS } from "../src/local-fs.ts";
-import { clearOsPathsCache } from "../src/os-path.ts";
+import { homeFS, LocalFileSystem, rebuildFS, scratchFS, tmpFS } from "../src/local-fs.ts";
+import { clearOsPathsCache, type ResolveOsPathsOptions } from "../src/os-path.ts";
 
 async function tempFs(options?: { readOnly?: boolean; contained?: boolean }) {
   const root = await mkdtemp(path.join(tmpdir(), "dbx-local-fs-"));
@@ -181,5 +181,81 @@ describe("homeFS / tmpFS", () => {
       clearOsPathsCache();
       await rm(cwd, { recursive: true, force: true });
     }
+  });
+});
+
+describe("scratchFS / rebuildFS", () => {
+  /** Isolated home + temp so a test never touches the real OS locations. */
+  const withOsRoot = async (
+    name: string,
+    run: (os: ResolveOsPathsOptions) => Promise<void>,
+  ): Promise<void> => {
+    const cwd = await mkdtemp(path.join(tmpdir(), `dbx-${name}-`));
+    clearOsPathsCache();
+    try {
+      await run({
+        cwd,
+        env: {},
+        homeDir: () => path.join(cwd, "home"),
+        tmpDir: () => path.join(cwd, "tmp"),
+      });
+    } finally {
+      clearOsPathsCache();
+      await rm(cwd, { recursive: true, force: true });
+    }
+  };
+
+  it("gives every scratchFS call its own root", async () => {
+    await withOsRoot("scratch-fs", async (os) => {
+      const a = scratchFS("job", { os });
+      const b = scratchFS("job", { os });
+      assert.notEqual(a.root, b.root);
+      assert.ok(a.root.includes("/job-"));
+    });
+  });
+
+  it("rebuilds into one stable root instead of a new dir per call", async () => {
+    await withOsRoot("rebuild-stable", async (os) => {
+      const first = await rebuildFS("tools", (s) => s.writeFile("v.txt", "1"), { os });
+      const second = await rebuildFS("tools", (s) => s.writeFile("v.txt", "2"), { os });
+
+      // Same directory both times, holding only the newest content.
+      assert.equal(first.root, second.root);
+      assert.equal(await second.readFile("v.txt", { encoding: "utf8" }), "2");
+    });
+  });
+
+  it("replaces the previous tree rather than merging into it", async () => {
+    await withOsRoot("rebuild-replace", async (os) => {
+      await rebuildFS("tools", (s) => s.writeFile("stale.txt", "old"), { os });
+      const rebuilt = await rebuildFS("tools", (s) => s.writeFile("fresh.txt", "new"), { os });
+
+      assert.equal(await rebuilt.exists("fresh.txt"), true);
+      assert.equal(await rebuilt.exists("stale.txt"), false);
+    });
+  });
+
+  it("leaves the previous tree intact when a rebuild fails", async () => {
+    await withOsRoot("rebuild-failure", async (os) => {
+      const good = await rebuildFS("tools", (s) => s.writeFile("v.txt", "1"), { os });
+
+      await assert.rejects(
+        () => rebuildFS("tools", () => Promise.reject(new Error("boom")), { os }),
+        /boom/,
+      );
+
+      assert.equal(await good.readFile("v.txt", { encoding: "utf8" }), "1");
+    });
+  });
+
+  it("keys nested rebuilds separately", async () => {
+    await withOsRoot("rebuild-nested", async (os) => {
+      const a = await rebuildFS("skills/aaa", (s) => s.writeFile("s.txt", "a"), { os });
+      const b = await rebuildFS("skills/bbb", (s) => s.writeFile("s.txt", "b"), { os });
+
+      assert.notEqual(a.root, b.root);
+      assert.equal(await a.readFile("s.txt", { encoding: "utf8" }), "a");
+      assert.equal(await b.readFile("s.txt", { encoding: "utf8" }), "b");
+    });
   });
 });

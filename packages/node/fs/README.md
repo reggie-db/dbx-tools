@@ -37,6 +37,11 @@ const scratch = localFS.tmpFS("job-42");
 // A throwaway working directory no other run can collide with.
 const work = localFS.scratchFS("import-job");
 await work.init(); // only needed when handing the root to `node:fs` or a subprocess
+
+// Regenerate on every boot, but into ONE stable directory: the callback writes
+// into a scratch root that replaces the stable one only on success, so restarts
+// don't pile up directories and a failed rebuild keeps the last good tree.
+const tools = await localFS.rebuildFS("databricks-aitools", (scratch) => installInto(scratch.root));
 ```
 
 ## Module map
@@ -47,6 +52,7 @@ await work.init(); // only needed when handing the root to `node:fs` or a subpro
 | `LocalFileSystemOptions`           | Constructor options                                    |
 | `localFS.homeFS` / `localFS.tmpFS` | `LocalFileSystem` under resolved home / temp           |
 | `localFS.scratchFS`                | `tmpFS` on a `<prefix>-<id>` root unique per call      |
+| `localFS.rebuildFS`                | Rebuild a stable temp tree via an atomic scratch swap  |
 | `osPath.resolveLocalHome`          | Home: `homedir` → `HOME` → `/home/app` → `./.home`     |
 | `osPath.resolveLocalTemp`          | Temp: `tmpdir` → `TMPDIR`/`TMP`/`TEMP` → `<home>/.tmp` |
 | `localPath.expandLocalHomePath`    | Expand `~` against a home dir                          |

@@ -65,6 +65,9 @@ const SKILLS_CLI_LAYOUT = [".agents", "skills"] as const;
 /** Cap on a direct-fetch download body, matching the `skills` CLI default. */
 const DEFAULT_MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 
+/** Stable temp directory holding one rebuilt skill tree per remote source. */
+const LOCAL_SKILLS_DIR = "mastra-local-skills";
+
 /* -------------------------------- types -------------------------------- */
 
 /**
@@ -212,7 +215,7 @@ export async function provisionRemoteSkills(
           await copySkillDirs(destination, staged);
           skillNames.push(...staged.map((dir) => dir.name));
         } else {
-          const localDir = await persistLocally(staged);
+          const localDir = await persistLocally(sourceOptions.source, staged);
           localSkillPaths.push(localDir);
           skillNames.push(...staged.map((dir) => dir.name));
         }
@@ -414,11 +417,20 @@ async function copySkillDirs(destination: FileSystem, dirs: StagedSkillDir[]): P
   }
 }
 
-/** Copy staged skill dirs into a local scratch tree; return its root path. */
-async function persistLocally(dirs: StagedSkillDir[]): Promise<string> {
-  const local = localFS.scratchFS("mastra-local-skills");
-  await copySkillDirs(local, dirs);
-  return local.root;
+/**
+ * Copy staged skill dirs into a STABLE local tree keyed by the source, and
+ * return its root path.
+ *
+ * A given source resolves to the same content on almost every boot, so each
+ * one owns a directory named for its {@link hash.fnvHash} rather than leaving
+ * a fresh scratch dir behind per restart. Keying on the source (not the
+ * content) is what keeps two different sources from overwriting each other.
+ */
+async function persistLocally(source: string, dirs: StagedSkillDir[]): Promise<string> {
+  const stable = await localFS.rebuildFS(`${LOCAL_SKILLS_DIR}/${hash.fnvHash(source)}`, (scratch) =>
+    copySkillDirs(scratch, dirs),
+  );
+  return stable.root;
 }
 
 /**
