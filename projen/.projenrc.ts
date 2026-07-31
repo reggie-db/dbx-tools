@@ -63,6 +63,7 @@ const project = new typescript.TypeScriptProject({
       // This package ships SOURCE (run through tsx), so it never emits - but its
       // own modules carry the same explicit `.ts` specifiers the packages use,
       // which the compiler only accepts with this on.
+      noEmit: true,
       allowImportingTsExtensions: true,
     },
     include: ["index.ts", "src/**/*.ts", "tasks/**/*.ts"],

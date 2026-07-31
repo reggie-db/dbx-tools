@@ -4,15 +4,14 @@
  * the project has a GitHub component - authors the tag-driven npm publish
  * workflow that the pushed tag triggers.
  */
-import { spawnSync } from "child_process";
 import { Component } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
 
 const NODE_VERSION = "lts/*";
+const NPM_REGISTRY_URL = "https://registry.npmjs.org";
 const PNPM_VERSION = "10.33.0";
-
 
 interface PublishWorkflow {
   readonly name: string;
@@ -21,26 +20,18 @@ interface PublishWorkflow {
   readonly workingDirectory?: string;
 }
 
-let _registryUrl: string | undefined;
-function getRegistryUrl(): string {
-  if (_registryUrl === undefined) {
-    //const npmRegistry = spawnSync("npm", ["config", "get", "registry"]);
-    //_registryUrl = (npmRegistry.stdout?.toString() ?? "").trim() || "https://registry.npmjs.org/";
-    _registryUrl = ""
-  }
-  return _registryUrl
-}
-
 /** Shared checkout and toolchain setup for every npm publish workflow. */
 function publishSetupSteps(): JobStep[] {
-  const registryUrl = getRegistryUrl();
   return [
     { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
     { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: PNPM_VERSION } },
     {
       name: "Setup Node.js",
       uses: "actions/setup-node@v6",
-      with: { "node-version": NODE_VERSION, ...(registryUrl ? { "registry-url": registryUrl } : {}) },
+      // setup-node writes the temporary npmrc that maps NODE_AUTH_TOKEN onto
+      // npmjs. Omitting this leaves the secret in the environment but gives npm
+      // no registry-scoped auth entry, and every publish fails with ENEEDAUTH.
+      with: { "node-version": NODE_VERSION, "registry-url": NPM_REGISTRY_URL },
     },
     // The lockfile is intentionally untracked and may be absent or stale in CI.
     { name: "Install", run: "pnpm install --no-frozen-lockfile" },
@@ -252,5 +243,3 @@ export class DBXToolsRelease extends Component {
     });
   }
 }
-
-
