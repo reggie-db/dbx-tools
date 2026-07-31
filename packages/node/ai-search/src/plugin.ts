@@ -39,7 +39,7 @@ import {
   type ToolRegistry,
 } from "@databricks/appkit/beta";
 import { search as searchContract, type SearchClientConfig } from "@dbx-tools/shared-ai-search";
-import { log, string } from "@dbx-tools/shared-core";
+import { error as errorUtil, log, string } from "@dbx-tools/shared-core";
 import {
   AI_SEARCH_CONFIG_SCHEMA,
   DATABRICKS_INDEX_ENV,
@@ -249,9 +249,10 @@ export class AiSearchPlugin extends Plugin<AiSearchPluginConfig> implements Tool
       method: "post",
       path: SEARCH_ROUTE,
       handler: async (req, res) => {
-        const request = searchContract.searchRequestSchema.parse(req.body ?? {});
-        const result = await this.asUser(req).runSearch(request);
-        res.json(result);
+        await this.respond(res, "search", () => {
+          const request = searchContract.searchRequestSchema.parse(req.body ?? {});
+          return this.asUser(req).runSearch(request);
+        });
       },
     });
     this.route(router, {
@@ -259,9 +260,10 @@ export class AiSearchPlugin extends Plugin<AiSearchPluginConfig> implements Tool
       method: "post",
       path: UNIVERSAL_ROUTE,
       handler: async (req, res) => {
-        const request = searchContract.universalSearchRequestSchema.parse(req.body ?? {});
-        const result = await this.asUser(req).runUniversalSearch(request);
-        res.json(result);
+        await this.respond(res, "universalSearch", () => {
+          const request = searchContract.universalSearchRequestSchema.parse(req.body ?? {});
+          return this.asUser(req).runUniversalSearch(request);
+        });
       },
     });
     this.route(router, {
@@ -282,8 +284,9 @@ export class AiSearchPlugin extends Plugin<AiSearchPluginConfig> implements Tool
           res.status(403).json({ error: "the document write surface is disabled" });
           return;
         }
-        const result = await this.asUser(req).runAddDocuments(req.body ?? {});
-        res.json(result);
+        await this.respond(res, "addDocuments", () =>
+          this.asUser(req).runAddDocuments(req.body ?? {}),
+        );
       },
     });
     this.route(router, {
@@ -296,8 +299,9 @@ export class AiSearchPlugin extends Plugin<AiSearchPluginConfig> implements Tool
           res.status(403).json({ error: "the index write surface is disabled" });
           return;
         }
-        const result = await this.asUser(req).runCreateIndex(req.body ?? {});
-        res.json(result);
+        await this.respond(res, "createIndex", () =>
+          this.asUser(req).runCreateIndex(req.body ?? {}),
+        );
       },
     });
     this.route(router, {
@@ -310,10 +314,32 @@ export class AiSearchPlugin extends Plugin<AiSearchPluginConfig> implements Tool
           res.status(403).json({ error: "the index write surface is disabled" });
           return;
         }
-        const result = await this.asUser(req).runSyncIndex(req.body ?? {});
-        res.json(result);
+        await this.respond(res, "syncIndex", () => this.asUser(req).runSyncIndex(req.body ?? {}));
       },
     });
+  }
+
+  /**
+   * Run a route body, turning a failure into a JSON error response.
+   *
+   * AppKit's `route()` registers the handler as-is, so a rejection escapes as
+   * an unhandled promise rejection and takes the whole process down rather than
+   * failing the one request. Every route here goes through this, so a bad index
+   * name or a Vector Search API error returns 500 with a message instead of
+   * killing the server.
+   */
+  private async respond(
+    res: Parameters<Parameters<IAppRouter["post"]>[1]>[1],
+    operation: string,
+    run: () => Promise<unknown>,
+  ): Promise<void> {
+    try {
+      res.json(await run());
+    } catch (cause) {
+      const message = errorUtil.errorMessage(cause);
+      logger.warn("route-failed", { operation, message });
+      res.status(500).json({ error: message });
+    }
   }
 
   /** Surface the index catalogue + defaults so a search box needs no round-trip. */

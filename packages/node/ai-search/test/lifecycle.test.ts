@@ -139,6 +139,25 @@ describe("ai-search index lifecycle", () => {
     assert.ok(fake.calls.some((c) => c.op === "deleteIndex"));
   });
 
+  it("rejects a blank index reference instead of calling the API", async () => {
+    // A blank reference is what an omitted `index` becomes when no default is
+    // configured. Reaching the SDK it would build a URL with the name segment
+    // missing and come back as a confusing ENDPOINT_NOT_FOUND, so every
+    // index-scoped call must fail fast and name the real problem.
+    const fake = fakeClient();
+    const client = makeClient(fake);
+    for (const call of [
+      () => client.syncIndex(""),
+      () => client.deleteIndex(""),
+      () => client.getIndex(""),
+      () => client.addDocuments("", [{ id: "1" }]),
+      () => client.deleteDocuments("", ["1"]),
+    ]) {
+      await assert.rejects(call, /no index configured/);
+    }
+    assert.deepEqual(fake.calls, []);
+  });
+
   it("ensureEndpoint creates only when missing", async () => {
     const present = fakeClient();
     await makeClient(present).ensureEndpoint();

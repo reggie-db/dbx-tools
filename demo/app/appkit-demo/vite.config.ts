@@ -12,6 +12,7 @@ import {
 // config in order - later wins, absent files are skipped.
 const OVERRIDE_FILES = [
   "vite.config.override.js",
+  "vite.config.override.ts",
 ];
 
 async function resolveConfig(

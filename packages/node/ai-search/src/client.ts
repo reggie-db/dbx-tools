@@ -313,9 +313,28 @@ export class SearchClient {
     return { query: text, hits, count: hits.length };
   }
 
+  /**
+   * Resolve an index reference (full UC name or configured alias) to the name
+   * the API expects, failing fast when it resolves to nothing. Without this a
+   * blank reference - what an omitted `index` becomes when no default is
+   * configured - reaches the SDK as an empty `index_name`, which builds a
+   * URL with the name segment missing and comes back as a confusing
+   * `ENDPOINT_NOT_FOUND` instead of naming the real problem.
+   */
+  private requireIndexName(reference: string, operation: string): string {
+    const name = string.trimToNull(resolveIndexName(this.config, reference) ?? reference);
+    if (name === null) {
+      throw new ExecutionError(
+        `ai-search: no index configured; set a default index or pass one to ${operation}`,
+        { context: { operation } },
+      );
+    }
+    return name;
+  }
+
   /** Fetch an index's live definition. */
   async getIndex(reference: string, signal?: AbortSignal): Promise<IndexInfo> {
-    const name = resolveIndexName(this.config, reference) ?? reference;
+    const name = this.requireIndexName(reference, "getIndex");
     const index = await this.withClient("getIndex", signal, (client, context) =>
       client.vectorSearchIndexes.getIndex({ index_name: name }, context),
     );
@@ -339,7 +358,7 @@ export class SearchClient {
     documents: SearchDocument[],
     signal?: AbortSignal,
   ): Promise<UpsertResult> {
-    const name = resolveIndexName(this.config, reference) ?? reference;
+    const name = this.requireIndexName(reference, "addDocuments");
     await this.withClient("addDocuments", signal, (client, context) =>
       client.vectorSearchIndexes.upsertDataVectorIndex(
         { index_name: name, inputs_json: JSON.stringify(documents) },
@@ -355,7 +374,7 @@ export class SearchClient {
     ids: Array<string | number>,
     signal?: AbortSignal,
   ): Promise<UpsertResult> {
-    const name = resolveIndexName(this.config, reference) ?? reference;
+    const name = this.requireIndexName(reference, "deleteDocuments");
     await this.withClient("deleteDocuments", signal, (client, context) =>
       client.vectorSearchIndexes.deleteDataVectorIndex(
         { index_name: name, primary_keys: ids.map(String) },
@@ -485,7 +504,7 @@ export class SearchClient {
 
   /** Trigger a sync of a Delta Sync index from its source table. */
   async syncIndex(reference: string, signal?: AbortSignal): Promise<void> {
-    const name = resolveIndexName(this.config, reference) ?? reference;
+    const name = this.requireIndexName(reference, "syncIndex");
     await this.withClient("syncIndex", signal, (client, context) =>
       client.vectorSearchIndexes.syncIndex({ index_name: name }, context),
     );
@@ -494,7 +513,7 @@ export class SearchClient {
 
   /** Delete an index. */
   async deleteIndex(reference: string, signal?: AbortSignal): Promise<void> {
-    const name = resolveIndexName(this.config, reference) ?? reference;
+    const name = this.requireIndexName(reference, "deleteIndex");
     await this.withClient("deleteIndex", signal, (client, context) =>
       client.vectorSearchIndexes.deleteIndex({ index_name: name }, context),
     );
