@@ -15,6 +15,7 @@
  */
 import type { IMixin as ConstructsMixin } from "constructs";
 import { javascript } from "projen";
+import { BunBuildFile, BunDevServerFile, BunfigFile } from "./bun-app.ts";
 import { create } from "./mixin.ts";
 import {
   addPackageFiles,
@@ -25,7 +26,6 @@ import {
   srcModuleExports,
 } from "./project.ts";
 import * as projectPredicate from "./project-predicate.ts";
-import { ViteConfigFile } from "./vite.ts";
 
 /** Node compiler options: ES2022 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
@@ -81,30 +81,42 @@ export const PACKAGE_TAG_MIXINS = {
       "./package.json": "./package.json",
     });
   }),
-  // `app`: a full browser app built + served by Vite (needs an `index.html`
-  // entry). Self-contained React app: React + DOM lib + JSX + the vite toolchain
-  // and app tasks (`dev`/`build`/`preview`). `build` resets the compile task, so
-  // `compile` bundles with vite rather than `tsc`.
+  // `app`: a full browser app built + served by BUN (needs an `index.html`
+  // entry). Self-contained React app: React + DOM lib + JSX + bun's fullstack
+  // dev server (`dev.ts`, `Bun.serve` + HMR) and production bundle (`build.ts`,
+  // `Bun.build`). Tailwind v4 is compiled by `bun-plugin-tailwind` (wired in the
+  // generated `bunfig.toml`). No Vite.
   app: create(projectPredicate.hasTag("app"), (p) => {
     p.addDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps(
-      "vite@catalog:",
-      "@vitejs/plugin-react@catalog:",
       "@types/react@catalog:",
       "@types/react-dom@catalog:",
+      // The Tailwind plugin the dev server + build load. Tailwind itself is a
+      // catalog dep the app declares (it also owns the Tailwind entry CSS).
+      "bun-plugin-tailwind@catalog:",
     );
     applyCompilerOptions(p, {
       target: "ES2022",
       lib: [...DOM_LIB],
       jsx: javascript.TypeScriptJsxMode.REACT_JSX,
-      types: ["vite/client"],
+      // `@types/bun` (a root/subproject devDep) supplies the `Bun.*` globals the
+      // generated `dev.ts`/`build.ts` use; no `vite/client`.
+      types: ["bun"],
+      // `@/` -> `src/` alias, resolved by both tsc and bun's bundler (bun reads
+      // tsconfig `paths`). Replaces the old Vite `resolve.alias` for `@`.
+      baseUrl: ".",
+      paths: { "@/*": ["./src/*"] },
     });
+    // bun runs the generated scripts directly. `build` resets the compile task so
+    // `compile` bundles with `Bun.build` rather than `tsc`.
     applyTasks(p, {
-      dev: { exec: "vite" },
-      build: { exec: "vite build" },
-      preview: { exec: "vite preview" },
+      dev: { exec: "bun dev.ts" },
+      build: { exec: "bun build.ts" },
+      preview: { exec: "bun dev.ts" },
     });
-    new ViteConfigFile(p);
+    new BunfigFile(p);
+    new BunDevServerFile(p);
+    new BunBuildFile(p);
     // An app has a single root entry, not a component library's subpaths - so it
     // replaces the `ui` tag's `./react`/`./styles.css` surface with a `.` root.
     applyExports(p, {
@@ -147,9 +159,11 @@ export const PACKAGE_TAG_MIXINS = {
       ...NODE_COMPILER_OPTIONS,
       experimentalDecorators: true,
     });
+    // bun runs the server `.ts` directly (native TS, no tsx). `--watch` restarts
+    // on change - the tsx-watch replacement.
     applyTasks(p, {
-      dev: { exec: "tsx watch src/server.ts" },
-      start: { exec: "tsx src/server.ts" },
+      dev: { exec: "bun --watch src/server.ts" },
+      start: { exec: "bun src/server.ts" },
     });
   }),
   node: create(projectPredicate.hasTag("node"), (p) => {

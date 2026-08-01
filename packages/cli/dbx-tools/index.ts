@@ -3,8 +3,8 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as bootstrap from "./src/bootstrap.ts";
+export * as bun from "./src/bun.ts";
 export * as cli from "./src/cli.ts";
-export * as pnpm from "./src/pnpm.ts";
 export * as root from "./src/root.ts";
-export { resolvePnpmArgv } from "./src/pnpm.ts";
+export { resolveBunArgv } from "./src/bun.ts";
 export { workspaceRoot } from "./src/root.ts";

@@ -22,7 +22,13 @@ import { applyCompiledPublish } from "./publish.ts";
 import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
-import { DEFAULT_VITE_OVERRIDES, ViteConfigFile } from "./vite.ts";
+import {
+  BUN_APP_OVERRIDES,
+  BunBuildFile,
+  BunDevServerFile,
+  BunfigFile,
+  RootBunfigFile,
+} from "./bun-app.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
 import {
   DEFAULT_PACKAGE_ROOTS,
@@ -147,11 +153,11 @@ function applyRepository(project: javascript.NodeProject, override?: string): vo
   });
 }
 
-/** Inherit a parent's package manager, else pnpm. */
+/** Inherit a parent's package manager, else bun. */
 function inheritedPackageManager(
   parent: javascript.NodeProject | undefined,
 ): javascript.NodePackageManager {
-  return parent?.package.packageManager ?? javascript.NodePackageManager.PNPM;
+  return parent?.package.packageManager ?? javascript.NodePackageManager.BUN;
 }
 
 /** Override a package's generated tsconfig `compilerOptions` (later-wins per key). */
@@ -328,12 +334,19 @@ export const PROJEN_VERSION = "^0.101.16";
 function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProjectOptions {
   const isRoot = options.parent === undefined;
   return {
-    packageManager: javascript.NodePackageManager.PNPM,
+    // Bun owns install/run/build/test locally and in CI. projen renders
+    // `bun install`/`bunx` and a native `trustedDependencies` field from this.
+    // The engine still emits `pnpm-workspace.yaml` itself (see
+    // {@link PnpmWorkspaceState}) for the Databricks Apps platform, whose build
+    // phase installs with pnpm - so a deployed app keeps its catalog + build
+    // allowances even though the local/CI manager is bun.
+    packageManager: javascript.NodePackageManager.BUN,
     // Pinned rather than left to projen's "latest": 0.101.16 is the first release
-    // whose `NodePackage` owns `pnpm-workspace.yaml` natively, and this engine
-    // writes that file itself ({@link DBXToolsPNPMWorkspace}). Floating would let
-    // an install cross that boundary silently, so the version the engine is known
-    // to co-exist with is stated here and bumped deliberately.
+    // whose `NodePackage` renders bun's `trustedDependencies` natively. Under bun,
+    // projen does NOT create the `pnpm-workspace.yaml` component itself (that call
+    // site is gated to pnpm), so the engine constructs it directly ({@link
+    // PnpmWorkspaceState}). Floating would let an install cross that boundary
+    // silently, so the co-tested version is stated here and bumped deliberately.
     projenVersion: PROJEN_VERSION,
     defaultReleaseBranch: "main",
     projenrcJs: false,
@@ -403,8 +416,8 @@ function copiedGitIgnoreOptions(
 /**
  * The engine's `TypeScriptProject` defaults - a superset of {@link defaultProjectOptions}.
  * A DBXTools TS project can itself be the ROOT (a standalone compiling root), so the
- * same parent-based root/child logic applies; this just layers on tsx/typescript and
- * disables sample code.
+ * same parent-based root/child logic applies; this just layers on typescript +
+ * bun types and disables sample code. No `tsx`: bun runs `.ts` directly.
  */
 function defaultTypeScriptProjectOptions(
   options: DBXToolsTypeScriptProjectOptions,
@@ -417,15 +430,16 @@ function defaultTypeScriptProjectOptions(
     // ESLint is configured once on the ROOT (see initProject) and lints the whole
     // tree, so packages don't emit their own config. A caller can still override.
     eslint: false,
-    devDeps: [...(base.devDeps ?? []), "tsx@^4.23.0", "typescript@^5.9.3"],
+    devDeps: [...(base.devDeps ?? []), "typescript@^5.9.3", "@types/bun@^1.3.14"],
     ...options,
     ...copiedGitIgnoreOptions(options),
   };
 }
 
-// Pinned to match the subproject defaults so pnpm resolves a single tsx/typescript
+// Pinned to match the subproject defaults so bun resolves a single typescript
 // across the workspace (a bare name -> `*` could pull a second, newer major).
-const DEV_DEPS_ROOT: string[] = ["tsx@^4.23.0", "typescript@^5.9.3"];
+// `@types/bun` gives the `Bun.*` globals the server/app tags now use.
+const DEV_DEPS_ROOT: string[] = ["typescript@^5.9.3", "@types/bun@^1.3.14"];
 
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
 export interface DBXToolsProjectOptions
@@ -478,13 +492,22 @@ export interface DBXToolsProjectOptions
    * `@dbx-tools/projen` engine in `projen/`, tagged `projen-v*`).
    */
   readonly standaloneReleases?: readonly StandaloneRelease[];
+  /**
+   * Extra workspace member paths (repo-relative, POSIX) to list in the workspace
+   * config ALONGSIDE the discovered `packageRoots` members - for a package that
+   * is synthesized by its OWN `.projenrc.ts` (so it isn't a root subproject) but
+   * should still resolve as a workspace sibling. The `@dbx-tools/projen` engine in
+   * `projen/` is the case: it synthesizes itself (avoiding a dogfooding cycle) yet
+   * is a member of the single bun workspace, so the root links it from source.
+   */
+  readonly extraWorkspaceMembers?: readonly string[];
 }
 
 /** Options for {@link DBXToolsTypeScriptProject} (a package, or a compiling root). */
 export interface DBXToolsTypeScriptProjectOptions
   extends Partial<typescript.TypeScriptProjectOptions>, DBXToolsProjectOptions {
-  /** Emit a projen-owned `vite.config.ts`. */
-  readonly viteConfig?: boolean;
+  /** Emit the projen-owned bun app scaffolding (`bunfig.toml`/`dev.ts`/`build.ts`). */
+  readonly bunApp?: boolean;
 }
 
 /**
@@ -498,6 +521,7 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
   pnpmWorkspace?: PnpmWorkspaceState;
   rootTsconfig?: DBXToolsRootTsconfig;
   vsCode?: DBXToolsVsCode;
+  private readonly extraWorkspaceMembers: readonly string[];
 
   constructor(options: DBXToolsProjectOptions = {}) {
     const { name, scope } = resolveIdentity(options);
@@ -505,11 +529,12 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
       options.release && options.releaseTrigger === undefined
         ? { releaseTrigger: ReleaseTrigger.tagged({ tags: ["v*"] }) }
         : {};
-    // Before `super`, since `NodePackage` creates the native
-    // `javascript.PnpmWorkspaceYaml` from these options inside the base
-    // constructor and `this` is unreachable until it returns. Given nothing,
-    // projen writes no workspace file at all - it never derives members from
-    // `project.subprojects` (see `pnpm-workspace.ts`).
+    // Holds the workspace state (members/catalog/allowBuilds/overrides). Under
+    // bun, projen's base constructor does NOT create the `PnpmWorkspaceYaml`
+    // component (its `configurePnpm` call site is gated to pnpm), so this state's
+    // options are wired into a directly-constructed component below - AND mirrored
+    // into `package.json` (`workspaces`/`catalog`) for bun to read. The
+    // `pnpm-workspace.yaml` is still emitted for the Databricks Apps pnpm install.
     const pnpmWorkspace = new PnpmWorkspaceState(options);
     super({
       ...defaultProjectOptions(options),
@@ -522,7 +547,12 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
     });
 
     this.pnpmWorkspace = pnpmWorkspace;
+    // Emit `pnpm-workspace.yaml` ourselves: under bun projen skips the native
+    // component, but the file is still required by the Databricks Apps platform
+    // (its build phase installs with pnpm and reads catalog + `allowBuilds`).
+    pnpmWorkspace.attachWorkspaceFile(this);
     this.scope = scope;
+    this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     initProject(this, options);
   }
@@ -531,7 +561,8 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
     super.preSynthesize();
     // Members come from the attached subprojects, which the root's scan appends
     // after construction - so the list is filled here, not in the constructor.
-    this.pnpmWorkspace?.resolveMembers(this);
+    // `extraWorkspaceMembers` adds self-synthesizing siblings (e.g. `projen/`).
+    this.pnpmWorkspace?.resolveMembers(this, this.extraWorkspaceMembers);
     preSynthesizeProject(this);
   }
 }
@@ -588,8 +619,19 @@ export class DBXToolsTypeScriptProject
       "./package.json": "./package.json",
     });
     addPackageFiles(this, "index.ts", "src");
-    this.testTask.exec("tsx --test 'test/**/*.test.ts'");
-    if (options.viteConfig ?? false) new ViteConfigFile(this);
+    // `bun test` intercepts `node:test` (the suites keep using node:test) and
+    // runs it with bun's own fast runner. Args are FILTERS, not globs; a bare
+    // directory auto-discovers `*.test.ts` recursively. But `bun test` EXITS 1
+    // when it matches no files (unlike the old `tsx --test 'glob'`, which was a
+    // no-op), so guard it: only invoke when a `*.test.ts` exists, else succeed.
+    this.testTask.exec(
+      'find test -name "*.test.ts" 2>/dev/null | grep -q . && bun test test || true',
+    );
+    if (options.bunApp ?? false) {
+      new BunfigFile(this);
+      new BunDevServerFile(this);
+      new BunBuildFile(this);
+    }
     initProject(this, options);
   }
 
@@ -746,16 +788,17 @@ function registerRootTasks(project: javascript.NodeProject): void {
 }
 
 /**
- * `tsx node_modules/@dbx-tools/projen/tasks/<script>` command for a projen task.
+ * `bun node_modules/@dbx-tools/projen/tasks/<script>` command for a projen task.
  *
- * Use the stable package symlink, never `require.resolve()`'s physical pnpm
- * store path. A later install can change the peer-hash directory while leaving
- * the package symlink valid; persisting the physical path made every generated
- * task fail with ERR_MODULE_NOT_FOUND after such an update.
+ * Use the stable package symlink, never `require.resolve()`'s physical store
+ * path. A later install can change the peer-hash directory while leaving the
+ * package symlink valid; persisting the physical path made every generated task
+ * fail with ERR_MODULE_NOT_FOUND after such an update. bun runs the `.ts`
+ * directly (no tsx, no build step).
  */
 export function taskScript(_project: javascript.NodeProject, script: string, args = ""): string {
   const scriptPath = toPosix(join("node_modules", "@dbx-tools", "projen", "tasks", script));
-  return args ? `tsx ${scriptPath} ${args}` : `tsx ${scriptPath}`;
+  return args ? `bun ${scriptPath} ${args}` : `bun ${scriptPath}`;
 }
 
 /**
@@ -788,20 +831,21 @@ function initProject(
   project.package.file.readonly = false;
 
   // NodeProject has no built-in TS projenrc support (unlike TypeScriptProject), so
-  // wire `.projenrc.ts` through the tsx runner - this also populates the `default`
-  // task that `pnpm exec projen` runs (and that the `sync` watcher invokes to re-synth).
+  // wire `.projenrc.ts` through a runner - this also populates the `default` task
+  // that `bunx projen` runs (and that the `sync` watcher invokes to re-synth).
+  // The runner choice is immaterial since the exec is reset to plain `bun` below;
+  // `nodejs()` avoids declaring a `ts-node`/`tsx` dependency.
   new typescript.ProjenrcTs(project, {
-    runner: typescript.TypeScriptRunner.tsx(),
+    runner: typescript.TypeScriptRunner.nodejs(),
   });
-  // ProjenrcTs wraps that step in `npx -y -p tsx -c "tsx .projenrc.ts"` because the
-  // tsx runner declares a `tsx` dependency (so it runs even uninstalled). tsx IS a
-  // devDep here, so that wrapper is not merely redundant but harmful: `npx -c` exports
-  // `npm_config_call="tsx .projenrc.ts"` into the environment, which every nested
-  // `pnpm` inherits and then dies on ("Failed parsing JSON config key call"), failing
-  // each subproject's post-synth install; the same `npx`/`npm` process also emits the
-  // "Unknown env config" warnings for pnpm's `catalog`/`@jsr:registry`/etc. Reset to a
-  // plain exec (tsx resolves from `node_modules/.bin`, which pnpm puts on PATH).
-  project.defaultTask?.reset("tsx .projenrc.ts");
+  // bun runs `.projenrc.ts` directly (native TS, no loader to register). Reset to
+  // a plain `bun` exec rather than any wrapper: the default task is spawned by
+  // nested installs/synths, and a wrapper that exported `npm_config_*` broke them.
+  project.defaultTask?.reset("bun .projenrc.ts");
+
+  // Pin bun's hoisted linker workspace-wide (see RootBunfigFile) so a peer dep
+  // resolves to one copy and singletons/types stay coherent.
+  new RootBunfigFile(project);
 
   // Only reached on a ROOT (early-returned above otherwise), so the root devDeps
   // always apply; the self-dep is added only when the engine is an installed pkg.
@@ -864,11 +908,12 @@ function initProject(
     eslint.addIgnorePattern(`${root}/openapi/**`);
     eslint.addIgnorePattern(`${root}/**/index.ts`);
   }
-  eslint.addIgnorePattern("**/vite.config.ts");
-  // The unmanaged vite overrides live at the package root, outside any `src/**`
-  // tsconfig include, so the type-aware parser cannot resolve them to a project.
-  // They are hand-authored (not generated), but ESLint still cannot parse them.
-  for (const override of DEFAULT_VITE_OVERRIDES) {
+  // The generated bun app scripts + unmanaged overrides live at the package root,
+  // outside any `src/**` tsconfig include, so the type-aware parser cannot resolve
+  // them to a project. ESLint still cannot parse them.
+  eslint.addIgnorePattern("**/dev.ts");
+  eslint.addIgnorePattern("**/build.ts");
+  for (const override of BUN_APP_OVERRIDES) {
     eslint.addIgnorePattern(`**/${override}`);
   }
   // Codegen packages declare `codegen.inputs` via mixins after construction; ignore

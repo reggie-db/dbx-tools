@@ -4,13 +4,13 @@
  * This project is intentionally a VANILLA projen `TypeScriptProject` - it does
  * NOT build on the dbx-tools engine it ships (no self-hosting), so it can be
  * synthesized and edited without the bootstrap cycle that dogfooding created.
- * It lives inside the repo but is NOT a member of the root pnpm workspace; the
- * root links to it (see the repo `.pnpmfile.cjs` / `pnpm-workspace.yaml`).
+ * It lives inside the repo AND is now a member of the single bun workspace (the
+ * root lists `projen` via `extraWorkspaceMembers`, since this project synthesizes
+ * ITSELF and is not a root subproject).
  *
  * The engine imports three `@dbx-tools/*` utility packages at runtime
- * (`shared-core`, `node-core`, `node-path`). They are resolved to local source
- * under `../packages/` by this project's `.pnpmfile.cjs`, so they stay listed
- * here as plain (registry-shaped) dependencies.
+ * (`shared-core`, `node-core`, `node-path`). As workspace siblings they are
+ * declared `workspace:*` and bun links them from local source - no `.pnpmfile.cjs`.
  */
 import { readFileSync } from "node:fs";
 import { javascript, typescript } from "projen";
@@ -31,23 +31,16 @@ const PACKAGE_VERSION =
 const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",
   defaultReleaseBranch: "main",
-  packageManager: NodePackageManager.PNPM,
-  // Keep this standalone project from being absorbed into the parent pnpm
-  // workspace. A non-empty native workspace schema forces projen to emit the
-  // local marker, so installs load `projen/.pnpmfile.cjs` and link the current
-  // `@dbx-tools/*` sources instead of stale registry copies.
-  pnpmOptions: {
-    workspaceYamlOptions: {
-      catalogMode: "manual",
-    },
-  },
-  // The projenrc runner is wired to tsx below (not projen's default ts-node).
-  // This package is `type: module`, and `.projenrc.ts` does a directory import
-  // (`projen/lib/javascript`) that Node's ESM loader rejects under ts-node
-  // ("Directory import ... is not supported"); tsx resolves it fine.
+  // A member of the single bun workspace. No nested `pnpm-workspace.yaml` marker
+  // (that was only to isolate the old standalone workspace); bun resolves the
+  // `workspace:*` sibling deps from the root install.
+  packageManager: NodePackageManager.BUN,
+  // The projenrc runner is reset to `bun` below (bun runs `.ts` directly). This
+  // package is `type: module` and `.projenrc.ts` does a directory import
+  // (`projen/lib/javascript`); bun resolves it fine.
   projenrcTs: false,
   typescriptVersion: "^5.9.3",
-  // Consumed as TypeScript source via tsx (its `main`/`exports` point at .ts),
+  // Consumed as TypeScript source via bun (its `main`/`exports` point at .ts),
   // so there is no build/emit step to wire and no jest/eslint ceremony.
   sampleCode: false,
   jest: false,
@@ -84,14 +77,13 @@ const project = new typescript.TypeScriptProject({
   },
   deps: [
     "@clack/prompts@^1.7.0",
-    // A REAL published range, never `*`. In-repo these three resolve through
-    // `.pnpmfile.cjs` to `link:../packages/...`, so the range is inert here - but
-    // it ships verbatim in the tarball. The shared root bump stamps
-    // PACKAGE_VERSION and these ranges together, so the engine cannot resolve
-    // an older sibling implementation than the release it was built against.
-    `@dbx-tools/core@^${PACKAGE_VERSION}`,
-    `@dbx-tools/path@^${PACKAGE_VERSION}`,
-    `@dbx-tools/shared-core@^${PACKAGE_VERSION}`,
+    // `workspace:*` now that `projen/` is a MEMBER of the single bun workspace:
+    // bun links these three from local source and rewrites them to the real
+    // published range at publish time (the shared root bump stamps that version),
+    // so the engine still cannot resolve an older sibling than it was built with.
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/path@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
     "commander@^15.0.0",
     // `tasks/sync.ts` imports this to fan the watchers out. It resolved here only
     // because the repo root happens to depend on it; a consumer install has no
@@ -103,7 +95,6 @@ const project = new typescript.TypeScriptProject({
     "oxc-parser@^0.90.0",
     "projen@^0.101.16",
     "ts-to-zod@^5.1.0",
-    "tsx@^4.23.0",
     "yaml@^2.9.0",
   ],
   devDeps: [
@@ -125,14 +116,6 @@ const project = new typescript.TypeScriptProject({
 // generated manifest field explicitly.
 project.package.addField("version", PACKAGE_VERSION);
 
-// projen 0.101's pnpm schema predates `allowBuilds`, but pnpm 10.33 only
-// honors this map (not `onlyBuiltDependencies`). Override the generated
-// top-level key directly; `esbuild` has no dots and this standalone marker has
-// no `packages` ordering concern, so neither addOverride hazard applies.
-const workspaceFile = project.files.find((file) => file.path === "pnpm-workspace.yaml");
-if (!workspaceFile) throw new Error("pnpm-workspace.yaml component is missing");
-workspaceFile.addOverride("allowBuilds", { esbuild: true });
-
 // This package is consumed as TS source; publish the source subpaths, not a
 // compiled `lib/`.
 project.package.addField("type", "module");
@@ -153,40 +136,25 @@ project.package.addField("exports", {
 // `./src/barrels` and synth dies with ERR_MODULE_NOT_FOUND.
 project.package.addField("files", ["index.ts", "src", "tasks"]);
 
-// Track the hand-authored files projen's default dotfile ignore would drop:
-// the pnpm workspace root marker (keeps this project isolated from the parent
-// workspace) and the util-dep link hook.
-project.gitignore.include(".pnpmfile.cjs", "pnpm-workspace.yaml");
-
-// ...but keep those local-dev-only files OUT of the published tarball: the link
-// hook would misresolve deps for a real npm consumer, and the workspace marker
-// is meaningless downstream.
-project.npmignore?.exclude(
-  ".pnpmfile.cjs",
-  "pnpm-workspace.yaml",
-  ".projenrc.ts",
-  "projenrc/",
-);
+// Keep `.projenrc.ts`/`projenrc/` out of the published tarball.
+project.npmignore?.exclude(".projenrc.ts", "projenrc/");
 
 // `projen bump`: compute the next `projen-v*` version (from the higher of the
 // latest remote tag and the local package.json), then commit, tag, and push -
 // which triggers `projen-release`. Each step is toggleable via `--no-*`
-// (e.g. `pnpm bump --level minor --no-publish` to bump + tag without pushing).
+// (e.g. `bun run bump --level minor --no-publish` to bump + tag without pushing).
 project.addTask("bump", {
-  exec: `tsx tasks/bump.ts --prefix ${RELEASE_TAG_PREFIX}`,
+  exec: `bun tasks/bump.ts --prefix ${RELEASE_TAG_PREFIX}`,
   receiveArgs: true,
   description: "Bump the release version (default patch), then commit, tag, and push it",
 });
 
-// Run `.projenrc.ts` through tsx instead of projen's default ts-node (see the
-// `projenrcTs: false` note above). tsx is already a devDep, so reset the default
-// task to a plain `tsx .projenrc.ts` exec - NOT the `npx -y -p tsx -c "..."`
-// wrapper `ProjenrcTs` emits (that exports `npm_config_call` into every nested
-// pnpm, which then dies parsing it). Same approach the engine uses on consumers.
-new typescript.ProjenrcTs(project, { runner: typescript.TypeScriptRunner.tsx() });
-project.defaultTask?.reset("tsx .projenrc.ts");
+// Run `.projenrc.ts` through bun (bun runs `.ts` directly). `nodejs()` runner
+// declares no ts-node/tsx dep; the exec is reset to a plain `bun` below.
+new typescript.ProjenrcTs(project, { runner: typescript.TypeScriptRunner.nodejs() });
+project.defaultTask?.reset("bun .projenrc.ts");
 project.addTask("demo", {
-  exec: `tsx tasks/demo.ts`,
+  exec: `bun tasks/demo.ts`,
   description: "Run the demo",
 });
 project.synth();

@@ -44,13 +44,17 @@ describe("local-path home expansion", () => {
 });
 
 describe("LocalFileSystem home roots", () => {
-  it("accepts ~ roots via HOME", async () => {
+  it("accepts ~ roots via an overridden home", async () => {
     const home = await mkdtemp(path.join(tmpdir(), "dbx-local-home-"));
     const previous = process.env.HOME;
     process.env.HOME = home;
     clearOsPathsCache();
     try {
-      const fs = new LocalFileSystem({ root: "~/app-data" });
+      // Inject `homeDir` rather than relying on `process.env.HOME` alone: home
+      // resolution consults `os.homedir()` FIRST (a pinned contract), and bun's
+      // `os.homedir()` - unlike Node's - ignores a process-set `HOME`, so an
+      // env-only override would not take on bun. `homeDir` overrides both.
+      const fs = new LocalFileSystem({ root: "~/app-data", os: { homeDir: () => home } });
       await fs.init();
       assert.equal(fs.root, path.resolve(home, "app-data").replace(/\\/g, "/"));
       await fs.writeFile("note.txt", "hi");

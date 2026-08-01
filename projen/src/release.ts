@@ -11,7 +11,44 @@ import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
 
 const NODE_VERSION = "lts/*";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
-const PNPM_VERSION = "10.33.0";
+const BUN_VERSION = "1.3.14";
+
+/**
+ * The `release` workflow's version-stamp + publish step, as a shell script.
+ *
+ * Bun has no `pnpm -r publish` equivalent, so this drives the engine's
+ * `tasks/publish.ts` (shipped in the engine tarball, run via bun): it reads the
+ * workspace members from the root `package.json`, stamps the tag version onto
+ * every manifest (rewriting `@dbx-tools/*` `workspace:*` sibling deps to
+ * `^<version>` so the tarballs resolve each other), then `bun publish`es each
+ * non-`private` package. `bun publish` substitutes `publishConfig` (the compiled
+ * `lib/` entry points) at pack time, runs `prepack` (compile) so `lib/` exists,
+ * and honors `NPM_CONFIG_PROVENANCE`.
+ *
+ * Two ways in: a pushed `<prefix>*` tag (the real release - `GITHUB_REF_NAME` is
+ * the version) and a manual `workflow_dispatch` (no tag, so a throwaway
+ * `0.0.0-dry.<run>` version is used and `--dry-run` is FORCED regardless of the
+ * input, since a dispatch never has a tag to publish as). The `dry_run` input
+ * (default true) is what lets a maintainer exercise the whole workflow - setup,
+ * install, stamp, compile, pack, validate - with nothing reaching npm.
+ */
+function BUN_PUBLISH_SCRIPT(tagPrefix: string, excludeDirs: readonly string[]): string {
+  const script = "node_modules/@dbx-tools/projen/tasks/publish.ts";
+  const excludes = excludeDirs.map((dir) => ` --exclude ${dir}`).join("");
+  return [
+    'if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then',
+    // A manual run has no tag: use a throwaway version and never really publish.
+    '  VERSION="0.0.0-dry.${GITHUB_RUN_NUMBER}"',
+    "  DRY_RUN=--dry-run",
+    "else",
+    `  VERSION="\${GITHUB_REF_NAME#${tagPrefix}}"`,
+    // A tag push honors the input too, so a dry-run tag can be tested if wanted.
+    '  DRY_RUN="${DRY_RUN_INPUT}"',
+    "fi",
+    "chmod -R u+w . || true",
+    `bun ${script} "$VERSION"${excludes} $DRY_RUN`,
+  ].join("\n");
+}
 
 interface PublishWorkflow {
   readonly name: string;
@@ -24,17 +61,18 @@ interface PublishWorkflow {
 function publishSetupSteps(): JobStep[] {
   return [
     { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
-    { name: "Setup pnpm", uses: "pnpm/action-setup@v5", with: { version: PNPM_VERSION } },
+    { name: "Setup Bun", uses: "oven-sh/setup-bun@v2", with: { "bun-version": BUN_VERSION } },
     {
       name: "Setup Node.js",
       uses: "actions/setup-node@v6",
       // setup-node writes the temporary npmrc that maps NODE_AUTH_TOKEN onto
       // npmjs. Omitting this leaves the secret in the environment but gives npm
       // no registry-scoped auth entry, and every publish fails with ENEEDAUTH.
+      // (Bun installs deps; publishing still goes through `npm publish`.)
       with: { "node-version": NODE_VERSION, "registry-url": NPM_REGISTRY_URL },
     },
-    // The lockfile is intentionally untracked and may be absent or stale in CI.
-    { name: "Install", run: "pnpm install --no-frozen-lockfile" },
+    // Bun's install; the lockfile may be absent or stale in CI so it is not frozen.
+    { name: "Install", run: "bun install" },
   ];
 }
 
@@ -160,12 +198,30 @@ export class DBXToolsRelease extends Component {
     // the publish job below overrides it with the `id-token` it needs.
     workflow.file?.addOverride("permissions", { contents: "read" });
     workflow.on({ push: { tags: [`${tagPrefix}*`] } });
+    // Manual trigger for testing the workflow WITHOUT reaching npm: a
+    // `workflow_dispatch` run has no tag, so the publish script forces
+    // `--dry-run` (pack + validate only). The `dry_run` input (default true)
+    // additionally lets a tag push be dry-run on demand.
+    workflow.file?.addOverride("on.workflow_dispatch", {
+      inputs: {
+        dry_run: {
+          description: "Pack and validate but do not upload to npm",
+          type: "boolean",
+          default: true,
+        },
+      },
+    });
     workflow.addJob("publish", {
       runsOn: ["ubuntu-latest"],
       // `id-token: write` lets npm mint the OIDC token for provenance attestation.
       permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
       timeoutMinutes: 30,
-      env: { CI: "true" },
+      // `DRY_RUN_INPUT` is `--dry-run` when the dispatch input is true, else empty;
+      // the publish script also FORCES it on any `workflow_dispatch` run.
+      env: {
+        CI: "true",
+        DRY_RUN_INPUT: "${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}",
+      },
       steps: [...publishSetupSteps(), ...steps],
       ...(workingDirectory ? { defaults: { run: { workingDirectory } } } : {}),
     });
@@ -182,26 +238,25 @@ export class DBXToolsRelease extends Component {
       name: "release",
       tagPrefix: this.tagPrefix,
       steps: [
-        // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Set it on
-        // every package (manifests are projen-readonly, so unlock them first).
+        // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Stamp it on
+        // every workspace package (manifests are projen-readonly, so unlock
+        // first), rewriting `workspace:*` sibling deps to `^<version>` so the
+        // published tarballs resolve each other. `bun publish` honors
+        // `publishConfig` (compiled `lib/` entry points) and provenance.
         {
-          name: "Set version from tag",
-          run: [
-            `VERSION="\${GITHUB_REF_NAME#${this.tagPrefix}}"`,
-            "chmod -R u+w . || true",
-            'pnpm -r exec npm version "$VERSION" --no-git-tag-version --allow-same-version',
-          ].join("\n"),
-        },
-        {
-          name: "Publish to npm",
-          // `pnpm -r publish` publishes every non-private package,
-          // rewriting `workspace:*` deps to the published version. Provenance is
-          // opt-in (omitted from each package's `publishConfig` so local
-          // publishes work); CI turns it on here via `npm_config_provenance`.
-          run: "pnpm -r publish --no-git-checks --access public",
+          name: "Set version from tag and publish",
+          // Exclude every standalone-release dir (e.g. `projen`): it publishes on
+          // its own `<prefix>-v*` tag via its own workflow, not the main `v*` one.
+          run: BUN_PUBLISH_SCRIPT(
+            this.tagPrefix,
+            this.standaloneReleases.map((s) => s.directory),
+          ),
           env: {
+            // `bun publish` authenticates via NPM_CONFIG_TOKEN (not NODE_AUTH_TOKEN,
+            // which is the `npm publish` convention). Set both so either tool works.
+            NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
             NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
-            npm_config_provenance: "true",
+            NPM_CONFIG_PROVENANCE: "true",
           },
         },
       ],
@@ -210,34 +265,55 @@ export class DBXToolsRelease extends Component {
 
   /**
    * Emit a {@link StandaloneRelease}'s workflow: push `<prefix>1.2.3` and the
-   * single package in `directory` (a non-workspace-member project) is published
-   * at 1.2.3 via `npm pack` + `npm publish`. Its `package.json` is
-   * projen-generated read-only, so it is unlocked before `npm version` rewrites
-   * it. No bump math - the pushed tag IS the published version.
+   * single package in `directory` is published at 1.2.3 via `bun publish`.
+   *
+   * `directory` (e.g. `projen/`) is a WORKSPACE MEMBER whose `@dbx-tools/*` deps
+   * are `workspace:*`. `bun publish` resolves those to whatever version its
+   * SIBLINGS carry (via the lockfile), so before publishing we set the version on
+   * the package AND its in-scope siblings, then refresh the lockfile - otherwise
+   * the published engine would depend on the siblings' on-disk `0.0.0`. The
+   * `Install` step already ran `bun install` from the repo root (the member
+   * subdir walks up to it), so the workspace is linked. The manifests are
+   * projen-readonly, hence the `chmod`. A manual `workflow_dispatch` run has no
+   * tag, so it uses a throwaway version and forces `--dry-run` (nothing to npm).
    */
   private authorStandaloneReleaseWorkflow(
     project: DBXToolsNodeProject,
     { name, directory, tagPrefix }: StandaloneRelease,
   ): void {
+    // The engine's release also stamps its in-scope siblings so `bun publish`
+    // resolves their `workspace:*` to the release version. Stamping the WHOLE
+    // workspace is simplest and harmless (only `directory` is published here).
+    const stampScript = "node_modules/@dbx-tools/projen/tasks/publish.ts";
     this.authorPublishWorkflow(project, {
       name,
       tagPrefix,
-      workingDirectory: directory,
       steps: [
-        // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. package.json
-        // is projen-generated read-only, so unlock it before `npm version` writes.
         {
-          name: "Set version from tag",
+          name: "Set version from tag and publish",
           run: [
-            "chmod u+w package.json",
-            `npm version "\${GITHUB_REF_NAME#${tagPrefix}}" --no-git-tag-version --allow-same-version`,
+            'if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then',
+            '  VERSION="0.0.0-dry.${GITHUB_RUN_NUMBER}"',
+            "  DRY_RUN=--dry-run",
+            "else",
+            `  VERSION="\${GITHUB_REF_NAME#${tagPrefix}}"`,
+            '  DRY_RUN="${DRY_RUN_INPUT}"',
+            "fi",
+            "chmod -R u+w . || true",
+            // Set the version across every member + refresh the lockfile (the
+            // publish task's stamp phase), so bun resolves the engine's
+            // `workspace:*` sibling deps to the release version at pack time.
+            `bun ${stampScript} "$VERSION" --stamp-only`,
+            // Then publish ONLY the standalone directory.
+            `cd ${directory} && bun publish --access public $DRY_RUN`,
           ].join("\n"),
-        },
-        { name: "Pack", run: "pnpm pack --pack-destination dist/js" },
-        {
-          name: "Publish to npm",
-          run: "npm publish dist/js/*.tgz --access public",
-          env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
+          env: {
+            // `bun publish` authenticates via NPM_CONFIG_TOKEN (not NODE_AUTH_TOKEN,
+            // which is the `npm publish` convention). Set both so either tool works.
+            NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
+            NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
+            NPM_CONFIG_PROVENANCE: "true",
+          },
         },
       ],
     });

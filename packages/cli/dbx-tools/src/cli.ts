@@ -10,11 +10,11 @@ import {
   runInitialSynth,
   seedToolchain,
 } from "./bootstrap.ts";
-import { ensureWorkspaceReady, runPnpm, runProjen } from "./pnpm.ts";
+import { ensureWorkspaceReady, runBun, runProjen } from "./bun.ts";
 import { findWorkspaceRoot, needsBootstrap, needsToolchain } from "./root.ts";
 
 /**
- * Prepare the workspace at `root`, then run `pnpm exec projen` with `projenArgs`.
+ * Prepare the workspace at `root`, then run projen (via bun) with `projenArgs`.
  *
  * Three cases, in order:
  *   - no `.projenrc.ts` at all -> full bootstrap (scaffold + install + synth),
@@ -36,7 +36,7 @@ async function prepareAndRunProjen(projenArgs: string[], startDir?: string): Pro
   if (needsToolchain(root)) {
     seedToolchain(root);
     runInitialSynth(root);
-    runPnpm(["install", "--no-frozen-lockfile", "--force"], root);
+    runBun(["install"], root);
     return;
   }
   ensureWorkspaceReady(root);

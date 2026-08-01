@@ -1,7 +1,7 @@
-import { SearchBox, SearchResults, useSearch } from "@dbx-tools/ui-search/react";
 import { Badge, Tabs, TabsContent, TabsList, TabsTrigger } from "@dbx-tools/ui-appkit/react";
-import { useState } from "react";
+import { SearchBox, SearchResults, useSearch } from "@dbx-tools/ui-search/react";
 import type { SearchHit } from "@dbx-tools/ui-search/react";
+import { useState } from "react";
 
 // AI Search demo over the server's `search()` plugin (@dbx-tools/search).
 //

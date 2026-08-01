@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { intro, outro } from "@clack/prompts";
 import { exec, project } from "@dbx-tools/core";
 import { json, log } from "@dbx-tools/shared-core";
-import { childEnv, resolvePnpmArgv, runPnpm } from "./pnpm.ts";
+import { childEnv, resolveBunArgv, runBun } from "./bun.ts";
 import { rootLabel } from "./root.ts";
 
 const logger = log.logger("dbx-tools:bootstrap");
@@ -25,15 +25,10 @@ const FALLBACK_PROJEN_SPECIFIER = "@dbx-tools/projen@latest";
  * the root `bump`, so the matching engine always exists on the registry.
  *
  * Not `@latest`, and not a bare `@dbx-tools/projen`. A bare specifier can land on
- * a stray `0.0.0`, whose `^0.0.0` caret then reaches no real release. `@latest`
- * has a subtler failure: pnpm 11 applies a `minimumReleaseAge` delay, so for the
- * first day after a release it deliberately resolves a dist-tag to the newest
- * version OLDER than the threshold and merely notes the newer one
- * (`+ @dbx-tools/projen 0.1.24 (0.3.42 is available)`). A bootstrap run right
- * after a release therefore installed a months-old engine against a current CLI,
- * which is how `sync --watch` died on an engine predating its `concurrently`
- * dependency. An explicit range admits only the version we want, so the age
- * heuristic has nothing older to fall back to.
+ * a stray `0.0.0`, whose `^0.0.0` caret then reaches no real release. An explicit
+ * range pinned to this CLI's own version admits only the matching engine, so the
+ * CLI and the engine it drives never drift across a release (they are cut
+ * together by the root `bump`).
  */
 function defaultProjenSpecifier(): string {
   const version = ownVersion();
@@ -92,7 +87,7 @@ export function ensureEngineCurrent(root: string): void {
   if (!expected) return;
   const installed = installedEngineVersion(root);
   if (installed && compareVersions(installed, expected) >= 0) return;
-  runPnpm(["add", "-D", defaultProjenSpecifier()], root);
+  runBun(["add", "-D", defaultProjenSpecifier()], root);
 }
 
 // Reach the class through its module NAMESPACE. Current engines also hoist it
@@ -105,26 +100,21 @@ const project = new projectApi.DBXToolsNodeProject();
 project.synth();
 `;
 
-/** Seed `pnpm-workspace.yaml` so the first \`pnpm add\` can allow esbuild non-interactively. */
-const WORKSPACE_SEED = `packages: []
-allowBuilds:
-  esbuild: true
-`;
-
 /**
- * Turn a folder into a functioning dbx-tools workspace: `pnpm init`, seed
- * `pnpm-workspace.yaml`, add `projen`/`typescript`/`tsx` + the engine package,
- * write a minimal `.projenrc.ts`, synth once (with `PROJEN_DISABLE_POST`), then
- * install. Does not run barrels - run `pnpm run barrels` or a full projen synth
- * post-install to generate package barrels.
+ * Turn a folder into a functioning dbx-tools workspace: `bun init`, seed the
+ * `package.json` workspace fields (bun reads `workspaces`/`trustedDependencies`
+ * from the manifest), add `projen`/`typescript` + the engine package, write a
+ * minimal `.projenrc.ts`, synth once (with `PROJEN_DISABLE_POST`), then install.
+ * Does not run barrels - run `bun run barrels` or a full projen synth post-install
+ * to generate package barrels.
  *
  * Every step is idempotent and self-guarded, so this is safe to run against a
  * folder that ALREADY has a hand-authored `.projenrc.ts` (and even a committed
  * `package.json`) but is missing the installed toolchain - e.g. a freshly copied
  * project whose generated files (including manifests) are gitignored. In that
- * case `pnpm init` and the `.projenrc.ts` scaffold are skipped, but the engine +
- * projen + tsx are (re)installed so the subsequent synth can regenerate
- * everything. See {@link seedToolchain}.
+ * case `bun init` and the `.projenrc.ts` scaffold are skipped, but the engine +
+ * projen are (re)installed so the subsequent synth can regenerate everything.
+ * See {@link seedToolchain}.
  */
 export function bootstrapWorkspace(
   root: string,
@@ -141,16 +131,18 @@ export function bootstrapWorkspace(
 
   runInitialSynth(root);
 
-  runPnpm(["install", "--no-frozen-lockfile", "--force"], root);
+  runBun(["install"], root);
   outro("Workspace ready - re-run dbx-tools or add packages under packages/");
 }
 
 /**
- * Install the toolchain a synth needs (`projen`, `typescript`, `tsx`, and the
- * dbx-tools engine), seeding a `package.json` and `pnpm-workspace.yaml` first
- * when absent. Idempotent: run it whenever the engine is missing, so a copied
- * project with a `.projenrc.ts` but no `node_modules`/manifests can be brought
- * up to a synth-ready state without full bootstrapping.
+ * Install the toolchain a synth needs (`projen`, `typescript`, and the dbx-tools
+ * engine), seeding a `package.json` first when absent. bun reads its workspace
+ * config (`workspaces`/`trustedDependencies`) from the manifest, so there is no
+ * separate workspace file to seed - the engine writes `pnpm-workspace.yaml` at
+ * synth for the Databricks Apps platform. Idempotent: run it whenever the engine
+ * is missing, so a copied project with a `.projenrc.ts` but no
+ * `node_modules`/manifest can be brought up to a synth-ready state.
  */
 export function seedToolchain(
   root: string,
@@ -158,13 +150,8 @@ export function seedToolchain(
 ): void {
   const manifestPath = join(root, "package.json");
   if (!existsSync(manifestPath)) {
-    runPnpm(["init"], root);
+    runBun(["init", "-y"], root);
     normalizeSeedManifest(manifestPath);
-  }
-
-  const workspaceFile = join(root, "pnpm-workspace.yaml");
-  if (!existsSync(workspaceFile)) {
-    writeFileSync(workspaceFile, WORKSPACE_SEED);
   }
 
   seedRegistry(root);
@@ -176,31 +163,21 @@ export function seedToolchain(
   }).stdout;
   logger.info("seeding toolchain", {
     node: process.version,
+    bun: process.versions.bun,
     platform: process.platform,
     arch: process.arch,
     kernelArch: kernelArch || "unknown",
     engine: projenSpecifier,
   });
-  runPnpm(
-    [
-      "add",
-      "--reporter=append-only",
-      "-D",
-      "projen",
-      "typescript@^5.9.3",
-      "tsx@^4.23.0",
-      projenSpecifier,
-    ],
-    root,
-  );
+  runBun(["add", "-D", "projen", "typescript@^5.9.3", "@types/bun", projenSpecifier], root);
 }
 
 /**
  * Pin a non-default registry into the new root's `.npmrc`.
  *
- * The CLI already forces `--registry` onto the pnpm invocations it makes itself,
- * but a bootstrapped workspace outlives this process: every later `pnpm install`
- * the developer (or projen's post-synth step) runs is on its own. pnpm ignores
+ * The CLI already forces `--registry` onto the bun invocations it makes itself,
+ * but a bootstrapped workspace outlives this process: every later `bun install`
+ * the developer (or projen's post-synth step) runs is on its own. bun ignores
  * `npm_config_registry` from the environment, so without a file on disk those
  * runs revert to `https://registry.npmjs.org/` - which is a hard failure where
  * the custom registry was the only reachable one.
@@ -217,44 +194,36 @@ function seedRegistry(root: string): void {
 }
 
 /**
- * Make what `pnpm init` produced safe to synth against. Two corrections, both
- * because that output varies by pnpm version:
- *
- *   - drop `devEngines`, which pnpm 11 seeds as `packageManager: { name: "pnpm",
- *     onFail: "download" }`. Any npm-based tool later in the chain (an
- *     `npx`/dlx fallback) then refuses with EBADDEVENGINES, its runner being npm;
- *   - force `type: "module"`, which pnpm 11 writes and pnpm 10 does not. tsx
- *     picks the entry's format from the nearest manifest, so without it
- *     `.projenrc.ts` loads as CJS and the first dependency using top-level await
- *     dies on "not supported with the cjs output format".
- *
- * projen regenerates the whole manifest at synth, so this only has to hold the
- * seed together long enough to get there.
+ * Make what `bun init` produced safe to synth against: force `type: "module"`
+ * (bun runs `.projenrc.ts` fine either way, but projen's ESM sources and the
+ * emitted config assume module type) and drop any `packageManager`/`devEngines`
+ * field that would pin a different manager. projen regenerates the whole manifest
+ * at synth, so this only has to hold the seed together long enough to get there.
  */
 function normalizeSeedManifest(manifestPath: string): void {
   try {
     const manifest = json.parseRecord(readFileSync(manifestPath, "utf8"));
     if (!manifest) return;
     delete manifest.devEngines;
+    delete manifest.packageManager;
     manifest.type = "module";
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   } catch {
-    // A malformed/absent manifest here just means the later `pnpm add` recreates it.
+    // A malformed/absent manifest here just means the later `bun add` recreates it.
   }
 }
 
 /**
- * Run the initial synth by executing `.projenrc.ts` directly with tsx (with
+ * Run the initial synth by executing `.projenrc.ts` directly with bun (with
  * `PROJEN_DISABLE_POST` set), NOT `projen <task>`. Use right after seeding a
  * fresh workspace: the projen TASKS (`sync`, `barrels`, ...) only exist once
  * `.projenrc.ts` has run once, so `projen sync` can't be the bootstrapping step.
  */
 export function runInitialSynth(root: string): void {
-  const [command, ...prefix] = resolvePnpmArgv();
-  // No `--registry` here: this is `pnpm exec`, whose trailing arguments belong to
-  // tsx. The registry reaches anything nested through `childEnv` and the seeded
-  // `.npmrc` instead.
-  exec.spawnSync(command, [...prefix, "exec", "tsx", ".projenrc.ts"], {
+  const [command, ...prefix] = resolveBunArgv();
+  // bun runs the `.ts` directly. The registry reaches anything nested through
+  // `childEnv` and the seeded `.npmrc`.
+  exec.spawnSync(command, [...prefix, ".projenrc.ts"], {
     cwd: root,
     env: childEnv({ PROJEN_DISABLE_POST: "true" }),
     check: true,

@@ -117,7 +117,7 @@ Primary package areas:
   `AdaptiveCardGallery` built on the `adaptivecards` JS renderer (which ships no
   markdown parser — `ui-teams` installs `marked` as its `onProcessMarkdown`).
   Same add-on shape as node-email.
-- `packages/ui/appkit` — AppKit UI/Tailwind/Vite foundation used by feature UI
+- `packages/ui/appkit` — AppKit UI/Tailwind foundation used by feature UI
   packages.
 - `packages/node/databricks` and `packages/node/databricks-zerobus` —
   workspace/cloud/Zerobus infrastructure helpers.
@@ -165,7 +165,7 @@ Package README rules:
 - Keep browser-safe shared packages framed as contracts/schemas/types, and Node
   packages framed as runtime behavior.
 - For UI packages, document public subpaths such as `@dbx-tools/ui-mastra/react`
-  or `@dbx-tools/ui-appkit/vite`; do not use generated package-root namespaces
+  or `@dbx-tools/ui-appkit/styles.css`; do not use generated package-root namespaces
   unless the package export map exposes them.
 - Do not publicly mention any predecessor repo, branch, or migration source.
 
@@ -346,23 +346,23 @@ utility is an invisible one.
 
 ## Formatting and diff hygiene
 
-`pnpm run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
+`bun run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
 does not exclude `packages/`. Some committed files predate the current
 `printWidth: 100` and were never reformatted, so a repo-wide run rewraps them and
 churns dozens of lines that have nothing to do with your change.
 
-Prefer `pnpm exec prettier --write <the files you edited>`. Run the repo-wide
+Prefer `bun exec prettier --write <the files you edited>`. Run the repo-wide
 `format` task only when reformatting the repo IS the change. Either way, check
 `git status` / `git diff --stat` before finishing and revert files you did not
 mean to touch, so a behavior change is not buried in reflowed whitespace.
 
-Lint is `pnpm run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
+Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
 over `packages`). It autofixes, so it can reformat too.
 
 ## Vocabulary (important)
 
 - **tag** — a label a package carries (Bit-style; it names the target
-  _environment_ — React/Vite, Node, agnostic, …). A package can carry MANY tags,
+  _environment_ — React/Bun, Node, agnostic, …). A package can carry MANY tags,
   or none. Tags are NOT npm scopes. They come from three sources, unioned and
   deduped: (1) tags already on a project you attached yourself, (2) matches in
   `packageTagPaths`, (3) the cumulative dash-join of the folder's path
@@ -377,9 +377,8 @@ over `packages`). It autofixes, so it can reformat too.
 - **`new DBXToolsNodeProject(options?)` gives you a configured monorepo root**
   (`project.ts`). It extends projen's `NodeProject`, merging its opinionated
   defaults (`defaultNodeProjectOptions`/`defaultTypeScriptProjectOptions`, root-aware
-  functions keyed off `options.parent`: pnpm, no jest/eslint/github/release/depsUpgrade,
-  no `devEngines.packageManager`, since pnpm 11 errors if that and
-  `packageManager` are both set; projen's built-in prettier runs on the ROOT only)
+  functions keyed off `options.parent`: bun, no jest/eslint/github/release/depsUpgrade;
+  projen's built-in prettier runs on the ROOT only)
   under anything you pass. You then call
   `project.synth()` yourself. A normal consuming `.projenrc.ts` is two lines:
   `const project = new DBXToolsNodeProject(); project.synth();`. The barrel
@@ -402,10 +401,13 @@ over `packages`). It autofixes, so it can reformat too.
   `addCatalog`/`allowBuild`; ROOT-only, so `undefined` on a child).
   Reach those fields directly (`project.dbxToolsConfig.tags.push(...)`), not
   via delegator methods on the project.
-- **`pnpm-workspace.yaml` is the source of truth**, and projen's OWN
-  `javascript.PnpmWorkspaceYaml` writes it — `NodePackage` creates that component
-  for every pnpm project, so the engine adds no file of its own. What the engine
-  supplies is the OPTIONS object it renders, via
+- **`pnpm-workspace.yaml` is GENERATED and committed but ONLY for the Databricks Apps
+  deploy path.** The engine writes it directly (projen skips its native component
+  under bun) and it exists so the platform's pnpm build phase reads `packages` +
+  `catalog` + `allowBuilds` from it. The same catalog + members + build-allowances
+  are mirrored into the root `package.json` (`workspaces`/`catalog`/`trustedDependencies`)
+  for bun. A `catalog:` specifier resolves under BOTH managers.
+  What the engine supplies is the OPTIONS object it renders, via
   `pnpmOptions.workspaceYamlOptions`; `PnpmWorkspaceState` (`pnpm-workspace.ts`)
   holds that object and is exposed as the root's `project.pnpmWorkspace` field.
   The root scans the filesystem ONCE at synth (under each `packageRoots`
@@ -480,8 +482,9 @@ over `packages`). It autofixes, so it can reformat too.
   the agnostic tsconfig floor (`AGNOSTIC_COMPILER_OPTIONS`: ES2022, no DOM/node) at
   construction; the class then points `main`/`types`/`exports` at the package-root
   `index.ts` barrel, applies any explicit `tasks`, optionally emits
-  `vite.config.ts`, and locks `package.json`. Per-tag deps/tsconfig/tasks are
-  layered afterward by the tag MIXINS the root applies (see below).
+  `dev.ts`/`build.ts` (for `app` tag) or `bunfig.toml`, and locks `package.json`.
+  Per-tag deps/tsconfig/tasks are layered afterward by the tag MIXINS the root
+  applies (see below).
   projen OWNS that package's `package.json`/`tsconfig.json`/tasks/`README.md`/
   `.projen/`; baseline projen features are off to match the root (`SUBPROJECT_
 DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
@@ -492,8 +495,9 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   generated tsconfig via `applyCompilerOptions` (projen enums, e.g.
   `TypeScriptJsxMode.REACT_JSX`) — layered over the `AGNOSTIC_COMPILER_OPTIONS`
   floor so tag `lib`/`jsx`/`types`/`target` win. Some also `applyTasks` / emit
-  `vite.config.ts`:
-  - `ui` → Vite/React (DOM + `vite/client` types, jsx, `vite.config.ts`)
+  dev/build toolchain:
+  - `app` → Bun app (DOM + `@types/bun`, jsx, `dev.ts` + `build.ts` + `bunfig.toml` for Bun.serve dev + Bun.build, Tailwind via bun-plugin-tailwind)
+  - `ui` → React component library (DOM + jsx, no bundler)
   - `server` → Node (`@types/node`, `tsoa` + `experimentalDecorators`, no DOM)
   - `node` → Node (`@types/node`, no DOM)
   - `cli` → Node + `commander` + `@clack/prompts` (no `tsx`: the published bin is
@@ -559,9 +563,9 @@ packages/
     index.ts                              # generated barrel (public API surface)
     src/
       bootstrap.ts                        # bootstraps a COMPLETELY EMPTY folder (see Commands)
-      cli.ts, pnpm.ts, root.ts            # CLI runtime helpers (bin/pnpm resolution, root init)
+      cli.ts, bun.ts, root.ts             # CLI runtime helpers (bin/bun resolution, root init)
   openapi/<name>/                        # generated from tsoa controllers, same root as the source
-projen/                                   # the projen engine (`@dbx-tools/projen`), top-level, NOT a workspace member
+projen/                                   # the projen engine (`@dbx-tools/projen`), a workspace member via extraWorkspaceMembers
   index.ts                                # generated barrel (public API surface)
   src/
     project.ts                            # DBXToolsProject + DBXToolsNode/TypeScriptProject + PackageIdentifier/naming, applyToProjects, applyCompilerOptions/applyTasks, SHARED_COMPILER_OPTIONS, root init
@@ -577,37 +581,67 @@ projen/                                   # the projen engine (`@dbx-tools/proje
     release.ts                            # DBXToolsRelease: bump task + tag-driven publish workflow
     publish.ts                            # compiled publish surface: publishConfig + rootDir/prepack wiring (publishesCompiled excludes `ui`)
     openapi.ts                            # openapi generator (tsoa controllers -> spec + client)
-    clean.ts, generated.ts, tsconfig.ts, vite.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
+    clean.ts, generated.ts, tsconfig.ts, bun-app.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
   tasks/                                  # projen task scripts (bump, sync, barrels, openapi, projenrc, clean, emit)
 example-packages/
-  cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ ui/app/   # seed examples, each a real subproject
+  cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ app/appkit/   # seed examples, each a real subproject
 ```
+
+## Package manager: bun (with pnpm-workspace.yaml kept for Databricks)
+
+**bun owns install/run/build/test locally and in CI.** The engine sets
+`packageManager: BUN`, so projen renders `bun install` / `bunx projen` / `bun test`
+and a native `trustedDependencies` field. The single bun workspace has ONE
+`node_modules`, no `.pnpmfile.cjs`, and `workspace:*` sibling deps resolve from
+source with no linking hook.
+
+**`pnpm-workspace.yaml` is STILL generated and committed** - the engine writes it
+directly (projen skips its native component under bun). It is not used for local
+installs; it exists for the **Databricks Apps deploy path**, whose build phase
+installs with pnpm and reads `packages` + `catalog` + `allowBuilds` from it (see
+`research/running-bun-on-databricks-apps.md`). The same catalog + members +
+build-allowances are mirrored into the root `package.json`
+(`workspaces`/`catalog`/`trustedDependencies`) for bun. A `catalog:` specifier
+resolves under BOTH managers, so package deps are written once.
+
+**The root `bunfig.toml` pins `linker = "hoisted"` and is MANDATORY.** bun's
+default (isolated) linker instantiates a peer dependency once per peer context, so
+a package with many peers (`@mastra/*`) gets two peer-hash variants of the same
+`@mastra/core` version and TypeScript rejects passing a value built against one to
+an API typed by the other. Hoisted de-dupes to a single flat copy - the coherence
+the old cross-workspace `.pnpmfile.cjs` bridge used to provide. Do not remove it.
 
 ## Commands
 
 Everything below the install line is a projen TASK the engine registers on the
-root, so run it with `pnpm run <task>`. The `dbx-tools` CLI is NOT needed here -
+root, so run it with `bun run <task>`. The `dbx-tools` CLI is NOT needed here -
 see "The `dbx-tools` CLI" for the one case it exists for.
 
 ```sh
-pnpm install                 # link workspace + engine
-pnpm exec projen             # synth all generated config (+ install + barrels)
-pnpm run sync                # one-shot full synth through the sync task
-pnpm run sync --watch        # watch while editing (concurrently: projenrc + barrels + openapi watchers)
-pnpm run barrels             # rebuild every package's root index.ts barrel
-pnpm run openapi             # generate the openapi packages from tsoa controllers
-pnpm run clean               # remove generated files (read-only ones); interactive picker, -y to skip
-pnpm -r compile              # type-check every package (projen's per-package compile: tsc --build)
-pnpm -r --no-bail test       # run every package's node:test suite, without stopping at the first failure
-pnpm run eslint              # lint (autofix) every package under `packages`
-pnpm run format              # prettier over the WHOLE repo - see "Formatting and diff hygiene" first
+bun install                  # install the workspace (hoisted; links engine + siblings from source)
+bunx projen                  # synth all generated config (+ install + barrels)
+bun run sync                 # one-shot full synth through the sync task
+bun run sync --watch         # watch while editing (concurrently: projenrc + barrels + openapi watchers)
+bun run barrels              # rebuild every package's root index.ts barrel
+bun run openapi              # generate the openapi packages from tsoa controllers
+bun run clean                # remove generated files (read-only ones); interactive picker, -y to skip
+bun run --filter '*' compile # type-check every package (projen's per-package compile: tsc --build)
+bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
+bun run eslint               # lint (autofix) every package under `packages`
+bun run format               # prettier over the WHOLE repo - see "Formatting and diff hygiene" first
 ```
 
-A cross-package change is verified by all three of `pnpm exec projen`,
-`pnpm -r compile`, and `pnpm -r --no-bail test`: synth catches a manifest or
-barrel that no longer matches the source tree, compile catches a moved export,
-and the tests catch behavior. Use `--no-bail` so one broken package does not hide
-the state of the rest.
+A cross-package change is verified by all three of `bunx projen`,
+`bun run --filter '*' compile`, and `bun run --filter '*' test`: synth catches a
+manifest or barrel that no longer matches the source tree, compile catches a moved
+export, and the tests catch behavior.
+
+Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
+runs them with its own fast runner). The generated task is
+`find test -name '*.test.ts' | grep -q . && bun test test || true` because
+`bun test` exits non-zero when it matches no files - the guard makes a package
+with no tests a no-op. bun does NOT support `describe()` nested inside `test()`
+(bun issue #5090); keep suites flat.
 
 ## The `dbx-tools` CLI
 
@@ -617,7 +651,7 @@ toolchain installed yet, where there are no tasks to run. `dbx-tools sync`
 bootstraps that folder and then forwards to projen from then on.
 
 Inside an established workspace the CLI only forwards, so prefer the
-`pnpm run <task>` forms above - do not document `dbx-tools barrels` /
+`bun run <task>` forms above - do not document `dbx-tools barrels` /
 `dbx-tools openapi` / `dbx-tools clean` as the way to run engine tasks.
 
 - **`projen sync --watch` is the always-on watcher** (the generated `sync` task run
@@ -637,22 +671,19 @@ Inside an established workspace the CLI only forwards, so prefer the
   it doesn't spell out (e.g. a new package folder). Stock `projen --watch` is
   deliberately NOT used: it `fs.watch`es the whole repo recursively and re-synths
   (full post, so it installs) on EVERY file change, so a mere source edit forced a
-  full re-synth + install.
+  full re-synth + install. Run it as `bun run sync --watch`.
 - **`dbx-tools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
-  `pnpm init`, seed a minimal `pnpm-workspace.yaml` (so the very next step can
-  approve `tsx`'s `esbuild` build script non-interactively), `pnpm add -D
-projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
+  `bun init`, seed a minimal `pnpm-workspace.yaml` (for Databricks Apps deploy),
+  `bun add -D projen typescript@^5.9.3 <engine specifier>`, write a minimal
   `.projenrc.ts` if none exists, synth (`post: false` - skips projen's own
-  post-synth install, which has no non-interactive answer for "remove this
-  stale node_modules?" with no TTY), then reconcile the install itself
-  (`pnpm install --no-frozen-lockfile --force` - `--force` is what makes pnpm's
-  own confirmation logic treat that prompt as pre-answered) and regenerate
-  barrels. Scaffolds **no** package folders or sample code - just enough for
-  `pnpm exec projen`/`dbx-tools sync` to work from here on.
+  post-synth install), then reconcile the install itself
+  (`bun install --force`) and regenerate barrels. Scaffolds **no** package folders
+  or sample code - just enough for `bunx projen`/`dbx-tools sync` to work from
+  here on.
 - **`dbx-tools sync` on an existing workspace** just runs projen once (full synth,
   installs, regenerates barrels via the post-synth component) - which is exactly
-  what `pnpm run sync` does directly, so prefer that once a workspace exists.
-- **`pnpm run sync --watch`** forwards to `projen sync --watch`, which does one
+  what `bun run sync` does directly, so prefer that once a workspace exists.
+- **`bun run sync --watch`** forwards to `projen sync --watch`, which does one
   initial full synth, then (via `concurrently`) runs the projenrc watcher alongside
   the barrel + openapi watchers. The projenrc watcher re-synths (+install) when
   `.projenrc.ts` or a configured `syncResynthPaths` entry changes; the barrel watcher
@@ -660,18 +691,17 @@ projen typescript@^5.9.3 tsx@^4.23.0 <engine specifier>`, write a minimal
   `openapi` packages when a tsoa controller changes.
 - **Barrels regenerate on every full (post) synth**: a post-synth projen `Component`
   (`GeneratedBarrels` in `project.ts`) runs on any `runSynth({ post: true })` - the
-  plain `pnpm exec projen`, `sync`'s initial synth, and the projenrc watcher's
+  plain `bunx projen`, `sync`'s initial synth, and the projenrc watcher's
   re-synth all install and rebuild barrels through it. Fast paths skip it: the
   standalone barrel watcher calls `generateBarrels()` directly on edits (no synth),
   and `bootstrap` runs `runSynth` with `PROJEN_DISABLE_POST` set, doing its own
   install + barrels afterward.
-- **`pnpm run clean`** (`clean.ts`) deletes generated files. It doesn't hardcode a
+- **`bun run clean`** (`clean.ts`) deletes generated files. It doesn't hardcode a
   list: every file the toolchain writes is read-only (see below), so a read-only file
   under the repo (skipping vendor/build/VCS, but INCLUDING `.projen/*`) is a clean
   target. It shows a `@clack/prompts` picker with all files preselected (uncheck to
   keep); `-y` removes them all non-interactively. Safe to run - `.projenrc.ts` imports
-  the engine by SOURCE path, so `npx tsx .projenrc.ts` (or `pnpm exec projen`)
-  regenerates everything afterward.
+  the engine by SOURCE path, so `bunx projen` regenerates everything afterward.
 
 Barrels re-export every exporting file under `src/` except names starting with
 `_`; a package's barrel lives at its ROOT (`index.ts`), re-exporting `./src/*`.
@@ -684,90 +714,45 @@ through their namespace (`posixPath.toPosix`). Uniqueness is counted over
 hoistable values and types together, and a name colliding with a namespace or
 declared by a hand-authored `exports.ts` is skipped, so anything ambiguous stays
 reachable only through its namespace. Widening what gets hoisted grows the flat
-surface of every package at once; regenerate with `pnpm run barrels` and note
-that it skips `projen/` (not a workspace member), which needs
-`generateBarrels({ dirs: ["projen"] })`.
+surface of every package at once; regenerate with `bun run barrels`.
 
-## Working on the packages via the `demo/` app
+## Working on the packages via the demo app
 
-`demo/` is a standalone downstream CONSUMER: it can install `@dbx-tools/*` from the
-registry in `demo/.npmrc` (a local verdaccio), exactly as an external app would.
-That mode is OPT-IN, not the default. In this checkout the packages are usually
-what you are editing, and a demo quietly running a published copy of code you just
-changed is the expensive surprise - you restart, see the old behavior, and go
-looking for the bug in the wrong place. So a plain install source-links BOTH
-demo members:
+The runnable sample lives under `example-packages/` as two ordinary workspace
+members - `example-packages/server/appkit-demo` (`@dbx-tools/demo-appkit-server`,
+`server` tag) and `example-packages/app/appkit-demo` (`@dbx-tools/demo-appkit-app`,
+`app` tag). It is no longer a standalone workspace: both members declare their
+`@dbx-tools/*` deps as `workspace:*`, so bun resolves them from source in the one
+`node_modules`. Editing a package is reflected in the demo immediately - there is
+no link hook, no `DBX_TOOLS_LINK` switch, and no consumer-mode registry install
+(that portability was dropped when the demo merged into the main tree).
 
 ```sh
-pnpm install                            # server + client resolve packages source
-# Restart the server for Node edits; the client watcher rebuilds on UI edits:
-pnpm --filter @dbx-tools/demo-appkit-server dev
-pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch
-DBX_TOOLS_LINK=0 pnpm install           # consumer mode: published versions
+bun install                                   # one workspace; demo resolves packages from source
+bun run demo                                  # server dev + client dev server (Bun.serve + HMR), concurrently
+# or individually:
+bun run --filter @dbx-tools/demo-appkit-server dev   # bun --watch src/server.ts
+bun run --filter @dbx-tools/demo-appkit-app dev      # Bun.serve dev server (HMR) via dev.ts
+bun run --filter @dbx-tools/demo-appkit-app build    # Bun.build production bundle via build.ts
 ```
 
-**The switch is defined ONCE, in the repo-root hook.** `.pnpmfile.cjs` exports
-`linkEnabled()`, which reads `DBX_TOOLS_LINK` and treats `0` / `false` / `off` /
-`no` as opt-out; `demo/.pnpmfile.cjs` calls it rather than re-deriving what counts
-as "on". Do not add a second env-var check in a sibling workspace. The links that
-are NOT a choice stay unconditional and never consult it: the root's link to
-`projen/`, and `projen/`'s link to `../packages`. `.projenrc.ts` imports the engine
-by source path, so an unlinked install of either cannot synth at all.
-
-**The mode switch is RESOLVE-time, not a file edit.** The hook rewrites both
-members' `@dbx-tools/*` specifiers to `link:` paths under `../packages/**`; the
-env var on the install is the ENTIRE interface, with no wrapper task or script.
-Nothing on disk changes, so neither mode needs a restore step and both leave
-`git status` clean. Do NOT reintroduce a script that edits manifests to do this:
-an earlier
-`demo/scripts/dev-link.mjs` rewrote the app `package.json` and `pnpm-workspace.yaml`
-in place, which meant clearing projen's read-only bit, inserting marker comments,
-and keeping a sidecar of the pristine contents - and since `pnpm-workspace.yaml` is
-COMMITTED, a forgotten undo landed local dev state in git.
-
-A demo folder copied OUT of this repo has neither the root hook nor `../packages`,
-so it installs from the registry with no env var involved. That is why the hook
-runs its existence checks BEFORE asking `linkEnabled()`.
-
-Two non-obvious constraints in that hook:
-
-- **The `link:` paths must be RELATIVE** (pnpm records a specifier verbatim in the
-  lockfile, so absolute ones pin it to one machine's home directory), and pnpm
-  resolves them against TWO different bases: a workspace MEMBER's dep resolves
-  against that member's own directory, while a transitively-linked package's dep
-  resolves against the directory holding `pnpm-lock.yaml`. Using the package's own
-  directory for both is what produced `Installing a dependency from a
-non-existent directory: <repo>/core`.
-- **Link the external runtime too.** A source-linked package resolves its own
-  dependencies from the MAIN repo's `node_modules`; without another bridge, the
-  demo's direct imports would still resolve from `demo/node_modules`, giving one
-  process two AppKit / Mastra / React instances. The root hook's
-  `resolvedDependencySources()` scans every local package manifest, resolves its
-  external dependencies from the main install, and adds those exact directories
-  to the same link map. This is what keeps identity-based singletons such as
-  AppKit's `CacheManager` coherent while the demo remains a separate workspace.
-  Do not narrow the map back to `@dbx-tools/*`.
-
-The demo server logs all resolved runtime dependency versions before AppKit
-starts. In local mode, `@dbx-tools/*` entries show `0.0.0 (linked from
-packages/...)`; in consumer mode they show the published `0.6.x` versions. See
-`demo/README.md` for the full two-mode explanation.
+Because everything is one workspace, a single AppKit / Mastra / React instance is
+shared automatically (the reason the hoisted linker is mandatory - see the package
+manager section). The demo server still ships `app.yaml` + `databricks.yml`, so it
+deploys to Databricks Apps unchanged; the committed `pnpm-workspace.yaml` is what
+the platform's pnpm build phase reads.
 
 ## Generated files — DO NOT edit by hand
 
 - **Per-package** (`package.json`, `tsconfig.json`, `.projen/*`, `README.md`,
   `.gitignore`, …): owned by that package's projen subproject.
-- **Root** (root `tsconfig*.json`, `.vscode/*`, per-package `vite.config.ts`):
+- **Root** (root `tsconfig*.json`, `.vscode/*`, per-package `bunfig.toml` + `dev.ts` + `build.ts`):
   read-only + projen marker, emitted from `files.ts`. `pnpm-workspace.yaml` is
-  projen's native `javascript.PnpmWorkspaceYaml`, fed the options
-  `PnpmWorkspaceState` (`pnpm-workspace.ts`) holds; unlike the engine's own files
+  generated by `PnpmWorkspaceState` (`pnpm-workspace.ts`); unlike the engine's own files
   it is NOT read-only, since projen writes it with `readonly: false`.
-  The generated `vite.config.ts` is tuned WITHOUT editing it: drop a
-  `vite.config.override.ts` (or `.js`) beside it and its default export is merged
-  over the generated config with `mergeConfig` at config load. Prefer the `.ts`
-  form; both are read, in that order, so `.ts` wins if both exist. The override is
-  a package-root file outside any `src/**` tsconfig, so it is ESLint-ignored like
-  the generated config - hand-author it, but the type-aware linter skips it.
+  The generated `dev.ts` and `build.ts` for `app` packages use Bun.serve (dev) and
+  Bun.build (prod) with Tailwind v4 via bun-plugin-tailwind. `bunfig.toml` is
+  pinned with `linker = "hoisted"` and is MANDATORY.
 - **barrels** (`<root>/<tags...>/<name>/index.ts`): read-only, do-not-edit header,
   written by the engine's own generator (`barrels.ts`). Marked generated in
   `.gitattributes` (`annotateGenerated`).
@@ -778,40 +763,55 @@ packages/...)`; in consumer mode they show the published `0.6.x` versions. See
 
 Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated files.
 
-## Gotchas
-
 - **The engine ships on its own tag but at the SAME version, and one `bump` cuts
-  both.** `pnpm run bump` at the root publishes the `packages/**` members via the
-  `v*` tag -> `release` workflow -> `pnpm -r publish`, which by definition cannot
-  see `projen/`, since it is not a workspace member. So the engine keeps a second
-  namespace: tag `projen-v*` -> `projen-release` workflow -> `npm pack` +
-  `npm publish`, versioned from the pushed tag. The two namespaces stay separate
-  because `@dbx-tools/projen` is consumable on its own, by a repo that wants the
-  monorepo generator and none of the Databricks packages.
-  What links them is the root's bump task, generated as `--prefix v --sibling
-projen:projen-v` from the `standaloneReleases` option: it takes the base version
-  from the highest tag across EVERY listed prefix, stamps each manifest, and
-  pushes all the tags together, so both release at one version. It also publishes
-  each sibling to the local registry individually, which `pnpm -r` would skip.
+  both.** `bun run bump` at the root publishes the `packages/**` members via the
+  `v*` tag -> `release` workflow -> `bun publish`es each non-private one, which by
+  definition cannot exclude `projen/` now that it is a workspace member. So the
+  engine's separate publication uses a second namespace: tag `projen-v*` ->
+  `projen-release` workflow -> `bun publish` (from `projen/`), versioned from the
+  pushed tag. The two namespaces stay separate because `@dbx-tools/projen` is
+  consumable on its own, by a repo that wants the monorepo generator and none of
+  the Databricks packages.
+  What links them is the root's bump task, generated as `--prefix v --exclude
+projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
+  the base version from the highest tag across EVERY listed prefix, stamps each
+  manifest, and pushes all the tags together, so both release at one version.
+  The `--exclude projen` keeps it out of the packages publish pass, and the
+  separate projen release workflow publishes it on its own tag.
   Before that, each namespace only consulted its own tags and the engine went
   stale in silence - it sat at 0.1.24 while the packages reached 0.3.41, so a
   consumer's `@dbx-tools/projen@latest` was months behind the CLI that installed
-  it (a `sync --watch` died on the engine's then-undeclared `concurrently`).
-  Releasing the engine alone is still `cd projen && pnpm run bump`; nothing about
+  it.
+  Releasing the engine alone is still `cd projen && bun run bump`; nothing about
   the version numbers being equal means a package change implies an engine change.
-- **Never install a just-released version through a dist-tag.** pnpm 11 enforces a
-  `minimumReleaseAge` delay, so for roughly a day after a publish `@latest`
-  resolves to the newest version OLDER than the threshold and only NOTES the new
-  one: `+ @dbx-tools/projen 0.1.24 (0.3.42 is available)`. It is not a cache -
-  clearing `~/Library/Caches/pnpm/**/metadata` changes nothing, and the registry's
-  `dist-tags` correctly say `0.3.42` the whole time. An explicit range admits only
-  the version you want, leaving the heuristic nothing older to fall back to, so
-  `bootstrap.ts` asks for `@dbx-tools/projen@^<this CLI's own version>` (see
-  `defaultProjenSpecifier`) rather than `@latest`. That is only sound because the
-  root bump releases both at ONE version - if the two ever diverge again, this
-  specifier starts requesting an engine that was never published. `--config.minimumReleaseAge=0`
-  overrides it ad hoc, but do not bake that into any shipped command; it exists to
-  blunt a supply-chain attack.
+- **Publishing leans on NATIVE bun - do not re-hand-roll what bun already does.**
+  `tasks/publish.ts` sets each member's version with `bun pm pkg set version=<v>`
+  (not a hand-written JSON edit; `bun pm version` is for bumping and errors on an
+  unchanged value, so `pkg set` is the tool for an exact release string). It does
+  NOT rewrite `workspace:`/`catalog:` deps - `bun publish` STRIPS both protocols
+  in the packed tarball (`workspace:*` -> the sibling's version, `catalog:` -> the
+  root catalog range; verified against a packed manifest). It also does NOT pack
+  by hand - `bun publish` runs `prepack` (compile) and substitutes `publishConfig`
+  itself. THE ONE non-obvious step: after stamping versions, delete `bun.lock` and
+  `bun install` before publishing. `bun publish` resolves each `workspace:*` from
+  the LOCKFILE, not the live manifest, and a plain `bun install` (even `--force`)
+  does not re-resolve after only a version-field change - so without the lockfile
+  refresh every sibling dep publishes as the stale `0.0.0`. The standalone
+  `projen/` release is the exception that DOES pre-rewrite its `@dbx-tools/*` deps
+  to `^<version>` (in `bump.ts`'s `writeManifestVersion`), because it publishes in
+  isolation where those siblings are never stamped, so bun would otherwise resolve
+  them to `0.0.0`.
+- **Release workflows are testable without touching npm.** Both `release` and
+  `projen-release` also trigger on `workflow_dispatch` with a `dry_run` boolean
+  input (default true). A manual run has no tag, so it uses a throwaway
+  `0.0.0-dry.<run>` version and FORCES `bun publish --dry-run` (pack + validate +
+  `prepack`, upload skipped). Run it from the Actions tab to exercise the whole
+  pipeline - setup-bun, install, stamp, compile, pack - with nothing reaching npm.
+- **`bootstrap.ts` pins the engine version explicitly.** `bootstrap.ts` asks for
+  `@dbx-tools/projen@^<this CLI's own version>` (see `defaultProjenSpecifier`)
+  rather than `@latest`, so the installed engine matches the CLI. That is only sound
+  because the root bump releases both at ONE version - if the two ever diverge,
+  this specifier starts requesting an engine that was never published.
 - **An established workspace pins its engine forever unless the CLI moves it.**
   Bootstrap installs the engine once; every later `dbxt` run took the
   "established workspace" path, which only installed when `node_modules` was
@@ -824,18 +824,11 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   re-adds the engine when the installed one is BEHIND this CLI. It compares
   versions and only moves forward, so an older CLI cannot downgrade a workspace,
   and an in-repo `0.0.0` build is a no-op.
-- **The engine's `@dbx-tools/*` deps must be a REAL published range, never `*`.**
-  `projen/.pnpmfile.cjs` rewrites them to `link:../packages/...` in-repo, so the
-  declared range is inert here and drifts unnoticed - but it ships verbatim in
-  the tarball. projen's install step resolves a `*` against what is linked, which
-  is the workspace's permanent `0.0.0`, and wrote `^0.0.0`. A caret on `0.0.0`
-  matches ONLY `0.0.0`, so publishing that would have produced an engine nobody
-  can install (`No matching version found for @dbx-tools/path@^0.0.0`), and the
-  in-repo link means no amount of local testing would show it. The standalone
-  config derives these ranges from its persisted package version, and the shared
-  root bump rewrites every same-scope dependency to `^<release>` whenever it
-  stamps the sibling manifest. Do not replace that with a hand-maintained floor:
-  it lets an engine install an older core than the release it was built against.
+- **The engine's `@dbx-tools/*` deps are resolved from workspace in-repo and pinned
+  in the published tarball.** In-repo, `workspace:*` resolves siblings from source.
+  The root bump rewrites every same-scope dependency to `^<release>` whenever it
+  stamps the engine's manifest for release, so the tarball ships real published
+  ranges. Do not hand-maintain those ranges - the bump does it.
 - **A generator tool the WORKSPACE already provides is a devDep, not a dep.** Every
   engine dependency is installed by every consumer, including ones that never reach
   the code path needing it, so the heavy generator toolchains are loaded lazily
@@ -856,21 +849,14 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   it. The residual `glob@10` warning in a workspace that genuinely uses tsoa is
   upstream's, not ours — don't paper over it with a pnpm `overrides` entry.
 - **pnpm gates build scripts behind the `allowBuilds` MAP** in
-  `pnpm-workspace.yaml` — `esbuild: true` is the default. Do NOT switch this to
-  projen's own `allowScripts` option: for pnpm that renders
-  `onlyBuiltDependencies`, and the pnpm this repo installs with (10.33) contains
-  ZERO references to that key or to `ignoredBuiltDependencies` — its only build
-  gate is `allowBuilds`. Emitting the list would install with every build script
-  silently skipped, so keep `PnpmWorkspaceState.allowBuild` writing the map even
-  though projen's schema also types the lists. Add allowances via
-  `project.pnpmWorkspace?.allowBuild(name)` (or `.addCatalog`, or
-  the root's typed `workspaceYaml` option for any other pnpm setting), not by
-  editing the YAML. Only ALLOWANCES are declared: a dependency that is never
-  allowed needs no entry, because `strictDepBuilds` is deliberately off, so pnpm
-  warns (`Ignored build scripts: ...`) and installs. Turning it on would make
-  every unreviewed postinstall a hard failure and force a declined entry for each
-  one. A stale `node_modules` can report an allowance you just added as still
-  unreviewed; re-run with `pnpm install --force`.
+  `pnpm-workspace.yaml`, and bun gates them via `trustedDependencies` in
+  `package.json`. The engine mirrors both: `PnpmWorkspaceState.allowBuild` writes
+  the pnpm map (for Databricks Apps deploy), and the root `package.json`'s
+  `trustedDependencies` mirrors the same list for bun (because it lives in
+  `workspaces` metadata). Add allowances via `project.pnpmWorkspace?.allowBuild(name)`,
+  not by editing either file. Only ALLOWANCES are declared: a dependency that is
+  never allowed needs no entry. A stale `node_modules` can report an allowance you
+  just added as still unreviewed; re-run with `bun install --force`.
 - **The `.gitignore` does NOT blanket-exclude dot-paths, and must not start
   again.** `ignore.ignorePatterns` is called with `{ test: false, dot: false }`
   (`project.ts`). The `dot` group is a SCANNING concern - skip `.git` and caches
@@ -929,18 +915,18 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   it is carried over from `pkg.package.npmAccess` explicitly; drop it and every
   scoped package publishes restricted.
   `prepack` (spawning `compile`) is what guarantees the output exists - the
-  release workflow publishes straight after `pnpm install` with no build step
+  release workflow publishes straight after `bun install` with no build step
   in between.
 - **UI packages deliberately still publish source.** The exclusion in
   `publishesCompiled` is about consumers, not convenience: the problem is that
   Node cannot load raw TypeScript, and a browser package is never loaded by
-  Node. UI packages reach their consumer through Vite, which reads their source
+  Node. UI packages reach their consumer through a browser bundler (bun's
+  `Bun.build`, or a downstream app's own Vite/webpack), which reads their source
   happily, and they export `./styles.css` plus raw SVG assets that `tsc`
   neither copies nor rewrites - compiling them would mean a real asset pipeline
-  (Vite library mode) to solve a problem they do not have. Downstream builds
-  already split exactly this way on their own: the client bundle resolves
-  `@dbx-tools/ui-*` from source, while the SERVER bundle was the one that had
-  to inline `@dbx-tools/*`.
+  to solve a problem they do not have. Downstream builds already split exactly
+  this way on their own: the client bundle resolves `@dbx-tools/ui-*` from source,
+  while the SERVER bundle was the one that had to inline `@dbx-tools/*`.
 - **`arethetypeswrong` is GREEN except for the CJS row, which is correct.**
   Packages are ESM-only, so `node16 (from CJS)` reports "ESM (dynamic import
   only)" - that is what an ESM-only package is supposed to look like, not a
@@ -948,38 +934,13 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   row other than the CJS one goes red, the compiled emit or the specifier pass
   broke; check that `lib/index.js` exists and that no relative specifier in
   `lib/**` is still extensionless.
-- **`pnpm-lock.yaml` is UNTRACKED, and nothing in CI may depend on it existing.**
-  It is covered by `.gitignore`'s `**/*-lock.yaml`, but it had been committed
-  before that rule existed and an ignore rule cannot untrack an already-tracked
-  path, so it stayed in the index for a long time while appearing to be ignored.
-  That state hid itself: `git check-ignore pnpm-lock.yaml` consults the index and
-  reports a TRACKED file as not ignored, never mentioning the rule that matches
-  it - only `--no-index` shows the rule. It has since been `git rm --cached`ed.
-  The reason to keep it out is that a lockfile resolved here can carry a
-  private-registry fingerprint; verify with
-  `rg -c 'localhost:4873|/Users/' pnpm-lock.yaml` before ever committing one.
-- **Do NOT set `workflowPackageCache: true`, and do not add `cache: pnpm` to a
-  hand-written workflow.** `actions/setup-node`'s package cache keys off a
-  lockfile in the tree; with `pnpm-lock.yaml` untracked the step fails the job
-  outright with "Dependencies lock file is not found". Turning it off removes
-  the `Setup Node.js` step from `build.yml` entirely, which is harmless - it
-  never pinned a `node-version`, so the runner's preinstalled Node is used
-  either way, exactly as before.
-- **No CI install is `--frozen-lockfile`, and that is deliberate.** With no
-  committed lockfile there is usually nothing to freeze against, and frozen
-  turns that into a hard failure of a PUBLISH, which is the worst place to
-  discover it. That is not hypothetical: it broke the v0.3.38 release and the
-  docs deploy at once. `build.yml` additionally needs a mutable install because
-  its self-mutation job exists to commit regenerated files back to the PR. The
-  cost of this choice is that CI resolves dependencies fresh, so a bad upstream
-  publish can break a build that nothing here changed.
-- **Keep `link:` specifiers RELATIVE in `.pnpmfile.cjs`.** An absolute
-  `path.resolve(__dirname, ...)` is recorded verbatim as the lockfile specifier,
-  which pins the lockfile to one developer's home directory and leaks that path.
-  Every install elsewhere then fails comparing `link:/Users/<someone>/...`
-  against `link:/home/runner/...`. Relative resolves against the IMPORTING
-  package's directory, so it only works while the importer's depth is known -
-  today the repo root is the sole importer of `@dbx-tools/projen`.
+- **`bun.lock` is TRACKED** (committed to git). bun's text lockfile is merge-friendly
+  and carries no private-registry fingerprint. CI installs are `bun install` (no
+  lockfile flag needed).
+- **Do NOT set `workflowPackageCache: true`, and do not add `cache: bun` to a
+  hand-written workflow** without understanding the implications. The bun lockfile
+  is tracked, so caching via `actions/setup-node` would be possible, but keep it
+  off to match the existing posture.
 - **There is no Dependabot, and third-party actions are on major tags.** Both
   were tried and removed: SHA pins with no updater just rot, and Dependabot PRs
   edit projen-GENERATED workflows, which the next synth reverts and the build's
@@ -998,7 +959,7 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   `project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, ...)` and:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
   adds its bins - `dbx-tools` plus the short `dbxt` alias, both pointing at
-  `./bin/dbx-tools.mjs` (npm exposes every `bin` key as its own command) - and
+  `./bin/dbx-tools.js` (npm exposes every `bin` key as its own command) - and
   depends on `@dbx-tools/projen`. That is ALL it declares: tsconfig
   (`rootDir: "."` + the `index.ts`/`bin/**/*.ts` includes) and the `exports` map
   come from the `cli` tag, so a CLI needs no per-package config for either.
@@ -1008,28 +969,25 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   `packages/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
   package, MOVE ITS FOLDER - do not add a name override.
   The projen engine itself lives in `projen`
-  (`@dbx-tools/projen`). It is NOT a workspace member and no mixin reaches it, so
-  it is synthesized by its own `projen/.projenrc.ts`, which declares its deps
-  inline (`projen`, `constructs`, `oxc-parser`, `@dbx-tools/path`, ...) - edit
-  that `deps: [...]` list, then re-synth from inside `projen/`.
+  (`@dbx-tools/projen`). It is a workspace member (via `extraWorkspaceMembers`
+  in the root options) and synthesizes itself via its own `projen/.projenrc.ts`,
+  which declares its deps inline (`projen`, `constructs`, `oxc-parser`,
+  `@dbx-tools/path`, ...) - edit that `deps: [...]` list, then re-synth from
+  inside `projen/`.
 - **A CLI's `bin` is its `.ts` entry in the workspace and the emitted
   `lib/bin/<name>.js` in the tarball**, swapped by `publishConfig.bin`
   (`publish.ts`) exactly like `exports`. There is no launcher file and no runtime
-  `tsx`: the published bin is plain JavaScript with a `#!/usr/bin/env node`
+  dependency: the published bin is plain JavaScript with a `#!/usr/bin/env node`
   shebang that `tsc` copies through, so an installed CLI runs with nothing extra
-  in the tree (verified by installing a tarball into a project with no `tsx`).
-  An earlier design generated a `bin/<name>.mjs` shim that called
-  `register()` from `tsx/esm/api` and made `tsx` a runtime dependency of every
-  CLI. Both are gone; do not reintroduce either. Note `publishConfig.bin` has to
-  RESOLVE the manifest field, because projen renders `bin` lazily
-  (`bin: () => this.renderBin()`) and keeps the map private - reading
-  `manifest.bin` directly hands you the function and silently finds no entries.
-  In-repo, run a CLI through its root task (`pnpm dbxt ...`, which is
-  `tsx <bin>/<name>.ts`) rather than the bin path: neither the `.ts` entry nor
-  the compiled one runs under bare `node` in the workspace, because a sibling
-  `@dbx-tools/*` import resolves to that package's SOURCE and at least one of
-  those sources uses non-erasable syntax. That only affects the checkout - a
-  consumer's install resolves the same imports to `lib/`.
+  in the tree (verified by installing a tarball into a project with no `bun`).
+  Note `publishConfig.bin` has to RESOLVE the manifest field, because projen
+  renders `bin` lazily (`bin: () => this.renderBin()`) and keeps the map private
+  - reading `manifest.bin` directly hands you the function and silently finds no
+  entries.
+  In-repo, run a CLI through its root task (`bun dbxt ...`, which is
+  `bun <bin>/<name>.ts`) rather than the bin path: the `.ts` entry runs under
+  `bun`, resolving sibling `@dbx-tools/*` imports from source in the workspace.
+  A consumer's install resolves the same imports to `lib/`.
 - **CLI command names are `dbx-tools-<name>` plus a short `dbxt-<name>` alias**,
   and the `bin/` entry file is named after the primary command - so
   `bin/dbx-tools-model-proxy.ts` backs `dbx-tools-model-proxy` /
@@ -1049,15 +1007,14 @@ dbx-tools-model-proxy`, or just install it.
   `link:` install with a version range would silently repoint it at the
   registry. If the path does NOT pass through `node_modules` (this repo's own
   dogfooding - relative-imported, no package resolution involved), it returns
-  `undefined` and adds nothing. The root also adds `tsx`, `typescript`, and
-  `@types/node`.
-- **`DBXToolsNodeProject` defaults `packageManager: PNPM`** (projen's
+  `undefined` and adds nothing. The root also adds `typescript` and `@types/bun`.
+- **`DBXToolsNodeProject` defaults `packageManager: BUN`** (projen's
   `packageManager` is readonly after construction); pass a different one only if
-  you know what you're doing, since the whole toolchain assumes pnpm workspaces.
+  you know what you're doing, since the whole toolchain assumes bun workspaces.
 - **Type-checking is projen's own per-package `compile`** (`tsc --build` against
   each package's tag tsconfig), not a `dbx-tools` command - the tag `lib`/`types`
-  overrides are what make misuse fail. Check one package with `pnpm exec projen
-compile` (or `pnpm compile`) in its dir, or all of them with `pnpm -r compile`.
+  overrides are what make misuse fail. Check one package with `bunx projen
+compile` (or `bun compile`) in its dir, or all of them with `bun run --filter '*' compile`.
 - **Heavy tools are resolved lazily** (a memoized `require`, not a module-level
   import): `module-exports.ts` loads `oxc-parser` this way, and `codegen.ts` /
   `openapi.ts` do the same for `typescript` / `ts-to-zod` / `tsoa`. Resolving
@@ -1094,8 +1051,8 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   another package's `src/` (e.g. `../../../../node/path/src/find`).
 - Everything runs on portable Node: subprocesses use `execFileSync(process.execPath, …)`;
   read-only is `fs.chmodSync` (Node maps it to the Windows read-only attribute).
-  `bootstrap.ts` resolves `pnpm`'s own CLI the same way (`require.resolve`, not a
-  PATH lookup) - `pnpm` is a regular dependency of the engine for exactly this.
+  `bootstrap.ts` resolves `bun`'s own CLI via `require.resolve` when available, or
+  falls back to PATH lookup.
 - **`package.json` is forced read-only by default** on the root and every
   subproject, so the whole generated tree is consistent. The `DBXToolsConfig`
   component sets the manifest's `FileBase.readonly = true` in its CONSTRUCTOR (projen
@@ -1105,7 +1062,7 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   The CLI package does exactly this so its own `package.json` stays writable.
   Source/sample files the developer owns (`.projenrc.ts`, each package's `README.md`,
   `src/*`) stay writable regardless.
-- **OpenAPI** (`openapi.ts`, `pnpm run openapi`): scans **every discovered**
+- **OpenAPI** (`openapi.ts`, `bun run openapi`): scans **every discovered**
   `server`/`node` package for **tsoa** controllers (classes with
   `@Route`/`@Get`/... - no JSDoc/YAML). For each, tsoa's `generateSpec` infers an
   OpenAPI 3 spec from the decorators + TS types, then openapi-typescript +
@@ -1113,9 +1070,9 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   package (`openapi.json` + `src/schema.ts` + `src/client.ts`) - colocated under
   the SAME root as the controller it came from (`example-packages/server/
 api`'s controllers generate `example-packages/openapi/api`), not a hardcoded
-  root. tsoa/typescript/openapi-typescript are lazy-loaded (only `pnpm run
+  root. tsoa/typescript/openapi-typescript are lazy-loaded (only `bun run
 openapi` / a watched controller edit needs them). The openapi watcher (started by
-  `pnpm run sync --watch`, under `concurrently`) regenerates it automatically when a
+  `bun run sync --watch`, under `concurrently`) regenerates it automatically when a
   controller changes.
 - **Brand theming is a `[data-brand]` token bridge, opt-in by detection.**
   `@dbx-tools/ui-branding` writes portable `--brand-color-*` / `--brand-font-*`

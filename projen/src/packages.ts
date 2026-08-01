@@ -85,18 +85,20 @@ function nestingTagsFromSegments(segments: readonly string[]): string[] {
 /** Matches a barrel `index.<ext>` (as a basename or a posix path tail). */
 const BARREL_RE = /(^|\/)index\.(ts|tsx|js|jsx|mjs|cjs)$/;
 
-/** Basenames this toolchain generates (projen manifests/tsconfigs + vite config). */
+/** Basenames this toolchain generates (projen manifests/tsconfigs + bun app scaffolding). */
 const GENERATED_BASENAMES = new Set([
   "package.json",
   "tsconfig.json",
   "tsconfig.dev.json",
-  "vite.config.ts",
+  "bunfig.toml",
+  "dev.ts",
+  "build.ts",
 ]);
 
 /**
  * True if the file matches the watcher's generated-file heuristic: projen manifest
- * basenames, package-root barrels (`index.ts`), vite config, or declaration files.
- * Other read-only toolchain output (e.g. openapi artifacts) is not covered here.
+ * basenames, package-root barrels (`index.ts`), bun app scaffolding, or declaration
+ * files. Other read-only toolchain output (e.g. openapi artifacts) is not covered here.
  */
 export function isGeneratedFile(file: string): boolean {
   const base = file.split(sep).pop() ?? "";

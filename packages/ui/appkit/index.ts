@@ -2,4 +2,4 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as vite from "./src/vite.ts";
+export * as reactAppkitUi from "./src/react/appkit-ui.ts";

@@ -1,10 +1,10 @@
+import { Button, Separator } from "@dbx-tools/ui-appkit/react";
+import { BrandLogo, BrandProvider } from "@dbx-tools/ui-branding/react";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Cards from "@/pages/Cards";
 import Conversations from "@/pages/Conversations";
 import Search from "@/pages/Search";
 import Stream from "@/pages/Stream";
-import { Button, Separator } from "@dbx-tools/ui-appkit/react";
-import { BrandLogo, BrandProvider } from "@dbx-tools/ui-branding/react";
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 // Real browser routes so deep links (and refreshing on `/stream`) land
 // on the right page. AppKit's dev and static servers already SPA-fallback

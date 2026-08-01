@@ -27,7 +27,10 @@ const SCOPE = "dbx-tools";
 const root = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
-  packageRoots: ["packages"],
+  // `packages` is the product; `example-packages` holds the runnable demo app
+  // (server + React app), merged in from the former standalone `demo/` workspace
+  // so it dogfoods the `@dbx-tools/*` packages as `workspace:*` source siblings.
+  packageRoots: ["packages", "example-packages"],
   // Any pnpm-workspace setting the engine does not manage itself, typed by
   // projen's own `PnpmWorkspaceYamlSchema`. `overrides` forces every transitive
   // glob onto v13: older majors are deprecated upstream (10.x now ships under
@@ -42,27 +45,43 @@ const root = new projectApi.DBXToolsNodeProject({
   // below - the same model as the standalone `projen/` project.
   release: false,
   releaseTagPrefix: "v",
-  // The standalone `@dbx-tools/projen` engine lives in `projen/` (not a
-  // workspace member) and releases on its own `projen-v*` tag prefix; the engine
-  // authors its `projen-release` workflow alongside the root's `release`.
+  // The `@dbx-tools/projen` engine lives in `projen/` and releases on its own
+  // `projen-v*` tag prefix; the engine authors its `projen-release` workflow
+  // alongside the root's `release`.
   standaloneReleases: [{ name: "projen-release", directory: "projen", tagPrefix: "projen-v" }],
-  // `actions/setup-node`'s pnpm cache keys off a lockfile in the tree, and
-  // `pnpm-lock.yaml` is deliberately untracked, so enabling it fails the job
-  // outright with "Dependencies lock file is not found".
+  // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
+  // root subproject, but it IS a member of the single bun workspace - listed here
+  // so bun links it + its `workspace:*` sibling deps from local source.
+  extraWorkspaceMembers: ["projen"],
+  // Bun manages installs (build.yml uses `oven-sh/setup-bun` + `bun install`), so
+  // projen's `actions/setup-node` package cache - which keys off an npm/pnpm/yarn
+  // lockfile - does not apply. `setup-bun` does its own caching. Leave off.
   workflowPackageCache: false,
   depsUpgrade: false,
-  // `@dbx-tools/projen` (the engine) lives in the standalone `projen/`
-  // project, not this workspace; the repo `.pnpmfile.cjs` rewrites it to a
-  // `link:./projen`. It stays a plain dep here so synth can resolve it.
+  // `@dbx-tools/projen` (the engine) lives in `projen/`, now a member of the
+  // single bun workspace, so it links from source via `workspace:*` - no
+  // `.pnpmfile.cjs`. `.projenrc.ts` imports it by source path either way.
   devDeps: [
     "concurrently",
     "@dbx-tools/shared-core@workspace:*",
-    "@dbx-tools/projen@*",
+    "@dbx-tools/projen@workspace:*",
     // shared-core's public brand namespace is Zod-backed and is loaded while
     // this projen definition evaluates through the workspace dependency.
     "zod@catalog:",
   ],
 });
+
+// ---------------------------------------------------------------------------
+// Lockfile: bun.lock stays UNTRACKED (projen's `*.lock` default ignore)
+// ---------------------------------------------------------------------------
+// Deliberately NOT committed, same rationale the old `pnpm-lock.yaml` had here:
+// a lockfile RESOLVED on a dev machine whose active npm registry is a local
+// verdaccio bakes `localhost:4873` tarball URLs into `bun.lock`, and CI (which
+// has no verdaccio) then fails every install with ConnectionRefused. Leaving it
+// untracked makes CI resolve fresh from public npm every time. bun does not need
+// a committed lockfile; the trade-off (CI re-resolves) is the same one the repo
+// already accepted for pnpm. Verify before ever committing one:
+//   grep -c 'localhost:4873' bun.lock
 
 // ---------------------------------------------------------------------------
 // Generated dot-directories
@@ -134,11 +153,11 @@ root.pnpmWorkspace?.addCatalog("@mastra/pg", "^1.14.2");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 root.pnpmWorkspace?.addCatalog("undici", "^7.17.0");
 
-// Catalog pins for the React `ui` add-on stack (AppKit UI kit + Tailwind v4 +
-// the Mastra chat-UI deps). These only load in ui-tagged (browser) packages.
-// (`@databricks/appkit-ui` is already an engine DEFAULT_CATALOG entry;
-// `@mastra/ai-sdk` is pinned above.)
-root.pnpmWorkspace?.addCatalog("@tailwindcss/vite", "^4.3.1");
+// Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
+// v4 + the Mastra chat-UI deps). These only load in ui/app-tagged (browser)
+// packages. Tailwind is compiled by `bun-plugin-tailwind` (engine catalog
+// default), so no `@tailwindcss/vite` pin. (`@databricks/appkit-ui` is already an
+// engine DEFAULT_CATALOG entry; `@mastra/ai-sdk` is pinned above.)
 root.pnpmWorkspace?.addCatalog("tailwindcss", "^4.3.2");
 root.pnpmWorkspace?.addCatalog("tw-animate-css", "^1.4.0");
 root.pnpmWorkspace?.addCatalog("lucide-react", "^0.554.0");
@@ -504,21 +523,22 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
   p.addDeps("zod@catalog:", "@dbx-tools/shared-sdk-model@workspace:*");
 });
 
-// The projen engine (`@dbx-tools/projen`) is no longer a member of this
-// workspace - it lives in the standalone `projen/` project and is linked
-// in via the repo `.pnpmfile.cjs`. So there is no engine rule here.
+// The projen engine (`@dbx-tools/projen`) lives in `projen/`, now a member of
+// the single bun workspace (added via `extraWorkspaceMembers`). It synthesizes
+// itself, so there is no engine rule here.
 
 // cli-dbx-tools: the published CLI. The ONLY package that overrides its
 // auto-discovered name (`@dbx-tools/cli-dbx-tools` -> the bare `@dbx-tools/cli`);
 // every other package keeps whatever discovery derives from its path. Ships the
 // `dbx-tools` bin (plus the short `dbxt` alias - npm exposes every `bin` key as
 // its own command). Tsconfig/exports come from the `cli` tag.
-// (shared-core comes from the blanket base-dep mixin above.)
+// (shared-core comes from the blanket base-dep mixin above.) No `pnpm` dep: the
+// CLI drives `bun` (the ambient runtime) - see `src/bun.ts`.
 project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, (p) => {
   p.package.addField("name", `@${SCOPE}/cli`);
   p.package.file.readonly = false;
   p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbxt: "./bin/dbx-tools.ts" });
-  p.addDeps("@dbx-tools/core@workspace:*", "pnpm");
+  p.addDeps("@dbx-tools/core@workspace:*");
 });
 
 // cli-model-proxy: local OpenAI-compatible proxy in front of Databricks Model
@@ -549,9 +569,10 @@ project.applyToProjects(
 );
 
 // ui-appkit: the shared React UI base for the feature UI packages. Re-exports
-// AppKit's UI kit (`@databricks/appkit-ui/react`), the default Vite plugins
-// (React + Tailwind v4), and the shared stylesheet. `ui`-tagged (React + vite
-// + jsx come from the ui tag). Subpath exports match the -js layout.
+// AppKit's UI kit (`@databricks/appkit-ui/react`) and the shared stylesheet.
+// `ui`-tagged (React + jsx come from the ui tag). Tailwind v4 is compiled by the
+// `app` tag's `bun-plugin-tailwind`, so this component library ships no bundler
+// preset - the old `./vite` export is gone under bun.
 project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) => {
   p.addDeps(
     "@databricks/appkit-ui@catalog:",
@@ -560,17 +581,9 @@ project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) =
     // UI package that depends on this base carries the (inert-by-default)
     // bridge. Scoped to `:root[data-brand]`, so it never disturbs AppKit.
     "@dbx-tools/ui-branding@workspace:*",
-    "@tailwindcss/vite@catalog:",
-    "@vitejs/plugin-react@catalog:",
     "tailwindcss@catalog:",
     "streamdown@catalog:",
   );
-  // Ships a Vite plugin preset (`./vite`), so it needs vite + the React
-  // plugin as real deps - the `ui` tag is a component library and no longer
-  // carries the vite toolchain (that moved to the `app` tag).
-  p.addDevDeps("vite@catalog:");
-  // Adds `./vite` on top of the `ui` tag's `./react` + `./styles.css` default.
-  projectApi.addExports(p, { "./vite": "./src/vite.ts" });
 });
 
 // ui-branding: portable SVG/data assets plus framework-agnostic browser helpers
@@ -674,19 +687,87 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
   // tag's component-library default.
 });
 
+// ---------------------------------------------------------------------------
+// Demo app (merged from the former standalone `demo/` workspace)
+// ---------------------------------------------------------------------------
+// The runnable sample: an AppKit server + a React/Vite-free (bun) client, now
+// members of the single workspace under `example-packages/`. They consume the
+// `@dbx-tools/*` packages as `workspace:*` source siblings (no registry, no
+// `.pnpmfile.cjs` linking) - editing a package is reflected immediately.
+
+// example-packages/server/appkit-demo: the AppKit server. `server` tag supplies
+// express + the `bun --watch`/`bun` dev/start tasks.
+project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "server" }, (p) => {
+  p.package.addField("name", "@dbx-tools/demo-appkit-server");
+  // A private runnable app, not an importable library: entry is `src/server.ts`.
+  p.package.addField("private", true);
+  p.package.addField("main", "src/server.ts");
+  p.package.addField("exports", { "./package.json": "./package.json" });
+  p.addDeps(
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/appkit-mastra@workspace:*",
+    "@dbx-tools/email@workspace:*",
+    "@dbx-tools/appkit-web-search@workspace:*",
+    "@dbx-tools/teams@workspace:*",
+    "@dbx-tools/search@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@databricks/appkit@catalog:",
+    "@databricks/sdk-experimental@catalog:",
+    "@mastra/core@catalog:",
+    "@mastra/ai-sdk@catalog:",
+    "@mastra/express@catalog:",
+    "@mastra/fastembed@catalog:",
+    "@mastra/mcp@catalog:",
+    "@mastra/memory@catalog:",
+    "@mastra/observability@catalog:",
+    "@mastra/otel-bridge@catalog:",
+    "@mastra/pg@catalog:",
+    "@opentelemetry/api@catalog:",
+    "marked@catalog:",
+    "zod@catalog:",
+    "pg@^8.22.0",
+    "nodemailer@^7.0.13",
+    "juice@^12.1.1",
+    "fuse.js@^7.4.2",
+  );
+  p.addDevDeps("@types/nodemailer@^7", "@types/pg@^8", "@types/json-schema@^7");
+});
+
+// example-packages/app/appkit-demo: the React client. `app` tag supplies react +
+// the bun dev server / `bun build` (Tailwind via bun-plugin-tailwind).
+project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }, (p) => {
+  p.package.addField("name", "@dbx-tools/demo-appkit-app");
+  p.package.addField("private", true);
+  p.addDeps(
+    "@dbx-tools/shared-core@workspace:*",
+    "@dbx-tools/ui-appkit@workspace:*",
+    "@dbx-tools/ui-branding@workspace:*",
+    "@dbx-tools/ui-mastra@workspace:*",
+    "@dbx-tools/ui-teams@workspace:*",
+    "@dbx-tools/ui-search@workspace:*",
+    "react-router-dom@catalog:",
+    // `src/index.css` `@import`s these directly, so the app declares them.
+    "@databricks/appkit-ui@catalog:",
+    "tw-animate-css@catalog:",
+    "tailwindcss@catalog:",
+  );
+});
+
 // In-repo runners for the CLI, mirroring the two bins the published
-// `@dbx-tools/cli` installs (`dbx-tools` + the short `dbxt` alias).
+// `@dbx-tools/cli` installs (`dbx-tools` + the short `dbxt` alias). bun runs the
+// `.ts` entry directly.
 for (const task of [SCOPE, "dbxt"]) {
   root.addTask(task, {
-    exec: "tsx packages/cli/dbx-tools/bin/dbx-tools.ts",
+    exec: "bun packages/cli/dbx-tools/bin/dbx-tools.ts",
     receiveArgs: true,
   });
 }
 
-
+// Run the demo server + client dev server together. Both are workspace members
+// now, so no nested projen synth or registry install - just their bun dev tasks.
 root.addTask("demo", {
-  exec: 'cd demo && pnpm run projen && NODE_ENV=development pnpm exec concurrently --kill-others --names server,client "pnpm --filter @dbx-tools/demo-appkit-server dev" "pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch"',
-  description: "Run the linked demo server and client build watcher",
+  exec: 'NODE_ENV=development bun x concurrently --kill-others --names server,client "bun run --filter @dbx-tools/demo-appkit-server dev" "bun run --filter @dbx-tools/demo-appkit-app dev"',
+  description: "Run the demo server and client dev servers",
 });
 
 // Both tag-driven release workflows are authored by the engine's

@@ -22,10 +22,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 10.33.0
+          bun-version: 1.3.14
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -33,15 +33,15 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: bun install
       - name: Generate docs from READMEs
-        run: pnpm exec tsx docs/scripts/sync-readmes.mjs
+        run: bun docs/scripts/sync-readmes.mjs
       - name: Install docs dependencies
-        run: pnpm --dir .docs-build/site install --lockfile=false
+        run: bun install --cwd .docs-build/site
       - name: Generate TypeScript API docs
-        run: node docs/scripts/generate-api-docs.mjs
+        run: bun docs/scripts/generate-api-docs.mjs
       - name: Build docs
-        run: pnpm --dir .docs-build/site build
+        run: bun run --cwd .docs-build/site build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

@@ -67,8 +67,8 @@ const DEFAULT_CATALOG: Catalog = {
   "react-dom": "^19.2.4",
   "@types/react": "^19.2.2",
   "@types/react-dom": "^19.2.2",
-  vite: "^7.1.14",
-  "@vitejs/plugin-react": "^5.0.4",
+  // Tailwind v4 compiler for bun's dev server + `Bun.build` (the `app` tag).
+  "bun-plugin-tailwind": "^0.1.2",
   "@types/node": "^24.6.0",
   "@types/express": "^5.0.5",
   express: "^5.1.0",
@@ -95,14 +95,26 @@ const DEFAULT_CATALOG: Catalog = {
 };
 
 /**
- * Build allowances every workspace needs, because the engine itself is what
- * drags each one in: `esbuild` arrives with tsx (so it has to be built for any
- * task to run at all), and `unrs-resolver` is the native binding behind
- * `eslint-import-resolver-typescript`, which projen's eslint component adds to
- * every generated project. Leaving either unlisted greets a freshly bootstrapped
- * workspace with pnpm's "Ignored build scripts" warning on its first install.
+ * Build allowances every workspace needs. These matter for the Databricks Apps
+ * pnpm install (which reads `pnpm-workspace.yaml`) and for bun (mirrored into the
+ * root `package.json` `trustedDependencies`): `unrs-resolver` is the native
+ * binding behind `eslint-import-resolver-typescript`, which projen's eslint
+ * component adds to every generated project, and `esbuild` is still pulled in by
+ * parts of the toolchain. Leaving either unlisted greets a freshly bootstrapped
+ * workspace with an "Ignored build scripts" warning on its first install.
  */
-const DEFAULT_ALLOW_BUILDS: AllowBuilds = { esbuild: true, "unrs-resolver": true };
+const DEFAULT_ALLOW_BUILDS: AllowBuilds = {
+  esbuild: true,
+  "unrs-resolver": true,
+  // The `bun` npm package (a peer of `bun-plugin-tailwind`) ships a `bun.exe`
+  // placeholder and downloads the real platform binary in its postinstall. Left
+  // unbuilt, that `.exe` shim lands in `node_modules/.bin/bun` and makes projen's
+  // dax PATH walk `spawn ENOEXEC` on macOS/Linux, breaking EVERY task. Building it
+  // replaces the shim with a runnable binary.
+  bun: true,
+  // fastembed's native ONNX runtime (via `@mastra/fastembed`).
+  "onnxruntime-node": true,
+};
 
 /**
  * pnpm settings this engine applies to every workspace, beyond members, catalog,
@@ -207,17 +219,66 @@ export class PnpmWorkspaceState {
   }
 
   /**
-   * Fill `packages` from the project's attached subprojects.
+   * Emit `pnpm-workspace.yaml` directly.
+   *
+   * Under bun, projen's base `NodePackage` never runs `configurePnpm` (that call
+   * site is gated to `packageManager === PNPM`), so no `PnpmWorkspaceYaml`
+   * component is created. This engine still needs the file for the Databricks
+   * Apps platform, whose build phase installs with pnpm and reads the catalog +
+   * `allowBuilds`. The native component is just a `YamlFile` fed by a lazy
+   * `toJson(options)`, so constructing it directly (with the same options object
+   * whose arrays/objects are mutated in place up to synth) produces the identical
+   * file. Idempotent: skips if a `pnpm-workspace.yaml` component already exists
+   * (e.g. a future projen that DOES create it under bun).
+   */
+  public attachWorkspaceFile(project: Project): void {
+    const exists = project.files.some((file) => file.path === "pnpm-workspace.yaml");
+    if (!exists) new javascript.PnpmWorkspaceYaml(project, this.options);
+  }
+
+  /**
+   * Fill `packages` from the project's attached subprojects, then mirror the
+   * workspace shape into the root `package.json` so bun (which reads
+   * `workspaces`/`catalog` from the manifest, not `pnpm-workspace.yaml`) resolves
+   * the same members + catalog. `trustedDependencies` (bun's `allowBuilds` analog)
+   * is rendered by projen from its own allowlist, so the build allowances are
+   * routed there via `addAllowedScripts`.
    *
    * Called from the root's `preSynthesize`, which is the earliest point every
    * discovered package is attached - the list cannot be captured at
    * construction, since the root's scan runs after it.
    */
-  public resolveMembers(project: Project): void {
+  public resolveMembers(project: Project, extraMembers: readonly string[] = []): void {
     const members = project.subprojects
       .map((sub) => toPosix(relative(project.outdir, sub.outdir)))
       .filter(Boolean);
+    // `extraMembers` are workspace siblings NOT attached as subprojects (e.g. the
+    // self-synthesizing `projen/` engine), so they must be added explicitly.
+    const all = [...members, ...extraMembers.map((m) => toPosix(m)).filter(Boolean)];
     // Replaces the array's CONTENTS, keeping the reference projen captured.
-    this.packages.splice(0, this.packages.length, ...new Set(members.sort()));
+    this.packages.splice(0, this.packages.length, ...new Set(all.sort()));
+    this.mirrorToPackageJson(project);
+  }
+
+  /**
+   * Write `workspaces` / `catalog` / `overrides` into the root `package.json`
+   * (bun's source of truth) and feed the build allowances into projen's
+   * allowlist so bun's native `trustedDependencies` renders them.
+   */
+  private mirrorToPackageJson(project: Project): void {
+    const pkg = (project as { package?: javascript.NodePackage }).package;
+    if (!pkg) return;
+    pkg.addField("workspaces", [...this.packages]);
+    if (Object.keys(this.catalog).length > 0) {
+      pkg.addField("catalog", { ...this.catalog });
+    }
+    if (Object.keys(this.overrides).length > 0) {
+      pkg.addField("overrides", { ...this.overrides });
+    }
+    // projen renders bun's `trustedDependencies` from `allowedScripts`.
+    const allowed = Object.entries(this.allowBuilds)
+      .filter(([, on]) => on)
+      .map(([name]) => name);
+    if (allowed.length > 0) pkg.addAllowedScripts(...allowed);
   }
 }

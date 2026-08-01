@@ -64,9 +64,21 @@ describe("upstream dispatcher", () => {
     }
   }
 
-  it("aborts a stalled stream when bodyTimeout is set", async () => {
-    await assert.rejects(() => readThroughStall(100));
-  });
+  // Bun's `fetch` (and its bundled undici) ignore the undici `Agent` dispatcher's
+  // `bodyTimeout`, so a stalled stream is NOT aborted there - unlike Node. That is
+  // acceptable for the proxy: the dispatcher exists only to DISABLE undici's
+  // default 300s timeouts, and bun imposes no such default, so long model streams
+  // are not cut either way. The positive-abort assertion is therefore Node-only;
+  // the "survives with timeouts disabled" case below holds on both runtimes.
+  const dispatcherTimeoutsHonored = !process.versions.bun;
+
+  it(
+    "aborts a stalled stream when bodyTimeout is set",
+    { skip: !dispatcherTimeoutsHonored },
+    async () => {
+      await assert.rejects(() => readThroughStall(100));
+    },
+  );
 
   it("survives the same stall with bodyTimeout disabled, as the proxy configures it", async () => {
     assert.equal(await readThroughStall(0), "data: first\n\ndata: second\n\n");

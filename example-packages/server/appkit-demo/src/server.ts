@@ -1,10 +1,7 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { genie, lakebase, server } from "@databricks/appkit";
 import { createApp, databricks } from "@dbx-tools/appkit";
-import {
-  brand as emailBrand,
-  plugin as emailPlugin,
-  tool as emailToolModule,
-} from "@dbx-tools/email";
 import {
   agents,
   genie as mastraGenie,
@@ -16,11 +13,14 @@ import {
   plugin as webSearchPlugin,
   tool as webSearchToolModule,
 } from "@dbx-tools/appkit-web-search";
-import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
+import {
+  brand as emailBrand,
+  plugin as emailPlugin,
+  tool as emailToolModule,
+} from "@dbx-tools/email";
 import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
 import { z } from "zod";
 
 import { logDependencies } from "./dependencies.ts";

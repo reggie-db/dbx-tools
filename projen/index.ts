@@ -3,6 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as barrels from "./src/barrels.ts";
+export * as bunApp from "./src/bun-app.ts";
 export * as clean from "./src/clean.ts";
 export * as codegen from "./src/codegen.ts";
 export * as dbxToolsConfig from "./src/dbx-tools-config.ts";
@@ -20,7 +21,6 @@ export * as release from "./src/release.ts";
 export * as scaffold from "./src/scaffold.ts";
 export * as tags from "./src/tags.ts";
 export * as tsconfig from "./src/tsconfig.ts";
-export * as vite from "./src/vite.ts";
 export * as vscode from "./src/vscode.ts";
 export * as watch from "./src/watch.ts";
 export { DBXToolsConfig } from "./src/dbx-tools-config.ts";
@@ -41,6 +41,6 @@ export type { StandaloneRelease, DBXToolsReleaseOptions } from "./src/release.ts
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
 export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";
-export { DEFAULT_VITE_OVERRIDES, ViteConfigFile } from "./src/vite.ts";
+export { BUN_DEV_OVERRIDE, BUN_BUILD_OVERRIDE, BUN_APP_OVERRIDES, BunfigFile, BunDevServerFile, BunBuildFile } from "./src/bun-app.ts";
 export { DBXToolsVsCode } from "./src/vscode.ts";
 export type { IgnoreGroupOptions } from "./src/watch.ts";

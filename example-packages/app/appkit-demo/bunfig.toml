@@ -1,0 +1,5 @@
+# Tailwind v4 for the dev server (Bun.serve reads [serve.static] plugins).
+# Production build applies the plugin via Bun.build's API in build.ts - the
+# `bun build` CLI does not load bunfig plugins, so there is no [build] here.
+[serve.static]
+plugins = ["bun-plugin-tailwind"]

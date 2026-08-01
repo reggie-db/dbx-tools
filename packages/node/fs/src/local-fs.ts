@@ -64,6 +64,14 @@ export interface LocalFileSystemOptions {
    * Create {@link root} (and parents) during init. Defaults to true.
    */
   createRoot?: boolean;
+
+  /**
+   * Injectables forwarded to {@link resolveLocalRoot} for `~` expansion (home /
+   * temp / cwd overrides). Mainly for tests: bun's `os.homedir()` ignores a
+   * process-set `HOME`, so overriding home via `{ os: { homeDir } }` is the
+   * runtime-agnostic way to point a `~` root at a chosen directory.
+   */
+  os?: ResolveOsPathsOptions;
 }
 
 /**
@@ -72,10 +80,7 @@ export interface LocalFileSystemOptions {
  * caller: {@link LocalFileSystemOptions} without `root`, plus the
  * {@link resolveOsPaths} injectables.
  */
-export type OsFileSystemOptions = Omit<LocalFileSystemOptions, "root"> & {
-  /** Forwarded to {@link resolveLocalHome} / {@link resolveLocalTemp}. */
-  os?: ResolveOsPathsOptions;
-};
+export type OsFileSystemOptions = Omit<LocalFileSystemOptions, "root">;
 
 /**
  * {@link FileSystem} implementation that stores files in a folder on the local
@@ -98,7 +103,7 @@ export class LocalFileSystem extends BaseFileSystem<"local"> {
   private realRoot: string;
 
   constructor(options: LocalFileSystemOptions) {
-    const hostRoot = resolveLocalRoot(options.root);
+    const hostRoot = resolveLocalRoot(options.root, options.os);
     const root = posixPath.normalizeRoot(posixPath.toPosix(hostRoot));
     super({
       id: options.id ?? `local-${hash.fnvHash(root)}`,

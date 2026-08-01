@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env -S bun
 /**
  * `projen bump` - synth, compute the next release version, then (by default)
  * commit, tag, and push it. Pushing the tag is what triggers the release
@@ -11,9 +11,9 @@
  *   - the local `package.json` version,
  * then incremented by `--level` (patch | minor | major; default patch).
  *
- * `--sibling <dir>:<tagPrefix>` (repeatable) releases a standalone in-repo
- * project - one that is NOT a pnpm workspace member, so `pnpm -r` cannot see it -
- * at the SAME version as the root, in the same run: its manifest is stamped, its
+ * `--sibling <dir>:<tagPrefix>` (repeatable) releases an in-repo project that
+ * publishes on its OWN tag namespace (e.g. `projen/`, tagged `projen-v*`) at the
+ * SAME version as the root, in the same run: its manifest version is stamped, its
  * `<tagPrefix><version>` tag is cut and pushed (triggering its own workflow), and
  * it is included in the local-registry publish. Taking the base version from
  * every prefix at once is what keeps the two in lockstep: the engine sat at
@@ -32,7 +32,7 @@
  *
  * `--local-registry <value>` publishes the just-tagged version to a LOCAL
  * registry (e.g. a verdaccio) right after the git tag is pushed - so a local
- * `pnpm run bump` both fires the GitHub release (public npm) and populates your
+ * `bun run bump` both fires the GitHub release (public npm) and populates your
  * local registry. Values:
  *   - `auto` (default): publish only when `npm config get registry` is a
  *     loopback host (`localhost` / `127.0.0.0/8` / `::1`); otherwise skip.
@@ -44,15 +44,10 @@ import { log, net } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;
-const DEPENDENCY_FIELDS = [
-  "dependencies",
-  "devDependencies",
-  "optionalDependencies",
-  "peerDependencies",
-] as const;
 type Level = (typeof LEVELS)[number];
 
 /** A standalone in-repo project released alongside the root, on its own tag prefix. */
@@ -126,37 +121,28 @@ function readPackageVersion(pkgPath: string): [number, number, number] {
 }
 
 /**
- * Write `version` into a manifest projen owns. Those are emitted read-only, so
- * the write is bracketed by a chmod; the mode is restored afterwards to leave the
- * tree exactly as synth left it.
+ * Write ONLY the `version` field into a manifest projen owns (read-only, so
+ * bracketed by a chmod that restores the mode). Used for the ROOT and the
+ * standalone `projen/` sibling so the committed release marks the version.
+ *
+ * It deliberately does NOT rewrite `@scope/*` dep ranges. `projen/` is a workspace
+ * member with `workspace:*` sibling deps; baking a `^version` for the just-bumped
+ * (not-yet-published) version into the COMMITTED manifest breaks the release
+ * workflow's initial `bun install`, which checks out that commit before anything
+ * is published. Sibling versions are resolved transiently at publish time instead:
+ * `projen-release` runs `tasks/publish.ts --stamp-only` (set versions + refresh
+ * lockfile), then `bun publish` in `projen/` strips `workspace:*` to those versions.
  */
-function writeManifestVersion(pkgPath: string, version: string, dependencyScope?: string): void {
+function writeManifestVersion(pkgPath: string, version: string): void {
   const { mode } = statSync(pkgPath);
   chmodSync(pkgPath, mode | 0o200);
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
     pkg.version = version;
-    if (dependencyScope) {
-      for (const field of DEPENDENCY_FIELDS) {
-        const dependencies = pkg[field];
-        if (!dependencies || typeof dependencies !== "object") continue;
-        for (const name of Object.keys(dependencies)) {
-          if (name.startsWith(dependencyScope)) {
-            (dependencies as Record<string, string>)[name] = `^${version}`;
-          }
-        }
-      }
-    }
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   } finally {
     chmodSync(pkgPath, mode);
   }
-}
-
-/** Scoped package prefix (`@scope/`) shared by the root's release packages. */
-function releaseDependencyScope(pkgPath: string): string | undefined {
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { name?: string };
-  return /^@[^/]+\//.exec(pkg.name ?? "")?.[0];
 }
 
 /**
@@ -217,7 +203,6 @@ program
     }) => {
       const pkgPath = resolve(process.cwd(), "package.json");
       if (!existsSync(pkgPath)) throw new Error(`no package.json in ${process.cwd()}`);
-      const dependencyScope = releaseDependencyScope(pkgPath);
 
       const siblings = opts.sibling.map((s) => ({ ...s, pkgPath: resolve(s.dir, "package.json") }));
       for (const s of siblings) {
@@ -228,7 +213,7 @@ program
       // manifests, workspace file, tasks, ...) rather than a stale one.
       if (opts.synth) {
         logger.info("synthesizing (projen)");
-        exec.spawnSync("pnpm", ["exec", "projen"], {
+        exec.spawnSync("bun", [".projenrc.ts"], {
           cwd: process.cwd(),
           stdout: "inherit",
           stderr: "inherit",
@@ -265,7 +250,7 @@ program
 
       if (opts.version) {
         writeManifestVersion(pkgPath, version);
-        for (const s of siblings) writeManifestVersion(s.pkgPath, version, dependencyScope);
+        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
         const also = siblings.length ? ` (and ${siblings.map((s) => s.dir).join(", ")})` : "";
         logger.info(`wrote version ${version} to package.json${also}`);
       }
@@ -304,57 +289,26 @@ program
       }
       if (publishToLocalRegistry) {
         logger.info(`publishing ${version} to local registry ${localRegistry}`);
-        const runIn = (cwd: string, command: string, args: string[]) =>
-          exec.spawnSync(command, args, {
-            cwd,
-            stdout: "inherit",
-            stderr: "inherit",
-            stdin: "ignore",
-            check: true,
-          });
-        const runInRepo = (command: string, args: string[]) => runIn(process.cwd(), command, args);
-        // Each package keeps `version: 0.0.0` on disk (projen owns the
-        // manifest); the root bump above only touched the root. Mirror the CI
-        // `release` workflow: stamp the release version on EVERY package (they're
-        // projen-readonly, so unlock first) so `pnpm -r publish` publishes them
-        // as `version` (and rewrites `workspace:*` sibling pins to it) instead of
-        // `0.0.0`. No restore needed - the next `projen` synth rewrites these
-        // manifests back to `0.0.0`; the release version lives in the git tag.
-        runInRepo("chmod", ["-R", "u+w", "."]);
-        runInRepo("pnpm", [
-          "-r",
-          "exec",
-          "npm",
-          "version",
-          version,
-          "--no-git-tag-version",
-          "--allow-same-version",
-        ]);
-        // Provenance is opt-in (see `.projenrc.ts`): the generated
-        // `publishConfig` omits it, so local (verdaccio) publishes never try to
-        // attest. CI turns it on with `npm_config_provenance=true`.
-        runInRepo("pnpm", [
-          "-r",
-          "publish",
-          "--registry",
-          localRegistry,
-          "--no-git-checks",
-          "--access",
-          "public",
-        ]);
-        // `pnpm -r` cannot see a sibling (not a workspace member), so publish each
-        // one on its own. Skipping this is what left a local registry serving a
-        // current CLI against a months-old engine.
-        for (const s of siblings) {
-          runIn(s.dir, "pnpm", [
-            "publish",
-            "--registry",
-            localRegistry,
-            "--no-git-checks",
-            "--access",
-            "public",
-          ]);
-        }
+        // Mirror the CI `release` workflow via the shared publish task: it sets
+        // the release version on every workspace member (`bun pm pkg set`; they
+        // keep `0.0.0` on disk, projen-owned, so it unlocks each briefly), then
+        // `bun publish`es each non-private one - and bun natively strips the
+        // `workspace:`/`catalog:` protocols in the packed tarball, resolving each
+        // to the version just set. The next `projen` synth restores the manifests
+        // to `0.0.0`; the release version lives in the git tag. Provenance is off
+        // for a local registry (no OIDC), so `NPM_CONFIG_PROVENANCE` is unset.
+        // `publish.ts` is this task's SIBLING in the engine's `tasks/` dir; resolve
+        // it off `import.meta.url` (works whether the engine is source-linked in-repo
+        // or installed under node_modules) rather than a repo-relative `tasks/...`
+        // that only exists inside `projen/`.
+        const publishScript = fileURLToPath(new URL("./publish.ts", import.meta.url));
+        exec.spawnSync("bun", [publishScript, version, "--registry", localRegistry], {
+          cwd: process.cwd(),
+          stdout: "inherit",
+          stderr: "inherit",
+          stdin: "ignore",
+          check: true,
+        });
         logger.success(`published ${version} to ${localRegistry}`);
       }
 
@@ -364,7 +318,7 @@ program
       // manifest finish the bump in lockstep.
       if (opts.version) {
         writeManifestVersion(pkgPath, version);
-        for (const s of siblings) writeManifestVersion(s.pkgPath, version, dependencyScope);
+        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
         logger.info(`synchronized release manifests at ${version}`);
       }
     },
