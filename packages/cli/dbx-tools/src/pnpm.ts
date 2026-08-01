@@ -34,7 +34,7 @@
  * @module
  */
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { exec, project } from "@dbx-tools/core";
 import { functionModule, log } from "@dbx-tools/shared-core";
 import { needsInstall } from "./root.ts";
@@ -90,12 +90,20 @@ export function pnpmRegistryArgs(args: readonly string[]): string[] {
 }
 
 /**
- * `process.env` plus the registry under npm's env-var convention, for children
- * that read it (npm, npx, and anything they spawn). pnpm ignores it, which is
- * why the CLI flags above exist.
+ * `process.env` plus the current Node executable directory and registry aliases.
+ *
+ * The executable directory matters when this CLI was launched by absolute path
+ * (for example from QuickJS or mise activation that was not exported): pnpm
+ * itself runs, but lifecycle scripts invoke `node` by name and otherwise fail
+ * with `sh: node: not found`.
  */
 export function childEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  const nodeBin = dirname(process.execPath);
+  const pathEntries = (env.PATH ?? "").split(delimiter).filter(Boolean);
+  if (!pathEntries.includes(nodeBin)) {
+    env.PATH = [nodeBin, ...pathEntries].join(delimiter);
+  }
   const url = registryOverride();
   if (url) {
     // Both cases: env is case-sensitive on POSIX, and npm lowercases when reading.
