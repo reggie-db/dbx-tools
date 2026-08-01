@@ -2,6 +2,10 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export * as authAllowlist from "./src/auth/allowlist.ts";
+export * as authGate from "./src/auth/gate.ts";
+export * as authOtp from "./src/auth/otp.ts";
+export * as authRateLimit from "./src/auth/rate-limit.ts";
 export * as brand from "./src/brand.ts";
 export * as config from "./src/config.ts";
 export * as defaults from "./src/defaults.ts";
@@ -12,10 +16,15 @@ export * as plugin from "./src/plugin.ts";
 export * as sender from "./src/sender.ts";
 export * as tool from "./src/tool.ts";
 export * as transport from "./src/transport.ts";
+export { SESSION_COOKIE, AuthGate } from "./src/auth/gate.ts";
+export type { AuthGateOptions } from "./src/auth/gate.ts";
+export { CodeStore } from "./src/auth/otp.ts";
+export type { VerifyOutcome } from "./src/auth/otp.ts";
+export { RateLimiter } from "./src/auth/rate-limit.ts";
 export { defaultEmailBrand } from "./src/brand.ts";
 export type { EmailBrand } from "./src/brand.ts";
 export { DEFAULT_SMTP_PORT, IMPLICIT_TLS_SMTP_PORT, EMAIL_CONFIG_SCHEMA } from "./src/config.ts";
-export type { SenderPolicy, SmtpConfig, EmailPluginConfig, ResolvedSmtpConfig, ResolvedFileConfig, ResolvedEmailConfig } from "./src/config.ts";
+export type { SenderPolicy, SmtpConfig, EmailPluginConfig, AuthConfig, ResolvedSmtpConfig, ResolvedFileConfig, ResolvedEmailConfig, ResolvedAuthConfig } from "./src/config.ts";
 export { SEND_TIMEOUT_MS, VERIFY_TIMEOUT_MS, VERIFY_ATTEMPTS, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS_TOTAL_BYTES, MAX_ATTACHMENT_COUNT, MAX_BODY_CHARS, EMAIL_SEND_SETTINGS, EMAIL_VERIFY_SETTINGS, EMAIL_SENDERS_SETTINGS } from "./src/defaults.ts";
 export type { EmailExecuteConfig, EmailExecutionSettings } from "./src/defaults.ts";
 export { escapeHtml } from "./src/email-html.ts";

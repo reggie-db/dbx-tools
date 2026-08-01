@@ -324,6 +324,9 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
     "nodemailer@^7.0.13",
     "juice@^12.1.1",
     "marked@catalog:",
+    // `jose` powers the email-OTP access gate's session JWT (auth/otp.ts). Same
+    // runtime-agnostic HS256 signer node-teams uses for its Bot Framework JWT.
+    "jose@^6.2.3",
   );
   p.addDevDeps("@types/nodemailer@^7", "@types/express@catalog:", "@types/json-schema@^7");
 });
@@ -745,6 +748,9 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
     "@dbx-tools/ui-mastra@workspace:*",
     "@dbx-tools/ui-teams@workspace:*",
     "@dbx-tools/ui-search@workspace:*",
+    // The `AuthGate` email-OTP login screen fronting the app (the server's
+    // email plugin has `auth` enabled for the public tunnel).
+    "@dbx-tools/ui-email@workspace:*",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.
     "@databricks/appkit-ui@catalog:",

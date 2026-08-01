@@ -223,7 +223,17 @@ await createAppAuto({
     // primes the transport the approval-gated `send_email` tool reuses.
     // `brand` styles every rendered email (accent, font, header logo)
     // with the dbx-tools brand; drop it for the neutral default layout.
-    email({ brand: defaultEmailBrand }),
+    // The email-OTP ACCESS GATE is enabled here because this demo is exposed
+    // publicly through a portr tunnel (see scripts/start.sh) that bypasses the
+    // Databricks OAuth front door - so the app gates itself. `auth.allow`
+    // whitelists the Databricks domain; every request-code attempt reports
+    // success (anti-enumeration) but only a databricks.com address is emailed a
+    // code. The gate mounts `/api/email/auth/*` and protects every other route.
+    // Disable by omitting `auth` or setting EMAIL_AUTH_ENABLED=0.
+    email({
+      brand: defaultEmailBrand,
+      auth: { enabled: true, allow: ["databricks.com"] },
+    }),
     // Web-search runtime for the `web_search` / `web_fetch` tools. The
     // web-search model defaults to Gemini, then GPT (the native web-search
     // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,

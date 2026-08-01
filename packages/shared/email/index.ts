@@ -2,6 +2,9 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export * as auth from "./src/auth.ts";
 export * as email from "./src/email.ts";
+export { authRequestSchema, authRequestResultSchema, authVerifySchema, authVerifyResultSchema, authStatusSchema } from "./src/auth.ts";
+export type { AuthRequest, AuthRequestResult, AuthVerify, AuthVerifyResult, AuthStatus } from "./src/auth.ts";
 export { emailAttachmentSchema, emailMessageSchema, emailResultSchema, emailSendersSchema } from "./src/email.ts";
 export type { EmailAttachment, EmailMessage, EmailResult, EmailSenders } from "./src/email.ts";

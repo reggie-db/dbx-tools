@@ -2,10 +2,12 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export * as reactAuthGate from "./src/react/auth-gate.tsx";
 export * as reactEmailApprovalCard from "./src/react/email-approval-card.tsx";
 export * as reactEmailBody from "./src/react/email-body.tsx";
 export * as reactEmailCompose from "./src/react/email-compose.tsx";
 export * as reactFields from "./src/react/fields.ts";
+export type { AuthGateProps } from "./src/react/auth-gate.tsx";
 export { EmailPreview, EmailApprovalCard } from "./src/react/email-approval-card.tsx";
 export type { EmailPreviewProps, EmailApprovalCardProps } from "./src/react/email-approval-card.tsx";
 export { EmailBody } from "./src/react/email-body.tsx";

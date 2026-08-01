@@ -50,6 +50,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/ui-email",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/ui-mastra",
       "version": "workspace:*",
       "type": "runtime"
