@@ -27,6 +27,15 @@ const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",
   defaultReleaseBranch: "main",
   packageManager: NodePackageManager.PNPM,
+  // Keep this standalone project from being absorbed into the parent pnpm
+  // workspace. A non-empty native workspace schema forces projen to emit the
+  // local marker, so installs load `projen/.pnpmfile.cjs` and link the current
+  // `@dbx-tools/*` sources instead of stale registry copies.
+  pnpmOptions: {
+    workspaceYamlOptions: {
+      catalogMode: "manual",
+    },
+  },
   // The projenrc runner is wired to tsx below (not projen's default ts-node).
   // This package is `type: module`, and `.projenrc.ts` does a directory import
   // (`projen/lib/javascript`) that Node's ESM loader rejects under ts-node
@@ -108,6 +117,14 @@ const project = new typescript.TypeScriptProject({
     "tsoa@^6.6.0",
   ],
 });
+
+// projen 0.101's pnpm schema predates `allowBuilds`, but pnpm 10.33 only
+// honors this map (not `onlyBuiltDependencies`). Override the generated
+// top-level key directly; `esbuild` has no dots and this standalone marker has
+// no `packages` ordering concern, so neither addOverride hazard applies.
+const workspaceFile = project.files.find((file) => file.path === "pnpm-workspace.yaml");
+if (!workspaceFile) throw new Error("pnpm-workspace.yaml component is missing");
+workspaceFile.addOverride("allowBuilds", { esbuild: true });
 
 // This package is consumed as TS source; publish the source subpaths, not a
 // compiled `lib/`.

@@ -50,7 +50,7 @@
   },
   "main": "index.ts",
   "license": "Apache-2.0",
-  "version": "0.6.35",
+  "version": "0.6.36",
   "packageManager": "pnpm@10.33.0",
   "types": "index.ts",
   "type": "module",

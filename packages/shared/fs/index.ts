@@ -2,9 +2,9 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export * as baseFs from "./src/base-fs.ts";
+export * as baseFS from "./src/base-fs.ts";
 export * as fs from "./src/fs.ts";
-export * as memoryFs from "./src/memory-fs.ts";
+export * as memoryFS from "./src/memory-fs.ts";
 export * as posixPath from "./src/posix-path.ts";
 export { FileSystemError, BaseFileSystem } from "./src/base-fs.ts";
 export type { FileSystemRootSegment, FileSystemRootInput, FileSystemErrorCode, BaseFileSystemOptions } from "./src/base-fs.ts";
