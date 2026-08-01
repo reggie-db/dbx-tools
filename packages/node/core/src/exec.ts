@@ -47,6 +47,7 @@ import {
 } from "node:child_process";
 import * as readline from "node:readline";
 import { Readable } from "node:stream";
+import { finished } from "node:stream/promises";
 
 /** Shell-compatible exit code returned when an executable cannot be found. */
 export const COMMAND_NOT_FOUND_EXIT_CODE = 127;
@@ -332,8 +333,13 @@ function lineHandlers(option: StdioOption): LineHandler[] {
  * @param option - Stdio option to classify
  * @returns Whether `option` is `"inherit"`, `"pipe"`, or `"ignore"`
  */
-function isPassthroughMode(option: StdioOption): option is ExecStdio {
+function isPassthroughMode(option: unknown): option is ExecStdio {
   return option === "inherit" || option === "pipe" || option === "ignore";
+}
+
+/** True when stdin is data rather than one of the three reserved stdio modes. */
+function isStdinPayload(stdin: ExecStdio | string | undefined): stdin is string {
+  return typeof stdin === "string" && !isPassthroughMode(stdin);
 }
 
 /**
@@ -401,15 +407,24 @@ function queueLineReads(
 /**
  * Write string stdin to a spawned process and close the stream.
  *
- * No-op unless `stdin` is a string and `proc.stdin` is available.
+ * No-op unless `stdin` is a payload string (not a stdio mode) and
+ * `proc.stdin` is available. A child that exits before consuming the payload
+ * closes its pipe; EPIPE is expected in that case and is ignored.
  *
  * @param proc - Child process returned from `spawn`
  * @param stdin - Stdio mode or string payload from {@link ExecOptions}
  */
-function writeStdin(proc: ChildProcess, stdin: ExecStdio | string | undefined): void {
-  if (typeof stdin === "string" && proc.stdin) {
-    proc.stdin.write(stdin);
-    proc.stdin.end();
+async function writeStdin(
+  proc: ChildProcess,
+  stdin: ExecStdio | string | undefined,
+): Promise<void> {
+  if (!isStdinPayload(stdin) || !proc.stdin) return;
+  const completion = finished(proc.stdin, { cleanup: true });
+  proc.stdin.end(stdin);
+  try {
+    await completion;
+  } catch (err) {
+    if (!(err instanceof Error && "code" in err && err.code === "EPIPE")) throw err;
   }
 }
 
@@ -496,14 +511,14 @@ export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult
   const stderrLines: string[] = [];
   const stdoutHandler = resolveStdio(stdout, stdoutLines);
   const stderrHandler = resolveStdio(stderr, stderrLines);
-  const stdinMode: ExecStdio = typeof stdin === "string" ? "pipe" : (stdin ?? "inherit");
+  const stdinMode: ExecStdio = isStdinPayload(stdin) ? "pipe" : (stdin ?? "inherit");
 
   const proc = nodeSpawn(command, commandArgs, {
     ...spawnOpts,
     stdio: [stdinMode, stdoutHandler.mode, stderrHandler.mode],
   });
 
-  writeStdin(proc, stdin);
+  const stdinWrite = writeStdin(proc, stdin);
 
   const reads: Promise<void>[] = [];
   queueLineReads(reads, proc.stdout, stdoutHandler);
@@ -513,9 +528,9 @@ export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult
   let commandNotFoundError: NodeJS.ErrnoException | undefined;
   try {
     exitCode = await waitForExit(proc);
-    await Promise.all(reads);
+    await Promise.all([stdinWrite, ...reads]);
   } catch (err) {
-    await Promise.allSettled(reads);
+    await Promise.allSettled([stdinWrite, ...reads]);
     if (!isCommandNotFoundError(err)) throw err;
     commandNotFoundError = err;
     exitCode = COMMAND_NOT_FOUND_EXIT_CODE;
@@ -546,7 +561,7 @@ export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult
 export function spawnSync(...args: SpawnArgs<SyncExecOptions>): ExecResult {
   const { command, commandArgs, options = {} } = parseSpawnArgs(args);
   const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options;
-  const stdinMode: ExecStdio = typeof stdin === "string" ? "pipe" : (stdin ?? "inherit");
+  const stdinMode: ExecStdio = isStdinPayload(stdin) ? "pipe" : (stdin ?? "inherit");
   const captureStdout = stdout === "capture";
   const captureStderr = stderr === "capture";
   const stdoutMode = resolveSyncStdio(stdout);
@@ -556,7 +571,7 @@ export function spawnSync(...args: SpawnArgs<SyncExecOptions>): ExecResult {
     ...spawnOpts,
     encoding: captureStdout || captureStderr ? "utf8" : undefined,
     stdio: [stdinMode, stdoutMode, stderrMode],
-    input: typeof stdin === "string" ? stdin : undefined,
+    input: isStdinPayload(stdin) ? stdin : undefined,
   });
 
   const commandNotFound = isCommandNotFoundError(result.error);

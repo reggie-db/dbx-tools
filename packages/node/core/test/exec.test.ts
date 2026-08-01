@@ -38,3 +38,46 @@ describe("missing executable", () => {
     );
   });
 });
+
+describe("stdin modes", () => {
+  const echoStdin = [
+    "process.stdin.setEncoding('utf8');",
+    "let input = '';",
+    "process.stdin.on('data', chunk => input += chunk);",
+    "process.stdin.on('end', () => process.stdout.write(input));",
+  ].join("");
+
+  it("treats ignore as a stdio mode, not literal input", async () => {
+    const result = await exec.spawn(process.execPath, ["-e", echoStdin], {
+      stdin: "ignore",
+      stdout: "capture",
+      stderr: "capture",
+      check: true,
+    });
+
+    assert.equal(result.stdout, "");
+  });
+
+  it("still writes arbitrary string payloads", async () => {
+    const result = await exec.spawn(process.execPath, ["-e", echoStdin], {
+      stdin: "hello",
+      stdout: "capture",
+      stderr: "capture",
+      check: true,
+    });
+
+    assert.equal(result.stdout, "hello");
+  });
+
+  it("ignores EPIPE when a child exits before reading its payload", async () => {
+    const payload = "x".repeat(1024 * 1024);
+    const result = await exec.spawn(process.execPath, ["-e", "process.exit(0)"], {
+      stdin: payload,
+      stdout: "ignore",
+      stderr: "ignore",
+      check: true,
+    });
+
+    assert.equal(result.exitCode, 0);
+  });
+});
