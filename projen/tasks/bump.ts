@@ -229,7 +229,7 @@ program
       const tags = prefixes.map((prefix) => `${prefix}${version}`);
       logger.info(
         `bump ${base.join(".")} -> ${version} (${opts.level}); tags ${tags.join(", ")}` +
-        `${tagged.length ? "" : " [no remote tag]"}`,
+          `${tagged.length ? "" : " [no remote tag]"}`,
       );
       for (const t of tagged) {
         if (compareSemver(t.version, base) < 0) {
@@ -332,6 +332,16 @@ program
           ]);
         }
         logger.success(`published ${version} to ${localRegistry}`);
+      }
+
+      // Publishing can run package lifecycle hooks, including a standalone
+      // project's own projen synth, which rewrites its generated manifest back
+      // to 0.0.0. Re-assert the release version last so root and every sibling
+      // manifest finish the bump in lockstep.
+      if (opts.version) {
+        writeManifestVersion(pkgPath, version);
+        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
+        logger.info(`synchronized release manifests at ${version}`);
       }
     },
   );
