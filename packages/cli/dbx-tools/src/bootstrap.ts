@@ -4,13 +4,18 @@
  * @module
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { intro, outro } from "@clack/prompts";
 import { exec, project } from "@dbx-tools/core";
-import { json } from "@dbx-tools/shared-core";
+import { json, log } from "@dbx-tools/shared-core";
 import { childEnv, resolvePnpmArgv, runPnpm } from "./pnpm.ts";
 import { rootLabel } from "./root.ts";
+
+const logger = log.logger("dbx-tools:bootstrap");
+
+/** Published package name used for Node's self-reference manifest resolution. */
+const CLI_PACKAGE = "@dbx-tools/cli";
 
 /** Fallback when this CLI's own version isn't a real release (an in-repo `0.0.0`). */
 const FALLBACK_PROJEN_SPECIFIER = "@dbx-tools/projen@latest";
@@ -38,7 +43,12 @@ function defaultProjenSpecifier(): string {
 /** This CLI's own released version, or `undefined` for an in-repo `0.0.0` build. */
 function ownVersion(): string | undefined {
   try {
-    const manifestPath = fileURLToPath(new URL("../package.json", import.meta.url));
+    // Resolve through the package's exported `./package.json`, which works from
+    // both source (`src/bootstrap.ts`) and published output
+    // (`lib/src/bootstrap.js`). A relative URL is one level from the manifest
+    // in source but two levels away after compilation and silently fell back to
+    // `@latest` in every installed CLI.
+    const manifestPath = createRequire(import.meta.url).resolve(`${CLI_PACKAGE}/package.json`);
     const version = json.parseRecord(readFileSync(manifestPath, "utf8"))?.version;
     return typeof version === "string" && version !== "0.0.0" ? version : undefined;
   } catch {
@@ -159,7 +169,30 @@ export function seedToolchain(
 
   seedRegistry(root);
 
-  runPnpm(["add", "-D", "projen", "typescript@^5.9.3", "tsx@^4.23.0", projenSpecifier], root);
+  const kernelArch = exec.spawnSync("uname", ["-m"], {
+    stdin: "ignore",
+    stdout: "capture",
+    stderr: "ignore",
+  }).stdout;
+  logger.info("seeding toolchain", {
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    kernelArch: kernelArch || "unknown",
+    engine: projenSpecifier,
+  });
+  runPnpm(
+    [
+      "add",
+      "--reporter=append-only",
+      "-D",
+      "projen",
+      "typescript@^5.9.3",
+      "tsx@^4.23.0",
+      projenSpecifier,
+    ],
+    root,
+  );
 }
 
 /**

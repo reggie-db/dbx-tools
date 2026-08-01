@@ -95,7 +95,7 @@ export type ExecResult = {
 
 /** Options for {@link spawn}. Extends `SpawnOptions` except `stdio`, which is driven by `stdin` / `stdout` / `stderr`. */
 export type ExecOptions = Omit<SpawnOptions, "stdio"> & {
-  /** `"inherit"` by default, or a string written to the process stdin. */
+  /** `"inherit"` by default; `"pipe"` / `"ignore"` select modes, any other string is input. */
   stdin?: ExecStdio | string;
   stdout?: StdioOption;
   stderr?: StdioOption;
@@ -114,7 +114,7 @@ export type SyncExecStdio = ExecStdio | "capture";
 
 /** Options for {@link spawnSync}. Same shape as {@link ExecOptions} but without line-handler stdio. */
 export type SyncExecOptions = Omit<SpawnOptions, "stdio"> & {
-  /** `"inherit"` by default, or a string written to the process stdin. */
+  /** `"inherit"` by default; `"pipe"` / `"ignore"` select modes, any other string is input. */
   stdin?: ExecStdio | string;
   stdout?: SyncExecStdio;
   stderr?: SyncExecStdio;
