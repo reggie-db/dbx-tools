@@ -77,7 +77,7 @@ const registryOverride = functionModule.memoize((): string | undefined =>
 /** `--registry <url>` for npx, or `[]`. Placed BEFORE the package name by callers. */
 export function npxRegistryArgs(): string[] {
   const url = registryOverride();
-  return url ? ["--registry", url] : [];
+  return url ? ["--registrsy", url] : [];
 }
 
 /** `--registry <url>` for a pnpm invocation, or `[]` when the subcommand does not resolve. */

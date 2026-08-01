@@ -38,7 +38,7 @@ export interface ProjectContext {
  */
 function projectContextCommandOutput(command: string, args: string[], cwd: string): ProjectContext {
   const result = spawnSync(command, args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
-  const output = result.stdout.toString().trim();
+  const output = result?.stdout?.toString()?.trim();
   if (result.status === 0 && output) {
     const pathStats = stat(output);
     // Only an EXPLICIT `scheme://...` counts as a URL. `urlBuilder` otherwise
