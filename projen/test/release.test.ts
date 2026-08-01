@@ -42,3 +42,16 @@ describe("npm release workflow auth", () => {
     });
   }
 });
+
+describe("generated engine task paths", () => {
+  it("uses the stable package symlink rather than pnpm's physical store path", () => {
+    const tasks = JSON.parse(readFileSync(join(outdir, ".projen", "tasks.json"), "utf8")) as {
+      tasks: Record<string, { steps: Array<{ exec?: string }> }>;
+    };
+
+    assert.equal(
+      tasks.tasks.sync?.steps[0]?.exec,
+      "tsx node_modules/@dbx-tools/projen/tasks/sync.ts",
+    );
+  });
+});

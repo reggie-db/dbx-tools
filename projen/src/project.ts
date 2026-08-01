@@ -746,15 +746,16 @@ function registerRootTasks(project: javascript.NodeProject): void {
 }
 
 /**
- * `tsx <rel>/tasks/<script>` command for a projen task, relative to `project.outdir`.
- * Resolves the engine's `tasks/` dir off its installed package root (via
- * {@link resolvePkgRoot}), so it works both in-repo and when the engine is a
- * dependency in a consumer's `node_modules` - no filesystem walking.
+ * `tsx node_modules/@dbx-tools/projen/tasks/<script>` command for a projen task.
+ *
+ * Use the stable package symlink, never `require.resolve()`'s physical pnpm
+ * store path. A later install can change the peer-hash directory while leaving
+ * the package symlink valid; persisting the physical path made every generated
+ * task fail with ERR_MODULE_NOT_FOUND after such an update.
  */
-export function taskScript(project: javascript.NodeProject, script: string, args = ""): string {
-  const scriptPath = join(resolvePkgRoot(), "tasks", script);
-  const rel = toPosix(relative(resolve(project.outdir), scriptPath));
-  return args ? `tsx ${rel} ${args}` : `tsx ${rel}`;
+export function taskScript(_project: javascript.NodeProject, script: string, args = ""): string {
+  const scriptPath = toPosix(join("node_modules", "@dbx-tools", "projen", "tasks", script));
+  return args ? `tsx ${scriptPath} ${args}` : `tsx ${scriptPath}`;
 }
 
 /**

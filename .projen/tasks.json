@@ -8,7 +8,7 @@
       "name": "barrels",
       "steps": [
         {
-          "exec": "tsx projen/tasks/barrels.ts"
+          "exec": "tsx node_modules/@dbx-tools/projen/tasks/barrels.ts"
         }
       ]
     },
@@ -41,7 +41,7 @@
       "description": "Bump the release version (default patch), then commit, tag, and push it",
       "steps": [
         {
-          "exec": "tsx projen/tasks/bump.ts --prefix v --sibling projen:projen-v",
+          "exec": "tsx node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v --sibling projen:projen-v",
           "receiveArgs": true
         }
       ]
@@ -50,7 +50,7 @@
       "name": "clean",
       "steps": [
         {
-          "exec": "tsx projen/tasks/clean.ts",
+          "exec": "tsx node_modules/@dbx-tools/projen/tasks/clean.ts",
           "receiveArgs": true
         }
       ]
@@ -184,7 +184,7 @@
       "name": "openapi",
       "steps": [
         {
-          "exec": "tsx projen/tasks/openapi.ts"
+          "exec": "tsx node_modules/@dbx-tools/projen/tasks/openapi.ts"
         }
       ]
     },
@@ -221,7 +221,7 @@
       "name": "sync",
       "steps": [
         {
-          "exec": "tsx projen/tasks/sync.ts",
+          "exec": "tsx node_modules/@dbx-tools/projen/tasks/sync.ts",
           "receiveArgs": true
         }
       ]
