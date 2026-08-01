@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as cloud from "./src/cloud.ts";
-export * as databricksFS from "./src/databricks-fs.ts";
+export * as databricksFs from "./src/databricks-fs.ts";
 export * as databricksPath from "./src/databricks-path.ts";
 export * as net from "./src/net.ts";
 export * as workspace from "./src/workspace.ts";

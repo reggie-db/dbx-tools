@@ -48,7 +48,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.32",
+  "version": "0.0.0",
   "packageManager": "pnpm@10.33.0",
   "types": "index.ts",
   "type": "module",
