@@ -374,27 +374,37 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
 
     // The gate must protect the WHOLE app, but a plugin's own `injectRoutes`
     // router only covers `/api/email/*`. AppKit's `server` plugin exposes
-    // `addExtension(fn)` for exactly this: an app-level middleware registered
-    // before the server listens. Look it up by its registered name (no
-    // dependency on a specific server-plugin package) and mount the gate there.
-    // The login routes themselves are exempted by the middleware's `emailBase`
-    // open-prefix (`/api/email/auth`).
-    const server = this.context?.getPlugins().get("server") as
-      | { addExtension?: (fn: (app: express.Application) => void) => void }
-      | undefined;
-    if (server?.addExtension) {
-      server.addExtension((app) => app.use(gate.middleware(`/api/${EmailPlugin.manifest.name}`)));
-      logger.info("auth:enabled", {
-        patterns: auth.allow.length,
-        sessionTtlSeconds: auth.sessionTtlSeconds,
-      });
+    // `addExtension(fn)` for exactly this: an app-level middleware applied before
+    // the server listens. The lookup is deferred to the `setup:complete`
+    // lifecycle event because sibling plugins (including `server`) are not all
+    // registered during this plugin's own `setup()` - the same coordination
+    // `appkit-mastra` uses to wait for `lakebase`. The login routes are exempted
+    // by the middleware's open-prefix (`/api/email/auth`).
+    const registerGate = () => {
+      const server = this.context?.getPlugins().get("server") as
+        | { addExtension?: (fn: (app: express.Application) => void) => void }
+        | undefined;
+      if (server?.addExtension) {
+        server.addExtension((app) =>
+          app.use(gate.middleware(`/api/${EmailPlugin.manifest.name}`)),
+        );
+        logger.info("auth:enabled", {
+          patterns: auth.allow.length,
+          sessionTtlSeconds: auth.sessionTtlSeconds,
+        });
+      } else {
+        // No server plugin to gate through - the login routes still work, but the
+        // rest of the app would be ungated, so disable rather than half-enable.
+        this.authGate = undefined;
+        logger.warn(
+          "auth:disabled - the `server` plugin is required to gate the app; add server() to your plugins",
+        );
+      }
+    };
+    if (this.context?.onLifecycle) {
+      this.context.onLifecycle("setup:complete", registerGate);
     } else {
-      // No server plugin to gate through - the login routes still work, but the
-      // rest of the app would be ungated, so refuse to half-enable silently.
-      this.authGate = undefined;
-      logger.warn(
-        "auth:disabled - the `server` plugin is required to gate the app; add server() to your plugins",
-      );
+      registerGate();
     }
   }
 
