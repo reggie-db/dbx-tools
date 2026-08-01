@@ -56,7 +56,6 @@ const REGISTRY_SUBCOMMANDS = new Set([
   "dlx",
   "i",
   "import",
-  "init",
   "install",
   "link",
   "up",
@@ -85,8 +84,13 @@ export function npxRegistryArgs(): string[] {
 export function pnpmRegistryArgs(args: readonly string[]): string[] {
   const url = registryOverride();
   if (!url) return [];
+  return pnpmUsesRegistry(args) ? ["--registry", url] : [];
+}
+
+/** Whether the first pnpm subcommand resolves packages and accepts `--registry`. */
+export function pnpmUsesRegistry(args: readonly string[]): boolean {
   const subcommand = args.find((arg) => !arg.startsWith("-"));
-  return subcommand && REGISTRY_SUBCOMMANDS.has(subcommand) ? ["--registry", url] : [];
+  return subcommand !== undefined && REGISTRY_SUBCOMMANDS.has(subcommand);
 }
 
 /**

@@ -46,7 +46,7 @@
   },
   "pnpm": {},
   "license": "UNLICENSED",
-  "version": "0.6.30",
+  "version": "0.6.31",
   "packageManager": "pnpm@10.33.0",
   "type": "module",
   "private": true,

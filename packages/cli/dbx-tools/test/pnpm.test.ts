@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { delimiter, dirname } from "node:path";
 import { describe, it } from "node:test";
 
-import { childEnv } from "../src/pnpm.ts";
+import { childEnv, pnpmUsesRegistry } from "../src/pnpm.ts";
 
 describe("childEnv", () => {
   it("makes the current Node executable available to lifecycle scripts", () => {
@@ -28,5 +28,19 @@ describe("childEnv", () => {
 
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout.trim(), process.version);
+  });
+});
+
+describe("pnpmUsesRegistry", () => {
+  it("adds registry routing only to package-resolving commands", () => {
+    assert.equal(pnpmUsesRegistry(["add", "tsx"]), true);
+    assert.equal(pnpmUsesRegistry(["install"]), true);
+    assert.equal(pnpmUsesRegistry(["--silent", "update"]), true);
+  });
+
+  it("leaves init and forwarding commands alone", () => {
+    assert.equal(pnpmUsesRegistry(["init"]), false);
+    assert.equal(pnpmUsesRegistry(["exec", "projen"]), false);
+    assert.equal(pnpmUsesRegistry(["run", "build"]), false);
   });
 });
