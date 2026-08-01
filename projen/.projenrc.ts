@@ -12,6 +12,7 @@
  * under `../packages/` by this project's `.pnpmfile.cjs`, so they stay listed
  * here as plain (registry-shaped) dependencies.
  */
+import { readFileSync } from "node:fs";
 import { javascript, typescript } from "projen";
 import { NodePackageManager } from "projen/lib/javascript";
 
@@ -22,6 +23,10 @@ import { NodePackageManager } from "projen/lib/javascript";
  * trigger + version-lookup key for the release workflow below.
  */
 const RELEASE_TAG_PREFIX = "projen-v";
+const PACKAGE_VERSION =
+  (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
+    version?: string;
+  }).version ?? "0.0.0";
 
 const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",
@@ -81,15 +86,12 @@ const project = new typescript.TypeScriptProject({
     "@clack/prompts@^1.7.0",
     // A REAL published range, never `*`. In-repo these three resolve through
     // `.pnpmfile.cjs` to `link:../packages/...`, so the range is inert here - but
-    // it ships verbatim in the tarball, and projen's install step resolves a `*`
-    // against whatever is linked, which is the workspace's permanent `0.0.0`.
-    // That wrote `^0.0.0` (a caret on 0.0.0 matches ONLY 0.0.0), so a published
-    // engine became uninstallable: `No matching version found for
-    // @dbx-tools/path@^0.0.0`. These are independently released packages, so
-    // widen this floor by hand when the engine starts needing a newer API.
-    "@dbx-tools/core@^0.3.40",
-    "@dbx-tools/path@^0.3.40",
-    "@dbx-tools/shared-core@^0.3.40",
+    // it ships verbatim in the tarball. The shared root bump stamps
+    // PACKAGE_VERSION and these ranges together, so the engine cannot resolve
+    // an older sibling implementation than the release it was built against.
+    `@dbx-tools/core@^${PACKAGE_VERSION}`,
+    `@dbx-tools/path@^${PACKAGE_VERSION}`,
+    `@dbx-tools/shared-core@^${PACKAGE_VERSION}`,
     "commander@^15.0.0",
     // `tasks/sync.ts` imports this to fan the watchers out. It resolved here only
     // because the repo root happens to depend on it; a consumer install has no
@@ -117,6 +119,11 @@ const project = new typescript.TypeScriptProject({
     "tsoa@^6.6.0",
   ],
 });
+
+// Preserve the version stamped by the shared root bump. The TypeScriptProject
+// constructor's `version` option is ignored when `release: false`, so write the
+// generated manifest field explicitly.
+project.package.addField("version", PACKAGE_VERSION);
 
 // projen 0.101's pnpm schema predates `allowBuilds`, but pnpm 10.33 only
 // honors this map (not `onlyBuiltDependencies`). Override the generated

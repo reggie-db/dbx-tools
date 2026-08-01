@@ -31,17 +31,17 @@
     },
     {
       "name": "@dbx-tools/core",
-      "version": "^0.3.40",
+      "version": "^0.6.36",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/path",
-      "version": "^0.3.40",
+      "version": "^0.6.36",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
-      "version": "^0.3.40",
+      "version": "^0.6.36",
       "type": "runtime"
     },
     {

@@ -831,8 +831,11 @@ projen:projen-v` from the `standaloneReleases` option: it takes the base version
   is the workspace's permanent `0.0.0`, and wrote `^0.0.0`. A caret on `0.0.0`
   matches ONLY `0.0.0`, so publishing that would have produced an engine nobody
   can install (`No matching version found for @dbx-tools/path@^0.0.0`), and the
-  in-repo link means no amount of local testing would show it. They are pinned to
-  `^0.3.40`; widen the floor by hand when the engine needs a newer sibling API.
+  in-repo link means no amount of local testing would show it. The standalone
+  config derives these ranges from its persisted package version, and the shared
+  root bump rewrites every same-scope dependency to `^<release>` whenever it
+  stamps the sibling manifest. Do not replace that with a hand-maintained floor:
+  it lets an engine install an older core than the release it was built against.
 - **A generator tool the WORKSPACE already provides is a devDep, not a dep.** Every
   engine dependency is installed by every consumer, including ones that never reach
   the code path needing it, so the heavy generator toolchains are loaded lazily

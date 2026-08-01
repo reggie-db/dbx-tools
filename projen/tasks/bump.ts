@@ -47,6 +47,12 @@ import { resolve } from "node:path";
 
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;
+const DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+] as const;
 type Level = (typeof LEVELS)[number];
 
 /** A standalone in-repo project released alongside the root, on its own tag prefix. */
@@ -124,16 +130,33 @@ function readPackageVersion(pkgPath: string): [number, number, number] {
  * the write is bracketed by a chmod; the mode is restored afterwards to leave the
  * tree exactly as synth left it.
  */
-function writeManifestVersion(pkgPath: string, version: string): void {
+function writeManifestVersion(pkgPath: string, version: string, dependencyScope?: string): void {
   const { mode } = statSync(pkgPath);
   chmodSync(pkgPath, mode | 0o200);
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
     pkg.version = version;
+    if (dependencyScope) {
+      for (const field of DEPENDENCY_FIELDS) {
+        const dependencies = pkg[field];
+        if (!dependencies || typeof dependencies !== "object") continue;
+        for (const name of Object.keys(dependencies)) {
+          if (name.startsWith(dependencyScope)) {
+            (dependencies as Record<string, string>)[name] = `^${version}`;
+          }
+        }
+      }
+    }
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   } finally {
     chmodSync(pkgPath, mode);
   }
+}
+
+/** Scoped package prefix (`@scope/`) shared by the root's release packages. */
+function releaseDependencyScope(pkgPath: string): string | undefined {
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { name?: string };
+  return /^@[^/]+\//.exec(pkg.name ?? "")?.[0];
 }
 
 /**
@@ -194,6 +217,7 @@ program
     }) => {
       const pkgPath = resolve(process.cwd(), "package.json");
       if (!existsSync(pkgPath)) throw new Error(`no package.json in ${process.cwd()}`);
+      const dependencyScope = releaseDependencyScope(pkgPath);
 
       const siblings = opts.sibling.map((s) => ({ ...s, pkgPath: resolve(s.dir, "package.json") }));
       for (const s of siblings) {
@@ -241,7 +265,7 @@ program
 
       if (opts.version) {
         writeManifestVersion(pkgPath, version);
-        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
+        for (const s of siblings) writeManifestVersion(s.pkgPath, version, dependencyScope);
         const also = siblings.length ? ` (and ${siblings.map((s) => s.dir).join(", ")})` : "";
         logger.info(`wrote version ${version} to package.json${also}`);
       }
@@ -340,7 +364,7 @@ program
       // manifest finish the bump in lockstep.
       if (opts.version) {
         writeManifestVersion(pkgPath, version);
-        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
+        for (const s of siblings) writeManifestVersion(s.pkgPath, version, dependencyScope);
         logger.info(`synchronized release manifests at ${version}`);
       }
     },
