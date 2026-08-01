@@ -204,6 +204,14 @@ const support = createAgent(supportDefinition);
 // local tunnel.
 const host = process.env.HOST ?? (databricks.isAppEnv() ? "0.0.0.0" : "127.0.0.1");
 
+// When the email-OTP gate proxy fronts the app (public portr tunnel), the proxy
+// binds DATABRICKS_APP_PORT and the app binds APP_INTERNAL_PORT on loopback so
+// only the proxy can reach it. Absent APP_INTERNAL_PORT, AppKit uses
+// DATABRICKS_APP_PORT as usual (no proxy).
+const internalPort = process.env.APP_INTERNAL_PORT
+  ? Number(process.env.APP_INTERNAL_PORT)
+  : undefined;
+
 // Report what actually resolved before serving anything: the demo can run its
 // `@dbx-tools/*` packages from source or from the registry, and only the
 // versions on disk say which one this process got.
@@ -216,7 +224,11 @@ process.env.SEARCH_INDEX ??= DEFAULT_SEARCH_INDEX;
 
 await createAppAuto({
   plugins: [
-    server({ host, staticPath: clientDist }),
+    server({
+      host: internalPort ? "127.0.0.1" : host,
+      staticPath: clientDist,
+      ...(internalPort ? { port: internalPort } : {}),
+    }),
     genie(),
     lakebase(),
     // Validates SMTP config + verifies connectivity at startup, and

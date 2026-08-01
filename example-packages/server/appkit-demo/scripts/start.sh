@@ -27,8 +27,20 @@ readonly SHUTDOWN_GRACE_SECS=5
 # dev mode still serves the prebuilt client bundle rather than a Vite dev server.
 export NODE_ENV="${NODE_ENV:-development}"
 
+# When a public tunnel is enabled we front the app with the email-OTP gate proxy:
+# the proxy binds DATABRICKS_APP_PORT (what portr tunnels) and the app binds a
+# loopback APP_INTERNAL_PORT that only the proxy reaches. Without a tunnel the app
+# binds DATABRICKS_APP_PORT directly (no proxy, no gate). The proxy is required
+# because AppKit's in-app gate can't cover sibling plugin APIs (see gate-proxy.ts).
+_gate_enabled=0
+if [[ -n "${PUBLIC_DOMAIN:-}" && -n "${PORTR_TOKEN:-}" ]]; then
+  _gate_enabled=1
+  export APP_INTERNAL_PORT="${APP_INTERNAL_PORT:-8001}"
+fi
+
 declare -A _pids=()
 _bun_pid=""
+_proxy_pid=""
 _portr_pid=""
 _shutdown=0
 
@@ -116,8 +128,20 @@ trap '_signal_handler TERM' TERM
 trap '_signal_handler INT'  INT
 trap '_signal_handler HUP'  HUP
 
-# Foreground role the Apps platform health-checks against. Run bun directly so
-# this shell supervises it and forwards signals.
+# The email-OTP gate proxy (only when a tunnel is enabled): binds the public
+# DATABRICKS_APP_PORT and forwards authenticated traffic to the app on
+# APP_INTERNAL_PORT. Started before the app so it's listening when portr connects;
+# it simply 502s until the app is up, then serves gated.
+if (( _gate_enabled )); then
+  bun scripts/gate-proxy.ts &
+  _proxy_pid=$!
+  _register gate-proxy "$_proxy_pid"
+  echo "[start] gate proxy on :${DATABRICKS_APP_PORT} -> app :${APP_INTERNAL_PORT}" >&2
+fi
+
+# The app. Foreground role the Apps platform health-checks against (when no
+# proxy, it binds DATABRICKS_APP_PORT directly). Run bun directly so this shell
+# supervises it and forwards signals.
 bun src/server.ts &
 _bun_pid=$!
 _register bun "$_bun_pid"

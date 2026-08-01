@@ -138,16 +138,25 @@ export class AuthGate {
   }
 
   /**
-   * Express middleware gating requests on the APP router (mounted at the app
-   * root). Requests to the login flow (`<emailBase>/auth/*`) pass through so a
-   * caller can authenticate; the app's own API/asset requests need a valid
-   * session or get a 401. `emailBase` is the plugin's mount path (e.g.
-   * `/api/email`) so the open prefix is matched against the full request path.
+   * Express middleware gating the app's DATA APIs behind a session.
+   *
+   * It gates `/api/*` and returns 401 for an unauthenticated caller - EXCEPT the
+   * login flow itself (`<emailBase>/auth/*`), which must stay open so a caller
+   * can obtain a session. Static assets (the SPA shell, JS/CSS, favicons) are
+   * NOT gated: the browser has to load the client so the `<AuthGate>` React
+   * component can render the login screen and call these endpoints. A gated
+   * `/api` request from the un-logged-in SPA simply 401s, which the client
+   * treats as "show the login". This is the standard SPA gate shape - protect
+   * the data, serve the shell.
+   *
+   * `emailBase` is the email plugin's mount path (e.g. `/api/email`), so both the
+   * open login prefix and the gated API prefix are matched on the full path.
    */
   middleware(emailBase: string): (req: Request, res: Response, next: NextFunction) => void {
     const openPrefix = `${emailBase}${AUTH_PATH_PREFIX}`;
     return (req, res, next) => {
-      if (req.path.startsWith(openPrefix)) {
+      // Only API traffic is gated; static assets load freely so the login UI can.
+      if (!req.path.startsWith("/api/") || req.path.startsWith(openPrefix)) {
         next();
         return;
       }
