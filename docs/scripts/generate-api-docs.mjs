@@ -352,12 +352,16 @@ function generatePackageApi(pkg) {
   const outDir = path.join(apiRoot, pkg.slug);
   fs.rmSync(outDir, { recursive: true, force: true });
 
+  // `bun x`, not `pnpm exec`: the repo installs with bun and the docs workflow
+  // never puts pnpm on the runner, so spawning it exited with a null status and
+  // no output at all (ENOENT), surfacing only as "TypeDoc failed\nnull\nnull".
+  // Every path below is already relative to `siteRoot`, so the spawn `cwd` is
+  // what points both bun and typedoc at the generated site - `bun x` has no
+  // `--cwd` of its own and reads the flag as a dependency spec.
   const result = spawnSync(
-    "pnpm",
+    "bun",
     [
-      "--dir",
-      siteRoot,
-      "exec",
+      "x",
       "typedoc",
       posix(path.relative(siteRoot, pkg.entry)),
       "--plugin",
@@ -383,7 +387,7 @@ function generatePackageApi(pkg) {
       "true",
     ],
     {
-      cwd: root,
+      cwd: siteRoot,
       encoding: "utf8",
       stdio: "pipe",
     },
