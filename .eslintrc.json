@@ -54,7 +54,7 @@
     "**/bunfig.override.toml",
     "**/bun-dev.override.ts",
     "**/bun-build.override.ts",
-    "packages/shared/core/src/string-example.ts",
+    "packages/shared/core/src/string.ts",
     "packages/shared/genie/src/dashboards.ts"
   ],
   "rules": {
