@@ -12,8 +12,9 @@ export * as plugin from "./src/plugin.ts";
 export * as portr from "./src/portr.ts";
 export * as proxy from "./src/proxy.ts";
 export * as rateLimit from "./src/rate-limit.ts";
+export * as signingKey from "./src/signing-key.ts";
 export { CommanderError } from "./src/cli.ts";
-export { ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, MESSAGE_ENV, SESSION_TTL_ENV, CODE_TTL_ENV, JWT_SECRET_ENV, PUBLIC_DOMAIN_ENV, INSECURE_ENV, FORWARD_HEADERS_ENV } from "./src/env.ts";
+export { ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, MESSAGE_ENV, SESSION_TTL_ENV, CODE_TTL_ENV, JWT_SECRET_ENV, SESSION_EPOCH_ENV, PUBLIC_DOMAIN_ENV, INSECURE_ENV, FORWARD_HEADERS_ENV } from "./src/env.ts";
 export { PROTECTED_HEADERS, DEFAULT_FORWARD_HEADERS } from "./src/headers.ts";
 export type { HeaderPolicy } from "./src/headers.ts";
 export { CodeStore } from "./src/otp.ts";
@@ -23,3 +24,5 @@ export type { AuthGateConfig, SendCodeOptions, ResolvedAuthGateConfig, AuthGateA
 export type { PortrConfig } from "./src/portr.ts";
 export type { ProxyOptions } from "./src/proxy.ts";
 export { RateLimiter } from "./src/rate-limit.ts";
+export { KEY_TTL_SECONDS } from "./src/signing-key.ts";
+export type { SigningKey } from "./src/signing-key.ts";

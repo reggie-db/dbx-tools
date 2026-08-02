@@ -30,6 +30,7 @@ import {
 } from "./env.ts";
 import { CodeStore, signSession, verifySession } from "./otp.ts";
 import { RateLimiter } from "./rate-limit.ts";
+import { KEY_TTL_SECONDS, resolveSessionEpoch, signingKey } from "./signing-key.ts";
 
 const logger = log.logger("tunnel:auth");
 
@@ -62,12 +63,26 @@ export interface AuthGateConfig extends BasePluginConfig {
    * what the platform code-detection heuristics key on.
    */
   message?: string;
-  /** Session lifetime (seconds). Env TUNNEL_AUTH_SESSION_TTL. Default 43200 (12h). */
+  /**
+   * Session lifetime (seconds). Env TUNNEL_AUTH_SESSION_TTL. Default 2592000 (30d).
+   *
+   * Matched to the cache-backed signing key's own 30-day TTL (see
+   * `./signing-key.ts`): the cookie and the key that validates it should expire
+   * together, or one silently outlives the other.
+   */
   sessionTtlSeconds?: number;
   /** One-time-code lifetime (seconds). Env TUNNEL_AUTH_CODE_TTL. Default 600 (10m). */
   codeTtlSeconds?: number;
   /** Max verify attempts per issued code. Default 5. */
   maxAttempts?: number;
+  /**
+   * Force-clear date: every session issued BEFORE it stops verifying, so moving
+   * it forward signs everyone out. Env TUNNEL_AUTH_SESSION_EPOCH.
+   *
+   * Any `Date`-parseable value (`2026-08-02`, an ISO timestamp) or bare epoch
+   * seconds / millis. Unset means no cutoff.
+   */
+  sessionEpoch?: string | number | Date;
   /** Deliver a code to an address. Wired by the app to the email plugin. */
   sendCode?: (email: string, code: string, opts: SendCodeOptions) => Promise<void>;
 }
@@ -95,6 +110,8 @@ export interface ResolvedAuthGateConfig {
   sessionTtlSeconds: number;
   codeTtlSeconds: number;
   maxAttempts: number;
+  /** Force-clear cutoff in epoch ms; `0` when unset. */
+  sessionEpochMs: number;
 }
 
 const DEFAULTS = {
@@ -107,7 +124,8 @@ const DEFAULTS = {
   // is the fallback when nothing is configured.
   brandName: brand.defaultBrandContext.name,
   message: "Your verification code is:",
-  sessionTtlSeconds: 43200,
+  // 30 days, the same window the cache-backed signing key is stored for.
+  sessionTtlSeconds: KEY_TTL_SECONDS,
   codeTtlSeconds: 600,
   maxAttempts: 5,
 };
@@ -130,6 +148,7 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     ),
     codeTtlSeconds: env.positiveInt(config.codeTtlSeconds, CODE_TTL_ENV, DEFAULTS.codeTtlSeconds),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
+    sessionEpochMs: resolveSessionEpoch(config.sessionEpoch),
   };
 }
 
@@ -171,9 +190,14 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   override async setup(): Promise<void> {
     this.resolved = resolveAuthGateConfig(this.config);
     this.codes = new CodeStore(this.resolved.codeTtlSeconds, this.resolved.maxAttempts);
+    // Resolve the signing key HERE rather than lazily on the first sign-in, so a
+    // cache that cannot hold it (and the resulting "sessions won't survive a
+    // restart" warning) shows up in the startup log, not hours later.
+    const { epochMs } = await signingKey(this.resolved.sessionEpochMs);
     logger.info("ready", {
       patterns: this.resolved.allow.length,
       sessionTtlSeconds: this.resolved.sessionTtlSeconds,
+      ...(epochMs > 0 ? { sessionEpoch: new Date(epochMs).toISOString() } : {}),
     });
   }
 

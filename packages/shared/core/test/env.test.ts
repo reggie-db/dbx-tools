@@ -89,3 +89,15 @@ describe("env.list", () => {
     assert.deepEqual(env.list([], KEYS), []);
   });
 });
+
+describe("env.name", () => {
+  it("returns the primary name from an alias list", () => {
+    assert.equal(env.name(KEYS), KEYS[0]);
+  });
+
+  it("returns a bare string key as-is", () => {
+    // The reason this helper exists: `"TUNNEL_AUTH_SESSION_EPOCH"[0]` is "T", so
+    // indexing an EnvKey to name it in a log produces a nonexistent variable.
+    assert.equal(env.name("TUNNEL_AUTH_SESSION_EPOCH"), "TUNNEL_AUTH_SESSION_EPOCH");
+  });
+});

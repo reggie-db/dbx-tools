@@ -340,7 +340,9 @@ without paying formatting cost when disabled.
 - `object` - record checks, boolean coercion, present-only field spreading, deep
   equality, shape types, and lazy sequence transforms + collection helpers.
 - `env` - config-over-environment resolution: strings, booleans, positive
-  numbers/integers, and lists, with env-name fallback chains.
+  numbers/integers, and lists, with env-name fallback chains. `name()` gives the
+  primary variable name for a log line or error - an `EnvKey` may be a bare
+  string, so indexing `keys[0]` yields a character, not a name.
 - `predicate` - composable boolean/type predicates.
 - `pattern` - literal / glob / `/regex/` allow-list matching compiled to a
   predicate.

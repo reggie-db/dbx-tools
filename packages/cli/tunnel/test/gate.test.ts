@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
-import { brand } from "@dbx-tools/shared-core";
+import { async as asyncModule, brand } from "@dbx-tools/shared-core";
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
 import { expiresIn } from "../src/app.ts";
 import { ALLOW_ENV, BRAND_NAME_ENV, CODE_TTL_ENV, SUBJECT_ENV } from "../src/env.ts";
-import { CodeStore, resetSigningKey, signSession, verifySession } from "../src/otp.ts";
+import { CodeStore, signSession, verifySession } from "../src/otp.ts";
 import { resolveAuthGateConfig } from "../src/plugin.ts";
 import { RateLimiter } from "../src/rate-limit.ts";
+import { KEY_TTL_SECONDS, resetSigningKey, resolveSessionEpoch } from "../src/signing-key.ts";
 
 describe("allowlist", () => {
   it("matches domain shortcut, glob, and /regex/; empty = nobody", () => {
@@ -76,6 +77,140 @@ describe("session jwt", () => {
   it("rejects an empty / bad token", async () => {
     assert.equal(await verifySession(undefined), undefined);
     assert.equal(await verifySession("not.a.jwt"), undefined);
+  });
+});
+
+/**
+ * The signing key decides whether an already-issued COOKIE still verifies, so the
+ * property under test is survival across a RESTART. `resetSigningKey()` is that
+ * restart: it drops the per-process memo while the cache (which in a real
+ * deployment is Lakebase-backed) keeps the key.
+ */
+describe("cache-backed signing key", () => {
+  before(async () => {
+    await CacheManager.getInstance();
+    delete process.env.TUNNEL_AUTH_JWT_SECRET;
+    delete process.env.AUTH_JWT_SECRET;
+    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    resetSigningKey();
+  });
+
+  it("keeps a session valid across a restart, with no configured secret", async () => {
+    const token = await signSession("persist@b.com", 3600);
+    assert.equal(await verifySession(token), "persist@b.com");
+
+    // The restart: nothing memoized, key re-read from the cache.
+    resetSigningKey();
+    assert.equal(
+      await verifySession(token),
+      "persist@b.com",
+      "a cookie must outlive the process that signed it",
+    );
+  });
+
+  it("stores the key for 30 days, matching the default session lifetime", () => {
+    assert.equal(KEY_TTL_SECONDS, 30 * 24 * 60 * 60);
+    // A key that expired before the cookies it signed would log everyone out for
+    // no reason, so these two are deliberately equal.
+    assert.equal(resolveAuthGateConfig({}).sessionTtlSeconds, KEY_TTL_SECONDS);
+  });
+
+  it("re-reads after writing, so racing instances converge on one key", async () => {
+    // Two "instances" resolving from the same cache must agree: the second boot
+    // adopts the STORED key rather than the one it generated itself.
+    const first = await signSession("race@b.com", 3600);
+    resetSigningKey();
+    const second = await signSession("race@b.com", 3600);
+    assert.equal(await verifySession(first), "race@b.com");
+    assert.equal(await verifySession(second), "race@b.com");
+  });
+
+  it("an explicit secret wins over the cached key", async () => {
+    process.env.TUNNEL_AUTH_JWT_SECRET = "operator-held-secret";
+    resetSigningKey();
+    const token = await signSession("env@b.com", 3600);
+    assert.equal(await verifySession(token), "env@b.com");
+
+    // Dropping the secret falls back to the cached key, which did NOT sign this
+    // token - so it must no longer verify.
+    delete process.env.TUNNEL_AUTH_JWT_SECRET;
+    resetSigningKey();
+    assert.equal(await verifySession(token), undefined);
+  });
+});
+
+describe("session force-clear epoch", () => {
+  before(async () => {
+    await CacheManager.getInstance();
+    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    resetSigningKey();
+  });
+
+  it("parses a date, an ISO timestamp, epoch seconds, and epoch millis", () => {
+    assert.equal(resolveSessionEpoch("2026-08-02"), Date.parse("2026-08-02"));
+    assert.equal(
+      resolveSessionEpoch("2026-08-02T12:00:00.000Z"),
+      Date.parse("2026-08-02T12:00:00.000Z"),
+    );
+    // `date +%s` output. Seconds must not be read as a YEAR, which is what
+    // `Date.parse` would do with a bare number.
+    assert.equal(resolveSessionEpoch("1785697899"), 1785697899000);
+    assert.equal(resolveSessionEpoch("1785697899000"), 1785697899000);
+    assert.equal(resolveSessionEpoch(new Date(1785697899000)), 1785697899000);
+  });
+
+  it("treats unset / unparseable as no cutoff rather than throwing", () => {
+    // This is the switch that logs a fleet back in; a typo must not stop boot.
+    assert.equal(resolveSessionEpoch(undefined), 0);
+    assert.equal(resolveSessionEpoch(""), 0);
+    assert.equal(resolveSessionEpoch("not-a-date"), 0);
+  });
+
+  it("refuses a session issued before the epoch, and accepts one issued after", async () => {
+    // Signed a couple of seconds "ago" so the cutoff below can land strictly
+    // after it - `iat` is second-granular, so a same-second token is kept.
+    const token = await signSession("epoch@b.com", 3600);
+    assert.equal(await verifySession(token), "epoch@b.com");
+
+    await asyncModule.sleep(1100);
+    process.env.TUNNEL_AUTH_SESSION_EPOCH = String(Date.now());
+    resetSigningKey();
+    assert.equal(await verifySession(token), undefined, "a pre-epoch cookie is dead");
+
+    // A session minted under the new epoch still works - the switch clears the
+    // outstanding sessions, it does not lock the app.
+    const fresh = await signSession("epoch@b.com", 3600);
+    assert.equal(await verifySession(fresh), "epoch@b.com");
+
+    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    resetSigningKey();
+  });
+
+  it("clamps a FUTURE epoch to now, so a mistyped year can't lock everyone out", async () => {
+    const future = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    const resolved = resolveSessionEpoch(future);
+    assert.ok(resolved < future.getTime(), "not taken at face value");
+    assert.ok(Math.abs(resolved - Date.now()) < 5_000, "held at now");
+
+    // The real hazard: with an unclamped future cutoff a FRESH sign-in would also
+    // be refused, leaving no way back in.
+    process.env.TUNNEL_AUTH_SESSION_EPOCH = future.toISOString();
+    resetSigningKey();
+    const fresh = await signSession("future@b.com", 3600);
+    assert.equal(await verifySession(fresh), "future@b.com");
+    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    resetSigningKey();
+  });
+
+  it("scopes the cached key by epoch, so moving it orphans the previous key", async () => {
+    const before = await signSession("orphan@b.com", 3600);
+    process.env.TUNNEL_AUTH_SESSION_EPOCH = "2026-08-02";
+    resetSigningKey();
+    // A different cache key entirely, so this is a different signing key - the
+    // old cookie cannot verify even ignoring the `iat` check.
+    assert.equal(await verifySession(before), undefined);
+    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    resetSigningKey();
   });
 });
 

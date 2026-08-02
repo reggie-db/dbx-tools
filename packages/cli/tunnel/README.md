@@ -34,8 +34,11 @@ address against an allow-list, verified by a code sent over
   attempt counter, verified in constant time, in AppKit's `CacheManager` (memory
   by default, Lakebase when the app configures persistent `CacheStorage`) so TTL
   expiry and eviction are the cache's job.
-- Short-lived HS256 session JWT (via `jose`) carrying only the email, signed with
-  `AUTH_JWT_SECRET`.
+- HS256 session JWT (via `jose`) carrying only the email, signed with a key that
+  is PERSISTED in AppKit's cache for 30 days - so a signed-in browser stays signed
+  in across the restarts a tunnel sees whenever the app it wraps reloads. An
+  operator-held `TUNNEL_AUTH_JWT_SECRET` still wins. `TUNNEL_AUTH_SESSION_EPOCH`
+  is the log-everyone-out switch.
 - Allow-list patterns in three shapes, matched in order: a domain shortcut
   (`example.com`, `@example.com`), a shell-style glob (`*@example.com`), or a
   regex literal (`/^ops-.*@example\.com$/`). An empty list allows nobody.
@@ -92,19 +95,20 @@ original public port itself.
 Every flag has an environment fallback, so a deployment can configure the gate
 with no change to its start command.
 
-| Flag                | Env                       | Default                        |
-| ------------------- | ------------------------- | ------------------------------ |
-| `--allow`           | `TUNNEL_AUTH_ALLOW`       | empty (allow nobody)           |
-| `--subject`         | `TUNNEL_AUTH_SUBJECT`     | `Your verification code`       |
-| `--brand-name`      | `TUNNEL_AUTH_BRAND_NAME`  | the brand context `name`       |
-| `--message`         | `TUNNEL_AUTH_MESSAGE`     | `Your verification code is:`   |
-| `--session-ttl`     | `TUNNEL_AUTH_SESSION_TTL` | `43200` (12 hours)             |
-| `--code-ttl`        | `TUNNEL_AUTH_CODE_TTL`    | `600` (10 minutes)             |
-| `--subdomain`       | -                         | derived from the public domain |
-| `--public-domain`   | `TUNNEL_PUBLIC_DOMAIN`    | -                              |
-| `--forward-headers` | `TUNNEL_FORWARD_HEADERS`  | the built-in `x-` allow-list   |
-| `--insecure`        | `TUNNEL_INSECURE`         | off (the gate is required)     |
-| -                   | `TUNNEL_AUTH_JWT_SECRET`  | an ephemeral per-process key   |
+| Flag                | Env                         | Default                        |
+| ------------------- | --------------------------- | ------------------------------ |
+| `--allow`           | `TUNNEL_AUTH_ALLOW`         | empty (allow nobody)           |
+| `--subject`         | `TUNNEL_AUTH_SUBJECT`       | `Your verification code`       |
+| `--brand-name`      | `TUNNEL_AUTH_BRAND_NAME`    | the brand context `name`       |
+| `--message`         | `TUNNEL_AUTH_MESSAGE`       | `Your verification code is:`   |
+| `--session-ttl`     | `TUNNEL_AUTH_SESSION_TTL`   | `2592000` (30 days)            |
+| `--code-ttl`        | `TUNNEL_AUTH_CODE_TTL`      | `600` (10 minutes)             |
+| `--session-epoch`   | `TUNNEL_AUTH_SESSION_EPOCH` | unset (no cutoff)              |
+| `--subdomain`       | -                           | derived from the public domain |
+| `--public-domain`   | `TUNNEL_PUBLIC_DOMAIN`      | -                              |
+| `--forward-headers` | `TUNNEL_FORWARD_HEADERS`    | the built-in `x-` allow-list   |
+| `--insecure`        | `TUNNEL_INSECURE`           | off (the gate is required)     |
+| -                   | `TUNNEL_AUTH_JWT_SECRET`    | an ephemeral per-process key   |
 
 Every variable is `TUNNEL_`-prefixed because the gate runs as a WRAPPER: it and
 the app it wraps share one environment, so a generic name is one the app may
@@ -118,10 +122,55 @@ keep their names: that namespace belongs to portr itself, as does
 
 `--allow` and `TUNNEL_AUTH_ALLOW` are UNIONED rather than one overriding the
 other, so a deployment-wide allow-list and a per-invocation addition both grant
-access. Session signing reads `TUNNEL_AUTH_JWT_SECRET`; when it is unset the gate
-mints an ephemeral per-process key, so sessions simply do not survive a restart
-rather than the gate refusing to serve. Set it in any deployment running more than
-one instance, or a session minted by one will not verify on another.
+access.
+
+## Sessions That Survive A Restart
+
+The signing key decides whether an already-issued session COOKIE still verifies,
+so where that key comes from is what decides whether a restart signs everyone out.
+Resolution order:
+
+1. **`TUNNEL_AUTH_JWT_SECRET`**, when set. The right answer for a fleet: an
+   operator-held secret needs no shared cache, and it survives a cache flush.
+2. **A key persisted in AppKit's cache for 30 days.** With a persistent
+   `CacheStorage` (Lakebase) the key outlives the process, so cookies stay valid
+   across restarts - which a tunnel does often, since it restarts whenever the app
+   it wraps reloads. On the default in-memory cache the key is per-process, the
+   same as having no secret at all.
+3. **An ephemeral per-process key**, when there is no secret and no reachable
+   cache. Sessions do not survive a restart, but the gate still serves: the key
+   only validates an ALREADY-issued session, so losing it costs sessions, never
+   admission. A caller still needs a code delivered to an allow-listed address.
+
+The cached key is read, generated-and-stored, then **re-read**. Two instances
+booting together both miss the cache, so both generate; adopting whatever is
+STORED afterwards is what makes them converge on one key instead of each trusting
+the one it minted. Set `TUNNEL_AUTH_JWT_SECRET` to remove the race entirely.
+
+`TUNNEL_AUTH_SESSION_TTL` defaults to the same 30 days the key is stored for, on
+purpose - a key that expired before the cookies it signed would sign everyone out
+for no reason.
+
+### Signing everyone out
+
+`--session-epoch` / `TUNNEL_AUTH_SESSION_EPOCH` invalidates every session issued
+before a given moment:
+
+```sh
+dbxt-tunnel --session-epoch 2026-08-02 -- bun src/server.ts
+TUNNEL_AUTH_SESSION_EPOCH=$(date +%s) dbxt-tunnel -- bun src/server.ts
+```
+
+Accepts a date, an ISO timestamp, or bare epoch seconds / millis. It works two
+ways at once, so it holds however the key was resolved: the epoch is part of the
+key's CACHE KEY (moving it orphans the previous key), and it is also checked
+against each token's `iat` (which is what makes it bite when
+`TUNNEL_AUTH_JWT_SECRET` is set and there is no key to rotate).
+
+A FUTURE date is clamped to now, because an unclamped one would refuse the
+sessions it is about to mint as well as the old ones - an app nobody can sign in
+to, from a mistyped year. An unparseable value is ignored with a warning rather
+than failing startup: this is the switch that gets a fleet back in.
 
 ## Inbound Header Policy
 
@@ -229,6 +278,8 @@ by hand.
 - `proxy` - the public-port reverse proxy: loopback-vs-platform classification,
   open login routes, session enforcement, and WebSocket forwarding.
 - `otp` - the `CacheManager`-backed code store and the session JWT.
+- `signingKey` - the cache-persisted HS256 session key (30-day TTL, get/generate/
+  re-read convergence) and the `TUNNEL_AUTH_SESSION_EPOCH` force-clear cutoff.
 - `allowlist` - email domain / glob / regex matching and `looksLikeEmail`.
 - `headers` - the inbound-header allow-list: `toHeaderPolicy()`,
   `DEFAULT_FORWARD_HEADERS`, and the `PROTECTED_HEADERS` no pattern can forward.

@@ -32,6 +32,21 @@ function environment(): Record<string, string | undefined> {
 }
 
 /**
+ * The PRIMARY (current, non-deprecated) name in an {@link EnvKey}.
+ *
+ * Use this when naming a variable in a log line or error rather than indexing
+ * `keys[0]`: an {@link EnvKey} may be a bare string, and `"TUNNEL_X"[0]` is the
+ * character `"T"`, which produces a message naming a variable that does not
+ * exist. Returns `""` only for an empty list, which no caller should have.
+ *
+ * @example
+ * logger.warn(`${env.name(JWT_SECRET_ENV)} is not set`);
+ */
+export function name(keys: EnvKey): string {
+  return typeof keys === "string" ? keys : (keys[0] ?? "");
+}
+
+/**
  * First non-empty value among `keys`, trimmed, else `null`.
  *
  * Several names for one setting is the norm (a package-specific variable plus

@@ -8,25 +8,20 @@
  * counter (never the plaintext, never in the JWT); `verify` is constant-time on
  * the hash, and the entry is deleted on success or once attempts are exhausted.
  *
- * The session JWT is a short-lived HS256 token (via `jose`) carrying only the
- * email. Its signing key comes from `TUNNEL_AUTH_JWT_SECRET`; when unset the gate uses an
- * ephemeral per-process key rather than refusing service, so an unset secret
- * degrades to "sessions don't survive a restart", not "nobody can log in". Note
- * what this does NOT weaken: a caller still needs a code delivered to an
- * allow-listed address, because the signing key only validates an ALREADY-issued
- * session. Set it in any deployment running more than one instance, or sessions
- * minted by one will not verify on another.
+ * The session JWT is an HS256 token (via `jose`) carrying only the email. Its
+ * signing key is resolved by `./signing-key.ts`: `TUNNEL_AUTH_JWT_SECRET` when
+ * set, else a key persisted in the cache for 30 days so cookies survive the
+ * restarts a tunnel sees whenever the app it wraps reloads. A cookie signed
+ * before `TUNNEL_AUTH_SESSION_EPOCH` is refused here as well as being orphaned by
+ * the cache key, so the force-clear switch holds even for a still-current key.
  *
  * @module
  */
 
-import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
-import { env, log } from "@dbx-tools/shared-core";
 import { jwtVerify, SignJWT } from "jose";
-import { JWT_SECRET_ENV } from "./env.ts";
-
-const logger = log.logger("tunnel:otp");
+import { signingKey } from "./signing-key.ts";
 
 /** JWT issuer/audience so a token minted for this gate isn't accepted elsewhere. */
 const JWT_AUD = "dbx-tools-tunnel-auth";
@@ -107,46 +102,34 @@ export class CodeStore {
   }
 }
 
-/**
- * Resolve the HS256 signing key. Prefers `TUNNEL_AUTH_JWT_SECRET`; when unset, mints an
- * ephemeral per-process key (fail-open) and warns once. Memoized.
- */
-let cachedKey: Uint8Array | undefined;
-function signingKey(): Uint8Array {
-  if (cachedKey) return cachedKey;
-  const secret = env.text(JWT_SECRET_ENV);
-  if (secret) {
-    cachedKey = new TextEncoder().encode(secret);
-  } else {
-    logger.warn(
-      `${JWT_SECRET_ENV[0]} is not set - using an ephemeral per-process key; sessions will not survive a restart`,
-    );
-    cachedKey = randomBytes(32);
-  }
-  return cachedKey;
-}
-
-/** Reset the memoized key (tests, or after changing the env in-process). */
-export function resetSigningKey(): void {
-  cachedKey = undefined;
-}
-
-/** Mint a short-lived session JWT for `email`, expiring in `ttlSeconds`. */
+/** Mint a session JWT for `email`, expiring in `ttlSeconds`. */
 export async function signSession(email: string, ttlSeconds: number): Promise<string> {
+  const { key } = await signingKey();
   return new SignJWT({ email })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(email)
     .setAudience(JWT_AUD)
     .setIssuedAt()
     .setExpirationTime(`${ttlSeconds}s`)
-    .sign(signingKey());
+    .sign(key);
 }
 
 /** Validate a session JWT, returning the email it was minted for, or `undefined`. */
 export async function verifySession(token: string | undefined): Promise<string | undefined> {
   if (!token) return undefined;
   try {
-    const { payload } = await jwtVerify(token, signingKey(), { audience: JWT_AUD });
+    const { key, epochMs } = await signingKey();
+    const { payload } = await jwtVerify(token, key, { audience: JWT_AUD });
+    // Belt and braces with the epoch-scoped cache key: that alone already
+    // orphans older keys, but an operator who moved the epoch while
+    // TUNNEL_AUTH_JWT_SECRET is set has no key rotation to rely on, and this
+    // check is what makes the switch work in that case too.
+    // Compared in whole SECONDS because `iat` has no finer resolution: against a
+    // millisecond epoch, a cookie minted in the same second as the cutoff would
+    // be refused depending on sub-second rounding.
+    if (epochMs > 0 && (payload.iat === undefined || payload.iat < Math.floor(epochMs / 1000))) {
+      return undefined;
+    }
     return typeof payload.email === "string" ? payload.email : undefined;
   } catch {
     return undefined;

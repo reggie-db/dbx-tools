@@ -384,6 +384,11 @@ second package, put it in shared-core rather than duplicating it.
   `match.toPathMatcher` instead.
 - `async` - `sleep`, `tieAbortSignal`, `poll`. Do not import
   `node:timers/promises` for a delay.
+- `env` - `text` / `string` / `boolean` / `positiveInt` / `list` over an `EnvKey`
+  (one name, or an earliest-wins alias list), plus `name(keys)` for the primary
+  variable name when a log or error mentions it. Never index `keys[0]`: an
+  `EnvKey` may be a bare string, so that yields its first CHARACTER and names a
+  variable that does not exist.
 - `error` (`toError` / `errorMessage` / `errorContext`), `log.logger`,
   `hash.id` (id generation - no `nanoid`), `net.urlBuilder`,
   `http.createFetchError`, `function.memoize`, `predicate`, `token`.
