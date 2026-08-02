@@ -3,8 +3,9 @@
  *
  * Value guards / coercions / shape types: {@link isRecord} narrows parsed JSON
  * to a record, {@link toBoolean} coerces loose truthy/falsy values, {@link
- * deepEqual} compares structurally, and {@link NameLike}/{@link NonFunctionKeys}
- * describe object shapes.
+ * optional} spreads a field only when it is present, {@link deepEqual} compares
+ * structurally, and {@link NameLike}/{@link NonFunctionKeys} describe object
+ * shapes.
  *
  * Iterable helpers: {@link generator} flattens mixed arguments; {@link sequence}
  * wraps source(s) in a lazy, `Array`-compatible {@link Sequence}. Every
@@ -810,6 +811,28 @@ export type NonFunctionKeys<T> = {
  */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * `{ [key]: value }` when `value` is present, otherwise `undefined` - so an
+ * absent optional field stays ABSENT when spread, rather than becoming an
+ * explicit `undefined` that `exactOptionalPropertyTypes` rejects.
+ *
+ * Spelling that inline costs a repeated, double-evaluated ternary per field
+ * (`...(v ? { key: v } : {})`), which is how config resolvers end up computing
+ * the same value twice.
+ *
+ * @example
+ * return {
+ *   ...optional("appId", env.text("MICROSOFT_APP_ID")),
+ *   ...optional("endpoint", config.endpoint),
+ * };
+ */
+export function optional<K extends string, V>(
+  key: K,
+  value: V | null | undefined,
+): Record<K, V> | undefined {
+  return value === null || value === undefined ? undefined : ({ [key]: value } as Record<K, V>);
 }
 
 /**

@@ -30,7 +30,7 @@ const message: EmailMessage = email.emailMessageSchema.parse({
 });
 ```
 
-The message schema covers recipients, subject, Markdown body, and attachments.
+The message schema covers recipients, subject, body content, and attachments.
 Attachments can carry inline content, a local path, a URL, encoding metadata, and
 content type hints.
 

@@ -13,12 +13,12 @@ import {
 } from "@dbx-tools/ui-appkit/react";
 import { EyeIcon, PaperclipIcon, PencilIcon, SendIcon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { EmailBody } from "./email-body.tsx";
+import { EmailPreview } from "./email-approval-card.tsx";
 import { joinAddresses, parseAddresses, type EmailDraft } from "./fields.ts";
 
 // A standard, editable email compose form usable outside a chat bubble
 // (a settings page, a standalone "send" view, etc.). It shares the
-// address / attachment helpers (`./fields`) and the Markdown body
+// address / attachment helpers (`./fields`) and the React Email body
 // renderer (`./email-body`) with the read-only `EmailPreview`, so the
 // two surfaces stay visually and semantically in sync.
 //
@@ -236,7 +236,7 @@ export const EmailComposeView = ({
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between">
           <Label htmlFor={fieldId("body")} className="text-xs text-muted-foreground">
-            Body (Markdown)
+            Body
           </Label>
           <Button
             type="button"
@@ -258,15 +258,13 @@ export const EmailComposeView = ({
           </Button>
         </div>
         {showPreview ? (
-          <div className="min-h-32 rounded-md border border-border bg-background p-3">
-            <EmailBody>{body || "_Nothing to preview yet._"}</EmailBody>
-          </div>
+          <EmailPreview email={{ ...buildMessage(), body: body || "_Nothing to preview yet._" }} />
         ) : (
           <Textarea
             id={fieldId("body")}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Write your message in Markdown..."
+            placeholder="Write your message..."
             disabled={blocked}
             className="min-h-32 font-mono text-xs"
           />

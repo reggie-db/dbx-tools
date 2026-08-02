@@ -9,7 +9,7 @@ import { repoRoot } from "./packages.ts";
  * Re-run projen synth by executing `.projenrc.ts` with `node --import tsx` (no
  * projen network re-exec).
  *
- * `post: true` runs the full flow - projen's post-synth `pnpm install` AND the
+ * `post: true` runs the full flow - projen's post-synth `bun install` AND the
  * post-synth barrels component - which is what the one-shot `sync` task
  * wants. The default (`post: false`) sets `PROJEN_DISABLE_POST`, skipping both so
  * the watch loop stays fast; there the caller rebuilds barrels explicitly.

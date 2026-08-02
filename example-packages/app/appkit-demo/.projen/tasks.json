@@ -72,24 +72,7 @@
     },
     "package": {
       "name": "package",
-      "description": "Creates the distribution package",
-      "steps": [
-        {
-          "execArgs": [
-            "mkdir",
-            "-p",
-            "dist/js"
-          ]
-        },
-        {
-          "execArgs": [
-            "npm",
-            "pack",
-            "--pack-destination",
-            "dist/js"
-          ]
-        }
-      ]
+      "description": "Creates the distribution package"
     },
     "post-compile": {
       "name": "post-compile",
@@ -108,20 +91,13 @@
         }
       ]
     },
-    "preview": {
-      "name": "preview",
-      "steps": [
-        {
-          "exec": "bun dev.ts"
-        }
-      ]
-    },
     "test": {
       "name": "test",
       "description": "Run tests",
       "steps": [
         {
-          "exec": "find test -name \"*.test.ts\" 2>/dev/null | grep -q . && bun test test || true"
+          "exec": "bun test test",
+          "condition": "find test -name \"*.test.ts\" 2>/dev/null | grep -q ."
         }
       ]
     },

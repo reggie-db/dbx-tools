@@ -14,7 +14,6 @@
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
     "prepack": "projen prepack",
-    "preview": "projen preview",
     "test": "projen test",
     "watch": "projen watch",
     "projen": "projen"

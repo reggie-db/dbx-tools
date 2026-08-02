@@ -53,18 +53,8 @@ export const emailMessageSchema = z.object({
     .describe(
       'One or more recipient email addresses (e.g. ["alice@example.com", "bob@example.com"]). Provide at least one.',
     ),
-  subject: z.string().describe("Subject line. Keep it short and specific."),
-  body: z
-    .string()
-    .describe(
-      [
-        "Email body in GitHub-Flavored Markdown; it is rendered to HTML before sending.",
-        "Use real Markdown structure: '#'/'##' headings, '-' or '1.' lists, **bold**/_italic_, '>' blockquotes, and fenced ``` code blocks.",
-        "For tabular data, emit a real Markdown table: a header row, then a '| --- | --- |' separator row, then one '| ... |' row per record.",
-        "Do NOT format with ASCII art: no '=====' or '-----' divider lines, and never hand-draw tables or bar charts with spaces, pipes, or '#'. Use the Markdown constructs above instead.",
-        "Be self-contained: the recipient has none of the chat context.",
-      ].join(" "),
-    ),
+  subject: z.string().describe("Email subject line."),
+  body: z.string().describe("Email content rendered through the configured React Email template."),
   cc: z.array(z.string()).optional().describe("Optional CC recipient addresses (one or more)."),
   bcc: z.array(z.string()).optional().describe("Optional BCC recipient addresses (one or more)."),
   attachments: z

@@ -16,7 +16,7 @@
  * OpenAPI client generator.
  *
  * `tsoa`, `typescript`, and `openapi-typescript` are loaded lazily (heavy, and only
- * needed for `pnpm run openapi`), so importing this module stays cheap. `tsoa` and
+ * needed for `bun run openapi`), so importing this module stays cheap. `tsoa` and
  * `typescript` are not engine dependencies at all - both are resolved out of the
  * consuming workspace, which is where they already live.
  */

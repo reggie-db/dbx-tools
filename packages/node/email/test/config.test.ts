@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { beforeEach, describe, it } from "node:test";
+import { defaultEmailBrand } from "../src/brand.ts";
 import {
   DEFAULT_SMTP_PORT,
   IMPLICIT_TLS_SMTP_PORT,
@@ -59,6 +60,7 @@ describe("resolveEmailConfig modes", () => {
     assert.equal(config.port, DEFAULT_SMTP_PORT);
     assert.equal(config.secure, false);
     assert.deepEqual(config.auth, { user: "apikey", pass: "secret" });
+    assert.equal(config.brand, defaultEmailBrand);
   });
 
   it("turns on TLS-on-connect for the implicit-TLS port", () => {

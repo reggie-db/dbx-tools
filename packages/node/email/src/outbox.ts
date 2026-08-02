@@ -59,7 +59,7 @@ export async function writeOutboxEmail(
   const folder = resolve(dir, from);
   await mkdir(folder, { recursive: true });
   const path = join(folder, `${Date.now()}-${subjectSlug(message.subject)}.html`);
-  const html = renderEmailHtml({
+  const html = await renderEmailHtml({
     subject: message.subject,
     headers: headerRows(message, from),
     body: message.body,

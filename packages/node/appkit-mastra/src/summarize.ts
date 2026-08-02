@@ -29,6 +29,7 @@ import { z } from "zod";
 
 import type { MastraPluginConfig } from "./config.ts";
 import { buildModel } from "./model.ts";
+import { TYPOGRAPHY_RULE } from "./style.ts";
 
 /** Fast / small chat tier used for both titling and summaries. */
 const SUMMARY_MODEL_CLASS = model.ModelClass.ChatFast;
@@ -39,7 +40,7 @@ const SUMMARIZER_INSTRUCTIONS = [
   "Given a block of text, produce a faithful, concise summary of it.",
   "Default to a few sentences; follow any length guidance the caller gives.",
   "Plain prose. No preamble, no headers, no bullet points unless asked.",
-  "Never use emojis. Use hyphens (-) only, never em dashes or en dashes.",
+  TYPOGRAPHY_RULE,
   "Never add information, opinions, or details not present in the input.",
   "Output only the summary.",
 ].join("\n");
@@ -52,8 +53,9 @@ const SUMMARIZER_INSTRUCTIONS = [
 export const TITLE_INSTRUCTIONS = [
   "Generate a short, specific title for this conversation, 3 to 6 words.",
   "Capture the user's topic, not the assistant's response.",
-  "Plain text only: no surrounding quotes, no trailing punctuation,",
-  "no emojis, and no em dashes. Output only the title.",
+  "Plain text only: no surrounding quotes and no trailing punctuation.",
+  TYPOGRAPHY_RULE,
+  "Output only the title.",
 ].join(" ");
 
 /**

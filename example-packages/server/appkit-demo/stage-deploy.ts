@@ -13,8 +13,8 @@
  *                       fetches the runtime (research: pnpm installs, bun runs);
  *   - a `pnpm-workspace.yaml` carrying `allowBuilds` (esbuild/unrs-resolver/bun/
  *     onnxruntime-node...) so pnpm 10+ doesn't fail the build on their postinstalls;
- *   - `app.yaml` command -> `bash -c "bun src/server.ts"` + `CLIENT_DIST` pointing
- *     at the bundled client;
+ *   - `app.yaml` copied unchanged; deployment-only command/env overrides live in
+ *     `databricks.yml` under the app resource's `config`;
  *   - the client `dist/` copied in and the server `src/` + support files.
  *
  * Run: `bun stage-deploy.ts <version>` from the server package dir.
@@ -87,43 +87,6 @@ const deployPkg = {
 // onnxruntime-node, appkit, ...). This is the research recipe's build gate.
 const deployWorkspace = { allowBuilds };
 
-// app.yaml: pnpm installs (build phase), then `dbxt-tunnel` wraps the app start
-// command - it spawns `bun src/server.ts` on a private port, fronts it with the
-// email-OTP gate proxy on the public port, and runs portr. `CLIENT_DIST` points
-// the server at the bundled client; PUBLIC_DOMAIN + PORTR_TOKEN publish the
-// tunnel; AUTH_JWT_SECRET signs the session; EMAIL_AUTH_ALLOW whitelists who may
-// sign in. Preserve the existing env block and append these.
-const appYaml = parse(readFileSync(join(serverDir, "app.yaml"), "utf8")) as {
-  command?: unknown;
-  env?: Array<Record<string, unknown>>;
-};
-// The published `@dbx-tools/cli-tunnel` exposes `dbxt-tunnel` as a COMPILED
-// `lib/bin/*.js` bin (the publish task folds `publishConfig` onto the manifest,
-// since `bun publish` doesn't), so the platform's `node`-shebang bin shim runs it
-// directly - no `bun <entry.ts>` wrapper needed. The wrapped app command after
-// `--` still names `bun` explicitly because it runs the demo's `.ts` source.
-appYaml.command = [
-  "dbxt-tunnel",
-  "--subject",
-  "Your dbx-tools demo sign-in code",
-  "--brand-name",
-  "dbx-tools demo",
-  "--allow",
-  "databricks.com",
-  "--",
-  "bun",
-  "src/server.ts",
-];
-appYaml.env = [
-  ...(appYaml.env ?? []),
-  { name: "CLIENT_DIST", value: "./client-dist" },
-  // The public tunnel + gate. PORTR_TOKEN / AUTH_JWT_SECRET come from the
-  // `dbx-tools-demo` secret scope; PUBLIC_DOMAIN is the portr subdomain.
-  { name: "PUBLIC_DOMAIN", value: "demo.apps.dbx.tools" },
-  { name: "PORTR_TOKEN", valueFrom: "portr-token" },
-  { name: "AUTH_JWT_SECRET", valueFrom: "auth-jwt-secret" },
-];
-
 // --- write the staged tree ---
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
@@ -133,9 +96,9 @@ if (existsSync(join(serverDir, "shared")))
 if (existsSync(clientDist)) cpSync(clientDist, join(outDir, "client-dist"), { recursive: true });
 writeFileSync(join(outDir, "package.json"), `${JSON.stringify(deployPkg, null, 2)}\n`);
 writeFileSync(join(outDir, "pnpm-workspace.yaml"), stringify(deployWorkspace));
-writeFileSync(join(outDir, "app.yaml"), stringify(appYaml));
+cpSync(join(serverDir, "app.yaml"), join(outDir, "app.yaml"));
 cpSync(join(serverDir, "databricks.yml"), join(outDir, "databricks.yml"));
 
 console.log(`staged deploy at ${outDir}`);
 console.log(`  @dbx-tools/* -> ^${version}, catalog resolved, bun+pnpm-workspace added`);
-console.log(`  command: dbxt-tunnel -- bun src/server.ts (gate proxy + portr @ demo.apps.dbx.tools)`);
+console.log(`  app.yaml copied unchanged; databricks.yml owns deployed command/env overrides`);

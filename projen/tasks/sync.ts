@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env -S bun
 import { fileURLToPath } from "node:url";
 import concurrently from "concurrently";
 import { log } from "@dbx-tools/shared-core";
@@ -54,9 +54,9 @@ if (!process.argv.includes("--watch")) {
 
   const { result } = concurrently(
     [
-      { command: `tsx "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
-      { command: `tsx "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
-      { command: `tsx "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
+      { command: `bun "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
+      { command: `bun "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
+      { command: `bun "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
     ],
     {
       prefix: "name",

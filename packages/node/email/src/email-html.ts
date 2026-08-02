@@ -1,174 +1,33 @@
-/**
- * Email HTML assembly: render a markdown body into a branded, responsive
- * email layout and inline the stylesheet with `juice`.
- *
- * The layout is the classic email-safe pattern (a centered 600px
- * table-based container with a header band, content card, and optional
- * footer) - the same shape MJML emits, hand-built here because MJML's
- * toolchain pulls fast-moving browser-data deps (caniuse-lite,
- * baseline-browser-mapping) that are awkward to install behind a
- * locked-down registry. Inlining matters because real clients (Gmail,
- * Outlook) strip `<style>` blocks and ignore class selectors; the same
- * renderer feeds both the local outbox preview and the SMTP HTML part,
- * so a browser and an inbox show the same thing.
- *
- * Brand styling (accent color, font, header logo) is optional: pass an
- * {@link EmailBrand} to color the layout, or omit it for the neutral
- * default. Branding is inlined here because the browser UI's `[data-brand]`
- * CSS bridge can't reach an inbox (see `./brand`).
- *
- * @module
- */
-
+/** Node rendering adapters for the shared React Email document. @module */
 import { string } from "@dbx-tools/shared-core";
-import juice from "juice";
-import type { EmailBrand } from "./brand.ts";
-import { markdownToHtml } from "./markdown.ts";
+import { EmailDocument, type EmailDocumentProps } from "@dbx-tools/shared-email-template";
+import { render } from "@react-email/render";
+import { createElement } from "react";
 
-/**
- * Rendered height of the header logo. Fixed rather than intrinsic because
- * mail clients ignore CSS sizing on an image without an `height` attribute.
- */
-const LOGO_HEIGHT_PX = 28;
-
-/** Neutral fallback styling when no brand is supplied. */
-const DEFAULT_BRAND: Required<Pick<EmailBrand, "accent" | "onAccent" | "fontFamily">> = {
-  accent: "#0b6bcb",
-  onAccent: "#ffffff",
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
-};
-
-/** Escape HTML-significant characters (re-exported from `@dbx-tools/shared-core`). */
+/** Escape HTML-significant characters (re-exported from shared-core). */
 export const escapeHtml = string.escapeHtml;
 
-/**
- * Content stylesheet inlined onto the markdown body (juice maps these
- * onto elements). Outer layout styling is written inline directly so it
- * survives even if inlining is skipped; the `@media` rule is preserved
- * by juice for clients that honor it. Parameterized by the resolved accent
- * so body links match the brand.
- */
-function contentCss(accent: string): string {
-  return `
-    .email-body { font-size: 15px; line-height: 1.55; color: #1a1a1a; }
-    .email-body p { margin: 0 0 1rem; }
-    .email-body a { color: ${accent}; }
-    .email-body h1, .email-body h2, .email-body h3 { margin: 1.4rem 0 0.6rem; line-height: 1.25; }
-    .email-body ul, .email-body ol { margin: 0 0 1rem; padding-left: 1.4rem; }
-    .email-body table { border-collapse: collapse; margin: 1rem 0; width: 100%; font-size: 14px; }
-    .email-body th, .email-body td { border: 1px solid #d0d7de; padding: 6px 10px; text-align: left; }
-    .email-body th { background: #f6f8fa; font-weight: 600; }
-    .email-body code { background: #f1f3f5; padding: 2px 5px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
-    .email-body pre { background: #f1f3f5; padding: 12px; border-radius: 6px; overflow-x: auto; }
-    .email-body pre code { background: none; padding: 0; }
-    .email-body blockquote { margin: 1rem 0; padding: 0 1rem; color: #57606a; border-left: 3px solid #d0d7de; }
-    .email-body img { max-width: 100%; height: auto; }
-    .meta { border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }
-    .meta th { text-align: left; padding: 2px 12px 2px 0; vertical-align: top; color: #6b7280; font-weight: 600; white-space: nowrap; }
-    .meta td { padding: 2px 0; color: #374151; }
-    @media only screen and (max-width: 620px) {
-      .container { width: 100% !important; }
-      .gutter { padding-left: 20px !important; padding-right: 20px !important; }
-    }`;
+/** Options accepted by the shared React Email document. */
+export type EmailHtmlOptions = EmailDocumentProps;
+
+/** Render a complete responsive React Email document. */
+export async function renderEmailHtml(options: EmailHtmlOptions): Promise<string> {
+  return render(createElement(EmailDocument, options), { pretty: true });
 }
 
-/** Options for {@link renderEmailHtml}. */
-export interface EmailHtmlOptions {
-  /** Markdown body. Rendered to HTML, then wrapped in the layout. */
-  body: string;
-  /** Header-band title and document `<title>`. Defaults to "Message". */
-  subject?: string;
-  /**
-   * Optional `[label, value]` envelope rows shown above the body (used
-   * by the outbox preview; omitted for SMTP sends, where the mail client
-   * shows the envelope itself).
-   */
-  headers?: ReadonlyArray<readonly [string, string]>;
-  /** Optional small-print footer line. Omitted when unset. */
-  footer?: string;
-  /**
-   * Optional brand styling for the layout (accent, font, header logo).
-   * Omit for the neutral default palette.
-   */
-  brand?: EmailBrand;
+/** Render the same React Email document as its plain-text alternative. */
+export async function renderEmailText(options: EmailHtmlOptions): Promise<string> {
+  return render(createElement(EmailDocument, options), { plainText: true });
 }
 
-/** Render the optional envelope-header table block. */
-function metaBlock(headers: EmailHtmlOptions["headers"]): string {
-  if (!headers || headers.length === 0) return "";
-  const rows = headers
-    .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
-    .join("");
-  return `<table role="presentation" class="meta"><tbody>${rows}</tbody></table>`;
-}
-
-/** Render the optional footer row. */
-function footerRow(footer: string | undefined): string {
-  if (!footer) return "";
-  return `
-          <tr>
-            <td class="gutter" style="padding: 16px 32px; border-top: 1px solid #eaecef; color: #9aa0a6; font-size: 12px; line-height: 1.5;">
-              ${escapeHtml(footer)}
-            </td>
-          </tr>`;
-}
-
-/**
- * Render the header-band content: the brand logo (when the brand supplies a
- * renderable image) above the title, or just the title. The logo is capped
- * at {@link LOGO_HEIGHT_PX} and tinted implicitly by its own artwork; the
- * title always shows so the band is never empty.
- */
-function headerBand(title: string, brand: EmailBrand, onAccent: string): string {
-  const logo = brand.logoUrl
-    ? `<img src="${escapeHtml(brand.logoUrl)}" alt="${escapeHtml(brand.name ?? title)}" height="${LOGO_HEIGHT_PX}" style="height: ${LOGO_HEIGHT_PX}px; width: auto; display: block; margin-bottom: 8px;" />`
-    : "";
-  return `${logo}<span style="color: ${onAccent}; font-size: 18px; font-weight: 700; line-height: 1.3;">${escapeHtml(title)}</span>`;
-}
-
-/**
- * Render `body` (markdown) into a complete, style-inlined email document
- * using the responsive layout. When `opts.brand` is set its accent, font,
- * and logo style the layout; otherwise a neutral default palette is used.
- */
-export function renderEmailHtml(opts: EmailHtmlOptions): string {
-  const title = opts.subject?.trim() || "Message";
-  const accent = opts.brand?.accent ?? DEFAULT_BRAND.accent;
-  const onAccent = opts.brand?.onAccent ?? DEFAULT_BRAND.onAccent;
-  const fontFamily = opts.brand?.fontFamily ?? DEFAULT_BRAND.fontFamily;
-  const brand: EmailBrand = opts.brand ?? { accent, onAccent, fontFamily };
-  const doc = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light only" />
-    <title>${escapeHtml(title)}</title>
-    <style>${contentCss(accent)}
-    </style>
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #f4f5f7; -webkit-text-size-adjust: 100%;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f5f7;">
-      <tr>
-        <td align="center" style="padding: 24px 12px;">
-          <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" style="width: 600px; max-width: 100%; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); font-family: ${fontFamily};">
-            <tr>
-              <td class="gutter" style="padding: 20px 32px; background-color: ${accent};">
-                ${headerBand(title, brand, onAccent)}
-              </td>
-            </tr>
-            <tr>
-              <td class="gutter" style="padding: 24px 32px 8px;">
-                ${metaBlock(opts.headers)}
-                <div class="email-body">${markdownToHtml(opts.body)}</div>
-              </td>
-            </tr>${footerRow(opts.footer)}
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-`;
-  return juice(doc);
+/** Render both MIME alternatives from one shared React Email component tree. */
+export async function renderEmail(
+  options: EmailHtmlOptions,
+): Promise<{ html: string; text: string }> {
+  const element = createElement(EmailDocument, options);
+  const [html, text] = await Promise.all([
+    render(element, { pretty: true }),
+    render(element, { plainText: true }),
+  ]);
+  return { html, text };
 }

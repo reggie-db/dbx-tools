@@ -17,6 +17,8 @@ Key features:
 - Attachment and status helpers for UI display logic.
 - Browser-safe types that allow clients to validate Genie payloads without
   bundling Databricks SDK runtime code.
+- Generated zod schemas for the upstream SDK Dashboard/Genie shapes, so
+  validating an unwidened SDK payload needs no SDK import either.
 
 ## Why Not Just AppKit Genie Types?
 
@@ -103,11 +105,34 @@ or query fragments while still allowing full history replay from persisted raw
 messages. Consumers can use the full `eventsFromMessage()` helper or individual
 detectors when a test needs to assert one specific behavior.
 
+## Generated SDK Schemas
+
+`dashboards` holds zod schemas generated from the upstream
+`@databricks/sdk-experimental` dashboards declarations. Import it when code needs
+to validate a raw Databricks Genie/Dashboard payload against the SDK's own shape:
+
+```ts
+import { dashboards } from "@dbx-tools/shared-genie";
+
+const space = dashboards.genieSpaceSchema.parse(rawSpace);
+```
+
+Most consumers want `genieModel` instead - those schemas are these shapes widened
+with the fields Genie actually sends. Reach for `dashboards` only when the
+unwidened SDK shape is the contract you mean.
+
+The module is generated at synth time and is read-only: the `codegen.inputs`
+field in `package.json` names the input declaration file. To change what is
+generated, change that input and re-synth; never hand-edit `src/dashboards.ts`.
+The SDK itself is a dev dependency, so importing this package pulls in zod only.
+
 ## Modules
 
 - `genieModel` - Genie schemas, status helpers, attachment helpers, and event
   union schemas/types.
 - `event` - event detector factory, individual detectors, and
   `eventsFromMessage()`.
+- `dashboards` - generated, read-only zod schemas and inferred types for the
+  upstream SDK Dashboard/Genie shapes that `genieModel` extends.
 
 Server-side streaming is in [`@dbx-tools/genie`](../../node/genie).

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { brand } from "@dbx-tools/shared-core";
 import { defaultEmailBrand, emailBrandFromContext } from "../src/brand.ts";
-import { renderEmailHtml } from "../src/email-html.ts";
+import { renderEmailHtml, renderEmailText } from "../src/email-html.ts";
 
 describe("email brand", () => {
   it("derives accent, font, and name from a brand context", () => {
@@ -28,19 +28,22 @@ describe("email brand", () => {
 });
 
 describe("renderEmailHtml branding", () => {
-  it("inlines the brand accent and font, not the default blue", () => {
-    const html = renderEmailHtml({ subject: "S", body: "b", brand: defaultEmailBrand });
+  it("uses the repository brand by default", async () => {
+    const html = await renderEmailHtml({ subject: "S", body: "b" });
     assert.ok(html.includes(defaultEmailBrand.accent));
-    assert.ok(html.includes(defaultEmailBrand.fontFamily));
-    assert.ok(!html.includes("#0b6bcb"));
+    assert.ok(html.includes("DM Sans"));
+    assert.ok(html.includes(defaultEmailBrand.name!));
   });
 
-  it("renders an <img> when the brand supplies a URL logo", () => {
+  it("renders an <img> when the brand supplies a URL logo", async () => {
     const b = { ...defaultEmailBrand, logoUrl: "https://ex.com/logo.svg" };
-    assert.ok(renderEmailHtml({ subject: "S", body: "b", brand: b }).includes("<img"));
+    assert.ok((await renderEmailHtml({ subject: "S", body: "b", brand: b })).includes("<img"));
   });
 
-  it("falls back to the neutral default palette with no brand", () => {
-    assert.ok(renderEmailHtml({ subject: "S", body: "b" }).includes("#0b6bcb"));
+  it("renders a matching plain-text alternative", async () => {
+    const text = await renderEmailText({ subject: "Status", body: "## Resolved\nAll clear." });
+    assert.match(text, /Status/i);
+    assert.match(text, /Resolved/i);
+    assert.match(text, /All clear\./);
   });
 });

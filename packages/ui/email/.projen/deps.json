@@ -30,12 +30,22 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-email-template",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-email",
       "version": "workspace:*",
       "type": "runtime"
     },
     {
       "name": "@dbx-tools/ui-appkit",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/ui-branding",
       "version": "workspace:*",
       "type": "runtime"
     },
@@ -51,11 +61,6 @@
     },
     {
       "name": "react",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "streamdown",
       "version": "catalog:",
       "type": "runtime"
     }

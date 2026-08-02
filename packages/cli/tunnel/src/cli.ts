@@ -1,14 +1,16 @@
 /**
  * `dbx-tools-tunnel` / `dbxt-tunnel` CLI.
  *
- * Wraps a Databricks App start command with a public portr tunnel and an
- * email-OTP access gate. Everything after `--` is the REAL app start command:
+ * Wraps an app's start command with a public portr tunnel and an email-OTP
+ * access gate. Everything after `--` is the REAL app start command:
  *
- *   dbxt-tunnel --subject "Here's your OTP" --allow databricks.com -- bun src/server.ts
+ *   dbxt-tunnel --subject "Here's your OTP" --allow example.com -- bun src/server.ts
  *
  * Boot sequence:
  *   1. Pick a random PRIVATE port and spawn the app command with
- *      `DATABRICKS_APP_PORT` set to it (so the app binds loopback-private).
+ *      `DATABRICKS_APP_PORT` set to it (so the app binds loopback-private). That
+ *      variable name is the Databricks Apps runtime contract; the gate itself is
+ *      platform-neutral and honours whatever port it finds there.
  *   2. Boot the tiny gate AppKit app (no server): inits `CacheManager` + the
  *      email transport, yields the in-process gate API.
  *   3. Start the gate PROXY on the ORIGINAL public port, forwarding to the app.
@@ -56,7 +58,7 @@ interface TunnelOpts {
 function program(): Command {
   return new Command()
     .name("dbx-tools-tunnel")
-    .description("Front a Databricks App with a public portr tunnel + email-OTP gate")
+    .description("Front an app with a public portr tunnel + email-OTP gate")
     .option("--subject <text>", "Subject line for the code email (env AUTH_SUBJECT)")
     .option(
       "--allow <patterns>",
@@ -64,7 +66,10 @@ function program(): Command {
     )
     .option("--subdomain <name>", "portr subdomain (else derived from PUBLIC_DOMAIN)")
     .option("--public-domain <host>", "portr <subdomain>.<server> (env PUBLIC_DOMAIN)")
-    .option("--brand-name <name>", "Product name in the email + login copy (env AUTH_BRAND_NAME)")
+    .option(
+      "--brand-name <name>",
+      "Display name in the code email copy (env AUTH_BRAND_NAME; defaults to the brand context name)",
+    )
     .option("--message <text>", "Line shown above the code in the email (env AUTH_MESSAGE)")
     .option("--session-ttl <seconds>", "Session lifetime (env AUTH_SESSION_TTL)")
     .option("--code-ttl <seconds>", "One-time-code lifetime (env AUTH_CODE_TTL)")

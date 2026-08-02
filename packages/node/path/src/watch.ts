@@ -133,13 +133,11 @@ function toCwdRelativePath(path: string, cwd: string): string {
   return rel === "" ? "." : rel;
 }
 
-// Manual demo: run this file directly (e.g. `tsx src/watch.ts`) to watch this
-// package and log every file event as it happens.
+// Manual demo: run this file directly (`bun src/watch.ts [dir]`) to watch a tree
+// and log every file event as it happens. Defaults to this package.
 if (import.meta.main) {
-  const dir = import.meta.dirname;
+  const cwd = resolve(process.argv[2] ?? resolve(import.meta.dirname, ".."));
   console.log("--- Starting File Watcher ---");
-  let cwd = resolve(dir, "..");
-  cwd = "/Users/reggie.pierce/Projects/github-reggie-db/dbx-tools";
   console.log(`Working Directory: ${cwd}`);
 
   const watcher = watchFiles("**/src/**", {

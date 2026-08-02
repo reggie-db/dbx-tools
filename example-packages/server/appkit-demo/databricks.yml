@@ -96,6 +96,55 @@ resources:
       name: dbx-tools-demo
       description: "dbx-tools AppKit + Mastra demo (Fuel Mart)"
       source_code_path: .
+      # Bundle app config overrides app.yaml for the deployed app. Keep the
+      # source app.yaml usable as the ordinary local/default app config; the
+      # public tunnel, OTP gate, staged client path, and deployment resource
+      # bindings belong to this deployment definition instead.
+      config:
+        command:
+          - dbxt-tunnel
+          - --subject
+          - Your dbx-tools demo sign-in code
+          - --brand-name
+          - dbx-tools demo
+          - --allow
+          - databricks.com
+          - --
+          - bun
+          - src/server.ts
+        env:
+          - name: DATABRICKS_GENIE_SPACE_ID
+            value_from: genie-space
+          - name: LAKEBASE_ENDPOINT
+            value_from: postgres
+          - name: MLFLOW_EXPERIMENT_ID
+            value_from: mlflow-experiment
+          - name: MLFLOW_TRACKING_URI
+            value: databricks
+          - name: OTEL_PROPAGATORS
+            value: none
+          - name: SMTP_HOST
+            value_from: smtp-host
+          - name: SMTP_PORT
+            value_from: smtp-port
+          - name: SMTP_SECURE
+            value_from: smtp-secure
+          - name: SMTP_USER
+            value_from: smtp-user
+          - name: SMTP_PASSWORD
+            value_from: smtp-password
+          - name: EMAIL_DOMAIN
+            value_from: email-domain
+          - name: EMAIL_FROM
+            value_from: email-from
+          - name: CLIENT_DIST
+            value: ./client-dist
+          - name: PUBLIC_DOMAIN
+            value: demo.apps.dbx.tools
+          - name: PORTR_TOKEN
+            value_from: portr-token
+          - name: AUTH_JWT_SECRET
+            value_from: auth-jwt-secret
       user_api_scopes:
         - sql
         - dashboards.genie
@@ -147,7 +196,7 @@ resources:
             permission: CAN_EDIT
         # SMTP + sender config for the approval-gated email tool, read from
         # the `dbx-tools-demo` secret scope and surfaced to the runtime by
-        # the matching `valueFrom` entries in app.yaml.
+        # the matching `value_from` entries in the app config above.
         - name: smtp-host
           secret:
             scope: dbx-tools-demo
@@ -182,4 +231,15 @@ resources:
           secret:
             scope: dbx-tools-demo
             key: email-from
+            permission: READ
+        # Public tunnel + OTP gate secrets used only by the deployed command.
+        - name: portr-token
+          secret:
+            scope: dbx-tools-demo
+            key: portr-token
+            permission: READ
+        - name: auth-jwt-secret
+          secret:
+            scope: dbx-tools-demo
+            key: auth-jwt-secret
             permission: READ

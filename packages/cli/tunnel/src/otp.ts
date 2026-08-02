@@ -9,10 +9,13 @@
  * the hash, and the entry is deleted on success or once attempts are exhausted.
  *
  * The session JWT is a short-lived HS256 token (via `jose`) carrying only the
- * email. Its signing key comes from `AUTH_JWT_SECRET`; when unset the gate FAILS
- * OPEN with an ephemeral per-process key (sessions reset on restart) rather than
- * refusing service - a Databricks App is already access-limited, so an unset
- * secret degrades to "sessions don't survive restarts", not "nobody can log in".
+ * email. Its signing key comes from `AUTH_JWT_SECRET`; when unset the gate uses an
+ * ephemeral per-process key rather than refusing service, so an unset secret
+ * degrades to "sessions don't survive a restart", not "nobody can log in". Note
+ * what this does NOT weaken: a caller still needs a code delivered to an
+ * allow-listed address, because the signing key only validates an ALREADY-issued
+ * session. Set it in any deployment running more than one instance, or sessions
+ * minted by one will not verify on another.
  *
  * @module
  */

@@ -10,8 +10,8 @@ reference, guides, and API docs.
 Companion packages for Databricks developers building Databricks Apps, AppKit
 backends, Mastra agents, Genie workflows, and Model Serving integrations.
 
-`dbx-tools` fills the gaps around Databricks-provided packages that are powerful
-but often low-level: missing sensible defaults, requiring repeated setup code, or
+`dbx-tools` fills gaps around Databricks-provided packages that are often
+low-level: missing sensible defaults, requiring repeated setup code, or
 making common app patterns more cumbersome than they need to be. The packages in
 this repo add opinionated defaults, shared schemas, AppKit plugins, UI helpers,
 and local developer tools while staying close to Databricks' own APIs.
@@ -75,7 +75,7 @@ app:
   it transparently falls back to a Postgres full-text index with the identical
   search shape.
 - **Reusable React surfaces** — provide AppKit/Tailwind/Vite foundations, a
-  Mastra chat UI, email approval, preview, compose, and Markdown body components.
+  Mastra chat UI plus React Email approval, preview, compose, and delivery components.
 - **Shared browser-safe contracts** — keep UI, server, tests, and tools aligned
   with zod schemas for Mastra routes, Genie events, model lookup, email payloads,
   and selected Databricks SDK shapes.
@@ -142,22 +142,24 @@ export function App() {
 
 ## Feature Packages
 
-| Use case                    | Packages                                                                                                                                        |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| AppKit defaults             | [`@dbx-tools/appkit`](packages/node/appkit), [`@dbx-tools/cli-appkit-env`](packages/cli/appkit-env)                                             |
-| AppKit-hosted agents        | [`@dbx-tools/appkit-mastra`](packages/node/appkit-mastra), [`@dbx-tools/shared-mastra`](packages/shared/mastra)                                 |
-| Genie streaming and schemas | [`@dbx-tools/genie`](packages/node/genie), [`@dbx-tools/shared-genie`](packages/shared/genie)                                                   |
-| Model Serving selection     | [`@dbx-tools/model`](packages/node/model), [`@dbx-tools/shared-model`](packages/shared/model)                                                   |
-| Local model proxy           | [`@dbx-tools/cli-model-proxy`](packages/cli/model-proxy)                                                                                        |
-| Email workflows             | [`@dbx-tools/email`](packages/node/email), [`@dbx-tools/shared-email`](packages/shared/email), [`@dbx-tools/ui-email`](packages/ui/email)       |
-| Web search and fetch        | [`@dbx-tools/appkit-web-search`](packages/node/appkit-web-search)                                                                               |
-| AI Search (Vector Search)   | [`@dbx-tools/search`](packages/node/search), [`@dbx-tools/shared-search`](packages/shared/search), [`@dbx-tools/ui-search`](packages/ui/search) |
-| Teams chat and cards        | [`@dbx-tools/teams`](packages/node/teams), [`@dbx-tools/shared-teams`](packages/shared/teams), [`@dbx-tools/ui-teams`](packages/ui/teams)       |
-| React/AppKit UI             | [`@dbx-tools/ui-appkit`](packages/ui/appkit), [`@dbx-tools/ui-mastra`](packages/ui/mastra), [`@dbx-tools/ui-email`](packages/ui/email)          |
-| Brand context and assets    | [`@dbx-tools/shared-core`](packages/shared/core), [`@dbx-tools/core`](packages/node/core), [`@dbx-tools/ui-branding`](packages/ui/branding)     |
-| Databricks infrastructure   | [`@dbx-tools/databricks`](packages/node/databricks), [`@dbx-tools/databricks-zerobus`](packages/node/databricks-zerobus)                        |
-| Shared utilities            | [`@dbx-tools/shared-core`](packages/shared/core), [`@dbx-tools/core`](packages/node/core), [`@dbx-tools/path`](packages/node/path)              |
-| SDK-derived schemas         | [`@dbx-tools/shared-sdk-model`](packages/shared/sdk-model)                                                                                      |
+| Use case                    | Packages                                                                                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AppKit defaults             | [`@dbx-tools/appkit`](packages/node/appkit), [`@dbx-tools/cli-appkit-env`](packages/cli/appkit-env)                                                                                                             |
+| AppKit-hosted agents        | [`@dbx-tools/appkit-mastra`](packages/node/appkit-mastra), [`@dbx-tools/shared-mastra`](packages/shared/mastra)                                                                                                 |
+| Genie streaming and schemas | [`@dbx-tools/genie`](packages/node/genie), [`@dbx-tools/shared-genie`](packages/shared/genie)                                                                                                                   |
+| Model Serving selection     | [`@dbx-tools/model`](packages/node/model), [`@dbx-tools/shared-model`](packages/shared/model)                                                                                                                   |
+| Local model proxy           | [`@dbx-tools/cli-model-proxy`](packages/cli/model-proxy)                                                                                                                                                        |
+| Public tunnel + access gate | [`@dbx-tools/cli-tunnel`](packages/cli/tunnel)                                                                                                                                                                  |
+| Email workflows             | [`@dbx-tools/email`](packages/node/email), [`@dbx-tools/shared-email-template`](packages/shared/email-template), [`@dbx-tools/shared-email`](packages/shared/email), [`@dbx-tools/ui-email`](packages/ui/email) |
+| Web search and fetch        | [`@dbx-tools/appkit-web-search`](packages/node/appkit-web-search)                                                                                                                                               |
+| AI Search (Vector Search)   | [`@dbx-tools/search`](packages/node/search), [`@dbx-tools/shared-search`](packages/shared/search), [`@dbx-tools/ui-search`](packages/ui/search)                                                                 |
+| Teams chat and cards        | [`@dbx-tools/teams`](packages/node/teams), [`@dbx-tools/shared-teams`](packages/shared/teams), [`@dbx-tools/ui-teams`](packages/ui/teams)                                                                       |
+| React/AppKit UI             | [`@dbx-tools/ui-appkit`](packages/ui/appkit), [`@dbx-tools/ui-mastra`](packages/ui/mastra), [`@dbx-tools/ui-email`](packages/ui/email)                                                                          |
+| Brand context and assets    | [`@dbx-tools/shared-core`](packages/shared/core), [`@dbx-tools/core`](packages/node/core), [`@dbx-tools/ui-branding`](packages/ui/branding)                                                                     |
+| Databricks infrastructure   | [`@dbx-tools/databricks`](packages/node/databricks), [`@dbx-tools/databricks-zerobus`](packages/node/databricks-zerobus)                                                                                        |
+| Portable filesystems        | [`@dbx-tools/shared-fs`](packages/shared/fs), [`@dbx-tools/fs`](packages/node/fs)                                                                                                                               |
+| Shared utilities            | [`@dbx-tools/shared-core`](packages/shared/core), [`@dbx-tools/core`](packages/node/core), [`@dbx-tools/path`](packages/node/path)                                                                              |
+| Workspace generator CLI     | [`@dbx-tools/cli`](packages/cli/dbx-tools)                                                                                                                                                                      |
 
 Read the package README for each feature area. They are written as the
 package-level source of truth: key features, import examples, configuration or

@@ -29,10 +29,12 @@
     "@databricks/appkit": "catalog:",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-email": "workspace:*",
+    "@dbx-tools/shared-email-template": "workspace:*",
     "@mastra/core": "catalog:",
-    "juice": "^12.1.1",
-    "marked": "catalog:",
-    "nodemailer": "^7.0.13"
+    "@react-email/render": "catalog:",
+    "nodemailer": "^7.0.13",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

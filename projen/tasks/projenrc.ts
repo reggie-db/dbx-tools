@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env -S bun
 import { resolve } from "node:path";
 import { log } from "@dbx-tools/shared-core";
 import { runSynth } from "../src/scaffold.ts";
@@ -25,7 +25,7 @@ const WATCH_PATHS = resynthWatchPaths();
 // scoping re-synth (the one expensive, install-bearing step) to those manifests is what
 // makes the watch intelligent vs stock `projen --watch`, which re-synths on any tree
 // change. `{ dot: false }` keeps the default dotfile ignore group from pruning dotfile
-// targets. (A one-shot "projenrc" is just a synth, i.e. `pnpm exec projen`.)
+// targets. (A one-shot "projenrc" is just a synth, i.e. `bun run default`.)
 watchLoop(
   "projenrc",
   WATCH_PATHS,

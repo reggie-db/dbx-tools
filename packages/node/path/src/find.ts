@@ -107,7 +107,7 @@ function normalizeIgnore(
   };
 }
 
-// Manual demo: run this file directly (e.g. `tsx src/find.ts`) to print the
+// Manual demo: run this file directly (`bun src/find.ts`) to print the
 // files findFiles keeps for this package under the given ignore options.
 if (import.meta.main) {
   const startTime = performance.now();

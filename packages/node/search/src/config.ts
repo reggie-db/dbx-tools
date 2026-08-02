@@ -23,7 +23,7 @@
  */
 
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
-import { object, string } from "@dbx-tools/shared-core";
+import { env, object, string } from "@dbx-tools/shared-core";
 import type { SearchDocument, SearchMode } from "@dbx-tools/shared-search";
 import type { JSONSchema7 } from "json-schema";
 
@@ -235,21 +235,9 @@ function toResolvedIndex(entry: string | SearchIndexConfig): ResolvedIndexConfig
   };
 }
 
-/** Coerce a positive integer from config or an env var, falling back to a default. */
-function resolvePositiveInt(
-  configured: number | undefined,
-  envVar: string,
-  fallback: number,
-): number {
-  const raw = configured ?? Number(process.env[envVar]);
-  const value = Number(raw);
-  if (Number.isFinite(value) && value > 0) return Math.floor(value);
-  return fallback;
-}
-
 /** Parse and validate a {@link SearchMode} from config or an env var. */
 function resolveMode(configured: SearchMode | undefined): SearchMode {
-  const raw = configured ?? string.trimToNull(process.env.SEARCH_MODE) ?? undefined;
+  const raw = configured ?? env.text("SEARCH_MODE") ?? undefined;
   if (raw === undefined) return DEFAULT_MODE;
   if (raw !== "hybrid" && raw !== "vector" && raw !== "keyword") {
     throw new ConfigurationError(
@@ -267,11 +255,7 @@ function resolveMode(configured: SearchMode | undefined): SearchMode {
  * and a bad mode throws a {@link ConfigurationError} naming the field.
  */
 export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSearchConfig {
-  const defaultIndexRaw =
-    string.trimToNull(config.index) ??
-    string.trimToNull(process.env[INDEX_ENV]) ??
-    string.trimToNull(process.env[DATABRICKS_INDEX_ENV]) ??
-    undefined;
+  const defaultIndexRaw = env.string(config.index, [INDEX_ENV, DATABRICKS_INDEX_ENV]) ?? undefined;
 
   const configured = (config.indexes ?? [])
     .map(toResolvedIndex)
@@ -279,11 +263,11 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
 
   // Ensure the default index is represented in the known set.
   if (defaultIndexRaw && !configured.some((i) => i.name === defaultIndexRaw)) {
-    const fromEnv = string.parseList(process.env.SEARCH_COLUMNS);
+    const envColumns = env.list(undefined, "SEARCH_COLUMNS");
     configured.unshift({
       name: defaultIndexRaw,
       alias: defaultAlias(defaultIndexRaw),
-      ...(fromEnv.length > 0 ? { columns: fromEnv } : {}),
+      ...(envColumns.length > 0 ? { columns: envColumns } : {}),
     });
   }
 
@@ -296,34 +280,22 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
   });
 
   const defaultIndex = defaultIndexRaw ?? indexes[0]?.name;
-  const columns = config.columns ?? string.parseList(process.env.SEARCH_COLUMNS);
+  const columns = env.list(config.columns, "SEARCH_COLUMNS");
 
   return {
-    ...(defaultIndex ? { defaultIndex } : {}),
+    ...object.optional("defaultIndex", defaultIndex),
     indexes,
-    ...((string.trimToNull(config.endpoint) ?? string.trimToNull(process.env[ENDPOINT_ENV]))
-      ? {
-          endpoint:
-            string.trimToNull(config.endpoint) ??
-            string.trimToNull(process.env[ENDPOINT_ENV]) ??
-            undefined,
-        }
-      : {}),
+    ...object.optional("endpoint", env.string(config.endpoint, ENDPOINT_ENV)),
     ...(columns.length > 0 ? { columns } : {}),
-    pageSize: resolvePositiveInt(config.pageSize, "SEARCH_PAGE_SIZE", DEFAULT_PAGE_SIZE),
+    pageSize: env.positiveInt(config.pageSize, "SEARCH_PAGE_SIZE", DEFAULT_PAGE_SIZE),
     mode: resolveMode(config.mode),
-    ...((string.trimToNull(config.embeddingModel) ??
-    string.trimToNull(process.env.SEARCH_EMBEDDING_MODEL))
-      ? {
-          embeddingModel:
-            string.trimToNull(config.embeddingModel) ??
-            string.trimToNull(process.env.SEARCH_EMBEDDING_MODEL) ??
-            undefined,
-        }
-      : {}),
+    ...object.optional(
+      "embeddingModel",
+      env.string(config.embeddingModel, "SEARCH_EMBEDDING_MODEL"),
+    ),
     basePath: DEFAULT_BASE_PATH,
-    timeoutMs: resolvePositiveInt(config.timeoutMs, "SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
-    allowWrite: config.allowWrite ?? object.toBoolean(process.env.SEARCH_WRITE) ?? false,
+    timeoutMs: env.positiveInt(config.timeoutMs, "SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
+    allowWrite: env.boolean(config.allowWrite, "SEARCH_WRITE") ?? false,
     ...(config.ensureOnSetup ? { ensureOnSetup: config.ensureOnSetup } : {}),
   };
 }

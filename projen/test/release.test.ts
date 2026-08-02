@@ -51,7 +51,7 @@ describe("generated engine task paths", () => {
 
     assert.equal(
       tasks.tasks.sync?.steps[0]?.exec,
-      "tsx node_modules/@dbx-tools/projen/tasks/sync.ts",
+      "bun node_modules/@dbx-tools/projen/tasks/sync.ts",
     );
   });
 });

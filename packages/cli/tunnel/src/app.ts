@@ -23,15 +23,31 @@
  */
 
 import { createApp as createAppNs } from "@dbx-tools/appkit";
-import { email, sender, transport } from "@dbx-tools/email";
-import { log } from "@dbx-tools/shared-core";
+import { brand as nodeBrand } from "@dbx-tools/core";
+import { brand as emailBrand, email, sender, transport } from "@dbx-tools/email";
+import { log, string } from "@dbx-tools/shared-core";
 import { authGate, type AuthGateApi, type AuthGateConfig } from "./plugin.ts";
 
 const logger = log.logger("tunnel:app");
 
+/**
+ * A code TTL as the plain phrase the email states ("10 minutes", "45 seconds").
+ *
+ * Whole minutes read as minutes; anything else stays in seconds rather than
+ * rounding, so a 90-second TTL is not advertised as "1 minute" and a recipient is
+ * never told the code lives longer than it does.
+ */
+export function expiresIn(seconds: number): string {
+  return seconds >= 60 && seconds % 60 === 0
+    ? string.pluralize(seconds / 60, "minute")
+    : string.pluralize(seconds, "second");
+}
+
 const { createApp } = createAppNs;
 const { resolveSenderAddress } = sender;
 const { getEmailRuntime, sendEmail } = transport;
+const { emailBrandFromContext } = emailBrand;
+const { loadBrandContext } = nodeBrand;
 
 /**
  * Boot the gate app and return the API the proxy calls. Throws when email is not
@@ -40,6 +56,13 @@ const { getEmailRuntime, sendEmail } = transport;
  * fall back to insecure/open mode when the operator opted in.
  */
 export async function startGateApp(config: AuthGateConfig): Promise<AuthGateApi> {
+  // The host app's own brand (`branding/brand.yaml` discovered from cwd) or the
+  // dbx-tools default. This is the ONE brand source for the gate: it styles the
+  // code email (accent band, font, logo) via the email plugin AND supplies the
+  // display name the copy uses, so a deployment that themes its app themes its
+  // sign-in email with it. An explicit `brandName` still wins (see below).
+  const context = await loadBrandContext();
+
   // `sendCode` delivers the OTP through the email plugin's SHARED transport, which
   // the `email()` plugin primes during its `setup()` (awaited by `createApp`
   // below). Using the module-level `sendEmail` avoids a circular dependency on the
@@ -51,12 +74,21 @@ export async function startGateApp(config: AuthGateConfig): Promise<AuthGateApi>
       {
         to: [to],
         subject: opts.subject,
+        // Deliberately the conventional one-time-code layout: the prompt line,
+        // then the bare code ALONE on the next line, then the expiry. iOS, Gmail,
+        // Outlook, and Android all detect a code from this shape and offer to
+        // autofill it, and anything more decorative is what breaks that. The code
+        // stays visible TEXT in both MIME parts (the email plugin renders the
+        // HTML and plain-text alternatives from one React Email tree), never an
+        // image, so a client that scrapes the text part still finds it.
         body: [
           opts.message,
           "",
           `## ${code}`,
           "",
-          "It expires shortly. If you didn't request this, ignore this email.",
+          `This code expires in ${expiresIn(opts.codeTtlSeconds)}.`,
+          "",
+          "If you did not request this code, you can ignore this email.",
         ].join("\n"),
       },
       from,
@@ -65,7 +97,20 @@ export async function startGateApp(config: AuthGateConfig): Promise<AuthGateApi>
 
   // `createApp` namespaces each plugin's exports on the handle by manifest name;
   // `handle.authGate` is the in-process gate API the proxy drives.
-  const handle = await createApp({ plugins: [email(), authGate({ ...config, sendCode })] });
+  const handle = await createApp({
+    plugins: [
+      // Brand the code email from the resolved context, the same bridge every
+      // other dbx-tools email surface uses (accent + font inlined, logo only when
+      // it is a fetchable URL - a package-export path cannot load in an inbox).
+      email({ brand: emailBrandFromContext(context) }),
+      // `brandName` falls back to the resolved context's display name, so the
+      // email copy names the app rather than a generic placeholder. Spelled as an
+      // explicit `??` rather than a key before `...config`: commander sets
+      // `brandName` on the options object whether or not the flag was passed, so
+      // spreading it would clobber the context name with `undefined`.
+      authGate({ ...config, brandName: config.brandName ?? context.name, sendCode }),
+    ],
+  });
 
   // Fail fast: the gate needs SMTP to email codes. `getEmailRuntime()` resolves to
   // `mode: "file"` (outbox) or throws when no SMTP creds are configured - neither

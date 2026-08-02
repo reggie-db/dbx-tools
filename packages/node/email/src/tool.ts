@@ -29,7 +29,7 @@ const logger = log.logger("email/tool/send-email");
 /**
  * The model-facing description of the send capability, shared by the Mastra
  * {@link emailTool} and the AppKit `email.send` tool so both agents get the
- * same guidance about approval, scope, and body formatting.
+ * same guidance about approval and scope.
  */
 export const SEND_EMAIL_DESCRIPTION = string.toDescription(`
   Send an email on the user's behalf. Pass one or more recipient
@@ -37,11 +37,9 @@ export const SEND_EMAIL_DESCRIPTION = string.toDescription(`
   and a body; the user is prompted to approve the send before it goes
   out (this tool is approval-gated). Use it only when the user
   explicitly asks to send / forward / share something via email -
-  never autonomously. Keep subjects short and bodies self-contained:
-  the recipient has none of the chat context. Write the body in
-  GitHub-Flavored Markdown - headings, lists, and real Markdown
-  tables - not ASCII art (no "=====" dividers or space/pipe-drawn
-  tables); it is rendered to HTML before sending.
+  never autonomously. Compose whatever subject and body best fulfill
+  the user's request; the configured React Email template handles the
+  responsive layout, rich presentation, and brand styling.
 `);
 
 /** Options accepted by {@link emailTool}. */

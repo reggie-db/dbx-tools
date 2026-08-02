@@ -789,6 +789,9 @@ client that talks to these routes.
   helpers, route handlers, and request-body validation.
 - `defaults` - cache / retry / timeout settings for the plugin's own outbound
   calls, one constant per call site with its reasoning.
+- `style` - `TYPOGRAPHY_RULE`, the one no-emoji / no-em-dash sentence the agent
+  style block, the summarizer, and the thread titler all append, so a summary or
+  a thread title cannot drift from the prose it sits beside.
 - `memory` / `storageSchema` - Lakebase-backed Mastra store/vector setup.
 - `workspaces` / `filesystems` - Mastra workspace creation with named
   `skillFolders` (defaults `workspace-team` / `workspace-team-app`, overridable

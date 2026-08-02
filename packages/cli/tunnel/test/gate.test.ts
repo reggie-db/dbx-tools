@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
+import { brand } from "@dbx-tools/shared-core";
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
+import { expiresIn } from "../src/app.ts";
 import { CodeStore, resetSigningKey, signSession, verifySession } from "../src/otp.ts";
+import { resolveAuthGateConfig } from "../src/plugin.ts";
 import { RateLimiter } from "../src/rate-limit.ts";
 
 describe("allowlist", () => {
   it("matches domain shortcut, glob, and /regex/; empty = nobody", () => {
-    assert.equal(matchesAllowlist("a@databricks.com", ["databricks.com"]), true);
-    assert.equal(matchesAllowlist("a@databricks.com", ["@databricks.com"]), true);
-    assert.equal(matchesAllowlist("bot@ci.databricks.com", ["*.databricks.com"]), true);
-    assert.equal(matchesAllowlist("Ada@Databricks.com", ["/@databricks\\.com$/"]), true);
-    assert.equal(matchesAllowlist("x@evil.com", ["databricks.com"]), false);
-    assert.equal(matchesAllowlist("a@databricks.com", []), false);
+    assert.equal(matchesAllowlist("a@example.com", ["example.com"]), true);
+    assert.equal(matchesAllowlist("a@example.com", ["@example.com"]), true);
+    assert.equal(matchesAllowlist("bot@ci.example.com", ["*.example.com"]), true);
+    assert.equal(matchesAllowlist("Ada@Example.com", ["/@example\\.com$/"]), true);
+    assert.equal(matchesAllowlist("x@evil.com", ["example.com"]), false);
+    assert.equal(matchesAllowlist("a@example.com", []), false);
   });
 
   it("validates address shape", () => {
@@ -72,5 +75,46 @@ describe("session jwt", () => {
   it("rejects an empty / bad token", async () => {
     assert.equal(await verifySession(undefined), undefined);
     assert.equal(await verifySession("not.a.jwt"), undefined);
+  });
+});
+
+describe("gate config", () => {
+  // The name a recipient reads in the code email must come from the shared brand
+  // context, not a hardcoded product string, so a themed app's sign-in mail
+  // matches the app. Pinned because the old default was the literal "This app".
+  it("defaults brandName to the brand context name", () => {
+    const resolved = resolveAuthGateConfig({});
+    assert.equal(resolved.brandName, brand.defaultBrandContext.name);
+    assert.notEqual(resolved.brandName, "This app");
+  });
+
+  it("lets an explicit brandName override the brand context", () => {
+    assert.equal(resolveAuthGateConfig({ brandName: "Acme Ops" }).brandName, "Acme Ops");
+  });
+
+  // The subject/message wording is a COMPATIBILITY contract, not a style choice:
+  // iOS, Gmail, Outlook, and Android detect a one-time code from the conventional
+  // "verification code" phrasing and offer to autofill it. Pinned so a later
+  // copy edit toward something branded ("Your dbx tools passcode") has to be
+  // deliberate.
+  it("uses the conventional verification-code wording", () => {
+    const resolved = resolveAuthGateConfig({});
+    assert.equal(resolved.subject, "Your verification code");
+    assert.equal(resolved.message, "Your verification code is:");
+  });
+});
+
+describe("code expiry copy", () => {
+  it("states whole minutes as minutes", () => {
+    assert.equal(expiresIn(600), "10 minutes");
+    assert.equal(expiresIn(60), "1 minute");
+  });
+
+  // Never round UP: telling a recipient "1 minute" for a 90-second code would be
+  // wrong in the direction that matters, so a non-whole minute stays in seconds.
+  it("keeps a partial minute in seconds rather than rounding", () => {
+    assert.equal(expiresIn(90), "90 seconds");
+    assert.equal(expiresIn(45), "45 seconds");
+    assert.equal(expiresIn(1), "1 second");
   });
 });

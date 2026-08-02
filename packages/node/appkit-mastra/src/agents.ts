@@ -32,6 +32,7 @@ import { buildGenieToolkitProvider, resolveGenieSpaces } from "./genie.ts";
 import type { MemoryBuilder } from "./memory.ts";
 import { buildModel } from "./model.ts";
 import { ResultProcessor, stripStaleChartsProcessor } from "./processors.ts";
+import { TYPOGRAPHY_RULE } from "./style.ts";
 import { buildSummarizeTool } from "./summarize.ts";
 import { createWorkspace } from "./workspaces.ts";
 
@@ -408,8 +409,7 @@ export const DEFAULT_STYLE_INSTRUCTIONS = [
   "Use markdown formatting, including headings, lists, and code blocks.",
   "Avoid lists and headers for short replies.",
   "Plain prose.",
-  "Use hyphens (-) only. Never use em dashes or en dashes.",
-  "Never use emojis.",
+  TYPOGRAPHY_RULE,
   "Skip openers like 'Great question', 'Absolutely', and 'I'd be happy to help'.",
   "Skip closers like 'Let me know if you have any questions'.",
   "Skip self-disclaimers like 'I should mention' and 'It's important to note'.",

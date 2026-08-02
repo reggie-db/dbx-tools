@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `dbx-tools-tunnel` / `dbxt-tunnel` entry: front a Databricks App with a public
+ * `dbx-tools-tunnel` / `dbxt-tunnel` entry: front an app with a public
  * portr tunnel + email-OTP gate, wrapping the start command after `--`.
  * Delegates to the commander program in `../src/cli`.
  */

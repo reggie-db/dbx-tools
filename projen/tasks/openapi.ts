@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env -S bun
 import { generateBarrels } from "../src/barrels.ts";
 import { log, string } from "@dbx-tools/shared-core";
 import { generateOpenapi, isTsoaController } from "../src/openapi.ts";

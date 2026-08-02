@@ -1,8 +1,9 @@
 /**
  * portr install + config + launch for the tunnel CLI.
  *
- * On a Databricks App the container's `$HOME` is read-only on cold start, so the
- * portr binary and its config are placed under a writable, cwd-rooted `.home`.
+ * Some hosts (Databricks Apps among them) mount the container's `$HOME` read-only
+ * on cold start, so the portr binary and its config are placed under a writable,
+ * cwd-rooted `.home` unconditionally - it costs nothing where `$HOME` is writable.
  * The install is idempotent (the installer skips when the on-PATH binary is
  * current). The config is rendered from `PUBLIC_DOMAIN` (`<subdomain>.<server>`)
  * + `PORTR_TOKEN` and points portr at the PUBLIC port (the proxy listens there).

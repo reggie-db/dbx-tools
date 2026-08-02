@@ -89,7 +89,7 @@ describe("outbox send", () => {
     assert.equal(result.recipient, "alice@example.com");
     assert.ok(result.messageId?.startsWith(join(OUTBOX_DIR, FROM)));
     const html = await readFile(result.messageId!, "utf8");
-    assert.match(html, /Status<\/h2>/);
+    assert.match(html, /Status\s*<\/h2>/);
     assert.match(html, /team@example\.com/);
   });
 

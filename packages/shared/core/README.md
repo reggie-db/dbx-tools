@@ -10,6 +10,7 @@ namespaces so call sites stay explicit:
 import {
   async,
   brand,
+  env,
   error,
   hash,
   http,
@@ -155,6 +156,38 @@ field off parsed JSON. `parseList()` normalizes a config value that may arrive a
 an array or as one comma/whitespace-separated env string, de-duplicating as it
 goes.
 
+## Configuration From The Environment
+
+```ts
+const config = {
+  host: env.string(options.host, "SMTP_HOST"),
+  // Several names for one setting; earlier names win.
+  appId: env.string(options.appId, ["TEAMS_APP_ID", "MICROSOFT_APP_ID"]),
+  timeoutMs: env.positiveInt(options.timeoutMs, "SEARCH_TIMEOUT_MS", 30_000),
+  threshold: env.positiveNumber(options.threshold, "FUZZY_THRESHOLD", 0.4),
+  fuzzy: env.boolean(options.fuzzy, "SEARCH_FUZZY") ?? true,
+  fallbacks: env.list(options.fallbacks, "MODEL_FALLBACKS"),
+};
+```
+
+Every plugin resolves config the same way - the caller's typed value, else one or
+more environment variables, else a default - and hand-writing that chain per
+field is how `config.x ?? Number(process.env.X)` bugs get in. `positiveInt()`
+floors, so a count cannot go fractional; `positiveNumber()` keeps the fraction
+for a threshold or ratio. `boolean()` goes through `object.toBoolean()`, so the
+loose spellings an env var actually carries (`1`, `on`, `yes`) are accepted, and
+returns `undefined` when neither source is interpretable so `??` picks the
+default. A name that is SET but unusable is not skipped for a later name in the
+chain - ignoring what a deployment explicitly configured hides the mistake.
+
+Browser-safe: `process` is reached through `globalThis` and guarded, so every
+lookup simply misses off-process and the caller's fallback applies.
+
+Pair it with `object.optional()` when a resolved value is an optional field -
+`...object.optional("endpoint", env.string(...))` keeps an absent field ABSENT
+rather than setting it to an explicit `undefined`, which
+`exactOptionalPropertyTypes` rejects.
+
 ## Objects And Predicates
 
 ```ts
@@ -207,6 +240,13 @@ http.forEachHeaderValue(req, "authorization", (value) => {
 `http.HeaderLike` works with Fetch `Request`, Express-ish requests, Node header
 records, and plain `{ headers }` objects. `http.createFetchError()` turns a
 failed `Response` into an error with response text attached.
+
+## Intercepted Execution
+
+`execution.directExecutor()` gives plugin-backed tools a no-plugin fallback with
+the same success/failure shape as AppKit's executor. `execution.run()` merges the
+plugin timeout signal with the caller's cancellation signal and centralizes
+result unwrapping without imposing an AppKit dependency on shared code.
 
 ## Network Strings, Email, And CIDR
 
@@ -267,10 +307,13 @@ without paying formatting cost when disabled.
 - `json` - non-throwing `parse()` and record-narrowing `parseRecord()`.
 - `string` - tokenization, slugs, identifiers, human labels, string coercion,
   config lists, descriptions, pluralization, and HTML escaping.
-- `object` - record checks, boolean coercion, deep equality, shape types, and
-  lazy sequence transforms + collection helpers.
+- `object` - record checks, boolean coercion, present-only field spreading, deep
+  equality, shape types, and lazy sequence transforms + collection helpers.
+- `env` - config-over-environment resolution: strings, booleans, positive
+  numbers/integers, and lists, with env-name fallback chains.
 - `predicate` - composable boolean/type predicates.
 - `http` - header iteration, cookie parsing, and fetch error creation.
+- `execution` - direct executor fallback, cancellation merging, and result unwrapping.
 - `net` - URL building, email parsing, path matching, IP/CIDR helpers.
 - `token` - JWT payload and scope readers.
 - `functionModule` - memoization.

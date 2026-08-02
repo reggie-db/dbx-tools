@@ -29,7 +29,7 @@
  */
 
 import { ValidationError, type BasePluginConfig } from "@databricks/appkit";
-import { object, string } from "@dbx-tools/shared-core";
+import { env, object } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import type { JSONSchema7 } from "json-schema";
 
@@ -198,11 +198,8 @@ export const TEAMS_CONFIG_SCHEMA: JSONSchema7 = {
  */
 export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeamsConfig {
   const cardVersion =
-    string.trimToNull(overrides?.cardVersion) ??
-    string.trimToNull(process.env[CARD_VERSION_ENV]) ??
-    card.ADAPTIVE_CARD_VERSION;
-  const webhookUrl =
-    string.trimToNull(overrides?.webhookUrl) ?? string.trimToNull(process.env[WEBHOOK_URL_ENV]);
+    env.string(overrides?.cardVersion, CARD_VERSION_ENV) ?? card.ADAPTIVE_CARD_VERSION;
+  const webhookUrl = env.string(overrides?.webhookUrl, WEBHOOK_URL_ENV);
   if (webhookUrl !== null && !isAbsoluteUrl(webhookUrl)) {
     throw ValidationError.invalidValue(
       WEBHOOK_URL_ENV,
@@ -210,50 +207,21 @@ export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeams
       "an absolute https URL for the Teams webhook",
     );
   }
-  const agentPlugin =
-    string.trimToNull(overrides?.agentPlugin) ??
-    string.trimToNull(process.env[AGENT_PLUGIN_ENV]) ??
-    DEFAULT_AGENT_PLUGIN;
+  const agentPlugin = env.string(overrides?.agentPlugin, AGENT_PLUGIN_ENV) ?? DEFAULT_AGENT_PLUGIN;
   // Two independent conditions must BOTH hold: the operator asked for it, and
   // this is a development build. Gating on `NODE_ENV` as well means a stray
   // variable in a production environment cannot silently expose the endpoint.
-  const requested =
-    overrides?.allowUnauthenticated ?? object.toBoolean(process.env[ALLOW_UNAUTHENTICATED_ENV]);
+  const requested = env.boolean(overrides?.allowUnauthenticated, ALLOW_UNAUTHENTICATED_ENV);
   const allowUnauthenticated = requested === true && process.env.NODE_ENV === "development";
   return {
     cardVersion,
     agentPlugin,
     allowUnauthenticated,
-    ...(webhookUrl !== null ? { webhookUrl } : {}),
-    ...spread("appId", string.trimToNull(overrides?.appId) ?? fromEnv(APP_ID_ENVS)),
-    ...spread(
-      "appPassword",
-      string.trimToNull(overrides?.appPassword) ?? fromEnv(APP_PASSWORD_ENVS),
-    ),
-    ...spread("appTenantId", string.trimToNull(overrides?.appTenantId) ?? fromEnv(APP_TENANT_ENVS)),
+    ...object.optional("webhookUrl", webhookUrl),
+    ...object.optional("appId", env.string(overrides?.appId, APP_ID_ENVS)),
+    ...object.optional("appPassword", env.string(overrides?.appPassword, APP_PASSWORD_ENVS)),
+    ...object.optional("appTenantId", env.string(overrides?.appTenantId, APP_TENANT_ENVS)),
   };
-}
-
-/**
- * First non-empty value among `names` in the environment, or `null`. Lets a
- * `TEAMS_*` variable win over the `MICROSOFT_APP_*` alias the Bot Framework SDK
- * uses without duplicating the lookup per field.
- */
-function fromEnv(names: readonly string[]): string | null {
-  for (const name of names) {
-    const value = string.trimToNull(process.env[name]);
-    if (value !== null) return value;
-  }
-  return null;
-}
-
-/**
- * `{ [key]: value }` when `value` is present, otherwise nothing - so an absent
- * optional field stays ABSENT rather than becoming an explicit `undefined`,
- * which `exactOptionalPropertyTypes` rejects.
- */
-function spread<K extends string>(key: K, value: string | null): Record<K, string> | undefined {
-  return value === null ? undefined : ({ [key]: value } as Record<K, string>);
 }
 
 /** Whether `value` parses as an absolute URL. */

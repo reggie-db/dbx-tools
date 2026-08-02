@@ -157,4 +157,5 @@ project.addTask("demo", {
   exec: `bun tasks/demo.ts`,
   description: "Run the demo",
 });
+project.testTask.exec("bun test test");
 project.synth();

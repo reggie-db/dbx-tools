@@ -50,7 +50,7 @@ export const MAX_ATTACHMENTS_TOTAL_BYTES = 20_971_520;
 /** Largest number of attachments accepted on one message. */
 export const MAX_ATTACHMENT_COUNT = 20;
 
-/** Largest markdown body accepted, in characters. */
+/** Largest email body accepted, in characters. */
 export const MAX_BODY_CHARS = 200_000;
 
 /** Execution settings for a send (SMTP dispatch or an outbox write). */

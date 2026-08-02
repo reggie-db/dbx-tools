@@ -3,11 +3,11 @@
  *
  * Each pattern in the configured list is one of three shapes, tried in order:
  *
- *   - **domain shortcut** - `databricks.com` or `@databricks.com`: matches any
+ *   - **domain shortcut** - `example.com` or `@example.com`: matches any
  *     address whose domain equals it (case-insensitive). The leading `@` is
  *     optional and stripped.
- *   - **glob** - contains `*` or `?`, e.g. `*.databricks.com` or
- *     `*@databricks.com`: matched against the WHOLE address with shell-style
+ *   - **glob** - contains `*` or `?`, e.g. `*.example.com` or
+ *     `*@example.com`: matched against the WHOLE address with shell-style
  *     wildcards (`*` = any run, `?` = one char).
  *   - **regex** - wrapped in slashes, `/.../ [flags]`: compiled and tested
  *     against the whole address. An invalid regex never matches (it is skipped

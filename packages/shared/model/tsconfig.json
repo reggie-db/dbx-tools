@@ -31,10 +31,12 @@
     "moduleResolution": "bundler",
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true
+    "rewriteRelativeImportExtensions": true,
+    "jsx": "react-jsx"
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.tsx",
     "index.ts"
   ],
   "exclude": [

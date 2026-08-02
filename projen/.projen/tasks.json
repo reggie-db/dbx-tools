@@ -165,7 +165,12 @@
     },
     "test": {
       "name": "test",
-      "description": "Run tests"
+      "description": "Run tests",
+      "steps": [
+        {
+          "exec": "bun test test"
+        }
+      ]
     },
     "upgrade": {
       "name": "upgrade",

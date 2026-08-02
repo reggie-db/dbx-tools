@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env -S bun
 import { relative } from "node:path";
 import { listGeneratedFiles, listNodeModulesDirs, removePaths } from "../src/clean.ts";
 import { log, string } from "@dbx-tools/shared-core";
@@ -18,8 +18,8 @@ if (targets.length === 0) {
 
 const regenHint = (removedNodeModules: boolean): string =>
   removedNodeModules
-    ? "reinstall with `pnpm install`, then `pnpm exec projen`"
-    : "regenerate with `pnpm exec projen`";
+    ? "reinstall with `bun install`, then `bun run default`"
+    : "regenerate with `bun run default`";
 
 if (yes) {
   const n = removePaths(targets);

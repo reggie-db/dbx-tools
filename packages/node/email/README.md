@@ -7,7 +7,9 @@ outbound email with human approval, sender derivation, SMTP dispatch, and a
 local outbox mode for development. AppKit ships no first-party email surface,
 so this is additive rather than an alternative to a native plugin. Browser-safe
 message/result schemas live in
-[`@dbx-tools/shared-email`](../../shared/email).
+[`@dbx-tools/shared-email`](../../shared/email), and the reusable React Email
+presentation lives in
+[`@dbx-tools/shared-email-template`](../../shared/email-template).
 
 **Key features:**
 
@@ -22,8 +24,8 @@ message/result schemas live in
   configured domain.
 - Deny-by-default sender policy with exact addresses, domains, domain wildcards,
   and a named `unrestricted` escape hatch.
-- Markdown-to-HTML rendering with a small email layout, inline styles, metadata,
-  and attachment summaries.
+- React Email rendering with responsive components, matching HTML/plain-text
+  alternatives, metadata, attachment summaries, and the dbx-tools brand by default.
 - Named caps on body length and attachment size, and an `AbortSignal` threaded
   through every send.
 
@@ -80,7 +82,7 @@ approval card and compose components.
 | `senderPolicy`   | `"allowlist" \| "unrestricted"` | `EMAIL_SENDER_POLICY`, then `"allowlist"` | How the sender is restricted when `allowedSenders` is empty.                     |
 | `allowedSenders` | `string \| string[]`            | `EMAIL_ALLOWED_SENDERS`                   | Permitted `From` patterns: exact addresses, `*@domain`, a bare `domain`, or `*`. |
 | `outDir`         | `string`                        | `EMAIL_OUTBOX_DIR`, then `<cwd>/tmp`      | Directory the outbox writes HTML previews to.                                    |
-| `brand`          | `EmailBrand`                    | none                                      | Accent color, font, display name, and header logo inlined into every message.    |
+| `brand`          | `EmailBrand`                    | dbx-tools brand                           | Colors, font, display name, footer, and optional logo applied to every message.  |
 
 Precedence per field is explicit config, then the environment variable, then the
 built-in default.
@@ -240,35 +242,41 @@ deployment that only sets `EMAIL_DOMAIN` rejects a `From` on any other domain.
 Set `senderPolicy: "unrestricted"` to accept any `From` a caller supplies. The
 effective policy is logged at boot.
 
-## Render Markdown Email
+## Render A React Email
 
 ```ts
 import { emailHtml, markdown } from "@dbx-tools/email";
 
-const html = emailHtml.renderEmailHtml({
+const html = await emailHtml.renderEmailHtml({
   subject: "Incident update",
   body: "## Status\nResolved.",
 });
 
-const fragment = markdown.markdownToHtml("## Status\nResolved.");
+const text = await emailHtml.renderEmailText({
+  subject: "Incident update",
+  body: "## Status\nResolved.",
+});
+
+const fragment = await markdown.markdownToHtml("## Status\nResolved.");
 ```
 
-`renderEmailHtml()` takes a Markdown `body`, renders it, wraps it in the package
-layout, and inlines the CSS for mail clients. Pass Markdown, not HTML: the
-renderer runs `markdownToHtml()` itself. `markdown.normalizeMarkdown()` trims
-common indentation and repairs fenced-text noise, and
-`markdown.markdownToHtml()` renders a Markdown fragment on its own.
+`renderEmailHtml()` and `renderEmailText()` render the same shared React Email
+component tree into the two MIME alternatives used by SMTP. The universal
+components live in `@dbx-tools/shared-email-template`, so the browser preview
+and delivered message share typography, content styling, and brand behavior.
+`markdown.normalizeMarkdown()` remains available for compatibility, while
+`markdown.markdownToHtml()` now renders through the shared React Email body.
 
 ## Brand The Email
 
-Branding is optional. Pass a `brand` to the plugin (or to `renderEmailHtml`) to
-color the layout with an accent, font, and header logo; omit it for the neutral
-default palette.
+Every message uses the repository's dbx-tools brand by default. Pass a `brand`
+to the plugin or renderer only when the consuming application needs its own
+identity.
 
 ```ts
 import { brand, plugin } from "@dbx-tools/email";
 
-// The dbx-tools brand, ready to use:
+// Explicitly select the same brand used by default:
 plugin.email({ brand: brand.defaultEmailBrand });
 
 // Or derive from any shared BrandContext:
@@ -286,12 +294,11 @@ plugin.email({
 });
 ```
 
-The brand is inlined into every rendered message. The browser UI's `[data-brand]`
-CSS bridge can't reach an inbox (mail clients strip `<style>` and ignore `var()`),
-so email branding uses inline token values instead. A `logoUrl` renders only when
-it is an `http(s):` or `data:` URL - a package-export asset path is dropped rather
-than shown as a broken image, so `defaultEmailBrand` applies the brand color and
-font but no logo.
+React Email applies the brand through email-safe inline styles. The browser UI's
+`[data-brand]` CSS bridge cannot reach an inbox, so both the delivered document
+and browser preview consume the same `EmailBrand` values directly. A `logoUrl`
+renders when it is an `http(s):`, `data:`, or `cid:` URL; otherwise the branded
+display name becomes the header mark.
 
 ## Use The Outbox In Tests
 
@@ -310,7 +317,7 @@ copied to disk.
 
 | Constant                      | Value   | Bounds                                   |
 | ----------------------------- | ------- | ---------------------------------------- |
-| `MAX_BODY_CHARS`              | 200,000 | Markdown body length.                    |
+| `MAX_BODY_CHARS`              | 200,000 | Email content length.                    |
 | `MAX_ATTACHMENT_BYTES`        | 10 MiB  | One attachment's decoded inline content. |
 | `MAX_ATTACHMENTS_TOTAL_BYTES` | 20 MiB  | Combined decoded attachment content.     |
 | `MAX_ATTACHMENT_COUNT`        | 20      | Attachments on one message.              |
@@ -335,9 +342,11 @@ handed to SMTP. The constants and the plugin's interceptor settings live in the
   `resolveEmailConfig()`.
 - `defaults` - execution settings for the interceptor chain and the payload caps.
 - `sender` - sender derivation, allow-list parsing, and sender-option listing.
-- `markdown` / `emailHtml` - Markdown normalization/rendering and HTML layout.
+- `markdown` / `emailHtml` - React Email body, HTML, and plain-text rendering.
 - `outbox` - local HTML file writer for development and tests.
 - `brand` - `EmailBrand`, `emailBrandFromContext()`, and `defaultEmailBrand`.
 
 Pair this package with [`@dbx-tools/shared-email`](../../shared/email) when a UI
-or tool schema needs to validate the same email payload.
+or tool schema needs to validate the same email payload, and with
+[`@dbx-tools/shared-email-template`](../../shared/email-template) when another
+runtime needs to reuse the presentation components directly.

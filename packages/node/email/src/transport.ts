@@ -23,13 +23,12 @@
  */
 
 import {
-  AppKitError,
   ConfigurationError,
   ExecutionError,
   ValidationError,
   type ExecutionResult,
 } from "@databricks/appkit";
-import { async, error, log } from "@dbx-tools/shared-core";
+import { execution, log } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
 import { resolveEmailConfig, type EmailPluginConfig, type ResolvedEmailConfig } from "./config.ts";
@@ -41,7 +40,7 @@ import {
   MAX_BODY_CHARS,
   type EmailExecutionSettings,
 } from "./defaults.ts";
-import { renderEmailHtml } from "./email-html.ts";
+import { renderEmail } from "./email-html.ts";
 import { writeOutboxEmail } from "./outbox.ts";
 import { assertSenderAllowed } from "./sender.ts";
 
@@ -70,17 +69,7 @@ export interface EmailRuntime {
  * directly, mapping a throw onto the same {@link ExecutionResult} shape so
  * call sites branch on `ok` either way.
  */
-const directExecute: EmailExecutor = async (fn) => {
-  try {
-    return { ok: true, data: await fn() };
-  } catch (err) {
-    return {
-      ok: false,
-      status: err instanceof AppKitError ? err.statusCode : 500,
-      message: error.errorMessage(err),
-    };
-  }
-};
+const directExecute = execution.directExecutor<EmailExecutionSettings>();
 
 let runtime: EmailRuntime | undefined;
 
@@ -157,20 +146,23 @@ export async function executeWrite<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   const { execute } = getEmailRuntime();
-  const result = await execute(
-    (executeSignal) => fn(async.combineAbortSignals(executeSignal, signal)),
-    settings,
-  );
-  if (result.ok) return result.data;
-  // A caller that cancelled is not a failure worth reporting as one.
-  if (signal?.aborted) throw ExecutionError.canceled();
-  logger.warn("execution-failed", {
+  return execution.run({
     operation,
-    status: result.status,
-    error: result.message,
-  });
-  throw new ExecutionError(`email: ${operation} failed`, {
-    context: { operation, status: result.status },
+    settings,
+    execute,
+    fn,
+    signal,
+    canceled: ExecutionError.canceled,
+    failed: (failure) => {
+      logger.warn("execution-failed", {
+        operation: failure.operation,
+        status: failure.status,
+        error: failure.message,
+      });
+      return new ExecutionError(`email: ${failure.operation} failed`, {
+        context: { operation: failure.operation, status: failure.status },
+      });
+    },
   });
 }
 
@@ -340,17 +332,18 @@ async function dispatch(
     );
   }
   const attachments = toMailAttachments(message.attachments);
+  const rendered = await renderEmail({
+    subject: message.subject,
+    body: message.body,
+    brand: config.brand,
+  });
   const info = await abortable(
     transporter.sendMail({
       from,
       to: message.to,
       subject: message.subject,
-      text: message.body,
-      html: renderEmailHtml({
-        subject: message.subject,
-        body: message.body,
-        ...(config.brand ? { brand: config.brand } : {}),
-      }),
+      text: rendered.text,
+      html: rendered.html,
       ...(message.cc && message.cc.length > 0 ? { cc: message.cc } : {}),
       ...(message.bcc && message.bcc.length > 0 ? { bcc: message.bcc } : {}),
       ...(attachments ? { attachments } : {}),
@@ -369,8 +362,8 @@ async function dispatch(
  * Send (SMTP mode) or persist (file/outbox mode) one message from the
  * resolved `from` address. `to` (and optional `cc` / `bcc`) each accept
  * one or more addresses, and `attachments` are forwarded as files. The
- * body is markdown: SMTP sends it as both a plain-text part (the raw
- * source) and an HTML part (rendered), and the outbox embeds the
+ * body is rendered by React Email into matching plain-text and HTML MIME
+ * alternatives, and the outbox embeds the
  * rendered HTML in a document. In file mode the returned `messageId` is
  * the path written. Throws when `to` carries no recipient, when the body
  * or attachments exceed the plugin's caps, or when `from` is not permitted

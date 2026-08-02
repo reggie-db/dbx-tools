@@ -46,7 +46,7 @@
 
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
 import { serving } from "@dbx-tools/model";
-import { json, object, type OneOrMany, string } from "@dbx-tools/shared-core";
+import { env, json, object, type OneOrMany, string } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import { parseAllowedUrls, toUrlAllowList, type UrlAllowList } from "./allowlist.ts";
 
@@ -300,20 +300,13 @@ export const WEB_SEARCH_CONFIG_SCHEMA: JSONSchema7 = {
   },
 };
 
-/** Parse a positive integer env/config value, else the fallback. */
-function resolvePositiveInt(value: number | undefined, envKey: string, fallback: number): number {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) return Math.floor(value);
-  const env = Number(process.env[envKey]);
-  return Number.isFinite(env) && env > 0 ? Math.floor(env) : fallback;
-}
-
 /**
  * Parse the `WEB_SEARCH_TOOLS` env var (JSON object), else `{}`. A value that
  * is set but not a JSON object is a deployment mistake that would otherwise
  * silently leave the built-in tool specs in place, so it throws.
  */
 function parseToolsEnv(): Record<string, unknown> {
-  const raw = string.trimToNull(process.env.WEB_SEARCH_TOOLS);
+  const raw = env.text("WEB_SEARCH_TOOLS");
   if (raw === null) return {};
   const parsed = json.parseRecord(raw);
   if (!parsed) {
@@ -329,9 +322,9 @@ function parseToolsEnv(): Record<string, unknown> {
 function resolveModelPin(config: WebSearchPluginConfig): { model?: string; source: ModelSource } {
   const fromConfig = string.trimToNull(config.model);
   if (fromConfig !== null) return { model: fromConfig, source: "config" };
-  const fromModelEnv = string.trimToNull(process.env[MODEL_ENV]);
+  const fromModelEnv = env.text(MODEL_ENV);
   if (fromModelEnv !== null) return { model: fromModelEnv, source: MODEL_ENV };
-  const fromResourceEnv = string.trimToNull(process.env[SERVING_ENDPOINT_ENV]);
+  const fromResourceEnv = env.text(SERVING_ENDPOINT_ENV);
   if (fromResourceEnv !== null) return { model: fromResourceEnv, source: SERVING_ENDPOINT_ENV };
   return { source: "none" };
 }
@@ -344,7 +337,7 @@ function resolveUrlPolicy(
   configured: UrlPolicyMode | undefined,
   patterns: readonly string[],
 ): UrlPolicyMode {
-  const raw = configured ?? string.trimToNull(process.env.WEB_SEARCH_URL_POLICY) ?? undefined;
+  const raw = configured ?? env.text("WEB_SEARCH_URL_POLICY") ?? undefined;
   if (raw === undefined) return patterns.length > 0 ? "allowlist" : "unrestricted";
   if (raw !== "allowlist" && raw !== "unrestricted") {
     throw new ConfigurationError(
@@ -401,37 +394,35 @@ export function toApprovalPolicy(gate: ApprovalGate | ApprovalPolicy | undefined
 export function resolveWebSearchConfig(
   config: WebSearchPluginConfig = {},
 ): ResolvedWebSearchConfig {
-  const patterns = parseAllowedUrls(config.allowedUrls ?? process.env.WEB_SEARCH_ALLOWED_URLS);
+  const patterns = parseAllowedUrls(
+    config.allowedUrls ?? env.text("WEB_SEARCH_ALLOWED_URLS") ?? undefined,
+  );
   const urlPolicy = resolveUrlPolicy(config.urlPolicy, patterns);
   const { model, source } = resolveModelPin(config);
-  const fallbacks = string.parseList(
-    config.modelFallbacks ?? process.env.WEB_SEARCH_MODEL_FALLBACKS,
-  );
-  const fuzzyThresholdRaw =
-    config.modelFuzzyThreshold ?? Number(process.env.WEB_SEARCH_FUZZY_THRESHOLD);
+  const fallbacks = env.list(config.modelFallbacks, "WEB_SEARCH_MODEL_FALLBACKS");
   return {
     ...(model ? { model } : {}),
     modelSource: source,
     modelFallbacks: fallbacks.length > 0 ? fallbacks : DEFAULT_MODEL_FALLBACKS,
     webSearchTools: { ...parseToolsEnv(), ...(config.webSearchTools ?? {}) },
-    fuzzy: config.modelFuzzyMatch ?? object.toBoolean(process.env.WEB_SEARCH_FUZZY) ?? true,
-    fuzzyThreshold:
-      Number.isFinite(fuzzyThresholdRaw) && fuzzyThresholdRaw
-        ? Number(fuzzyThresholdRaw)
-        : serving.DEFAULT_FUZZY_THRESHOLD,
-    maxCitations: resolvePositiveInt(
+    fuzzy: env.boolean(config.modelFuzzyMatch, "WEB_SEARCH_FUZZY") ?? true,
+    fuzzyThreshold: env.positiveNumber(
+      config.modelFuzzyThreshold,
+      "WEB_SEARCH_FUZZY_THRESHOLD",
+      serving.DEFAULT_FUZZY_THRESHOLD,
+    ),
+    maxCitations: env.positiveInt(
       config.maxCitations,
       "WEB_SEARCH_MAX_CITATIONS",
       DEFAULT_MAX_CITATIONS,
     ),
-    fetchMaxLength: resolvePositiveInt(
+    fetchMaxLength: env.positiveInt(
       config.fetchMaxLength,
       "WEB_SEARCH_FETCH_MAX_LENGTH",
       DEFAULT_FETCH_MAX_LENGTH,
     ),
-    timeoutMs: resolvePositiveInt(config.timeoutMs, "WEB_SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
-    scrapeFallback:
-      config.scrapeFallback ?? object.toBoolean(process.env.WEB_SEARCH_SCRAPE_FALLBACK) ?? true,
+    timeoutMs: env.positiveInt(config.timeoutMs, "WEB_SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
+    scrapeFallback: env.boolean(config.scrapeFallback, "WEB_SEARCH_SCRAPE_FALLBACK") ?? true,
     urlPolicy,
     allowList: toUrlAllowList(urlPolicy === "allowlist" ? patterns : []),
     approval: toApprovalPolicy(config.approval),

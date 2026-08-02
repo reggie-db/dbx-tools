@@ -70,6 +70,19 @@ Built-in tag mixins set runtime defaults for `shared`, `node`, `cli`, `server`,
 `ui`, and `openapi`. Repo-specific mixins layer package-specific dependencies,
 scripts, and generated files on top.
 
+A tag layers over a shared compiler floor every package gets at construction:
+ES2022 plus the web-platform globals available in every runtime, and deliberately
+no DOM lib and no Node types, so agnostic code stays isomorphic. The tags are what
+add an environment on top - `node` adds Node types, `ui` adds the DOM lib. That
+floor is also where `jsx` lives, for a reason worth knowing before moving it:
+packages resolve each other to SOURCE, so a consumer type-checks its dependency's
+files under its own tsconfig. The moment any package re-exports a `.tsx` module,
+every package that imports it - however far down the graph, whatever its tag -
+fails with `TS6142: ... but '--jsx' is not set`. Setting `jsx` per consumer is the
+wrong fix, since the consumer authors no JSX and cannot know a transitive
+dependency started to. The option is inert without JSX in the graph: it selects
+how JSX syntax compiles and adds no lib, global, or type dependency.
+
 ## Work With Package Discovery
 
 ```ts
@@ -94,7 +107,11 @@ barrels.generateBarrels();
 ```
 
 `generateCodegen()` reads `package.json` `codegen.inputs` and writes generated
-schema modules. `generateBarrels()` writes package-root `index.ts` barrels with
+schema modules. They are written read-only, and the root ESLint task runs with
+`--fix` (which fails on a read-only file), so each generated module is added to
+`ignorePatterns` at synth - named individually via `codegen.codegenModulePaths()`,
+never as a blanket `<package>/src/**`. A codegen package may hold hand-written
+modules beside its generated ones, and those must stay linted. `generateBarrels()` writes package-root `index.ts` barrels with
 module namespaces and flat unique type exports, returning the number that
 actually changed. A barrel whose export surface is unchanged is left untouched,
 read-only bit included, so concurrent writers never collide over it. Every
@@ -167,13 +184,13 @@ file contract as the CLI.
 - `barrels` / `moduleExports` - public entrypoint generation.
 - `codegen` - `.d.ts` to zod schema generation.
 - `openapi` - tsoa/OpenAPI package generation.
-- `vite` / `tsconfig` / `vscode` - generated support files/components.
+- `bunApp` / `tsconfig` / `vscode` - generated support files/components.
 - `generated` / `clean` / `watch` / `scaffold` - read-only file stamping,
   cleanup, watchers, and synth orchestration.
 - `publish` - packaging and tag-based release helpers.
 - `engineRoot` - engine package root resolution for bootstrapped repos.
 
 The engine registers its commands as projen tasks on the workspace root, so run
-them with `pnpm run <task>` - `sync` (add `--watch`), `barrels`, `openapi`, and
+them with `bun run <task>` - `sync` (add `--watch`), `barrels`, `openapi`, and
 `clean`. [`@dbx-tools/cli`](../packages/cli/dbx-tools) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.

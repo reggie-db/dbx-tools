@@ -65,9 +65,17 @@ function firstParagraph(markdown) {
     ?.replace(/\s+/g, " ");
 }
 
+/**
+ * Every PUBLISHED package under `packages/` that has a barrel to document.
+ *
+ * `private: true` manifests are skipped for the same reason the README sync
+ * skips them: an unpublished package has no installable API surface, so
+ * generating a reference for it only adds pages a reader cannot use.
+ */
 function discoverPackages() {
   return walk(path.join(root, "packages"))
     .filter((p) => path.basename(p) === "package.json")
+    .filter((packageJson) => JSON.parse(read(packageJson)).private !== true)
     .map((packageJson) => {
       const pkg = JSON.parse(read(packageJson));
       const dir = path.dirname(packageJson);

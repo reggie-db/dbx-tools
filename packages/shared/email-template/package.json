@@ -1,9 +1,9 @@
 {
-  "name": "@dbx-tools/shared-sdk-model",
+  "name": "@dbx-tools/shared-email-template",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
-    "directory": "packages/shared/sdk-model"
+    "directory": "packages/shared/email-template"
   },
   "scripts": {
     "build": "projen build",
@@ -18,14 +18,15 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@databricks/sdk-experimental": "catalog:",
     "@types/bun": "^1.3.14",
     "@types/node": "^24.6.0",
+    "@types/react": "catalog:",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
-    "zod": "catalog:"
+    "@react-email/components": "catalog:",
+    "react": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -53,11 +54,6 @@
     "src",
     "lib"
   ],
-  "codegen": {
-    "inputs": [
-      "node_modules/@databricks/sdk-experimental/dist/apis/dashboards/model.d.ts"
-    ]
-  },
   "dbxToolsConfig": {
     "tags": [
       "shared"

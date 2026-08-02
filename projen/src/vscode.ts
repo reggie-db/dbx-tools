@@ -45,7 +45,7 @@ export class DBXToolsVsCode extends Component {
             detail:
               "projen sync --watch - projenrc (.projenrc.ts + syncResynthPaths re-synth) + barrels + openapi watchers",
             type: "shell",
-            command: "pnpm exec projen sync --watch",
+            command: "bun run sync -- --watch",
             isBackground: true,
             problemMatcher: [],
             runOptions: { runOn: "folderOpen" },
@@ -59,7 +59,7 @@ export class DBXToolsVsCode extends Component {
             label: "synth",
             detail: "projen - synthesize all generated config",
             type: "shell",
-            command: "pnpm exec projen",
+            command: "bun run default",
             problemMatcher: [],
           },
         ],

@@ -17,7 +17,7 @@
  */
 
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
-import { log, string } from "@dbx-tools/shared-core";
+import { brand, env, log, string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-email";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
 import { CodeStore, signSession, verifySession } from "./otp.ts";
@@ -29,11 +29,30 @@ const logger = log.logger("tunnel:auth");
 export interface AuthGateConfig extends BasePluginConfig {
   /** Allow-list patterns (domain / glob / `/regex/`). Empty = allow nobody. Env EMAIL_AUTH_ALLOW. */
   allow?: string | string[];
-  /** Subject line for the code email. Env AUTH_SUBJECT. */
+  /**
+   * Subject line for the code email. Env AUTH_SUBJECT.
+   *
+   * Defaults to "Your verification code". The wording of the subject and
+   * {@link message} is deliberately the conventional phrasing rather than
+   * anything branded: iOS, Gmail, Outlook, and Android all detect a one-time
+   * code from this shape and offer to autofill it, and a novel phrasing is what
+   * breaks that detection.
+   */
   subject?: string;
-  /** Product/brand name used in the email + login copy. Env AUTH_BRAND_NAME. */
+  /**
+   * Display name used in the code email copy. Env AUTH_BRAND_NAME.
+   *
+   * Defaults to the brand context's `name` - the app's own `branding/brand.yaml`
+   * when it has one, else the dbx-tools default. Set this only to override the
+   * brand for this gate.
+   */
   brandName?: string;
-  /** One-line message shown above the code in the email. Env AUTH_MESSAGE. */
+  /**
+   * Line shown immediately above the code in the email. Env AUTH_MESSAGE.
+   *
+   * Keep the code on its OWN line directly after this text - that adjacency is
+   * what the platform code-detection heuristics key on.
+   */
   message?: string;
   /** Session lifetime (seconds). Env AUTH_SESSION_TTL. Default 43200 (12h). */
   sessionTtlSeconds?: number;
@@ -50,6 +69,13 @@ export interface SendCodeOptions {
   subject: string;
   brandName: string;
   message: string;
+  /**
+   * Lifetime of the code being sent, in seconds - the RESOLVED
+   * {@link AuthGateConfig.codeTtlSeconds}, so the email can state the real
+   * expiry ("This code expires in 10 minutes") instead of a vague "shortly"
+   * that drifts from the configured TTL.
+   */
+  codeTtlSeconds: number;
 }
 
 /** Resolved gate config with env fallbacks + defaults applied. */
@@ -64,33 +90,39 @@ export interface ResolvedAuthGateConfig {
 }
 
 const DEFAULTS = {
-  subject: "Your sign-in code",
-  brandName: "This app",
-  message: "Your one-time sign-in code is:",
+  subject: "Your verification code",
+  // The repo-wide brand context's display name, NOT a hardcoded product string:
+  // this name is what the recipient reads in the code email, so it has to be the
+  // same identity the rest of the app presents. A host with its own
+  // `branding/brand.yaml` overrides it by passing `brandName` (see
+  // {@link startGateApp}, which resolves the on-disk context); the shared default
+  // is the fallback when nothing is configured.
+  brandName: brand.defaultBrandContext.name,
+  message: "Your verification code is:",
   sessionTtlSeconds: 43200,
   codeTtlSeconds: 600,
   maxAttempts: 5,
 };
 
-/** Positive finite number from a value / env string, else the fallback. */
-function num(value: number | undefined, env: string | undefined, fallback: number): number {
-  const raw = value ?? (env ? Number(env) : undefined);
-  return typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : fallback;
-}
-
 /** Merge {@link AuthGateConfig} over env over defaults into a resolved config. */
 export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateConfig {
   return {
+    // Both sources are unioned rather than one overriding: a deployment-wide
+    // EMAIL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
     allow: [...string.parseList(config.allow), ...string.parseList(process.env.EMAIL_AUTH_ALLOW)],
-    subject: config.subject ?? process.env.AUTH_SUBJECT?.trim() ?? DEFAULTS.subject,
-    brandName: config.brandName ?? process.env.AUTH_BRAND_NAME?.trim() ?? DEFAULTS.brandName,
-    message: config.message ?? process.env.AUTH_MESSAGE?.trim() ?? DEFAULTS.message,
-    sessionTtlSeconds: num(
+    subject: env.string(config.subject, "AUTH_SUBJECT") ?? DEFAULTS.subject,
+    brandName: env.string(config.brandName, "AUTH_BRAND_NAME") ?? DEFAULTS.brandName,
+    message: env.string(config.message, "AUTH_MESSAGE") ?? DEFAULTS.message,
+    sessionTtlSeconds: env.positiveInt(
       config.sessionTtlSeconds,
-      process.env.AUTH_SESSION_TTL,
+      "AUTH_SESSION_TTL",
       DEFAULTS.sessionTtlSeconds,
     ),
-    codeTtlSeconds: num(config.codeTtlSeconds, process.env.AUTH_CODE_TTL, DEFAULTS.codeTtlSeconds),
+    codeTtlSeconds: env.positiveInt(
+      config.codeTtlSeconds,
+      "AUTH_CODE_TTL",
+      DEFAULTS.codeTtlSeconds,
+    ),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
   };
 }
@@ -170,6 +202,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
           subject: this.resolved.subject,
           brandName: this.resolved.brandName,
           message: this.resolved.message,
+          codeTtlSeconds: this.resolved.codeTtlSeconds,
         });
       } catch (error) {
         logger.warn("failed to send OTP email", { error });

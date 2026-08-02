@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { file } from "@dbx-tools/core";
-import { error, functionModule, hash, http, log, net } from "@dbx-tools/shared-core";
+import { error, functionModule, hash, http, json, log, net } from "@dbx-tools/shared-core";
 import { resolveHostIps } from "./net.ts";
 
 const logger = log.logger("cloud");
@@ -234,9 +234,19 @@ function addRange(ranges: RegionCidr[], cidr?: string, region?: string): void {
   if (parsed) ranges.push({ ...parsed, region });
 }
 
+/**
+ * Fetch and parse a provider feed. A parse failure names the URL rather than
+ * surfacing an opaque `Unexpected token` - the text may come from the on-disk
+ * cache, so "which feed" is the part worth knowing. {@link loadProviderRanges}
+ * turns the throw into a per-provider warning.
+ */
 async function fetchJson<T>(url: string): Promise<T> {
   const text = await fetchText(url);
-  return JSON.parse(text) as T;
+  const parsed = json.parse<T>(text);
+  if (parsed === undefined) {
+    throw new Error(`range feed returned non-JSON content: ${url}`);
+  }
+  return parsed;
 }
 
 /**

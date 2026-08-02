@@ -40,6 +40,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-email-template",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-email",
       "version": "workspace:*",
       "type": "runtime"
@@ -50,18 +55,23 @@
       "type": "runtime"
     },
     {
-      "name": "juice",
-      "version": "^12.1.1",
-      "type": "runtime"
-    },
-    {
-      "name": "marked",
+      "name": "@react-email/render",
       "version": "catalog:",
       "type": "runtime"
     },
     {
       "name": "nodemailer",
       "version": "^7.0.13",
+      "type": "runtime"
+    },
+    {
+      "name": "react-dom",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "react",
+      "version": "catalog:",
       "type": "runtime"
     }
   ],

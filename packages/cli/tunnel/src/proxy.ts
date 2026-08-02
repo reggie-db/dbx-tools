@@ -7,9 +7,11 @@
  *
  *   - **portr client** (same container, connects over LOOPBACK) - the public
  *     tunnel. This is what the gate protects.
- *   - **Databricks control plane / front door** (reaches the `0.0.0.0` port from
- *     a NON-loopback container-network address) - passed through UNGATED, per the
- *     rule "if it's not from the portr client, let it in".
+ *   - **the hosting platform's front door** (Databricks Apps' control plane, or
+ *     any other host reaching the `0.0.0.0` port from a NON-loopback
+ *     container-network address) - passed through UNGATED, per the rule "if it's
+ *     not from the portr client, let it in". The platform already authenticates
+ *     that path; the gate exists for the tunnel, which nothing else protects.
  *
  * The distinguisher is the connection's source address: a loopback
  * `req.socket.remoteAddress` is the portr client; anything else is the platform.
@@ -126,10 +128,11 @@ export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise
   };
 
   /**
-   * Present an OTP-authenticated caller to the app the SAME way the Databricks
-   * front door does: set `x-forwarded-user` / `x-forwarded-email` to the verified
-   * address (AppKit reads `x-forwarded-user` for the OBO user id). Any inbound
-   * copies are overwritten so a client can't spoof identity through the gate.
+   * Present an OTP-authenticated caller to the app the SAME way a platform front
+   * door does: set `x-forwarded-user` / `x-forwarded-email` to the verified
+   * address (AppKit reads `x-forwarded-user` for the OBO user id), so the app
+   * needs no gate-specific code path. Any inbound copies are overwritten so a
+   * client can't spoof identity through the gate.
    */
   const injectIdentity = (req: IncomingMessage, email: string): void => {
     req.headers["x-forwarded-user"] = email;
@@ -139,8 +142,8 @@ export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise
   const server = createServer(async (req, res) => {
     const path = (req.url ?? "/").split("?")[0]!;
 
-    // Insecure/open mode (no gate) OR non-loopback traffic (the Databricks front
-    // door / control plane): forward ungated.
+    // Insecure/open mode (no gate) OR non-loopback traffic (the hosting
+    // platform's front door / control plane): forward ungated.
     if (!gate || !isLoopback(req.socket.remoteAddress)) {
       proxy.web(req, res);
       return;
@@ -198,7 +201,7 @@ export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise
     const token = http.parseCookies(req.headers.cookie ?? null)[SESSION_COOKIE_NAME];
     const email = await gate.session(token);
     if (email) {
-      // Present the OTP user like the Databricks front door, and drop the gate
+      // Present the OTP user like a platform front door, and drop the gate
       // cookie so the app sees a clean, front-door-shaped request.
       injectIdentity(req, email);
       stripSessionCookie(req);

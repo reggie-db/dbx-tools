@@ -88,7 +88,7 @@ function publishSetupSteps(): JobStep[] {
  *
  * Declaring one also enlists it in the root's `bump`, which cuts BOTH tags at one
  * shared version. The separate tag namespace still lets it be released alone
- * (`cd <directory> && pnpm run bump`) for a consumer who wants only this package -
+ * (`cd <directory> && bun run bump`) for a consumer who wants only this package -
  * but a routine root bump no longer leaves it behind, which is how the engine
  * drifted to 0.1.24 while the packages reached 0.3.41.
  */

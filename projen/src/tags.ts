@@ -1,7 +1,7 @@
 /**
  * Tags, expressed as MIXINS (`constructs` `IMixin`).
  *
- * A tag names a target environment (React/Vite, Node, agnostic, ...) - modeled on
+ * A tag names a target environment (React/Bun, Node, agnostic, ...) - modeled on
  * `databricks apps init` (AppKit): `ui`, `server`, `shared`. Any `src`-bearing folder
  * under a package root is discovered automatically; path-derived tag
  * candidates plus `packageTagPaths` decide which mixins apply. ("Scope" is
@@ -61,15 +61,18 @@ export const AGNOSTIC_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
 export const PACKAGE_TAG_MIXINS = {
   // `ui`: a React COMPONENT LIBRARY (source-first, consumed by apps) - modeled
   // on `@databricks/appkit-ui`. React + DOM lib + JSX, and the default `tsc`
-  // compile (typecheck). No vite app build / index.html: a full browser app is an
-  // `app`-tagged package (see below) that layers vite on top.
+  // compile (typecheck). No app build / index.html: a full browser app is an
+  // `app`-tagged package (see below) that layers Bun's build tooling on top.
   ui: create(projectPredicate.hasTag("ui"), (p) => {
     p.addDeps("react@catalog:", "react-dom@catalog:");
     p.addDevDeps("@types/react@catalog:", "@types/react-dom@catalog:");
+    // `jsx` is not set here: it is in the shared floor for EVERY package, because
+    // packages resolve each other to source and so every consumer of a `.tsx`
+    // module needs it too (see SHARED_COMPILER_OPTIONS). What this tag adds is the
+    // browser part - the DOM lib and React's types.
     applyCompilerOptions(p, {
       target: "ES2022",
       lib: [...DOM_LIB],
-      jsx: javascript.TypeScriptJsxMode.REACT_JSX,
     });
     // A component library's standard subpath surface: `./react` (components),
     // `./styles.css` (Tailwind entry), and `./package.json`. A package that
@@ -98,7 +101,6 @@ export const PACKAGE_TAG_MIXINS = {
     applyCompilerOptions(p, {
       target: "ES2022",
       lib: [...DOM_LIB],
-      jsx: javascript.TypeScriptJsxMode.REACT_JSX,
       // `@types/bun` (a root/subproject devDep) supplies the `Bun.*` globals the
       // generated `dev.ts`/`build.ts` use; no `vite/client`.
       types: ["bun"],
@@ -109,10 +111,14 @@ export const PACKAGE_TAG_MIXINS = {
     });
     // bun runs the generated scripts directly. `build` resets the compile task so
     // `compile` bundles with `Bun.build` rather than `tsc`.
+    //
+    // No `preview` task: that pairing is Vite's, where `dev` runs the dev server
+    // and `preview` serves the already-built bundle. `Bun.serve` builds on request,
+    // so `preview` could only be spelled the same as `dev` - two names for one
+    // command, and a reader would reasonably assume the second one served `dist/`.
     applyTasks(p, {
       dev: { exec: "bun dev.ts" },
       build: { exec: "bun build.ts" },
-      preview: { exec: "bun dev.ts" },
     });
     new BunfigFile(p);
     new BunDevServerFile(p);

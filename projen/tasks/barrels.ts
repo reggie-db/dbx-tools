@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env -S bun
 import { sep } from "node:path";
 import { generateBarrels } from "../src/barrels.ts";
 import { log, string } from "@dbx-tools/shared-core";
@@ -35,7 +35,7 @@ if (process.argv.includes("--watch")) {
       if (unowned.length) {
         logger.warn(
           `no recorded package owns ${string.pluralize(unowned.length, "change")}; ` +
-            "run `pnpm exec projen` (or touch .projenrc.ts) to pick up a new package folder",
+            "run `bun run default` (or touch .projenrc.ts) to pick up a new package folder",
         );
       }
       return;

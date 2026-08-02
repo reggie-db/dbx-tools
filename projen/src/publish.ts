@@ -148,7 +148,7 @@ export function applyCompiledPublish(pkg: javascript.NodeProject): void {
   const config = publishConfig(pkg);
   if (config) pkg.package.addField("publishConfig", config);
 
-  // The release workflow publishes straight after `pnpm install`, with no build
+  // The release workflow publishes straight after `bun install`, with no build
   // in between, so the compiled output has to be produced by the pack itself
   // rather than assumed present. This also covers a bare `pnpm pack` and the
   // bump task's local-registry publish.

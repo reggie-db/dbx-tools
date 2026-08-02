@@ -3,27 +3,21 @@
 // render the drafted Markdown identically (links, lists, emphasis, and
 // tables rather than raw syntax).
 
+import { EmailBody as ReactEmailBody, type EmailBrand } from "@dbx-tools/shared-email-template";
 import { cn } from "@dbx-tools/ui-appkit/react";
-import { Streamdown } from "streamdown";
 
 /** Props for {@link EmailBody}. */
 export interface EmailBodyProps {
   children: string;
   /** Extra classes merged onto the prose container. */
   className?: string;
+  /** Optional brand override; dbx-tools branding is the default. */
+  brand?: EmailBrand;
 }
 
-/** Render an email body (Markdown) as compact, muted prose. */
-export const EmailBody = ({ children, className }: EmailBodyProps) => (
-  <Streamdown
-    controls={false}
-    className={cn(
-      "prose prose-sm dark:prose-invert max-w-none break-words",
-      "text-[11px] leading-snug text-muted-foreground",
-      "[&_strong]:text-foreground [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_ul]:pl-4 [&_ol]:pl-4",
-      className,
-    )}
-  >
-    {children}
-  </Streamdown>
+/** Render an email body with the same React Email component used for delivery. */
+export const EmailBody = ({ children, className, brand }: EmailBodyProps) => (
+  <div className={cn("max-w-none break-words", className)}>
+    <ReactEmailBody body={children} brand={brand} />
+  </div>
 );

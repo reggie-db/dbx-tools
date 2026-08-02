@@ -1,11 +1,11 @@
+import { EmailCard } from "@dbx-tools/shared-email-template";
 import { Button } from "@dbx-tools/ui-appkit/react";
 import { CheckIcon, MailIcon, XIcon } from "lucide-react";
-import { EmailBody } from "./email-body.tsx";
 import { attachmentNames, joinAddresses, type EmailDraft } from "./fields.ts";
 
 // Presentational pieces for an outbound email awaiting a human Approve /
-// Deny: the field preview (To / Cc / Subject / Body / Files, body
-// rendered as markdown) and a self-contained approval card wrapping it.
+// Deny: the field preview (To / Cc / Subject / Body / Files, body rendered
+// through the shared React Email presentation) and an approval card wrapping it.
 // State and the resolve transport belong to the caller; these components
 // only render and report intent. The editable counterpart is
 // `EmailComposeView` in `./email-compose`; both share `./fields` and
@@ -21,48 +21,23 @@ export interface EmailPreviewProps {
 /**
  * Render an email draft as a labelled `To` / `Cc` / `Subject` / `Body` /
  * `Files` list. `to` / `cc` may carry one or more addresses; the body is
- * markdown so links, lists, and emphasis render rather than showing raw
- * syntax. Fields that are empty are omitted.
+ * rendered through the same React Email body used for delivery. Fields that
+ * are empty are omitted.
  */
 export const EmailPreview = ({ email }: EmailPreviewProps) => {
   const to = joinAddresses(email.to);
   const cc = joinAddresses(email.cc);
+  const bcc = joinAddresses(email.bcc);
   const attachments = attachmentNames(email.attachments);
+  const headers: Array<readonly [string, string]> = [];
+  if (to) headers.push(["To", to]);
+  if (cc) headers.push(["Cc", cc]);
+  if (bcc) headers.push(["Bcc", bcc]);
+  if (attachments) headers.push(["Files", attachments]);
   return (
-    <dl className="space-y-1 text-xs">
-      {to && (
-        <div className="flex gap-2">
-          <dt className="w-16 shrink-0 text-muted-foreground">To</dt>
-          <dd className="truncate">{to}</dd>
-        </div>
-      )}
-      {cc && (
-        <div className="flex gap-2">
-          <dt className="w-16 shrink-0 text-muted-foreground">Cc</dt>
-          <dd className="truncate">{cc}</dd>
-        </div>
-      )}
-      {email.subject && (
-        <div className="flex gap-2">
-          <dt className="w-16 shrink-0 text-muted-foreground">Subject</dt>
-          <dd className="truncate font-medium">{email.subject}</dd>
-        </div>
-      )}
-      {email.body && (
-        <div className="flex gap-2">
-          <dt className="w-16 shrink-0 text-muted-foreground">Body</dt>
-          <dd className="min-w-0 flex-1 break-words text-foreground">
-            <EmailBody>{email.body}</EmailBody>
-          </dd>
-        </div>
-      )}
-      {attachments && (
-        <div className="flex gap-2">
-          <dt className="w-16 shrink-0 text-muted-foreground">Files</dt>
-          <dd className="min-w-0 flex-1 truncate">{attachments}</dd>
-        </div>
-      )}
-    </dl>
+    <div className="overflow-x-auto rounded-2xl bg-muted/20 p-2">
+      <EmailCard subject={email.subject || "Message"} body={email.body || ""} headers={headers} />
+    </div>
   );
 };
 

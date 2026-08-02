@@ -5,7 +5,7 @@
       "label": "sync",
       "detail": "projen sync --watch - projenrc (.projenrc.ts + syncResynthPaths re-synth) + barrels + openapi watchers",
       "type": "shell",
-      "command": "pnpm exec projen sync --watch",
+      "command": "bun run sync -- --watch",
       "isBackground": true,
       "problemMatcher": [],
       "runOptions": {
@@ -21,7 +21,7 @@
       "label": "synth",
       "detail": "projen - synthesize all generated config",
       "type": "shell",
-      "command": "pnpm exec projen",
+      "command": "bun run default",
       "problemMatcher": []
     }
   ]

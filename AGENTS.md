@@ -54,13 +54,18 @@ Primary package areas:
   and the matching React chat UI.
 - `packages/node/genie` and `packages/shared/genie` — low-level Genie
   drivers, typed async events, snapshot diffing, and browser-safe Genie
-  contracts.
+  contracts. `shared/genie` also owns the codegen'd `src/dashboards.ts` (zod
+  schemas from the upstream SDK `.d.ts`) that its Genie schemas widen; that used
+  to be a separate `shared-sdk-model` package with exactly one consumer.
 - `packages/node/model`, `packages/shared/model`, and
   `packages/cli/model-proxy` — intent-based Model Serving endpoint selection,
   shared schemas/classification, and local OpenAI-compatible proxying.
-- `packages/node/email`, `packages/shared/email`, and `packages/ui/email`
-  — approval-gated email tool/runtime, shared payload schemas, and React email
-  approval/compose surfaces.
+- `packages/node/email`, `packages/shared/email-template`,
+  `packages/shared/email`, and `packages/ui/email` — approval-gated email
+  tool/runtime, a universal React Email presentation layer, shared payload
+  schemas, and matching React approval/compose surfaces. Outbound HTML and
+  browser previews share the same React Email components, with the repository
+  brand applied unless a consumer supplies its own `EmailBrand`.
 - `packages/node/appkit-web-search` — web-search add-on: `web_search` (the
   Databricks Model Serving NATIVE web-search tool — the model searches the web
   server-side and returns answer + citations; resolves its OWN web-capable model
@@ -172,6 +177,13 @@ Package README rules:
 Docs site rules:
 
 - Source of truth is `README.md` plus `packages/**/README.md`.
+- A `private: true` package is EXCLUDED from the site by both generators. A
+  private package never reaches npm, so a page for it documents something a
+  reader cannot install. Both `discoverPackages()` functions filter on it, which
+  is also what relaxes the missing-README throw to published packages only: an
+  unpublished spike may have no docs, a published package may not. Keep a README
+  on a private package for contributors anyway (say it is unpublished), and keep
+  it out of the root README's package tables.
 - `docs/scripts/sync-readmes.mjs` generates the Starlight site under
   `.docs-build/site`.
 - `docs/scripts/generate-api-docs.mjs` generates TypeDoc Markdown into the same
@@ -242,6 +254,11 @@ why to use this package anyway:
   portable `BrandContext`. Inert until a brand is applied, so it never gets in
   the way of default AppKit. Not a replacement for AppKit's own theming when the
   default palette is fine.
+- `@dbx-tools/shared-email-template`: use when server and browser code need the
+  same email presentation. It owns the React Email document/body components,
+  email-safe brand projection, and dbx-tools-branded default. Keep transport,
+  SMTP, and AppKit behavior in `@dbx-tools/email`; keep wire schemas in
+  `@dbx-tools/shared-email`.
 - `@dbx-tools/appkit-web-search`: AppKit has no first-party web-search or
   page-fetch surface, so use this whenever an agent must look things up on the
   open web or read a user-supplied URL — with a policy layer (URL allow-list +
@@ -282,6 +299,29 @@ Concrete examples to preserve in docs:
   protocol at a path" move) — compiles a model's small `CardSpec` into a valid
   Adaptive Card, and renders a whole Teams conversation with the `adaptivecards`
   JS renderer (with optional webhook posting), a surface AppKit doesn't ship.
+
+## When a package earns its own boundary
+
+The reason to split is to keep DEPENDENCIES out of a consumer's install, and
+secondarily to keep the accidental API surface small. It is not modularity for its
+own sake, and a package that adds a hop without either benefit should be merged
+back. Before adding one, name the dependency it isolates.
+
+Splits that ARE earning their keep, so leave them alone:
+
+- The `shared` (agnostic) / `ui` (browser) / `node` (server) tag split. This is
+  intentional and enforced by each tag's tsconfig `lib`/`types`. A browser bundle
+  importing a `shared-*` contract must not be able to reach Node APIs.
+- `node/path` (isolates chokidar/glob/minimatch), `node/databricks-zerobus`
+  (isolates the Zerobus SDK), every `shared-*` consumed by a `ui-*`.
+- `shared-core`, which is a blanket dependency of every package and so must stay
+  light - adding a dependency to it adds it everywhere.
+
+What does NOT justify a package: being a different KIND of thing (generated vs
+hand-written - the barrel generator and codegen both handle mixed packages fine),
+or being conceptually separable while having exactly one consumer and no
+dependency of its own to isolate. `shared-sdk-model` was both and is now
+`shared/genie/src/dashboards.ts`.
 
 ## Shared utilities - check here before writing a helper
 
@@ -493,11 +533,11 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   `tagMixin(name, fn)` that, for every package carrying the tag, adds the tag's
   projen-native `deps`/`devDeps` (`@catalog:` specifiers) and OVERRIDES the
   generated tsconfig via `applyCompilerOptions` (projen enums, e.g.
-  `TypeScriptJsxMode.REACT_JSX`) — layered over the `AGNOSTIC_COMPILER_OPTIONS`
-  floor so tag `lib`/`jsx`/`types`/`target` win. Some also `applyTasks` / emit
-  dev/build toolchain:
-  - `app` → Bun app (DOM + `@types/bun`, jsx, `dev.ts` + `build.ts` + `bunfig.toml` for Bun.serve dev + Bun.build, Tailwind via bun-plugin-tailwind)
-  - `ui` → React component library (DOM + jsx, no bundler)
+  `TypeScriptModuleResolution.BUNDLER`) — layered over the
+  `AGNOSTIC_COMPILER_OPTIONS` floor so tag `lib`/`types`/`target` win. Some also
+  `applyTasks` / emit dev/build toolchain:
+  - `app` → Bun app (DOM + `@types/bun`, `dev.ts` + `build.ts` + `bunfig.toml` for Bun.serve dev + Bun.build, Tailwind via bun-plugin-tailwind)
+  - `ui` → React component library (DOM + React types, no bundler)
   - `server` → Node (`@types/node`, `tsoa` + `experimentalDecorators`, no DOM)
   - `node` → Node (`@types/node`, no DOM)
   - `cli` → Node + `commander` + `@clack/prompts` (no `tsx`: the published bin is
@@ -510,6 +550,21 @@ DEFAULTS`; `sampleCode: false` stops projen dropping template `src/` files).
   - `openapi` → generated, read-only clients (`openapi-fetch`, DOM libs)
     Enforcement is real via each package's generated `tsconfig` `lib`/`types`:
     `document` in `shared`/`server` fails `tsc`; `process`/`node:*` in `ui` fails.
+
+  **`jsx` is NOT a tag concern** — it is in `SHARED_COMPILER_OPTIONS`
+  (`project.ts`), the floor EVERY package gets, alongside the `src/**/*.tsx`
+  include added in the constructor. Do not "tidy" it back onto the React tags.
+  Packages resolve each other to SOURCE (`main: index.ts`), so a consumer
+  type-checks its dependency's files under its OWN tsconfig: the moment any
+  package re-exports a `.tsx` module, every package that imports it — however far
+  down the graph, whatever its tag — fails with `TS6142: ... but '--jsx' is not
+set`. That is exactly what happened when `shared/email-template` was extracted:
+  `cli-tunnel` (a `cli` package that authors no JSX) stopped compiling. Setting
+  `jsx` on the consumer is the wrong fix — it cannot know a transitive dependency
+  started shipping JSX. The option is inert without JSX in the graph: it selects
+  how JSX syntax COMPILES and adds no lib, no global, and no type dependency, so
+  the agnostic/node floor stays honest. Pinned by `projen/test/tsconfig-jsx.test.ts`.
+
 - **Per-package behavior is MIXINS** (`mixin.ts`; `constructs` `IMixin`). A mixin
   is `{ supports(c), applyTo(c) }`, applied with the constructs-native
   `construct.with(...mixins)` — it runs each across the construct's whole subtree

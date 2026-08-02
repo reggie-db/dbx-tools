@@ -89,7 +89,12 @@
     },
     "compile": {
       "name": "compile",
-      "description": "Only compile"
+      "description": "Only compile",
+      "steps": [
+        {
+          "exec": "bun run --filter '*' compile"
+        }
+      ]
     },
     "dbx-tools": {
       "name": "dbx-tools",
@@ -190,24 +195,7 @@
     },
     "package": {
       "name": "package",
-      "description": "Creates the distribution package",
-      "steps": [
-        {
-          "execArgs": [
-            "mkdir",
-            "-p",
-            "dist/js"
-          ]
-        },
-        {
-          "execArgs": [
-            "npm",
-            "pack",
-            "--pack-destination",
-            "dist/js"
-          ]
-        }
-      ]
+      "description": "Creates the distribution package"
     },
     "post-compile": {
       "name": "post-compile",
@@ -232,6 +220,9 @@
       "steps": [
         {
           "spawn": "eslint"
+        },
+        {
+          "exec": "bun run --filter '*' test"
         }
       ]
     }

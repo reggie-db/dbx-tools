@@ -81,9 +81,18 @@ function walk(dir, files = []) {
   return files;
 }
 
+/**
+ * Every PUBLISHED package under `packages/`, as the site's page set.
+ *
+ * A `private: true` manifest is skipped: it never reaches npm, so a page for it
+ * documents something a reader cannot install. That also relaxes the
+ * missing-README throw below to the packages it should apply to - an unpublished
+ * spike is allowed to have no docs, a published package is not.
+ */
 function discoverPackages() {
   return walk(path.join(root, "packages"))
     .filter((p) => path.basename(p) === "package.json")
+    .filter((packageJson) => JSON.parse(read(packageJson)).private !== true)
     .map((packageJson) => {
       const pkg = JSON.parse(read(packageJson));
       const dir = path.dirname(packageJson);

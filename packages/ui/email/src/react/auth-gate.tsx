@@ -1,12 +1,13 @@
+import { string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-email";
 import { Button, Input } from "@dbx-tools/ui-appkit/react";
-import { MailIcon } from "lucide-react";
+import { BrandIcon, useBrand } from "@dbx-tools/ui-branding/react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 /**
- * Email-OTP login gate for an AppKit app fronted by the `@dbx-tools/email` auth
- * plugin (an app exposed publicly, e.g. through a portr tunnel that bypasses the
- * Databricks OAuth proxy).
+ * Email one-time-code sign-in gate for an app fronted by the `@dbx-tools/email`
+ * auth plugin - an app reachable on the public internet, where the hosting
+ * platform's own identity-aware proxy is not in the request path.
  *
  * Wrap the app in `<AuthGate>...</AuthGate>`. It calls the plugin's
  * `/api/email/auth/*` routes: on mount it checks `status`; if the gate is
@@ -17,7 +18,12 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
  * Presentational + fetch only: the session lives in an HttpOnly cookie the
  * browser sends automatically, so this component holds no token. Anti-enumeration
  * is server-side (every request-code call reports success), so the UI always
- * advances to the code step after "send code".
+ * advances to the code step after the code is requested.
+ *
+ * Branding comes from the repo-wide `@dbx-tools/ui-branding` context, so the
+ * sign-in screen carries the host app's mark and name - the same brand the gate's
+ * code email is themed with - instead of a generic icon and a hardcoded product
+ * name. With no `BrandProvider` above it, the dbx-tools default context applies.
  */
 
 /** Base path the email auth routes are mounted under. */
@@ -51,6 +57,7 @@ export interface AuthGateProps {
  * off) or the two-step login.
  */
 export function AuthGate({ children, title, description }: AuthGateProps): ReactNode {
+  const { context: brand } = useBrand();
   const [phase, setPhase] = useState<Phase>("loading");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -90,8 +97,8 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
         // rate-limit cooldown, which leaks no allow-list state.
         setNotice(
           result.retryAfter
-            ? `Please wait ${result.retryAfter}s before requesting another code.`
-            : "If that address is allowed, a code is on its way.",
+            ? `Too many requests. Try again in ${string.pluralize(result.retryAfter, "second")}.`
+            : "If an account exists for that email address, a verification code is on its way.",
         );
         setPhase("code");
       } finally {
@@ -117,8 +124,8 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
         } else {
           setNotice(
             result.retryAfter
-              ? `Too many attempts. Wait ${result.retryAfter}s and request a new code.`
-              : "That code didn't match. Check it or request a new one.",
+              ? `Too many attempts. Try again in ${string.pluralize(result.retryAfter, "second")}.`
+              : "That verification code is incorrect or has expired.",
           );
         }
       } finally {
@@ -135,11 +142,19 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-2 text-foreground">
-          <MailIcon className="size-5" aria-hidden />
-          <h1 className="text-lg font-semibold">{title ?? "Sign in"}</h1>
+          <BrandIcon className="size-5" alt="" aria-hidden />
+          {/*
+            Names the app, which is the convention for a sign-in screen and the
+            reassurance a recipient checks the code against. `brand.name` is the
+            same value that names the app in the code email.
+          */}
+          <h1 className="text-lg font-semibold">{title ?? `Sign in to ${brand.name}`}</h1>
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
-          {description ?? "Enter your email to receive a one-time sign-in code."}
+          {description ??
+            (phase === "code"
+              ? "Enter the 6-digit verification code sent to your email address."
+              : "Enter your email address and we will send you a verification code.")}
         </p>
 
         {phase === "email" ? (
@@ -147,27 +162,37 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
             <Input
               type="email"
               autoComplete="email"
+              aria-label="Email address"
               placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
             <Button type="submit" disabled={busy} className="w-full">
-              {busy ? "Sending…" : "Send code"}
+              {busy ? "Sending…" : "Send verification code"}
             </Button>
           </form>
         ) : (
           <form onSubmit={verifyCode} className="space-y-3">
+            {/*
+              `autoComplete="one-time-code"` is what lets iOS/Android/Safari offer
+              the code straight from the notification, and it only pays off when
+              the email keeps the conventional "Your verification code is: /
+              <code>" shape the gate sends. `inputMode="numeric"` raises the
+              number pad without rejecting a paste.
+            */}
             <Input
               inputMode="numeric"
               autoComplete="one-time-code"
-              placeholder="6-digit code"
+              aria-label="Verification code"
+              placeholder="6-digit verification code"
+              maxLength={6}
               value={code}
               onChange={(e) => setCode(e.target.value)}
               required
             />
             <Button type="submit" disabled={busy} className="w-full">
-              {busy ? "Verifying…" : "Verify"}
+              {busy ? "Verifying…" : "Continue"}
             </Button>
             <button
               type="button"
@@ -178,12 +203,16 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
                 setNotice(null);
               }}
             >
-              Use a different email
+              Use a different email address
             </button>
           </form>
         )}
 
-        {notice ? <p className="mt-3 text-xs text-muted-foreground">{notice}</p> : null}
+        {notice ? (
+          <p role="status" aria-live="polite" className="mt-3 text-xs text-muted-foreground">
+            {notice}
+          </p>
+        ) : null}
       </div>
     </div>
   );

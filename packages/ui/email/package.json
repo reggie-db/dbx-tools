@@ -26,11 +26,12 @@
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-email": "workspace:*",
+    "@dbx-tools/shared-email-template": "workspace:*",
     "@dbx-tools/ui-appkit": "workspace:*",
+    "@dbx-tools/ui-branding": "workspace:*",
     "lucide-react": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:",
-    "streamdown": "catalog:"
+    "react-dom": "catalog:"
   },
   "license": "UNLICENSED",
   "publishConfig": {

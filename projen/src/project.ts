@@ -14,7 +14,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
 import { generateBarrels } from "./barrels.ts";
-import { generateCodegen } from "./codegen.ts";
+import { codegenModulePaths, generateCodegen } from "./codegen.ts";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
 import { resolvePkgRoot } from "./engine-root.ts";
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
@@ -172,7 +172,6 @@ export function applyCompilerOptions(
     if (value === undefined) continue;
     file.addOverride(`compilerOptions.${key}`, value);
   }
-  if (compilerOptions.jsx) pkg.tsconfig?.addInclude("src/**/*.tsx");
 }
 
 /**
@@ -287,6 +286,17 @@ export function srcModuleExports(pkg: javascript.NodeProject): Record<string, st
  * only: the specifier style is a property of the SOURCE, so a `ui` package (which
  * publishes source and is excluded from the compiled surface) still has to accept
  * and rewrite it.
+ *
+ * `jsx` is here for the same reason, and it is NOT a per-tag concern even though
+ * only React packages author `.tsx`. Packages resolve each other to SOURCE
+ * (`main: index.ts`), so a consumer type-checks its dependency's files under its
+ * OWN tsconfig: the moment any package re-exports a `.tsx` module, every package
+ * that imports it - however far down the graph, whatever its tag - fails with
+ * `TS6142: ... but '--jsx' is not set`. Setting it per consumer is the wrong fix
+ * (the consumer does not author JSX and has no way to know a transitive dependency
+ * started to), so the floor carries it. The option is inert for a package with no
+ * `.tsx` in its graph: it selects how JSX syntax COMPILES and adds no lib, no
+ * global, and no type dependency on its own.
  */
 const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions & {
   rewriteRelativeImportExtensions: boolean;
@@ -296,6 +306,7 @@ const SHARED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions & {
   skipLibCheck: true,
   allowImportingTsExtensions: true,
   rewriteRelativeImportExtensions: true,
+  jsx: javascript.TypeScriptJsxMode.REACT_JSX,
 };
 
 /** Shared formatting rules, applied by projen's Prettier on whichever project is root. */
@@ -365,6 +376,13 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
     buildWorkflow: false,
     release: false,
+    // No `npm pack` step on any project. projen wires `package` into `build`, so
+    // `bunx projen build` would tarball all 36 manifests (root included) into
+    // gitignored `dist/js` on every CI run and never read them: publishing here
+    // is `bun publish` driving each package's own `prepack` (see
+    // {@link applyCompiledPublish} and the `publish` task), and `release: false`
+    // means no projen Publisher exists to consume the artifacts either.
+    package: false,
     jest: false,
     github: false,
     npmignoreEnabled: false,
@@ -570,8 +588,8 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
 /**
  * A single package (usually created by a root's scan), or a standalone
  * compiling root. The agnostic tsconfig floor is applied at construction; the
- * source-first package fields (`main`/`types`/`exports` -> `index.ts`) and an
- * optional `vite.config.ts` are applied after. Per-tag deps/tsconfig arrive later
+ * source-first package fields (`main`/`types`/`exports` -> `index.ts`) and optional
+ * Bun app scaffolding are applied after. Per-tag deps/tsconfig arrive later
  * via the {@link PACKAGE_TAG_MIXINS} the root applies.
  */
 export class DBXToolsTypeScriptProject
@@ -608,6 +626,11 @@ export class DBXToolsTypeScriptProject
       },
     });
     this.scope = scope;
+    // Pairs with `jsx` in SHARED_COMPILER_OPTIONS: projen's default `include` is
+    // `src/**/*.ts` only, which silently omits a `.tsx` file from the program
+    // instead of failing, so authoring a React component would otherwise need
+    // per-package tsconfig config to be compiled at all.
+    this.tsconfig?.addInclude("src/**/*.tsx");
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     // Source-first entry: point the package at its package-ROOT `index.ts` barrel
     // so packages resolve each other's `@scope/pkg` imports to source.
@@ -624,9 +647,9 @@ export class DBXToolsTypeScriptProject
     // directory auto-discovers `*.test.ts` recursively. But `bun test` EXITS 1
     // when it matches no files (unlike the old `tsx --test 'glob'`, which was a
     // no-op), so guard it: only invoke when a `*.test.ts` exists, else succeed.
-    this.testTask.exec(
-      'find test -name "*.test.ts" 2>/dev/null | grep -q . && bun test test || true',
-    );
+    this.testTask.exec("bun test test", {
+      condition: 'find test -name "*.test.ts" 2>/dev/null | grep -q .',
+    });
     if (options.bunApp ?? false) {
       new BunfigFile(this);
       new BunDevServerFile(this);
@@ -662,6 +685,37 @@ class GeneratedSource extends Component {
 }
 
 /**
+ * Make the ROOT `compile` / `test` tasks actually validate the workspace.
+ *
+ * projen gives a monorepo root empty `compile`/`test` tasks - a child's tasks
+ * are the child's business - so `bun run build` at the root type-checked nothing
+ * and ran no package tests. The fan-out is delegated to bun's own workspace
+ * filter rather than one `exec` per member, which matters three ways: bun runs
+ * the members in PARALLEL (measured ~2.5x faster across this repo than the
+ * sequential per-`cwd` form), a member that does not define the script is
+ * skipped instead of needing a guard, and the filter reads the workspace from
+ * `package.json` - so it stays correct when a package is added without a
+ * re-synth. A non-zero member exit still fails the run.
+ *
+ * `*` matches every workspace MEMBER and never the root itself, so the root
+ * task delegating to it cannot recurse. Members declared outside the scanned
+ * package roots (`extraWorkspaceMembers`) are workspace members too, so they are
+ * covered by the same filter.
+ */
+class WorkspaceValidationTasks extends Component {
+  private configured = false;
+
+  public override preSynthesize(): void {
+    if (this.configured) return;
+    this.configured = true;
+    const project = this.project as javascript.NodeProject;
+    for (const task of [project.compileTask, project.testTask]) {
+      task.exec(`bun run --filter '*' ${task.name}`);
+    }
+  }
+}
+
+/**
  * Ignore each `codegen`-declaring package's `src/` from the root ESLint config.
  * Those modules are read-only (ts-to-zod); lint `--fix` otherwise EACCES-crashes
  * on them. Runs in `preSynthesize` so mixin-added `codegen.inputs` are visible.
@@ -673,10 +727,17 @@ class EslintIgnoreCodegen extends Component {
     const rootAbs = resolve(this.project.outdir);
     for (const sub of this.project.subprojects) {
       if (!(sub instanceof javascript.NodeProject)) continue;
-      const codegen = sub.package.manifest.codegen as { inputs?: unknown[] } | undefined;
+      const codegen = sub.package.manifest.codegen as { inputs?: string[] } | undefined;
       if (!codegen?.inputs?.length) continue;
       const rel = toPosix(relative(rootAbs, sub.outdir));
-      eslint.addIgnorePattern(`${rel}/src/**`);
+      // Ignore the generated MODULES, not the package's whole `src/`. A codegen
+      // package may hold hand-written modules next to its generated ones
+      // (shared-genie generates `dashboards.ts` beside a hand-written
+      // `genie-model.ts`), and a blanket `src/**` would silently stop linting
+      // them - the failure mode being invisible, since ESLint just reports less.
+      for (const module of codegenModulePaths(codegen.inputs)) {
+        eslint.addIgnorePattern(`${rel}/${module}`);
+      }
     }
   }
 }
@@ -781,7 +842,7 @@ function registerRootTasks(project: javascript.NodeProject): void {
     barrels: { exec: taskScript(project, "barrels.ts") },
     openapi: { exec: taskScript(project, "openapi.ts") },
     clean: { exec: taskScript(project, "clean.ts"), receiveArgs: true },
-    // `receiveArgs` forwards `--watch`, so `pnpm exec projen sync --watch` syncs once
+    // `receiveArgs` forwards `--watch`, so `bun run sync -- --watch` syncs once
     // then starts the single node-path watcher loop.
     sync: { exec: taskScript(project, "sync.ts"), receiveArgs: true },
   });
@@ -901,7 +962,7 @@ function initProject(
     prettier: Boolean(project.prettier),
     tsconfigPath: "./tsconfig.json",
   });
-  // Generated read-only outputs (barrels, openapi clients, vite configs, codegen).
+  // Generated read-only outputs (barrels, openapi clients, app scripts, codegen).
   // ESLint --fix cannot rewrite them; they are stamped by the barrel generator /
   // openapi / codegen / projen.
   for (const root of roots) {
@@ -994,6 +1055,8 @@ function initProject(
   if (enabledTagMixins.length) {
     project.with(...enabledTagMixins.map((t) => PACKAGE_TAG_MIXINS[t]));
   }
+
+  new WorkspaceValidationTasks(project);
 
   new GeneratedSource(project);
   // The `bump` task (compute next version + commit + tag + push) is useful on

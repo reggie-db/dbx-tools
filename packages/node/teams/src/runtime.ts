@@ -19,8 +19,8 @@
  * @module
  */
 
-import { AppKitError, ExecutionError, type ExecutionResult } from "@databricks/appkit";
-import { async, error, log } from "@dbx-tools/shared-core";
+import { ExecutionError, type ExecutionResult } from "@databricks/appkit";
+import { execution, log } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import { buildCardResult } from "./builder.ts";
 import { resolveTeamsConfig, type ResolvedTeamsConfig, type TeamsPluginConfig } from "./config.ts";
@@ -53,17 +53,7 @@ export interface TeamsRuntime {
  * directly, mapping a throw onto the same {@link ExecutionResult} shape so
  * call sites branch on `ok` either way.
  */
-const directExecute: TeamsExecutor = async (fn) => {
-  try {
-    return { ok: true, data: await fn() };
-  } catch (err) {
-    return {
-      ok: false,
-      status: err instanceof AppKitError ? err.statusCode : 500,
-      message: error.errorMessage(err),
-    };
-  }
-};
+const directExecute = execution.directExecutor<TeamsExecutionSettings>();
 
 let runtime: TeamsRuntime | undefined;
 
@@ -109,19 +99,23 @@ async function run<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   const { execute } = getTeamsRuntime();
-  const result = await execute(
-    (executeSignal) => fn(async.combineAbortSignals(executeSignal, signal)),
-    settings,
-  );
-  if (result.ok) return result.data;
-  if (signal?.aborted) throw ExecutionError.canceled();
-  logger.warn("execution-failed", {
+  return execution.run({
     operation,
-    status: result.status,
-    error: result.message,
-  });
-  throw new ExecutionError(`teams: ${operation} failed`, {
-    context: { operation, status: result.status },
+    settings,
+    execute,
+    fn,
+    signal,
+    canceled: ExecutionError.canceled,
+    failed: (failure) => {
+      logger.warn("execution-failed", {
+        operation: failure.operation,
+        status: failure.status,
+        error: failure.message,
+      });
+      return new ExecutionError(`teams: ${failure.operation} failed`, {
+        context: { operation: failure.operation, status: failure.status },
+      });
+    },
   });
 }
 

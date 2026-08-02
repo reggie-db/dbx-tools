@@ -4,8 +4,8 @@
  *
  * Two related layers live here:
  *
- *   1. Genie wire shapes derived from `@dbx-tools/shared-sdk-model`'s
- *      generated `dashboards` schemas (regenerated from the upstream
+ *   1. Genie wire shapes derived from this package's own generated
+ *      `dashboards` schemas (regenerated from the upstream
  *      `@databricks/sdk-experimental` `apis/dashboards/model.d.ts`
  *      by the engine's codegen on synth). We extend the SDK schemas where Genie
  *      ships fields on the wire that the SDK doesn't currently type:
@@ -33,18 +33,18 @@
  *      discriminated union.
  *
  * Pure types: no runtime imports beyond zod + the generated
- * sdk-type schemas, no Node-only code, safe for browser bundles.
+ * `dashboards` schemas, no Node-only code, safe for browser bundles.
  *
  * @module
  */
 
 import { string } from "@dbx-tools/shared-core";
-import { dashboards } from "@dbx-tools/shared-sdk-model";
 import { z } from "zod";
+import * as dashboards from "./dashboards.ts";
 
-// The generated SDK schemas live under the `dashboards` namespace of
-// @dbx-tools/shared-sdk-model. Alias the handful Genie extends so the
-// widened schemas below read against short, local names.
+// The generated SDK schemas live in the sibling `./dashboards.ts`, written by the
+// engine's codegen from the upstream `.d.ts`. Alias the handful Genie extends so
+// the widened schemas below read against short, local names.
 const {
   messageStatusSchema: MessageStatusSchema,
   genieAttachmentSchema: SDKGenieAttachmentSchema,

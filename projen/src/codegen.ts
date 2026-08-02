@@ -90,6 +90,25 @@ function parseInputArg(value: string): CodegenInput {
 }
 
 /**
+ * The `src/` modules a set of `codegen.inputs` specs will emit, as package-relative
+ * posix paths - WITHOUT resolving or reading any input.
+ *
+ * This exists so callers that only need to know WHICH files are generated (the
+ * ESLint ignore list, above all) can ask without running codegen. The output names
+ * are derived from the specs alone, so it is safe to call during synth, before
+ * `node_modules` is resolved and before any manifest has been written to disk -
+ * hence taking the specs rather than a directory to read them from.
+ *
+ * Naming a package's generated modules is strictly better than ignoring its whole
+ * `src/`: a codegen package may also hold HAND-WRITTEN modules (shared-genie
+ * generates `dashboards.ts` next to a hand-written `genie-model.ts`), and those
+ * must stay linted.
+ */
+export function codegenModulePaths(inputs: readonly string[]): string[] {
+  return inputs.map((input) => `src/${parseInputArg(input).name}.ts`);
+}
+
+/**
  * Resolve a codegen input to an absolute path. A `node_modules/...` source is
  * searched for in each `node_modules` from the consuming package up to the
  * filesystem root, so it resolves whether the dependency is nested under the
