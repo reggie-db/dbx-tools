@@ -64,13 +64,24 @@ describe("useServicePrincipal", () => {
       true,
     );
   });
+
+  it("in `auto` mode, falls back only when the request has no OBO token", () => {
+    // The tunnel case: the gate proves the caller's email but cannot mint a
+    // Databricks credential, so the turn runs as the service principal instead
+    // of throwing AppKit's AuthenticationError.
+    assert.equal(useServicePrincipal("auto", req({ "x-forwarded-user": "ada" })), true);
+    assert.equal(useServicePrincipal("auto", req({ "x-forwarded-access-token": "t" })), false);
+  });
 });
 
 describe("identity schema surface", () => {
-  it("publishes exactly the two supported modes on the config schema", () => {
+  it("publishes exactly the supported modes on the config schema", () => {
     const genieIdentity = MASTRA_CONFIG_SCHEMA.properties?.genieIdentity as {
       enum?: unknown[];
     };
+    // Derived from IDENTITY_MODES, so a new mode cannot reach the option without
+    // also reaching the schema an AppKit host validates against.
     assert.deepEqual(genieIdentity.enum, [...IDENTITY_MODES]);
+    assert.deepEqual([...IDENTITY_MODES], ["user", "service-principal", "auto"]);
   });
 });

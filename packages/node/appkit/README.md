@@ -38,6 +38,9 @@ Use this package when the friction is around bootstrapping and reuse:
 - AppKit does not own your local CLI flags, bundle validation output, or
   `app.yaml`; `config.resolveConfigValue()` gives setup scripts one resolution
   path across those sources.
+- AppKit's `asUser(req)` throws outside `NODE_ENV=development` when a request
+  carries no OBO token; `identity` makes falling back to the service principal a
+  configured, per-request decision instead of a `NODE_ENV` side effect.
 
 ## Create An Auto-Configured App
 
@@ -231,6 +234,58 @@ Pass a second argument to report progress on your own logger. The grants are
 skipped inside a Databricks App, and any failure is logged rather than thrown so
 a degraded cache never blocks startup.
 
+## Choose The Request Identity
+
+AppKit gives a plugin two identities: the ambient service context (the app's own
+service principal) and a per-request user context entered with `asUser(req)`,
+which authenticates on-behalf-of (OBO) using the token the Databricks front door
+forwards on `x-forwarded-access-token`. When that header is absent, AppKit's
+behaviour depends entirely on `NODE_ENV`:
+
+| `NODE_ENV`    | `asUser(req)` with no `x-forwarded-access-token`       |
+| ------------- | ------------------------------------------------------ |
+| `development` | logs a warning, silently runs as the service principal |
+| anything else | throws `AuthenticationError: Missing user token`       |
+
+That throw is right for an app behind the front door, where a missing token means
+something is broken. It is fatal for an app whose traffic legitimately arrives
+without one - a public tunnel where callers authenticate by email code
+([`@dbx-tools/cli-tunnel`](../../cli/tunnel)), or a bot channel that validates its
+own inbound JWT (`POST /api/teams/messages`). Those apps must not run with
+`NODE_ENV=development` just to get the fallback, since that flag also relaxes
+secure cookies and unlocks other dev-only escape hatches.
+
+`identity` is that decision, made explicit:
+
+```ts
+import { identity } from "@dbx-tools/appkit";
+
+const mode = identity.resolveIdentityMode(config.identity, "MY_APP_IDENTITY");
+
+// One call decides whether this request enters `asUser`.
+const scoped = identity.useServicePrincipal(mode, req) ? this : this.asUser(req);
+const rows = await scoped.executeQuery(sql);
+```
+
+| Mode                | Behaviour                                                                    |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `user` (default)    | Always OBO. Per-user attribution and per-user Genie / Unity Catalog filters. |
+| `service-principal` | Always the app's own identity. Needs no OBO scopes and serves any caller.    |
+| `auto`              | OBO when the request carries a usable token, service principal otherwise.    |
+
+`auto` decides per REQUEST, not per boot, because one container can serve both
+doors at once - the tunnel gate and the platform front door share a port. A
+boot-time flag would have to be wrong for one of them. An unrecognized configured
+value throws a `ConfigurationError` rather than falling back, because a typo
+(`"obo"`, `"sp"`) would otherwise keep serving the very error the option was set
+to avoid.
+
+Running as the service principal does not change WHO the request belongs to. The
+caller still arrives on `x-forwarded-user` / `x-forwarded-email` (read them with
+`identity.requestUserId()` / `requestUserEmail()`), so memory threads, cache
+namespaces, and trace attribution stay per-user - only the Databricks credential
+is shared. `@dbx-tools/appkit-mastra` exposes this as its `genieIdentity` option.
+
 ## Modules
 
 | Module             | Responsibility                                                                             |
@@ -243,6 +298,7 @@ a degraded cache never blocks startup.
 | `databricks`       | App env detection and SDK context cancellation adapters.                                   |
 | `plugin`           | Typed AppKit plugin data, instance, and required-instance lookup.                          |
 | `provision`        | Cache schema provisioning helpers.                                                         |
+| `identity`         | OBO-vs-service-principal request identity: modes, resolution, and the forwarded headers.   |
 
 The shell-facing wrapper for auto-config is
 [`@dbx-tools/cli-appkit-env`](../../cli/appkit-env). Higher-level agent composition

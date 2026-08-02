@@ -6,6 +6,7 @@ export * as appkit from "./src/appkit.ts";
 export * as config from "./src/config.ts";
 export * as createApp from "./src/create-app.ts";
 export * as databricks from "./src/databricks.ts";
+export * as identity from "./src/identity.ts";
 export * as lakebaseResolver from "./src/lakebase-resolver.ts";
 export * as pgaddress from "./src/pgaddress.ts";
 export * as plugin from "./src/plugin.ts";
@@ -15,6 +16,8 @@ export type { BundleValidateJson, ConfigFile, ConfigSource, ConfigMapValue, Reso
 export type { AutoConfigureMode, CreateAppConfig } from "./src/create-app.ts";
 export { MAX_TCP_PORT } from "./src/databricks.ts";
 export type { ContextLike } from "./src/databricks.ts";
+export { ACCESS_TOKEN_HEADER, USER_ID_HEADER, USER_EMAIL_HEADER, IDENTITY_MODES, DEFAULT_IDENTITY_MODE } from "./src/identity.ts";
+export type { IdentityMode, HeaderBearing } from "./src/identity.ts";
 export type { LakebaseResolverInputs, LakebaseConnection } from "./src/lakebase-resolver.ts";
 export { SSL_MODES } from "./src/pgaddress.ts";
 export type { SslMode, LakebaseConnectionInputs, ParsedAddress } from "./src/pgaddress.ts";

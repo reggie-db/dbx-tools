@@ -45,7 +45,7 @@ import {
   type ToolProvider,
   type ToolRegistry,
 } from "@databricks/appkit/beta";
-import { log } from "@dbx-tools/shared-core";
+import { log, string, token } from "@dbx-tools/shared-core";
 import {
   email as emailWire,
   type EmailMessage,
@@ -203,6 +203,20 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
    * plugin base path, i.e. `GET /api/email/senders`. Runs in the OBO
    * user scope so domain wildcards resolve against the caller's own
    * local part.
+   *
+   * OBO is used only WHEN the request can support it. `asUser(req)` throws
+   * `AuthenticationError` outside `NODE_ENV=development` if the request carries
+   * no forwarded OBO token, and AppKit does not catch a rejection raised inside
+   * a handler - so unconditionally wrapping this route takes the process down
+   * for a caller that authenticated some other way (a `@dbx-tools/cli-tunnel`
+   * OTP session, a health probe, a local `curl`). The user context is only ever
+   * an ENRICHMENT here: without it, wildcard senders simply expand against no
+   * local part. Degrading to the service context therefore answers correctly
+   * instead of failing, and a front-door request is unchanged.
+   *
+   * This is the same rule `@dbx-tools/appkit`'s `identity` module applies in
+   * `"auto"` mode; the header check is inlined rather than taking a dependency
+   * on that package for one predicate.
    */
   override injectRoutes(router: IAppRouter): void {
     this.route(router, {
@@ -210,7 +224,9 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
       method: "get",
       path: SENDERS_ROUTE,
       handler: async (req, res) => {
-        const result = await this.asUser(req).executeListSenders();
+        const oboToken = string.trimToNull(req.header(token.ACCESS_TOKEN_HEADER));
+        const scoped = oboToken === null ? this : this.asUser(req);
+        const result = await scoped.executeListSenders();
         if (!result.ok) {
           res.status(result.status).json({ error: result.message });
           return;

@@ -20,7 +20,9 @@ Key features:
   where available, while storage and background work use service-principal
   connections. Set `genieIdentity: "service-principal"` to run the agents'
   Databricks calls as the app service principal instead, so callers who can open
-  the app but are not workspace members can still chat.
+  the app but are not workspace members can still chat, or `"auto"` to make that
+  fallback per-request - OBO when the caller forwards a token, service principal
+  when they cannot.
 - Durable conversations: Lakebase-backed Mastra storage provides thread
   history, message persistence, and optional vector memory.
 - Rich data answers: Genie tools, statement fetches, chart preparation, and
@@ -720,7 +722,7 @@ needs no extra wiring.
 | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `DATABRICKS_SERVING_ENDPOINT_NAME`                                  | Model used when neither the agent nor `defaultModel` names one.                                                         |
 | `DATABRICKS_GENIE_SPACE_ID`                                         | Genie space registered under the `default` alias.                                                                       |
-| `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO) or `service-principal` for the agents' Databricks calls.                                          |
+| `MASTRA_GENIE_IDENTITY`                                             | `user` (default, OBO), `service-principal`, or `auto` for the agents' Databricks calls.                                 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Presence of either turns Mastra tracing on when `observability` is unset. On Apps, the telemetry sidecar injects these. |
 | `OTEL_PROPAGATORS`                                                  | Set to `none` on Databricks Apps so ingress `traceparent` does not hide every chat trace from UC `*_trace_unified`.     |
 | `MLFLOW_EXPERIMENT_ID`, `MLFLOW_EXPERIMENT_NAME`                    | With an OTLP endpoint, turns MLflow feedback on when `feedback` is unset.                                               |
@@ -763,8 +765,17 @@ requiring callers to assemble a Mastra server by hand.
   shared with an account-level group too large to add to the workspace. It
   changes only the Databricks credential: memory threads, the per-user cache
   namespace, and trace metadata still key off the forwarded user, at the cost
-  of per-user attribution in Genie / Unity Catalog. Falls back to
-  `MASTRA_GENIE_IDENTITY`.
+  of per-user attribution in Genie / Unity Catalog. `"auto"` decides PER REQUEST:
+  OBO when the request actually carries an OBO token, service principal when it
+  does not. That is the mode for an app served through more than one door - a
+  container fronted by [`@dbx-tools/cli-tunnel`](../../cli/tunnel) serves both
+  email-code callers (no Databricks credential exists to forward) and the
+  platform front door on one port, and `"user"` would make every tunnel turn fail
+  with AppKit's `AuthenticationError` while `"service-principal"` would throw away
+  per-user scoping for the front-door callers who still have it. Falls back to
+  `MASTRA_GENIE_IDENTITY`. The decision itself lives in
+  [`@dbx-tools/appkit`](../appkit)'s `identity` module, so a non-Mastra plugin can
+  make the same call.
 - `apiAccess` chooses the route allowlist. Keep the default scoped mode for
   deployed apps.
 

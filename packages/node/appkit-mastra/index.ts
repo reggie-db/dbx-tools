@@ -45,7 +45,7 @@ export type { MastraFileSystemAdapterOptions } from "./src/filesystems.ts";
 export { DEFAULT_GENIE_ALIAS, GENIE_INSTRUCTIONS } from "./src/genie.ts";
 export type { GenieSpaceConfig, GenieSpacesConfig } from "./src/genie.ts";
 export type { LoadHistoryOptions, ClearHistoryOptions, HistoryRouteOptions } from "./src/history.ts";
-export { IDENTITY_ENV, IDENTITY_MODES, DEFAULT_IDENTITY_MODE, USER_ID_HEADER, USER_EMAIL_HEADER } from "./src/identity.ts";
+export { IDENTITY_ENV, IDENTITY_MODES, DEFAULT_IDENTITY_MODE, USER_ID_HEADER, USER_EMAIL_HEADER, requestUserId, requestUserEmail, useServicePrincipal } from "./src/identity.ts";
 export type { MastraIdentityMode } from "./src/identity.ts";
 export type { ResolvedMcp } from "./src/mcp.ts";
 export { MemoryBuilder } from "./src/memory.ts";

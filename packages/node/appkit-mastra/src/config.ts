@@ -24,7 +24,7 @@ import type { PgVectorConfig, PostgresStoreConfig } from "@mastra/pg";
 
 import type { MastraAgentDefinition, MastraTools } from "./agents.ts";
 import type { GenieSpacesConfig } from "./genie.ts";
-import type { MastraIdentityMode } from "./identity.ts";
+import { IDENTITY_MODES, type MastraIdentityMode } from "./identity.ts";
 import type { RemoteSkillsOption } from "./remote-skills.ts";
 
 /**
@@ -526,8 +526,13 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * - `"service-principal"`: always the app service principal. Needs no OBO
    *   scopes and works for any caller who can open the app, at the cost of
    *   per-user attribution in Genie / Unity Catalog.
+   * - `"auto"`: OBO when the request carries an OBO token, the service principal
+   *   when it does not. For an app serving BOTH the platform front door and a
+   *   door that has no token to forward - a `@dbx-tools/cli-tunnel` gate, a
+   *   Teams channel - where AppKit's `asUser` would otherwise throw
+   *   `AuthenticationError` outside `NODE_ENV=development`.
    *
-   * `"service-principal"` changes only the Databricks CREDENTIAL. Memory
+   * The service-principal path changes only the Databricks CREDENTIAL. Memory
    * threads, the per-user cache namespace, and trace metadata still key off the
    * forwarded user, so callers sharing the service principal's data access keep
    * separate conversations and cannot read each other's threads or charts.
@@ -535,6 +540,11 @@ export interface MastraPluginConfig extends BasePluginConfig {
    * @example An app any account user can open
    * ```ts
    * mastra({ genieIdentity: "service-principal", genieSpaces: { default: spaceId } });
+   * ```
+   *
+   * @example One app behind both the front door and a public tunnel
+   * ```ts
+   * mastra({ genieIdentity: "auto", genieSpaces: { default: spaceId } });
    * ```
    */
   genieIdentity?: MastraIdentityMode;
@@ -691,9 +701,11 @@ export const MASTRA_CONFIG_SCHEMA: ConfigSchema = {
     },
     genieIdentity: {
       type: "string",
-      enum: ["user", "service-principal"],
+      // Derived from the resolver's own list, so a mode can never be accepted at
+      // runtime while the published schema (and the UI built from it) omits it.
+      enum: [...IDENTITY_MODES],
       description:
-        'Which Databricks identity the agents\' workspace calls (serving catalogue, Genie, statement execution) run as. "user" (default) is always OBO, so callers must be workspace members; "service-principal" always uses the app service principal, so any caller who can open the app works, at the cost of per-user attribution. Falls back to MASTRA_GENIE_IDENTITY.',
+        'Which Databricks identity the agents\' workspace calls (serving catalogue, Genie, statement execution) run as. "user" (default) is always OBO, so callers must be workspace members; "service-principal" always uses the app service principal, so any caller who can open the app works, at the cost of per-user attribution; "auto" uses OBO when the request carries an OBO token and the service principal when it does not, for an app that also serves a tunnel or webhook door. Falls back to MASTRA_GENIE_IDENTITY.',
     },
     apiAccess: {
       type: "string",
