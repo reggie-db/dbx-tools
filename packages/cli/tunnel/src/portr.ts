@@ -5,7 +5,7 @@
  * on cold start, so the portr binary and its config are placed under a writable,
  * cwd-rooted `.home` unconditionally - it costs nothing where `$HOME` is writable.
  * The install is idempotent (the installer skips when the on-PATH binary is
- * current). The config is rendered from `PUBLIC_DOMAIN` (`<subdomain>.<server>`)
+ * current). The config is rendered from `TUNNEL_PUBLIC_DOMAIN` (`<subdomain>.<server>`)
  * + `PORTR_TOKEN` and points portr at the PUBLIC port (the proxy listens there).
  *
  * @module
@@ -14,7 +14,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import { log } from "@dbx-tools/shared-core";
+import { env, log } from "@dbx-tools/shared-core";
+import { PUBLIC_DOMAIN_ENV } from "./env.ts";
 
 const logger = log.logger("tunnel:portr");
 
@@ -27,8 +28,8 @@ export interface PortrConfig {
 }
 
 /**
- * Resolve portr config from `PUBLIC_DOMAIN` + `PORTR_TOKEN`, or an explicit
- * `subdomain`. `PUBLIC_DOMAIN` is `<subdomain>.<server>` (e.g.
+ * Resolve portr config from `TUNNEL_PUBLIC_DOMAIN` + `PORTR_TOKEN`, or an
+ * explicit `subdomain`. The domain is `<subdomain>.<server>` (e.g.
  * `demo.apps.dbx.tools`). Returns `undefined` (no tunnel) when the token or a
  * usable domain is absent.
  */
@@ -38,8 +39,9 @@ export function resolvePortrConfig(opts: {
   token?: string;
   port: number;
 }): PortrConfig | undefined {
-  const token = opts.token ?? process.env.PORTR_TOKEN;
-  const domain = opts.publicDomain ?? process.env.PUBLIC_DOMAIN;
+  // PORTR_* is upstream portr's own namespace, so it keeps its name.
+  const token = env.string(opts.token, "PORTR_TOKEN");
+  const domain = env.string(opts.publicDomain, PUBLIC_DOMAIN_ENV);
   if (!token) return undefined;
   let subdomain = opts.subdomain;
   let server: string | undefined;
@@ -47,7 +49,7 @@ export function resolvePortrConfig(opts: {
     subdomain ??= domain.split(".")[0];
     server = domain.slice(domain.indexOf(".") + 1);
   }
-  server ??= process.env.PORTR_SERVER;
+  server ??= env.text("PORTR_SERVER") ?? undefined;
   if (!subdomain || !server || server === domain) return undefined;
   return { subdomain, server, token, port: opts.port };
 }

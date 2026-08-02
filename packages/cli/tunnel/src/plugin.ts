@@ -20,6 +20,14 @@ import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@d
 import { brand, env, log, string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-email";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
+import {
+  ALLOW_ENV,
+  BRAND_NAME_ENV,
+  CODE_TTL_ENV,
+  MESSAGE_ENV,
+  SESSION_TTL_ENV,
+  SUBJECT_ENV,
+} from "./env.ts";
 import { CodeStore, signSession, verifySession } from "./otp.ts";
 import { RateLimiter } from "./rate-limit.ts";
 
@@ -27,10 +35,10 @@ const logger = log.logger("tunnel:auth");
 
 /** Options for the {@link authGate} plugin (all resolvable from env - see below). */
 export interface AuthGateConfig extends BasePluginConfig {
-  /** Allow-list patterns (domain / glob / `/regex/`). Empty = allow nobody. Env EMAIL_AUTH_ALLOW. */
+  /** Allow-list patterns (domain / glob / `/regex/`). Empty = allow nobody. Env TUNNEL_AUTH_ALLOW. */
   allow?: string | string[];
   /**
-   * Subject line for the code email. Env AUTH_SUBJECT.
+   * Subject line for the code email. Env TUNNEL_AUTH_SUBJECT.
    *
    * Defaults to "Your verification code". The wording of the subject and
    * {@link message} is deliberately the conventional phrasing rather than
@@ -40,7 +48,7 @@ export interface AuthGateConfig extends BasePluginConfig {
    */
   subject?: string;
   /**
-   * Display name used in the code email copy. Env AUTH_BRAND_NAME.
+   * Display name used in the code email copy. Env TUNNEL_AUTH_BRAND_NAME.
    *
    * Defaults to the brand context's `name` - the app's own `branding/brand.yaml`
    * when it has one, else the dbx-tools default. Set this only to override the
@@ -48,15 +56,15 @@ export interface AuthGateConfig extends BasePluginConfig {
    */
   brandName?: string;
   /**
-   * Line shown immediately above the code in the email. Env AUTH_MESSAGE.
+   * Line shown immediately above the code in the email. Env TUNNEL_AUTH_MESSAGE.
    *
    * Keep the code on its OWN line directly after this text - that adjacency is
    * what the platform code-detection heuristics key on.
    */
   message?: string;
-  /** Session lifetime (seconds). Env AUTH_SESSION_TTL. Default 43200 (12h). */
+  /** Session lifetime (seconds). Env TUNNEL_AUTH_SESSION_TTL. Default 43200 (12h). */
   sessionTtlSeconds?: number;
-  /** One-time-code lifetime (seconds). Env AUTH_CODE_TTL. Default 600 (10m). */
+  /** One-time-code lifetime (seconds). Env TUNNEL_AUTH_CODE_TTL. Default 600 (10m). */
   codeTtlSeconds?: number;
   /** Max verify attempts per issued code. Default 5. */
   maxAttempts?: number;
@@ -108,21 +116,19 @@ const DEFAULTS = {
 export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateConfig {
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
-    // EMAIL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
-    allow: [...string.parseList(config.allow), ...string.parseList(process.env.EMAIL_AUTH_ALLOW)],
-    subject: env.string(config.subject, "AUTH_SUBJECT") ?? DEFAULTS.subject,
-    brandName: env.string(config.brandName, "AUTH_BRAND_NAME") ?? DEFAULTS.brandName,
-    message: env.string(config.message, "AUTH_MESSAGE") ?? DEFAULTS.message,
+    // TUNNEL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
+    // Hence `parseList` on each rather than `env.list`, which stops at the first
+    // source that yields anything.
+    allow: [...string.parseList(config.allow), ...string.parseList(env.text(ALLOW_ENV))],
+    subject: env.string(config.subject, SUBJECT_ENV) ?? DEFAULTS.subject,
+    brandName: env.string(config.brandName, BRAND_NAME_ENV) ?? DEFAULTS.brandName,
+    message: env.string(config.message, MESSAGE_ENV) ?? DEFAULTS.message,
     sessionTtlSeconds: env.positiveInt(
       config.sessionTtlSeconds,
-      "AUTH_SESSION_TTL",
+      SESSION_TTL_ENV,
       DEFAULTS.sessionTtlSeconds,
     ),
-    codeTtlSeconds: env.positiveInt(
-      config.codeTtlSeconds,
-      "AUTH_CODE_TTL",
-      DEFAULTS.codeTtlSeconds,
-    ),
+    codeTtlSeconds: env.positiveInt(config.codeTtlSeconds, CODE_TTL_ENV, DEFAULTS.codeTtlSeconds),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
   };
 }

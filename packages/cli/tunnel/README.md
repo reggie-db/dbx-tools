@@ -41,6 +41,11 @@ address against an allow-list, verified by a code sent over
   regex literal (`/^ops-.*@example\.com$/`). An empty list allows nobody.
 - Per-email and per-IP fixed-window rate limiting, plus anti-enumeration: a code
   request always answers `{ ok: true }`, whether or not the address is allowed.
+- Inbound `x-` headers are stripped by default and re-allowed by pattern, so a
+  public caller cannot spoof the headers the app trusts - above all
+  `x-forwarded-access-token`, which would otherwise let anyone drive the app's
+  workspace calls with a pasted token. Add an app's own headers with
+  `--forward-headers`.
 - Platform traffic passes through UNGATED. The gate distinguishes the portr
   client (a loopback source address, same container) from the hosting platform's
   front door (a non-loopback container-network address), so health checks and the
@@ -87,23 +92,91 @@ original public port itself.
 Every flag has an environment fallback, so a deployment can configure the gate
 with no change to its start command.
 
-| Flag              | Env                | Default                      |
-| ----------------- | ------------------ | ---------------------------- |
-| `--allow`         | `EMAIL_AUTH_ALLOW` | empty (allow nobody)         |
-| `--subject`       | `AUTH_SUBJECT`     | `Your verification code`     |
-| `--brand-name`    | `AUTH_BRAND_NAME`  | the brand context `name`     |
-| `--message`       | `AUTH_MESSAGE`     | `Your verification code is:` |
-| `--session-ttl`   | `AUTH_SESSION_TTL` | `43200` (12 hours)           |
-| `--code-ttl`      | `AUTH_CODE_TTL`    | `600` (10 minutes)           |
-| `--subdomain`     | -                  | derived from `PUBLIC_DOMAIN` |
-| `--public-domain` | `PUBLIC_DOMAIN`    | -                            |
-| `--insecure`      | `TUNNEL_INSECURE`  | off (the gate is required)   |
+| Flag                | Env                       | Default                        |
+| ------------------- | ------------------------- | ------------------------------ |
+| `--allow`           | `TUNNEL_AUTH_ALLOW`       | empty (allow nobody)           |
+| `--subject`         | `TUNNEL_AUTH_SUBJECT`     | `Your verification code`       |
+| `--brand-name`      | `TUNNEL_AUTH_BRAND_NAME`  | the brand context `name`       |
+| `--message`         | `TUNNEL_AUTH_MESSAGE`     | `Your verification code is:`   |
+| `--session-ttl`     | `TUNNEL_AUTH_SESSION_TTL` | `43200` (12 hours)             |
+| `--code-ttl`        | `TUNNEL_AUTH_CODE_TTL`    | `600` (10 minutes)             |
+| `--subdomain`       | -                         | derived from the public domain |
+| `--public-domain`   | `TUNNEL_PUBLIC_DOMAIN`    | -                              |
+| `--forward-headers` | `TUNNEL_FORWARD_HEADERS`  | the built-in `x-` allow-list   |
+| `--insecure`        | `TUNNEL_INSECURE`         | off (the gate is required)     |
+| -                   | `TUNNEL_AUTH_JWT_SECRET`  | an ephemeral per-process key   |
 
-`--allow` and `EMAIL_AUTH_ALLOW` are UNIONED rather than one overriding the
+Every variable is `TUNNEL_`-prefixed because the gate runs as a WRAPPER: it and
+the app it wraps share one environment, so a generic name is one the app may
+already be using. The earlier unprefixed spellings - `AUTH_SUBJECT`,
+`AUTH_BRAND_NAME`, `AUTH_MESSAGE`, `AUTH_SESSION_TTL`, `AUTH_CODE_TTL`,
+`AUTH_JWT_SECRET`, `EMAIL_AUTH_ALLOW`, `PUBLIC_DOMAIN` - are still read as
+deprecated aliases, with the `TUNNEL_` name winning when both are set, so an
+existing deployment needs no coordinated rename. `PORTR_TOKEN` / `PORTR_SERVER`
+keep their names: that namespace belongs to portr itself, as does
+`DATABRICKS_APP_PORT`, which the platform sets and the gate honours.
+
+`--allow` and `TUNNEL_AUTH_ALLOW` are UNIONED rather than one overriding the
 other, so a deployment-wide allow-list and a per-invocation addition both grant
-access. Session signing reads `AUTH_JWT_SECRET`; when it is unset the gate mints
-an ephemeral per-process key, so sessions simply do not survive a restart rather
-than the gate refusing to serve.
+access. Session signing reads `TUNNEL_AUTH_JWT_SECRET`; when it is unset the gate
+mints an ephemeral per-process key, so sessions simply do not survive a restart
+rather than the gate refusing to serve. Set it in any deployment running more than
+one instance, or a session minted by one will not verify on another.
+
+## Inbound Header Policy
+
+Tunnel traffic arrives from the public internet, so every header on it is
+attacker-controlled - and the headers an app trusts are exactly the ones a caller
+must not be able to write, because the app cannot tell a header the Databricks
+front door set from one a browser typed.
+
+Enumerating headers to remove is a losing game (a deny-list is only correct until
+the platform adds a header), so the policy is inverted: **every `x-`-prefixed
+request header is stripped from tunnel traffic unless a pattern allows it.** A
+header nobody thought about is removed rather than trusted. Non-`x-` headers -
+`content-type`, `accept`, `authorization`, `cookie` - are the app's normal input
+and pass through untouched.
+
+The default allow-list covers the `x-` namespaces this repo's own client sends
+and its own server reads, so a dbx-tools app works behind the tunnel with no
+configuration:
+
+| Pattern            | Why                                                 |
+| ------------------ | --------------------------------------------------- |
+| `x-mastra-*`       | thread and model routing for `@dbx-tools/ui-mastra` |
+| `x-mlflow-*`       | MLflow trace correlation for feedback               |
+| `x-requested-with` | the conventional AJAX marker                        |
+
+Add an app's own headers with `--forward-headers` /`TUNNEL_FORWARD_HEADERS`. Each
+entry is a literal name, a shell-style glob, or a `/regex/` - the same three
+shapes the email allow-list takes - and the configured list is UNIONED with the
+defaults, so extending it never silently breaks the built-in surfaces:
+
+```sh
+dbxt-tunnel --forward-headers "x-acme-*, /^x-trace-/, x-tenant" -- bun src/server.ts
+```
+
+Some headers no pattern can forward. These decide who a request is and where it
+came from, and on tunnel traffic only the gate may answer that:
+
+| Header                                | Why it is never forwarded                                                                                                                                |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x-forwarded-access-token`            | OBO auth. A pasted workspace token would make every call in the app run as its owner; a verified email proves nothing about who a credential belongs to. |
+| `x-forwarded-user`, `-email`          | Caller identity. The gate sets these itself, from a verified session.                                                                                    |
+| `x-forwarded-preferred-username`      | Display identity from the IdP.                                                                                                                           |
+| `x-forwarded-host`, `-proto`, `-port` | Original host/scheme/port. Spoofing them poisons absolute URLs the app builds, or makes a plaintext request look like TLS.                               |
+| `x-forwarded-for`, `x-real-ip`        | Client IP. Spoofing forges the audit trail and gives a caller a fresh rate-limit bucket per request.                                                     |
+| `x-request-id`                        | Request correlation UUID. Forged or colliding ids make logs unreliable.                                                                                  |
+
+The identity headers are AppKit's OBO contract; the rest are the
+[`X-Forwarded-*` set Databricks Apps documents passing to an
+app](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/http-headers),
+plus the conventional `x-forwarded-proto`/`-port`/`x-real-ip` a library may read
+anyway. Dropping the transport headers costs nothing: the proxy re-adds them from
+the real socket after the policy runs, so the app sees the honest values instead
+of the caller's claim. Rate limiting reads the client IP before stripping, and
+takes the **rightmost** `x-forwarded-for` entry - the only one a proxy appended
+rather than a client supplied.
 
 ## Use The Gate As A Plugin
 
@@ -156,10 +229,13 @@ by hand.
 - `proxy` - the public-port reverse proxy: loopback-vs-platform classification,
   open login routes, session enforcement, and WebSocket forwarding.
 - `otp` - the `CacheManager`-backed code store and the session JWT.
-- `allowlist` - domain / glob / regex matching and `looksLikeEmail`.
+- `allowlist` - email domain / glob / regex matching and `looksLikeEmail`.
+- `headers` - the inbound-header allow-list: `toHeaderPolicy()`,
+  `DEFAULT_FORWARD_HEADERS`, and the `PROTECTED_HEADERS` no pattern can forward.
 - `rate-limit` - the in-memory fixed-window limiter (single-instance only; not
   distributed).
 - `portr` - portr install, config rendering, and child launch.
+- `env` - the environment-variable names, each with its deprecated aliases.
 - `app` - boots the minimal gate AppKit app and returns the `AuthGateApi`.
 
 Browser-safe login wire schemas (the request/verify payloads and the session

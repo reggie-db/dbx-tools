@@ -27,9 +27,10 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
-import { http, json, log } from "@dbx-tools/shared-core";
+import { http, json, log, token } from "@dbx-tools/shared-core";
 import { authRequestSchema, authVerifySchema, SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
 import ProxyModule from "http-proxy-3";
+import { toHeaderPolicy, type HeaderPolicy } from "./headers.ts";
 import type { AuthGateApi } from "./plugin.ts";
 
 const logger = log.logger("tunnel:proxy");
@@ -74,10 +75,22 @@ export interface ProxyOptions {
    * operator passed `--insecure` / `TUNNEL_INSECURE=true`.
    */
   gate?: AuthGateApi;
+  /**
+   * Extra `x-` request headers tunnel traffic may forward, as literals, globs, or
+   * `/regex/`es - unioned with {@link DEFAULT_FORWARD_HEADERS}. Every other `x-`
+   * header is stripped, and {@link PROTECTED_HEADERS} is stripped regardless. See
+   * `./headers.ts` for why the policy is an allow-list.
+   */
+  forwardHeaders?: readonly string[];
 }
 
 /** Start the gate proxy. Resolves once it is listening. */
-export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise<void> {
+export function startProxy({
+  publicPort,
+  appPort,
+  gate,
+  forwardHeaders,
+}: ProxyOptions): Promise<void> {
   const proxy = ProxyModule.createProxyServer({
     target: { host: "127.0.0.1", port: appPort },
     ws: true,
@@ -90,6 +103,10 @@ export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise
       sendJson(r, 502, { error: "upstream unavailable" });
     }
   });
+
+  // Compiled once: the inbound-header allow-list applied to every gated request.
+  const headerPolicy = toHeaderPolicy(forwardHeaders);
+  logger.debug("inbound header policy", { forward: headerPolicy.patterns });
 
   /** The session cookie for a verified email, as a Set-Cookie string. */
   const sessionCookie = (token: string, maxAgeSeconds: number): string =>
@@ -104,11 +121,25 @@ export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise
       .filter(Boolean)
       .join("; ");
 
-  /** Client IP for rate-limiting: the portr-forwarded XFF, else the socket. */
+  /**
+   * Client IP for rate-limiting: the portr client's forwarded XFF, else the socket.
+   *
+   * Deliberately the RIGHTMOST `x-forwarded-for` entry, not the leftmost. The
+   * list grows left-to-right as each hop appends, so the last entry is the one
+   * the nearest trusted proxy (portr) wrote and every earlier entry is a value
+   * the caller could have sent. Reading the leftmost lets a client vary one
+   * header to get a fresh rate-limit bucket per request, which defeats both the
+   * per-IP code-request and verify-attempt limiters. Called BEFORE
+   * {@link HeaderPolicy.apply} strips the header, so the honest hop value is
+   * still available here.
+   */
   const clientIp = (req: IncomingMessage): string => {
-    const fwd = req.headers["x-forwarded-for"];
-    const first = Array.isArray(fwd) ? fwd[0] : fwd?.split(",")[0];
-    return (first ?? req.socket.remoteAddress ?? "unknown").trim();
+    const forwarded = req.headers["x-forwarded-for"];
+    const chain = (Array.isArray(forwarded) ? forwarded.join(",") : (forwarded ?? ""))
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    return chain.at(-1) ?? req.socket.remoteAddress ?? "unknown";
   };
 
   /**
@@ -129,14 +160,38 @@ export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise
 
   /**
    * Present an OTP-authenticated caller to the app the SAME way a platform front
-   * door does: set `x-forwarded-user` / `x-forwarded-email` to the verified
-   * address (AppKit reads `x-forwarded-user` for the OBO user id), so the app
-   * needs no gate-specific code path. Any inbound copies are overwritten so a
-   * client can't spoof identity through the gate.
+   * door does: set the front door's own identity headers to the verified address
+   * (AppKit reads {@link token.USER_ID_HEADER} for the OBO user id), so the app
+   * needs no gate-specific code path. The names come from
+   * `@dbx-tools/shared-core`'s `token` module - the same constants AppKit-side
+   * code reads them by - rather than being re-spelled here.
+   *
+   * What the gate CANNOT set is {@link token.ACCESS_TOKEN_HEADER}: an OTP session
+   * proves an email address, not possession of a Databricks credential, and
+   * there is no way to mint one for the caller. Its absence is exactly what
+   * `@dbx-tools/appkit`'s `identity` `"auto"` mode detects, so a gated request
+   * runs as the app's service principal instead of throwing.
    */
   const injectIdentity = (req: IncomingMessage, email: string): void => {
-    req.headers["x-forwarded-user"] = email;
-    req.headers["x-forwarded-email"] = email;
+    req.headers[token.USER_ID_HEADER] = email;
+    req.headers[token.USER_EMAIL_HEADER] = email;
+  };
+
+  /**
+   * Apply the inbound-header policy to a tunnel request: every `x-` header the
+   * allow-list does not name is deleted, and the platform identity/transport set
+   * is deleted regardless. See `./headers.ts` for the reasoning; the
+   * security-critical case is {@link token.ACCESS_TOKEN_HEADER}, which the gate
+   * never sets but an app running `identity: "auto"` treats as proof the request
+   * can do OBO.
+   *
+   * `xfwd: true` on the proxy re-adds `x-forwarded-for`/`-proto`/`-port`/`-host`
+   * afterwards from the real socket, so the app still sees those - it just sees
+   * the honest values rather than the caller's claim.
+   */
+  const applyHeaderPolicy = (req: IncomingMessage): void => {
+    const removed = headerPolicy.apply(req.headers as Record<string, unknown>);
+    if (removed.length) logger.debug("stripped inbound headers", { removed });
   };
 
   const server = createServer(async (req, res) => {
@@ -184,10 +239,9 @@ export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise
       );
     }
 
-    // Anti-spoof: strip any inbound identity headers on portr traffic - only the
-    // gate may set them, below, for a verified session.
-    delete req.headers["x-forwarded-user"];
-    delete req.headers["x-forwarded-email"];
+    // Anti-spoof: apply the inbound-header allow-list to portr traffic - only the
+    // gate may assert identity, and it does so below for a verified session.
+    applyHeaderPolicy(req);
 
     // Static (non-API) loads freely so the SPA + <AuthGate> can render. Strip the
     // session cookie so it never leaks to the static handler.
@@ -218,8 +272,7 @@ export function startProxy({ publicPort, appPort, gate }: ProxyOptions): Promise
       proxy.ws(req, socket, head);
       return;
     }
-    delete req.headers["x-forwarded-user"];
-    delete req.headers["x-forwarded-email"];
+    applyHeaderPolicy(req);
     if (!(req.url ?? "").startsWith("/api/")) {
       stripSessionCookie(req);
       proxy.ws(req, socket, head);

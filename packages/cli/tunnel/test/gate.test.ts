@@ -4,6 +4,7 @@ import { CacheManager } from "@databricks/appkit";
 import { brand } from "@dbx-tools/shared-core";
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
 import { expiresIn } from "../src/app.ts";
+import { ALLOW_ENV, BRAND_NAME_ENV, CODE_TTL_ENV, SUBJECT_ENV } from "../src/env.ts";
 import { CodeStore, resetSigningKey, signSession, verifySession } from "../src/otp.ts";
 import { resolveAuthGateConfig } from "../src/plugin.ts";
 import { RateLimiter } from "../src/rate-limit.ts";
@@ -116,5 +117,56 @@ describe("code expiry copy", () => {
     assert.equal(expiresIn(90), "90 seconds");
     assert.equal(expiresIn(45), "45 seconds");
     assert.equal(expiresIn(1), "1 second");
+  });
+});
+
+describe("env var names", () => {
+  /** Set a var for one assertion, restoring whatever was there. */
+  function withEnv(name: string, value: string, body: () => void): void {
+    const original = process.env[name];
+    process.env[name] = value;
+    try {
+      body();
+    } finally {
+      if (original === undefined) delete process.env[name];
+      else process.env[name] = original;
+    }
+  }
+
+  it("reads the current TUNNEL_-prefixed names", () => {
+    withEnv("TUNNEL_AUTH_SUBJECT", "Current name", () => {
+      assert.equal(resolveAuthGateConfig({}).subject, "Current name");
+    });
+    withEnv("TUNNEL_AUTH_ALLOW", "example.com", () => {
+      assert.deepEqual(resolveAuthGateConfig({}).allow, ["example.com"]);
+    });
+    withEnv("TUNNEL_AUTH_CODE_TTL", "120", () => {
+      assert.equal(resolveAuthGateConfig({}).codeTtlSeconds, 120);
+    });
+  });
+
+  it("still honours the deprecated unprefixed names, so a deployment keeps working", () => {
+    withEnv("AUTH_SUBJECT", "Legacy name", () => {
+      assert.equal(resolveAuthGateConfig({}).subject, "Legacy name");
+    });
+    withEnv("EMAIL_AUTH_ALLOW", "legacy.example", () => {
+      assert.deepEqual(resolveAuthGateConfig({}).allow, ["legacy.example"]);
+    });
+  });
+
+  it("prefers the current name when both are set", () => {
+    withEnv("AUTH_BRAND_NAME", "Legacy", () => {
+      withEnv("TUNNEL_AUTH_BRAND_NAME", "Current", () => {
+        assert.equal(resolveAuthGateConfig({}).brandName, "Current");
+      });
+    });
+  });
+
+  it("lists the current name first in every alias list", () => {
+    // `env.*` is earliest-wins, so ordering IS the deprecation policy.
+    for (const keys of [ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, CODE_TTL_ENV]) {
+      assert.ok(Array.isArray(keys));
+      assert.match(keys[0]!, /^TUNNEL_/);
+    }
   });
 });

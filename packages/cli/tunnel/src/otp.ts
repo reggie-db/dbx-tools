@@ -9,7 +9,7 @@
  * the hash, and the entry is deleted on success or once attempts are exhausted.
  *
  * The session JWT is a short-lived HS256 token (via `jose`) carrying only the
- * email. Its signing key comes from `AUTH_JWT_SECRET`; when unset the gate uses an
+ * email. Its signing key comes from `TUNNEL_AUTH_JWT_SECRET`; when unset the gate uses an
  * ephemeral per-process key rather than refusing service, so an unset secret
  * degrades to "sessions don't survive a restart", not "nobody can log in". Note
  * what this does NOT weaken: a caller still needs a code delivered to an
@@ -22,8 +22,9 @@
 
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
-import { log } from "@dbx-tools/shared-core";
+import { env, log } from "@dbx-tools/shared-core";
 import { jwtVerify, SignJWT } from "jose";
+import { JWT_SECRET_ENV } from "./env.ts";
 
 const logger = log.logger("tunnel:otp");
 
@@ -107,18 +108,18 @@ export class CodeStore {
 }
 
 /**
- * Resolve the HS256 signing key. Prefers `AUTH_JWT_SECRET`; when unset, mints an
+ * Resolve the HS256 signing key. Prefers `TUNNEL_AUTH_JWT_SECRET`; when unset, mints an
  * ephemeral per-process key (fail-open) and warns once. Memoized.
  */
 let cachedKey: Uint8Array | undefined;
 function signingKey(): Uint8Array {
   if (cachedKey) return cachedKey;
-  const secret = process.env.AUTH_JWT_SECRET?.trim();
+  const secret = env.text(JWT_SECRET_ENV);
   if (secret) {
     cachedKey = new TextEncoder().encode(secret);
   } else {
     logger.warn(
-      "AUTH_JWT_SECRET is not set - using an ephemeral per-process key; sessions will not survive a restart",
+      `${JWT_SECRET_ENV[0]} is not set - using an ephemeral per-process key; sessions will not survive a restart`,
     );
     cachedKey = randomBytes(32);
   }

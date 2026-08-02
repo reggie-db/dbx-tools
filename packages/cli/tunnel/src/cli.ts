@@ -26,9 +26,10 @@
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
-import { log } from "@dbx-tools/shared-core";
+import { env, log } from "@dbx-tools/shared-core";
 import { Command, CommanderError } from "commander";
 import { startGateApp } from "./app.ts";
+import { FORWARD_HEADERS_ENV, INSECURE_ENV } from "./env.ts";
 import type { AuthGateConfig } from "./plugin.ts";
 import { installPortr, resolvePortrConfig, startPortr, writePortrConfig } from "./portr.ts";
 import { startProxy } from "./proxy.ts";
@@ -52,6 +53,7 @@ interface TunnelOpts {
   sessionTtl?: string;
   codeTtl?: string;
   insecure?: boolean;
+  forwardHeaders?: string;
 }
 
 /** Build the commander program. `--` separates flags from the app start command. */
@@ -59,20 +61,24 @@ function program(): Command {
   return new Command()
     .name("dbx-tools-tunnel")
     .description("Front an app with a public portr tunnel + email-OTP gate")
-    .option("--subject <text>", "Subject line for the code email (env AUTH_SUBJECT)")
+    .option("--subject <text>", "Subject line for the code email (env TUNNEL_AUTH_SUBJECT)")
     .option(
       "--allow <patterns>",
-      "Comma/space-separated allow-list: domain / glob / /regex/ (env EMAIL_AUTH_ALLOW)",
+      "Comma/space-separated allow-list: domain / glob / /regex/ (env TUNNEL_AUTH_ALLOW)",
     )
-    .option("--subdomain <name>", "portr subdomain (else derived from PUBLIC_DOMAIN)")
-    .option("--public-domain <host>", "portr <subdomain>.<server> (env PUBLIC_DOMAIN)")
+    .option("--subdomain <name>", "portr subdomain (else derived from TUNNEL_PUBLIC_DOMAIN)")
+    .option("--public-domain <host>", "portr <subdomain>.<server> (env TUNNEL_PUBLIC_DOMAIN)")
     .option(
       "--brand-name <name>",
-      "Display name in the code email copy (env AUTH_BRAND_NAME; defaults to the brand context name)",
+      "Display name in the code email copy (env TUNNEL_AUTH_BRAND_NAME; defaults to the brand context name)",
     )
-    .option("--message <text>", "Line shown above the code in the email (env AUTH_MESSAGE)")
-    .option("--session-ttl <seconds>", "Session lifetime (env AUTH_SESSION_TTL)")
-    .option("--code-ttl <seconds>", "One-time-code lifetime (env AUTH_CODE_TTL)")
+    .option("--message <text>", "Line shown above the code in the email (env TUNNEL_AUTH_MESSAGE)")
+    .option("--session-ttl <seconds>", "Session lifetime (env TUNNEL_AUTH_SESSION_TTL)")
+    .option("--code-ttl <seconds>", "One-time-code lifetime (env TUNNEL_AUTH_CODE_TTL)")
+    .option(
+      "--forward-headers <patterns>",
+      "Extra x- request headers tunnel traffic may forward: literal / glob / /regex/ (env TUNNEL_FORWARD_HEADERS)",
+    )
     .option(
       "--insecure",
       "Run the tunnel OPEN with no gate (env TUNNEL_INSECURE=true). Otherwise the CLI fails fast when email SMTP is not configured.",
@@ -143,7 +149,7 @@ export async function runCli(argv: string[]): Promise<void> {
   // 2. Boot the gate app (cache + email transport + gate API). `startGateApp`
   //    FAILS FAST when email can't send codes (no SMTP). Insecure mode
   //    (`--insecure` / TUNNEL_INSECURE) skips the gate and runs the tunnel open.
-  const insecure = opts.insecure || /^(1|true|yes|on)$/i.test(process.env.TUNNEL_INSECURE ?? "");
+  const insecure = env.boolean(opts.insecure, INSECURE_ENV) ?? false;
   let gate: Awaited<ReturnType<typeof startGateApp>> | undefined;
   if (insecure) {
     logger.warn("insecure mode - tunnel runs OPEN with no email-OTP gate");
@@ -159,7 +165,13 @@ export async function runCli(argv: string[]): Promise<void> {
   }
 
   // 3. Start the gate proxy on the public port (open when `gate` is undefined).
-  await startProxy({ publicPort, appPort, gate });
+  //    `forwardHeaders` only ADDS to the built-in allow-list; see `./headers.ts`.
+  await startProxy({
+    publicPort,
+    appPort,
+    gate,
+    forwardHeaders: env.list(opts.forwardHeaders, FORWARD_HEADERS_ENV),
+  });
 
   // 4. Install + run portr when a tunnel is configured.
   const portrConfig = resolvePortrConfig({
@@ -169,11 +181,13 @@ export async function runCli(argv: string[]): Promise<void> {
   });
   const children: ChildProcess[] = [app];
   if (portrConfig) {
-    const env = installPortr();
-    writePortrConfig(portrConfig, env);
-    children.push(startPortr(portrConfig, env));
+    const portrEnv = installPortr();
+    writePortrConfig(portrConfig, portrEnv);
+    children.push(startPortr(portrConfig, portrEnv));
   } else {
-    logger.info("no PORTR_TOKEN/PUBLIC_DOMAIN - serving the gate proxy without a public tunnel");
+    logger.info(
+      "no PORTR_TOKEN/TUNNEL_PUBLIC_DOMAIN - serving the gate proxy without a public tunnel",
+    );
   }
 
   // Any child exit (or a signal) tears the whole thing down.
