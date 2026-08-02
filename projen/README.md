@@ -199,3 +199,37 @@ The engine registers its commands as projen tasks on the workspace root, so run
 them with `bun run <task>` - `sync` (add `--watch`), `barrels`, `openapi`, and
 `clean`. [`@dbx-tools/cli`](../packages/cli/dbx-tools) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
+
+## Run Tasks From The ROOT
+
+Every repo-wide task lives on the root, and the root's `compile` / `test`
+delegate with `bun run --filter '*'` rather than emitting a step per member - so
+a new package is covered without a re-synth. Work from the root:
+
+| Task              | What it does                                       |
+| ----------------- | -------------------------------------------------- |
+| `bun run build`   | `compile` + `test` + `package` across every member |
+| `bun run compile` | `tsc --build` in each member, in parallel          |
+| `bun run test`    | `eslint` once, then each member's tests            |
+| `bun run sync`    | re-synth (`--watch` to keep synthing)              |
+| `bun run barrels` | regenerate the read-only `index.ts` barrels        |
+| `bun run bump`    | version, tag, and publish                          |
+
+Members intentionally keep only the tasks that something OTHER than a human
+invokes, so there is no second place to run the same thing:
+
+- `compile` / `test` - what the root's `--filter '*'` delegation calls.
+- `prepack` - what `bun publish` runs per package while packing a tarball
+  (27 of 33 members; a package with nothing to pack has none).
+- `watch` - a single-package `tsc --build -w`, for narrowing a long
+  edit/compile loop to one package.
+- `build` / `install` / `install:ci` / `default` / `pre-compile` /
+  `post-compile` / `package` - projen's own lifecycle scaffolding, emitted for
+  every member because projen's task model expects them. Nothing in this repo's
+  workflow calls them per member.
+
+Do NOT run `projen default` (or `bunx projen`) from inside a member. Synth is a
+whole-tree operation driven by the ROOT `.projenrc.ts`, so a member-level run
+re-synths the entire workspace from the member's directory and rewrites the
+root `package.json` `version` back to `0.0.0`. Run `bun run sync` from the root
+instead.

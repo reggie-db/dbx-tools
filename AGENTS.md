@@ -329,6 +329,33 @@ or being conceptually separable while having exactly one consumer and no
 dependency of its own to isolate. `shared-sdk-model` was both and is now
 `shared/genie/src/dashboards.ts`.
 
+### The single-consumer packages, already audited
+
+Every package with exactly ONE internal consumer has been checked against the
+rule above; the verdicts are recorded here so the audit is not re-litigated:
+
+- `node/fs` (only `appkit-mastra`) - KEEP. It is the `LocalFileSystem` +
+  OS-path-resolution half of the `shared-fs` contract, and its Node-only
+  `node:fs` / `node:os` surface is exactly what a `shared-*` or `ui-*` consumer
+  must not be able to reach. The tag split is the boundary here, not the
+  consumer count.
+- `node/genie` (only `appkit-mastra`) - KEEP. It isolates
+  `@databricks/sdk-experimental` and takes a `@databricks/appkit` PEER; folding
+  it into `appkit-mastra` would make the Genie driver unusable from a non-Mastra
+  backend, which is the documented reason it exists.
+- `node/email` (only `cli-tunnel`) - KEEP. Six external deps (SMTP transport
+  among them) that `cli-tunnel` genuinely needs, and it is a published add-on
+  consumers install directly. Its single INTERNAL consumer understates its use.
+- `shared/email-template` (`email` + `ui-email`) - KEEP. Isolates
+  `@react-email/components` + `react`, and it is the one package both a server
+  and a browser consumer share. Two consumers, and a real dependency.
+
+The genuinely questionable one is `node/databricks-map`: no consumers, no
+external deps, and an unfinished spike. It stays only because it is `private`
+(so it ships to nobody and is excluded from the docs site) and its README says
+so plainly. If it is still untouched next time this list is reviewed, delete it
+rather than growing a third rationale for keeping it.
+
 ## Shared utilities - check here before writing a helper
 
 `@dbx-tools/shared-core` is the browser-safe base EVERY package
