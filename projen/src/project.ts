@@ -913,6 +913,9 @@ function initProject(
   // them to a project. ESLint still cannot parse them.
   eslint.addIgnorePattern("**/dev.ts");
   eslint.addIgnorePattern("**/build.ts");
+  // A deploy-staging helper that lives at a package root (outside any `src/**`
+  // tsconfig), same parse-resolution problem as the bun app scripts above.
+  eslint.addIgnorePattern("**/stage-deploy.ts");
   for (const override of BUN_APP_OVERRIDES) {
     eslint.addIgnorePattern(`**/${override}`);
   }

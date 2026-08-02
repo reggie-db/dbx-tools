@@ -202,15 +202,10 @@ const support = createAgent(supportDefinition);
 // LAN-bound interface, so anything else won't accept traffic).
 // Override with `HOST=...` if you need a different bind address for a
 // local tunnel.
+// `dbxt-tunnel` (when it wraps the start command) sets both HOST=127.0.0.1 and a
+// private DATABRICKS_APP_PORT, so the app binds loopback behind the gate proxy.
+// Run directly (no tunnel) and this falls back to 0.0.0.0 on Databricks.
 const host = process.env.HOST ?? (databricks.isAppEnv() ? "0.0.0.0" : "127.0.0.1");
-
-// When the email-OTP gate proxy fronts the app (public portr tunnel), the proxy
-// binds DATABRICKS_APP_PORT and the app binds APP_INTERNAL_PORT on loopback so
-// only the proxy can reach it. Absent APP_INTERNAL_PORT, AppKit uses
-// DATABRICKS_APP_PORT as usual (no proxy).
-const internalPort = process.env.APP_INTERNAL_PORT
-  ? Number(process.env.APP_INTERNAL_PORT)
-  : undefined;
 
 // Report what actually resolved before serving anything: the demo can run its
 // `@dbx-tools/*` packages from source or from the registry, and only the
@@ -224,28 +219,14 @@ process.env.SEARCH_INDEX ??= DEFAULT_SEARCH_INDEX;
 
 await createAppAuto({
   plugins: [
-    server({
-      host: internalPort ? "127.0.0.1" : host,
-      staticPath: clientDist,
-      ...(internalPort ? { port: internalPort } : {}),
-    }),
+    server({ host, staticPath: clientDist }),
     genie(),
     lakebase(),
     // Validates SMTP config + verifies connectivity at startup, and
     // primes the transport the approval-gated `send_email` tool reuses.
     // `brand` styles every rendered email (accent, font, header logo)
     // with the dbx-tools brand; drop it for the neutral default layout.
-    // The email-OTP ACCESS GATE is enabled here because this demo is exposed
-    // publicly through a portr tunnel (see scripts/start.sh) that bypasses the
-    // Databricks OAuth front door - so the app gates itself. `auth.allow`
-    // whitelists the Databricks domain; every request-code attempt reports
-    // success (anti-enumeration) but only a databricks.com address is emailed a
-    // code. The gate mounts `/api/email/auth/*` and protects every other route.
-    // Disable by omitting `auth` or setting EMAIL_AUTH_ENABLED=0.
-    email({
-      brand: defaultEmailBrand,
-      auth: { enabled: true, allow: ["databricks.com"] },
-    }),
+    email({ brand: defaultEmailBrand }),
     // Web-search runtime for the `web_search` / `web_fetch` tools. The
     // web-search model defaults to Gemini, then GPT (the native web-search
     // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,

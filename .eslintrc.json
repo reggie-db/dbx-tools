@@ -50,6 +50,7 @@
     "example-packages/**/index.ts",
     "**/dev.ts",
     "**/build.ts",
+    "**/stage-deploy.ts",
     "**/bunfig.override.toml",
     "**/bun-dev.override.ts",
     "**/bun-build.override.ts",

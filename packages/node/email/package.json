@@ -30,7 +30,6 @@
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-email": "workspace:*",
     "@mastra/core": "catalog:",
-    "jose": "^6.2.3",
     "juice": "^12.1.1",
     "marked": "catalog:",
     "nodemailer": "^7.0.13"

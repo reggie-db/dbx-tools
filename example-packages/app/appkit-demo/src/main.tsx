@@ -13,7 +13,10 @@ import { ErrorBoundary } from "./ErrorBoundary.tsx";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
-      <AuthGate title="dbx-tools demo" description="Sign in with your Databricks email to continue.">
+      <AuthGate
+        title="dbx-tools demo"
+        description="Sign in with your Databricks email to continue."
+      >
         <App />
       </AuthGate>
     </ErrorBoundary>

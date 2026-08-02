@@ -1,5 +1,5 @@
-import { Button, Input } from "@dbx-tools/ui-appkit/react";
 import type { AuthStatus } from "@dbx-tools/shared-email";
+import { Button, Input } from "@dbx-tools/ui-appkit/react";
 import { MailIcon } from "lucide-react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 

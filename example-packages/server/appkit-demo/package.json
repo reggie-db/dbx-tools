@@ -34,6 +34,7 @@
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/appkit-mastra": "workspace:*",
     "@dbx-tools/appkit-web-search": "workspace:*",
+    "@dbx-tools/cli-tunnel": "workspace:*",
     "@dbx-tools/email": "workspace:*",
     "@dbx-tools/search": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",

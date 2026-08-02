@@ -18,6 +18,12 @@
 
 import { z } from "zod";
 
+/**
+ * Name of the HttpOnly cookie the tunnel gate stores its session JWT in. Shared
+ * so the proxy (which sets it) and any client-side code agree on one name.
+ */
+export const SESSION_COOKIE_NAME = "dbx-tools-auth";
+
 /** `POST /api/email/auth/request` body: ask for a code to be emailed. */
 export const authRequestSchema = z.object({
   email: z.string().describe("Address to email a one-time code to, if it is allowed."),

@@ -324,9 +324,6 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
     "nodemailer@^7.0.13",
     "juice@^12.1.1",
     "marked@catalog:",
-    // `jose` powers the email-OTP access gate's session JWT (auth/otp.ts). Same
-    // runtime-agnostic HS256 signer node-teams uses for its Bot Framework JWT.
-    "jose@^6.2.3",
   );
   p.addDevDeps("@types/nodemailer@^7", "@types/express@catalog:", "@types/json-schema@^7");
 });
@@ -571,6 +568,33 @@ project.applyToProjects(
   },
 );
 
+// cli-tunnel: fronts a Databricks App with a public portr tunnel + email-OTP
+// access gate. Wraps a start command (`dbxt-tunnel -- bun src/server.ts`): spawns
+// the app on a random private port, runs a reverse-proxy (http-proxy-3, with
+// WebSocket support) on the public port that gates portr-tunneled traffic behind
+// an email OTP (allow-list + rate limit + CacheManager-stored codes + jose
+// session), and installs/runs portr - all supervised so any exit brings the set
+// down. It is its OWN tiny AppKit app (createApp WITHOUT server) so CacheManager
+// auto-configures (memory/Lakebase) and the email transport is primed. Bins are
+// `dbx-tools-tunnel` + the short `dbxt-tunnel`.
+project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p) => {
+  p.package.addBin({
+    [`${SCOPE}-tunnel`]: "./bin/dbx-tools-tunnel.ts",
+    "dbxt-tunnel": "./bin/dbx-tools-tunnel.ts",
+  });
+  p.addDeps(
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/email@workspace:*",
+    "@dbx-tools/shared-email@workspace:*",
+    "@databricks/appkit@catalog:",
+    // The reverse proxy: a maintained node-http-proxy fork with WebSocket +
+    // upgrade support and TS types (verified to run under bun).
+    "http-proxy-3@^1.23.3",
+    // Session JWT signing/verification (runtime-agnostic HS256), same as node-teams.
+    "jose@^6.2.3",
+  );
+});
+
 // ui-appkit: the shared React UI base for the feature UI packages. Re-exports
 // AppKit's UI kit (`@databricks/appkit-ui/react`) and the shared stylesheet.
 // `ui`-tagged (React + jsx come from the ui tag). Tailwind v4 is compiled by the
@@ -714,6 +738,9 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
     "@dbx-tools/teams@workspace:*",
     "@dbx-tools/search@workspace:*",
     "@dbx-tools/shared-core@workspace:*",
+    // The tunnel CLI wraps the app start command (public portr tunnel +
+    // email-OTP gate); its `dbxt-tunnel` bin is the deployed app.yaml command.
+    "@dbx-tools/cli-tunnel@workspace:*",
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",

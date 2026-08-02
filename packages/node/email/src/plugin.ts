@@ -52,10 +52,7 @@ import {
   type EmailResult,
   type EmailSenders,
 } from "@dbx-tools/shared-email";
-import type express from "express";
-import { authRequestSchema, authVerifySchema } from "@dbx-tools/shared-email";
-import { EMAIL_CONFIG_SCHEMA, resolveAuthConfig, type EmailPluginConfig } from "./config.ts";
-import { AuthGate, SESSION_COOKIE } from "./auth/gate.ts";
+import { EMAIL_CONFIG_SCHEMA, type EmailPluginConfig } from "./config.ts";
 import { EMAIL_SENDERS_SETTINGS, EMAIL_VERIFY_SETTINGS } from "./defaults.ts";
 import { isSenderAllowed, listSenderOptions, resolveSenderAddress } from "./sender.ts";
 import { SEND_EMAIL_DESCRIPTION } from "./tool.ts";
@@ -96,9 +93,6 @@ const logger = log.logger("email");
  * ```
  */
 export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvider {
-  /** The email-OTP access gate, constructed in {@link setup} when `auth.enabled`. */
-  private authGate?: AuthGate;
-
   static manifest = {
     name: "email",
     displayName: "Email",
@@ -149,7 +143,6 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
   override async setup(): Promise<void> {
     const { transporter, config } = getEmailRuntime(this.config);
     setEmailExecutor((fn, settings) => this.execute(fn, settings));
-    this.setupAuthGate();
     const policy = {
       mode: config.mode,
       senderPolicy: config.senderPolicy,
@@ -225,85 +218,6 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
         res.json(result.data);
       },
     });
-    this.injectAuthRoutes(router);
-  }
-
-  /**
-   * Mount the email-OTP login flow under `/api/email/auth/*` when the gate is
-   * enabled. These routes are the ONLY ones the gate middleware leaves open (see
-   * {@link AuthGate.middleware}); everything else requires the session cookie
-   * they establish. No-op when auth is off.
-   */
-  private injectAuthRoutes(router: IAppRouter): void {
-    const gate = this.authGate;
-    if (!gate) return;
-
-    // `request` and `verify` take a raw email/code, not an OBO user, so they are
-    // NOT wrapped in `asUser` - the caller is anonymous until verified.
-    this.route(router, {
-      name: "authRequest",
-      method: "post",
-      path: "/auth/request",
-      handler: async (req, res) => {
-        const parsed = authRequestSchema.safeParse(req.body);
-        if (!parsed.success) {
-          // Even a malformed body reports success (anti-enumeration).
-          res.json({ ok: true });
-          return;
-        }
-        const result = await gate.handleRequest(parsed.data.email, this.clientIp(req));
-        res.json(result);
-      },
-    });
-
-    this.route(router, {
-      name: "authVerify",
-      method: "post",
-      path: "/auth/verify",
-      handler: async (req, res) => {
-        const parsed = authVerifySchema.safeParse(req.body);
-        if (!parsed.success) {
-          res.json({ ok: false });
-          return;
-        }
-        const result = await gate.handleVerify(
-          parsed.data.email,
-          parsed.data.code,
-          this.clientIp(req),
-          req.secure,
-        );
-        if (result.ok && result.token && result.cookieOptions) {
-          res.cookie(SESSION_COOKIE, result.token, result.cookieOptions);
-        }
-        res.json({ ok: result.ok, ...(result.retryAfter ? { retryAfter: result.retryAfter } : {}) });
-      },
-    });
-
-    this.route(router, {
-      name: "authLogout",
-      method: "post",
-      path: "/auth/logout",
-      handler: async (_req, res) => {
-        res.clearCookie(SESSION_COOKIE, { path: "/" });
-        res.json({ ok: true });
-      },
-    });
-
-    this.route(router, {
-      name: "authStatus",
-      method: "get",
-      path: "/auth/status",
-      handler: async (req, res) => {
-        res.json(await gate.status(req));
-      },
-    });
-  }
-
-  /** Client IP for rate-limiting, honoring the Apps ingress `x-forwarded-for`. */
-  private clientIp(req: express.Request): string {
-    const fwd = req.headers["x-forwarded-for"];
-    const first = Array.isArray(fwd) ? fwd[0] : fwd?.split(",")[0];
-    return (first ?? req.ip ?? "unknown").trim();
   }
 
   override exports() {
@@ -352,82 +266,6 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
     signal?: AbortSignal,
   ): Promise<EmailResult> {
     return sendEmail(message, from ?? this.resolveSender(), signal);
-  }
-
-  /**
-   * Build the email-OTP access gate when `auth.enabled`, wiring its code
-   * delivery through this plugin's own transport. Called from {@link setup}; a
-   * no-op (leaves {@link authGate} undefined) when the gate is off.
-   */
-  private setupAuthGate(): void {
-    const auth = resolveAuthConfig(this.config.auth);
-    if (!auth) return;
-    const gate = new AuthGate({
-      allow: auth.allow,
-      sessionTtlSeconds: auth.sessionTtlSeconds,
-      codeTtlSeconds: auth.codeTtlSeconds,
-      maxAttempts: auth.maxAttempts,
-      secureCookies: process.env.NODE_ENV === "production",
-      sendCode: (email, code) => this.sendOtpEmail(email, code),
-    });
-    this.authGate = gate;
-
-    // The gate must protect the WHOLE app, but a plugin's own `injectRoutes`
-    // router only covers `/api/email/*`. AppKit's `server` plugin exposes
-    // `addExtension(fn)` for exactly this: an app-level middleware applied before
-    // the server listens. The lookup is deferred to the `setup:complete`
-    // lifecycle event because sibling plugins (including `server`) are not all
-    // registered during this plugin's own `setup()` - the same coordination
-    // `appkit-mastra` uses to wait for `lakebase`. The login routes are exempted
-    // by the middleware's open-prefix (`/api/email/auth`).
-    const registerGate = () => {
-      const server = this.context?.getPlugins().get("server") as
-        | { addExtension?: (fn: (app: express.Application) => void) => void }
-        | undefined;
-      if (server?.addExtension) {
-        server.addExtension((app) =>
-          app.use(gate.middleware(`/api/${EmailPlugin.manifest.name}`)),
-        );
-        logger.info("auth:enabled", {
-          patterns: auth.allow.length,
-          sessionTtlSeconds: auth.sessionTtlSeconds,
-        });
-      } else {
-        // No server plugin to gate through - the login routes still work, but the
-        // rest of the app would be ungated, so disable rather than half-enable.
-        this.authGate = undefined;
-        logger.warn(
-          "auth:disabled - the `server` plugin is required to gate the app; add server() to your plugins",
-        );
-      }
-    };
-    if (this.context?.onLifecycle) {
-      this.context.onLifecycle("setup:complete", registerGate);
-    } else {
-      registerGate();
-    }
-  }
-
-  /**
-   * Deliver a one-time code to `email` through this plugin's transport. Throws
-   * on failure (the gate swallows it, so a delivery error never leaks whether
-   * the address was allow-listed).
-   */
-  private async sendOtpEmail(email: string, code: string): Promise<void> {
-    await this.send(
-      {
-        to: [email],
-        subject: `Your sign-in code: ${code}`,
-        body: [
-          `Your one-time sign-in code is:`,
-          ``,
-          `## ${code}`,
-          ``,
-          `It expires shortly. If you didn't request this, you can ignore this email.`,
-        ].join("\n"),
-      },
-      undefined,
-    );
   }
 
   /** Run the sender-options lookup through the plugin's interceptor chain. */

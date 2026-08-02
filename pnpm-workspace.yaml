@@ -6,6 +6,7 @@ packages:
   - packages/cli/appkit-env
   - packages/cli/dbx-tools
   - packages/cli/model-proxy
+  - packages/cli/tunnel
   - packages/node/appkit
   - packages/node/appkit-mastra
   - packages/node/appkit-web-search

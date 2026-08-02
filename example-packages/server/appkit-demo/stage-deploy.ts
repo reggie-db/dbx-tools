@@ -70,8 +70,13 @@ const deployPkg = {
   private: true,
   type: "module",
   // Runtime deps only, all resolved to npm-installable specifiers. `bun` is added
-  // so the platform's pnpm install fetches the runtime the command below uses.
-  dependencies: { ...resolveDeps(pkg.dependencies as Record<string, string>), bun: "1.3.14" },
+  // so the platform's pnpm install fetches the runtime the command below uses;
+  // `@dbx-tools/cli-tunnel` provides the `dbxt-tunnel` bin the command runs.
+  dependencies: {
+    ...resolveDeps(pkg.dependencies as Record<string, string>),
+    "@dbx-tools/cli-tunnel": `^${version}`,
+    bun: "1.3.14",
+  },
   // Keep the ambient TS types the server's imported `@dbx-tools/*` SOURCE needs at
   // runtime type-strip (bun runs .ts directly), resolved off the catalog too.
   devDependencies: resolveDeps(pkg.devDependencies as Record<string, string>),
@@ -82,16 +87,28 @@ const deployPkg = {
 // onnxruntime-node, appkit, ...). This is the research recipe's build gate.
 const deployWorkspace = { allowBuilds };
 
-// app.yaml: pnpm installs (build phase), then `scripts/start.sh` supervises bun
-// AND (when PUBLIC_DOMAIN is set) the portr tunnel. `CLIENT_DIST` points the
-// server at the bundled client staged beside it; PUBLIC_DOMAIN + PORTR_TOKEN
-// publish the public tunnel; AUTH_JWT_SECRET signs the email-OTP session cookie.
-// Preserve the existing env block and append these.
+// app.yaml: pnpm installs (build phase), then `dbxt-tunnel` wraps the app start
+// command - it spawns `bun src/server.ts` on a private port, fronts it with the
+// email-OTP gate proxy on the public port, and runs portr. `CLIENT_DIST` points
+// the server at the bundled client; PUBLIC_DOMAIN + PORTR_TOKEN publish the
+// tunnel; AUTH_JWT_SECRET signs the session; EMAIL_AUTH_ALLOW whitelists who may
+// sign in. Preserve the existing env block and append these.
 const appYaml = parse(readFileSync(join(serverDir, "app.yaml"), "utf8")) as {
   command?: unknown;
   env?: Array<Record<string, unknown>>;
 };
-appYaml.command = ["bash", "scripts/start.sh"];
+appYaml.command = [
+  "dbxt-tunnel",
+  "--subject",
+  "Your dbx-tools demo sign-in code",
+  "--brand-name",
+  "dbx-tools demo",
+  "--allow",
+  "databricks.com",
+  "--",
+  "bun",
+  "src/server.ts",
+];
 appYaml.env = [
   ...(appYaml.env ?? []),
   { name: "CLIENT_DIST", value: "./client-dist" },
@@ -100,16 +117,12 @@ appYaml.env = [
   { name: "PUBLIC_DOMAIN", value: "demo.apps.dbx.tools" },
   { name: "PORTR_TOKEN", valueFrom: "portr-token" },
   { name: "AUTH_JWT_SECRET", valueFrom: "auth-jwt-secret" },
-  // Turn the email-OTP gate on in the deployed app (whitelisted to the
-  // Databricks domain in server.ts).
-  { name: "EMAIL_AUTH_ENABLED", value: "1" },
 ];
 
 // --- write the staged tree ---
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 cpSync(join(serverDir, "src"), join(outDir, "src"), { recursive: true });
-cpSync(join(serverDir, "scripts"), join(outDir, "scripts"), { recursive: true });
 if (existsSync(join(serverDir, "shared")))
   cpSync(join(serverDir, "shared"), join(outDir, "shared"), { recursive: true });
 if (existsSync(clientDist)) cpSync(clientDist, join(outDir, "client-dist"), { recursive: true });
@@ -120,4 +133,4 @@ cpSync(join(serverDir, "databricks.yml"), join(outDir, "databricks.yml"));
 
 console.log(`staged deploy at ${outDir}`);
 console.log(`  @dbx-tools/* -> ^${version}, catalog resolved, bun+pnpm-workspace added`);
-console.log(`  command: bash scripts/start.sh (bun + portr @ demo.apps.dbx.tools), email-OTP gate on`);
+console.log(`  command: dbxt-tunnel -- bun src/server.ts (gate proxy + portr @ demo.apps.dbx.tools)`);

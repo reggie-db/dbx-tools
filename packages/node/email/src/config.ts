@@ -25,7 +25,7 @@
  */
 import { resolve } from "node:path";
 import { ConfigurationError, ValidationError, type BasePluginConfig } from "@databricks/appkit";
-import { object, string } from "@dbx-tools/shared-core";
+import { object } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import type { EmailBrand } from "./brand.ts";
 import { parseAllowedSenders } from "./sender.ts";
@@ -114,33 +114,6 @@ export interface EmailPluginConfig extends BasePluginConfig {
    * `BrandContext`.
    */
   brand?: EmailBrand;
-  /**
-   * Optional email-OTP ACCESS GATE. When `enabled`, the plugin mounts a login
-   * flow (`/api/email/auth/*`) and gates every other route behind a session
-   * cookie - the front door for an app exposed publicly (e.g. through a portr
-   * tunnel that bypasses the Databricks OAuth proxy). Reuses this plugin's
-   * transport to email the code. Omit or `enabled: false` to leave the app open.
-   */
-  auth?: AuthConfig;
-}
-
-/** Email-OTP access-gate configuration (see {@link EmailPluginConfig.auth}). */
-export interface AuthConfig {
-  /** Turn the gate on. Falls back to `EMAIL_AUTH_ENABLED`. Default off. */
-  enabled?: boolean;
-  /**
-   * Who may request a code. Each entry is a domain shortcut (`databricks.com`
-   * or `@databricks.com`), a glob (`*.databricks.com`), or a `/regex/`. An
-   * EMPTY list allows nobody (fail closed). Falls back to `EMAIL_AUTH_ALLOW`
-   * (comma/space-separated).
-   */
-  allow?: string | string[];
-  /** Session lifetime (seconds). Falls back to `EMAIL_AUTH_SESSION_TTL`. Default 43200 (12h). */
-  sessionTtlSeconds?: number;
-  /** One-time-code lifetime (seconds). Falls back to `EMAIL_AUTH_CODE_TTL`. Default 600 (10m). */
-  codeTtlSeconds?: number;
-  /** Max verify attempts per issued code. Default 5. */
-  maxAttempts?: number;
 }
 
 /** Config shared by both resolved modes. */
@@ -260,70 +233,8 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
       },
       required: ["accent", "fontFamily"],
     },
-    auth: {
-      type: "object",
-      description:
-        "Email-OTP access gate. When enabled, mounts a login flow at /api/email/auth/* and gates every other route behind a session cookie.",
-      properties: {
-        enabled: {
-          type: "boolean",
-          description: "Turn the gate on (env EMAIL_AUTH_ENABLED). Default off.",
-        },
-        allow: {
-          type: "array",
-          items: { type: "string" },
-          description:
-            'Allow-list of who may request a code: domain shortcut ("databricks.com"), glob ("*.databricks.com"), or "/regex/". Empty = nobody. Also accepts a comma/space-separated string. Env EMAIL_AUTH_ALLOW.',
-        },
-        sessionTtlSeconds: {
-          type: "number",
-          description: "Session lifetime in seconds (env EMAIL_AUTH_SESSION_TTL). Default 43200.",
-        },
-        codeTtlSeconds: {
-          type: "number",
-          description: "One-time-code lifetime in seconds (env EMAIL_AUTH_CODE_TTL). Default 600.",
-        },
-        maxAttempts: {
-          type: "number",
-          description: "Max verify attempts per issued code. Default 5.",
-        },
-      },
-    },
   },
 };
-
-/** Resolved email-OTP gate config, with env fallbacks applied (or `undefined` when off). */
-export interface ResolvedAuthConfig {
-  readonly allow: string[];
-  readonly sessionTtlSeconds: number;
-  readonly codeTtlSeconds: number;
-  readonly maxAttempts: number;
-}
-
-/**
- * Resolve {@link AuthConfig} against env, returning `undefined` when the gate is
- * off. `enabled` gates everything; `allow` merges the config list + env
- * (`parseList` handles a `string[]` or a delimited string). Empty `allow` is
- * allowed here (the gate then denies everyone - a deliberate fail-closed state).
- */
-export function resolveAuthConfig(auth: AuthConfig | undefined): ResolvedAuthConfig | undefined {
-  const enabled = auth?.enabled ?? object.toBoolean(process.env.EMAIL_AUTH_ENABLED) ?? false;
-  if (!enabled) return undefined;
-  const allow = [
-    ...string.parseList(auth?.allow),
-    ...string.parseList(process.env.EMAIL_AUTH_ALLOW),
-  ];
-  const num = (value: number | undefined, env: string | undefined, fallback: number): number => {
-    const raw = value ?? (env ? Number(env) : undefined);
-    return typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : fallback;
-  };
-  return {
-    allow,
-    sessionTtlSeconds: num(auth?.sessionTtlSeconds, process.env.EMAIL_AUTH_SESSION_TTL, 43200),
-    codeTtlSeconds: num(auth?.codeTtlSeconds, process.env.EMAIL_AUTH_CODE_TTL, 600),
-    maxAttempts: auth?.maxAttempts ?? 5,
-  };
-}
 
 /** Parse the `SMTP_SECURE` env / config flag, defaulting by port. */
 function resolveSecure(flag: boolean | undefined, port: number): boolean {

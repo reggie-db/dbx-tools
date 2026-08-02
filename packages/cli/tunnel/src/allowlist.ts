@@ -21,7 +21,7 @@
 
 import { log } from "@dbx-tools/shared-core";
 
-const logger = log.logger("email:auth:allowlist");
+const logger = log.logger("tunnel:allowlist");
 
 /** Escape a string for literal use inside a `RegExp`. */
 function escapeRegExp(value: string): string {
