@@ -3,5 +3,5 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as template from "./src/template.tsx";
-export { emailBrandFromContext, defaultEmailBrand, resolveEmailBrand, normalizeEmailMarkdown, EmailBody, EmailCard, EmailDocument } from "./src/template.tsx";
+export { emailBrandFromContext, defaultEmailBrand, resolveEmailBrand, normalizeEmailMarkdown, EmailBody, autofillTrailer, EmailCard, EmailDocument } from "./src/template.tsx";
 export type { EmailBrand, ResolvedEmailBrand, EmailBodyProps, EmailDocumentProps } from "./src/template.tsx";

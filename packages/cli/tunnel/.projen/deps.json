@@ -45,6 +45,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/shared-email-template",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-email",
       "version": "workspace:*",
       "type": "runtime"

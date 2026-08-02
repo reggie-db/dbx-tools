@@ -30,6 +30,11 @@ address against an allow-list, verified by a code sent over
   Android detect a code from that shape and offer it directly from the
   notification; novel phrasing is what breaks the detection. Both MIME parts carry
   the code as visible text, never an image.
+- Domain-bound AutoFill on iOS, layered on top of that: when `--public-domain` is
+  set, the email's last line is `@<domain> #<code>`, which binds the code to this
+  host so the keyboard offers it only here - a code phished from another site will
+  not autofill into it. Omitted when no public domain is configured, leaving the
+  heuristic detection above untouched.
 - Email one-time-code gate: a 6-digit code stored as a SHA-256 hash with an
   attempt counter, verified in constant time, in AppKit's `CacheManager` (memory
   by default, Lakebase when the app configures persistent `CacheStorage`) so TTL

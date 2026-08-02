@@ -5,6 +5,11 @@
  * the body component is reused directly by browser approval and compose views.
  * Both default to the repository brand while accepting a consumer override.
  *
+ * {@link autofillTrailer} + the document's `trailer` prop cover Apple's
+ * domain-bound one-time-code AutoFill, which requires `@<domain> #<code>` to be
+ * the message's final line - hence a document-level prop rather than something a
+ * caller can append to `body`.
+ *
  * @module
  */
 import { brand, type BrandContext } from "@dbx-tools/shared-core";
@@ -195,7 +200,59 @@ export interface EmailDocumentProps extends EmailBodyProps {
   subject?: string;
   headers?: ReadonlyArray<readonly [string, string]>;
   footer?: string;
+  /**
+   * A machine-read line emitted as the very LAST line of both MIME parts, after
+   * the branded footer and outside the card.
+   *
+   * This exists for Apple's domain-bound one-time-code AutoFill, whose format is
+   * `@<domain> #<code>` and which iOS only honours when it is the final line of
+   * the message - so it cannot be appended to `body`, which the branded footer
+   * would then follow. Rendered as visible-but-quiet text rather than hidden
+   * (`display: none` content is a spam signal, and a client that ignores the
+   * convention should show something innocuous rather than nothing).
+   *
+   * See {@link autofillTrailer}, which builds the string.
+   */
+  trailer?: string;
 }
+
+/**
+ * Apple's domain-bound AutoFill trailer, `@<domain> #<code>`, or `undefined`
+ * when either part is missing.
+ *
+ * iOS reads this to bind a code to a specific WEBSITE: with it, the keyboard
+ * offers the code only for the matching domain, which is what stops a code
+ * phished from one site being autofilled into another. Without it, iOS still
+ * detects a code heuristically from the conventional layout (prompt line, bare
+ * code alone on the next line), as do Gmail, Outlook, and Android - so this is a
+ * strict upgrade on top of that baseline, never a replacement for it.
+ *
+ * The domain is normalized to bare host form: a scheme, a `www.` prefix, any
+ * path, and a trailing dot are stripped, since iOS matches the host the site is
+ * served from. A domain with no dot (`localhost`) is rejected - it cannot be the
+ * public host of a real deployment, and a trailer iOS will never match is just a
+ * confusing line in the email.
+ *
+ * @example
+ * autofillTrailer("demo.apps.dbx.tools", "123456"); // "@demo.apps.dbx.tools #123456"
+ * autofillTrailer("https://www.example.com/app", "123456"); // "@example.com #123456"
+ */
+export const autofillTrailer = (
+  domain: string | undefined,
+  code: string | undefined,
+): string | undefined => {
+  if (!domain || !code) return undefined;
+  const host = domain
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z\d+.-]*:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/[/?#].*$/, "")
+    .replace(/\.$/, "")
+    .replace(/:\d+$/, "");
+  if (!host.includes(".")) return undefined;
+  return `@${host} #${code.trim()}`;
+};
 
 function BrandMark({ theme }: { theme: ResolvedEmailBrand }): React.ReactNode {
   if (theme.logoUrl) {
@@ -330,6 +387,38 @@ export const EmailCard = ({
   );
 };
 
+/**
+ * The machine-read trailer line, rendered LAST and outside the card.
+ *
+ * Deliberately the final element of `<Body>`: iOS only binds a code to a domain
+ * when `@<domain> #<code>` is the last line of the message, so nothing - not even
+ * the branded footer - may follow it. Styled small and muted rather than hidden,
+ * because `display: none` text is a spam-filter signal.
+ */
+function AutofillTrailer({
+  trailer,
+  theme,
+}: {
+  trailer?: string;
+  theme: ResolvedEmailBrand;
+}): React.ReactNode {
+  if (!trailer) return null;
+  return (
+    <Text
+      style={{
+        color: theme.muted,
+        fontFamily: theme.fontFamily,
+        fontSize: "11px",
+        margin: "16px auto 0",
+        maxWidth: "620px",
+        textAlign: "center",
+      }}
+    >
+      {trailer}
+    </Text>
+  );
+}
+
 /** Complete responsive, branded React Email document. */
 export const EmailDocument = (props: EmailDocumentProps) => {
   const theme = resolveEmailBrand(props.brand);
@@ -345,6 +434,7 @@ export const EmailDocument = (props: EmailDocumentProps) => {
       <Preview>{props.subject ?? "Message"}</Preview>
       <Body style={pageStyle}>
         <EmailCard {...props} />
+        <AutofillTrailer trailer={props.trailer} theme={theme} />
       </Body>
     </Html>
   );

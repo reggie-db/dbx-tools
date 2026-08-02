@@ -809,12 +809,13 @@ import API's 10 MB per-file limit fails the UPLOAD, not the build), `publicPath:
 (the static server rewrites `/*` to one `index.html`, so relative chunk paths 404 on
 nested routes), `external` for self-hosted fonts, and `sourcemap: "none"`.
 
-That note also records a live engine bug: `runSynth()` spawns
-`process.execPath --import tsx`, but under bun `process.execPath` IS bun, which
-cannot load tsx's loader (`Cannot find module './cjs/index.cjs' from ''`). It breaks
-the re-synth step of `projenrc`, `openapi`, and `sync`. Loading tsx under bun is
-pointless anyway - bun runs `.ts` natively - so the fix is to spawn without a loader
-when running under bun rather than to chase the resolution failure.
+That note also recorded an engine bug that is now FIXED, kept here because the
+failure is unintuitive: `runSynth()` spawned `process.execPath --import tsx`, but
+under bun `process.execPath` IS bun, which cannot load tsx's loader (`Cannot find
+module './cjs/index.cjs' from ''`) - so `sync`, `projenrc`, and `openapi` all
+failed at the re-synth step. Loading tsx under bun is pointless anyway (bun runs
+`.ts` natively), so `runSynth` now branches on `process.versions.bun` and passes
+the loader flag only under node. Do not "restore" the flag unconditionally.
 
 ## Commands
 

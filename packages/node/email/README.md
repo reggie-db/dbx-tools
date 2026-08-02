@@ -127,6 +127,24 @@ tools, so every path shares one connection pool, one sender policy, and one set
 of caps. A third argument accepts an `AbortSignal` when the caller wants to stop
 waiting on SMTP.
 
+A fourth argument carries delivery-time options that are deliberately NOT part of
+the message schema - that schema is the agent tool's input, so a field added there
+becomes one a model can set. Today that is `trailer`, a machine-read final line
+for Apple's domain-bound one-time-code AutoFill:
+
+```ts
+import { autofillTrailer } from "@dbx-tools/shared-email-template";
+
+await transport.sendEmail(message, from, undefined, {
+  trailer: autofillTrailer("app.example.com", code),
+});
+```
+
+It renders after the branded footer, since iOS honours `@<domain> #<code>` only as
+the message's final line - see
+[`@dbx-tools/shared-email-template`](../../shared/email-template) for the format
+and [`@dbx-tools/cli-tunnel`](../../cli/tunnel) for a gate that uses it.
+
 The plugin export is equivalent and resolves the sender for you when the caller
 is a Databricks user:
 
@@ -335,7 +353,8 @@ handed to SMTP. The constants and the plugin's interceptor settings live in the
 - `tool` - approval-gated `emailTool()` Mastra tool and the shared
   `SEND_EMAIL_DESCRIPTION`.
 - `transport` - shared runtime, `getEmailRuntime()`, `resetEmailRuntime()`,
-  `verifyEmailTransport()`, `sendEmail()`, and the executor slot
+  `verifyEmailTransport()`, `sendEmail()`, its `SendEmailOptions` (the
+  `trailer` delivery option), and the executor slot
   (`setEmailExecutor()`, `executeWrite()`) that puts every send on AppKit's
   interceptor chain.
 - `config` - SMTP/outbox config types, sender policy, JSON schema, and

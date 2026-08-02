@@ -141,6 +141,9 @@ export async function runCli(argv: string[]): Promise<void> {
     sessionTtlSeconds: opts.sessionTtl ? Number(opts.sessionTtl) : undefined,
     codeTtlSeconds: opts.codeTtl ? Number(opts.codeTtl) : undefined,
     sessionCutoff: opts.sessionCutoff,
+    // Also given to portr below; the gate uses it only to bind the emailed code
+    // to this host for Apple's AutoFill.
+    publicDomain: opts.publicDomain,
   };
 
   // 1. Spawn the wrapped app with the PRIVATE port. It binds loopback; only the

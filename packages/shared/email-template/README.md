@@ -40,6 +40,36 @@ import { EmailDocument } from "@dbx-tools/shared-email-template";
 Node runtimes should pass this component to `@react-email/render`.
 `@dbx-tools/email` does that automatically for SMTP and local outbox delivery.
 
+## Bind A One-Time Code To Your Domain
+
+Apple's AutoFill can tie a code to a specific website, so the keyboard offers it
+only on the matching domain - which is what stops a code phished from one site
+being autofilled into another. The format is `@<domain> #<code>` and iOS honours
+it only as the message's **final** line, so it is a document-level `trailer` prop
+rather than something a caller appends to `body` (the branded footer renders after
+the body).
+
+```tsx
+import { autofillTrailer, EmailDocument } from "@dbx-tools/shared-email-template";
+
+<EmailDocument
+  subject="Your verification code"
+  body={"Your verification code is:\n\n## 123456"}
+  trailer={autofillTrailer("demo.apps.dbx.tools", "123456")}
+/>;
+```
+
+`autofillTrailer()` normalizes a configured URL down to the bare host iOS matches
+on (scheme, `www.`, port, path, and trailing dot are stripped) and returns
+`undefined` when there is nothing to match - no domain, no code, or a hostless
+value like `localhost`. Passing `undefined` renders no trailer, so a deployment
+without a public domain simply omits it.
+
+This is a strict upgrade on top of the conventional layout, never a replacement:
+a prompt line followed by the bare code alone is what iOS, Gmail, Outlook, and
+Android already detect heuristically. `@dbx-tools/email` accepts the built string
+as a delivery option (`sendEmail(message, from, signal, { trailer })`).
+
 ## Reuse The Body Preview
 
 ```tsx
@@ -74,8 +104,8 @@ font, name, tagline, website, and fetchable logo URL.
 
 ## Modules
 
-- `.` - `EmailDocument`, `EmailCard`, `EmailBody`, brand types/defaults, and
-  content normalization.
+- `.` - `EmailDocument`, `EmailCard`, `EmailBody`, `autofillTrailer()`, brand
+  types/defaults, and content normalization.
 
 Pair this package with [`@dbx-tools/shared-email`](../email) for wire schemas,
 [`@dbx-tools/email`](../../node/email) for delivery, and

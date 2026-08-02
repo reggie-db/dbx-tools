@@ -25,7 +25,8 @@
 import { createApp as createAppNs } from "@dbx-tools/appkit";
 import { brand as nodeBrand } from "@dbx-tools/core";
 import { brand as emailBrand, email, sender, transport } from "@dbx-tools/email";
-import { log, string } from "@dbx-tools/shared-core";
+import { log, object, string } from "@dbx-tools/shared-core";
+import { autofillTrailer } from "@dbx-tools/shared-email-template";
 import { authGate, type AuthGateApi, type AuthGateConfig } from "./plugin.ts";
 
 const logger = log.logger("tunnel:app");
@@ -80,7 +81,8 @@ export async function startGateApp(config: AuthGateConfig): Promise<AuthGateApi>
         // autofill it, and anything more decorative is what breaks that. The code
         // stays visible TEXT in both MIME parts (the email plugin renders the
         // HTML and plain-text alternatives from one React Email tree), never an
-        // image, so a client that scrapes the text part still finds it.
+        // image, so a client that scrapes the text part still finds it. The
+        // `trailer` below adds Apple's domain-bound AutoFill on top.
         body: [
           opts.message,
           "",
@@ -92,6 +94,14 @@ export async function startGateApp(config: AuthGateConfig): Promise<AuthGateApi>
         ].join("\n"),
       },
       from,
+      undefined,
+      // Apple's domain-bound AutoFill, layered ON TOP of the conventional layout
+      // above (which is what iOS/Gmail/Outlook/Android already detect
+      // heuristically). Passed as a delivery OPTION rather than appended to the
+      // body because iOS only honours `@<domain> #<code>` as the message's final
+      // line, and the branded footer renders after the body. Omitted when no
+      // public domain is configured - there is no host to bind the code to.
+      object.optional("trailer", autofillTrailer(opts.publicDomain, code)),
     );
   };
 

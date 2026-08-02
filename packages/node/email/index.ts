@@ -22,4 +22,4 @@ export { normalizeMarkdown } from "./src/markdown.ts";
 export { EmailPlugin, email } from "./src/plugin.ts";
 export { SEND_EMAIL_DESCRIPTION } from "./src/tool.ts";
 export type { EmailToolOptions } from "./src/tool.ts";
-export type { EmailExecutor, EmailRuntime } from "./src/transport.ts";
+export type { EmailExecutor, EmailRuntime, SendEmailOptions } from "./src/transport.ts";

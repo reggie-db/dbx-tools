@@ -25,6 +25,7 @@ import {
   BRAND_NAME_ENV,
   CODE_TTL_ENV,
   MESSAGE_ENV,
+  PUBLIC_DOMAIN_ENV,
   SESSION_TTL_ENV,
   SUBJECT_ENV,
 } from "./env.ts";
@@ -84,6 +85,15 @@ export interface AuthGateConfig extends BasePluginConfig {
    * means no cutoff.
    */
   sessionCutoff?: string | number | Date;
+  /**
+   * The public host the gate is served on. Env TUNNEL_PUBLIC_DOMAIN.
+   *
+   * Only used to bind the emailed code to this site for Apple's domain-bound
+   * AutoFill (see {@link SendCodeOptions.publicDomain}); the gate does not route
+   * on it. Absent, the code email simply omits that trailer and still relies on
+   * the conventional layout every client detects heuristically.
+   */
+  publicDomain?: string;
   /** Deliver a code to an address. Wired by the app to the email plugin. */
   sendCode?: (email: string, code: string, opts: SendCodeOptions) => Promise<void>;
 }
@@ -100,6 +110,16 @@ export interface SendCodeOptions {
    * that drifts from the configured TTL.
    */
   codeTtlSeconds: number;
+  /**
+   * The public host the gate is served on, when one is configured.
+   *
+   * `sendCode` turns this into Apple's `@<domain> #<code>` trailer, which binds
+   * the code to THIS site: iOS then offers it only for a matching domain, so a
+   * code phished from elsewhere is not autofilled here. Undefined simply omits
+   * the trailer - every client still detects the code from the conventional
+   * layout.
+   */
+  publicDomain?: string;
 }
 
 /** Resolved gate config with env fallbacks + defaults applied. */
@@ -113,6 +133,8 @@ export interface ResolvedAuthGateConfig {
   maxAttempts: number;
   /** Force-clear cutoff in epoch ms; `0` when unset. */
   sessionCutoffMs: number;
+  /** Public host for the AutoFill trailer, when configured. */
+  publicDomain?: string;
 }
 
 const DEFAULTS = {
@@ -150,6 +172,7 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     codeTtlSeconds: env.positiveInt(config.codeTtlSeconds, CODE_TTL_ENV, DEFAULTS.codeTtlSeconds),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
     sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
+    ...object.optional("publicDomain", env.string(config.publicDomain, PUBLIC_DOMAIN_ENV)),
   };
 }
 
@@ -234,6 +257,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
           brandName: this.resolved.brandName,
           message: this.resolved.message,
           codeTtlSeconds: this.resolved.codeTtlSeconds,
+          ...object.optional("publicDomain", this.resolved.publicDomain),
         });
       } catch (error) {
         logger.warn("failed to send OTP email", { error });

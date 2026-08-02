@@ -28,7 +28,7 @@ import {
   ValidationError,
   type ExecutionResult,
 } from "@databricks/appkit";
-import { execution, log } from "@dbx-tools/shared-core";
+import { execution, log, object } from "@dbx-tools/shared-core";
 import type { EmailAttachment, EmailMessage, EmailResult } from "@dbx-tools/shared-email";
 import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
 import { resolveEmailConfig, type EmailPluginConfig, type ResolvedEmailConfig } from "./config.ts";
@@ -315,13 +315,14 @@ async function dispatch(
   message: EmailMessage,
   from: string,
   signal?: AbortSignal,
+  options?: SendEmailOptions,
 ): Promise<EmailResult> {
   const { config, transporter } = getEmailRuntime();
   const recipient = recipientEcho(message.to);
   signal?.throwIfAborted();
 
   if (config.mode === "file") {
-    const path = await writeOutboxEmail(message, from, config.outDir, config.brand);
+    const path = await writeOutboxEmail(message, from, config.outDir, config.brand, options);
     return { sent: true, recipient, from, messageId: path };
   }
 
@@ -336,6 +337,7 @@ async function dispatch(
     subject: message.subject,
     body: message.body,
     brand: config.brand,
+    ...object.optional("trailer", options?.trailer),
   });
   const info = await abortable(
     transporter.sendMail({
@@ -359,6 +361,24 @@ async function dispatch(
 }
 
 /**
+ * Delivery-time options that are NOT part of the message a model composes.
+ *
+ * Deliberately separate from {@link EmailMessage}: that schema is the agent
+ * tool's input, so anything added to it becomes a field a model can set. A
+ * trailer is a property of how the message is DELIVERED (it must be the final
+ * line, and its content is derived from the deployment's own domain), so it is
+ * the caller's to supply, never the model's.
+ */
+export interface SendEmailOptions {
+  /**
+   * A machine-read final line, after the branded footer - Apple's domain-bound
+   * one-time-code AutoFill trailer. Build it with
+   * `sharedEmailTemplate.autofillTrailer(domain, code)`.
+   */
+  trailer?: string;
+}
+
+/**
  * Send (SMTP mode) or persist (file/outbox mode) one message from the
  * resolved `from` address. `to` (and optional `cc` / `bcc`) each accept
  * one or more addresses, and `attachments` are forwarded as files. The
@@ -377,6 +397,7 @@ export async function sendEmail(
   message: EmailMessage,
   from: string,
   signal?: AbortSignal,
+  options?: SendEmailOptions,
 ): Promise<EmailResult> {
   if (message.to.length === 0) {
     throw ValidationError.missingField("to");
@@ -386,7 +407,7 @@ export async function sendEmail(
   return executeWrite(
     "send",
     EMAIL_SEND_SETTINGS,
-    (executeSignal) => dispatch(message, from, executeSignal),
+    (executeSignal) => dispatch(message, from, executeSignal, options),
     signal,
   );
 }
