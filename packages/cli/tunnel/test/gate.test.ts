@@ -3,7 +3,13 @@ import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
 import { async as asyncModule, brand } from "@dbx-tools/shared-core";
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
-import { codeEmailHtmlBody, codeEmailTextBody, expiresIn } from "../src/app.ts";
+import {
+  codeEmailHtmlBody,
+  codeEmailPreview,
+  codeEmailSubject,
+  codeEmailTextBody,
+  expiresIn,
+} from "../src/app.ts";
 import {
   ALLOW_ENV,
   BRAND_NAME_ENV,
@@ -359,6 +365,28 @@ describe("code email layout", () => {
   it("states the real configured expiry rather than a fixed phrase", () => {
     assert.match(codeEmailTextBody("1", { ...opts, codeTtlSeconds: 90 }), /90 seconds/);
     assert.match(codeEmailHtmlBody("1", { ...opts, codeTtlSeconds: 60 }), /1 minute\./);
+  });
+
+  // The notification is the whole point: iOS offers an autofill code from an
+  // incoming notification's text, and a notification carries only the sender,
+  // subject, and snippet. A code that appears solely in the BODY is unreachable,
+  // which is why Gmail never prompted however well the text part was shaped.
+  it("puts the code in the subject, ahead of the prompt words", () => {
+    assert.equal(
+      codeEmailSubject("123456", "Your verification code"),
+      "123456 is your verification code",
+    );
+    // Leading, so a truncated notification or inbox row still shows it.
+    assert.match(codeEmailSubject("123456", "Your verification code"), /^123456\b/);
+  });
+
+  it("prefixes rather than rewrites a subject an operator chose deliberately", () => {
+    assert.equal(codeEmailSubject("123456", "Acme Ops access"), "123456 - Acme Ops access");
+  });
+
+  it("repeats the prompt and the code in the preheader", () => {
+    // The other half of a push notification's text.
+    assert.equal(codeEmailPreview("123456", opts), "Your verification code is: 123456");
   });
 
   it("keeps the code a styled heading in the HTML part, and the copy identical", () => {

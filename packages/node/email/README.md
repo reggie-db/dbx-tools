@@ -152,6 +152,24 @@ the same information in both parts - a text alternative that disagrees with the
 HTML reads as phishing to spam filters. See
 [`@dbx-tools/cli-tunnel`](../../cli/tunnel) for a gate that does this.
 
+### Control the preheader (and the push notification)
+
+The same options object takes a `preview`, the preheader: the snippet a client
+shows beside the subject in an inbox list, and the body of the PUSH NOTIFICATION
+a mobile mail app posts. It defaults to the subject.
+
+```ts
+await transport.sendEmail(message, from, undefined, {
+  preview: `Your verification code is: ${code}`,
+});
+```
+
+It matters for anything a phone reads off a notification rather than out of the
+open message. Mobile one-time-code autofill is the case in point: the notification
+carries the sender, the subject, and this snippet, so a code that appears only in
+the body is never offered. Put the important text in the subject and the preheader
+and the body becomes what a human reads, not what a heuristic depends on.
+
 The plugin export is equivalent and resolves the sender for you when the caller
 is a Databricks user:
 
@@ -383,7 +401,7 @@ handed to SMTP. The constants and the plugin's interceptor settings live in the
   `SEND_EMAIL_DESCRIPTION`.
 - `transport` - shared runtime, `getEmailRuntime()`, `resetEmailRuntime()`,
   `verifyEmailTransport()`, `sendEmail()`, its `SendEmailOptions` (an explicit
-  `text/plain` alternative), and the executor slot
+  `text/plain` alternative and the `preview` preheader), and the executor slot
   (`setEmailExecutor()`, `executeWrite()`) that puts every send on AppKit's
   interceptor chain.
 - `config` - SMTP/outbox config types, sender policy, JSON schema, and

@@ -157,6 +157,13 @@ resources:
           # it unset is what dogfoods that path. Set it (from the `auth-jwt-secret`
           # secret) for a multi-instance deployment, where an operator-held secret
           # beats waiting for two instances to converge on a cached key.
+          #
+          # The `postgres` binding below is what makes that cache persistent, and
+          # the gate is a SEPARATE process from the app - it resolves the binding's
+          # LAKEBASE_ENDPOINT into PGHOST/PGDATABASE/PGUSER itself at boot. Check
+          # the startup log for `lakebase resolved for the gate cache`; a line
+          # saying the cache stays in memory means every redeploy signs everyone
+          # out again.
       user_api_scopes:
         - sql
         - dashboards.genie

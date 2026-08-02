@@ -195,6 +195,19 @@ export interface EmailDocumentProps extends EmailBodyProps {
   subject?: string;
   headers?: ReadonlyArray<readonly [string, string]>;
   footer?: string;
+  /**
+   * Preheader text: the snippet a client shows next to the subject in a list, and
+   * - the reason this is a prop - the text a mobile OS puts in the PUSH
+   * NOTIFICATION body.
+   *
+   * Defaults to the subject. Set it when the notification should say something the
+   * subject does not. One-time-code mail is the case that motivated it: iOS reads
+   * an incoming notification's text to offer an autofill code (natively for Mail
+   * and Messages, and since iOS 26 for any app's notification, Gmail included), so
+   * a code that appears only in the BODY is never seen - the notification carries
+   * the subject and this snippet, nothing more.
+   */
+  preview?: string;
 }
 
 function BrandMark({ theme }: { theme: ResolvedEmailBrand }): React.ReactNode {
@@ -342,7 +355,7 @@ export const EmailDocument = (props: EmailDocumentProps) => {
   return (
     <Html lang="en">
       <Head />
-      <Preview>{props.subject ?? "Message"}</Preview>
+      <Preview>{props.preview ?? props.subject ?? "Message"}</Preview>
       <Body style={pageStyle}>
         <EmailCard {...props} />
       </Body>

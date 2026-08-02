@@ -94,6 +94,16 @@ lakebaseResolver.applyLakebaseToEnv(resolved);
 | --------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema; `"env"` resolves the connection only; `false` skips auto-configuration. Omit it to gate the default on a `lakebase` plugin being registered, or set it explicitly to run regardless. |
 
+Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
+still wants AppKit's PERSISTENT cache. AppKit only chooses Lakebase for
+`CacheManager` when it can build a pool, and that reads `LAKEBASE_ENDPOINT`,
+`PGHOST`, and `PGDATABASE` from `process.env` — while a Databricks App `postgres`
+resource binding supplies only the first. Without the resolution step the cache
+degrades silently to in-memory, so anything it holds (a session signing key, a
+one-time code) is lost on every restart. `"env"` is the right mode inside a
+deployed app, since the app service principal cannot grant on the cache schema
+anyway.
+
 `lakebaseResolver.resolveLakebaseConnection()` accepts:
 
 | Option       | Type                                 | Default                                  | Description                                                                                                    |

@@ -40,6 +40,22 @@ import { EmailDocument } from "@dbx-tools/shared-email-template";
 Node runtimes should pass this component to `@react-email/render`.
 `@dbx-tools/email` does that automatically for SMTP and local outbox delivery.
 
+`preview` sets the preheader — the snippet a client shows beside the subject, and
+the body of the push notification a mobile mail app posts. It defaults to the
+subject; set it when the notification should say something the subject does not:
+
+```tsx
+<EmailDocument
+  subject="123456 is your verification code"
+  preview="Your verification code is: 123456"
+  body={body}
+/>
+```
+
+That pairing is what makes mobile one-time-code autofill work at all: a
+notification carries the sender, the subject, and this snippet, so a code found
+only in the body never reaches the autofill heuristics.
+
 ## Reuse The Body Preview
 
 ```tsx

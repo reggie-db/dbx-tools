@@ -389,6 +389,17 @@ export interface SendEmailOptions {
    * with the HTML reads as phishing to spam filters.
    */
   text?: string;
+  /**
+   * Preheader text for the HTML part - the snippet shown beside the subject in an
+   * inbox list, and the body of the PUSH NOTIFICATION a mobile mail app posts.
+   * Defaults to the subject.
+   *
+   * Delivery-time rather than part of {@link EmailMessage} for the same reason as
+   * `text`: it is presentation the sending CODE chooses, not content a model
+   * composes. The one-time-code path sets it so the code itself rides in the
+   * notification, which is the only text iOS autofill gets to read.
+   */
+  preview?: string;
 }
 
 /**

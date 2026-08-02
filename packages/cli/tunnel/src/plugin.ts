@@ -46,6 +46,11 @@ export interface AuthGateConfig extends BasePluginConfig {
    * anything branded: iOS, Gmail, Outlook, and Android all detect a one-time
    * code from this shape and offer to autofill it, and a novel phrasing is what
    * breaks that detection.
+   *
+   * This is the subject TEMPLATE, not the literal line sent: the code is spliced
+   * into it (`"123456 is your verification code"`) because a push notification
+   * shows only the subject and preheader, and that notification is what mobile
+   * autofill reads. See `codeEmailSubject` in `./app.ts`.
    */
   subject?: string;
   /**

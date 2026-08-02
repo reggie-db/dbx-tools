@@ -47,6 +47,14 @@ type AppKitPlugins = NonNullable<AppKitCreateAppConfig["plugins"]>;
  * Omit it to get `"provision"` gated on a `lakebase` plugin being registered;
  * set it explicitly to run regardless of the plugin list, or pass `false` to
  * skip auto-configuration entirely.
+ *
+ * Set it EXPLICITLY on an app that has no `lakebase()` plugin but still wants
+ * AppKit's PERSISTENT cache. AppKit picks Lakebase for `CacheManager` only when
+ * `createLakebasePool()` can build a pool, and that reads `LAKEBASE_ENDPOINT` /
+ * `PGHOST` / `PGDATABASE` straight from `process.env` - so without this step the
+ * cache silently falls back to in-memory, and anything it holds (a session
+ * signing key, a one-time code) is lost on restart. `"env"` is the right mode
+ * there: the app SP cannot grant on the cache schema anyway.
  */
 export type AutoConfigureMode = "env" | "provision";
 

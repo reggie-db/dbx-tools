@@ -30,6 +30,12 @@ address against an allow-list, verified by a code sent over
   Android detect a code from that shape and offer it directly from the
   notification; novel phrasing is what breaks the detection. Both MIME parts carry
   the code as visible text, never an image, and no trailer follows the copy.
+- The code rides in the SUBJECT and the preheader, not only the body:
+  `123456 is your verification code`. Mobile autofill reads an incoming
+  NOTIFICATION, and a notification contains the sender, the subject, and a short
+  snippet - nothing else - so a code that lives only in the body is unreachable
+  however cleanly the body is shaped. See
+  [Why the code is in the subject](#why-the-code-is-in-the-subject).
 - The two MIME parts are built separately, on purpose. The HTML part is the full
   branded template with the code as a large styled heading; the `text/plain` part
   is authored directly, keeping the prompt and the code on ONE line
@@ -43,9 +49,16 @@ address against an allow-list, verified by a code sent over
   machine-generated code reaches nobody. `EMAIL_FROM` is not required - see
   [`@dbx-tools/email`](../../node/email#sender-addresses).
 - Email one-time-code gate: a 6-digit code stored as a SHA-256 hash with an
-  attempt counter, verified in constant time, in AppKit's `CacheManager` (memory
-  by default, Lakebase when the app configures persistent `CacheStorage`) so TTL
-  expiry and eviction are the cache's job.
+  attempt counter, verified in constant time, in AppKit's `CacheManager` (Lakebase
+  when a database is bound to the deployment, else memory) so TTL expiry and
+  eviction are the cache's job.
+- The gate resolves Lakebase for itself, so its cache is actually persistent. The
+  gate is its own tiny AppKit app with no `lakebase()` plugin (it has no server to
+  mount routes on), and AppKit only chooses Lakebase for the cache when a pool can
+  be built from `LAKEBASE_ENDPOINT` **and** `PGHOST` **and** `PGDATABASE` - while a
+  Databricks App `postgres` binding supplies only the first. The gate fills in the
+  rest at boot, and skips entirely when nothing is bound rather than creating
+  infrastructure on someone else's behalf.
 - HS256 session JWT (via `jose`) carrying only the email, signed with a key that
   is PERSISTED in AppKit's cache for 30 days - so a signed-in browser stays signed
   in across the restarts a tunnel sees whenever the app it wraps reloads. An
@@ -151,6 +164,15 @@ Resolution order:
    across restarts - which a tunnel does often, since it restarts whenever the app
    it wraps reloads. On the default in-memory cache the key is per-process, the
    same as having no secret at all.
+
+   Getting that persistence is not automatic, and the gate does the work at boot:
+   it resolves `LAKEBASE_ENDPOINT` into the `PGHOST` / `PGDATABASE` the cache's
+   pool also needs. Without it AppKit cannot build the pool, silently uses an
+   in-memory cache, and every redeploy signs everyone out - so the startup log
+   says which one you got (`lakebase resolved for the gate cache`, or
+   `the gate cache stays in memory`). Bind a `postgres` resource to the app to
+   get the persistent path.
+
 3. **An ephemeral per-process key**, when there is no secret and no reachable
    cache. Sessions do not survive a restart, but the gate still serves: the key
    only validates an ALREADY-issued session, so losing it costs sessions, never
@@ -164,6 +186,35 @@ the one it minted. Set `TUNNEL_AUTH_JWT_SECRET` to remove the race entirely.
 `TUNNEL_AUTH_SESSION_TTL` defaults to the same 30 days the key is stored for, on
 purpose - a key that expired before the cookies it signed would sign everyone out
 for no reason.
+
+## Why The Code Is In The Subject
+
+The subject line the gate SENDS is `123456 is your verification code` -
+`--subject` is the template the code is spliced into, not the literal line.
+
+Mobile autofill does not read the email; it reads the NOTIFICATION. iOS scans
+incoming notification text for a code and offers to fill it - natively for
+Messages and Mail, and since iOS 26 for any app's notification, which is what
+finally made Gmail work. A notification carries the sender, the subject, and a
+short snippet. That is all. A code sitting in the body is invisible to it no
+matter how carefully the body is formatted, which is why a perfectly shaped
+`text/plain` part alone produced no prompt in Gmail.
+
+So the code goes in both strings a notification actually shows:
+
+- **The subject**, code FIRST, because a notification and an inbox row both
+  truncate: `123456 is your verification code` survives the cut wherever it lands,
+  and keeps the code in the same sentence as the words the heuristics look for.
+  A subject that does not use the conventional `Your ...` phrasing is treated as
+  deliberate and only prefixed (`123456 - Acme Ops access`).
+- **The preheader**, the hidden snippet a client shows beside the subject and puts
+  in the notification body, repeating the prompt with the code
+  (`Your verification code is: 123456`).
+
+The body keeps the code as a large styled heading regardless, for a recipient
+reading the mail rather than a notification. This is deliberately NOT Apple's
+domain-bound `@domain #code` trailer, which binds a code to a single origin;
+subject + preheader works across clients and needs no origin.
 
 ### Signing everyone out
 
