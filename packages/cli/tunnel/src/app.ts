@@ -25,7 +25,6 @@
  * @module
  */
 
-import { getUsernameWithApiLookup } from "@databricks/appkit";
 import { createApp as createAppNs, lakebaseResolver } from "@dbx-tools/appkit";
 import { brand as nodeBrand } from "@dbx-tools/core";
 import { brand as emailBrand, email, sender, transport } from "@dbx-tools/email";
@@ -138,7 +137,7 @@ export function codeEmailPreview(code: string, opts: CodeCopy): string {
 }
 
 const { createApp } = createAppNs;
-const { applyLakebaseToEnv, resolveLakebaseConnection } = lakebaseResolver;
+const { applyLakebaseEnv } = lakebaseResolver;
 const { resolveSystemSenderAddress } = sender;
 const { getEmailRuntime, sendEmail } = transport;
 const { emailBrandFromContext } = emailBrand;
@@ -163,22 +162,19 @@ const LAKEBASE_RESOLVE_TIMEOUT_MS = 60_000;
  * chooses PERSISTENT storage instead of memory.
  *
  * This is what makes the gate's session signing key and outstanding one-time
- * codes survive a restart, and it has to be done explicitly here. AppKit picks
- * Lakebase for the cache only when `createLakebasePool()` succeeds, and that pool
- * reads FOUR things off `process.env`: `LAKEBASE_ENDPOINT`, `PGHOST`,
- * `PGDATABASE`, and a username (`PGUSER`, or `DATABRICKS_CLIENT_ID` for a service
- * principal). A Databricks App `postgres` resource binding supplies only
- * `LAKEBASE_ENDPOINT`. The resolver turns that one value into the host and
- * database; the username is looked up separately, because missing it fails pool
- * construction just as hard as a missing host - and it is what a LOCAL run (a
- * developer on a PAT, with no `DATABRICKS_CLIENT_ID`) is always missing. Without
- * all four the pool cannot be built, the cache silently degrades to in-memory, and
- * every redeploy signs out every user (the exact symptom this exists to prevent).
+ * codes survive a restart. `applyLakebaseEnv` is the SHARED helper AppKit
+ * auto-configuration uses, so the gate gets exactly the env a pool needs -
+ * `LAKEBASE_ENDPOINT`, `PGHOST`, `PGDATABASE`, and `PGUSER` - rather than a
+ * hand-rolled subset. All four matter: `createLakebasePool()` throws without any
+ * one of them, and a Databricks App `postgres` resource binding supplies only the
+ * first. Without them the pool cannot be built, the cache silently degrades to
+ * in-memory, and every redeploy signs out every user (the exact symptom this
+ * exists to prevent).
  *
- * `@dbx-tools/appkit`'s `createApp` would normally do this via `autoConfigure`,
- * but it gates that on a `lakebase()` plugin being registered - and this app
- * registers none, because it has no server to mount Lakebase routes on. Calling
- * the resolver directly also lets the gate be stricter than `autoConfigure` is:
+ * It is called here rather than left to `createApp`'s `autoConfigure` because that
+ * gates on a `lakebase()` plugin being registered - and this app registers none,
+ * having no server to mount Lakebase routes on. Calling the helper directly also
+ * lets the gate be stricter than `autoConfigure` is:
  *
  *   - It runs ONLY when a Lakebase env var is present. A tunnel is a wrapper
  *     around someone else's app and must not invent infrastructure, so with
@@ -197,21 +193,15 @@ export async function resolveCacheStorageEnv(): Promise<boolean> {
     return false;
   }
   try {
-    const resolved = await resolveLakebaseConnection(
+    const { resolved, user } = await applyLakebaseEnv(
       { autoCreate: false },
       AbortSignal.timeout(LAKEBASE_RESOLVE_TIMEOUT_MS),
     );
-    applyLakebaseToEnv(resolved);
-    // `??=` so an explicitly configured PGUSER stays authoritative. The lookup
-    // falls back to the workspace API and returns undefined rather than throwing,
-    // so a failure here just leaves the pool to find its own username.
-    const user = await getUsernameWithApiLookup({});
-    if (user) process.env.PGUSER ??= user;
     logger.info("lakebase resolved for the gate cache", {
       host: resolved.host,
       database: resolved.database,
       endpoint: resolved.endpoint,
-      user: process.env.PGUSER,
+      user,
     });
     return true;
   } catch (error) {
@@ -269,7 +259,8 @@ export async function startGateApp(config: AuthGateConfig): Promise<AuthGateApi>
   // `handle.authGate` is the in-process gate API the proxy drives.
   //
   // `autoConfigure: false` because {@link resolveCacheStorageEnv} above already
-  // did the one piece of it this app wants, on this app's terms.
+  // ran the one piece of it this app wants (`applyLakebaseEnv`), on this app's
+  // terms - no auto-create, and a warning instead of a throw.
   const handle = await createApp({
     autoConfigure: false,
     plugins: [

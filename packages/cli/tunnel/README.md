@@ -165,13 +165,13 @@ Resolution order:
    it wraps reloads. On the default in-memory cache the key is per-process, the
    same as having no secret at all.
 
-   Getting that persistence is not automatic, and the gate does the work at boot:
-   it resolves `LAKEBASE_ENDPOINT` into the `PGHOST` / `PGDATABASE` the cache's
-   pool also needs. Without it AppKit cannot build the pool, silently uses an
-   in-memory cache, and every redeploy signs everyone out - so the startup log
-   says which one you got (`lakebase resolved for the gate cache`, or
-   `the gate cache stays in memory`). Bind a `postgres` resource to the app to
-   get the persistent path.
+   Getting that persistence is not automatic, and the gate does the work at boot
+   via `lakebaseResolver.applyLakebaseEnv()`: it turns `LAKEBASE_ENDPOINT` into the
+   `PGHOST` / `PGDATABASE` / `PGUSER` the cache's pool also needs. Without them
+   AppKit cannot build the pool, silently uses an in-memory cache, and every
+   redeploy signs everyone out - so the startup log says which one you got
+   (`lakebase resolved for the gate cache`, or `the gate cache stays in memory`).
+   Bind a `postgres` resource to the app to get the persistent path.
 
 3. **An ephemeral per-process key**, when there is no secret and no reachable
    cache. Sessions do not survive a restart, but the gate still serves: the key

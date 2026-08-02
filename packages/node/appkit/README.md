@@ -86,6 +86,22 @@ const resolved = await lakebaseResolver.resolveLakebaseConnection({
 lakebaseResolver.applyLakebaseToEnv(resolved);
 ```
 
+`applyLakebaseEnv()` does both steps and applies the COMPLETE set a Postgres pool
+needs, `PGUSER` included — it is what auto-configuration itself calls, so a caller
+outside `createApp` gets the same env rather than a hand-rolled subset:
+
+```ts
+const { resolved, user } = await lakebaseResolver.applyLakebaseEnv({ autoCreate: false });
+```
+
+Reach for it when something other than the `lakebase()` plugin needs a working
+pool. AppKit's PERSISTENT cache is the common case: it builds its own pool from
+env, and `createLakebasePool()` throws unless `LAKEBASE_ENDPOINT`, `PGHOST`,
+`PGDATABASE`, and a username are all present — while a Databricks App `postgres`
+resource binding supplies only the first. Miss one and the cache degrades silently
+to in-memory. `@dbx-tools/cli-tunnel`'s OTP gate calls this for exactly that
+reason.
+
 ## Configuration
 
 `createApp.createApp()` accepts everything AppKit's `createApp` does, plus:
@@ -130,7 +146,8 @@ Environment variables read during resolution:
 
 Resolved values are written back to `process.env` by
 `lakebaseResolver.applyLakebaseToEnv()`, which never overwrites a variable that
-is already set.
+is already set. That function covers everything except `PGUSER`, which needs an
+await; `lakebaseResolver.applyLakebaseEnv()` resolves and applies the full set.
 
 ## Resolve Local And Bundle Config
 
@@ -298,17 +315,17 @@ is shared. `@dbx-tools/appkit-mastra` exposes this as its `genieIdentity` option
 
 ## Modules
 
-| Module             | Responsibility                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------ |
-| `createApp`        | `createApp()` wrapper and `autoConfigure()`.                                               |
-| `lakebaseResolver` | Lakebase connection discovery, default picking, optional auto-create, and env application. |
-| `pgaddress`        | Permissive Lakebase/Postgres address parser.                                               |
-| `config`           | Local/env/bundle/app-yaml config lookup.                                                   |
-| `appkit`           | Execution context lookup and initialization.                                               |
-| `databricks`       | App env detection and SDK context cancellation adapters.                                   |
-| `plugin`           | Typed AppKit plugin data, instance, and required-instance lookup.                          |
-| `provision`        | Cache schema provisioning helpers.                                                         |
-| `identity`         | OBO-vs-service-principal request identity: modes, resolution, and the forwarded headers.   |
+| Module             | Responsibility                                                                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createApp`        | `createApp()` wrapper and `autoConfigure()`.                                                                                                    |
+| `lakebaseResolver` | Lakebase connection discovery, default picking, optional auto-create, and env application (`applyLakebaseEnv()` for the full set a pool needs). |
+| `pgaddress`        | Permissive Lakebase/Postgres address parser.                                                                                                    |
+| `config`           | Local/env/bundle/app-yaml config lookup.                                                                                                        |
+| `appkit`           | Execution context lookup and initialization.                                                                                                    |
+| `databricks`       | App env detection and SDK context cancellation adapters.                                                                                        |
+| `plugin`           | Typed AppKit plugin data, instance, and required-instance lookup.                                                                               |
+| `provision`        | Cache schema provisioning helpers.                                                                                                              |
+| `identity`         | OBO-vs-service-principal request identity: modes, resolution, and the forwarded headers.                                                        |
 
 The shell-facing wrapper for auto-config is
 [`@dbx-tools/cli-appkit-env`](../../cli/appkit-env). Higher-level agent composition

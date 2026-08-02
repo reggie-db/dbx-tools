@@ -38,6 +38,7 @@
 import {
   ConfigurationError,
   ExecutionError,
+  getUsernameWithApiLookup,
   getWorkspaceClient,
   ValidationError,
 } from "@databricks/appkit";
@@ -383,6 +384,9 @@ export async function resolveLakebaseConnection(
  * (which reads env directly) picks them up during its own `setup()`.
  * Existing env values are preserved; only missing keys are filled in,
  * which keeps explicit overrides authoritative.
+ *
+ * This does NOT set `PGUSER`, which needs an await - see
+ * {@link applyLakebaseEnv} for the complete set a Postgres pool requires.
  */
 export function applyLakebaseToEnv(resolved: LakebaseConnection): void {
   if (resolved.endpoint) process.env.LAKEBASE_ENDPOINT ??= resolved.endpoint;
@@ -390,6 +394,40 @@ export function applyLakebaseToEnv(resolved: LakebaseConnection): void {
   if (resolved.database) process.env.PGDATABASE ??= resolved.database;
   process.env.PGPORT ??= String(resolved.port);
   process.env.PGSSLMODE ??= resolved.sslMode;
+}
+
+/**
+ * Resolve the connection AND apply every Postgres env var a Lakebase pool needs,
+ * returning the resolved connection plus the username that was applied.
+ *
+ * This is the whole set, which is the point of having one function for it:
+ * `createLakebasePool()` throws unless `LAKEBASE_ENDPOINT`, `PGHOST`,
+ * `PGDATABASE`, **and** a username (`PGUSER`, or `DATABRICKS_CLIENT_ID` for a
+ * service principal) are all present, and a Databricks App `postgres` resource
+ * binding supplies only the first. Anything that wants a working pool - the
+ * `lakebase` plugin, or AppKit's PERSISTENT cache, which quietly degrades to
+ * in-memory when the pool cannot be built - needs all four, so callers should not
+ * pair {@link applyLakebaseToEnv} with their own username lookup.
+ *
+ * `PGUSER` is applied with `??=` like the rest, so an explicitly configured value
+ * stays authoritative. The lookup returns `undefined` rather than throwing when it
+ * cannot determine a user, leaving the pool to resolve its own.
+ *
+ * @example
+ * import { lakebaseResolver } from "@dbx-tools/appkit";
+ *
+ * // Enough for `createLakebasePool()` to build a pool.
+ * const { user } = await lakebaseResolver.applyLakebaseEnv({ autoCreate: false });
+ */
+export async function applyLakebaseEnv(
+  config?: LakebaseResolverInputs,
+  signal?: AbortSignal,
+): Promise<{ resolved: LakebaseConnection; user?: string }> {
+  const resolved = await resolveLakebaseConnection(config, signal);
+  applyLakebaseToEnv(resolved);
+  const user = await getUsernameWithApiLookup({});
+  if (user) process.env.PGUSER ??= user;
+  return { resolved, ...(user ? { user } : {}) };
 }
 
 type WorkspaceClient = ReturnType<typeof getWorkspaceClient>;

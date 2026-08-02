@@ -21,17 +21,13 @@
  * @module
  */
 
-import { createApp as appkitCreateApp, getUsernameWithApiLookup } from "@databricks/appkit";
+import { createApp as appkitCreateApp } from "@databricks/appkit";
 // AppKit's root barrel re-exports `PluginData` but not `PluginMap`; the package
 // publishes this subpath for exactly that type.
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
 import { async, log } from "@dbx-tools/shared-core";
 
-import {
-  applyLakebaseToEnv,
-  resolveLakebaseConnection,
-  type LakebaseConnection,
-} from "./lakebase-resolver.ts";
+import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
 
 type AppKitCreateAppConfig = NonNullable<Parameters<typeof appkitCreateApp>[0]>;
@@ -133,17 +129,14 @@ export async function autoConfigure<T extends AppKitPlugins>(
 /**
  * Resolve Lakebase Postgres connection info, write the resolved values to
  * `process.env`, and return the record. Used by {@link autoConfigure}; call
- * {@link resolveLakebaseConnection} and {@link applyLakebaseToEnv} directly when
- * finer control is needed.
+ * {@link applyLakebaseEnv} directly when finer control is needed (a different
+ * `autoCreate` policy, or a caller that wants the env without booting AppKit).
  */
 async function autoConfigureLakebase(
   provision: boolean,
   signal: AbortSignal,
 ): Promise<LakebaseConnection> {
-  const resolved = await resolveLakebaseConnection(undefined, signal);
-  applyLakebaseToEnv(resolved);
-  const user = await getUsernameWithApiLookup({});
-  if (user) process.env.PGUSER ??= user;
+  const { resolved, user } = await applyLakebaseEnv(undefined, signal);
   logger.info("env updated", { ...redactLakebaseConnection(resolved), user });
   if (provision) {
     await provisionCacheSchema(user, logger);
