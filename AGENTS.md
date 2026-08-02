@@ -348,11 +348,23 @@ second package, put it in shared-core rather than duplicating it.
   comma/whitespace-separated env string), `escapeHtml`, `pluralize`.
 - `object` - `isRecord` (narrowing parsed JSON), `deepEqual` (never compare via
   `JSON.stringify`), `toBoolean`, plus the lazy `Sequence` transforms.
+- `pattern` - `toPatternMatcher` / `toPattern` / `escapeRegExp`: a config
+  allow-list of literals, shell globs, and `/regex/` literals compiled to one
+  predicate. EVERY configurable allow-list in this repo takes those three shapes
+  (email senders, tunnel forwardable headers, ...), so do not hand-roll another
+  `globToRegExp` or `/pattern/flags` parser. For a filesystem or URL PATH, where
+  `/` is a segment boundary and `**` matters, use `@dbx-tools/path`'s
+  `match.toPathMatcher` instead.
 - `async` - `sleep`, `tieAbortSignal`, `poll`. Do not import
   `node:timers/promises` for a delay.
 - `error` (`toError` / `errorMessage` / `errorContext`), `log.logger`,
   `hash.id` (id generation - no `nanoid`), `net.urlBuilder`,
   `http.createFetchError`, `function.memoize`, `predicate`, `token`.
+- `token` also owns the front-door header NAMES - `ACCESS_TOKEN_HEADER`,
+  `USER_ID_HEADER`, `USER_EMAIL_HEADER`. Never spell `"x-forwarded-access-token"`
+  in a package: several places branch on it (`@dbx-tools/appkit`'s `identity`
+  decides whether OBO is possible by its presence, `@dbx-tools/cli-tunnel` must
+  strip inbound copies), and a stale second spelling is a silent auth bug.
 
 Node-only equivalents live in `@dbx-tools/core` (`exec.spawn`/`spawnSync`,
 `project.root`/`name`/`repositoryUrl`/`npmRegistry`) and `@dbx-tools/path`

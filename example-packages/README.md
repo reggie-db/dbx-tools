@@ -139,6 +139,13 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
    calls on load) throws `AuthenticationError` from inside the handler and takes
    the process down.
 
+   For a deployment that genuinely has no OBO token - behind the OTP tunnel, or
+   any proxy that authenticates its own way - set `MASTRA_GENIE_IDENTITY=auto`
+   instead of reaching for `NODE_ENV=development`, which also relaxes secure
+   cookies and other dev-only escape hatches. `auto` falls back per request, so
+   front-door callers keep full per-user scoping. See
+   [`@dbx-tools/appkit`](../packages/node/appkit#choose-the-request-identity).
+
 ## Two dev modes
 
 Which mode you want depends on whether you're building a CONSUMING project or

@@ -315,7 +315,11 @@ await createAppAuto({
       // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
       // genieIdentity: "service-principal" here) to run the agents' Databricks
       // calls as the app service principal instead, so any account user who can
-      // open the app can chat even without workspace membership.
+      // open the app can chat even without workspace membership. The DEPLOYED
+      // demo sets `auto` (see databricks.yml): it is served through the OTP
+      // tunnel, where a caller proves an email but forwards no Databricks
+      // token, so per-request fallback is the only setting that serves the
+      // tunnel and the workspace front door correctly at once.
       // Themes charts from the `render_data` / `prepare_chart` tools with the
       // same brand the client UI (`BrandProvider`) and email layouts use, so a
       // generated chart matches the surrounding AppKit UI instead of falling

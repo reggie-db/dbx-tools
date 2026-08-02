@@ -103,10 +103,10 @@ resources:
       config:
         command:
           - dbxt-tunnel
-          - --subject
-          - Your dbx-tools demo sign-in code
-          - --brand-name
-          - dbx-tools demo
+          # No --subject / --brand-name: the defaults are the conventional
+          # one-time-code wording ("Your verification code") that iOS, Gmail,
+          # Outlook, and Android detect for autofill, and the display name comes
+          # from the repo brand context. A novel subject is what breaks that.
           - --allow
           - databricks.com
           - --
@@ -117,6 +117,13 @@ resources:
             value_from: genie-space
           - name: LAKEBASE_ENDPOINT
             value_from: postgres
+          # The demo is served through the OTP tunnel, where callers authenticate
+          # by email and no OBO token exists to forward - `user` would fail every
+          # turn with AppKit's AuthenticationError. `auto` keeps OBO for
+          # front-door (workspace UI) traffic and falls back to the app service
+          # principal per-request for tunnel callers.
+          - name: MASTRA_GENIE_IDENTITY
+            value: auto
           - name: MLFLOW_EXPERIMENT_ID
             value_from: mlflow-experiment
           - name: MLFLOW_TRACKING_URI
@@ -139,11 +146,11 @@ resources:
             value_from: email-from
           - name: CLIENT_DIST
             value: ./client-dist
-          - name: PUBLIC_DOMAIN
+          - name: TUNNEL_PUBLIC_DOMAIN
             value: demo.apps.dbx.tools
           - name: PORTR_TOKEN
             value_from: portr-token
-          - name: AUTH_JWT_SECRET
+          - name: TUNNEL_AUTH_JWT_SECRET
             value_from: auth-jwt-secret
       user_api_scopes:
         - sql

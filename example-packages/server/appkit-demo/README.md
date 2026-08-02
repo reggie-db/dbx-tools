@@ -63,11 +63,21 @@ Two things worth knowing before changing this flow:
   `.gitignore`, and this repo ignores every `dist` directory — staged there,
   `bundle deploy` warns "There are no files to sync" and ships an app with no
   source.
-- **Start with `bundle run`, not `databricks apps deploy`.** The deployed
-  `command` (the `dbxt-tunnel` wrapper around `bun src/server.ts`) lives in
-  `databricks.yml` under the app resource's `config`, which only the bundle
-  applies. A bare `apps deploy` falls back to `app.yaml`'s `npm run start`,
-  which the staged tree has no script for, and the app crashes on boot.
+- **Start with `bundle run`, not `databricks apps deploy` or `apps start`.** The
+  deployed `command` (the `dbxt-tunnel` wrapper around `bun src/server.ts`) lives
+  in `databricks.yml` under the app resource's `config`, which only the bundle
+  applies. A bare `apps deploy` falls back to `app.yaml`'s `npm run start`, which
+  the staged tree has no script for, and the app crashes on boot. `databricks
+apps stop` + `apps start` is the same trap: `start` re-deploys the last source
+  snapshot with the app.yaml command, so it takes a RUNNING app to
+  `FAILED`/`Missing script: "start"`. Recover with `bundle deploy` +
+  `bundle run demo_app`.
+- **To bounce the app, use `bundle run demo_app`.** It restarts a running app in
+  place with the bundle's command, which is what brings the public portr tunnel
+  back when its edge has dropped (`demo.apps.dbx.tools` serving portr's
+  "Connection Lost" while the platform URL still answers) — the tunnel child is
+  supervised but not re-dialed, so a lost portr session outlives the app process
+  that started it.
 
 If the app already exists in the workspace but not in this bundle's state,
 `deploy` fails with `ALREADY_EXISTS`; adopt it once with
