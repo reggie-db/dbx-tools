@@ -397,13 +397,22 @@ does not exclude `packages/`. Some committed files predate the current
 `printWidth: 100` and were never reformatted, so a repo-wide run rewraps them and
 churns dozens of lines that have nothing to do with your change.
 
-Prefer `bun exec prettier --write <the files you edited>`. Run the repo-wide
-`format` task only when reformatting the repo IS the change. Either way, check
+**Formatting is a FINAL step, not an iteration step.** Do not run prettier after
+every edit. Save it for the moment work is being wrapped up: right before a
+commit that is about to be pushed, before a version bump/release, or when the
+user asks to finalize. While iterating (editing, compiling, running tests), leave
+formatting alone — a reformat mid-task inflates the diff, invalidates the review
+you already did, and hides the behavior change you are actually making.
+
+When that final step arrives, prefer
+`bun exec prettier --write <the files you edited>`. Run the repo-wide `format`
+task only when reformatting the repo IS the change. Either way, check
 `git status` / `git diff --stat` before finishing and revert files you did not
 mean to touch, so a behavior change is not buried in reflowed whitespace.
 
 Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
-over `packages`). It autofixes, so it can reformat too.
+over `packages`). It autofixes, so it can reformat too — same timing rule applies:
+run it when finishing up, not between edits.
 
 ## Vocabulary (important)
 
@@ -752,7 +761,7 @@ bun run clean                # remove generated files (read-only ones); interact
 bun run --filter '*' compile # type-check every package (projen's per-package compile: tsc --build)
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
 bun run eslint               # lint (autofix) every package under `packages`
-bun run format               # prettier over the WHOLE repo - see "Formatting and diff hygiene" first
+bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
 ```
 
 A cross-package change is verified by all three of `bunx projen`,
