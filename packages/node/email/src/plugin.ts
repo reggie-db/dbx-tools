@@ -60,7 +60,6 @@ import {
   getEmailRuntime,
   resetEmailRuntime,
   sendEmail,
-  type SendEmailOptions,
   setEmailExecutor,
   verifyEmailTransport,
 } from "./transport.ts";
@@ -243,18 +242,12 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
        * Send a message immediately from `from` through the shared
        * transport, bypassing the approval flow. For agent-driven sends
        * use {@link emailTool} instead.
-       *
-       * `options` carries delivery-time concerns that are deliberately NOT part of
-       * the message schema an agent fills in - see {@link SendEmailOptions}. The
-       * agent tool path never supplies them, which is the point: a trailer is
-       * derived from the deployment's own domain, not from model output.
        */
       sendEmail: (
         message: EmailMessage,
         from: string,
         signal?: AbortSignal,
-        options?: SendEmailOptions,
-      ): Promise<EmailResult> => this.send(message, from, signal, options),
+      ): Promise<EmailResult> => this.send(message, from, signal),
       /**
        * Sender options for the current user (the `GET /senders` payload).
        * AppKit wraps this with `asUser(req)` for OBO scoping.
@@ -282,18 +275,13 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
    * `from` is not pinned. The interceptor chain is applied inside
    * {@link sendEmail} through the executor installed at setup, so this must
    * not wrap it again.
-   *
-   * `options` is forwarded untouched so every caller of this plugin reaches the
-   * same shared template features the module-level {@link sendEmail} does; the
-   * agent tool path simply omits it.
    */
   private async send(
     message: EmailMessage,
     from: string | undefined,
     signal?: AbortSignal,
-    options?: SendEmailOptions,
   ): Promise<EmailResult> {
-    return sendEmail(message, from ?? this.resolveSender(), signal, options);
+    return sendEmail(message, from ?? this.resolveSender(), signal);
   }
 
   /** Run the sender-options lookup through the plugin's interceptor chain. */

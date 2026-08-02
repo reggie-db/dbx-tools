@@ -609,10 +609,6 @@ project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p)
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/email@workspace:*",
     "@dbx-tools/shared-email@workspace:*",
-    // `autofillTrailer()`: the emailed code carries Apple's domain-bound AutoFill
-    // trailer, whose format the email template owns (it must render as the
-    // message's final line, after the branded footer).
-    "@dbx-tools/shared-email-template@workspace:*",
     "@databricks/appkit@catalog:",
     // The reverse proxy: a maintained node-http-proxy fork with WebSocket +
     // upgrade support and TS types (verified to run under bun).

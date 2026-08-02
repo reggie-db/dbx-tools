@@ -228,30 +228,6 @@ describe("session force-clear cutoff", () => {
   });
 });
 
-describe("public domain for AutoFill", () => {
-  it("resolves the public domain so the code email can bind to this host", () => {
-    assert.equal(
-      resolveAuthGateConfig({ publicDomain: "demo.apps.dbx.tools" }).publicDomain,
-      "demo.apps.dbx.tools",
-    );
-  });
-
-  it("reads it from the tunnel's own env var, including the deprecated spelling", () => {
-    const original = process.env.TUNNEL_PUBLIC_DOMAIN;
-    process.env.TUNNEL_PUBLIC_DOMAIN = "gate.example.com";
-    try {
-      assert.equal(resolveAuthGateConfig({}).publicDomain, "gate.example.com");
-    } finally {
-      if (original === undefined) delete process.env.TUNNEL_PUBLIC_DOMAIN;
-      else process.env.TUNNEL_PUBLIC_DOMAIN = original;
-    }
-  });
-
-  it("stays absent when no domain is configured, so no unmatched trailer is sent", () => {
-    assert.equal(resolveAuthGateConfig({}).publicDomain, undefined);
-  });
-});
-
 describe("gate config", () => {
   // The name a recipient reads in the code email must come from the shared brand
   // context, not a hardcoded product string, so a themed app's sign-in mail

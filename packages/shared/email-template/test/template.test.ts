@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { brand } from "@dbx-tools/shared-core";
 import {
-  autofillTrailer,
   defaultEmailBrand,
   emailBrandFromContext,
   normalizeEmailMarkdown,
@@ -39,31 +38,5 @@ describe("email template brand", () => {
 describe("email content normalization", () => {
   it("removes shared indentation without rewriting content", () => {
     assert.equal(normalizeEmailMarkdown("\n    # Hello\n\n    World\n"), "# Hello\n\nWorld");
-  });
-});
-
-describe("autofill trailer", () => {
-  it("builds Apple's domain-bound one-time-code line", () => {
-    assert.equal(autofillTrailer("demo.apps.dbx.tools", "123456"), "@demo.apps.dbx.tools #123456");
-  });
-
-  it("reduces a configured URL to the bare host iOS matches on", () => {
-    for (const domain of [
-      "https://www.example.com/app",
-      "HTTP://Example.com",
-      "example.com.",
-      "example.com:8443",
-      "  example.com  ",
-    ]) {
-      assert.equal(autofillTrailer(domain, "123456"), "@example.com #123456");
-    }
-  });
-
-  it("omits the trailer when there is nothing iOS could match", () => {
-    assert.equal(autofillTrailer(undefined, "123456"), undefined);
-    assert.equal(autofillTrailer("example.com", undefined), undefined);
-    assert.equal(autofillTrailer("", "123456"), undefined);
-    assert.equal(autofillTrailer("localhost", "123456"), undefined);
-    assert.equal(autofillTrailer("localhost:8000", "123456"), undefined);
   });
 });

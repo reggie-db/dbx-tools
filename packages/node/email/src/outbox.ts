@@ -55,7 +55,6 @@ export async function writeOutboxEmail(
   from: string,
   dir: string,
   brand?: EmailBrand,
-  options?: { trailer?: string },
 ): Promise<string> {
   const folder = resolve(dir, from);
   await mkdir(folder, { recursive: true });
@@ -66,9 +65,6 @@ export async function writeOutboxEmail(
     body: message.body,
     footer: "Local outbox preview - written to disk, not sent (no SMTP credentials configured).",
     ...(brand ? { brand } : {}),
-    // Preserved so the preview shows the trailer in the same place a real send
-    // puts it - the whole point being that it is the LAST line.
-    ...(options?.trailer ? { trailer: options.trailer } : {}),
   });
   await writeFile(path, html, "utf8");
   return path;

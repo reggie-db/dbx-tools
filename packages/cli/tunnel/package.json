@@ -34,7 +34,6 @@
     "@dbx-tools/email": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-email": "workspace:*",
-    "@dbx-tools/shared-email-template": "workspace:*",
     "commander": "catalog:",
     "http-proxy-3": "^1.23.3",
     "jose": "^6.2.3"
