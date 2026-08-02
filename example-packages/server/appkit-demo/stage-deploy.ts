@@ -5,7 +5,11 @@
  * The demo server is a workspace member: its `@dbx-tools/*` deps are `workspace:*`
  * and its third-party deps are `catalog:`. Neither resolves when the Databricks
  * Apps platform runs a standalone `pnpm install` on the uploaded source. This
- * script produces `<repo>/dist/deploy-app/` where:
+ * script produces `<tmp>/dbx-tools-deploy-app/` - OUTSIDE the repo, because the
+ * bundle CLI filters its upload through the enclosing worktree's `.gitignore`,
+ * and this repo ignores every `dist` directory: staged under `<repo>/dist/`,
+ * `bundle deploy` warned "There are no files to sync" and shipped an app with no
+ * source. The staged tree holds:
  *
  *   - `@dbx-tools/*` -> the just-published npm version (arg 1, e.g. 0.6.41);
  *   - `catalog:`     -> the concrete version from the root `pnpm-workspace.yaml`;
@@ -20,6 +24,7 @@
  * Run: `bun stage-deploy.ts <version>` from the server package dir.
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse, stringify } from "yaml";
@@ -33,7 +38,7 @@ if (!version) {
 const serverDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(serverDir, "../../..");
 const clientDist = resolve(serverDir, "../../app/appkit-demo/dist");
-const outDir = join(repoRoot, "dist", "deploy-app");
+const outDir = join(tmpdir(), "dbx-tools-deploy-app");
 
 // The root catalog: `catalog:` specifiers resolve to these concrete versions.
 const rootWorkspace = parse(readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8")) as {

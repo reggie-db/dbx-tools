@@ -26,15 +26,49 @@ backend.
 
 - `src/server.ts` — the plugin list + agent definition (the only code here).
 - `app.yaml` — Databricks App runtime env wiring (`genie-space`, `postgres`).
-- `databricks.yml` — Asset Bundle: the Lakebase autoscaling Postgres project.
+- `databricks.yml` — Asset Bundle: the Lakebase autoscaling Postgres project,
+  the app resource, and the deployed `command`/`env` overrides.
+- `stage-deploy.ts` — stages a self-contained deploy tree (see Deploy).
 - `appkit.plugins.json` — AppKit plugin manifest (`appkit plugin sync`).
 
 ## Run
 
 ```bash
-pnpm dev     # tsx watch over src/server.ts
+bun run dev
 ```
 
 Serves the sibling [`@dbx-tools/demo-appkit-app`](../../app/appkit-demo) build
 (`../../app/appkit-demo/dist`) on the same port as the API. See the
 [demo README](../../README.md) for full setup and env.
+
+## Deploy
+
+This package's `@dbx-tools/*` deps are `workspace:*` and its third-party deps are
+`catalog:`, neither of which resolves when the Databricks Apps platform installs
+the uploaded source. So the deploy is staged against a PUBLISHED version:
+
+```bash
+bun run --filter '@dbx-tools/demo-appkit-app' compile   # client build the server serves
+bun stage-deploy.ts <version>                           # e.g. 0.6.48, already on npm
+cd "$(dirname "$(mktemp -u)")/dbx-tools-deploy-app"     # printed by stage-deploy
+databricks bundle validate
+databricks bundle deploy
+databricks bundle run demo_app
+```
+
+Two things worth knowing before changing this flow:
+
+- **Stage outside the repo.** `stage-deploy.ts` writes to the OS temp dir on
+  purpose. The bundle CLI filters its upload through the enclosing worktree's
+  `.gitignore`, and this repo ignores every `dist` directory — staged there,
+  `bundle deploy` warns "There are no files to sync" and ships an app with no
+  source.
+- **Start with `bundle run`, not `databricks apps deploy`.** The deployed
+  `command` (the `dbxt-tunnel` wrapper around `bun src/server.ts`) lives in
+  `databricks.yml` under the app resource's `config`, which only the bundle
+  applies. A bare `apps deploy` falls back to `app.yaml`'s `npm run start`,
+  which the staged tree has no script for, and the app crashes on boot.
+
+If the app already exists in the workspace but not in this bundle's state,
+`deploy` fails with `ALREADY_EXISTS`; adopt it once with
+`databricks bundle deployment bind demo_app dbx-tools-demo`.
