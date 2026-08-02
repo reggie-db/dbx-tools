@@ -47,3 +47,31 @@ describe("renderEmailHtml branding", () => {
     assert.match(text, /All clear\./);
   });
 });
+
+/**
+ * A one-time-code email is parsed by MACHINES, not just read, so the text
+ * alternative's line layout is functional. These pin the contract that makes
+ * autofill work: the code on the line IMMEDIATELY after the prompt in the text
+ * part, while the HTML part keeps the branded template.
+ */
+describe("explicit plain-text alternative", () => {
+  const code = "123456";
+  const prompt = "Your verification code is:";
+  const options = {
+    subject: "Your verification code",
+    body: [prompt, "", `## ${code}`, "", "This code expires in 10 minutes."].join("\n"),
+  };
+
+  it("puts the code two blank lines below the prompt when GENERATED from the tree", async () => {
+    // Not a bug in the template - a styled heading's margin becomes newlines.
+    // Documented here because it is exactly why a caller supplies `text`.
+    const text = await renderEmailText(options);
+    assert.match(text, new RegExp(`${prompt}\\n\\n\\n${code}`));
+  });
+
+  it("keeps the code as visible styled text in the HTML part", async () => {
+    const html = await renderEmailHtml(options);
+    assert.match(html, new RegExp(`<h2[^>]*>\\s*${code}`), "prominent in an inbox");
+    assert.ok(html.includes(defaultEmailBrand.name!), "still fully branded");
+  });
+});

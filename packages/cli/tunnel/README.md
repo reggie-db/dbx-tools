@@ -29,7 +29,19 @@ address against an allow-list, verified by a code sent over
   code input carries `autocomplete="one-time-code"`. iOS, Gmail, Outlook, and
   Android detect a code from that shape and offer it directly from the
   notification; novel phrasing is what breaks the detection. Both MIME parts carry
-  the code as visible text, never an image.
+  the code as visible text, never an image, and no trailer follows the copy.
+- The two MIME parts are built separately, on purpose. The HTML part is the full
+  branded template with the code as a large styled heading; the `text/plain` part
+  is authored directly, keeping the prompt and the code on ONE line
+  (`Your verification code is: 123456`) because that is the shape client code
+  detection reads most reliably. A generated text part cannot hold it - the text
+  part is a rendering of the HTML, so the heading's CSS margin arrives as blank
+  lines and autofill stops being offered while the HTML still looks perfect. See
+  `codeEmailTextBody` in the `app` module.
+- The sign-in code is SYSTEM mail: it sends from `no-reply@EMAIL_DOMAIN` (or
+  `EMAIL_SYSTEM_FROM`), never a person's address, since a reply to a
+  machine-generated code reaches nobody. `EMAIL_FROM` is not required - see
+  [`@dbx-tools/email`](../../node/email#sender-addresses).
 - Email one-time-code gate: a 6-digit code stored as a SHA-256 hash with an
   attempt counter, verified in constant time, in AppKit's `CacheManager` (memory
   by default, Lakebase when the app configures persistent `CacheStorage`) so TTL

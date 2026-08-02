@@ -11,7 +11,7 @@ import {
   MAX_ATTACHMENTS_TOTAL_BYTES,
   MAX_BODY_CHARS,
 } from "../src/defaults.ts";
-import { resetEmailRuntime, sendEmail } from "../src/transport.ts";
+import { getEmailRuntime, resetEmailRuntime, sendEmail } from "../src/transport.ts";
 
 // The runtime is a process-wide singleton built from the environment on first
 // use, so the outbox mode has to be in place before any test sends.
@@ -101,5 +101,68 @@ describe("outbox send", () => {
     ];
     const result = await sendEmail(message({ attachments }), FROM);
     assert.equal(result.sent, true);
+  });
+});
+
+/**
+ * The `text` option is what lets a one-time-code email keep the branded HTML
+ * template AND the machine-parseable plain-text layout. Asserted against the
+ * payload handed to nodemailer, since "which string lands in `text`" is the whole
+ * contract - the generated fallback is a rendering of the HTML and cannot hold
+ * that layout.
+ */
+describe("caller-supplied plain-text alternative", () => {
+  /** Send through a stubbed SMTP transporter and return the captured payload. */
+  async function captureSend(options?: { text?: string }): Promise<{ text: string; html: string }> {
+    const saved = { ...process.env };
+    delete process.env.EMAIL_OUTBOX_MODE;
+    process.env.SMTP_HOST = "smtp.example.com";
+    process.env.SMTP_USER = "user";
+    process.env.SMTP_PASSWORD = "secret";
+    process.env.EMAIL_FROM = FROM;
+    resetEmailRuntime();
+    try {
+      const runtime = getEmailRuntime();
+      assert.equal(runtime.config.mode, "smtp");
+      let captured: { text: string; html: string } | undefined;
+      // The transporter is the seam: everything above it is the code under test.
+      (runtime.transporter as unknown as Record<string, unknown>).sendMail = async (payload: {
+        text: string;
+        html: string;
+      }) => {
+        captured = payload;
+        return { messageId: "stub" };
+      };
+      await sendEmail(
+        message({ body: "Your verification code is:\n\n## 123456\n\nExpires in 10 minutes." }),
+        FROM,
+        undefined,
+        options,
+      );
+      assert.ok(captured, "sendMail was not reached");
+      return captured;
+    } finally {
+      Object.assign(process.env, saved);
+      resetEmailRuntime();
+    }
+  }
+
+  it("sends the supplied text verbatim while keeping the branded HTML", async () => {
+    const supplied = "Your verification code is: 123456\nExpires in 10 minutes.";
+    const { text, html } = await captureSend({ text: supplied });
+    assert.equal(text, supplied, "the caller owns the text part exactly");
+    // The prompt and the code on ONE line is the functional part: that is what
+    // client code detection keys on.
+    assert.match(text, /^Your verification code is: 123456$/m);
+    // ...and the recipient still gets the full template, code styled as a heading.
+    assert.match(html, /<h2[^>]*>\s*123456/);
+  });
+
+  it("falls back to the generated text part when none is supplied", async () => {
+    const { text } = await captureSend();
+    assert.match(text, /123456/);
+    // The generated part is a rendering of the HTML, so the heading's margin
+    // shows up as blank lines - which is precisely why the option exists.
+    assert.match(text, /code is:\n\n\n123456/);
   });
 });

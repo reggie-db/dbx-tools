@@ -8,6 +8,8 @@ import {
   listSenderOptions,
   parseAllowedSenders,
   resolveSenderAddress,
+  resolveSystemSenderAddress,
+  systemSenderAddress,
 } from "../src/sender.ts";
 
 /** A resolved outbox config with only the sender fields under test set. */
@@ -110,6 +112,50 @@ describe("sender derivation", () => {
 
   it("refuses when no source and no user yield an address", () => {
     assert.throws(() => resolveSenderAddress(outboxConfig(), undefined), /Email sender address/);
+  });
+});
+
+/**
+ * Mail nobody asked for - a sign-in code, a reset - must not arrive from a
+ * person's address, since a reply to it reaches nobody.
+ */
+describe("system sender", () => {
+  it("defaults to no-reply on the sending domain", () => {
+    assert.equal(systemSenderAddress({ domain: "mail.example.com" }), "no-reply@mail.example.com");
+  });
+
+  it("prefers no-reply over a fixed From, which is a human's address", () => {
+    assert.equal(
+      systemSenderAddress({ domain: "mail.example.com", from: "alice@mail.example.com" }),
+      "no-reply@mail.example.com",
+    );
+  });
+
+  it("uses an explicit systemFrom over everything", () => {
+    assert.equal(
+      systemSenderAddress({
+        systemFrom: "support@example.com",
+        domain: "mail.example.com",
+        from: "alice@mail.example.com",
+      }),
+      "support@example.com",
+    );
+  });
+
+  it("falls back to the fixed From when no domain is configured", () => {
+    assert.equal(systemSenderAddress({ from: "alerts@example.com" }), "alerts@example.com");
+  });
+
+  it("yields nothing when no sender source is configured at all", () => {
+    assert.equal(systemSenderAddress({}), undefined);
+    assert.throws(() => resolveSystemSenderAddress(outboxConfig()), /Email sender address/);
+  });
+
+  it("is what a send with no user in scope goes out from", () => {
+    const config = outboxConfig({ domain: "mail.example.com", from: "alice@mail.example.com" });
+    assert.equal(resolveSenderAddress(config, undefined), "no-reply@mail.example.com");
+    // ...while a user in scope still gets the fixed From.
+    assert.equal(resolveSenderAddress(config, "bob@databricks.com"), "alice@mail.example.com");
   });
 });
 

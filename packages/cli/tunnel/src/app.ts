@@ -11,8 +11,10 @@
  *
  * It returns the {@link AuthGateApi} the proxy drives. `sendCode` is wired here
  * (the plugin can't resolve HOW to send on its own) to the email plugin's
- * transport, resolving the `From` from the email runtime config (EMAIL_FROM /
- * EMAIL_DOMAIN) since an OTP request has no on-behalf-of user.
+ * transport. A sign-in code is SYSTEM mail - no on-behalf-of user asked for it
+ * and no reply to it reaches anyone - so it sends from the email config's
+ * do-not-reply address (`no-reply@EMAIL_DOMAIN` unless EMAIL_SYSTEM_FROM names
+ * another).
  *
  * FAIL FAST: a gate that can't email a code is useless, so if email does not
  * resolve to SMTP mode (real delivery), this throws - unless `insecure` is set
@@ -26,7 +28,7 @@ import { createApp as createAppNs } from "@dbx-tools/appkit";
 import { brand as nodeBrand } from "@dbx-tools/core";
 import { brand as emailBrand, email, sender, transport } from "@dbx-tools/email";
 import { log, string } from "@dbx-tools/shared-core";
-import { authGate, type AuthGateApi, type AuthGateConfig } from "./plugin.ts";
+import { authGate, type AuthGateApi, type AuthGateConfig, type SendCodeOptions } from "./plugin.ts";
 
 const logger = log.logger("tunnel:app");
 
@@ -43,8 +45,58 @@ export function expiresIn(seconds: number): string {
     : string.pluralize(seconds, "second");
 }
 
+/** The parts of {@link SendCodeOptions} the code email's copy is built from. */
+type CodeCopy = Pick<SendCodeOptions, "message" | "codeTtlSeconds">;
+
+/** The reassurance line closing both parts. */
+const IGNORE_LINE = "If you did not request this code, you can ignore this email.";
+
+/**
+ * The HTML part's source: the full branded template, with the code as a large
+ * styled heading (`## ` is what makes it prominent in an inbox).
+ */
+export function codeEmailHtmlBody(code: string, opts: CodeCopy): string {
+  return [
+    opts.message,
+    "",
+    `## ${code}`,
+    "",
+    `This code expires in ${expiresIn(opts.codeTtlSeconds)}.`,
+    "",
+    IGNORE_LINE,
+  ].join("\n");
+}
+
+/**
+ * The `text/plain` part, supplied EXPLICITLY rather than rendered from the tree
+ * above. Both parts say the same thing; only the line layout differs.
+ *
+ * The prompt and the code share ONE line ("Your verification code is: 123456").
+ * That single-line shape is what iOS, Gmail, Outlook, and Android code detection
+ * keys on most reliably - the heuristics look for a code in the same sentence as
+ * a recognized prompt, so splitting them across lines makes detection dependent
+ * on the client, and any blank line between them defeats it outright.
+ *
+ * The GENERATED text part cannot hold that shape at all: it is a rendering of the
+ * HTML, so it carries the brand header/footer and turns the code heading's CSS
+ * margin into blank lines, arriving as `prompt\n\n\ncode`.
+ *
+ * The code is visible text in BOTH parts, never an image, so a client scraping
+ * either one finds it. No trailer line follows the copy - Apple's domain-bound
+ * `@domain #code` footer is deliberately NOT emitted, since it constrains the
+ * code to one origin and is not what the broadly-compatible shape needs.
+ */
+export function codeEmailTextBody(code: string, opts: CodeCopy): string {
+  return [
+    `${opts.message} ${code}`,
+    `This code expires in ${expiresIn(opts.codeTtlSeconds)}.`,
+    "",
+    IGNORE_LINE,
+  ].join("\n");
+}
+
 const { createApp } = createAppNs;
-const { resolveSenderAddress } = sender;
+const { resolveSystemSenderAddress } = sender;
 const { getEmailRuntime, sendEmail } = transport;
 const { emailBrandFromContext } = emailBrand;
 const { loadBrandContext } = nodeBrand;
@@ -66,32 +118,20 @@ export async function startGateApp(config: AuthGateConfig): Promise<AuthGateApi>
   // `sendCode` delivers the OTP through the email plugin's SHARED transport, which
   // the `email()` plugin primes during its `setup()` (awaited by `createApp`
   // below). Using the module-level `sendEmail` avoids a circular dependency on the
-  // app handle's inferred type. `From` is the app's configured sender (EMAIL_FROM /
-  // EMAIL_DOMAIN); the code email has no OBO user, so it resolves with `undefined`.
+  // app handle's inferred type. The `From` is the SYSTEM sender: a verification
+  // code is machine-generated and unanswerable, so it must not arrive from a
+  // person's address inviting a reply.
   const sendCode: NonNullable<AuthGateConfig["sendCode"]> = async (to, code, opts) => {
-    const from = resolveSenderAddress(getEmailRuntime().config, undefined);
+    const from = resolveSystemSenderAddress(getEmailRuntime().config);
     await sendEmail(
       {
         to: [to],
         subject: opts.subject,
-        // Deliberately the conventional one-time-code layout: the prompt line,
-        // then the bare code ALONE on the next line, then the expiry. iOS, Gmail,
-        // Outlook, and Android all detect a code from this shape and offer to
-        // autofill it, and anything more decorative is what breaks that. The code
-        // stays visible TEXT in both MIME parts (the email plugin renders the
-        // HTML and plain-text alternatives from one React Email tree), never an
-        // image, so a client that scrapes the text part still finds it.
-        body: [
-          opts.message,
-          "",
-          `## ${code}`,
-          "",
-          `This code expires in ${expiresIn(opts.codeTtlSeconds)}.`,
-          "",
-          "If you did not request this code, you can ignore this email.",
-        ].join("\n"),
+        body: codeEmailHtmlBody(code, opts),
       },
       from,
+      undefined,
+      { text: codeEmailTextBody(code, opts) },
     );
   };
 

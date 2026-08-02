@@ -142,8 +142,9 @@ resources:
             value_from: smtp-password
           - name: EMAIL_DOMAIN
             value_from: email-domain
-          - name: EMAIL_FROM
-            value_from: email-from
+          # EMAIL_FROM is deliberately NOT set - see app.yaml. The sender is
+          # derived per on-behalf-of user, and system mail (the tunnel's sign-in
+          # code) goes out as no-reply@EMAIL_DOMAIN.
           - name: CLIENT_DIST
             value: ./client-dist
           - name: TUNNEL_PUBLIC_DOMAIN

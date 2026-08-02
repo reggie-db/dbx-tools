@@ -60,6 +60,7 @@ import {
   getEmailRuntime,
   resetEmailRuntime,
   sendEmail,
+  type SendEmailOptions,
   setEmailExecutor,
   verifyEmailTransport,
 } from "./transport.ts";
@@ -247,7 +248,8 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
         message: EmailMessage,
         from: string,
         signal?: AbortSignal,
-      ): Promise<EmailResult> => this.send(message, from, signal),
+        options?: SendEmailOptions,
+      ): Promise<EmailResult> => this.send(message, from, signal, options),
       /**
        * Sender options for the current user (the `GET /senders` payload).
        * AppKit wraps this with `asUser(req)` for OBO scoping.
@@ -280,8 +282,9 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
     message: EmailMessage,
     from: string | undefined,
     signal?: AbortSignal,
+    options?: SendEmailOptions,
   ): Promise<EmailResult> {
-    return sendEmail(message, from ?? this.resolveSender(), signal);
+    return sendEmail(message, from ?? this.resolveSender(), signal, options);
   }
 
   /** Run the sender-options lookup through the plugin's interceptor chain. */

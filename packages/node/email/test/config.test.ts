@@ -19,6 +19,7 @@ const ENV_KEYS = [
   "SMTP_PASSWORD",
   "EMAIL_DOMAIN",
   "EMAIL_FROM",
+  "EMAIL_SYSTEM_FROM",
   "EMAIL_ALLOWED_SENDERS",
   "EMAIL_SENDER_POLICY",
   "EMAIL_OUTBOX_MODE",
@@ -161,5 +162,38 @@ describe("resolveEmailConfig sender policy", () => {
     process.env.EMAIL_OUTBOX_MODE = "1";
     process.env.EMAIL_ALLOWED_SENDERS = "a@x.com b@x.com";
     assert.deepEqual(resolveEmailConfig().allowedSenders, ["a@x.com", "b@x.com"]);
+  });
+
+  it("permits a system sender the domain pattern does not already cover", () => {
+    // Otherwise the policy describing the app's own senders denies its own
+    // sign-in mail.
+    const config = resolveEmailConfig({
+      smtp: SMTP_CREDENTIALS,
+      domain: "mail.example.com",
+      systemFrom: "no-reply@other.example.com",
+    });
+    assert.deepEqual(config.allowedSenders, ["*@mail.example.com", "no-reply@other.example.com"]);
+  });
+});
+
+describe("resolveEmailConfig sender sources", () => {
+  it("needs only a domain - a fixed From is an override, not a requirement", () => {
+    const config = resolveEmailConfig({ smtp: SMTP_CREDENTIALS, domain: "mail.example.com" });
+    assert.equal(config.from, undefined);
+    assert.equal(config.systemFrom, undefined);
+  });
+
+  it("accepts a system sender as the ONLY configured source", () => {
+    const config = resolveEmailConfig({
+      smtp: SMTP_CREDENTIALS,
+      systemFrom: "no-reply@example.com",
+    });
+    assert.equal(config.systemFrom, "no-reply@example.com");
+  });
+
+  it("reads the system sender from EMAIL_SYSTEM_FROM", () => {
+    process.env.EMAIL_SYSTEM_FROM = "donotreply@example.com";
+    process.env.EMAIL_OUTBOX_MODE = "1";
+    assert.equal(resolveEmailConfig().systemFrom, "donotreply@example.com");
   });
 });

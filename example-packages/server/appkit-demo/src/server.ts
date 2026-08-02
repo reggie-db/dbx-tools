@@ -157,7 +157,8 @@ const supportDefinition: MastraAgentDefinition = {
       // model can call this freely; execution pauses until the user
       // clicks Approve in the chat UI, then the message is sent for
       // real over SMTP. The sender is derived from the on-behalf-of
-      // user's email on the configured `EMAIL_DOMAIN`; SMTP host /
+      // user's email on the configured `EMAIL_DOMAIN` (system mail, like
+      // the tunnel's sign-in code, uses `no-reply@` there instead); SMTP host /
       // credentials come from the `email()` plugin config / env.
       send_email: emailTool(),
       // Web search + fetch from `@dbx-tools/appkit-web-search`.

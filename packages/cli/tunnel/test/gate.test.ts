@@ -3,7 +3,7 @@ import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
 import { async as asyncModule, brand } from "@dbx-tools/shared-core";
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
-import { expiresIn } from "../src/app.ts";
+import { codeEmailHtmlBody, codeEmailTextBody, expiresIn } from "../src/app.ts";
 import {
   ALLOW_ENV,
   BRAND_NAME_ENV,
@@ -320,6 +320,54 @@ describe("env var names", () => {
     for (const keys of [ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, CODE_TTL_ENV, SESSION_CUTOFF_ENV]) {
       assert.ok(Array.isArray(keys));
       assert.match(keys[0]!, /^TUNNEL_/);
+    }
+  });
+});
+
+/**
+ * The code email's two MIME parts. The text part's LINE LAYOUT is functional -
+ * client code detection reads the code out of the prompt line - so it is pinned
+ * here rather than left to whatever the HTML happens to render as.
+ */
+describe("code email layout", () => {
+  const opts = { message: "Your verification code is:", codeTtlSeconds: 600 };
+
+  it("puts the code on the SAME line as the prompt in the text part", () => {
+    const text = codeEmailTextBody("123456", opts);
+    assert.equal(
+      text,
+      [
+        "Your verification code is: 123456",
+        "This code expires in 10 minutes.",
+        "",
+        "If you did not request this code, you can ignore this email.",
+      ].join("\n"),
+    );
+    // Spelled out separately: the prompt and the code must not be split apart.
+    assert.match(text, /^Your verification code is: 123456$/m);
+  });
+
+  it("emits no trailer after the copy", () => {
+    // Apple's domain-bound `@domain #code` footer is deliberately absent: it
+    // binds the code to one origin and is not what broad detection needs.
+    const text = codeEmailTextBody("123456", opts);
+    assert.equal(text.trimEnd().endsWith("you can ignore this email."), true);
+    assert.doesNotMatch(text, /#123456/);
+    assert.doesNotMatch(codeEmailHtmlBody("123456", opts), /#123456/);
+  });
+
+  it("states the real configured expiry rather than a fixed phrase", () => {
+    assert.match(codeEmailTextBody("1", { ...opts, codeTtlSeconds: 90 }), /90 seconds/);
+    assert.match(codeEmailHtmlBody("1", { ...opts, codeTtlSeconds: 60 }), /1 minute\./);
+  });
+
+  it("keeps the code a styled heading in the HTML part, and the copy identical", () => {
+    const html = codeEmailHtmlBody("123456", opts);
+    assert.match(html, /^## 123456$/m, "prominent in an inbox");
+    // Same information in both parts - a text alternative that disagrees with the
+    // HTML reads as phishing to spam filters.
+    for (const line of [opts.message, "This code expires in 10 minutes.", "ignore this email"]) {
+      assert.ok(html.includes(line) && codeEmailTextBody("123456", opts).includes(line), line);
     }
   });
 });

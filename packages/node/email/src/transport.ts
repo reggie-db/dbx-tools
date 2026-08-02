@@ -315,6 +315,7 @@ async function dispatch(
   message: EmailMessage,
   from: string,
   signal?: AbortSignal,
+  options?: SendEmailOptions,
 ): Promise<EmailResult> {
   const { config, transporter } = getEmailRuntime();
   const recipient = recipientEcho(message.to);
@@ -342,7 +343,11 @@ async function dispatch(
       from,
       to: message.to,
       subject: message.subject,
-      text: rendered.text,
+      // A caller-supplied plain-text part WINS over the generated one. Both parts
+      // still come from the same content; this only lets a caller control the
+      // text alternative's exact line layout, which some clients parse (see
+      // `SendEmailOptions.text`).
+      text: options?.text ?? rendered.text,
       html: rendered.html,
       ...(message.cc && message.cc.length > 0 ? { cc: message.cc } : {}),
       ...(message.bcc && message.bcc.length > 0 ? { bcc: message.bcc } : {}),
@@ -356,6 +361,34 @@ async function dispatch(
     from,
     ...(info.messageId ? { messageId: info.messageId } : {}),
   };
+}
+
+/**
+ * Delivery-time options that are NOT part of the message a model composes.
+ *
+ * Deliberately separate from {@link EmailMessage}: that schema is the agent
+ * tool's input, so anything added to it becomes a field a model can set. These
+ * describe how a message is DELIVERED, so they are the caller's to supply.
+ */
+export interface SendEmailOptions {
+  /**
+   * An explicit `text/plain` alternative, replacing the one generated from the
+   * React Email tree. The HTML part is untouched, so the recipient still gets the
+   * full branded template.
+   *
+   * This exists because the generated text part is a RENDERING of the HTML: it
+   * carries the brand header and footer, and it turns CSS margin into blank
+   * lines. That is fine for prose and wrong for content a machine parses. A
+   * one-time-code email is the case in point - clients look for the code on the
+   * line immediately after the prompt, and a styled `<h2>` code lands two blank
+   * lines below it, so autofill stops being offered even though the HTML looks
+   * perfect. Supplying the text part directly keeps the nice template AND the
+   * layout those clients expect.
+   *
+   * Keep the same information in both parts; a text alternative that disagrees
+   * with the HTML reads as phishing to spam filters.
+   */
+  text?: string;
 }
 
 /**
@@ -377,6 +410,7 @@ export async function sendEmail(
   message: EmailMessage,
   from: string,
   signal?: AbortSignal,
+  options?: SendEmailOptions,
 ): Promise<EmailResult> {
   if (message.to.length === 0) {
     throw ValidationError.missingField("to");
@@ -386,7 +420,7 @@ export async function sendEmail(
   return executeWrite(
     "send",
     EMAIL_SEND_SETTINGS,
-    (executeSignal) => dispatch(message, from, executeSignal),
+    (executeSignal) => dispatch(message, from, executeSignal, options),
     signal,
   );
 }

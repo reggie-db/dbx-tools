@@ -20,8 +20,10 @@ presentation lives in
   host's approval gate fires.
 - SMTP delivery for production and HTML outbox delivery for local development
   and tests.
-- Sender derivation from the current Databricks user, a fixed `EMAIL_FROM`, or a
-  configured domain.
+- Sender derivation from the current Databricks user: `EMAIL_DOMAIN` alone is
+  enough, with a fixed `EMAIL_FROM` as an override rather than a requirement.
+- A separate do-not-reply sender for system mail (`no-reply@<domain>`, or
+  `EMAIL_SYSTEM_FROM`), used automatically when no user is in scope.
 - Deny-by-default sender policy with exact addresses, domains, domain wildcards,
   and a named `unrestricted` escape hatch.
 - React Email rendering with responsive components, matching HTML/plain-text
@@ -70,36 +72,38 @@ approval card and compose components.
 
 ## Configuration
 
-| Option           | Type                            | Default                                   | Description                                                                      |
-| ---------------- | ------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
-| `smtp.host`      | `string`                        | `SMTP_HOST`                               | SMTP server hostname. Omit the whole `smtp` block to run in outbox mode.         |
-| `smtp.port`      | `number`                        | `SMTP_PORT`, then `587`                   | SMTP server port.                                                                |
-| `smtp.secure`    | `boolean`                       | `SMTP_SECURE`, then `port === 465`        | TLS-on-connect socket rather than STARTTLS.                                      |
-| `smtp.user`      | `string`                        | `SMTP_USER`                               | SMTP auth username.                                                              |
-| `smtp.password`  | `string`                        | `SMTP_PASSWORD`                           | SMTP auth password or API key.                                                   |
-| `domain`         | `string`                        | `EMAIL_DOMAIN`                            | Domain the sender is derived on, as `<user-local-part>@<domain>`.                |
-| `from`           | `string`                        | `EMAIL_FROM`                              | Fixed `From` address. Skips per-user derivation.                                 |
-| `senderPolicy`   | `"allowlist" \| "unrestricted"` | `EMAIL_SENDER_POLICY`, then `"allowlist"` | How the sender is restricted when `allowedSenders` is empty.                     |
-| `allowedSenders` | `string \| string[]`            | `EMAIL_ALLOWED_SENDERS`                   | Permitted `From` patterns: exact addresses, `*@domain`, a bare `domain`, or `*`. |
-| `outDir`         | `string`                        | `EMAIL_OUTBOX_DIR`, then `<cwd>/tmp`      | Directory the outbox writes HTML previews to.                                    |
-| `brand`          | `EmailBrand`                    | dbx-tools brand                           | Colors, font, display name, footer, and optional logo applied to every message.  |
+| Option           | Type                            | Default                                       | Description                                                                      |
+| ---------------- | ------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------- |
+| `smtp.host`      | `string`                        | `SMTP_HOST`                                   | SMTP server hostname. Omit the whole `smtp` block to run in outbox mode.         |
+| `smtp.port`      | `number`                        | `SMTP_PORT`, then `587`                       | SMTP server port.                                                                |
+| `smtp.secure`    | `boolean`                       | `SMTP_SECURE`, then `port === 465`            | TLS-on-connect socket rather than STARTTLS.                                      |
+| `smtp.user`      | `string`                        | `SMTP_USER`                                   | SMTP auth username.                                                              |
+| `smtp.password`  | `string`                        | `SMTP_PASSWORD`                               | SMTP auth password or API key.                                                   |
+| `domain`         | `string`                        | `EMAIL_DOMAIN`                                | Domain the sender is derived on, as `<user-local-part>@<domain>`.                |
+| `from`           | `string`                        | `EMAIL_FROM`                                  | Optional fixed `From`. Skips per-user derivation.                                |
+| `systemFrom`     | `string`                        | `EMAIL_SYSTEM_FROM`, then `no-reply@<domain>` | `From` for system mail (no user in scope).                                       |
+| `senderPolicy`   | `"allowlist" \| "unrestricted"` | `EMAIL_SENDER_POLICY`, then `"allowlist"`     | How the sender is restricted when `allowedSenders` is empty.                     |
+| `allowedSenders` | `string \| string[]`            | `EMAIL_ALLOWED_SENDERS`                       | Permitted `From` patterns: exact addresses, `*@domain`, a bare `domain`, or `*`. |
+| `outDir`         | `string`                        | `EMAIL_OUTBOX_DIR`, then `<cwd>/tmp`          | Directory the outbox writes HTML previews to.                                    |
+| `brand`          | `EmailBrand`                    | dbx-tools brand                               | Colors, font, display name, footer, and optional logo applied to every message.  |
 
 Precedence per field is explicit config, then the environment variable, then the
 built-in default.
 
-| Environment variable    | Purpose                                                       |
-| ----------------------- | ------------------------------------------------------------- |
-| `SMTP_HOST`             | SMTP server hostname.                                         |
-| `SMTP_PORT`             | SMTP server port.                                             |
-| `SMTP_SECURE`           | Force or disable a TLS-on-connect socket.                     |
-| `SMTP_USER`             | SMTP auth username.                                           |
-| `SMTP_PASSWORD`         | SMTP auth password or API key.                                |
-| `EMAIL_DOMAIN`          | Domain for the derived sender address.                        |
-| `EMAIL_FROM`            | Fixed `From` address.                                         |
-| `EMAIL_SENDER_POLICY`   | `allowlist` (default) or `unrestricted`.                      |
-| `EMAIL_ALLOWED_SENDERS` | Comma- or whitespace-separated `From` allow-list.             |
-| `EMAIL_OUTBOX_MODE`     | Opt in to writing messages to disk when SMTP is unconfigured. |
-| `EMAIL_OUTBOX_DIR`      | Directory for outbox previews.                                |
+| Environment variable    | Purpose                                                        |
+| ----------------------- | -------------------------------------------------------------- |
+| `SMTP_HOST`             | SMTP server hostname.                                          |
+| `SMTP_PORT`             | SMTP server port.                                              |
+| `SMTP_SECURE`           | Force or disable a TLS-on-connect socket.                      |
+| `SMTP_USER`             | SMTP auth username.                                            |
+| `SMTP_PASSWORD`         | SMTP auth password or API key.                                 |
+| `EMAIL_DOMAIN`          | Domain for the derived sender address.                         |
+| `EMAIL_FROM`            | Optional fixed `From` address, overriding per-user derivation. |
+| `EMAIL_SYSTEM_FROM`     | `From` for system mail; defaults to `no-reply@<domain>`.       |
+| `EMAIL_SENDER_POLICY`   | `allowlist` (default) or `unrestricted`.                       |
+| `EMAIL_ALLOWED_SENDERS` | Comma- or whitespace-separated `From` allow-list.              |
+| `EMAIL_OUTBOX_MODE`     | Opt in to writing messages to disk when SMTP is unconfigured.  |
+| `EMAIL_OUTBOX_DIR`      | Directory for outbox previews.                                 |
 
 The `SMTP_*` names are unprefixed because SMTP is a third-party service, not a
 Databricks resource.
@@ -126,6 +130,27 @@ involved. The same resolved runtime is used by the AppKit plugin and both agent
 tools, so every path shares one connection pool, one sender policy, and one set
 of caps. A third argument accepts an `AbortSignal` when the caller wants to stop
 waiting on SMTP.
+
+### Control the plain-text part
+
+By default both MIME alternatives are rendered from one React Email tree, so the
+`text/plain` part is a rendering of the HTML - it carries the brand header and
+footer, and CSS margin becomes blank lines. That is right for prose and wrong for
+content something PARSES. A fourth argument replaces just that part, leaving the
+branded HTML untouched:
+
+```ts
+await transport.sendEmail(message, from, undefined, {
+  text: `Your verification code is: ${code}\nThis code expires in 10 minutes.`,
+});
+```
+
+The motivating case is a one-time code: client code detection reads the code out
+of the prompt line, and a styled `<h2>` code renders two blank lines below the
+prompt, so autofill stops being offered even though the HTML looks perfect. Keep
+the same information in both parts - a text alternative that disagrees with the
+HTML reads as phishing to spam filters. See
+[`@dbx-tools/cli-tunnel`](../../cli/tunnel) for a gate that does this.
 
 The plugin export is equivalent and resolves the sender for you when the caller
 is a Databricks user:
@@ -221,16 +246,38 @@ caller's own local part.
 Use this route to populate a `From` dropdown in a compose UI. If no dropdown is
 shown, the server can still derive the sender from the active user and config.
 
-## Derive And Restrict Senders
+## Sender Addresses
 
 ```ts
 import { config, sender } from "@dbx-tools/email";
 
 const resolved = config.resolveEmailConfig({ domain: "mail.example.com" });
+
+// A user caused this send, so it comes from them: alice@mail.example.com
 const from = sender.resolveSenderAddress(resolved, "alice@databricks.com");
+
+// Nobody did, so it is system mail: no-reply@mail.example.com
+const system = sender.resolveSystemSenderAddress(resolved);
 
 sender.assertSenderAllowed(from, resolved.allowedSenders);
 ```
+
+`domain` is the only sender setting a deployment needs. The `From` for a normal
+send is the on-behalf-of user's local part re-homed on it, so a recipient can
+reply to the person who caused the message. `from` overrides that with one fixed
+address and is entirely optional - set it only when every message really should
+come from a single mailbox.
+
+Mail that no user asked for - a sign-in code, a password reset, an alert - is
+SYSTEM mail, and a reply to it reaches nobody. It sends from
+`no-reply@<domain>` instead, which is also what `resolveSenderAddress()` returns
+when there is no user in scope, so a service-context send never leaks a person's
+address onto machine mail. That default outranks `from` on purpose (a fixed
+`from` is normally a human or team address). Name the address yourself with
+`systemFrom` / `EMAIL_SYSTEM_FROM` to route those replies to a monitored
+`support@`, or just to spell the local part differently. The system sender is
+folded into the effective allow-list, so the deny-by-default policy never blocks
+the app's own sign-in mail.
 
 Sender helpers support exact addresses, domain wildcards, bare domains, and `*`.
 `sender.listSenderOptions(resolved, userEmail)` produces the concrete `From`
@@ -335,13 +382,16 @@ handed to SMTP. The constants and the plugin's interceptor settings live in the
 - `tool` - approval-gated `emailTool()` Mastra tool and the shared
   `SEND_EMAIL_DESCRIPTION`.
 - `transport` - shared runtime, `getEmailRuntime()`, `resetEmailRuntime()`,
-  `verifyEmailTransport()`, `sendEmail()`, and the executor slot
+  `verifyEmailTransport()`, `sendEmail()`, its `SendEmailOptions` (an explicit
+  `text/plain` alternative), and the executor slot
   (`setEmailExecutor()`, `executeWrite()`) that puts every send on AppKit's
   interceptor chain.
 - `config` - SMTP/outbox config types, sender policy, JSON schema, and
   `resolveEmailConfig()`.
 - `defaults` - execution settings for the interceptor chain and the payload caps.
-- `sender` - sender derivation, allow-list parsing, and sender-option listing.
+- `sender` - per-user sender derivation, the do-not-reply system sender
+  (`resolveSystemSenderAddress()`), allow-list parsing, and sender-option
+  listing.
 - `emailHtml` - Node rendering adapters over the shared template:
   `renderEmailHtml()`, `renderEmailText()`, and `renderEmail()` for both MIME
   alternatives from one component tree.

@@ -18,6 +18,7 @@
  * to a single SMTP server (e.g. SMTP2GO): `SMTP_HOST`, `SMTP_PORT`,
  * `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, plus `EMAIL_DOMAIN` for
  * the derived sender's domain, `EMAIL_FROM` for an explicit override,
+ * `EMAIL_SYSTEM_FROM` for the do-not-reply address system mail sends from,
  * `EMAIL_SENDER_POLICY` for the sender restriction mode, and
  * `EMAIL_OUTBOX_DIR` for the outbox directory.
  *
@@ -28,7 +29,7 @@ import { ConfigurationError, ValidationError, type BasePluginConfig } from "@dat
 import { env, object } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import { defaultEmailBrand, type EmailBrand } from "./brand.ts";
-import { parseAllowedSenders } from "./sender.ts";
+import { isSenderAllowed, parseAllowedSenders, systemSenderAddress } from "./sender.ts";
 
 /** SMTP submission port used when none is configured. */
 export const DEFAULT_SMTP_PORT = 587;
@@ -80,10 +81,24 @@ export interface EmailPluginConfig extends BasePluginConfig {
    */
   domain?: string;
   /**
-   * Explicit `From` address. When set, the sender is used verbatim and
-   * the per-user derivation is skipped. Falls back to `EMAIL_FROM`.
+   * Explicit `From` address, OPTIONAL. When set, the sender is used verbatim
+   * and the per-user derivation is skipped. Falls back to `EMAIL_FROM`.
+   *
+   * Leave it unset in most deployments: {@link domain} alone is enough, and
+   * mail then comes from the address of the person who caused it, which is what
+   * a recipient expects to be able to reply to.
    */
   from?: string;
+  /**
+   * `From` for SYSTEM mail - a send with no on-behalf-of user, such as a
+   * sign-in code or a password reset. Falls back to `EMAIL_SYSTEM_FROM`, then
+   * to `no-reply@<domain>`, then to {@link from}.
+   *
+   * Machine mail gets a do-not-reply address by default because a reply to it
+   * reaches nobody. Set this to route those replies somewhere real (a monitored
+   * `support@`) or to spell the local part differently (`donotreply@`).
+   */
+  systemFrom?: string;
   /**
    * Directory for the file/outbox fallback. Falls back to
    * `EMAIL_OUTBOX_DIR`, then `<cwd>/tmp`. Only used when SMTP
@@ -116,11 +131,16 @@ export interface EmailPluginConfig extends BasePluginConfig {
 }
 
 /** Config shared by both resolved modes. */
-interface ResolvedSender {
+export interface ResolvedSender {
   /** Sender domain; present whenever {@link from} is absent. */
   domain?: string;
   /** Explicit sender override; present skips per-user derivation. */
   from?: string;
+  /**
+   * Explicit do-not-reply sender for system mail. Absent means it is derived -
+   * see {@link systemSenderAddress}.
+   */
+  systemFrom?: string;
   /**
    * Effective sender allow-list: the configured patterns when any were
    * given, else the patterns implied by the sender source under an
@@ -184,7 +204,13 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
     },
     from: {
       type: "string",
-      description: "Explicit From address; skips per-user derivation. Falls back to EMAIL_FROM.",
+      description:
+        "Optional explicit From address; skips per-user derivation. Falls back to EMAIL_FROM.",
+    },
+    systemFrom: {
+      type: "string",
+      description:
+        "From for system mail (no on-behalf-of user, e.g. a sign-in code). Falls back to EMAIL_SYSTEM_FROM, then no-reply@<domain>, then from.",
     },
     outDir: {
       type: "string",
@@ -262,10 +288,21 @@ function resolveSenderPolicy(policy: SenderPolicy | undefined): SenderPolicy {
  * which only happens in outbox mode (where the sender falls back to the
  * on-behalf-of user's own address and cannot be enumerated up front).
  */
-function impliedSenderPatterns(domain: string | undefined, from: string | undefined): string[] {
+function impliedSenderPatterns(sender: {
+  domain?: string;
+  from?: string;
+  systemFrom?: string;
+}): string[] {
   const patterns: string[] = [];
-  if (from) patterns.push(from.trim().toLowerCase());
-  if (domain) patterns.push(`*@${domain.trim().toLowerCase()}`);
+  if (sender.from) patterns.push(sender.from.trim().toLowerCase());
+  if (sender.domain) patterns.push(`*@${sender.domain.trim().toLowerCase()}`);
+  // The system sender too, when the patterns above do not already cover it: it
+  // is an address this app SENDS from, so a list derived from the sender source
+  // has to permit it, or the very policy meant to describe the app's own senders
+  // denies its sign-in mail. Usually redundant (`*@domain` already matches
+  // `no-reply@domain`) - it matters for a `systemFrom` on another domain.
+  const system = systemSenderAddress(sender)?.toLowerCase();
+  if (system && !isSenderAllowed(system, patterns)) patterns.push(system);
   return patterns;
 }
 
@@ -290,8 +327,9 @@ function missingSmtpFields(
  * Resolve plugin config over environment defaults.
  *
  * When SMTP host + user + password are all present, returns `mode:
- * "smtp"` for real delivery (and throws if no sender source - domain or
- * from - is configured, since SMTP can't derive one from nothing).
+ * "smtp"` for real delivery (and throws if no sender source - domain,
+ * from, or systemFrom - is configured, since SMTP can't derive one from
+ * nothing; `domain` alone is the intended minimum).
  * When all three are absent and `EMAIL_OUTBOX_MODE` is enabled, returns
  * `mode: "file"` so the runtime writes messages to the outbox directory
  * for local testing; in that mode a sender source is optional (the
@@ -311,6 +349,7 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   const pass = env.string(smtp.password, "SMTP_PASSWORD") ?? undefined;
   const domain = env.string(config.domain, "EMAIL_DOMAIN") ?? undefined;
   const from = env.string(config.from, "EMAIL_FROM") ?? undefined;
+  const systemFrom = env.string(config.systemFrom, "EMAIL_SYSTEM_FROM") ?? undefined;
   const senderPolicy = resolveSenderPolicy(config.senderPolicy);
   const configuredSenders = parseAllowedSenders(
     config.allowedSenders ?? env.text("EMAIL_ALLOWED_SENDERS") ?? undefined,
@@ -318,10 +357,11 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   const allowedSenders =
     configuredSenders.length > 0 || senderPolicy === "unrestricted"
       ? configuredSenders
-      : impliedSenderPatterns(domain, from);
+      : impliedSenderPatterns({ domain, from, systemFrom });
   const sender: ResolvedSender = {
     ...object.optional("domain", domain),
     ...object.optional("from", from),
+    ...object.optional("systemFrom", systemFrom),
     allowedSenders,
     senderPolicy,
     brand: config.brand ?? defaultEmailBrand,
@@ -335,10 +375,10 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   }
 
   if (hasAllSmtp) {
-    if (!domain && !from) {
+    if (!domain && !from && !systemFrom) {
       throw ConfigurationError.resourceNotFound(
         "Email sender source",
-        "Set EMAIL_DOMAIN to derive <user-local-part>@<domain>, or EMAIL_FROM for a fixed address.",
+        "Set EMAIL_DOMAIN to derive <user-local-part>@<domain> (and no-reply@<domain> for system mail), or EMAIL_FROM for a fixed address.",
       );
     }
     const port = env.positiveInt(smtp.port, "SMTP_PORT", DEFAULT_SMTP_PORT);

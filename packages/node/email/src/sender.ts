@@ -5,9 +5,15 @@
  * The default `From` re-homes the local part (everything before `@`) of
  * the OBO email on the configured sending domain, so `alice@databricks.com`
  * through a domain of `mail.example.com` goes out as
- * `alice@mail.example.com`. An explicit `from` short-circuits that; the
- * file/outbox fallback (no domain) keeps the user's address verbatim so
- * test artifacts land under a recognizable folder.
+ * `alice@mail.example.com`. Nothing has to be configured for that beyond the
+ * domain: a fixed `from` is an OVERRIDE, not a requirement. The file/outbox
+ * fallback (no domain) keeps the user's address verbatim so test artifacts land
+ * under a recognizable folder.
+ *
+ * A send with NO user in scope is SYSTEM mail - a sign-in code, a password
+ * reset, an alert - and goes from the do-not-reply address instead
+ * ({@link resolveSystemSenderAddress}), because a recipient cannot usefully
+ * reply to a machine and a human's address on machine mail invites them to try.
  *
  * The resolved `From` is then constrained to the effective allow-list: a
  * pattern is either an exact address (`user@domain.com`), a domain wildcard
@@ -22,15 +28,16 @@
  */
 
 import { ConfigurationError, ValidationError } from "@databricks/appkit";
-import { log, net } from "@dbx-tools/shared-core";
+import { log, net, string } from "@dbx-tools/shared-core";
 
-import type { ResolvedEmailConfig } from "./config.ts";
+import type { ResolvedEmailConfig, ResolvedSender } from "./config.ts";
 
 const logger = log.logger("email/sender");
 
 /**
- * Re-home the OBO user's local part on `domain`. Throws when no usable
- * local part is available (e.g. a service-context call with no user).
+ * Re-home a user's local part on `domain`. Throws when no usable local part is
+ * available; callers with no user in scope want
+ * {@link resolveSystemSenderAddress} instead of a fixed `from`.
  */
 export function deriveSenderAddress(userEmail: string | undefined, domain: string): string {
   const local = userEmail?.split("@")[0]?.trim();
@@ -102,24 +109,67 @@ export function assertSenderAllowed(from: string, patterns: string[]): void {
 }
 
 /**
+ * Local part of the default do-not-reply sender, used for mail that no user
+ * asked for and nobody can reply to.
+ */
+export const SYSTEM_SENDER_LOCAL_PART = "no-reply";
+
+/** The sender fields {@link systemSenderAddress} reads, resolved or raw. */
+type SenderSource = Pick<ResolvedSender, "systemFrom" | "domain" | "from">;
+
+/**
+ * The address SYSTEM mail sends from, or undefined when nothing configured
+ * yields one: an explicit {@link ResolvedSender.systemFrom} wins, else
+ * `no-reply@<domain>`, else the fixed `from`.
+ *
+ * `no-reply@<domain>` outranks a configured `from` on purpose. A fixed `from` is
+ * typically a person or a team address chosen for mail a HUMAN sent, and a
+ * verification code arriving from it invites a reply nobody reads. Set
+ * `systemFrom` / EMAIL_SYSTEM_FROM to name the address explicitly (a monitored
+ * `support@`, a differently-spelled `donotreply@`).
+ *
+ * Returns undefined rather than throwing so config resolution can fold the
+ * result into the sender allow-list before any send happens.
+ */
+export function systemSenderAddress(source: SenderSource): string | undefined {
+  const explicit = string.trimToNull(source.systemFrom);
+  if (explicit) return explicit;
+  const domain = string.trimToNull(source.domain);
+  if (domain) return `${SYSTEM_SENDER_LOCAL_PART}@${domain}`;
+  return string.trimToNull(source.from) ?? undefined;
+}
+
+/**
+ * The `From` for a send with no user in scope. Throws when no sender source is
+ * configured at all, which in SMTP mode {@link resolveEmailConfig} has already
+ * ruled out - so this only fires for an outbox with nothing configured.
+ */
+export function resolveSystemSenderAddress(config: ResolvedEmailConfig): string {
+  const address = systemSenderAddress(config);
+  if (address) return address;
+  throw ConfigurationError.resourceNotFound(
+    "Email sender address",
+    "Set `domain` / EMAIL_DOMAIN to send system mail as no-reply@<domain>, or `systemFrom` / EMAIL_SYSTEM_FROM to name the address.",
+  );
+}
+
+/**
  * Resolve the `From` address for a send from the resolved config and the
- * current OBO user: explicit `from` wins, then `<local>@<domain>`, then
- * (file/outbox mode only) the user's email verbatim. Throws when none of
- * those yield an address.
+ * current OBO user.
+ *
+ * With a user in scope: an explicit `from` wins, then `<local>@<domain>`, then
+ * (file/outbox mode only) the user's email verbatim. With NO user the send is
+ * system mail, so it goes from {@link resolveSystemSenderAddress}. Throws when
+ * none of those yield an address.
  */
 export function resolveSenderAddress(
   config: ResolvedEmailConfig,
   userEmail: string | undefined,
 ): string {
+  const email = string.trimToNull(userEmail);
+  if (!email) return resolveSystemSenderAddress(config);
   if (config.from) return config.from;
-  if (config.domain) return deriveSenderAddress(userEmail, config.domain);
-  const email = userEmail?.trim();
-  if (!email) {
-    throw ConfigurationError.resourceNotFound(
-      "Email sender address",
-      "Set `from` / EMAIL_FROM, set `domain` / EMAIL_DOMAIN, or run on behalf of a user.",
-    );
-  }
+  if (config.domain) return deriveSenderAddress(email, config.domain);
   return email;
 }
 
