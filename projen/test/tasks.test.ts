@@ -110,4 +110,12 @@ describe("workspace validation tasks", () => {
     assert.equal(command, "bun test test");
     assert.match(condition, /^find test /);
   });
+
+  it("registers Rosetta generation on the root only", () => {
+    assert.equal(
+      tasks.root.tasks["rs-packages"]?.steps?.[0]?.exec,
+      "bun node_modules/@dbx-tools/projen/tasks/rs-packages.ts",
+    );
+    assert.equal(tasks.child.tasks["rs-packages"], undefined);
+  });
 });

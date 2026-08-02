@@ -205,6 +205,15 @@
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
     },
+    "rs-packages": {
+      "name": "rs-packages",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/rs-packages.ts",
+          "receiveArgs": true
+        }
+      ]
+    },
     "sync": {
       "name": "sync",
       "steps": [

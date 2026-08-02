@@ -31,7 +31,7 @@ if (!process.argv.includes("--watch")) {
   runSynth({ post: true });
   logger.success("synced");
 } else {
-  // Watch: one initial full synth to bring the tree up to date, then three focused
+  // Watch: one initial full synth to bring the tree up to date, then focused
   // watchers under `concurrently`. The projenrc watcher is the intelligent stand-in
   // for stock `projen --watch` - it re-synths (+install) ONLY when `.projenrc.ts` or
   // a configured `syncResynthPaths` entry changes, while barrels/openapi keep generated
@@ -57,6 +57,11 @@ if (!process.argv.includes("--watch")) {
       { command: `bun "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
       { command: `bun "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
       { command: `bun "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
+      {
+        command: `bun "${taskPath("rs-packages.ts")}" --watch`,
+        name: "rs-packages",
+        prefixColor: "yellow",
+      },
     ],
     {
       prefix: "name",
