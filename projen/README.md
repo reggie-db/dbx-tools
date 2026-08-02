@@ -111,9 +111,14 @@ schema modules. They are written read-only, and the root ESLint task runs with
 `--fix` (which fails on a read-only file), so each generated module is added to
 `ignorePatterns` at synth - named individually via `codegen.codegenModulePaths()`,
 never as a blanket `<package>/src/**`. A codegen package may hold hand-written
-modules beside its generated ones, and those must stay linted. `generateBarrels()` writes package-root `index.ts` barrels with
-module namespaces and flat unique type exports, returning the number that
-actually changed. A barrel whose export surface is unchanged is left untouched,
+modules beside its generated ones, and those must stay linted.
+
+`generateBarrels()` writes package-root `index.ts` barrels with module
+namespaces and flat unique type exports, returning the number that actually
+changed. A name two modules both declare is ambiguous and stays namespace-only —
+except when one of them is generated: the hand-written module is the curated view
+of the generated shape (`shared-genie`'s `genie-model.ts` extends its own
+codegen'd `dashboards.ts`), so it owns the name and stays hoisted. A barrel whose export surface is unchanged is left untouched,
 read-only bit included, so concurrent writers never collide over it. Every
 package is attempted even if one fails; the failures are re-thrown together as an
 `AggregateError` naming each package, rather than the first one abandoning the

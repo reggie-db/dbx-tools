@@ -33,6 +33,15 @@
  * name stays namespace-only. Names that collide with a generated namespace, or
  * that a hand-authored `exports.ts` declares, are never hoisted (that file wins).
  *
+ * One collision is NOT ambiguous, though: a HAND-WRITTEN module and a GENERATED
+ * one (a codegen `src/` module, recognised by its do-not-edit banner) declaring
+ * the same name. The hand-written module is by definition the curated view of the
+ * generated shape - `shared-genie`'s `genie-model.ts` extends and re-exports its
+ * own generated `dashboards.ts` - so it WINS and its name is still hoisted.
+ * Treating that pair as ambiguous is what silently dropped `GenieMessage`,
+ * `GenieSpace`, and `MessageStatus` from the barrel the moment the two modules
+ * became siblings, breaking every consumer importing them by name.
+ *
  * The result gets a do-not-edit header + read-only bit (see `./generated`).
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -40,7 +49,7 @@ import { join, relative } from "node:path";
 import { find } from "@dbx-tools/path";
 import { string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
-import { header, makeReadonly, makeWritable, type HeaderOpts } from "./generated.ts";
+import { header, isGenerated, makeReadonly, makeWritable, type HeaderOpts } from "./generated.ts";
 import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports.ts";
 import { isModuleFile, toPosix, recordedPackages, repoRoot } from "./packages.ts";
 
@@ -140,8 +149,10 @@ function namespaceLines(content: string): { ns: string; modulePath: string }[] {
  * package's modules - `export type { ... }` for types, `export { ... }` for
  * non-function values (classes, consts, enums, …). `export function` names are
  * never hoisted; they stay namespace-only (`posixPath.toPosix`). A name declared
- * by two or more modules is ambiguous and left namespace-only. `suppress` names
- * (a hand-authored `exports.ts` surface) are never hoisted so that file stays
+ * by two or more modules is ambiguous and left namespace-only - UNLESS exactly one
+ * of them is hand-written and the rest are generated, in which case the
+ * hand-written module owns the name (see the module doc). `suppress` names (a
+ * hand-authored `exports.ts` surface) are never hoisted so that file stays
  * authoritative.
  */
 function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<string>): string {
@@ -157,17 +168,32 @@ function hoistUniqueExports(content: string, pkgDir: string, suppress: Set<strin
   // Uniqueness is tallied over hoistable types AND values together - name ->
   // { count, owning module }. Functions are excluded from hoisting and from
   // this tally so they do not block a same-named type/class in another module.
-  const seen = new Map<string, { count: number; modulePath: string }>();
+  //
+  // A generated module never claims a name a hand-written sibling also declares:
+  // it is counted only while no hand-written module owns the name, and it yields
+  // ownership as soon as one does. So a curated re-export
+  // (`genie-model.ts`'s `GenieMessage`, extending generated `dashboards.ts`)
+  // stays hoisted, while two HAND-WRITTEN modules claiming one name are still
+  // ambiguous and stay namespace-only.
+  const seen = new Map<string, { count: number; modulePath: string; generated: boolean }>();
   const perModule = new Map<string, ModuleExport[]>();
   for (const { modulePath } of namespaces) {
-    const exports = moduleExports(join(pkgDir, modulePath.replace(/^\.\//, ""))).filter(
-      (e) => !e.isFunction,
-    );
+    const file = join(pkgDir, modulePath.replace(/^\.\//, ""));
+    const exports = moduleExports(file).filter((e) => !e.isFunction);
     perModule.set(modulePath, exports);
+    const generated = isGenerated(file);
     for (const { name } of exports) {
       const prior = seen.get(name);
-      if (prior) prior.count += 1;
-      else seen.set(name, { count: 1, modulePath });
+      if (!prior) {
+        seen.set(name, { count: 1, modulePath, generated });
+        continue;
+      }
+      // Hand-written beats generated, either direction, without counting as a clash.
+      if (prior.generated !== generated) {
+        if (prior.generated) seen.set(name, { count: 1, modulePath, generated });
+        continue;
+      }
+      prior.count += 1;
     }
   }
 
