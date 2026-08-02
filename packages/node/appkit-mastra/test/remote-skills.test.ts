@@ -238,4 +238,84 @@ describe("remote skill caching", () => {
     );
     assert.deepEqual(result.skillNames, first.skillNames);
   });
+  /**
+   * The default destination (`/Workspace/.assistant/skills`) is a workspace-ADMIN
+   * tree, and a Databricks App runs as a non-admin service principal. The
+   * workspace API reports a path the caller may not touch as
+   * `RESOURCE_DOES_NOT_EXIST`, and `mkdirs` on an existing directory succeeds even
+   * then - so nothing before the first real write reveals the problem, and that
+   * write used to abort `setup:complete` and leave the whole agent surface 503.
+   *
+   * The client here is the minimum shape the write path touches: `mkdirs` accepts
+   * (as the real API does) and `import` refuses the way Databricks does.
+   */
+  describe("destination fallback", () => {
+    /** A workspace client that lets directories be "created" but refuses writes. */
+    const unwritableClient = () => {
+      const calls: string[] = [];
+      const client = {
+        workspace: {
+          mkdirs: async () => {
+            calls.push("mkdirs");
+            return {};
+          },
+          getStatus: async () => ({ object_type: "DIRECTORY" as const, path: "/x" }),
+          import: async () => {
+            calls.push("import");
+            throw Object.assign(
+              new Error("The parent folder (/Workspace/.assistant/skills) does not exist."),
+              { errorCode: "RESOURCE_DOES_NOT_EXIST" },
+            );
+          },
+        },
+      };
+      return { client, calls };
+    };
+
+    it("falls back to the local tree when the workspace destination refuses a write", async () => {
+      const { client, calls } = unwritableClient();
+      const result = await provisionRemoteSkills({
+        sources: [source],
+        client: client as never,
+        databricksBasePath: "/Workspace/.assistant/skills",
+        refreshTtlMs: 0,
+      });
+
+      assert.ok(calls.includes("import"), "the probe attempted a real write");
+      // The skills still resolve - only WHERE they are stored changed.
+      assert.equal(result.databricksBasePath, undefined);
+      assert.equal(result.localSkillPaths.length, 1);
+      assert.ok(result.skillNames.length > 0);
+    });
+
+    it("keeps the workspace destination when the write succeeds", async () => {
+      const written: string[] = [];
+      const client = {
+        workspace: {
+          mkdirs: async () => ({}),
+          getStatus: async () => ({ object_type: "DIRECTORY" as const, path: "/x" }),
+          import: async (request: { path: string }) => {
+            written.push(request.path);
+            return {};
+          },
+          delete: async () => ({}),
+        },
+      };
+
+      const result = await provisionRemoteSkills({
+        sources: [source],
+        client: client as never,
+        databricksBasePath: "/Workspace/.assistant/skills",
+        refreshTtlMs: 0,
+      });
+
+      assert.equal(result.databricksBasePath, "/Workspace/.assistant/skills");
+      // Nothing local to scan: the Assistant tree is already mounted per request.
+      assert.deepEqual(result.localSkillPaths, []);
+      assert.ok(
+        written.some((path) => path.endsWith(".metadata.json")),
+        "the tree landed in the workspace",
+      );
+    });
+  });
 });

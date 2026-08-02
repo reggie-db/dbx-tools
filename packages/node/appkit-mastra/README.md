@@ -300,6 +300,17 @@ explicit tree. When no Databricks client is resolvable at startup, the tree is
 written to a local temp dir and handed to Mastra as an extra local skill path
 for the current process only.
 
+The destination is **probed with a real write** before it is used, and falls back
+to that local tree when the probe fails. Writing the shared
+`/Workspace/.assistant/skills` tree is a workspace-ADMIN action, and a Databricks
+App runs as a non-admin service principal, so the common deployment cannot write
+it - and the workspace API reports a path the caller may not touch as
+`RESOURCE_DOES_NOT_EXIST` rather than a permission error. Only the storage
+LOCATION degrades: the same skills are provisioned either way, so a
+non-admin app keeps a working agent instead of failing startup. Give the app's
+service principal `CAN_MANAGE` on the tree (or point `databricksBasePath` at one
+it owns) to get workspace persistence back.
+
 A source that resolves through neither path fails app startup, so a misconfigured
 skill set is caught at boot rather than silently missing. Set `failOnError: false`
 (top-level or per-source) to log and skip a bad source instead. Install the

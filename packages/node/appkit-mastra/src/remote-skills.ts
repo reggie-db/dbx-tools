@@ -40,9 +40,12 @@
  * action writes to), so provisioned skills persist across restarts and are
  * discovered by the built-in Assistant-skills mount. Pass `userEmail` (or an
  * explicit `databricksBasePath`) to target `/Users/<email>/.assistant/skills`
- * instead. When no Databricks client is resolvable at startup, the tree is
- * written under {@link localFS.tmpFS} and returned as an extra local skill path
- * for the current process.
+ * instead. When no Databricks client is resolvable at startup - or the resolved
+ * identity cannot WRITE the destination, which is the normal case for a
+ * Databricks App service principal against the admin-owned shared tree (see
+ * {@link openWritableWorkspace}) - the tree is written under
+ * {@link localFS.tmpFS} and returned as an extra local skill path for the
+ * current process. Storage location degrades; the skills themselves do not.
  *
  * @module
  */
@@ -413,24 +416,19 @@ export async function provisionRemoteSkills(
 
   const failDefault = options.failOnError !== false;
   const client = options.client ?? appkit.tryGetExecutionContext()?.client;
-  const databricksBasePath = resolveDatabricksBasePath(options, client);
-  const destination = databricksBasePath
-    ? new DatabricksFileSystem({
-        client: client as WorkspaceClient,
-        root: databricksBasePath,
-        readOnly: false,
-        createRoot: true,
-      })
+  // Probed rather than assumed: an identity that cannot write the workspace
+  // tree falls back to the local one instead of failing startup. The probe also
+  // creates the root, which the first cache READ needs - `copySkillDirs` would
+  // otherwise be the first thing to create it, which is too late.
+  const requestedBasePath = resolveDatabricksBasePath(options, client);
+  const destination = requestedBasePath
+    ? await openWritableWorkspace(requestedBasePath, client as WorkspaceClient)
     : undefined;
+  const databricksBasePath = destination ? requestedBasePath : undefined;
 
   const localSkillPaths: string[] = [];
   const skillNames: string[] = [];
   let staging: LocalFileSystem | undefined;
-
-  // The destination roots the shared metadata document, so it has to exist
-  // before the first cache READ - `copySkillDirs` would otherwise be the first
-  // thing to create it, which is too late.
-  if (destination) await destination.init();
 
   try {
     const sources = Array.isArray(options.sources) ? options.sources : [options.sources];
@@ -506,6 +504,49 @@ export async function provisionRemoteSkills(
   }
 
   return { localSkillPaths, databricksBasePath, skillNames };
+}
+
+/** Probe file {@link openWritableWorkspace} writes and removes. */
+const WRITE_PROBE_FILE = ".dbx-tools-write-probe";
+
+/**
+ * Open the Databricks skills destination, or `undefined` when this identity
+ * cannot write there.
+ *
+ * The default destination (`/Workspace/.assistant/skills`) is commonly
+ * admins-only, and an app service principal is not an admin - so a Databricks
+ * App writing there fails with `RESOURCE_DOES_NOT_EXIST`, which is how the
+ * workspace API reports a path the caller is not allowed to see. That is a fact
+ * about WHERE the tree is stored, not about whether the skills are usable, so it
+ * degrades to the local tree (handed to Mastra as an extra scan path) rather
+ * than taking app startup down over bookkeeping location.
+ *
+ * The probe is a real write: `mkdirs` succeeds on an existing directory even for
+ * an identity that cannot write into it, so init alone proves nothing. Removing
+ * the probe file is best-effort - a failed cleanup must not decide writability.
+ */
+async function openWritableWorkspace(
+  basePath: string,
+  client: WorkspaceClient,
+): Promise<DatabricksFileSystem | undefined> {
+  const fs = new DatabricksFileSystem({
+    client,
+    root: basePath,
+    readOnly: false,
+    createRoot: true,
+  });
+  try {
+    await fs.init();
+    await fs.writeFile(WRITE_PROBE_FILE, new Date().toISOString(), { overwrite: true });
+  } catch (err) {
+    logger.warn("destination:unwritable", {
+      destination: basePath,
+      error: error.errorMessage(err),
+    });
+    return undefined;
+  }
+  await fs.deleteFile(WRITE_PROBE_FILE, { force: true }).catch(() => undefined);
+  return fs;
 }
 
 /** Resolve the Databricks Assistant skills destination, or `undefined` for local temp. */
