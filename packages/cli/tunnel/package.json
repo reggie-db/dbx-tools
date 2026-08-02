@@ -93,6 +93,10 @@
         "types": "./lib/src/rate-limit.d.ts",
         "default": "./lib/src/rate-limit.js"
       },
+      "./signing-key": {
+        "types": "./lib/src/signing-key.d.ts",
+        "default": "./lib/src/signing-key.js"
+      },
       "./package.json": "./package.json"
     }
   },
@@ -111,6 +115,7 @@
     "./portr": "./src/portr.ts",
     "./proxy": "./src/proxy.ts",
     "./rate-limit": "./src/rate-limit.ts",
+    "./signing-key": "./src/signing-key.ts",
     "./package.json": "./package.json"
   },
   "files": [
