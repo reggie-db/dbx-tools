@@ -206,6 +206,38 @@ const isRunnable = predicate
 short-circuits. `predicate.create()` returns composable predicates with `and`,
 `or`, and `negate`, used heavily by the projen engine.
 
+## Dates And Durations
+
+```ts
+object.toDate("2026-08-02"); //  a date or ISO instant
+object.toDate("1785697899"); //  epoch SECONDS (not the year 1785697899)
+object.toDate(1785697899000); // epoch millis
+object.toDate("30 days ago"); // relative to now
+object.toDate("now");
+object.toDate("nope"); //        undefined - never throws
+
+object.toDuration("1 hour 30 minutes"); // 5_400_000
+object.toDuration("2ms"); //               2
+object.toDuration("-7d"); //               -604_800_000
+```
+
+Both are for values typed by HAND into env vars, CLI flags, and config files, so
+they are deliberately lenient: whitespace between amount and unit is optional,
+units are case-insensitive, and plurals and abbreviations are equivalent (`2ms`
+=== `2 milliseconds`, `1h` === `1 hr` === `1 Hour`). Signs make a duration an
+OFFSET, which is what lets `toDate` read `-30d` / `12 hours ago` / `in 45s` as
+instants.
+
+`toDate` exists rather than `new Date(value)` because a bare epoch usually
+arrives as a STRING (`date +%s`, a JSON field, a copied log line) and
+`Date.parse("1785697899")` reads that as a YEAR, landing 1.7 billion years out.
+Numeric input is therefore routed to the epoch path, with values under `1e11`
+read as seconds and the rest as milliseconds. An unknown unit fails the whole
+duration parse instead of being skipped, so `1 fortnight` is `undefined` rather
+than `1`. Neither function throws - like `toBoolean` they return `undefined`, so
+the caller decides whether a bad value is fatal, a warning, or a fallback
+(`@dbx-tools/cli-tunnel`'s `--session-cutoff` warns and carries on).
+
 ## Iterables
 
 ```ts
@@ -337,8 +369,9 @@ without paying formatting cost when disabled.
 - `json` - non-throwing `parse()` and record-narrowing `parseRecord()`.
 - `string` - tokenization, slugs, identifiers, human labels, string coercion,
   config lists, descriptions, pluralization, and HTML escaping.
-- `object` - record checks, boolean coercion, present-only field spreading, deep
-  equality, shape types, and lazy sequence transforms + collection helpers.
+- `object` - record checks, boolean/date/duration coercion, present-only field
+  spreading, deep equality, shape types, and lazy sequence transforms +
+  collection helpers.
 - `env` - config-over-environment resolution: strings, booleans, positive
   numbers/integers, and lists, with env-name fallback chains. `name()` gives the
   primary variable name for a log line or error - an `EnvKey` may be a bare

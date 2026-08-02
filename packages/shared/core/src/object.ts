@@ -3,7 +3,9 @@
  *
  * Value guards / coercions / shape types: {@link isRecord} narrows parsed JSON
  * to a record, {@link toBoolean} coerces loose truthy/falsy values, {@link
- * optional} spreads a field only when it is present, {@link deepEqual} compares
+ * toDuration} parses `1h30m` / `2 milliseconds` to millis, {@link toDate}
+ * coerces a date/ISO string/epoch number/relative duration, {@link optional}
+ * spreads a field only when it is present, {@link deepEqual} compares
  * structurally, and {@link NameLike}/{@link NonFunctionKeys} describe object
  * shapes.
  *
@@ -870,6 +872,182 @@ export function toBoolean(value: unknown): boolean | undefined {
     else if (value === 0) return false;
   }
   return undefined;
+}
+
+/**
+ * Largest value read as epoch SECONDS rather than milliseconds.
+ *
+ * `1e11` seconds is the year 5138 and `1e11` ms is 1973-03-03, so every value a
+ * caller realistically means as millis is above the line and every value they
+ * mean as seconds is below it. The ambiguity is unavoidable - the two units share
+ * a number line - so the split is placed where neither side has a plausible
+ * claim.
+ */
+const SECONDS_CEILING = 1e11;
+
+/**
+ * Milliseconds per unit, keyed by SINGULAR alias. {@link toDuration} retries a
+ * lookup without a trailing `s`, so every plural spelling is covered without
+ * listing it (`ms` is already singular, hence its own entry).
+ *
+ * `m` is MINUTES and months need `mo`, following the near-universal convention
+ * (`ms`, `date`, cron prose); month and year are calendar approximations (30 /
+ * 365 days) because a duration has no anchor date to be exact against.
+ */
+const DURATION_UNITS: ReadonlyArray<readonly [ms: number, aliases: readonly string[]]> = [
+  [1, ["ms", "msec", "millisecond", "milli"]],
+  [1000, ["s", "sec", "second"]],
+  [60_000, ["m", "min", "minute"]],
+  [3_600_000, ["h", "hr", "hour"]],
+  [86_400_000, ["d", "day"]],
+  [604_800_000, ["w", "wk", "week"]],
+  [2_592_000_000, ["mo", "mon", "month"]],
+  [31_536_000_000, ["y", "yr", "year"]],
+];
+
+const DURATION_UNIT_MS: ReadonlyMap<string, number> = new Map(
+  DURATION_UNITS.flatMap(([ms, aliases]) => aliases.map((alias) => [alias, ms] as const)),
+);
+
+/** One `<amount><unit>` term inside a duration string. */
+const DURATION_TERM = /([+-]?)(\d+(?:\.\d+)?)\s*([a-z]+)/g;
+
+/**
+ * Coerce a loose duration to MILLISECONDS, or `undefined` when it can't be
+ * interpreted.
+ *
+ * Deliberately lenient, because these values are typed by hand into env vars,
+ * CLI flags, and config files: whitespace between amount and unit is optional and
+ * unlimited, units are case-insensitive, plurals and the common abbreviations are
+ * equivalent (`2ms` === `2 milliseconds`, `1h` === `1 hr` === `1 Hour`), `and` and
+ * thousands separators are ignored (`1,500 ms`, `1 hour and 30 minutes`), and
+ * terms compose (`1h30m`). A plain `number` passes through as milliseconds.
+ *
+ * Signs are supported so a duration can express an OFFSET rather than only a
+ * length: a leading `-` (or a trailing `ago`) makes the result negative, and an
+ * unsigned term inherits the previous term's sign, so `-1h30m` is -90 minutes
+ * rather than -60 + 30. {@link toDate} uses that to turn `-7d` / `7 days ago`
+ * into an instant relative to now.
+ *
+ * An UNKNOWN unit fails the whole parse rather than being skipped - `1 fortnight`
+ * returning `1` silently would be worse than returning nothing - which is also
+ * what keeps {@link toDate} from mistaking `1 Jan 2026` for a duration.
+ *
+ * @example
+ * toDuration("30s");                    // 30_000
+ * toDuration("1 hour 30 minutes");      // 5_400_000
+ * toDuration("-7 days");                // -604_800_000
+ * toDuration("2 weeks ago");            // -1_209_600_000
+ * toDuration("soon");                   // undefined
+ */
+export function toDuration(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string") return undefined;
+  // A unitless string means the same as the unitless number: milliseconds.
+  if (/^[+-]?\d+(\.\d+)?$/.test(value.trim())) return toDuration(Number(value.trim()));
+
+  let text = value
+    .toLowerCase()
+    .replaceAll(/[,_]/g, "")
+    .replaceAll(/\band\b/g, " ")
+    .trim();
+  let negate = false;
+  if (text.endsWith("ago")) {
+    negate = true;
+    text = text.slice(0, -"ago".length);
+  }
+  text = text.replace(/^in\b/, "").trim();
+  if (!text) return undefined;
+
+  const terms = [...text.matchAll(DURATION_TERM)];
+  if (terms.length === 0) return undefined;
+
+  // Everything outside the matched terms must be separators only; otherwise the
+  // string is something else that merely CONTAINS a duration-shaped fragment.
+  let leftover = text;
+  for (const term of terms) leftover = leftover.replace(term[0], " ");
+  if (leftover.trim()) return undefined;
+
+  let total = 0;
+  let sign = 1;
+  for (const [, explicitSign, amount, unit] of terms) {
+    if (explicitSign) sign = explicitSign === "-" ? -1 : 1;
+    const unitMs = DURATION_UNIT_MS.get(unit) ?? DURATION_UNIT_MS.get(unit.replace(/s$/, ""));
+    if (unitMs === undefined) return undefined;
+    total += sign * Number(amount) * unitMs;
+  }
+  return negate ? -total : total;
+}
+
+/**
+ * Coerce a loose date-ish value to a real `Date`, or `undefined` when it can't be
+ * interpreted. Accepts, in this order:
+ *
+ *   - a `Date` (passed through; an invalid one is a miss);
+ *   - an epoch NUMBER or numeric string, in seconds or milliseconds (see
+ *     {@link SECONDS_CEILING});
+ *   - `now` (and its `today` spelling), for the current instant;
+ *   - a {@link toDuration} expression, resolved RELATIVE TO NOW, so `-7d`,
+ *     `7 days ago`, and `in 30 minutes` are all valid instants;
+ *   - anything `Date.parse` understands (`2026-08-02`, an ISO/UTC instant).
+ *
+ * The epoch unit inference is the reason this exists rather than
+ * `new Date(value)`: a bare epoch arrives as a STRING from an env var or a CLI
+ * flag as often as it arrives as a number (`date +%s`, a JSON field, a copied log
+ * line), and `Date.parse("1785697899")` reads that as a YEAR, silently landing
+ * 1.7 billion years out. Numeric strings are therefore routed to the epoch path,
+ * never to `Date.parse`.
+ *
+ * Like {@link toBoolean} this NEVER throws and returns `undefined` for anything
+ * uninterpretable, so a caller decides whether a bad value is fatal, a warning,
+ * or a fallback.
+ *
+ * @example
+ * toDate("now");               // this instant
+ * toDate("2026-08-02");        // 2026-08-02T00:00:00.000Z
+ * toDate("1785697899");        // seconds -> 2026-08-02T...
+ * toDate(1785697899000);       // millis  -> the same instant
+ * toDate("30 days ago");       // now - 30d
+ * toDate("nope");              // undefined
+ */
+export function toDate(value: unknown): Date | undefined {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value;
+  }
+
+  const epochMs = toEpochMs(value);
+  if (epochMs !== undefined) return fromMs(epochMs);
+
+  if (typeof value !== "string") return undefined;
+
+  const text = value.trim().toLowerCase();
+  if (text === "now" || text === "today") return new Date();
+
+  const offsetMs = toDuration(value);
+  if (offsetMs !== undefined) return fromMs(Date.now() + offsetMs);
+
+  const parsed = Date.parse(value.trim());
+  return Number.isNaN(parsed) ? undefined : new Date(parsed);
+}
+
+/** A `Date` for epoch `ms`, or `undefined` when it is out of representable range. */
+function fromMs(ms: number): Date | undefined {
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/** Epoch milliseconds for a numeric value/string, or `undefined` when not one. */
+function toEpochMs(value: unknown): number | undefined {
+  let numeric: number;
+  if (typeof value === "number") {
+    numeric = value;
+  } else if (typeof value === "string" && /^[+-]?\d+(\.\d+)?$/.test(value.trim())) {
+    numeric = Number(value.trim());
+  } else {
+    return undefined;
+  }
+  if (!Number.isFinite(numeric)) return undefined;
+  return Math.abs(numeric) < SECONDS_CEILING ? numeric * 1000 : numeric;
 }
 
 /**

@@ -374,7 +374,17 @@ second package, put it in shared-core rather than duplicating it.
   string), `parseList` (a config value that may be an array OR one
   comma/whitespace-separated env string), `escapeHtml`, `pluralize`.
 - `object` - `isRecord` (narrowing parsed JSON), `deepEqual` (never compare via
-  `JSON.stringify`), `toBoolean`, plus the lazy `Sequence` transforms.
+  `JSON.stringify`), `toBoolean`, `optional` (spread a field only when present),
+  plus the lazy `Sequence` transforms.
+- `object.toDate` / `object.toDuration` - the ONE place hand-typed dates and
+  durations are interpreted. `toDate` takes a `Date`, a date/ISO string, epoch
+  seconds OR millis (inferred; `Date.parse("1785697899")` would read that as a
+  YEAR), `now`, or a relative duration (`-30d`, `7 days ago`). `toDuration` takes
+  `1h30m` / `2 milliseconds` / `-7d`, lenient about whitespace, case, plurals,
+  and abbreviations. Both return `undefined` rather than throwing, like
+  `toBoolean`. Do not hand-roll a `1e11` seconds-vs-millis check or a
+  `(\d+)(ms|s|m|h)` regex in a package - `cli-tunnel`'s `--session-cutoff` is the
+  reference consumer.
 - `pattern` - `toPatternMatcher` / `toPattern` / `escapeRegExp`: a config
   allow-list of literals, shell globs, and `/regex/` literals compiled to one
   predicate. EVERY configurable allow-list in this repo takes those three shapes

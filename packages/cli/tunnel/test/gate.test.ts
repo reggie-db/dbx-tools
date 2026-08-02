@@ -4,11 +4,17 @@ import { CacheManager } from "@databricks/appkit";
 import { async as asyncModule, brand } from "@dbx-tools/shared-core";
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
 import { expiresIn } from "../src/app.ts";
-import { ALLOW_ENV, BRAND_NAME_ENV, CODE_TTL_ENV, SUBJECT_ENV } from "../src/env.ts";
+import {
+  ALLOW_ENV,
+  BRAND_NAME_ENV,
+  CODE_TTL_ENV,
+  SESSION_CUTOFF_ENV,
+  SUBJECT_ENV,
+} from "../src/env.ts";
 import { CodeStore, signSession, verifySession } from "../src/otp.ts";
 import { resolveAuthGateConfig } from "../src/plugin.ts";
 import { RateLimiter } from "../src/rate-limit.ts";
-import { KEY_TTL_SECONDS, resetSigningKey, resolveSessionEpoch } from "../src/signing-key.ts";
+import { KEY_TTL_SECONDS, resetSigningKey, resolveSessionCutoff } from "../src/signing-key.ts";
 
 describe("allowlist", () => {
   it("matches domain shortcut, glob, and /regex/; empty = nobody", () => {
@@ -91,7 +97,7 @@ describe("cache-backed signing key", () => {
     await CacheManager.getInstance();
     delete process.env.TUNNEL_AUTH_JWT_SECRET;
     delete process.env.AUTH_JWT_SECRET;
-    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    delete process.env.TUNNEL_AUTH_SESSION_CUTOFF;
     resetSigningKey();
   });
 
@@ -139,77 +145,85 @@ describe("cache-backed signing key", () => {
   });
 });
 
-describe("session force-clear epoch", () => {
+describe("session force-clear cutoff", () => {
   before(async () => {
     await CacheManager.getInstance();
-    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    delete process.env.TUNNEL_AUTH_SESSION_CUTOFF;
     resetSigningKey();
   });
 
-  it("parses a date, an ISO timestamp, epoch seconds, and epoch millis", () => {
-    assert.equal(resolveSessionEpoch("2026-08-02"), Date.parse("2026-08-02"));
+  it("accepts a date, an ISO instant, epoch seconds/millis, and a relative duration", () => {
+    assert.equal(resolveSessionCutoff("2026-08-02"), Date.parse("2026-08-02"));
     assert.equal(
-      resolveSessionEpoch("2026-08-02T12:00:00.000Z"),
+      resolveSessionCutoff("2026-08-02T12:00:00.000Z"),
       Date.parse("2026-08-02T12:00:00.000Z"),
     );
     // `date +%s` output. Seconds must not be read as a YEAR, which is what
     // `Date.parse` would do with a bare number.
-    assert.equal(resolveSessionEpoch("1785697899"), 1785697899000);
-    assert.equal(resolveSessionEpoch("1785697899000"), 1785697899000);
-    assert.equal(resolveSessionEpoch(new Date(1785697899000)), 1785697899000);
+    assert.equal(resolveSessionCutoff("1785697899"), 1785697899000);
+    assert.equal(resolveSessionCutoff("1785697899000"), 1785697899000);
+    assert.equal(resolveSessionCutoff(new Date(1785697899000)), 1785697899000);
+    // The spelling an operator actually reaches for: sign out anyone whose
+    // session predates a window, without computing a timestamp.
+    const week = resolveSessionCutoff("-7d");
+    assert.ok(Math.abs(week - (Date.now() - 604_800_000)) < 5_000, "-7d is now minus a week");
+    assert.equal(
+      Math.round(resolveSessionCutoff("2 weeks ago") / 1000),
+      Math.round((Date.now() - 1_209_600_000) / 1000),
+    );
   });
 
   it("treats unset / unparseable as no cutoff rather than throwing", () => {
     // This is the switch that logs a fleet back in; a typo must not stop boot.
-    assert.equal(resolveSessionEpoch(undefined), 0);
-    assert.equal(resolveSessionEpoch(""), 0);
-    assert.equal(resolveSessionEpoch("not-a-date"), 0);
+    assert.equal(resolveSessionCutoff(undefined), 0);
+    assert.equal(resolveSessionCutoff(""), 0);
+    assert.equal(resolveSessionCutoff("not-a-date"), 0);
   });
 
-  it("refuses a session issued before the epoch, and accepts one issued after", async () => {
+  it("refuses a session issued before the cutoff, and accepts one issued after", async () => {
     // Signed a couple of seconds "ago" so the cutoff below can land strictly
     // after it - `iat` is second-granular, so a same-second token is kept.
-    const token = await signSession("epoch@b.com", 3600);
-    assert.equal(await verifySession(token), "epoch@b.com");
+    const token = await signSession("cutoff@b.com", 3600);
+    assert.equal(await verifySession(token), "cutoff@b.com");
 
     await asyncModule.sleep(1100);
-    process.env.TUNNEL_AUTH_SESSION_EPOCH = String(Date.now());
+    process.env.TUNNEL_AUTH_SESSION_CUTOFF = String(Date.now());
     resetSigningKey();
-    assert.equal(await verifySession(token), undefined, "a pre-epoch cookie is dead");
+    assert.equal(await verifySession(token), undefined, "a pre-cutoff cookie is dead");
 
-    // A session minted under the new epoch still works - the switch clears the
+    // A session minted under the new cutoff still works - the switch clears the
     // outstanding sessions, it does not lock the app.
-    const fresh = await signSession("epoch@b.com", 3600);
-    assert.equal(await verifySession(fresh), "epoch@b.com");
+    const fresh = await signSession("cutoff@b.com", 3600);
+    assert.equal(await verifySession(fresh), "cutoff@b.com");
 
-    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    delete process.env.TUNNEL_AUTH_SESSION_CUTOFF;
     resetSigningKey();
   });
 
-  it("clamps a FUTURE epoch to now, so a mistyped year can't lock everyone out", async () => {
+  it("clamps a FUTURE cutoff to now, so a mistyped year can't lock everyone out", async () => {
     const future = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-    const resolved = resolveSessionEpoch(future);
+    const resolved = resolveSessionCutoff(future);
     assert.ok(resolved < future.getTime(), "not taken at face value");
     assert.ok(Math.abs(resolved - Date.now()) < 5_000, "held at now");
 
     // The real hazard: with an unclamped future cutoff a FRESH sign-in would also
     // be refused, leaving no way back in.
-    process.env.TUNNEL_AUTH_SESSION_EPOCH = future.toISOString();
+    process.env.TUNNEL_AUTH_SESSION_CUTOFF = future.toISOString();
     resetSigningKey();
     const fresh = await signSession("future@b.com", 3600);
     assert.equal(await verifySession(fresh), "future@b.com");
-    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    delete process.env.TUNNEL_AUTH_SESSION_CUTOFF;
     resetSigningKey();
   });
 
-  it("scopes the cached key by epoch, so moving it orphans the previous key", async () => {
+  it("scopes the cached key by cutoff, so moving it orphans the previous key", async () => {
     const before = await signSession("orphan@b.com", 3600);
-    process.env.TUNNEL_AUTH_SESSION_EPOCH = "2026-08-02";
+    process.env.TUNNEL_AUTH_SESSION_CUTOFF = "2026-08-02";
     resetSigningKey();
     // A different cache key entirely, so this is a different signing key - the
     // old cookie cannot verify even ignoring the `iat` check.
     assert.equal(await verifySession(before), undefined);
-    delete process.env.TUNNEL_AUTH_SESSION_EPOCH;
+    delete process.env.TUNNEL_AUTH_SESSION_CUTOFF;
     resetSigningKey();
   });
 });
@@ -287,6 +301,10 @@ describe("env var names", () => {
     withEnv("EMAIL_AUTH_ALLOW", "legacy.example", () => {
       assert.deepEqual(resolveAuthGateConfig({}).allow, ["legacy.example"]);
     });
+    // Shipped under the "epoch" spelling before the cutoff rename.
+    withEnv("TUNNEL_AUTH_SESSION_EPOCH", "1785697899", () => {
+      assert.equal(resolveSessionCutoff(), 1785697899000);
+    });
   });
 
   it("prefers the current name when both are set", () => {
@@ -299,7 +317,7 @@ describe("env var names", () => {
 
   it("lists the current name first in every alias list", () => {
     // `env.*` is earliest-wins, so ordering IS the deprecation policy.
-    for (const keys of [ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, CODE_TTL_ENV]) {
+    for (const keys of [ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, CODE_TTL_ENV, SESSION_CUTOFF_ENV]) {
       assert.ok(Array.isArray(keys));
       assert.match(keys[0]!, /^TUNNEL_/);
     }

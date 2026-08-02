@@ -370,9 +370,9 @@ async function readMetadata(fs: FileSystem): Promise<RemoteSkillsMetadata | unde
  */
 function isFresh(entry: RemoteSkillCacheEntry, ttlMs: number): boolean {
   if (ttlMs <= 0 || !Array.isArray(entry.skills)) return false;
-  const downloadedAt = Date.parse(entry.downloadedAt ?? "");
-  if (Number.isNaN(downloadedAt)) return false;
-  const age = Date.now() - downloadedAt;
+  const downloadedAt = object.toDate(entry.downloadedAt);
+  if (!downloadedAt) return false;
+  const age = Date.now() - downloadedAt.getTime();
   return age >= 0 && age < ttlMs;
 }
 

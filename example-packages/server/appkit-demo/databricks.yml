@@ -150,8 +150,12 @@ resources:
             value: demo.apps.dbx.tools
           - name: PORTR_TOKEN
             value_from: portr-token
-          - name: TUNNEL_AUTH_JWT_SECRET
-            value_from: auth-jwt-secret
+          # TUNNEL_AUTH_JWT_SECRET is deliberately NOT set: the gate persists its
+          # own signing key in the Lakebase-backed AppKit cache for 30 days, so
+          # sessions survive the restarts this app sees on every redeploy. Leaving
+          # it unset is what dogfoods that path. Set it (from the `auth-jwt-secret`
+          # secret) for a multi-instance deployment, where an operator-held secret
+          # beats waiting for two instances to converge on a cached key.
       user_api_scopes:
         - sql
         - dashboards.genie

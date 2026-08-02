@@ -37,8 +37,9 @@ address against an allow-list, verified by a code sent over
 - HS256 session JWT (via `jose`) carrying only the email, signed with a key that
   is PERSISTED in AppKit's cache for 30 days - so a signed-in browser stays signed
   in across the restarts a tunnel sees whenever the app it wraps reloads. An
-  operator-held `TUNNEL_AUTH_JWT_SECRET` still wins. `TUNNEL_AUTH_SESSION_EPOCH`
-  is the log-everyone-out switch.
+  operator-held `TUNNEL_AUTH_JWT_SECRET` still wins. `TUNNEL_AUTH_SESSION_CUTOFF`
+  is the log-everyone-out switch, and takes a relative duration (`-30d`) as
+  readily as a date.
 - Allow-list patterns in three shapes, matched in order: a domain shortcut
   (`example.com`, `@example.com`), a shell-style glob (`*@example.com`), or a
   regex literal (`/^ops-.*@example\.com$/`). An empty list allows nobody.
@@ -95,26 +96,27 @@ original public port itself.
 Every flag has an environment fallback, so a deployment can configure the gate
 with no change to its start command.
 
-| Flag                | Env                         | Default                        |
-| ------------------- | --------------------------- | ------------------------------ |
-| `--allow`           | `TUNNEL_AUTH_ALLOW`         | empty (allow nobody)           |
-| `--subject`         | `TUNNEL_AUTH_SUBJECT`       | `Your verification code`       |
-| `--brand-name`      | `TUNNEL_AUTH_BRAND_NAME`    | the brand context `name`       |
-| `--message`         | `TUNNEL_AUTH_MESSAGE`       | `Your verification code is:`   |
-| `--session-ttl`     | `TUNNEL_AUTH_SESSION_TTL`   | `2592000` (30 days)            |
-| `--code-ttl`        | `TUNNEL_AUTH_CODE_TTL`      | `600` (10 minutes)             |
-| `--session-epoch`   | `TUNNEL_AUTH_SESSION_EPOCH` | unset (no cutoff)              |
-| `--subdomain`       | -                           | derived from the public domain |
-| `--public-domain`   | `TUNNEL_PUBLIC_DOMAIN`      | -                              |
-| `--forward-headers` | `TUNNEL_FORWARD_HEADERS`    | the built-in `x-` allow-list   |
-| `--insecure`        | `TUNNEL_INSECURE`           | off (the gate is required)     |
-| -                   | `TUNNEL_AUTH_JWT_SECRET`    | an ephemeral per-process key   |
+| Flag                | Env                          | Default                        |
+| ------------------- | ---------------------------- | ------------------------------ |
+| `--allow`           | `TUNNEL_AUTH_ALLOW`          | empty (allow nobody)           |
+| `--subject`         | `TUNNEL_AUTH_SUBJECT`        | `Your verification code`       |
+| `--brand-name`      | `TUNNEL_AUTH_BRAND_NAME`     | the brand context `name`       |
+| `--message`         | `TUNNEL_AUTH_MESSAGE`        | `Your verification code is:`   |
+| `--session-ttl`     | `TUNNEL_AUTH_SESSION_TTL`    | `2592000` (30 days)            |
+| `--code-ttl`        | `TUNNEL_AUTH_CODE_TTL`       | `600` (10 minutes)             |
+| `--session-cutoff`  | `TUNNEL_AUTH_SESSION_CUTOFF` | unset (no cutoff)              |
+| `--subdomain`       | -                            | derived from the public domain |
+| `--public-domain`   | `TUNNEL_PUBLIC_DOMAIN`       | -                              |
+| `--forward-headers` | `TUNNEL_FORWARD_HEADERS`     | the built-in `x-` allow-list   |
+| `--insecure`        | `TUNNEL_INSECURE`            | off (the gate is required)     |
+| -                   | `TUNNEL_AUTH_JWT_SECRET`     | an ephemeral per-process key   |
 
 Every variable is `TUNNEL_`-prefixed because the gate runs as a WRAPPER: it and
 the app it wraps share one environment, so a generic name is one the app may
 already be using. The earlier unprefixed spellings - `AUTH_SUBJECT`,
 `AUTH_BRAND_NAME`, `AUTH_MESSAGE`, `AUTH_SESSION_TTL`, `AUTH_CODE_TTL`,
-`AUTH_JWT_SECRET`, `EMAIL_AUTH_ALLOW`, `PUBLIC_DOMAIN` - are still read as
+`AUTH_JWT_SECRET`, `EMAIL_AUTH_ALLOW`, `PUBLIC_DOMAIN`, plus
+`TUNNEL_AUTH_SESSION_EPOCH` from before the cutoff rename - are still read as
 deprecated aliases, with the `TUNNEL_` name winning when both are set, so an
 existing deployment needs no coordinated rename. `PORTR_TOKEN` / `PORTR_SERVER`
 keep their names: that namespace belongs to portr itself, as does
@@ -153,19 +155,24 @@ for no reason.
 
 ### Signing everyone out
 
-`--session-epoch` / `TUNNEL_AUTH_SESSION_EPOCH` invalidates every session issued
+`--session-cutoff` / `TUNNEL_AUTH_SESSION_CUTOFF` invalidates every session issued
 before a given moment:
 
 ```sh
-dbxt-tunnel --session-epoch 2026-08-02 -- bun src/server.ts
-TUNNEL_AUTH_SESSION_EPOCH=$(date +%s) dbxt-tunnel -- bun src/server.ts
+dbxt-tunnel --session-cutoff -30d -- bun src/server.ts
+dbxt-tunnel --session-cutoff 2026-08-02 -- bun src/server.ts
+TUNNEL_AUTH_SESSION_CUTOFF="now" dbxt-tunnel -- bun src/server.ts
 ```
 
-Accepts a date, an ISO timestamp, or bare epoch seconds / millis. It works two
-ways at once, so it holds however the key was resolved: the epoch is part of the
-key's CACHE KEY (moving it orphans the previous key), and it is also checked
-against each token's `iat` (which is what makes it bite when
-`TUNNEL_AUTH_JWT_SECRET` is set and there is no key to rotate).
+The value goes through `@dbx-tools/shared-core`'s `object.toDate`, so a date, an
+ISO instant, epoch seconds or millis from `date +%s`, and a relative duration
+(`-30d`, `12 hours ago`) all work - the relative spelling being the one an
+operator usually wants, since "sign out anything older than a month" needs no
+timestamp arithmetic. It works two ways at once, so it holds however the key was
+resolved: the cutoff is part of the key's CACHE KEY (moving it orphans the
+previous key), and it is also checked against each token's `iat` (which is what
+makes it bite when `TUNNEL_AUTH_JWT_SECRET` is set and there is no key to
+rotate).
 
 A FUTURE date is clamped to now, because an unclamped one would refuse the
 sessions it is about to mint as well as the old ones - an app nobody can sign in
@@ -279,7 +286,7 @@ by hand.
   open login routes, session enforcement, and WebSocket forwarding.
 - `otp` - the `CacheManager`-backed code store and the session JWT.
 - `signingKey` - the cache-persisted HS256 session key (30-day TTL, get/generate/
-  re-read convergence) and the `TUNNEL_AUTH_SESSION_EPOCH` force-clear cutoff.
+  re-read convergence) and the `TUNNEL_AUTH_SESSION_CUTOFF` force-clear cutoff.
 - `allowlist` - email domain / glob / regex matching and `looksLikeEmail`.
 - `headers` - the inbound-header allow-list: `toHeaderPolicy()`,
   `DEFAULT_FORWARD_HEADERS`, and the `PROTECTED_HEADERS` no pattern can forward.

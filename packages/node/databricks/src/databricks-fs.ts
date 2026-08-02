@@ -14,7 +14,7 @@
  */
 
 import { WorkspaceClient } from "@databricks/sdk-experimental";
-import { hash } from "@dbx-tools/shared-core";
+import { hash, object } from "@dbx-tools/shared-core";
 import {
   BaseFileSystem,
   baseFS,
@@ -245,7 +245,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     return this.dispatch<Omit<FileStat, "path">>(resolvedPath, {
       dbfs: async (client) => {
         const info = await client.dbfs.getStatus({ path: resolvedPath });
-        const modified = toDate(info.modification_time);
+        const modified = object.toDate(info.modification_time);
         return {
           name: posixPath.basename(info.path ?? resolvedPath) || fallbackName,
           type: info.is_dir ? "directory" : "file",
@@ -259,8 +259,8 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
         return {
           name: posixPath.basename(info.path ?? resolvedPath) || fallbackName,
           type: info.object_type === "DIRECTORY" ? "directory" : "file",
-          createdAt: toDate(info.created_at),
-          modifiedAt: toDate(info.modified_at),
+          createdAt: object.toDate(info.created_at),
+          modifiedAt: object.toDate(info.modified_at),
         };
       },
       volumes: (client) => this.statVolumePath(client, resolvedPath, fallbackName),
@@ -327,7 +327,7 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
   ): Promise<Omit<FileStat, "path">> {
     try {
       const metadata = await client.files.getMetadata({ file_path: absolutePath });
-      const modified = parseHttpDate(metadata["last-modified"]);
+      const modified = object.toDate(metadata["last-modified"]);
       return {
         name: fallbackName,
         type: "file",
@@ -431,14 +431,4 @@ function bufferToReadableStream(buffer: Buffer): globalThis.ReadableStream<Uint8
       controller.close();
     },
   });
-}
-
-function toDate(value: number | undefined): Date | undefined {
-  return value === undefined ? undefined : new Date(value);
-}
-
-function parseHttpDate(value: string | undefined): Date | undefined {
-  if (!value) return undefined;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed) : undefined;
 }

@@ -53,10 +53,14 @@ export const CODE_TTL_ENV: EnvKey = ["TUNNEL_AUTH_CODE_TTL", "AUTH_CODE_TTL"];
 export const JWT_SECRET_ENV: EnvKey = ["TUNNEL_AUTH_JWT_SECRET", "AUTH_JWT_SECRET"];
 
 /**
- * Force-clear date for sessions issued before it: every earlier cookie stops
- * verifying. Any `Date`-parseable value, or bare epoch seconds / millis.
+ * Force-clear cutoff: every session issued BEFORE it stops verifying. Anything
+ * `object.toDate` accepts - a date, an ISO instant, epoch seconds/millis, or a
+ * relative duration (`-30d`, `7 days ago`).
  */
-export const SESSION_EPOCH_ENV: EnvKey = "TUNNEL_AUTH_SESSION_EPOCH";
+export const SESSION_CUTOFF_ENV: EnvKey = [
+  "TUNNEL_AUTH_SESSION_CUTOFF",
+  "TUNNEL_AUTH_SESSION_EPOCH",
+];
 
 /** The public `<subdomain>.<server>` portr should serve on. */
 export const PUBLIC_DOMAIN_ENV: EnvKey = ["TUNNEL_PUBLIC_DOMAIN", "PUBLIC_DOMAIN"];

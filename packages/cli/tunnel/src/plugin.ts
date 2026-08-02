@@ -17,7 +17,7 @@
  */
 
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
-import { brand, env, log, string } from "@dbx-tools/shared-core";
+import { brand, env, log, object, string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-email";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
 import {
@@ -30,7 +30,7 @@ import {
 } from "./env.ts";
 import { CodeStore, signSession, verifySession } from "./otp.ts";
 import { RateLimiter } from "./rate-limit.ts";
-import { KEY_TTL_SECONDS, resolveSessionEpoch, signingKey } from "./signing-key.ts";
+import { KEY_TTL_SECONDS, resolveSessionCutoff, signingKey } from "./signing-key.ts";
 
 const logger = log.logger("tunnel:auth");
 
@@ -76,13 +76,14 @@ export interface AuthGateConfig extends BasePluginConfig {
   /** Max verify attempts per issued code. Default 5. */
   maxAttempts?: number;
   /**
-   * Force-clear date: every session issued BEFORE it stops verifying, so moving
-   * it forward signs everyone out. Env TUNNEL_AUTH_SESSION_EPOCH.
+   * Force-clear cutoff: every session issued BEFORE it stops verifying, so moving
+   * it forward signs everyone out. Env TUNNEL_AUTH_SESSION_CUTOFF.
    *
-   * Any `Date`-parseable value (`2026-08-02`, an ISO timestamp) or bare epoch
-   * seconds / millis. Unset means no cutoff.
+   * Anything `object.toDate` accepts: a `Date`, `2026-08-02`, an ISO instant,
+   * epoch seconds/millis, or a relative duration (`-30d`, `7 days ago`). Unset
+   * means no cutoff.
    */
-  sessionEpoch?: string | number | Date;
+  sessionCutoff?: string | number | Date;
   /** Deliver a code to an address. Wired by the app to the email plugin. */
   sendCode?: (email: string, code: string, opts: SendCodeOptions) => Promise<void>;
 }
@@ -111,7 +112,7 @@ export interface ResolvedAuthGateConfig {
   codeTtlSeconds: number;
   maxAttempts: number;
   /** Force-clear cutoff in epoch ms; `0` when unset. */
-  sessionEpochMs: number;
+  sessionCutoffMs: number;
 }
 
 const DEFAULTS = {
@@ -148,7 +149,7 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     ),
     codeTtlSeconds: env.positiveInt(config.codeTtlSeconds, CODE_TTL_ENV, DEFAULTS.codeTtlSeconds),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
-    sessionEpochMs: resolveSessionEpoch(config.sessionEpoch),
+    sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
   };
 }
 
@@ -193,11 +194,11 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     // Resolve the signing key HERE rather than lazily on the first sign-in, so a
     // cache that cannot hold it (and the resulting "sessions won't survive a
     // restart" warning) shows up in the startup log, not hours later.
-    const { epochMs } = await signingKey(this.resolved.sessionEpochMs);
+    const { cutoffMs } = await signingKey(this.resolved.sessionCutoffMs);
     logger.info("ready", {
       patterns: this.resolved.allow.length,
       sessionTtlSeconds: this.resolved.sessionTtlSeconds,
-      ...(epochMs > 0 ? { sessionEpoch: new Date(epochMs).toISOString() } : {}),
+      ...object.optional("sessionCutoff", cutoffMs > 0 ? new Date(cutoffMs).toISOString() : null),
     });
   }
 

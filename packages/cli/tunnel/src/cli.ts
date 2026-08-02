@@ -52,7 +52,7 @@ interface TunnelOpts {
   message?: string;
   sessionTtl?: string;
   codeTtl?: string;
-  sessionEpoch?: string;
+  sessionCutoff?: string;
   insecure?: boolean;
   forwardHeaders?: string;
 }
@@ -77,8 +77,8 @@ function program(): Command {
     .option("--session-ttl <seconds>", "Session lifetime (env TUNNEL_AUTH_SESSION_TTL)")
     .option("--code-ttl <seconds>", "One-time-code lifetime (env TUNNEL_AUTH_CODE_TTL)")
     .option(
-      "--session-epoch <date>",
-      "Invalidate sessions issued before this date, signing everyone out: a date, ISO timestamp, or epoch seconds (env TUNNEL_AUTH_SESSION_EPOCH)",
+      "--session-cutoff <when>",
+      "Invalidate sessions issued before this point, signing everyone out: a date, ISO instant, epoch seconds, or relative duration like -30d (env TUNNEL_AUTH_SESSION_CUTOFF)",
     )
     .option(
       "--forward-headers <patterns>",
@@ -140,7 +140,7 @@ export async function runCli(argv: string[]): Promise<void> {
     message: opts.message,
     sessionTtlSeconds: opts.sessionTtl ? Number(opts.sessionTtl) : undefined,
     codeTtlSeconds: opts.codeTtl ? Number(opts.codeTtl) : undefined,
-    sessionEpoch: opts.sessionEpoch,
+    sessionCutoff: opts.sessionCutoff,
   };
 
   // 1. Spawn the wrapped app with the PRIVATE port. It binds loopback; only the

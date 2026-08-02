@@ -12,8 +12,8 @@
  * signing key is resolved by `./signing-key.ts`: `TUNNEL_AUTH_JWT_SECRET` when
  * set, else a key persisted in the cache for 30 days so cookies survive the
  * restarts a tunnel sees whenever the app it wraps reloads. A cookie signed
- * before `TUNNEL_AUTH_SESSION_EPOCH` is refused here as well as being orphaned by
- * the cache key, so the force-clear switch holds even for a still-current key.
+ * before `TUNNEL_AUTH_SESSION_CUTOFF` is refused here as well as being orphaned
+ * by the cache key, so the force-clear switch holds even for a still-current key.
  *
  * @module
  */
@@ -118,16 +118,16 @@ export async function signSession(email: string, ttlSeconds: number): Promise<st
 export async function verifySession(token: string | undefined): Promise<string | undefined> {
   if (!token) return undefined;
   try {
-    const { key, epochMs } = await signingKey();
+    const { key, cutoffMs } = await signingKey();
     const { payload } = await jwtVerify(token, key, { audience: JWT_AUD });
-    // Belt and braces with the epoch-scoped cache key: that alone already
-    // orphans older keys, but an operator who moved the epoch while
+    // Belt and braces with the cutoff-scoped cache key: that alone already
+    // orphans older keys, but an operator who moved the cutoff while
     // TUNNEL_AUTH_JWT_SECRET is set has no key rotation to rely on, and this
     // check is what makes the switch work in that case too.
     // Compared in whole SECONDS because `iat` has no finer resolution: against a
-    // millisecond epoch, a cookie minted in the same second as the cutoff would
-    // be refused depending on sub-second rounding.
-    if (epochMs > 0 && (payload.iat === undefined || payload.iat < Math.floor(epochMs / 1000))) {
+    // millisecond cutoff, a cookie minted in the same second as it would be
+    // refused depending on sub-second rounding.
+    if (cutoffMs > 0 && (payload.iat === undefined || payload.iat < Math.floor(cutoffMs / 1000))) {
       return undefined;
     }
     return typeof payload.email === "string" ? payload.email : undefined;
