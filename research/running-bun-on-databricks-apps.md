@@ -6,6 +6,9 @@ gate, PATH resolution, caching, and a minimal working example.
 Verified live on Databricks Apps (AWS), CLI v1.6.0. Container: Node v22.16.0,
 pnpm 11.0.8, user `app`, `HOME=/home/app`, app code at `/app/python/source_code`.
 
+For the local toolchain rather than the deploy path, see
+[Bun migration field notes](./bun-migration-field-notes.md).
+
 ## TL;DR that works
 
 `package.json` with `bun` as a dependency + `pnpm-workspace.yaml` with

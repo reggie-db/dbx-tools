@@ -798,6 +798,24 @@ Two migration gotchas worth calling out (both bit this repo):
   (`bun src/server.ts`, or a compiled CLI bin). Do not switch the deploy to
   `bun install` - see `research/running-bun-on-databricks-apps.md`.
 
+Migrating a downstream workspace surfaced a further set, written up in
+`research/bun-migration-field-notes.md` - read it before doing one. The ones that
+cost the most time: bun accepts node's `--env-file-if-exists` and silently loads
+NOTHING (use `--env-file`, already missing-file tolerant); `bun --watch build.ts`
+does not rebuild when bundler INPUTS change, only when the script's own imports do,
+so a `vite build --watch` replacement must watch for itself; bun's bundler does not
+copy `public/`; and a Databricks App's `Bun.build` needs `splitting` (the Workspace
+import API's 10 MB per-file limit fails the UPLOAD, not the build), `publicPath: "/"`
+(the static server rewrites `/*` to one `index.html`, so relative chunk paths 404 on
+nested routes), `external` for self-hosted fonts, and `sourcemap: "none"`.
+
+That note also records a live engine bug: `runSynth()` spawns
+`process.execPath --import tsx`, but under bun `process.execPath` IS bun, which
+cannot load tsx's loader (`Cannot find module './cjs/index.cjs' from ''`). It breaks
+the re-synth step of `projenrc`, `openapi`, and `sync`. Loading tsx under bun is
+pointless anyway - bun runs `.ts` natively - so the fix is to spawn without a loader
+when running under bun rather than to chase the resolution failure.
+
 ## Commands
 
 Everything below the install line is a projen TASK the engine registers on the

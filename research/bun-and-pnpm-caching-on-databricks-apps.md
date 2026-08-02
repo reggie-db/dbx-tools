@@ -7,6 +7,9 @@ they can be shared, and the recommended install/run split.
 Verified live on Databricks Apps (AWS), CLI v1.6.0. Container: Node v22.16.0,
 pnpm 11.0.8, user `app`, `HOME=/home/app`, app code at `/app/python/source_code`.
 
+For the local toolchain rather than the deploy path, see
+[Bun migration field notes](./bun-migration-field-notes.md).
+
 ## TL;DR
 
 - The platform's build-phase installer is **pnpm**. Its store lives at
