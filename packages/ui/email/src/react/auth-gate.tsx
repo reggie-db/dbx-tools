@@ -1,4 +1,4 @@
-import { string } from "@dbx-tools/shared-core";
+import { net, string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-email";
 import { Button, Input } from "@dbx-tools/ui-appkit/react";
 import { BrandIcon, useBrand } from "@dbx-tools/ui-branding/react";
@@ -86,12 +86,19 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
   const requestCode = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
-      if (!email.trim() || busy) return;
+      if (busy) return;
+      const addresses = net.parseEmails(email);
+      const normalizedEmail = addresses[0];
+      if (addresses.length !== 1 || !normalizedEmail || !net.isEmail(normalizedEmail)) {
+        setNotice("Enter a valid email address.");
+        return;
+      }
       setBusy(true);
       setNotice(null);
+      setEmail(normalizedEmail);
       try {
         const result = await postJson<{ ok: true; retryAfter?: number }>(`${AUTH_BASE}/request`, {
-          email: email.trim(),
+          email: normalizedEmail,
         });
         // Anti-enumeration: always advance to the code step. Surface only a
         // rate-limit cooldown, which leaks no allow-list state.
@@ -158,13 +165,13 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
         </p>
 
         {phase === "email" ? (
-          <form key="email" onSubmit={requestCode} className="space-y-3">
+          <form key="email" noValidate onSubmit={requestCode} className="space-y-3">
             <Input
               type="email"
               name="email"
               autoComplete="email"
               aria-label="Email address"
-              placeholder="you@company.com"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

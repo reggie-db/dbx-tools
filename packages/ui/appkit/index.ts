@@ -3,3 +3,5 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as reactAppkitUi from "./src/react/appkit-ui.ts";
+export * as reactBrandPicker from "./src/react/brand-picker.tsx";
+export type { BrandPreset, BrandPickerProps } from "./src/react/brand-picker.tsx";

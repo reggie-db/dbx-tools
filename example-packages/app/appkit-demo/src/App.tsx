@@ -1,6 +1,9 @@
+import { brand } from "@dbx-tools/shared-core";
 import { Button, Separator } from "@dbx-tools/ui-appkit/react";
-import { BrandLogo, BrandProvider } from "@dbx-tools/ui-branding/react";
+import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui-branding/react";
+import { useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import Brand from "@/pages/Brand";
 import Cards from "@/pages/Cards";
 import Conversations from "@/pages/Conversations";
 import Search from "@/pages/Search";
@@ -18,7 +21,7 @@ type RouteDef = {
   element: React.ReactNode;
 };
 
-const ROUTES: RouteDef[] = [
+const BASE_ROUTES: RouteDef[] = [
   {
     path: "/stream",
     label: "Stream",
@@ -45,46 +48,69 @@ const ROUTES: RouteDef[] = [
   },
 ];
 
-const Nav = () => {
+const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
   const { pathname } = useLocation();
+  const { context } = useBrand();
   return (
-    <nav className="max-w-4xl mx-auto flex items-center gap-1 px-4 md:px-6 py-2">
-      <BrandLogo height={24} className="mr-2 h-6 w-auto" />
-      {ROUTES.map((r) => (
-        <Button key={r.path} asChild size="sm" variant={pathname === r.path ? "default" : "ghost"}>
-          <Link to={r.path} title={r.description}>
-            {r.label}
-          </Link>
-        </Button>
-      ))}
+    <nav className="mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto px-4 py-2 md:px-6">
+      <Link to="/brand" className="mr-1 flex shrink-0 items-center gap-2 text-sm font-semibold">
+        <BrandIcon className="size-6" />
+        <span>{context.shortName}</span>
+      </Link>
+      <div className="flex items-center gap-1">
+        {routes.map((route) => (
+          <Button
+            key={route.path}
+            asChild
+            size="sm"
+            variant={pathname === route.path ? "default" : "ghost"}
+          >
+            <Link to={route.path} title={route.description}>
+              {route.label}
+            </Link>
+          </Button>
+        ))}
+      </div>
     </nav>
   );
 };
 
-const App = () => (
-  // `applyToDocument` writes the brand CSS vars + sets `data-brand` (which
-  // activates the inert `:root[data-brand]` token bridge) and updates the
-  // page title + favicon. Uses the default dbx-tools brand; pass `context`
-  // to theme with another brand.
-  <BrandProvider applyToDocument>
-    <BrowserRouter>
-      <div className="flex flex-col h-dvh">
-        <header>
-          <Nav />
-          <Separator />
-        </header>
-        <main className="flex-1 min-h-0">
-          <Routes>
-            <Route path="/" element={<Navigate to="/stream" replace />} />
-            {ROUTES.map((r) => (
-              <Route key={r.path} path={r.path} element={r.element} />
-            ))}
-            <Route path="*" element={<Navigate to="/stream" replace />} />
-          </Routes>
-        </main>
-      </div>
-    </BrowserRouter>
-  </BrandProvider>
-);
+const App = () => {
+  const [brandContext, setBrandContext] = useState(brand.defaultBrandContext);
+  const routes: RouteDef[] = [
+    ...BASE_ROUTES,
+    {
+      path: "/brand",
+      label: "Brand",
+      description: "Live brand picker and rich email template previews",
+      element: <Brand value={brandContext} onChange={setBrandContext} />,
+    },
+  ];
+
+  return (
+    // `applyToDocument` writes the brand CSS vars + sets `data-brand` (which
+    // activates the inert `:root[data-brand]` token bridge) and updates the
+    // page title + favicon whenever the picker changes the context.
+    <BrandProvider context={brandContext} applyToDocument>
+      <BrowserRouter>
+        <div className="flex h-dvh flex-col">
+          <header>
+            <Nav routes={routes} />
+            <Separator />
+          </header>
+          <main className="min-h-0 flex-1">
+            <Routes>
+              <Route path="/" element={<Navigate to="/stream" replace />} />
+              {routes.map((route) => (
+                <Route key={route.path} path={route.path} element={route.element} />
+              ))}
+              <Route path="*" element={<Navigate to="/stream" replace />} />
+            </Routes>
+          </main>
+        </div>
+      </BrowserRouter>
+    </BrandProvider>
+  );
+};
 
 export default App;

@@ -66,7 +66,10 @@ import { EmailPreview } from "@dbx-tools/ui-email/react";
 ```
 
 Use `EmailPreview` when a page needs the same full branded card without action
-buttons, such as a review queue, audit log, or test harness.
+buttons, such as a review queue, audit log, or test harness. It projects the
+nearest `BrandProvider` context into email-safe colors and typography, so a live
+site brand picker updates the preview too. Pass the optional `brand` prop when a
+specific message needs an independent campaign or partner identity.
 
 ## Provide A Compose View
 
@@ -133,6 +136,11 @@ session cookie.
 It holds no token: the session lives in an HttpOnly cookie the browser sends
 automatically. `title` and `description` override the default copy, which
 otherwise names the app from the brand context.
+
+Before requesting a code, the email field requires exactly one address parsed
+and validated by `@dbx-tools/shared-core`'s `net.parseEmails` + `net.isEmail`.
+Malformed or multi-address input stays in the browser and never reaches the auth
+endpoint.
 
 The code field carries `autocomplete="one-time-code"`, which is what lets iOS,
 Android, and Safari offer the code straight from the notification. That only pays

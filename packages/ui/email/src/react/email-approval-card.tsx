@@ -1,5 +1,10 @@
-import { EmailCard } from "@dbx-tools/shared-email-template";
+import {
+  EmailCard,
+  emailBrandFromContext,
+  type EmailBrand,
+} from "@dbx-tools/shared-email-template";
 import { Button } from "@dbx-tools/ui-appkit/react";
+import { useBrand } from "@dbx-tools/ui-branding/react";
 import { CheckIcon, MailIcon, XIcon } from "lucide-react";
 import { attachmentNames, joinAddresses, type EmailDraft } from "./fields.ts";
 
@@ -16,6 +21,8 @@ export type { EmailDraft } from "./fields.ts";
 /** Props for {@link EmailPreview}. */
 export interface EmailPreviewProps {
   email: EmailDraft;
+  /** Optional email-only brand. Defaults to the active `BrandProvider` context. */
+  brand?: EmailBrand;
 }
 
 /**
@@ -24,7 +31,8 @@ export interface EmailPreviewProps {
  * rendered through the same React Email body used for delivery. Fields that
  * are empty are omitted.
  */
-export const EmailPreview = ({ email }: EmailPreviewProps) => {
+export const EmailPreview = ({ email, brand }: EmailPreviewProps) => {
+  const { context } = useBrand();
   const to = joinAddresses(email.to);
   const cc = joinAddresses(email.cc);
   const bcc = joinAddresses(email.bcc);
@@ -36,7 +44,12 @@ export const EmailPreview = ({ email }: EmailPreviewProps) => {
   if (attachments) headers.push(["Files", attachments]);
   return (
     <div className="overflow-x-auto rounded-2xl bg-muted/20 p-2">
-      <EmailCard subject={email.subject || "Message"} body={email.body || ""} headers={headers} />
+      <EmailCard
+        subject={email.subject || "Message"}
+        body={email.body || ""}
+        headers={headers}
+        brand={brand ?? emailBrandFromContext(context)}
+      />
     </div>
   );
 };

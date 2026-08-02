@@ -4,6 +4,7 @@
 
 export * as app from "./src/App.tsx";
 export * as errorBoundary from "./src/ErrorBoundary.tsx";
+export * as pagesBrand from "./src/pages/Brand.tsx";
 export * as pagesCards from "./src/pages/Cards.tsx";
 export * as pagesConversations from "./src/pages/Conversations.tsx";
 export * as pagesSearch from "./src/pages/Search.tsx";

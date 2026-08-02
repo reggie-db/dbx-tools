@@ -18,6 +18,9 @@ content is dropping in `<MastraChat/>`.
 - `src/pages/Stream.tsx` — `<MastraChat showModelPicker enableExport />`.
 - `src/pages/Conversations.tsx` — the same component with its thread sidebar,
   showing multi-conversation storage.
+- `src/pages/Brand.tsx` — a live `BrandPicker` that updates the whole site plus
+  rich email previews that inherit the active brand, with one intentionally
+  independent campaign identity.
 
 ## Build
 

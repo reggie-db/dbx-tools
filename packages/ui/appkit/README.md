@@ -12,6 +12,8 @@ Key features:
 - Shared Vite plugin factory for React and Tailwind v4.
 - Stable `@dbx-tools/ui-appkit/react` re-export of AppKit's React component
   primitives for feature packages.
+- `BrandPicker`, a controlled AppKit-native editor for portable identity,
+  color tokens, document metadata, and assets.
 - AppKit UI stylesheet import path for host applications and feature packages.
 - Streamdown/code-block styling used by streaming chat and Markdown surfaces.
 - One place to evolve UI build assumptions for feature packages such as
@@ -50,6 +52,28 @@ The stylesheet imports Tailwind and Streamdown styles, then adds the shiki CSS
 variable shim used by Streamdown code-block spans. Feature UI packages should
 import this once and add their own `@source` directives for local class names.
 
+## Edit A Live Brand
+
+`BrandPicker` emits only complete, schema-valid `BrandContext` values. Feed the
+result back into `BrandProvider` to update AppKit tokens, document metadata,
+brand assets, and brand-aware feature UI together.
+
+```tsx
+import { brand } from "@dbx-tools/shared-core";
+import { BrandPicker } from "@dbx-tools/ui-appkit/react";
+import { BrandProvider } from "@dbx-tools/ui-branding/react";
+import { useState } from "react";
+
+export function BrandSettings() {
+  const [context, setContext] = useState(brand.defaultBrandContext);
+  return (
+    <BrandProvider context={context} applyToDocument>
+      <BrandPicker value={context} onChange={setContext} />
+    </BrandProvider>
+  );
+}
+```
+
 ## Build Feature UI Packages
 
 Feature packages should depend on this package instead of each owning their own
@@ -64,8 +88,8 @@ look for:
 ## Module
 
 - `./vite` - `appkitUiVitePlugins()` for React + Tailwind v4 Vite projects.
-- `./react` - AppKit React UI kit re-export for feature packages and hosts.
+- `./react` - AppKit React UI kit re-export plus the controlled `BrandPicker`.
 - `./styles.css` - Tailwind/Streamdown/shiki base stylesheet.
 
 App-specific React components should live in feature UI packages that import this
-foundation.
+foundation. Cross-feature AppKit utilities such as `BrandPicker` live here.
