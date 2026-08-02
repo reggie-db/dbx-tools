@@ -97,14 +97,13 @@ const appYaml = parse(readFileSync(join(serverDir, "app.yaml"), "utf8")) as {
   command?: unknown;
   env?: Array<Record<string, unknown>>;
 };
-// Invoke the tunnel entry through `bun` EXPLICITLY rather than the `dbxt-tunnel`
-// bin name: the platform resolves a bin via its shebang, and this repo's bins are
-// `.ts` with a `node` shebang - node can't run `.ts` (ERR_UNKNOWN_FILE_EXTENSION).
-// `bun <entry.ts>` ignores the shebang and runs TypeScript natively (same reason
-// the wrapped app is `bun src/server.ts`). bun is on PATH via the `bun` dep.
+// The published `@dbx-tools/cli-tunnel` exposes `dbxt-tunnel` as a COMPILED
+// `lib/bin/*.js` bin (the publish task folds `publishConfig` onto the manifest,
+// since `bun publish` doesn't), so the platform's `node`-shebang bin shim runs it
+// directly - no `bun <entry.ts>` wrapper needed. The wrapped app command after
+// `--` still names `bun` explicitly because it runs the demo's `.ts` source.
 appYaml.command = [
-  "bun",
-  "node_modules/@dbx-tools/cli-tunnel/bin/dbx-tools-tunnel.ts",
+  "dbxt-tunnel",
   "--subject",
   "Your dbx-tools demo sign-in code",
   "--brand-name",

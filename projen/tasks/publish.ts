@@ -18,8 +18,17 @@
  *     while the on-disk manifest keeps the protocols.) Setting each member's
  *     version first is the only prerequisite, so a sibling resolves the release
  *     version rather than the disk default of `0.0.0`;
- *   - **`publishConfig` substitution** (compiled `lib/` entry points) and the
- *     `prepack` (compile) run are `bun publish`'s own pack behavior.
+ *   - **`publishConfig` substitution** (compiled `lib/` entry points) is done
+ *     HERE, by {@link applyPublishConfig}, NOT by bun: unlike pnpm/npm, `bun
+ *     publish`/`bun pm pack` do NOT fold `publishConfig`'s `main`/`types`/`bin`/
+ *     `exports` into the packed manifest (verified: the packed manifest keeps the
+ *     raw `.ts` source paths and an inert `publishConfig`). Left unsubstituted, a
+ *     published CLI's `bin` points at `./bin/x.ts`, and because the bin runs via
+ *     its `#!/usr/bin/env node` shebang, node chokes on the `.ts`
+ *     (ERR_UNKNOWN_FILE_EXTENSION). We merge `publishConfig` onto the top-level
+ *     manifest before packing so the tarball advertises the compiled `lib/` tree;
+ *   - the **`prepack` (compile) run** that emits that `lib/` tree is `bun
+ *     publish`'s own pack behavior.
  *
  * `--dry-run` forwards to `bun publish`: it packs + validates (running prepack)
  * but uploads nothing, so the `release` workflow is testable end-to-end via a
@@ -32,7 +41,7 @@
  * this unlocks each only long enough to set the version + publish. The next
  * `projen` synth restores them - the release version lives in the git tag.
  */
-import { chmodSync, existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { exec } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
@@ -68,6 +77,31 @@ function run(cwd: string, command: string, args: string[], path: string): void {
 /** Make a projen-readonly manifest writable so `bun pm pkg set` / `bun publish` can edit it. */
 function unlockManifest(pkgPath: string): void {
   chmodSync(pkgPath, statSync(pkgPath).mode | 0o200);
+}
+
+/** Entry-point fields projen writes as `.ts` source in-repo and rewrites to `lib/` for publish. */
+const PUBLISH_CONFIG_ENTRY_FIELDS = ["main", "types", "bin", "exports"] as const;
+
+/**
+ * Fold a package's `publishConfig` entry-point fields onto the top-level manifest,
+ * the way pnpm/npm do at pack time but `bun publish` does NOT (see the module
+ * doc). Idempotent, writes only when something changes, and leaves `publishConfig`
+ * in place (npm ignores it once the top-level fields already point at `lib/`). The
+ * manifest must already be unlocked. The next `projen` synth restores the `.ts`
+ * entry points, so this only affects the packed tarball - like the version stamp.
+ */
+function applyPublishConfig(pkgPath: string): void {
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
+  const publishConfig = pkg.publishConfig as Record<string, unknown> | undefined;
+  if (!publishConfig) return;
+  let changed = false;
+  for (const field of PUBLISH_CONFIG_ENTRY_FIELDS) {
+    if (field in publishConfig) {
+      pkg[field] = publishConfig[field];
+      changed = true;
+    }
+  }
+  if (changed) writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 }
 
 /**
@@ -149,6 +183,11 @@ for (const dir of members) {
     logger.info(`skip private ${pkg.name ?? dirname(dir)}`);
     continue;
   }
+  // bun won't fold publishConfig into the packed manifest, so do it ourselves -
+  // otherwise the tarball's `bin`/`main`/`exports` stay pointed at `.ts` source.
+  const manifestPath = join(dir, "package.json");
+  unlockManifest(manifestPath);
+  applyPublishConfig(manifestPath);
   logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${pkg.name} @ ${version}`);
   run(dir, "bun", ["publish", ...publishArgs], path);
   published += 1;
