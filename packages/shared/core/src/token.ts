@@ -16,6 +16,23 @@ const SPLIT_REGEX = /\s+|\s*,\s*/;
 const log = logger("shared/token");
 
 /**
+ * Header the Databricks Apps front door forwards the caller's OAuth (OBO) token
+ * on - the default source for every helper here.
+ *
+ * Exported because it is a wire contract several packages branch on, not just a
+ * default argument: `@dbx-tools/appkit`'s `identity` module decides whether a
+ * request can use OBO auth at all by its presence, and `@dbx-tools/cli-tunnel`
+ * must know the name to strip inbound copies of it. One spelling, one place.
+ */
+export const ACCESS_TOKEN_HEADER = "x-forwarded-access-token";
+
+/** Header the front door forwards the caller's user id on. */
+export const USER_ID_HEADER = "x-forwarded-user";
+
+/** Header the front door forwards the caller's email on. */
+export const USER_EMAIL_HEADER = "x-forwarded-email";
+
+/**
  * Decode a JWT segment (base64url with standard base64 padding), or
  * `undefined` when the segment is not valid base64.
  */
@@ -39,7 +56,7 @@ function decodeJwtSegment(segment: string): string | undefined {
  */
 export function getAccessTokenPayload(
   input: HeaderLike | string,
-  headerName: string | undefined = "x-forwarded-access-token",
+  headerName: string | undefined = ACCESS_TOKEN_HEADER,
 ): Record<string, unknown> {
   let accessTokenPayload: Record<string, unknown> | undefined;
   if (!(typeof input === "string")) {

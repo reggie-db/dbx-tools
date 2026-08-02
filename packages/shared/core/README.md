@@ -261,6 +261,36 @@ const internal = cidr ? net.ipInCidr("10.1.2.3", cidr) : false;
 `net.pathMatch()` compares path prefixes on segment boundaries. IP/CIDR helpers
 parse IPv4 and IPv6 into a shared bigint comparison model.
 
+## Allow-List Patterns
+
+```ts
+// One matcher from a config array OR a delimited env string.
+const forwardable = pattern.toPatternMatcher(["x-mastra-*", "/^x-trace-/", "x-tenant"]);
+
+forwardable("x-mastra-model"); // true  (glob)
+forwardable("x-trace-parent"); // true  (regex literal)
+forwardable("x-tenant"); // true  (literal, whole-string)
+forwardable("x-forwarded-user"); // false
+```
+
+Every configurable allow-list in this repo takes the same three shapes, so the
+compilation lives here once: a `/regex/` literal (with optional flags), a
+shell-style glob (`*`, `?`, anchored at both ends, all other characters escaped),
+or a literal compared whole-string. Matching is case-insensitive by default -
+what HTTP header names and email addresses both want - and `caseSensitive` opts
+out.
+
+An invalid regex is skipped with a warning instead of throwing, so one bad
+config entry cannot stop a process from starting. No usable patterns yields a
+matcher that always returns `false`; a caller that reads "no patterns" as "permit
+everything" must say so itself. The result is a `predicate`, so it composes with
+`.and()` / `.or()` / `.negate()`.
+
+Reach for [`@dbx-tools/path`](../../node/path)'s `toPathMatcher` instead when
+matching a filesystem path or URL path, where `/` is a segment boundary and `**`
+is meaningful - that one is `minimatch`-backed. This module is deliberately
+dependency-free so it stays usable in a browser bundle.
+
 ## Token Claims
 
 ```ts
@@ -312,6 +342,8 @@ without paying formatting cost when disabled.
 - `env` - config-over-environment resolution: strings, booleans, positive
   numbers/integers, and lists, with env-name fallback chains.
 - `predicate` - composable boolean/type predicates.
+- `pattern` - literal / glob / `/regex/` allow-list matching compiled to a
+  predicate.
 - `http` - header iteration, cookie parsing, and fetch error creation.
 - `execution` - direct executor fallback, cancellation merging, and result unwrapping.
 - `net` - URL building, email parsing, path matching, IP/CIDR helpers.
