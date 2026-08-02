@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { cp, rm } from "node:fs/promises";
 import { basename } from "node:path";
 import tailwind from "bun-plugin-tailwind";
 
@@ -8,7 +9,10 @@ let options: Bun.BuildConfig = {
   entrypoints: ["./index.html"],
   outdir: "./dist",
   minify: true,
-  sourcemap: "linked",
+  splitting: true,
+  publicPath: "/",
+  external: ["/fonts/*"],
+  sourcemap: "none",
   plugins: [tailwind],
 };
 
@@ -18,6 +22,9 @@ if (existsSync(overrideUrl)) {
   const override = typeof mod.default === "function" ? await mod.default() : mod.default;
   options = { ...options, ...override, plugins: [...(options.plugins ?? []), ...(override.plugins ?? [])] };
 }
+
+const outdir = options.outdir ?? "./dist";
+await rm(outdir, { recursive: true, force: true });
 
 const result = await Bun.build(options);
 if (!result.success) {
@@ -42,6 +49,11 @@ if (htmlOut && entryJs) {
     html = html.replace(/(<link[^>]*\bhref=")([^"]*\/)?[^"/]+\.css(")/i, "$1$2" + cssName + "$3");
   }
   await Bun.write(htmlOut.path, html);
+}
+
+const publicDir = "./public";
+if (existsSync(publicDir)) {
+  await cp(publicDir, outdir, { recursive: true });
 }
 
 console.log("built " + result.outputs.length + " files to " + options.outdir);

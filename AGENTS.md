@@ -808,6 +808,10 @@ copy `public/`; and a Databricks App's `Bun.build` needs `splitting` (the Worksp
 import API's 10 MB per-file limit fails the UPLOAD, not the build), `publicPath: "/"`
 (the static server rewrites `/*` to one `index.html`, so relative chunk paths 404 on
 nested routes), `external` for self-hosted fonts, and `sourcemap: "none"`.
+The generated `app`-tag `build.ts` supplies those four options by default,
+clears `dist/` before each build, and stages an optional `public/` directory after
+`Bun.build`; use `bun-build.override.ts` only to replace a default for an app with
+different deployment requirements.
 
 That note also recorded an engine bug that is now FIXED, kept here because the
 failure is unintuitive: `runSynth()` spawned `process.execPath --import tsx`, but

@@ -54,6 +54,19 @@ describe("generated Bun app", () => {
     assert.match(build, /plugins: \[tailwind\]/);
   });
 
+  it("uses Databricks-safe production defaults", () => {
+    assert.match(build, /splitting: true/);
+    assert.match(build, /publicPath: "\/"/);
+    assert.match(build, /external: \["\/fonts\/\*"\]/);
+    assert.match(build, /sourcemap: "none"/);
+  });
+
+  it("cleans the output and stages public assets", () => {
+    assert.match(build, /await rm\(outdir, \{ recursive: true, force: true \}\)/);
+    assert.match(build, /if \(existsSync\(publicDir\)\)/);
+    assert.match(build, /await cp\(publicDir, outdir, \{ recursive: true \}\)/);
+  });
+
   it("fails a production build when Bun reports errors", () => {
     assert.match(build, /if \(!result\.success\)/);
     assert.match(build, /process\.exit\(1\)/);

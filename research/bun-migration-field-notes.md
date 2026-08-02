@@ -114,9 +114,9 @@ Bun emits only what the module graph reaches. It has no notion of a static
 directory copied verbatim — the Vite convention an existing app is very likely
 relying on. Nothing warns; assets just are not in `dist/`.
 
-Stage it yourself, clearing `dist/` first so a rename does not leave the old file
-behind (the server serves the directory, so an orphan is indistinguishable from a
-current asset):
+The generated `build.ts` now stages it automatically, clearing `dist/` first so a
+rename does not leave the old file behind (the server serves the directory, so an
+orphan is indistinguishable from a current asset). The underlying operation is:
 
 ```ts
 async function copyPublicAssets(): Promise<void> {
@@ -127,8 +127,9 @@ async function copyPublicAssets(): Promise<void> {
 
 ## Four `Bun.build` options a Databricks App needs
 
-In `bun-build.override.ts` (the hand-authored file merged over the generated
-`build.ts` options). Each of these was a real failure, not a preference:
+These are now the generated `build.ts` defaults for every `app`-tagged package;
+`bun-build.override.ts` can replace them when an app has different deployment
+requirements. Each of these was a real failure, not a preference:
 
 - **`splitting: true`** — keeps every emitted file under the **10 MB per-file
   ceiling the Workspace import API enforces**. Unsplit, a client with Cytoscape +

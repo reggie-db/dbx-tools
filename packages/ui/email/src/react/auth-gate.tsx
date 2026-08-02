@@ -158,9 +158,10 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
         </p>
 
         {phase === "email" ? (
-          <form onSubmit={requestCode} className="space-y-3">
+          <form key="email" onSubmit={requestCode} className="space-y-3">
             <Input
               type="email"
+              name="email"
               autoComplete="email"
               aria-label="Email address"
               placeholder="you@company.com"
@@ -173,7 +174,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
             </Button>
           </form>
         ) : (
-          <form onSubmit={verifyCode} className="space-y-3">
+          <form key="code" onSubmit={verifyCode} className="space-y-3">
             {/*
               `autoComplete="one-time-code"` is what lets iOS/Android/Safari offer
               the code straight from the notification, and it only pays off when
@@ -182,6 +183,8 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
               number pad without rejecting a paste.
             */}
             <Input
+              type="text"
+              name="code"
               inputMode="numeric"
               autoComplete="one-time-code"
               aria-label="Verification code"
