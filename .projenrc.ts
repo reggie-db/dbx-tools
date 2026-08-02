@@ -780,14 +780,11 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
     "@mastra/otel-bridge@catalog:",
     "@mastra/pg@catalog:",
     "@opentelemetry/api@catalog:",
-    "marked@catalog:",
     "zod@catalog:",
     "pg@^8.22.0",
-    "nodemailer@^7.0.13",
-    "juice@^12.1.1",
     "fuse.js@^7.4.2",
   );
-  p.addDevDeps("@types/nodemailer@^7", "@types/pg@^8", "@types/json-schema@^7");
+  p.addDevDeps("@types/pg@^8", "@types/json-schema@^7");
 });
 
 // example-packages/app/appkit-demo: the React client. `app` tag supplies react +

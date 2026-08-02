@@ -24,7 +24,6 @@
     "@types/express": "catalog:",
     "@types/json-schema": "^7",
     "@types/node": "catalog:",
-    "@types/nodemailer": "^7",
     "@types/pg": "^8",
     "typescript": "^5.9.3"
   },
@@ -51,9 +50,6 @@
     "@opentelemetry/api": "catalog:",
     "express": "catalog:",
     "fuse.js": "^7.4.2",
-    "juice": "^12.1.1",
-    "marked": "catalog:",
-    "nodemailer": "^7.0.13",
     "pg": "^8.22.0",
     "tsoa": "catalog:",
     "zod": "catalog:"

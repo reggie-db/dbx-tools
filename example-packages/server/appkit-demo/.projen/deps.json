@@ -21,11 +21,6 @@
       "type": "build"
     },
     {
-      "name": "@types/nodemailer",
-      "version": "^7",
-      "type": "build"
-    },
-    {
       "name": "@types/pg",
       "version": "^8",
       "type": "build"
@@ -142,21 +137,6 @@
     {
       "name": "fuse.js",
       "version": "^7.4.2",
-      "type": "runtime"
-    },
-    {
-      "name": "juice",
-      "version": "^12.1.1",
-      "type": "runtime"
-    },
-    {
-      "name": "marked",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "nodemailer",
-      "version": "^7.0.13",
       "type": "runtime"
     },
     {

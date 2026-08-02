@@ -258,7 +258,13 @@ why to use this package anyway:
   same email presentation. It owns the React Email document/body components,
   email-safe brand projection, and dbx-tools-branded default. Keep transport,
   SMTP, and AppKit behavior in `@dbx-tools/email`; keep wire schemas in
-  `@dbx-tools/shared-email`.
+  `@dbx-tools/shared-email`. This is the ONE package that authors `.tsx` outside a
+  `ui` tag, which is why `jsx` is in the shared compiler floor rather than on the
+  React tags (see the tag section) — `cli-tunnel` consumes it transitively and
+  authors no JSX of its own. `node/email`'s `brand`/`emailHtml`/`markdown` modules
+  are thin adapters over this package, not a second implementation; React Email
+  does its own style inlining, so there is no separate CSS inliner (`juice` was
+  removed when this was extracted).
 - `@dbx-tools/appkit-web-search`: AppKit has no first-party web-search or
   page-fetch surface, so use this whenever an agent must look things up on the
   open web or read a user-supplied URL — with a policy layer (URL allow-list +

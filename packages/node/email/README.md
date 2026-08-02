@@ -342,9 +342,18 @@ handed to SMTP. The constants and the plugin's interceptor settings live in the
   `resolveEmailConfig()`.
 - `defaults` - execution settings for the interceptor chain and the payload caps.
 - `sender` - sender derivation, allow-list parsing, and sender-option listing.
-- `markdown` / `emailHtml` - React Email body, HTML, and plain-text rendering.
+- `emailHtml` - Node rendering adapters over the shared template:
+  `renderEmailHtml()`, `renderEmailText()`, and `renderEmail()` for both MIME
+  alternatives from one component tree.
+- `markdown` - body-only rendering plus `normalizeMarkdown()`.
 - `outbox` - local HTML file writer for development and tests.
 - `brand` - `EmailBrand`, `emailBrandFromContext()`, and `defaultEmailBrand`.
+
+`brand`, and the components behind `emailHtml`/`markdown`, re-export from
+[`@dbx-tools/shared-email-template`](../../shared/email-template). They exist so
+server code has one import for delivery, and so the Node renderer and a browser
+preview cannot drift apart - not as a second implementation. Style inlining is
+React Email's own; this package runs no separate CSS inliner.
 
 Pair this package with [`@dbx-tools/shared-email`](../../shared/email) when a UI
 or tool schema needs to validate the same email payload, and with
