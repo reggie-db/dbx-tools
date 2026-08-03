@@ -37,9 +37,15 @@
  * repo-relative) skips a member that releases on its OWN tag namespace (e.g.
  * `projen`, published by `projen-release`, not the main `release`).
  *
+ * `--no-restore` keeps the edits on disk instead of undoing them at exit. Only
+ * needed when a LATER process must still see them - `--stamp-only` implies it,
+ * since its whole job is to stamp the workspace for a `bun publish` that runs
+ * afterwards from another directory.
+ *
  * The disk manifests normally carry `version: 0.0.0` (projen owns them, read-only);
- * this unlocks each only long enough to set the version + publish. The next
- * `projen` synth restores them - the release version lives in the git tag.
+ * this unlocks each only long enough to set the version + publish, then RESTORES
+ * every one it touched byte-for-byte (and re-locks the mode) on the way out - see
+ * {@link restoreManifests}. The release version lives in the git tag, not on disk.
  */
 import { chmodSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -48,6 +54,29 @@ import { log } from "@dbx-tools/shared-core";
 import { parse } from "yaml";
 
 const logger = log.logger("dbx-tools:publish");
+
+/** A manifest's on-disk bytes + mode, captured before this task edits it. */
+interface ManifestBackup {
+  readonly content: string;
+  readonly mode: number;
+}
+
+/**
+ * Original state of every manifest this task has unlocked, keyed by path.
+ *
+ * Publishing has to mutate manifests projen owns (the version stamp, so a
+ * `workspace:*` sibling resolves to the release version, and the `publishConfig`
+ * entry-point substitution bun won't do itself). Those edits are only ever meant
+ * to reach the packed TARBALL, so every one is undone by {@link restoreManifests}
+ * before the process ends.
+ *
+ * Leaving them on disk is what used to strand a local `bun run bump` with ~34
+ * modified `package.json` files - version stamps and `lib/` entry points - after
+ * the release commit was already made, so the tree diverged from the commit that
+ * was just pushed and every subsequent `git status` needed a manual revert. CI
+ * never noticed because a fresh checkout is discarded.
+ */
+const manifestBackups = new Map<string, ManifestBackup>();
 
 /**
  * Workspace member dirs (absolute), read from the root `pnpm-workspace.yaml` - the
@@ -74,9 +103,43 @@ function run(cwd: string, command: string, args: string[], path: string): void {
   });
 }
 
-/** Make a projen-readonly manifest writable so `bun pm pkg set` / `bun publish` can edit it. */
+/**
+ * Make a projen-readonly manifest writable so `bun pm pkg set` / `bun publish` can
+ * edit it, recording its original bytes + mode for {@link restoreManifests} the
+ * first time it is seen. Idempotent, so a manifest unlocked twice (version stamp,
+ * then `publishConfig`) keeps its PRE-EDIT backup rather than overwriting it with
+ * the already-stamped content.
+ */
 function unlockManifest(pkgPath: string): void {
-  chmodSync(pkgPath, statSync(pkgPath).mode | 0o200);
+  const mode = statSync(pkgPath).mode;
+  if (!manifestBackups.has(pkgPath)) {
+    manifestBackups.set(pkgPath, { content: readFileSync(pkgPath, "utf8"), mode });
+  }
+  chmodSync(pkgPath, mode | 0o200);
+}
+
+/**
+ * Put every manifest this task edited back exactly as it was found, mode included.
+ *
+ * Runs from an `exit` handler so a clean finish and a failure partway through the
+ * publish loop are covered alike - a `bun publish` that dies on package 12 of 34
+ * must not leave the first 11 stamped. Best-effort per file: one unwritable
+ * manifest is logged and the rest are still restored, since a partial restore
+ * beats none.
+ *
+ * Not registered under `--stamp-only`, where the stamps ARE the deliverable.
+ */
+function restoreManifests(): void {
+  for (const [pkgPath, backup] of manifestBackups) {
+    try {
+      chmodSync(pkgPath, backup.mode | 0o200);
+      writeFileSync(pkgPath, backup.content);
+      chmodSync(pkgPath, backup.mode);
+    } catch (cause) {
+      logger.warn(`could not restore ${pkgPath}`, { cause });
+    }
+  }
+  manifestBackups.clear();
 }
 
 /** Entry-point fields projen writes as `.ts` source in-repo and rewrites to `lib/` for publish. */
@@ -87,8 +150,9 @@ const PUBLISH_CONFIG_ENTRY_FIELDS = ["main", "types", "bin", "exports"] as const
  * the way pnpm/npm do at pack time but `bun publish` does NOT (see the module
  * doc). Idempotent, writes only when something changes, and leaves `publishConfig`
  * in place (npm ignores it once the top-level fields already point at `lib/`). The
- * manifest must already be unlocked. The next `projen` synth restores the `.ts`
- * entry points, so this only affects the packed tarball - like the version stamp.
+ * manifest must already be unlocked. {@link restoreManifests} puts the `.ts` entry
+ * points back at exit, so this only ever affects the packed tarball - like the
+ * version stamp.
  */
 function applyPublishConfig(pkgPath: string): void {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
@@ -133,12 +197,19 @@ const dryRun = rest.includes("--dry-run");
 // own `bun publish` (run separately, in `projen/`) resolves `workspace:*` siblings
 // to the release version; publishing every member here would double-publish them.
 const stampOnly = rest.includes("--stamp-only");
+// Undo the manifest edits at exit unless a later process still needs them. Implied
+// off by `--stamp-only`, whose stamps exist precisely for a subsequent `bun publish`.
+const restore = !stampOnly && !rest.includes("--no-restore");
 const excluded = new Set(
   rest.reduce<string[]>((acc, arg, i) => (arg === "--exclude" ? [...acc, rest[i + 1]] : acc), []),
 );
 
 const root = process.cwd();
 const path = enrichedPath(root);
+// Registered BEFORE the first manifest edit so no exit path can skip it: a clean
+// finish and a `bun publish` failure mid-loop both land here, so a publish that
+// dies partway does not leave half the workspace stamped.
+if (restore) process.on("exit", restoreManifests);
 const members = workspaceMembers(root)
   .filter((dir) => existsSync(join(dir, "package.json")))
   .filter((dir) => !excluded.has(resolve(root, dir).replace(`${resolve(root)}/`, "")));

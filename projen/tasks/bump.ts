@@ -294,9 +294,11 @@ program
         // keep `0.0.0` on disk, projen-owned, so it unlocks each briefly), then
         // `bun publish`es each non-private one - and bun natively strips the
         // `workspace:`/`catalog:` protocols in the packed tarball, resolving each
-        // to the version just set. The next `projen` synth restores the manifests
-        // to `0.0.0`; the release version lives in the git tag. Provenance is off
-        // for a local registry (no OIDC), so `NPM_CONFIG_PROVENANCE` is unset.
+        // to the version just set. `publish.ts` restores every manifest it touched
+        // at exit, so this leaves the worktree matching the release commit that was
+        // just pushed - the release version lives in the git tag, not on disk.
+        // Provenance is off for a local registry (no OIDC), so
+        // `NPM_CONFIG_PROVENANCE` is unset.
         // `publish.ts` is this task's SIBLING in the engine's `tasks/` dir; resolve
         // it off `import.meta.url` (works whether the engine is source-linked in-repo
         // or installed under node_modules) rather than a repo-relative `tasks/...`
