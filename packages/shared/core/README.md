@@ -236,7 +236,7 @@ read as seconds and the rest as milliseconds. An unknown unit fails the whole
 duration parse instead of being skipped, so `1 fortnight` is `undefined` rather
 than `1`. Neither function throws - like `toBoolean` they return `undefined`, so
 the caller decides whether a bad value is fatal, a warning, or a fallback
-(`@dbx-tools/cli-tunnel`'s `--session-cutoff` warns and carries on).
+(`@dbx-tools/tunnel`'s `TUNNEL_AUTH_SESSION_CUTOFF` warns and carries on).
 
 ## Iterables
 

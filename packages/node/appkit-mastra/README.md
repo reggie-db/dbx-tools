@@ -779,7 +779,7 @@ requiring callers to assemble a Mastra server by hand.
   of per-user attribution in Genie / Unity Catalog. `"auto"` decides PER REQUEST:
   OBO when the request actually carries an OBO token, service principal when it
   does not. That is the mode for an app served through more than one door - a
-  container fronted by [`@dbx-tools/cli-tunnel`](../../cli/tunnel) serves both
+  container fronted by [`@dbx-tools/tunnel`](../../node/tunnel) serves both
   email-code callers (no Databricks credential exists to forward) and the
   platform front door on one port, and `"user"` would make every tunnel turn fail
   with AppKit's `AuthenticationError` while `"service-principal"` would throw away

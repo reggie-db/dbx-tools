@@ -586,20 +586,17 @@ project.applyToProjects(
   },
 );
 
-// cli-tunnel: fronts a Databricks App with a public portr tunnel + email-OTP
-// access gate. Wraps a start command (`dbxt-tunnel -- bun src/server.ts`): spawns
-// the app on a random private port, runs a reverse-proxy (http-proxy-3, with
-// WebSocket support) on the public port that gates portr-tunneled traffic behind
-// an email OTP (allow-list + rate limit + CacheManager-stored codes + jose
-// session), and installs/runs portr - all supervised so any exit brings the set
-// down. It is its OWN tiny AppKit app (createApp WITHOUT server) so CacheManager
-// auto-configures (memory/Lakebase) and the email transport is primed. Bins are
-// `dbx-tools-tunnel` + the short `dbxt-tunnel`.
-project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p) => {
-  p.package.addBin({
-    [`${SCOPE}-tunnel`]: "./bin/dbx-tools-tunnel.ts",
-    "dbxt-tunnel": "./bin/dbx-tools-tunnel.ts",
-  });
+// node-tunnel (`@dbx-tools/tunnel`): fronts a Databricks App with a public portr
+// tunnel + email-OTP access gate, consumed IN-PROCESS through `@dbx-tools/appkit`'s
+// `createApp` interceptor context - `createApp({ interceptor: tunnelInterceptor() })`.
+// `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs portr pointed at the app's
+// public port, and `bindProcess`es it so the app and portr live/die as one
+// (concurrently-style). The email OTP gate (allow-list + rate limit +
+// CacheManager-stored codes + jose session) ships as the `authGate` AppKit plugin
+// plus the `startProxy` reverse-proxy (http-proxy-3, WebSocket-aware), for an app
+// that wants to gate the tunnelled traffic. A `node`-tier library, not a CLI: no
+// bin - the app that owns the tunnel is the process.
+project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
     // `brand.loadBrandContext()`: the gate's email copy + styling come from the
@@ -765,9 +762,10 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
     "@dbx-tools/teams@workspace:*",
     "@dbx-tools/search@workspace:*",
     "@dbx-tools/shared-core@workspace:*",
-    // The tunnel CLI wraps the app start command (public portr tunnel +
-    // email-OTP gate); its `dbxt-tunnel` bin is the deployed app.yaml command.
-    "@dbx-tools/cli-tunnel@workspace:*",
+    // The tunnel library: the server registers `tunnelInterceptor()` on its own
+    // `createApp` (public portr tunnel + email-OTP gate), so the deployed app.yaml
+    // runs the server directly rather than through a wrapper bin.
+    "@dbx-tools/tunnel@workspace:*",
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",

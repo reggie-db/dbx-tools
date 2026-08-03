@@ -38,8 +38,7 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "index.ts",
-    "bin/**/*.ts"
+    "index.ts"
   ],
   "exclude": [
     "node_modules"

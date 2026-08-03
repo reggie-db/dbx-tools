@@ -20,7 +20,7 @@
  * where a missing token means something is wrong. It is fatal for an app whose
  * traffic legitimately arrives WITHOUT one:
  *
- *   - a public tunnel (`@dbx-tools/cli-tunnel`), where callers authenticate by
+ *   - a public tunnel (`@dbx-tools/tunnel`), where callers authenticate by
  *     email OTP and no OBO token exists to forward - the gate can prove WHO the
  *     caller is, but it cannot mint a Databricks credential for them;
  *   - any reverse proxy, webhook, or bot channel (`POST /api/teams/messages`)
@@ -41,7 +41,7 @@
  *
  * `"auto"` decides per REQUEST, not per boot, because a single container serves
  * both doors at once - the tunnel gate and the platform front door share a port
- * (see `@dbx-tools/cli-tunnel`). A boot-time flag would have to be wrong for one
+ * (see `@dbx-tools/tunnel`). A boot-time flag would have to be wrong for one
  * of them.
  *
  * What the service principal does NOT change is WHO the request belongs to. The

@@ -21,6 +21,7 @@ import {
 import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
+import { interceptor as tunnelInterceptorModule } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
 import { logDependencies } from "./dependencies.ts";
@@ -43,6 +44,7 @@ const { search } = searchPlugin;
 const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, syncIndexTool } =
   searchToolModule;
 const { defaultBrandContext } = sharedBrand;
+const { tunnelInterceptor } = tunnelInterceptorModule;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
 // `server({ staticPath })` serves it on the same port as the API. Locally the
@@ -201,11 +203,7 @@ const support = createAgent(supportDefinition);
 // exposed on the LAN, but fall back to `0.0.0.0` when the Databricks
 // Apps platform is running us (it reaches the container over the
 // LAN-bound interface, so anything else won't accept traffic).
-// Override with `HOST=...` if you need a different bind address for a
-// local tunnel.
-// `dbxt-tunnel` (when it wraps the start command) sets both HOST=127.0.0.1 and a
-// private DATABRICKS_APP_PORT, so the app binds loopback behind the gate proxy.
-// Run directly (no tunnel) and this falls back to 0.0.0.0 on Databricks.
+// Override with `HOST=...` if you need a different bind address.
 const host = process.env.HOST ?? (databricks.isAppEnv() ? "0.0.0.0" : "127.0.0.1");
 
 // Report what actually resolved before serving anything: the demo can run its
@@ -332,6 +330,12 @@ await createAppAuto({
       remoteSkills: "aitools",
     }),
   ],
+  // Front the app with a public portr tunnel IN-PROCESS: `tunnelInterceptor`
+  // applies the computed DATABRICKS_HOST, launches portr pointed at this app's
+  // public port, and binds it so the app and portr live/die as one. A no-op when
+  // no PORTR_TOKEN / TUNNEL_PUBLIC_DOMAIN is set (local runs, or a deploy without a
+  // tunnel), so it is safe to register unconditionally.
+  interceptor: tunnelInterceptor(),
   cache: {
     enabled: true,
   },

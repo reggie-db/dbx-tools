@@ -1,29 +1,37 @@
-# @dbx-tools/cli-tunnel
+# @dbx-tools/tunnel
 
-Front an app with a public tunnel and an email one-time-code access gate.
+Front an app with a public tunnel and an email one-time-code access gate,
+in-process.
 
-Built on [portr](https://github.com/amalshaji/portr). Run this CLI when an app
-needs to be reachable from outside its network - a stakeholder demo, a webhook
-sender that has to reach a dev build, an OAuth redirect that cannot point at
-`localhost` - without publishing the app to anyone who learns the URL. It is
+Built on [portr](https://github.com/amalshaji/portr). Use this library when an
+app needs to be reachable from outside its network - a stakeholder demo, a
+webhook sender that has to reach a dev build, an OAuth redirect that cannot point
+at `localhost` - without publishing the app to anyone who learns the URL. It is
 shaped for Databricks Apps (it honours the `DATABRICKS_APP_PORT` contract and
 lets the platform's own front door through ungated) but the gate itself is
-platform-neutral. The CLI wraps the app's real start command: it
-moves the app onto a private loopback port, binds the public port with a gate
-proxy, and brings the tunnel up alongside it. Access is granted per email
-address against an allow-list, verified by a code sent over
-[`@dbx-tools/email`](../../node/email).
+platform-neutral.
+
+The tunnel plugs into `@dbx-tools/appkit`'s `createApp` through its INTERCEPTOR
+context: `createApp({ interceptor: tunnelInterceptor() })` applies the computed
+`DATABRICKS_HOST`, launches portr pointed at the app's public port, and binds it
+so the app and portr live and die as one (concurrently-style - signals pass
+through, either death tears the pair down). The app is the process; the tunnel
+rides along inside it. Access is granted per email address against an allow-list,
+verified by a code sent over [`@dbx-tools/email`](../../node/email); the gate
+itself is the `authGate` AppKit plugin plus the `startProxy` reverse-proxy, both
+exported here for an app that wants to gate the tunnelled traffic.
 
 **Key features:**
 
-- Wraps an unmodified start command - everything after `--` runs as-is, so the
-  app needs no tunnel-specific code:
-  `dbxt-tunnel --allow example.com -- bun src/server.ts`.
+- Consumed in-process via the `createApp` interceptor context - no wrapper CLI,
+  no separate process: `createApp({ interceptor: tunnelInterceptor() })`. A no-op
+  when no `PORTR_TOKEN` / `TUNNEL_PUBLIC_DOMAIN` is set, so it is safe to register
+  unconditionally.
 - Branded from the repo-wide brand context: the code email's accent colour, font,
   logo, and display name come from the app's own `branding/brand.yaml` (via
   `@dbx-tools/core`'s `loadBrandContext()`), falling back to the dbx-tools
   default - so the sign-in email looks like the app it fronts with nothing to
-  configure. `--brand-name` overrides just the name.
+  configure. `TUNNEL_AUTH_BRAND_NAME` overrides just the name.
 - Conventional one-time-code copy, so platform autofill works: the email is
   `Your verification code is: / <code> / This code expires in N minutes`, and the
   code input carries `autocomplete="one-time-code"`. iOS, Gmail, Outlook, and
@@ -74,7 +82,7 @@ address against an allow-list, verified by a code sent over
   public caller cannot spoof the headers the app trusts - above all
   `x-forwarded-access-token`, which would otherwise let anyone drive the app's
   workspace calls with a pasted token. Add an app's own headers with
-  `--forward-headers`.
+  `TUNNEL_FORWARD_HEADERS`.
 - Platform traffic passes through UNGATED. The gate distinguishes the portr
   client (a loopback source address, same container) from the hosting platform's
   front door (a non-loopback container-network address), so health checks and the
@@ -82,74 +90,73 @@ address against an allow-list, verified by a code sent over
 - SPA-aware gating: static assets and the login routes stay open so the browser
   can load the client and render the login form; every other `/api/*` needs a
   valid session cookie or gets `401`. WebSocket upgrades are gated the same way.
-- Supervised teardown - the app child, the portr child, and this process are tied
-  together, so if any one exits the whole tunnel comes down.
-- Fails fast when email is not configured for SMTP, because a gate that cannot
-  send codes locks everyone out. `--insecure` is the explicit opt-out.
+- Supervised teardown - `tunnelInterceptor` binds portr through the `createApp`
+  interceptor context, so the app and the tunnel are tied together: if either
+  exits, `bindProcess` brings the whole set down and passes signals through.
+- The gate fails fast when email is not configured for SMTP, because a gate that
+  cannot send codes locks everyone out (see `startGateApp` in the `app` module).
 
 ## Why This Over An Ad-Hoc Tunnel
 
 A bare tunnel (`ngrok`, `portr` on its own) makes the app reachable by anyone
 with the URL. This package keeps the tunnel but puts a gate in front of it,
 reusing what the app already has: AppKit's cache for code storage, the
-`@dbx-tools/email` transport for delivery, and the app's own `From` policy. There
-is nothing to add to the app itself - no route, no middleware, no auth library.
+`@dbx-tools/email` transport for delivery, and the app's own `From` policy.
+Because it rides inside the app's own `createApp`, there is no second process to
+supervise and no wrapper command to thread flags through.
 
 ## Run It
 
-```sh
-dbxt-tunnel \
-  --allow "example.com, *@partner.example" \
-  --brand-name "Acme Ops" \
-  -- bun src/server.ts
+```ts
+import { createApp } from "@dbx-tools/appkit";
+import { server } from "@databricks/appkit";
+import { interceptor } from "@dbx-tools/tunnel";
+
+const { tunnelInterceptor } = interceptor;
+
+await createApp.createApp({
+  plugins: [server({ host, staticPath })],
+  // Applies DATABRICKS_HOST, launches portr at the app's public port, and binds
+  // it to the app. No-op when no PORTR_TOKEN / TUNNEL_PUBLIC_DOMAIN is set.
+  interceptor: tunnelInterceptor(),
+});
 ```
 
-The package installs two equivalent commands, `dbx-tools-tunnel` and the shorter
-`dbxt-tunnel`. Neither matches the package name, so a one-off run has to name the
-command explicitly:
-
-```sh
-npx --package @dbx-tools/cli-tunnel dbx-tools-tunnel --help
-```
-
-Everything after `--` is the real start command. The CLI sets
-`DATABRICKS_APP_PORT` to a random private port for that child and binds the
-original public port itself.
+`tunnelInterceptor(opts)` takes optional `publicDomain` / `subdomain` / `port`;
+each falls back to env (and `port` to the `DATABRICKS_APP_PORT` contract), so a
+deployment usually passes nothing and configures through the environment. The
+OTP gate is a separate concern - see [Use The Gate](#use-the-gate) to mount
+`authGate` + `startProxy` for gated traffic.
 
 ## Options
 
-Every flag has an environment fallback, so a deployment can configure the gate
-with no change to its start command.
+The interceptor reads portr wiring from the environment; the gate (the `authGate`
+plugin) reads its own settings the same way, so a deployment configures both
+without touching code.
 
-| Flag                | Env                          | Default                        |
-| ------------------- | ---------------------------- | ------------------------------ |
-| `--allow`           | `TUNNEL_AUTH_ALLOW`          | empty (allow nobody)           |
-| `--subject`         | `TUNNEL_AUTH_SUBJECT`        | `Your verification code`       |
-| `--brand-name`      | `TUNNEL_AUTH_BRAND_NAME`     | the brand context `name`       |
-| `--message`         | `TUNNEL_AUTH_MESSAGE`        | `Your verification code is:`   |
-| `--session-ttl`     | `TUNNEL_AUTH_SESSION_TTL`    | `2592000` (30 days)            |
-| `--code-ttl`        | `TUNNEL_AUTH_CODE_TTL`       | `600` (10 minutes)             |
-| `--session-cutoff`  | `TUNNEL_AUTH_SESSION_CUTOFF` | unset (no cutoff)              |
-| `--subdomain`       | -                            | derived from the public domain |
-| `--public-domain`   | `TUNNEL_PUBLIC_DOMAIN`       | -                              |
-| `--forward-headers` | `TUNNEL_FORWARD_HEADERS`     | the built-in `x-` allow-list   |
-| `--insecure`        | `TUNNEL_INSECURE`            | off (the gate is required)     |
-| -                   | `TUNNEL_AUTH_JWT_SECRET`     | an ephemeral per-process key   |
+| Env                          | Default                      |
+| ---------------------------- | ---------------------------- |
+| `TUNNEL_AUTH_ALLOW`          | empty (allow nobody)         |
+| `TUNNEL_AUTH_SUBJECT`        | `Your verification code`     |
+| `TUNNEL_AUTH_BRAND_NAME`     | the brand context `name`     |
+| `TUNNEL_AUTH_MESSAGE`        | `Your verification code is:` |
+| `TUNNEL_AUTH_SESSION_TTL`    | `2592000` (30 days)          |
+| `TUNNEL_AUTH_CODE_TTL`       | `600` (10 minutes)           |
+| `TUNNEL_AUTH_SESSION_CUTOFF` | unset (no cutoff)            |
+| `TUNNEL_PUBLIC_DOMAIN`       | - (no tunnel when unset)     |
+| `TUNNEL_FORWARD_HEADERS`     | the built-in `x-` allow-list |
+| `TUNNEL_AUTH_JWT_SECRET`     | an ephemeral per-process key |
 
-Every variable is `TUNNEL_`-prefixed because the gate runs as a WRAPPER: it and
-the app it wraps share one environment, so a generic name is one the app may
-already be using. The earlier unprefixed spellings - `AUTH_SUBJECT`,
-`AUTH_BRAND_NAME`, `AUTH_MESSAGE`, `AUTH_SESSION_TTL`, `AUTH_CODE_TTL`,
-`AUTH_JWT_SECRET`, `EMAIL_AUTH_ALLOW`, `PUBLIC_DOMAIN`, plus
-`TUNNEL_AUTH_SESSION_EPOCH` from before the cutoff rename - are still read as
-deprecated aliases, with the `TUNNEL_` name winning when both are set, so an
-existing deployment needs no coordinated rename. `PORTR_TOKEN` / `PORTR_SERVER`
-keep their names: that namespace belongs to portr itself, as does
-`DATABRICKS_APP_PORT`, which the platform sets and the gate honours.
-
-`--allow` and `TUNNEL_AUTH_ALLOW` are UNIONED rather than one overriding the
-other, so a deployment-wide allow-list and a per-invocation addition both grant
-access.
+Every variable is `TUNNEL_`-prefixed because the tunnel shares one environment
+with the app it fronts, so a generic name is one the app may already be using.
+The earlier unprefixed spellings - `AUTH_SUBJECT`, `AUTH_BRAND_NAME`,
+`AUTH_MESSAGE`, `AUTH_SESSION_TTL`, `AUTH_CODE_TTL`, `AUTH_JWT_SECRET`,
+`EMAIL_AUTH_ALLOW`, `PUBLIC_DOMAIN`, plus `TUNNEL_AUTH_SESSION_EPOCH` from before
+the cutoff rename - are still read as deprecated aliases, with the `TUNNEL_` name
+winning when both are set, so an existing deployment needs no coordinated rename.
+`PORTR_TOKEN` / `PORTR_SERVER` keep their names: that namespace belongs to portr
+itself, as does `DATABRICKS_APP_PORT`, which the platform sets and the tunnel
+honours.
 
 ## Sessions That Survive A Restart
 
@@ -218,13 +225,13 @@ subject + preheader works across clients and needs no origin.
 
 ### Signing everyone out
 
-`--session-cutoff` / `TUNNEL_AUTH_SESSION_CUTOFF` invalidates every session issued
-before a given moment:
+`TUNNEL_AUTH_SESSION_CUTOFF` (or `sessionCutoff` on the `authGate` config)
+invalidates every session issued before a given moment:
 
 ```sh
-dbxt-tunnel --session-cutoff -30d -- bun src/server.ts
-dbxt-tunnel --session-cutoff 2026-08-02 -- bun src/server.ts
-TUNNEL_AUTH_SESSION_CUTOFF="now" dbxt-tunnel -- bun src/server.ts
+TUNNEL_AUTH_SESSION_CUTOFF="-30d" ...       # a relative duration
+TUNNEL_AUTH_SESSION_CUTOFF="2026-08-02" ... # a date
+TUNNEL_AUTH_SESSION_CUTOFF="now" ...         # sign everyone out on this boot
 ```
 
 The value goes through `@dbx-tools/shared-core`'s `object.toDate`, so a date, an
@@ -266,13 +273,14 @@ configuration:
 | `x-mlflow-*`       | MLflow trace correlation for feedback               |
 | `x-requested-with` | the conventional AJAX marker                        |
 
-Add an app's own headers with `--forward-headers` /`TUNNEL_FORWARD_HEADERS`. Each
-entry is a literal name, a shell-style glob, or a `/regex/` - the same three
-shapes the email allow-list takes - and the configured list is UNIONED with the
-defaults, so extending it never silently breaks the built-in surfaces:
+Add an app's own headers with `TUNNEL_FORWARD_HEADERS` (or `forwardHeaders` on
+`startProxy`). Each entry is a literal name, a shell-style glob, or a `/regex/` -
+the same three shapes the email allow-list takes - and the configured list is
+UNIONED with the defaults, so extending it never silently breaks the built-in
+surfaces:
 
 ```sh
-dbxt-tunnel --forward-headers "x-acme-*, /^x-trace-/, x-tenant" -- bun src/server.ts
+TUNNEL_FORWARD_HEADERS="x-acme-*, /^x-trace-/, x-tenant" ...
 ```
 
 Some headers no pattern can forward. These decide who a request is and where it
@@ -297,16 +305,17 @@ of the caller's claim. Rate limiting reads the client IP before stripping, and
 takes the **rightmost** `x-forwarded-for` entry - the only one a proxy appended
 rather than a client supplied.
 
-## Use The Gate As A Plugin
+## Use The Gate
 
-The gate is an AppKit plugin, so an app that wants the OTP flow without the
-tunnel can mount it directly. It registers no routes - it exposes handlers the
-caller invokes - and it takes a `sendCode` callback because delivering mail is
+The gate is an AppKit plugin, so an app that wants the OTP flow can mount it
+directly - with or without the portr tunnel. It registers no routes - it exposes
+handlers the caller invokes (drive them from the `startProxy` reverse-proxy, or
+your own server) - and it takes a `sendCode` callback because delivering mail is
 the one thing it cannot resolve on its own:
 
 ```ts
 import { createApp } from "@dbx-tools/appkit";
-import { authGate } from "@dbx-tools/cli-tunnel/plugin";
+import { authGate } from "@dbx-tools/tunnel";
 import { brand, email, sender, transport } from "@dbx-tools/email";
 
 const handle = await createApp({
@@ -334,15 +343,15 @@ const handle = await createApp({
 const status = await handle.authGate.status(sessionCookieValue);
 ```
 
-`sendCode` is the one thing the plugin cannot resolve on its own. When the tunnel
-CLI boots the gate it wires this same callback, and derives the email styling from
-the brand context, so mounting the plugin directly is the only case that needs it
-by hand.
+`sendCode` is the one thing the plugin cannot resolve on its own. The `app`
+module's `startGateApp()` wires this same callback and derives the email styling
+from the brand context, so mounting the plugin directly is the only case that
+needs it by hand.
 
 ## Modules
 
-- `cli` - argv parsing, the wrapped-command split at `--`, and process
-  supervision.
+- `interceptor` - `tunnelInterceptor()`, the `createApp` interceptor that applies
+  `DATABRICKS_HOST`, launches portr, and binds it to the app.
 - `plugin` - `authGate()`, its config/env resolution, and the `AuthGateApi`
   handlers the proxy calls in-process.
 - `proxy` - the public-port reverse proxy: loopback-vs-platform classification,

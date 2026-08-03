@@ -209,7 +209,7 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
    * `AuthenticationError` outside `NODE_ENV=development` if the request carries
    * no forwarded OBO token, and AppKit does not catch a rejection raised inside
    * a handler - so unconditionally wrapping this route takes the process down
-   * for a caller that authenticated some other way (a `@dbx-tools/cli-tunnel`
+   * for a caller that authenticated some other way (a `@dbx-tools/tunnel`
    * OTP session, a health probe, a local `curl`). The user context is only ever
    * an ENRICHMENT here: without it, wildcard senders simply expand against no
    * local part. Degrading to the service context therefore answers correctly

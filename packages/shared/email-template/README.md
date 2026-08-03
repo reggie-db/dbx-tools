@@ -20,7 +20,7 @@ it lives on its own:
   `@databricks/appkit` and `nodemailer`. Templates that lived there could not be
   imported by a browser bundle.
 - `@dbx-tools/shared-email` is a pure zod contract package consumed by
-  non-AppKit callers such as `@dbx-tools/cli-tunnel`. Templates that lived there
+  non-AppKit callers such as `@dbx-tools/tunnel`. Templates that lived there
   would push React and `@react-email/components` onto every schema consumer.
 - `@dbx-tools/ui-email` is a React/DOM package. Templates that lived there would
   make the Node renderer depend on a DOM-typed package.

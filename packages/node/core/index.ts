@@ -9,5 +9,5 @@ export * as project from "./src/project.ts";
 export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContextJsonSchema, brandContextPrompt } from "./src/brand.ts";
 export type { BrandContext, BrandContextInput } from "./src/brand.ts";
 export { COMMAND_NOT_FOUND_EXIT_CODE } from "./src/exec.ts";
-export type { ExecStdio, LineHandler, StdioOption, ExecResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
+export type { ExecStdio, LineHandler, StdioOption, ExecResult, ChildProcessResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
 export type { ProjectContext } from "./src/project.ts";

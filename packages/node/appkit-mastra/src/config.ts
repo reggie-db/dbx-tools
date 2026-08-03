@@ -528,7 +528,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    *   per-user attribution in Genie / Unity Catalog.
    * - `"auto"`: OBO when the request carries an OBO token, the service principal
    *   when it does not. For an app serving BOTH the platform front door and a
-   *   door that has no token to forward - a `@dbx-tools/cli-tunnel` gate, a
+   *   door that has no token to forward - a `@dbx-tools/tunnel` gate, a
    *   Teams channel - where AppKit's `asUser` would otherwise throw
    *   `AuthenticationError` outside `NODE_ENV=development`.
    *

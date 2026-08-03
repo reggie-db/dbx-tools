@@ -59,7 +59,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.59",
+  "version": "0.0.0",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -68,7 +68,6 @@
     "packages/cli/appkit-env",
     "packages/cli/dbx-tools",
     "packages/cli/model-proxy",
-    "packages/cli/tunnel",
     "packages/node/appkit",
     "packages/node/appkit-mastra",
     "packages/node/appkit-web-search",
@@ -83,6 +82,7 @@
     "packages/node/path",
     "packages/node/search",
     "packages/node/teams",
+    "packages/node/tunnel",
     "packages/shared/core",
     "packages/shared/email",
     "packages/shared/email-template",

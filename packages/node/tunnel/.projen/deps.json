@@ -15,11 +15,6 @@
       "type": "build"
     },
     {
-      "name": "@clack/prompts",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "@databricks/appkit",
       "version": "catalog:",
       "type": "runtime"
@@ -47,11 +42,6 @@
     {
       "name": "@dbx-tools/shared-email",
       "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "commander",
-      "version": "catalog:",
       "type": "runtime"
     },
     {
