@@ -24,6 +24,7 @@ import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams
 import { interceptor as tunnelInterceptorModule, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
+import { configureStaticDelivery } from "./_static-delivery.ts";
 import { busDemo } from "./bus-demo.ts";
 import { logDependencies } from "./dependencies.ts";
 
@@ -345,6 +346,9 @@ await createAppAuto({
       remoteSkills: "aitools",
     }),
   ],
+  onPluginsReady(appkit) {
+    appkit.server.extend((application) => configureStaticDelivery(application, clientDist));
+  },
   // Front the app with a public portr tunnel IN-PROCESS: `tunnelInterceptor`
   // applies the computed DATABRICKS_HOST, launches portr pointed at this app's
   // public port, and binds it so the app and portr live/die as one. A no-op when

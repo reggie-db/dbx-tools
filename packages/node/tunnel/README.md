@@ -42,8 +42,9 @@ gating middleware on the app's OWN Express server (no separate proxy process).
   snippet - nothing else - so a code that lives only in the body is unreachable
   however cleanly the body is shaped. See
   [Why the code is in the subject](#why-the-code-is-in-the-subject).
-- The two MIME parts are built separately, on purpose. The HTML part is the full
-  branded template with the code as a large styled heading; the `text/plain` part
+- The two MIME parts are built separately, on purpose. The HTML card uses the
+  configured subject template as its neutral title and shows the code once as a
+  large styled body heading; the `text/plain` part
   is authored directly, keeping the prompt and the code on ONE line
   (`Your verification code is: 123456`) because that is the shape client code
   detection reads most reliably. A generated text part cannot hold it - the text
@@ -231,10 +232,10 @@ So the code goes in both strings a notification actually shows:
   in the notification body, repeating the prompt with the code
   (`Your verification code is: 123456`).
 
-The body keeps the code as a large styled heading regardless, for a recipient
-reading the mail rather than a notification. This is deliberately NOT Apple's
-domain-bound `@domain #code` trailer, which binds a code to a single origin;
-subject + preheader works across clients and needs no origin.
+The opened card keeps the configured subject template as a code-free title and
+shows the code once as a large styled body heading. This is deliberately NOT
+Apple's domain-bound `@domain #code` trailer, which binds a code to a single
+origin; subject + preheader works across clients and needs no origin.
 
 ### Signing everyone out
 

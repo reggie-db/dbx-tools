@@ -32,7 +32,7 @@ interface EmailModule {
       message: { to: string[]; subject: string; body: string },
       from: string,
       onBehalfOf: undefined,
-      extra: { text: string; preview: string },
+      extra: { heading: string; text: string; preview: string },
     ) => Promise<void>;
   };
 }
@@ -107,6 +107,10 @@ function sendEmailWith(
     },
     from,
     undefined,
-    { text: codeEmailTextBody(code, opts), preview: codeEmailPreview(code, opts) },
+    {
+      heading: opts.subject,
+      text: codeEmailTextBody(code, opts),
+      preview: codeEmailPreview(code, opts),
+    },
   );
 }

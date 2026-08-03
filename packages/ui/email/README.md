@@ -117,7 +117,7 @@ across approval, compose, and custom UI surfaces.
 ## Gate An App Behind An Email Code
 
 ```tsx
-import { AuthGate } from "@dbx-tools/ui-email/react";
+import { AuthGate } from "@dbx-tools/ui-email/react/auth-gate";
 
 <AuthGate>
   <App />
@@ -152,6 +152,8 @@ shape the gate sends, so change one and check the other.
 - `./react` - `EmailPreview`, `EmailApprovalCard`, `EmailComposeView`,
   `EmailBody`, `AuthGate`, address/attachment helpers, shared email message
   types, and prop types.
+- `./react/auth-gate` - focused `AuthGate` entry that keeps email rendering and
+  compose dependencies out of a public login bundle.
 - `./styles.css` - Tailwind/AppKit style entrypoint for the email components.
 
 Pair this package with [`@dbx-tools/email`](../../node/email) for SMTP or

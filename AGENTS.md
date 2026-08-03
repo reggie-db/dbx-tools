@@ -860,8 +860,9 @@ so a `vite build --watch` replacement must watch for itself; bun's bundler does 
 copy `public/`; and a Databricks App's `Bun.build` needs `splitting` (the Workspace
 import API's 10 MB per-file limit fails the UPLOAD, not the build), `publicPath: "/"`
 (the static server rewrites `/*` to one `index.html`, so relative chunk paths 404 on
-nested routes), `external` for self-hosted fonts, and `sourcemap: "none"`.
-The generated `app`-tag `build.ts` supplies those four options by default,
+nested routes), `external` for self-hosted fonts, `sourcemap: "none"`, and a
+`process.env.NODE_ENV="production"` define so React ships its production runtime.
+The generated `app`-tag `build.ts` supplies those five options by default,
 clears `dist/` before each build, and stages an optional `public/` directory after
 `Bun.build`; use `bun-build.override.ts` only to replace a default for an app with
 different deployment requirements.
@@ -998,6 +999,19 @@ bun run --filter @dbx-tools/demo-appkit-server dev   # bun --watch src/server.ts
 bun run --filter @dbx-tools/demo-appkit-app dev      # Bun.serve dev server (HMR) via dev.ts
 bun run --filter @dbx-tools/demo-appkit-app build    # Bun.build production bundle via build.ts
 ```
+
+The deployed demo keeps its public OTP shell small: `main.tsx` imports AuthGate
+from the focused `@dbx-tools/ui-email/react/auth-gate` subpath and lazy-loads the
+application only after the gate admits the visitor, `App.tsx` lazy-loads each
+feature route, `ui-mastra` dynamically imports Echarts, chat export,
+`sql-formatter`, and a fine-grained Shiki runtime with only its eight supported
+grammars, and `ui-teams` loads Adaptive Cards + marked only when a card mounts.
+Markdown export never loads Echarts; PDF export loads marked for prose and
+Echarts only when it encounters a chart. The server's `onPluginsReady` extension
+applies HTTP compression and serves static files first with one-year immutable
+headers for Bun's content-hashed names (unhashed files revalidate); AppKit's own
+static mount remains the SPA fallback. Keep new feature dependencies behind the
+same boundaries instead of importing them into the login entry.
 
 Because everything is one workspace, a single AppKit / Mastra / React instance is
 shared automatically (the reason the hoisted linker is mandatory - see the package

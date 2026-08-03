@@ -1,19 +1,19 @@
 import { brand } from "@dbx-tools/shared-core";
 import { Button, Separator } from "@dbx-tools/ui-appkit/react";
 import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui-branding/react";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import Brand from "@/pages/Brand";
-import Bus from "@/pages/Bus";
-import Cards from "@/pages/Cards";
-import Conversations from "@/pages/Conversations";
-import Search from "@/pages/Search";
-import Stream from "@/pages/Stream";
 
-// Real browser routes so deep links (and refreshing on `/stream`) land
-// on the right page. AppKit's dev and static servers already SPA-fallback
-// any non-`/api`, non-`/query` path to index.html, so BrowserRouter is
-// safe in both `bun run dev` and a deployed Databricks App.
+const Brand = lazy(() => import("@/pages/Brand"));
+const Bus = lazy(() => import("@/pages/Bus"));
+const Cards = lazy(() => import("@/pages/Cards"));
+const Conversations = lazy(() => import("@/pages/Conversations"));
+const Search = lazy(() => import("@/pages/Search"));
+const Stream = lazy(() => import("@/pages/Stream"));
+
+// Real browser routes keep deep links refreshable while lazy page modules ensure
+// each feature's dependencies load only when that route is selected. AppKit's
+// dev and static servers SPA-fallback non-API paths to index.html.
 
 type RouteDef = {
   path: string;
@@ -106,13 +106,21 @@ const App = () => {
             <Separator />
           </header>
           <main className="min-h-0 flex-1">
-            <Routes>
-              <Route path="/" element={<Navigate to="/stream" replace />} />
-              {routes.map((route) => (
-                <Route key={route.path} path={route.path} element={route.element} />
-              ))}
-              <Route path="*" element={<Navigate to="/stream" replace />} />
-            </Routes>
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Loading page...
+                </div>
+              }
+            >
+              <Routes>
+                <Route path="/" element={<Navigate to="/stream" replace />} />
+                {routes.map((route) => (
+                  <Route key={route.path} path={route.path} element={route.element} />
+                ))}
+                <Route path="*" element={<Navigate to="/stream" replace />} />
+              </Routes>
+            </Suspense>
           </main>
         </div>
       </BrowserRouter>

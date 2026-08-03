@@ -55,6 +55,7 @@ describe("generated Bun app", () => {
   });
 
   it("uses Databricks-safe production defaults", () => {
+    assert.match(build, /"process\.env\.NODE_ENV": JSON\.stringify\("production"\)/);
     assert.match(build, /splitting: true/);
     assert.match(build, /publicPath: "\/"/);
     assert.match(build, /external: \["\/fonts\/\*"\]/);

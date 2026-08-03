@@ -131,6 +131,21 @@ tools, so every path shares one connection pool, one sender policy, and one set
 of caps. A third argument accepts an `AbortSignal` when the caller wants to stop
 waiting on SMTP.
 
+### Control the visible heading
+
+The HTML card normally repeats the transport subject as its heading. Set
+`heading` when the subject contains notification-specific context that should not
+be repeated inside the opened message:
+
+```ts
+await transport.sendEmail(message, from, undefined, {
+  heading: "Verification code",
+});
+```
+
+This keeps a code-bearing subject useful in inboxes and notifications while the
+HTML body presents the code once.
+
 ### Control the plain-text part
 
 By default both MIME alternatives are rendered from one React Email tree, so the
@@ -375,8 +390,9 @@ const path = await outbox.writeOutboxEmail(message, "bot@example.com", "tmp/emai
 
 Outbox files are HTML previews with metadata in the header, written to
 `<dir>/<from>/<timestamp>-<subject-slug>.html`. A fourth argument accepts an
-`EmailBrand`. Attachments are listed in the preview, but attachment bytes are not
-copied to disk.
+`EmailBrand`; a fifth accepts the same `heading` and `preview` presentation used
+by the transport. Attachments are listed in the preview, but attachment bytes
+are not copied to disk.
 
 ## Limits
 
@@ -401,7 +417,7 @@ handed to SMTP. The constants and the plugin's interceptor settings live in the
   `SEND_EMAIL_DESCRIPTION`.
 - `transport` - shared runtime, `getEmailRuntime()`, `resetEmailRuntime()`,
   `verifyEmailTransport()`, `sendEmail()`, its `SendEmailOptions` (an explicit
-  `text/plain` alternative and the `preview` preheader), and the executor slot
+  HTML `heading`, `text/plain` alternative, and `preview` preheader), and the executor slot
   (`setEmailExecutor()`, `executeWrite()`) that puts every send on AppKit's
   interceptor chain.
 - `config` - SMTP/outbox config types, sender policy, JSON schema, and

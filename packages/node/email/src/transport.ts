@@ -322,7 +322,10 @@ async function dispatch(
   signal?.throwIfAborted();
 
   if (config.mode === "file") {
-    const path = await writeOutboxEmail(message, from, config.outDir, config.brand);
+    const path = await writeOutboxEmail(message, from, config.outDir, config.brand, {
+      ...(options?.heading !== undefined ? { heading: options.heading } : {}),
+      ...(options?.preview !== undefined ? { preview: options.preview } : {}),
+    });
     return { sent: true, recipient, from, messageId: path };
   }
 
@@ -337,6 +340,8 @@ async function dispatch(
     subject: message.subject,
     body: message.body,
     brand: config.brand,
+    ...(options?.heading !== undefined ? { heading: options.heading } : {}),
+    ...(options?.preview !== undefined ? { preview: options.preview } : {}),
   });
   const info = await abortable(
     transporter.sendMail({
@@ -371,6 +376,12 @@ async function dispatch(
  * describe how a message is DELIVERED, so they are the caller's to supply.
  */
 export interface SendEmailOptions {
+  /**
+   * Visible heading inside the branded HTML card. Defaults to the message
+   * subject. Use this when the transport subject carries notification-specific
+   * details that would be noisy if repeated inside the opened email.
+   */
+  heading?: string;
   /**
    * An explicit `text/plain` alternative, replacing the one generated from the
    * React Email tree. The HTML part is untouched, so the recipient still gets the

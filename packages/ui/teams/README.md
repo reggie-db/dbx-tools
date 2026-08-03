@@ -25,7 +25,8 @@ contract from [`@dbx-tools/shared-teams`](../../shared/teams) and renders throug
 - `AdaptiveCardView` - a thin React wrapper over the imperative `adaptivecards`
   renderer: feed it a compiled Adaptive Card document and it mounts the rendered
   node, re-rendering on change and wiring `Action.OpenUrl` clicks (open in a new
-  tab by default, or intercept with `onOpenUrl`).
+  tab by default, or intercept with `onOpenUrl`). The renderer is loaded only
+  when the first card mounts.
 - `AdaptiveCardGallery` - a self-contained dev tool: edit a `CardSpec` (or pick a
   sample), compile it through the server's `POST /api/teams/card` route, and see
   the card render live. This is the drop-in "display them" surface for a dev
@@ -35,10 +36,10 @@ contract from [`@dbx-tools/shared-teams`](../../shared/teams) and renders throug
 - Markdown in a `TextBlock` actually renders. A `TextBlock` is markdown per the
   Adaptive Cards spec, but `adaptivecards` ships no parser - it leaves the
   implementation (and its sanitization) to the host, so `**bold**` renders
-  literally until one is installed. Importing this package registers `marked`
-  as the renderer's `onProcessMarkdown` processor, degrading to plain text if a
-  string fails to parse, and the stylesheet re-applies list markers / paragraph
-  spacing that Tailwind's preflight resets away.
+  literally until one is installed. Mounting the first card loads and registers
+  `marked` as the renderer's `onProcessMarkdown` processor, degrading to plain
+  text if a string fails to parse, and the stylesheet re-applies list markers /
+  paragraph spacing that Tailwind's preflight resets away.
 
 ## Simulate A Teams Chat
 

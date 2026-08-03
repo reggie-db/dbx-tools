@@ -26,8 +26,7 @@
 import { string } from "@dbx-tools/shared-core";
 import { marker as markers, type Chart, type StatementData } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
-import * as echarts from "echarts";
-import { marked } from "marked";
+import type { EChartsCoreOption } from "echarts";
 import { normalizeChartOption } from "./chart-option.ts";
 import { LIGHT_CHART_CHROME } from "./chart-theme.ts";
 import { downloadFile } from "./download.ts";
@@ -271,7 +270,9 @@ async function messageBodyHtml(message: UIMessage, resolver: EmbedResolver): Pro
     if (seg.kind === "text") {
       if (!seg.text.trim()) continue;
       parts.push(
-        isAssistant ? markdownToHtml(seg.text) : `<p class="plain">${escapeHtml(seg.text)}</p>`,
+        isAssistant
+          ? await _markdownToHtml(seg.text)
+          : `<p class="plain">${escapeHtml(seg.text)}</p>`,
       );
       continue;
     }
@@ -287,7 +288,8 @@ async function messageBodyHtml(message: UIMessage, resolver: EmbedResolver): Pro
 }
 
 /** Render a markdown fragment to an HTML string (GFM tables, line breaks). */
-function markdownToHtml(md: string): string {
+async function _markdownToHtml(md: string): Promise<string> {
+  const { marked } = await import("marked");
   return marked.parse(md, { async: false, gfm: true, breaks: true }) as string;
 }
 
@@ -309,6 +311,7 @@ async function chartSvg(resolver: EmbedResolver, id: string): Promise<string | n
   try {
     const chart = await resolver.chart(id);
     if (!chart?.result) return null;
+    const echarts = await import("echarts");
     const instance = echarts.init(null, undefined, {
       renderer: "svg",
       ssr: true,
@@ -317,7 +320,7 @@ async function chartSvg(resolver: EmbedResolver, id: string): Promise<string | n
     });
     try {
       instance.setOption(
-        normalizeChartOption(chart.result.option, LIGHT_CHART_CHROME) as echarts.EChartsCoreOption,
+        normalizeChartOption(chart.result.option, LIGHT_CHART_CHROME) as EChartsCoreOption,
       );
       return instance.renderToSVGString();
     } finally {

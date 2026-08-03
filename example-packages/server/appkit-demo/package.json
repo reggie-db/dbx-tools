@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
+    "@types/compression": "^1.8.1",
     "@types/express": "catalog:",
     "@types/json-schema": "^7",
     "@types/node": "catalog:",
@@ -50,6 +51,7 @@
     "@mastra/otel-bridge": "catalog:",
     "@mastra/pg": "catalog:",
     "@opentelemetry/api": "catalog:",
+    "compression": "^1.8.1",
     "express": "catalog:",
     "fuse.js": "^7.4.2",
     "pg": "^8.22.0",

@@ -193,6 +193,12 @@ export const EmailBody = ({ body, brand: brandInput }: EmailBodyProps) => {
 /** Props for the complete React Email document. */
 export interface EmailDocumentProps extends EmailBodyProps {
   subject?: string;
+  /**
+   * Visible heading inside the email card. Defaults to the subject so ordinary
+   * messages keep their existing presentation while callers may use a shorter
+   * heading when the transport subject contains notification-specific details.
+   */
+  heading?: string;
   headers?: ReadonlyArray<readonly [string, string]>;
   footer?: string;
   /**
@@ -279,6 +285,7 @@ function EnvelopeHeaders({
 export const EmailCard = ({
   body,
   subject = "Message",
+  heading,
   headers,
   footer,
   brand: brandInput,
@@ -310,7 +317,7 @@ export const EmailCard = ({
             margin: "0 0 24px",
           }}
         >
-          {subject}
+          {heading ?? subject}
         </Heading>
         <EnvelopeHeaders headers={headers} theme={theme} />
         <EmailBody body={body} brand={theme} />

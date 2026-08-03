@@ -15,7 +15,7 @@ import type {
   ToolEvent,
   ToolProgress,
 } from "./types.ts";
-import { exportChat, type EmbedResolver, type ExportFormat } from "../support/export.ts";
+import type { EmbedResolver, ExportFormat } from "../support/export.ts";
 import {
   useMastraClient,
   useMastraDefaultModel,
@@ -35,6 +35,8 @@ import {
   terminateRunningToolEvents,
   type ThreadSession,
 } from "../support/thread-sessions.ts";
+
+const _loadChatExport = () => import("../support/export.ts");
 
 // Self-contained drop-in chat. `useMastraChat` drives the conversation
 // over `@mastra/client-js`: `agent.stream()` returns a Response
@@ -1274,6 +1276,7 @@ export const useMastraChat = (
       const title =
         (activeThreadId && threads.find((t) => t.id === activeThreadId)?.title) || "Conversation";
       try {
+        const { exportChat } = await _loadChatExport();
         await exportChat({
           messages: getSession(activeKey).messages,
           format,
@@ -1294,6 +1297,7 @@ export const useMastraChat = (
   const exportMessage = useCallback(
     async (message: UIMessage, format: ExportFormat) => {
       try {
+        const { exportChat } = await _loadChatExport();
         await exportChat({
           messages: [message],
           format,

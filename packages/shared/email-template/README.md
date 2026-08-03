@@ -40,6 +40,19 @@ import { EmailDocument } from "@dbx-tools/shared-email-template";
 Node runtimes should pass this component to `@react-email/render`.
 `@dbx-tools/email` does that automatically for SMTP and local outbox delivery.
 
+`heading` overrides only the visible card heading while `subject` remains the
+MIME subject and preheader fallback. One-time-code mail uses this to keep the
+code in notifications without repeating it inside the opened card:
+
+```tsx
+<EmailDocument
+  subject="123456 is your verification code"
+  heading="Your verification code"
+  preview="Your verification code is: 123456"
+  body={body}
+/>
+```
+
 `preview` sets the preheader — the snippet a client shows beside the subject, and
 the body of the push notification a mobile mail app posts. It defaults to the
 subject; set it when the notification should say something the subject does not:

@@ -1,13 +1,14 @@
 import { marker as markers, type ParsedMarker } from "@dbx-tools/shared-mastra";
 import { Spinner } from "@dbx-tools/ui-appkit/react";
-import ReactECharts from "echarts-for-react";
 import { ClockIcon } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { lazy, Suspense, useMemo, useRef } from "react";
 import { DataGrid, humanizeLabel } from "./data-grid.tsx";
 import { AssistantMarkdown } from "./markdown.tsx";
 import { normalizeChartOption } from "../support/chart-option.ts";
 import { useChartChrome } from "../support/chart-theme.ts";
 import { useChartFetch, useStatementFetch } from "../support/mastra-client.ts";
+
+const ReactECharts = lazy(() => import("echarts-for-react"));
 
 // Inline embed slots: chart / data tables resolved from `[chart:<id>]`
 // and `[data:<id>]` markers in the assistant's prose, plus the splitter
@@ -31,6 +32,16 @@ import { useChartFetch, useStatementFetch } from "../support/mastra-client.ts";
  */
 const CHART_FRAME_CLASSES = "not-prose my-3 max-w-full rounded border border-border bg-card p-2";
 const CHART_HEIGHT_PX = 320;
+
+/** Fixed chart placeholder shared by data loading and renderer loading. */
+const ChartLoading = () => (
+  <div
+    className="flex items-center justify-center"
+    style={{ height: CHART_HEIGHT_PX, width: "100%" }}
+  >
+    <Spinner className="size-5 text-muted-foreground" />
+  </div>
+);
 
 /**
  * Compact inline notice rendered in place of an embed - a chart, data
@@ -107,19 +118,16 @@ const ChartSlot = ({ chartId }: { chartId: string }) => {
   return (
     <div ref={frameRef} className={CHART_FRAME_CLASSES}>
       {option ? (
-        <ReactECharts
-          option={option}
-          style={{ height: CHART_HEIGHT_PX, width: "100%" }}
-          notMerge
-          lazyUpdate
-        />
+        <Suspense fallback={<ChartLoading />}>
+          <ReactECharts
+            option={option}
+            style={{ height: CHART_HEIGHT_PX, width: "100%" }}
+            notMerge
+            lazyUpdate
+          />
+        </Suspense>
       ) : (
-        <div
-          className="flex items-center justify-center"
-          style={{ height: CHART_HEIGHT_PX, width: "100%" }}
-        >
-          <Spinner className="size-5 text-muted-foreground" />
-        </div>
+        <ChartLoading />
       )}
     </div>
   );

@@ -669,6 +669,12 @@ project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p)
 // shared-email wire contract and renders through ui-appkit's UI kit + the
 // shared Markdown/Tailwind styling. `ui`-tagged (React + jsx from the ui tag).
 project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) => {
+  p.package.addField("exports", {
+    "./react": "./src/react/index.ts",
+    "./react/auth-gate": "./src/react/auth-gate.tsx",
+    "./styles.css": "./src/styles.css",
+    "./package.json": "./package.json",
+  });
   p.addDeps(
     "@dbx-tools/shared-email@workspace:*",
     "@dbx-tools/shared-email-template@workspace:*",
@@ -792,10 +798,11 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
     "@mastra/pg@catalog:",
     "@opentelemetry/api@catalog:",
     "zod@catalog:",
+    "compression@^1.8.1",
     "pg@^8.22.0",
     "fuse.js@^7.4.2",
   );
-  p.addDevDeps("@types/pg@^8", "@types/json-schema@^7");
+  p.addDevDeps("@types/compression@^1.8.1", "@types/pg@^8", "@types/json-schema@^7");
 });
 
 // example-packages/app/appkit-demo: the React client. `app` tag supplies react +

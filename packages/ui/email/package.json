@@ -41,6 +41,7 @@
   "type": "module",
   "exports": {
     "./react": "./src/react/index.ts",
+    "./react/auth-gate": "./src/react/auth-gate.tsx",
     "./styles.css": "./src/styles.css",
     "./package.json": "./package.json"
   },

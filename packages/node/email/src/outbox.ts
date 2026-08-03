@@ -18,7 +18,7 @@ import { join, resolve } from "node:path";
 import { string } from "@dbx-tools/shared-core";
 import type { EmailMessage } from "@dbx-tools/shared-email";
 import type { EmailBrand } from "./brand.ts";
-import { renderEmailHtml } from "./email-html.ts";
+import { renderEmailHtml, type EmailHtmlOptions } from "./email-html.ts";
 
 /**
  * Longest subject slug kept in an outbox file name, leaving room for the
@@ -55,6 +55,7 @@ export async function writeOutboxEmail(
   from: string,
   dir: string,
   brand?: EmailBrand,
+  presentation?: Pick<EmailHtmlOptions, "heading" | "preview">,
 ): Promise<string> {
   const folder = resolve(dir, from);
   await mkdir(folder, { recursive: true });
@@ -65,6 +66,8 @@ export async function writeOutboxEmail(
     body: message.body,
     footer: "Local outbox preview - written to disk, not sent (no SMTP credentials configured).",
     ...(brand ? { brand } : {}),
+    ...(presentation?.heading !== undefined ? { heading: presentation.heading } : {}),
+    ...(presentation?.preview !== undefined ? { preview: presentation.preview } : {}),
   });
   await writeFile(path, html, "utf8");
   return path;

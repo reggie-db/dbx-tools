@@ -13,8 +13,7 @@ import {
   cn,
 } from "@dbx-tools/ui-appkit/react";
 import { CheckIcon, CopyIcon } from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { format as formatSql } from "sql-formatter";
+import React, { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { DataGrid, TABLE_WRAPPER_CLASSES, colorizeDelta, type DataRow } from "./data-grid.tsx";
 import { copyText } from "../support/clipboard.ts";
@@ -289,9 +288,10 @@ export const ToolMarkdown = ({ children }: { children: string }) => (
  * constructs or a partial query), so we fall back to the raw string
  * rather than dropping the preview.
  */
-function prettySql(sql: string): string {
+async function _prettySql(sql: string): Promise<string> {
   try {
-    return formatSql(sql, { language: "spark", keywordCase: "upper" });
+    const { format } = await import("sql-formatter");
+    return format(sql, { language: "spark", keywordCase: "upper" });
   } catch {
     return sql;
   }
@@ -335,7 +335,7 @@ const CopyButton = ({ value, className }: { value: string; className?: string })
 
 /**
  * Render a SQL string as a syntax-highlighted code block. The query is
- * first run through {@link prettySql} so one-line Genie output reads as
+ * first run through {@link _prettySql} so one-line Genie output reads as
  * formatted SQL, then highlighted to minimal inline HTML via
  * {@link highlightToHtml} (shiki). Unlike Streamdown's code renderer,
  * this emits a plain `<pre><code>` with only per-token color spans - no
@@ -345,18 +345,23 @@ const CopyButton = ({ value, className }: { value: string; className?: string })
  * the tokens are ready to avoid a flash of empty space.
  */
 export const SqlBlock = ({ sql }: { sql: string }) => {
-  const formatted = useMemo(() => prettySql(sql), [sql]);
+  const [formatted, setFormatted] = useState(sql);
   const [html, setHtml] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
+    setFormatted(sql);
     setHtml(null);
-    void highlightToHtml(formatted, "sql").then((result) => {
-      if (active) setHtml(result);
+    void _prettySql(sql).then((source) => {
+      if (!active) return;
+      setFormatted(source);
+      void highlightToHtml(source, "sql").then((result) => {
+        if (active) setHtml(result);
+      });
     });
     return () => {
       active = false;
     };
-  }, [formatted]);
+  }, [sql]);
   return (
     <div className="group relative">
       <CopyButton

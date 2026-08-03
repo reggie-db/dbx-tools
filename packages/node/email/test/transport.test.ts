@@ -11,7 +11,12 @@ import {
   MAX_ATTACHMENTS_TOTAL_BYTES,
   MAX_BODY_CHARS,
 } from "../src/defaults.ts";
-import { getEmailRuntime, resetEmailRuntime, sendEmail } from "../src/transport.ts";
+import {
+  getEmailRuntime,
+  resetEmailRuntime,
+  sendEmail,
+  type SendEmailOptions,
+} from "../src/transport.ts";
 
 // The runtime is a process-wide singleton built from the environment on first
 // use, so the outbox mode has to be in place before any test sends.
@@ -93,6 +98,17 @@ describe("outbox send", () => {
     assert.match(html, /team@example\.com/);
   });
 
+  it("uses caller-supplied heading and preheader presentation", async () => {
+    const result = await sendEmail(message(), FROM, undefined, {
+      heading: "Verification code",
+      preview: "Your verification code is: 123456",
+    });
+    const html = await readFile(result.messageId!, "utf8");
+    assert.match(html, /Verification code\s*<\/h1>/);
+    assert.match(html, /Your verification code is: 123456/);
+    assert.doesNotMatch(html, />Subject\s*<\/h1>/);
+  });
+
   it("measures a base64 attachment by its decoded size, not its text length", async () => {
     // Four characters carry three decoded bytes, so the text is longer than
     // what the cap counts.
@@ -113,7 +129,7 @@ describe("outbox send", () => {
  */
 describe("caller-supplied plain-text alternative", () => {
   /** Send through a stubbed SMTP transporter and return the captured payload. */
-  async function captureSend(options?: { text?: string }): Promise<{ text: string; html: string }> {
+  async function captureSend(options?: SendEmailOptions): Promise<{ text: string; html: string }> {
     const saved = { ...process.env };
     delete process.env.EMAIL_OUTBOX_MODE;
     process.env.SMTP_HOST = "smtp.example.com";
@@ -156,6 +172,16 @@ describe("caller-supplied plain-text alternative", () => {
     assert.match(text, /^Your verification code is: 123456$/m);
     // ...and the recipient still gets the full template, code styled as a heading.
     assert.match(html, /<h2[^>]*>\s*123456/);
+  });
+
+  it("renders the caller-supplied heading and preheader", async () => {
+    const { html } = await captureSend({
+      heading: "Verification code",
+      preview: "Your verification code is: 123456",
+    });
+    assert.match(html, /Verification code\s*<\/h1>/);
+    assert.match(html, /Your verification code is: 123456/);
+    assert.doesNotMatch(html, />Subject\s*<\/h1>/);
   });
 
   it("falls back to the generated text part when none is supplied", async () => {

@@ -1,10 +1,6 @@
 import { string } from "@dbx-tools/shared-core";
-import {
-  createHighlighter,
-  type BundledLanguage,
-  type BundledTheme,
-  type Highlighter,
-} from "shiki";
+import type { BundledLanguage, BundledTheme } from "shiki";
+import type { HighlighterCore } from "shiki/core";
 import type { CodeHighlighterPlugin } from "streamdown";
 
 // Streamdown 2.x ships syntax highlighting as an opt-in plugin and has
@@ -39,20 +35,22 @@ const THEME: BundledTheme = "github-light";
 /** Languages we can tokenize, as a set for O(1) support checks. */
 const SUPPORTED = new Set<BundledLanguage>(LANGUAGES);
 
-let _highlighter: Highlighter | null = null;
-let _loading: Promise<Highlighter> | null = null;
+let _highlighter: HighlighterCore | null = null;
+let _loading: Promise<HighlighterCore> | null = null;
 
 /** Lazily create the shared shiki highlighter (singleton, loaded once). */
-function loadHighlighter(): Promise<Highlighter> {
-  _loading ??= createHighlighter({ themes: [THEME], langs: LANGUAGES }).then((h) => {
-    _highlighter = h;
-    return h;
-  });
+function loadHighlighter(): Promise<HighlighterCore> {
+  _loading ??= import("./_shiki-runtime.ts")
+    .then(({ createHighlighter }) => createHighlighter())
+    .then((highlighter) => {
+      _highlighter = highlighter;
+      return highlighter;
+    });
   return _loading;
 }
 
 /** Tokenize `code` with the active theme into Streamdown's result shape. */
-function highlightTokens(h: Highlighter, code: string, language: BundledLanguage) {
+function highlightTokens(h: HighlighterCore, code: string, language: BundledLanguage) {
   const { tokens, fg, bg, rootStyle } = h.codeToTokens(code, {
     lang: language,
     theme: THEME,

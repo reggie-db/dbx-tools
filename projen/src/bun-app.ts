@@ -141,6 +141,7 @@ import tailwind from "bun-plugin-tailwind";
 let options: Bun.BuildConfig = {
   entrypoints: ["./index.html"],
   outdir: "./dist",
+  define: { "process.env.NODE_ENV": JSON.stringify("production") },
   minify: true,
   splitting: true,
   publicPath: "/",
