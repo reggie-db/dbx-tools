@@ -54,21 +54,11 @@
     },
     "install": {
       "name": "install",
-      "description": "Install project dependencies and update lockfile (non-frozen)",
-      "steps": [
-        {
-          "exec": "bun install"
-        }
-      ]
+      "description": "Install project dependencies and update lockfile (non-frozen)"
     },
     "install:ci": {
       "name": "install:ci",
-      "description": "Install project dependencies using frozen lockfile",
-      "steps": [
-        {
-          "exec": "bun install --frozen-lockfile"
-        }
-      ]
+      "description": "Install project dependencies using frozen lockfile"
     },
     "package": {
       "name": "package",

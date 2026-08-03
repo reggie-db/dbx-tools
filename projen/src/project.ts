@@ -519,6 +519,12 @@ export interface DBXToolsProjectOptions
    * is a member of the single bun workspace, so the root links it from source.
    */
   readonly extraWorkspaceMembers?: readonly string[];
+  /**
+   * Install workspace dependencies once from the custom root instead of once
+   * per child project during post-synthesis. Defaults to `true`; set `false` to
+   * preserve projen's native per-project install tasks.
+   */
+  readonly rootInstallOnly?: boolean;
 }
 
 /** Options for {@link DBXToolsTypeScriptProject} (a package, or a compiling root). */
@@ -540,6 +546,7 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
   rootTsconfig?: DBXToolsRootTsconfig;
   vsCode?: DBXToolsVsCode;
   private readonly extraWorkspaceMembers: readonly string[];
+  private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsProjectOptions = {}) {
     const { name, scope } = resolveIdentity(options);
@@ -571,11 +578,13 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
     pnpmWorkspace.attachWorkspaceFile(this);
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
+    this.rootInstallOnly = options.rootInstallOnly !== false;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     initProject(this, options);
   }
 
   public override preSynthesize(): void {
+    if (this.rootInstallOnly) this.with(ROOT_INSTALL_ONLY_MIXIN);
     super.preSynthesize();
     // Members come from the attached subprojects, which the root's scan appends
     // after construction - so the list is filled here, not in the constructor.
@@ -584,6 +593,25 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
     preSynthesizeProject(this);
   }
 }
+
+/**
+ * Root-owned workspace install policy.
+ *
+ * Every projen child has its own `NodePackage` post-synth hook, which otherwise
+ * runs `bun install` against the same root workspace once per package. Clear the
+ * child install tasks while leaving the root's real install/install:ci tasks
+ * intact. Applied in root `preSynthesize` so manually attached late children are
+ * included and repeated synths remain idempotent.
+ */
+export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
+  (construct: IConstruct): construct is DBXToolsNodeProject | DBXToolsTypeScriptProject =>
+    (construct instanceof DBXToolsNodeProject || construct instanceof DBXToolsTypeScriptProject) &&
+    construct.parent !== undefined,
+  (child) => {
+    child.package.installTask.reset();
+    child.package.installCiTask.reset();
+  },
+);
 
 /**
  * A single package (usually created by a root's scan), or a standalone
@@ -1006,6 +1034,10 @@ function initProject(
     // node:test `describe`/`it` return promises by design.
     rules: { "@typescript-eslint/no-floating-promises": "off" },
   });
+  if (eslint.config?.settings) {
+    // eslint-plugin-import knows Node built-ins but not Bun's test module.
+    eslint.config.settings["import/core-modules"] = ["bun:test"];
+  }
   // Point the TS import resolver at every package tsconfig, not just the root's
   // (which only includes `.projenrc.ts`), so `import/no-unresolved` resolves
   // cross-package imports.

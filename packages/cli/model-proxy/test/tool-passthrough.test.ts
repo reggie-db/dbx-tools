@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { describe, it } from "bun:test";
-
 import type { ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { describe, it } from "bun:test";
 
 import { startProxyServer, type ModelProxyBackend, type StartProxyOptions } from "../src/server.ts";
 

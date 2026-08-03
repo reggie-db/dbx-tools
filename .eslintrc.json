@@ -36,7 +36,10 @@
         ],
         "alwaysTryTypes": true
       }
-    }
+    },
+    "import/core-modules": [
+      "bun:test"
+    ]
   },
   "ignorePatterns": [
     "*.js",

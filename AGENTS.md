@@ -772,6 +772,14 @@ and a native `trustedDependencies` field. The single bun workspace has ONE
 `node_modules`, no `.pnpmfile.cjs`, and `workspace:*` sibling deps resolve from
 source with no linking hook.
 
+The custom root applies `ROOT_INSTALL_ONLY_MIXIN` during every pre-synth by
+default (`rootInstallOnly: true`). It clears child `install` / `install:ci` task
+steps, so child `NodePackage.postSynthesize()` hooks cannot run the same
+workspace install once per package; only the root performs `bun install`.
+`rootInstallOnly: false` restores projen's native per-project behavior. Apply the
+mixin in pre-synth rather than only at construction so packages attached later
+are covered too.
+
 **`pnpm-workspace.yaml` is STILL generated and committed** - the engine writes it
 directly (projen skips its native component under bun). It is not used for local
 installs; it exists for the **Databricks Apps deploy path**, whose build phase

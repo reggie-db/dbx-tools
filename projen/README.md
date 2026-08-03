@@ -37,6 +37,12 @@ project.synth();
 Every `src`-bearing folder under the configured roots becomes a
 `DBXToolsTypeScriptProject`. Folder path drives package name and runtime tags.
 
+Dependency installation runs once from this root. The default-on
+`ROOT_INSTALL_ONLY_MIXIN` clears child `install` / `install:ci` task steps during
+root pre-synthesis, including packages attached after root construction. Set
+`rootInstallOnly: false` only when a repository intentionally wants projen's
+per-project installation behavior.
+
 The engine treats generated barrels, tests, declaration files, and folders
 without exported source modules as implementation details. They do not create
 new package membership.
