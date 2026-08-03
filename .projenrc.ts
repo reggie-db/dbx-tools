@@ -592,10 +592,11 @@ project.applyToProjects(
 // `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs portr pointed at the app's
 // public port, and `bindProcess`es it so the app and portr live/die as one
 // (concurrently-style). The email OTP gate (allow-list + rate limit +
-// CacheManager-stored codes + jose session) ships as the `authGate` AppKit plugin
-// plus the `startProxy` reverse-proxy (http-proxy-3, WebSocket-aware), for an app
-// that wants to gate the tunnelled traffic. A `node`-tier library, not a CLI: no
-// bin - the app that owns the tunnel is the process.
+// CacheManager-stored codes + jose session) ships as the `authGate` AppKit plugin,
+// which registers the login routes + a gating MIDDLEWARE on the app's OWN Express
+// server (no separate proxy process; it keys on the `Host` header to gate only
+// portr traffic). A `node`-tier library, not a CLI: no bin - the app that owns the
+// tunnel is the process.
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
@@ -604,15 +605,21 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     // matches the app it fronts. Node-only (reads the file), hence node-core
     // rather than shared-core.
     "@dbx-tools/core@workspace:*",
-    "@dbx-tools/email@workspace:*",
+    // Browser-safe login wire schemas + the session cookie name - imported
+    // statically by the gate, so a regular dep.
     "@dbx-tools/shared-email@workspace:*",
     "@databricks/appkit@catalog:",
-    // The reverse proxy: a maintained node-http-proxy fork with WebSocket +
-    // upgrade support and TS types (verified to run under bun).
-    "http-proxy-3@^1.23.3",
     // Session JWT signing/verification (runtime-agnostic HS256), same as node-teams.
     "jose@^6.2.3",
   );
+  // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
+  // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
+  // `--insecure` mode) needs no mail transport, so it is an optional peer rather
+  // than a hard dep; the app that mounts `authGate` provides it. Kept as a devDep
+  // so it resolves for this package's own tests.
+  p.addPeerDeps("@dbx-tools/email@workspace:*");
+  p.package.addField("peerDependenciesMeta", { "@dbx-tools/email": { optional: true } });
+  p.addDevDeps("@dbx-tools/email@workspace:*");
 });
 
 // ui-appkit: the shared React UI base for the feature UI packages. Re-exports

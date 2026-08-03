@@ -18,8 +18,8 @@ so the app and portr live and die as one (concurrently-style - signals pass
 through, either death tears the pair down). The app is the process; the tunnel
 rides along inside it. Access is granted per email address against an allow-list,
 verified by a code sent over [`@dbx-tools/email`](../../node/email); the gate
-itself is the `authGate` AppKit plugin plus the `startProxy` reverse-proxy, both
-exported here for an app that wants to gate the tunnelled traffic.
+itself is the `authGate` AppKit plugin, which registers the login routes and a
+gating middleware on the app's OWN Express server (no separate proxy process).
 
 **Key features:**
 
@@ -83,18 +83,22 @@ exported here for an app that wants to gate the tunnelled traffic.
   `x-forwarded-access-token`, which would otherwise let anyone drive the app's
   workspace calls with a pasted token. Add an app's own headers with
   `TUNNEL_FORWARD_HEADERS`.
-- Platform traffic passes through UNGATED. The gate distinguishes the portr
-  client (a loopback source address, same container) from the hosting platform's
-  front door (a non-loopback container-network address), so health checks and the
-  workspace UI keep working while public tunnel traffic is gated.
+- Only PORTR traffic is gated. The gate identifies tunnel requests by their
+  `Host` header (`TUNNEL_PUBLIC_DOMAIN`), which portr's client preserves from the
+  public visitor. Platform front-door traffic and any other local caller carry a
+  different `Host` and pass through UNGATED, so health checks and the workspace UI
+  keep working. (There is no portr-injected identifying header and no source-IP
+  signal - the client dials the app over plain loopback - so `Host` is the signal.)
 - SPA-aware gating: static assets and the login routes stay open so the browser
   can load the client and render the login form; every other `/api/*` needs a
-  valid session cookie or gets `401`. WebSocket upgrades are gated the same way.
+  valid session cookie or gets `401`. A WebSocket handshake is an ordinary `GET`
+  and runs through the same gate.
 - Supervised teardown - `tunnelInterceptor` binds portr through the `createApp`
   interceptor context, so the app and the tunnel are tied together: if either
   exits, `bindProcess` brings the whole set down and passes signals through.
 - The gate fails fast when email is not configured for SMTP, because a gate that
-  cannot send codes locks everyone out (see `startGateApp` in the `app` module).
+  cannot send codes locks everyone out. `@dbx-tools/email` is an OPTIONAL peer
+  dependency, imported lazily; the app that mounts the gate provides it.
 
 ## Why This Over An Ad-Hoc Tunnel
 
@@ -109,24 +113,35 @@ supervise and no wrapper command to thread flags through.
 
 ```ts
 import { createApp } from "@dbx-tools/appkit";
+import { email } from "@dbx-tools/email";
 import { server } from "@databricks/appkit";
-import { interceptor } from "@dbx-tools/tunnel";
+import { interceptor, plugin } from "@dbx-tools/tunnel";
 
 const { tunnelInterceptor } = interceptor;
+const { authGate } = plugin;
 
 await createApp.createApp({
-  plugins: [server({ host, staticPath })],
+  plugins: [
+    server({ host, staticPath }),
+    // Delivers the OTP codes; the gate reuses this shared transport.
+    email(),
+    // The OTP gate: login routes + a gating middleware on THIS server. Gates only
+    // portr traffic (Host === TUNNEL_PUBLIC_DOMAIN); the platform front door passes
+    // through. Inert when no tunnel domain is configured.
+    authGate({}),
+  ],
   // Applies DATABRICKS_HOST, launches portr at the app's public port, and binds
   // it to the app. No-op when no PORTR_TOKEN / TUNNEL_PUBLIC_DOMAIN is set.
   interceptor: tunnelInterceptor(),
 });
 ```
 
-`tunnelInterceptor(opts)` takes optional `publicDomain` / `subdomain` / `port`;
-each falls back to env (and `port` to the `DATABRICKS_APP_PORT` contract), so a
-deployment usually passes nothing and configures through the environment. The
-OTP gate is a separate concern - see [Use The Gate](#use-the-gate) to mount
-`authGate` + `startProxy` for gated traffic.
+Two pieces, one process: `tunnelInterceptor()` runs portr (a child, bound to the
+app), and `authGate()` is the in-app gate. `tunnelInterceptor(opts)` takes optional
+`publicDomain` / `subdomain` / `port`, each falling back to env (and `port` to the
+`DATABRICKS_APP_PORT` contract); `authGate` reads `TUNNEL_AUTH_ALLOW` /
+`TUNNEL_PUBLIC_DOMAIN` from the environment, so a deployment usually passes nothing.
+See [Use The Gate](#use-the-gate) for the gate on its own.
 
 ## Options
 
@@ -274,7 +289,7 @@ configuration:
 | `x-requested-with` | the conventional AJAX marker                        |
 
 Add an app's own headers with `TUNNEL_FORWARD_HEADERS` (or `forwardHeaders` on
-`startProxy`). Each entry is a literal name, a shell-style glob, or a `/regex/` -
+`authGate`). Each entry is a literal name, a shell-style glob, or a `/regex/` -
 the same three shapes the email allow-list takes - and the configured list is
 UNIONED with the defaults, so extending it never silently breaks the built-in
 surfaces:
@@ -299,63 +314,52 @@ The identity headers are AppKit's OBO contract; the rest are the
 [`X-Forwarded-*` set Databricks Apps documents passing to an
 app](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/http-headers),
 plus the conventional `x-forwarded-proto`/`-port`/`x-real-ip` a library may read
-anyway. Dropping the transport headers costs nothing: the proxy re-adds them from
-the real socket after the policy runs, so the app sees the honest values instead
-of the caller's claim. Rate limiting reads the client IP before stripping, and
-takes the **rightmost** `x-forwarded-for` entry - the only one a proxy appended
-rather than a client supplied.
+anyway. Dropping the transport headers costs nothing: `xfwd` re-adds them from the
+real socket after the policy runs, so the app sees the honest values instead of the
+caller's claim. Rate limiting reads the client IP before stripping, and takes the
+**rightmost** `x-forwarded-for` entry - the only one portr appended rather than a
+client supplied.
 
 ## Use The Gate
 
-The gate is an AppKit plugin, so an app that wants the OTP flow can mount it
-directly - with or without the portr tunnel. It registers no routes - it exposes
-handlers the caller invokes (drive them from the `startProxy` reverse-proxy, or
-your own server) - and it takes a `sendCode` callback because delivering mail is
-the one thing it cannot resolve on its own:
+`authGate()` is the gate. Register it in your app's `createApp` plugins and it
+mounts the `/api/email/auth/*` login routes plus a gating middleware on your app's
+own server (via AppKit's `this.context`). By default it delivers codes through the
+app's shared `@dbx-tools/email` transport - so the minimal wiring is just an
+`allow` list (or `TUNNEL_AUTH_ALLOW`):
 
 ```ts
 import { createApp } from "@dbx-tools/appkit";
+import { email } from "@dbx-tools/email";
 import { authGate } from "@dbx-tools/tunnel";
-import { brand, email, sender, transport } from "@dbx-tools/email";
 
-const handle = await createApp({
+await createApp.createApp({
   plugins: [
-    email({ brand: brand.defaultEmailBrand }),
-    authGate({
-      allow: ["example.com"],
-      sendCode: async (to, code, opts) => {
-        const runtime = transport.getEmailRuntime();
-        await transport.sendEmail(
-          {
-            to: [to],
-            subject: opts.subject,
-            body: `${opts.message}\n\n## ${code}`,
-          },
-          // The app's configured sender; a code email has no on-behalf-of user.
-          sender.resolveSenderAddress(runtime.config, undefined),
-        );
-      },
-    }),
+    server({ host, staticPath }),
+    email(), // the gate reuses this transport to send codes
+    authGate({ allow: ["example.com"] }),
   ],
 });
-
-// The gate exposes handlers rather than routes - call them from your own server.
-const status = await handle.authGate.status(sessionCookieValue);
 ```
 
-`sendCode` is the one thing the plugin cannot resolve on its own. The `app`
-module's `startGateApp()` wires this same callback and derives the email styling
-from the brand context, so mounting the plugin directly is the only case that
-needs it by hand.
+Override `sendCode` only to deliver through something other than the shared
+transport; the default builds the OTP email (code in the subject + preheader for
+mobile autofill) and sends it as the system sender. `@dbx-tools/email` is an
+OPTIONAL peer dependency - a tunnel without the gate needs no mail - so the app
+that mounts `authGate` must include it (or run `TUNNEL_INSECURE=true` to skip the
+gate); a missing transport fails fast at boot.
 
 ## Modules
 
 - `interceptor` - `tunnelInterceptor()`, the `createApp` interceptor that applies
   `DATABRICKS_HOST`, launches portr, and binds it to the app.
-- `plugin` - `authGate()`, its config/env resolution, and the `AuthGateApi`
-  handlers the proxy calls in-process.
-- `proxy` - the public-port reverse proxy: loopback-vs-platform classification,
-  open login routes, session enforcement, and WebSocket forwarding.
+- `plugin` - `authGate()`, its config/env resolution, the `AuthGateApi` handlers,
+  and the `setup()` that mounts the gate on the app's server.
+- `gate` - the login routes + gating middleware (`mountGate`, `isTunnelHost`):
+  `Host`-based tunnel classification, session enforcement, and identity injection.
+- `send-code` - the default OTP delivery through the shared email transport
+  (lazily imported) and the SMTP fail-fast.
+- `code-email` - pure builders for the code email's subject/preheader/bodies.
 - `otp` - the `CacheManager`-backed code store and the session JWT.
 - `signingKey` - the cache-persisted HS256 session key (30-day TTL, get/generate/
   re-read convergence) and the `TUNNEL_AUTH_SESSION_CUTOFF` force-clear cutoff.
@@ -366,7 +370,6 @@ needs it by hand.
   distributed).
 - `portr` - portr install, config rendering, and child launch.
 - `env` - the environment-variable names, each with its deprecated aliases.
-- `app` - boots the minimal gate AppKit app and returns the `AuthGateApi`.
 
 Browser-safe login wire schemas (the request/verify payloads and the session
 cookie name) live in [`@dbx-tools/shared-email`](../../shared/email); the React

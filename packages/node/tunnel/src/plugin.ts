@@ -24,12 +24,17 @@ import {
   ALLOW_ENV,
   BRAND_NAME_ENV,
   CODE_TTL_ENV,
+  FORWARD_HEADERS_ENV,
+  INSECURE_ENV,
   MESSAGE_ENV,
+  PUBLIC_DOMAIN_ENV,
   SESSION_TTL_ENV,
   SUBJECT_ENV,
 } from "./env.ts";
+import { mountGate } from "./gate.ts";
 import { CodeStore, signSession, verifySession } from "./otp.ts";
 import { RateLimiter } from "./rate-limit.ts";
+import { ensureEmailAvailable, sendCode as defaultSendCode } from "./send-code.ts";
 import { KEY_TTL_SECONDS, resolveSessionCutoff, signingKey } from "./signing-key.ts";
 
 const logger = log.logger("tunnel:auth");
@@ -89,8 +94,31 @@ export interface AuthGateConfig extends BasePluginConfig {
    * means no cutoff.
    */
   sessionCutoff?: string | number | Date;
-  /** Deliver a code to an address. Wired by the app to the email plugin. */
+  /**
+   * Deliver a code to an address. Defaults to sending through the host app's
+   * shared `@dbx-tools/email` transport (see `./send-code`); override to wire a
+   * different delivery path.
+   */
   sendCode?: (email: string, code: string, opts: SendCodeOptions) => Promise<void>;
+  /**
+   * The public `<subdomain>.<server>` that identifies portr traffic by its `Host`
+   * header. Only requests whose `Host` matches this are gated; everything else
+   * (the platform front door, other local callers) passes through. Env
+   * `TUNNEL_PUBLIC_DOMAIN`. When absent, the gate is inert (nothing is tunnel
+   * traffic).
+   */
+  publicDomain?: string;
+  /**
+   * Extra `x-` request headers tunnel traffic may forward (literal / glob /
+   * `/regex/`), unioned with the built-in allow-list. Env `TUNNEL_FORWARD_HEADERS`.
+   */
+  forwardHeaders?: string | string[];
+  /**
+   * Run OPEN with no gate (env `TUNNEL_INSECURE=true`). The login routes and gate
+   * middleware are not mounted, and the SMTP fail-fast is skipped. Use only when
+   * the tunnel is deliberately public.
+   */
+  insecure?: boolean;
 }
 
 /** Branding/messaging passed to {@link AuthGateConfig.sendCode}. */
@@ -118,6 +146,12 @@ export interface ResolvedAuthGateConfig {
   maxAttempts: number;
   /** Force-clear cutoff in epoch ms; `0` when unset. */
   sessionCutoffMs: number;
+  /** Public domain that identifies portr traffic by `Host`; `undefined` = inert. */
+  publicDomain?: string;
+  /** Extra `x-` headers tunnel traffic may forward (unioned with the defaults). */
+  forwardHeaders: string[];
+  /** Run OPEN with no gate. */
+  insecure: boolean;
 }
 
 const DEFAULTS = {
@@ -125,8 +159,7 @@ const DEFAULTS = {
   // The repo-wide brand context's display name, NOT a hardcoded product string:
   // this name is what the recipient reads in the code email, so it has to be the
   // same identity the rest of the app presents. A host with its own
-  // `branding/brand.yaml` overrides it by passing `brandName` (see
-  // {@link startGateApp}, which resolves the on-disk context); the shared default
+  // `branding/brand.yaml` overrides it by passing `brandName`; the shared default
   // is the fallback when nothing is configured.
   brandName: brand.defaultBrandContext.name,
   message: "Your verification code is:",
@@ -155,10 +188,16 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     codeTtlSeconds: env.positiveInt(config.codeTtlSeconds, CODE_TTL_ENV, DEFAULTS.codeTtlSeconds),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
     sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
+    publicDomain: env.string(config.publicDomain, PUBLIC_DOMAIN_ENV) ?? undefined,
+    forwardHeaders: [
+      ...string.parseList(config.forwardHeaders),
+      ...string.parseList(env.text(FORWARD_HEADERS_ENV)),
+    ],
+    insecure: env.boolean(config.insecure, INSECURE_ENV) ?? false,
   };
 }
 
-/** The handlers the proxy calls in-process (returned by {@link AuthGatePlugin.exports}). */
+/** The handlers the gate middleware calls in-process (returned by {@link AuthGatePlugin.exports}). */
 export interface AuthGateApi {
   /** Handle a code request. Always resolves `{ ok: true }` (anti-enumeration). */
   request(email: string, ip: string): Promise<{ ok: true; retryAfter?: number }>;
@@ -176,7 +215,13 @@ export interface AuthGateApi {
   status(token: string | undefined): Promise<AuthStatus>;
 }
 
-/** AppKit plugin owning the email-OTP gate's logic (no HTTP routes; proxy-driven). */
+/**
+ * AppKit plugin owning the email-OTP gate. On `setup()` it registers the login
+ * routes (`/api/email/auth/*`) and a gating middleware on the app's OWN Express
+ * server via `this.context`, so a public portr caller must prove an email before
+ * reaching the app's `/api/*` - see `./gate`. Front-door (platform) traffic and
+ * other local callers pass through untouched (the gate keys on the `Host` header).
+ */
 export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   static manifest = {
     name: "authGate",
@@ -200,11 +245,55 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     // cache that cannot hold it (and the resulting "sessions won't survive a
     // restart" warning) shows up in the startup log, not hours later.
     const { cutoffMs } = await signingKey(this.resolved.sessionCutoffMs);
+
+    if (this.resolved.insecure) {
+      logger.warn("insecure mode - the tunnel runs OPEN with no email-OTP gate");
+    } else {
+      this.mountGateRoutes();
+      // Fail fast (post-boot, once the email plugin has primed its transport):
+      // a gate that cannot email a code lets nobody in. `setup:complete` is when
+      // every plugin's `setup()` - including `email()`'s - has resolved.
+      this.context?.onLifecycle("setup:complete", () => ensureEmailAvailable());
+    }
+
     logger.info("ready", {
       patterns: this.resolved.allow.length,
       sessionTtlSeconds: this.resolved.sessionTtlSeconds,
+      publicDomain: this.resolved.publicDomain ?? null,
+      insecure: this.resolved.insecure,
       ...object.optional("sessionCutoff", cutoffMs > 0 ? new Date(cutoffMs).toISOString() : null),
     });
+  }
+
+  /**
+   * Register the login routes (`/api/email/auth/*`) and the gating middleware on
+   * the app's OWN Express server, via `this.context`. Uses `addRoute`/`addMiddleware`
+   * (absolute paths) rather than `injectRoutes` because the login routes live at
+   * the client's fixed `/api/email/auth/*` contract, not under this plugin's
+   * `/api/authGate` base. Both buffer until the server plugin registers as the
+   * route target and flush middleware-before-routes, so the gate runs before the
+   * static handler and the app's own `/api/*` routes.
+   */
+  private mountGateRoutes(): void {
+    const context = this.context;
+    if (!context) {
+      logger.warn("no plugin context - the OTP gate cannot mount its routes");
+      return;
+    }
+    mountGate(
+      {
+        gate: this.exports(),
+        publicDomain: this.resolved.publicDomain,
+        forwardHeaders: this.resolved.forwardHeaders,
+      },
+      (method, path, handler) => context.addRoute(method, path, handler),
+      (path, handler) => context.addMiddleware(path, handler),
+    );
+  }
+
+  /** The code sender: the configured `sendCode`, else the shared-transport default. */
+  private get sendCode(): NonNullable<AuthGateConfig["sendCode"]> {
+    return this.config.sendCode ?? defaultSendCode;
   }
 
   override exports(): AuthGateApi {
@@ -234,7 +323,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     if (looksLikeEmail(address) && matchesAllowlist(address, this.resolved.allow)) {
       const code = await this.codes.issue(address);
       try {
-        await this.config.sendCode?.(address, code, {
+        await this.sendCode(address, code, {
           subject: this.resolved.subject,
           brandName: this.resolved.brandName,
           message: this.resolved.message,

@@ -9,7 +9,7 @@ import {
   codeEmailSubject,
   codeEmailTextBody,
   expiresIn,
-} from "../src/app.ts";
+} from "../src/code-email.ts";
 import {
   ALLOW_ENV,
   BRAND_NAME_ENV,

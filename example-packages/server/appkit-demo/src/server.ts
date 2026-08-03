@@ -21,7 +21,7 @@ import {
 import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
-import { interceptor as tunnelInterceptorModule } from "@dbx-tools/tunnel";
+import { interceptor as tunnelInterceptorModule, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
 import { logDependencies } from "./dependencies.ts";
@@ -45,6 +45,7 @@ const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, sync
   searchToolModule;
 const { defaultBrandContext } = sharedBrand;
 const { tunnelInterceptor } = tunnelInterceptorModule;
+const { authGate } = tunnelPlugin;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.
 // `server({ staticPath })` serves it on the same port as the API. Locally the
@@ -226,6 +227,14 @@ await createAppAuto({
     // `brand` styles every rendered email (accent, font, header logo)
     // with the dbx-tools brand; drop it for the neutral default layout.
     email({ brand: defaultEmailBrand }),
+    // The email-OTP access gate for the public portr tunnel. Registers the
+    // `/api/email/auth/*` login routes + a gating middleware on THIS server that
+    // gates only tunnel traffic (identified by the `Host` header matching
+    // `TUNNEL_PUBLIC_DOMAIN`); the platform front door passes through. `allow`
+    // comes from `TUNNEL_AUTH_ALLOW`, `publicDomain` from `TUNNEL_PUBLIC_DOMAIN`
+    // (both set on the deployed app). Codes send through the `email()` transport
+    // above. Inert locally when no tunnel domain is set.
+    authGate({}),
     // Web-search runtime for the `web_search` / `web_fetch` tools. The
     // web-search model defaults to Gemini, then GPT (the native web-search
     // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,

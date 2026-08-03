@@ -16,10 +16,10 @@
  *   4. registers an AppKit `shutdown` lifecycle handler so an orderly app shutdown
  *      also stops portr.
  *
- * The email-OTP GATE is a separate concern: it is the {@link authGate} AppKit
- * plugin plus the {@link startProxy} reverse-proxy, both exported from this package
- * for an app that wants to gate the tunnelled traffic. This interceptor is only the
- * portr half - "update the host, bind portr" - matching the smallest useful unit.
+ * The email-OTP GATE is a separate concern: it is the `authGate` AppKit plugin,
+ * which registers the login routes + a gating middleware on the app's own server.
+ * Register it in the app's `plugins` for gated traffic. This interceptor is only
+ * the portr half - "update the host, bind portr" - the smallest useful unit.
  *
  * @module
  */

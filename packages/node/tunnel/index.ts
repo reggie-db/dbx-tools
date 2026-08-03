@@ -3,26 +3,46 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as allowlist from "./src/allowlist.ts";
-export * as app from "./src/app.ts";
+export * as codeEmail from "./src/code-email.ts";
 export * as env from "./src/env.ts";
+export * as gate from "./src/gate.ts";
 export * as headers from "./src/headers.ts";
 export * as interceptor from "./src/interceptor.ts";
 export * as otp from "./src/otp.ts";
 export * as plugin from "./src/plugin.ts";
 export * as portr from "./src/portr.ts";
-export * as proxy from "./src/proxy.ts";
 export * as rateLimit from "./src/rate-limit.ts";
+export * as sendCode from "./src/send-code.ts";
 export * as signingKey from "./src/signing-key.ts";
-export { ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, MESSAGE_ENV, SESSION_TTL_ENV, CODE_TTL_ENV, JWT_SECRET_ENV, SESSION_CUTOFF_ENV, PUBLIC_DOMAIN_ENV, INSECURE_ENV, FORWARD_HEADERS_ENV } from "./src/env.ts";
+export type { CodeCopy } from "./src/code-email.ts";
+export {
+  ALLOW_ENV,
+  SUBJECT_ENV,
+  BRAND_NAME_ENV,
+  MESSAGE_ENV,
+  SESSION_TTL_ENV,
+  CODE_TTL_ENV,
+  JWT_SECRET_ENV,
+  SESSION_CUTOFF_ENV,
+  PUBLIC_DOMAIN_ENV,
+  INSECURE_ENV,
+  FORWARD_HEADERS_ENV,
+} from "./src/env.ts";
+export { AUTH_PREFIX } from "./src/gate.ts";
+export type { GateOptions } from "./src/gate.ts";
 export { PROTECTED_HEADERS, DEFAULT_FORWARD_HEADERS } from "./src/headers.ts";
 export type { HeaderPolicy } from "./src/headers.ts";
 export type { TunnelInterceptorOptions } from "./src/interceptor.ts";
 export { CodeStore } from "./src/otp.ts";
 export type { VerifyOutcome } from "./src/otp.ts";
 export { AuthGatePlugin, authGate } from "./src/plugin.ts";
-export type { AuthGateConfig, SendCodeOptions, ResolvedAuthGateConfig, AuthGateApi } from "./src/plugin.ts";
+export type {
+  AuthGateConfig,
+  SendCodeOptions,
+  ResolvedAuthGateConfig,
+  AuthGateApi,
+} from "./src/plugin.ts";
 export type { PortrConfig } from "./src/portr.ts";
-export type { ProxyOptions } from "./src/proxy.ts";
 export { RateLimiter } from "./src/rate-limit.ts";
 export { KEY_TTL_SECONDS } from "./src/signing-key.ts";
 export type { SigningKey } from "./src/signing-key.ts";
