@@ -124,35 +124,6 @@ package is attempted even if one fails; the failures are re-thrown together as a
 `AggregateError` naming each package, rather than the first one abandoning the
 rest of the sweep.
 
-### Generate Node And Python From Rosetta Sources
-
-The experimental `rs-packages` convention keeps TypeScript as the canonical
-Node implementation while colocating an explicit Python implementation in the
-same file:
-
-```ts
-export function capitalize(value: string): string {
-  return value ? value[0]!.toUpperCase() + value.slice(1) : value;
-}
-
-/* @rs-python
-def capitalize(value: str) -> str:
-    return value[:1].upper() + value[1:] if value else value
-@rs-end */
-```
-
-By default, `rs-packages/shared/core/src/string.ts` generates:
-
-- `packages/shared/core/src/string.ts`
-- `python-packages/shared-core/src/shared_core/string.py`
-
-Use `// @rs-node <path>` or `// @rs-python-path <path>` only when the inferred
-paths are unsuitable. Every Rosetta source must live below a package's `src/`
-folder and include at least one Python block; generation fails rather than
-silently emitting an empty Python module. `DBXToolsNodeProject` enables the
-`rs-packages` root by default, accepts `rsPackageRoots` for custom roots, and
-accepts `rsPackageRoots: false` to disable the experiment.
-
 ## Generate OpenAPI Clients
 
 ```ts
@@ -217,7 +188,6 @@ file contract as the CLI.
 - `pnpmWorkspace` - generated pnpm workspace file and catalog model.
 - `barrels` / `moduleExports` - public entrypoint generation.
 - `codegen` - `.d.ts` to zod schema generation.
-- `rsPackages` - annotated TypeScript source to Node/Python generation.
 - `openapi` - tsoa/OpenAPI package generation.
 - `bunApp` / `tsconfig` / `vscode` - generated support files/components.
 - `generated` / `clean` / `watch` / `scaffold` - read-only file stamping,
@@ -226,8 +196,8 @@ file contract as the CLI.
 - `engineRoot` - engine package root resolution for bootstrapped repos.
 
 The engine registers its commands as projen tasks on the workspace root, so run
-them with `bun run <task>` - `sync` (add `--watch`), `barrels`, `openapi`,
-`rs-packages` (also supports `--watch`), and `clean`.
+them with `bun run <task>` - `sync` (add `--watch`), `barrels`, `openapi`, and
+`clean`.
 [`@dbx-tools/cli`](../packages/cli/dbx-tools) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
 
@@ -237,15 +207,14 @@ Every repo-wide task lives on the root, and the root's `compile` / `test`
 delegate with `bun run --filter '*'` rather than emitting a step per member - so
 a new package is covered without a re-synth. Work from the root:
 
-| Task                  | What it does                                       |
-| --------------------- | -------------------------------------------------- |
-| `bun run build`       | `compile` + `test` + `package` across every member |
-| `bun run compile`     | `tsc --build` in each member, in parallel          |
-| `bun run test`        | `eslint` once, then each member's tests            |
-| `bun run sync`        | re-synth (`--watch` to keep synthing)              |
-| `bun run barrels`     | regenerate the read-only `index.ts` barrels        |
-| `bun run rs-packages` | regenerate Node/Python Rosetta outputs             |
-| `bun run bump`        | version, tag, and publish                          |
+| Task              | What it does                                       |
+| ----------------- | -------------------------------------------------- |
+| `bun run build`   | `compile` + `test` + `package` across every member |
+| `bun run compile` | `tsc --build` in each member, in parallel          |
+| `bun run test`    | `eslint` once, then each member's tests            |
+| `bun run sync`    | re-synth (`--watch` to keep synthing)              |
+| `bun run barrels` | regenerate the read-only `index.ts` barrels        |
+| `bun run bump`    | version, tag, and publish                          |
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:

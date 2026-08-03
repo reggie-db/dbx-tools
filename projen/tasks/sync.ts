@@ -57,11 +57,6 @@ if (!process.argv.includes("--watch")) {
       { command: `bun "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
       { command: `bun "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
       { command: `bun "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
-      {
-        command: `bun "${taskPath("rs-packages.ts")}" --watch`,
-        name: "rs-packages",
-        prefixColor: "yellow",
-      },
     ],
     {
       prefix: "name",

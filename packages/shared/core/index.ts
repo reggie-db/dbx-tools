@@ -17,10 +17,16 @@ export * as object from "./src/object.ts";
 export * as pattern from "./src/pattern.ts";
 export * as predicate from "./src/predicate.ts";
 export * as string from "./src/string.ts";
-export * as stringExample from "./src/string-example.ts";
 export * as token from "./src/token.ts";
 export type { PollContext, PollProducer, PollOptions } from "./src/async.ts";
-export { DEFAULT_BRAND_ASSETS, BrandAssetSetSchema, BrandColorsSchema, BrandVoiceSchema, BrandContextSchema, defaultBrandContext } from "./src/brand.ts";
+export {
+  DEFAULT_BRAND_ASSETS,
+  BrandAssetSetSchema,
+  BrandColorsSchema,
+  BrandVoiceSchema,
+  BrandContextSchema,
+  defaultBrandContext,
+} from "./src/brand.ts";
 export type { BrandContext, BrandContextInput, BrandAssetSet } from "./src/brand.ts";
 export type { EnvKey } from "./src/env.ts";
 export type { ErrorContext } from "./src/error.ts";
@@ -28,9 +34,29 @@ export type { ExecutionResult, Executor, ExecutionFailure, RunOptions } from "./
 export type { MemoizeOptions } from "./src/function.ts";
 export type { HeaderLike } from "./src/http.ts";
 export type { LogLevel, Logger } from "./src/log.ts";
-export type { UrlLike, IpVersion, ParsedIp, Cidr, UrlBuilder, ParseEmailsOptions } from "./src/net.ts";
-export type { Sequence, Container, Collection, OneOrMany, NameLike, NonFunctionKeys, DeepEqualComparator } from "./src/object.ts";
+export type {
+  UrlLike,
+  IpVersion,
+  ParsedIp,
+  Cidr,
+  UrlBuilder,
+  ParseEmailsOptions,
+} from "./src/net.ts";
+export type {
+  Sequence,
+  Container,
+  Collection,
+  OneOrMany,
+  NameLike,
+  NonFunctionKeys,
+  DeepEqualComparator,
+} from "./src/object.ts";
 export type { PatternOptions } from "./src/pattern.ts";
-export type { PredicateFunction, TypePredicateFunction, PredicateInput, Predicate } from "./src/predicate.ts";
+export type {
+  PredicateFunction,
+  TypePredicateFunction,
+  PredicateInput,
+  Predicate,
+} from "./src/predicate.ts";
 export type { TokenizeOptions, KeyOptions, IdentifierOptions, Description } from "./src/string.ts";
 export { ACCESS_TOKEN_HEADER, USER_ID_HEADER, USER_EMAIL_HEADER } from "./src/token.ts";

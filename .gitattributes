@@ -26,9 +26,7 @@
 /package.json linguist-generated
 /packages/**/index.ts linguist-generated
 /packages/openapi/** linguist-generated
-/packages/shared/core/src/string-example.ts linguist-generated
 /pnpm-workspace.yaml linguist-generated
-/python-packages/shared-core/src/shared_core/string_example.py linguist-generated
 /tsconfig.base.json linguist-generated
 /tsconfig.json linguist-generated
 /tsconfig.projen.json linguist-generated linguist-language=JSON-with-Comments

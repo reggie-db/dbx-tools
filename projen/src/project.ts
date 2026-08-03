@@ -30,7 +30,6 @@ import {
   RootBunfigFile,
 } from "./bun-app.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
-import { DEFAULT_RS_PACKAGE_ROOTS, RsPackages } from "./rs-packages.ts";
 import {
   DEFAULT_PACKAGE_ROOTS,
   type DiscoveredPackage,
@@ -520,11 +519,6 @@ export interface DBXToolsProjectOptions
    * is a member of the single bun workspace, so the root links it from source.
    */
   readonly extraWorkspaceMembers?: readonly string[];
-  /**
-   * Experimental TypeScript-to-Node/Python source roots. Defaults to
-   * `["rs-packages"]`; set `false` to disable the generator.
-   */
-  readonly rsPackageRoots?: readonly string[] | false;
 }
 
 /** Options for {@link DBXToolsTypeScriptProject} (a package, or a compiling root). */
@@ -847,7 +841,6 @@ function registerRootTasks(project: javascript.NodeProject): void {
   applyTasks(project, {
     barrels: { exec: taskScript(project, "barrels.ts") },
     openapi: { exec: taskScript(project, "openapi.ts") },
-    "rs-packages": { exec: taskScript(project, "rs-packages.ts"), receiveArgs: true },
     clean: { exec: taskScript(project, "clean.ts"), receiveArgs: true },
     // `receiveArgs` forwards `--watch`, so `bun run sync -- --watch` syncs once
     // then starts the single node-path watcher loop.
@@ -932,13 +925,6 @@ function initProject(
   project.vsCode = new DBXToolsVsCode(project);
 
   registerRootTasks(project);
-  project.dbxToolsConfig.rsPackageRoots =
-    options.rsPackageRoots === false
-      ? false
-      : [...(options.rsPackageRoots ?? DEFAULT_RS_PACKAGE_ROOTS)];
-  if (options.rsPackageRoots !== false) {
-    new RsPackages(project, options.rsPackageRoots ?? DEFAULT_RS_PACKAGE_ROOTS);
-  }
   if (options.prettier || project.prettier) {
     const formatTask = project.tasks.tryFind("format") ?? project.addTask("format");
     formatTask.prependExec("prettier . --write", { receiveArgs: true });
