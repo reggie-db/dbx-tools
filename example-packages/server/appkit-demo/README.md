@@ -64,10 +64,11 @@ Two things worth knowing before changing this flow:
   `bundle deploy` warns "There are no files to sync" and ships an app with no
   source.
 - **Start with `bundle run`, not `databricks apps deploy` or `apps start`.** The
-  deployed `command` (the `dbxt-tunnel` wrapper around `bun src/server.ts`) lives
-  in `databricks.yml` under the app resource's `config`, which only the bundle
-  applies. A bare `apps deploy` falls back to `app.yaml`'s `npm run start`, which
-  the staged tree has no script for, and the app crashes on boot. `databricks
+  deployed `command` (`bun src/server.ts`, which fronts itself with the public
+  portr tunnel + OTP gate in-process via `@dbx-tools/tunnel`'s `tunnelInterceptor`)
+  lives in `databricks.yml` under the app resource's `config`, which only the
+  bundle applies. A bare `apps deploy` falls back to `app.yaml`'s `npm run start`,
+  which the staged tree has no script for, and the app crashes on boot. `databricks
 apps stop` + `apps start` is the same trap: `start` re-deploys the last source
   snapshot with the app.yaml command, so it takes a RUNNING app to
   `FAILED`/`Missing script: "start"`. Recover with `bundle deploy` +
