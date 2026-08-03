@@ -194,11 +194,18 @@ export const EmailBody = ({ body, brand: brandInput }: EmailBodyProps) => {
 export interface EmailDocumentProps extends EmailBodyProps {
   subject?: string;
   /**
-   * Visible heading inside the email card. Defaults to the subject so ordinary
-   * messages keep their existing presentation while callers may use a shorter
-   * heading when the transport subject contains notification-specific details.
+   * Visible heading inside the email card. Omit it for ordinary messages so the
+   * transport subject stays a transport subject and is not repeated as a body
+   * title. Pass a shorter heading when the subject carries notification-specific
+   * details (one-time-code mail is the motivating case).
    */
   heading?: string;
+  /**
+   * Optional envelope rows rendered above the body (From / To / Cc / …). Kept for
+   * local outbox previews that deliberately show the wire envelope; delivered
+   * SMTP mail and browser approval/compose previews leave this unset — those
+   * surfaces put recipients and attachments in client chrome instead.
+   */
   headers?: ReadonlyArray<readonly [string, string]>;
   footer?: string;
   /**
@@ -284,7 +291,6 @@ function EnvelopeHeaders({
 /** Branded message card shared by the full document and browser previews. */
 export const EmailCard = ({
   body,
-  subject = "Message",
   heading,
   headers,
   footer,
@@ -308,17 +314,19 @@ export const EmailCard = ({
         <BrandMark theme={theme} />
       </Section>
       <Section style={{ padding: "34px 34px 24px" }}>
-        <Heading
-          style={{
-            color: theme.foreground,
-            fontSize: "28px",
-            letterSpacing: "-0.5px",
-            lineHeight: "1.2",
-            margin: "0 0 24px",
-          }}
-        >
-          {heading ?? subject}
-        </Heading>
+        {heading ? (
+          <Heading
+            style={{
+              color: theme.foreground,
+              fontSize: "28px",
+              letterSpacing: "-0.5px",
+              lineHeight: "1.2",
+              margin: "0 0 24px",
+            }}
+          >
+            {heading}
+          </Heading>
+        ) : null}
         <EnvelopeHeaders headers={headers} theme={theme} />
         <EmailBody body={body} brand={theme} />
       </Section>

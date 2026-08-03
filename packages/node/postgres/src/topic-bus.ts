@@ -148,9 +148,9 @@ export type TopicListener<TBody extends SerializableValue = SerializableValue> =
 
 /**
  * Resolves metadata at publish time instead of construction time, for context a
- * process learns late or asynchronously - a discovered public IP, an instance id
- * from a control plane. Called on every broadcast, so memoize anything expensive;
- * a rejection fails the broadcast.
+ * process learns late or asynchronously - an instance id from a control plane, a
+ * discovered address a caller chooses to attach. Called on every broadcast, so
+ * memoize anything expensive; a rejection fails the broadcast.
  */
 export type TopicMetadataProvider = () => TopicMetadata | PromiseLike<TopicMetadata>;
 
@@ -201,18 +201,18 @@ function definedMetadata(values: Record<string, SerializableValue | undefined>):
 }
 
 /**
- * Context every message gets for free: which project, host, process, and
- * deployment published it.
+ * Context every message gets for free: which project, host, and deployment
+ * published it.
  *
  * Read fresh per broadcast rather than cached, because a long-lived process can
  * be re-parented (a deployment id appearing after boot). Keys that resolve to
- * nothing are omitted. Public IP is only read from the environment here - the bus
- * never makes a network call to discover it; a process that wants a discovered IP
- * passes a {@link TopicMetadataProvider}.
+ * nothing are omitted.
  *
- * Deliberately NOT included: CPU architecture, runtime name, and runtime version.
- * They are constant per deployment and cost payload bytes against the `NOTIFY`
- * limit on every single message.
+ * Deliberately NOT included: public/client IP, process id, CPU architecture,
+ * runtime name, and runtime version. IPs and pids are noisy, often sensitive,
+ * and burn `NOTIFY` payload budget; architecture/runtime are constant per
+ * deployment and pay the same cost. A process that wants any of them passes a
+ * {@link TopicMetadataProvider} or per-message `metadata`.
  */
 function machineMetadata(): TopicMetadata {
   return definedMetadata({
@@ -223,15 +223,8 @@ function machineMetadata(): TopicMetadata {
         process.env.PROJECT_NAME,
         process.env.npm_package_name,
       ]) ?? undefined,
-    publicIp:
-      string.firstNonEmpty([
-        process.env.PUBLIC_IP,
-        process.env.DATABRICKS_PUBLIC_IP,
-        process.env.HOST_IP,
-      ]) ?? undefined,
     hostname: hostname(),
     platform: process.platform,
-    pid: process.pid,
     environment: string.trimToNull(process.env.NODE_ENV) ?? undefined,
     appName: string.trimToNull(process.env.DATABRICKS_APP_NAME) ?? undefined,
     deploymentId: string.trimToNull(process.env.DATABRICKS_APP_DEPLOYMENT_ID) ?? undefined,

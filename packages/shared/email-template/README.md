@@ -40,9 +40,10 @@ import { EmailDocument } from "@dbx-tools/shared-email-template";
 Node runtimes should pass this component to `@react-email/render`.
 `@dbx-tools/email` does that automatically for SMTP and local outbox delivery.
 
-`heading` overrides only the visible card heading while `subject` remains the
-MIME subject and preheader fallback. One-time-code mail uses this to keep the
-code in notifications without repeating it inside the opened card:
+`heading` is optional. Ordinary mail leaves it unset so the MIME subject stays a
+transport subject and is not repeated as a body title. Pass a shorter heading when
+the subject carries notification-specific details — one-time-code mail uses this
+to keep the code in notifications without repeating it inside the opened card:
 
 ```tsx
 <EmailDocument
@@ -78,7 +79,10 @@ import { EmailBody } from "@dbx-tools/shared-email-template";
 ```
 
 The body preview and complete document share typography and content styling. The
-full document adds the branded header, subject, envelope metadata, and footer.
+full document adds the branded header band, optional heading, and footer.
+Envelope rows (`headers`) are opt-in for local outbox previews; delivered SMTP
+mail and browser approval chrome leave recipients and attachments outside the
+HTML body.
 
 Use `EmailCard` when a browser surface should show that complete presentation
 without rendering an outer `<html>` or `<body>` element:
@@ -86,7 +90,7 @@ without rendering an outer `<html>` or `<body>` element:
 ```tsx
 import { EmailCard } from "@dbx-tools/shared-email-template";
 
-<EmailCard subject={draft.subject} body={draft.body} headers={[["To", draft.to.join(", ")]]} />;
+<EmailCard subject={draft.subject} body={draft.body} />;
 ```
 
 ## Apply A Brand

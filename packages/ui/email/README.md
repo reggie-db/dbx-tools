@@ -49,9 +49,9 @@ const draft = email.emailMessageSchema.parse(toolCall.args);
 ```
 
 `EmailApprovalCard` is the chat-facing component for the `send_email` tool. It
-renders the complete branded React Email card, including envelope metadata and
-attachments, plus Approve/Deny actions while leaving tool-call state and
-transport decisions to the host app.
+renders mail-client chrome (sender, recipients, subject, attachments) around the
+branded React Email card, plus Approve/Deny actions while leaving tool-call
+state and transport decisions to the host app.
 
 Wire `onApprove` and `onDeny` to the chat framework's tool-result mechanism.
 The component deliberately does not call the email API itself; the server-side
@@ -65,11 +65,13 @@ import { EmailPreview } from "@dbx-tools/ui-email/react";
 <EmailPreview email={draft} />;
 ```
 
-Use `EmailPreview` when a page needs the same full branded card without action
-buttons, such as a review queue, audit log, or test harness. It projects the
-nearest `BrandProvider` context into email-safe colors and typography, so a live
-site brand picker updates the preview too. Pass the optional `brand` prop when a
-specific message needs an independent campaign or partner identity.
+Use `EmailPreview` when a page needs the same received-mail presentation without
+action buttons, such as a review queue, audit log, or test harness. Envelope
+fields live in the client chrome; the card itself matches delivered HTML. It
+projects the nearest `BrandProvider` context into email-safe colors and
+typography, so a live site brand picker updates the preview too. Pass the
+optional `brand` prop when a specific message needs an independent campaign or
+partner identity.
 
 ## Provide A Compose View
 

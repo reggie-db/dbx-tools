@@ -115,16 +115,15 @@ from being used for that key.
 
 Automatic keys, each omitted when it resolves to nothing: `project` (from
 `DATABRICKS_APP_NAME`, `DATABRICKS_BUNDLE_NAME`, `PROJECT_NAME`, or
-`npm_package_name`), `publicIp` (from `PUBLIC_IP`, `DATABRICKS_PUBLIC_IP`, or
-`HOST_IP`), `hostname`, `platform`, `pid`, `environment`, `appName`,
-`deploymentId`, and `databricksHost`. CPU architecture, runtime name, and runtime
-version are left out on purpose: they are constant per deployment and every
-message would pay for them against the payload limit.
+`npm_package_name`), `hostname`, `platform`, `environment`, `appName`,
+`deploymentId`, and `databricksHost`. Public/client IP, process id, CPU
+architecture, runtime name, and runtime version are left out on purpose: IPs and
+pids are noisy (and often sensitive), the rest are constant per deployment, and
+every message would pay for them against the payload limit. Pass a `metadata`
+function when a process genuinely needs one of those values.
 
-`publicIp` is only read from the environment. The bus makes no network call to
-discover one — pass a `metadata` function for that, which is also how to attach
-context a process learns after construction. The function runs on every broadcast,
-so memoize anything expensive.
+The example above attaches a discovered public IP that way. The function runs on
+every broadcast, so memoize anything expensive.
 
 With the optional `@databricks/appkit` peer installed and a user execution context
 active, `senderId`, `senderName`, and `senderEmail` are added too. AppKit is

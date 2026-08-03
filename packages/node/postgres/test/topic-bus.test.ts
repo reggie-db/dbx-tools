@@ -59,7 +59,19 @@ describe("PostgresTopicBus", () => {
     assert.equal("arch" in encoded.metadata, false);
     assert.equal("runtime" in encoded.metadata, false);
     assert.equal("runtimeVersion" in encoded.metadata, false);
+    assert.equal("pid" in encoded.metadata, false);
+    assert.equal("clientIp" in encoded.metadata, false);
     assert.equal(message.topic, "orders");
+  });
+
+  it("does not auto-attach public IP, client IP, or pid", async () => {
+    const { pool, queries } = fixture();
+    const bus = new PostgresTopicBus(pool);
+    await bus.broadcast("orders", { type: "order.updated", body: { id: 1 } });
+    const encoded = JSON.parse(String(queries[0]?.values?.[1]));
+    assert.equal("publicIp" in encoded.metadata, false);
+    assert.equal("clientIp" in encoded.metadata, false);
+    assert.equal("pid" in encoded.metadata, false);
   });
 
   it("uses one dedicated LISTEN connection and filters by topic", async () => {

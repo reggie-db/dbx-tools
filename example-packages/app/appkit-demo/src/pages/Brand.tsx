@@ -194,7 +194,7 @@ const BrandPage = ({ value, onChange }: BrandPageProps) => {
               <CardHeader>
                 <CardTitle>Operational digest</CardTitle>
                 <CardDescription>
-                  Live site brand · metrics, table, actions, and link.
+                  Live site brand · received-mail chrome around the delivered card.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -206,7 +206,7 @@ const BrandPage = ({ value, onChange }: BrandPageProps) => {
               <CardHeader>
                 <CardTitle>Product launch</CardTitle>
                 <CardDescription>
-                  Live site brand · announcement, quote, list, and file.
+                  Live site brand · announcement chrome with attachment chip.
                 </CardDescription>
               </CardHeader>
               <CardContent>

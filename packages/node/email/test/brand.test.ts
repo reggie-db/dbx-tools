@@ -41,10 +41,23 @@ describe("renderEmailHtml branding", () => {
   });
 
   it("renders a matching plain-text alternative", async () => {
-    const text = await renderEmailText({ subject: "Status", body: "## Resolved\nAll clear." });
+    const text = await renderEmailText({
+      subject: "Status",
+      heading: "Status",
+      body: "## Resolved\nAll clear.",
+    });
     assert.match(text, /Status/i);
     assert.match(text, /Resolved/i);
     assert.match(text, /All clear\./);
+  });
+
+  it("keeps the transport subject out of the body unless a heading is set", async () => {
+    const html = await renderEmailHtml({
+      subject: "Weekly digest",
+      body: "Your pipelines finished cleanly.",
+    });
+    assert.ok(!html.includes("<h1"), "no duplicated subject heading");
+    assert.ok(html.includes("Your pipelines finished cleanly."));
   });
 });
 
