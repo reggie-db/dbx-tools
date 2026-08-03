@@ -74,7 +74,7 @@ app:
   Search endpoint is configured but the AppKit `lakebase` plugin is registered,
   it transparently falls back to a Postgres full-text index with the identical
   search shape.
-- **Reusable React surfaces** — provide AppKit/Tailwind/Vite foundations, a
+- **Reusable React surfaces** — provide AppKit/Tailwind/Bun foundations, a
   Mastra chat UI plus React Email approval, preview, compose, and delivery components.
 - **Shared browser-safe contracts** — keep UI, server, tests, and tools aligned
   with zod schemas for Mastra routes, Genie events, model lookup, email payloads,
@@ -91,8 +91,8 @@ app:
 Install dependencies and type-check the workspace:
 
 ```sh
-pnpm install
-pnpm -r compile
+bun install
+bun run --filter '*' compile
 ```
 
 For AppKit apps, the most common entrypoint is the Mastra plugin:
@@ -259,11 +259,11 @@ the main product surface of the repo, but it is documented for contributors:
 Useful contributor commands:
 
 ```sh
-pnpm install
-pnpm exec projen
-pnpm -r compile
-pnpm test
-pnpm format
+bun install
+bunx projen
+bun run --filter '*' compile
+bun run --filter '*' test
+bun run format
 ```
 
 ## Documentation

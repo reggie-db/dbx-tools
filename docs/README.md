@@ -24,29 +24,29 @@ Source of truth:
 Start locally while editing content:
 
 ```sh
-pnpm exec tsx docs/scripts/sync-readmes.mjs
-pnpm --dir .docs-build/site install --lockfile=false
-node docs/scripts/generate-api-docs.mjs
-pnpm --dir .docs-build/site dev
+bun docs/scripts/sync-readmes.mjs
+bun install --cwd .docs-build/site
+bun docs/scripts/generate-api-docs.mjs
+bun run --cwd .docs-build/site dev
 ```
 
 Build and preview locally with search:
 
 ```sh
-pnpm exec tsx docs/scripts/sync-readmes.mjs
-pnpm --dir .docs-build/site install --lockfile=false
-node docs/scripts/generate-api-docs.mjs
-pnpm --dir .docs-build/site build
-pnpm --dir .docs-build/site exec astro preview --host 127.0.0.1
+bun docs/scripts/sync-readmes.mjs
+bun install --cwd .docs-build/site
+bun docs/scripts/generate-api-docs.mjs
+bun run --cwd .docs-build/site build
+cd .docs-build/site && bun x astro preview --host 127.0.0.1
 ```
 
 Build locally:
 
 ```sh
-pnpm exec tsx docs/scripts/sync-readmes.mjs
-pnpm --dir .docs-build/site install --lockfile=false
-node docs/scripts/generate-api-docs.mjs
-pnpm --dir .docs-build/site build
+bun docs/scripts/sync-readmes.mjs
+bun install --cwd .docs-build/site
+bun docs/scripts/generate-api-docs.mjs
+bun run --cwd .docs-build/site build
 ```
 
 Generated files live under `.docs-build/` and should not be committed.

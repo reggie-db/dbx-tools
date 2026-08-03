@@ -72,7 +72,7 @@ generated files, build output, VCS metadata, and package-manager output.
 import { scan } from "@dbx-tools/path";
 
 const options: scan.FileScanOptions = {
-  cwd: "workspaces",
+  cwd: "packages",
   ignore: ["generated/**"],
   followSymlinks: scan.FOLLOW_SYMLINKS_DEFAULT,
 };

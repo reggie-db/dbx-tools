@@ -160,6 +160,7 @@ goes.
 
 ```ts
 const config = {
+  isDatabricksApp: env.isAppEnv(),
   host: env.string(options.host, "SMTP_HOST"),
   // Several names for one setting; earlier names win.
   appId: env.string(options.appId, ["TEAMS_APP_ID", "MICROSOFT_APP_ID"]),
@@ -182,6 +183,8 @@ chain - ignoring what a deployment explicitly configured hides the mistake.
 
 Browser-safe: `process` is reached through `globalThis` and guarded, so every
 lookup simply misses off-process and the caller's fallback applies.
+`isAppEnv()` checks the required Databricks App name, workspace host, and valid
+TCP port shape without adding Node types to this shared package.
 
 Pair it with `object.optional()` when a resolved value is an optional field -
 `...object.optional("endpoint", env.string(...))` keeps an absent field ABSENT
@@ -439,10 +442,10 @@ without paying formatting cost when disabled.
   field spreading, deep equality, JSON-round-trip guards
   (`isSerializableValue`), canonical identity keys (`toStableKey`), shape types,
   and lazy sequence transforms + collection helpers.
-- `env` - config-over-environment resolution: strings, booleans, positive
-  numbers/integers, and lists, with env-name fallback chains. `name()` gives the
-  primary variable name for a log line or error - an `EnvKey` may be a bare
-  string, so indexing `keys[0]` yields a character, not a name.
+- `env` - config-over-environment resolution, Databricks App runtime detection,
+  and TCP port bounds. `name()` gives the primary variable name for a log line
+  or error - an `EnvKey` may be a bare string, so indexing `keys[0]` yields a
+  character, not a name.
 - `predicate` - composable boolean/type predicates.
 - `pattern` - literal / glob / `/regex/` allow-list matching compiled to a
   predicate.

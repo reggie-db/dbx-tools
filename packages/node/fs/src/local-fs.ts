@@ -422,6 +422,7 @@ export function scratchFS(prefix: string, options: OsFileSystemOptions = {}): Lo
  * - a reader never observes a half-written tree, and a failed rebuild leaves
  *   the previous one intact.
  *
+ * Rebuilds targeting the same stable tree are serialized across processes.
  * The swap is a `rename` within the same temp root, so it is atomic.
  *
  * @param key - Stable temp-relative path. May be nested (`"skills/abc123"`)

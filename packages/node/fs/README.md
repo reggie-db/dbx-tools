@@ -15,6 +15,7 @@ Key features:
 - Read/write/append/copy/move plus mkdir/rmdir/readdir/stat/exists
 - Optional read-only mode
 - Native append / copy / rename via Node when available
+- Cross-process serialization for concurrent rebuilds of the same stable temp tree
 
 ## Why Use This Over Native Node fs
 
@@ -40,7 +41,8 @@ await work.init(); // only needed when handing the root to `node:fs` or a subpro
 
 // Regenerate on every boot, but into ONE stable directory: the callback writes
 // into a scratch root that replaces the stable one only on success, so restarts
-// don't pile up directories and a failed rebuild keeps the last good tree.
+// don't pile up directories, a failed rebuild keeps the last good tree, and
+// concurrent rebuilds of the same key are serialized across processes.
 const skills = await localFS.rebuildFS("agent-skills", (scratch) => downloadInto(scratch.root));
 ```
 
@@ -52,7 +54,7 @@ const skills = await localFS.rebuildFS("agent-skills", (scratch) => downloadInto
 | `LocalFileSystemOptions`           | Constructor options                                    |
 | `localFS.homeFS` / `localFS.tmpFS` | `LocalFileSystem` under resolved home / temp           |
 | `localFS.scratchFS`                | `tmpFS` on a `<prefix>-<id>` root unique per call      |
-| `localFS.rebuildFS`                | Rebuild a stable temp tree via an atomic scratch swap  |
+| `localFS.rebuildFS`                | Serialized stable temp rebuild via atomic scratch swap |
 | `osPath.resolveLocalHome`          | Home: `homedir` → `HOME` → `/home/app` → `./.home`     |
 | `osPath.resolveLocalTemp`          | Temp: `tmpdir` → `TMPDIR`/`TMP`/`TEMP` → `<home>/.tmp` |
 | `localPath.expandLocalHomePath`    | Expand `~` against a home dir                          |
