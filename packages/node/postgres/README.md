@@ -110,12 +110,13 @@ different instances reliably.
 Weakest to strongest: automatic machine context, then AppKit sender identity, then
 the bus's `metadata` option, then the per-message `metadata`. A key present at a
 stronger layer is never overwritten, so passing `project` explicitly replaces the
-inferred one.
+inferred one. An explicit `null` is also preserved and prevents an automatic value
+from being used for that key.
 
 Automatic keys, each omitted when it resolves to nothing: `project` (from
 `DATABRICKS_APP_NAME`, `DATABRICKS_BUNDLE_NAME`, `PROJECT_NAME`, or
 `npm_package_name`), `publicIp` (from `PUBLIC_IP`, `DATABRICKS_PUBLIC_IP`, or
-`HOST_IP`), `hostname`, `cwd`, `platform`, `pid`, `environment`, `appName`,
+`HOST_IP`), `hostname`, `platform`, `pid`, `environment`, `appName`,
 `deploymentId`, and `databricksHost`. CPU architecture, runtime name, and runtime
 version are left out on purpose: they are constant per deployment and every
 message would pay for them against the payload limit.

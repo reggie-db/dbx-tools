@@ -42,7 +42,7 @@ describe("PostgresTopicBus", () => {
     });
     const message = await bus.broadcast("orders", {
       type: "order.updated",
-      metadata: { project: "caller-project", priority: "high" },
+      metadata: { project: "caller-project", priority: "high", hostname: null },
       body: { id: 7 },
     });
     assert.equal(queries[0]?.text, "SELECT pg_notify($1, $2)");
@@ -54,7 +54,8 @@ describe("PostgresTopicBus", () => {
     assert.equal(encoded.metadata.project, "caller-project");
     assert.equal(encoded.metadata.publicIp, "203.0.113.8");
     assert.equal(encoded.metadata.priority, "high");
-    assert.equal(typeof encoded.metadata.hostname, "string");
+    assert.equal(encoded.metadata.hostname, null);
+    assert.equal("cwd" in encoded.metadata, false);
     assert.equal("arch" in encoded.metadata, false);
     assert.equal("runtime" in encoded.metadata, false);
     assert.equal("runtimeVersion" in encoded.metadata, false);

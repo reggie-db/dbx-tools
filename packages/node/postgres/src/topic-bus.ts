@@ -230,7 +230,6 @@ function machineMetadata(): TopicMetadata {
         process.env.HOST_IP,
       ]) ?? undefined,
     hostname: hostname(),
-    cwd: process.cwd(),
     platform: process.platform,
     pid: process.pid,
     environment: string.trimToNull(process.env.NODE_ENV) ?? undefined,

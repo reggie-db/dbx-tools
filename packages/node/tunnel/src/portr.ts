@@ -20,14 +20,10 @@ import { env, log } from "@dbx-tools/shared-core";
 import { PUBLIC_DOMAIN_ENV } from "./env.ts";
 
 const logger = log.logger("tunnel:portr");
-const PORTR_LATEST_RELEASE_URL = "https://api.github.com/repos/amalshaji/portr/releases/latest";
+const PORTR_VERSION = "1.0.15-sse.2";
+const PORTR_RELEASE_URL = `https://github.com/reggie-db/portr/releases/download/v${PORTR_VERSION}`;
 const PORTR_MIN_VERSION = "v1.0.15";
 const execFileAsync = promisify(execFile);
-
-interface PortrRelease {
-  tag_name: string;
-  assets: Array<{ name: string; browser_download_url: string }>;
-}
 
 /** Options for installing the portr executable. */
 export interface PortrInstallOptions {
@@ -84,25 +80,10 @@ export function portrAssetName(
   return `portr_${version}_${osName}_${archName}.zip`;
 }
 
-async function portrDownloadUrl(): Promise<string> {
-  const releaseResponse = await fetch(PORTR_LATEST_RELEASE_URL, {
-    headers: {
-      accept: "application/vnd.github+json",
-      "user-agent": "@dbx-tools/tunnel",
-    },
-  });
-  if (!releaseResponse.ok) {
-    throw new Error(`portr release lookup failed (${releaseResponse.status})`);
-  }
-  const release = (await releaseResponse.json()) as PortrRelease;
-  const version = release.tag_name.replace(/^v/, "");
-
-  const assetName = portrAssetName(version);
-  const asset = release.assets.find((candidate) => candidate.name === assetName);
-  if (!asset) throw new Error(`portr release ${release.tag_name} has no ${assetName}`);
-
-  logger.info("installing portr", { version, asset: assetName });
-  return asset.browser_download_url;
+function portrDownloadUrl(): string {
+  const assetName = portrAssetName(PORTR_VERSION);
+  logger.info("installing portr", { version: PORTR_VERSION, asset: assetName });
+  return `${PORTR_RELEASE_URL}/${assetName}`;
 }
 
 /** Install portr when absent and return the environment used by its process. */
@@ -113,6 +94,10 @@ export async function installPortr(options: PortrInstallOptions = {}): Promise<N
     homeDir,
     minVersion: PORTR_MIN_VERSION,
     selector: ({ source }) => join(source, "portr"),
+    versionParser: (output) => {
+      const version = bin.parseVersion(output);
+      return version === PORTR_VERSION ? version : undefined;
+    },
   });
   return {
     ...process.env,

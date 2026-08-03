@@ -3,12 +3,13 @@
 Front an app with a public tunnel and an email one-time-code access gate,
 in-process.
 
-Built on [portr](https://github.com/amalshaji/portr). Use this library when an
-app needs to be reachable from outside its network - a stakeholder demo, a
-webhook sender that has to reach a dev build, an OAuth redirect that cannot point
-at `localhost` - without publishing the app to anyone who learns the URL. It is
-shaped for Databricks Apps (it honours the `DATABRICKS_APP_PORT` contract and
-lets the platform's own front door through ungated) but the gate itself is
+Built on the [SSE-enabled Portr fork](https://github.com/reggie-db/portr/releases/tag/v1.0.15-sse.2),
+based on [upstream Portr](https://github.com/amalshaji/portr). Use this library
+when an app needs to be reachable from outside its network - a stakeholder demo,
+a webhook sender that has to reach a dev build, an OAuth redirect that cannot
+point at `localhost` - without publishing the app to anyone who learns the URL.
+It is shaped for Databricks Apps (it honours the `DATABRICKS_APP_PORT` contract
+and lets the platform's own front door through ungated) but the gate itself is
 platform-neutral.
 
 The tunnel plugs into `@dbx-tools/appkit`'s `createApp` through its INTERCEPTOR
