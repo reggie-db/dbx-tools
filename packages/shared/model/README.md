@@ -49,6 +49,7 @@ import { model } from "@dbx-tools/shared-model";
 const query = model.ModelQuerySchema.parse({
   search: "claude sonnet",
   modelClass: "chat-balanced",
+  requiresTools: true,
   limit: 5,
 });
 ```
@@ -67,7 +68,9 @@ const ranked: RankedModel = model.RankedModelSchema.parse(response);
 
 `model.ServingEndpointSummarySchema` describes the stable endpoint fields exposed
 to clients: endpoint name, task, state, optional profile scores, classified
-class, and embedding dimension.
+class, `supportsTools`, and embedding dimension. `requiresTools: true` filters
+search/ranking to endpoints that can complete both a function call and the
+subsequent `function_call_output` replay.
 
 ## Classify Endpoint Catalogues
 
@@ -76,7 +79,15 @@ import { classify, model } from "@dbx-tools/shared-model";
 
 const byClass = classify.classifyEndpoints(endpoints);
 const fast = byClass[model.ModelClass.ChatFast];
+const agentModels = endpoints.filter((endpoint) => classify.endpointCapabilities(endpoint).tools);
 ```
+
+Databricks currently exposes no tool-capability attribute in the endpoint list
+or OpenAPI schema. `supportsTools` therefore uses a conservative, live-verified
+provider-family policy: GPT (except GPT-OSS), Claude, Qwen, GLM, and Llama.
+Gemini is excluded because its Open Responses tool-result replay requires a
+thought signature the wire does not currently accept; GPT-OSS rejects Responses
+passthrough. An explicit `supportsTools` stamp overrides the family fallback.
 
 The classifier uses Foundation Model API quality/speed/cost scores when present
 and family-name heuristics when scores are missing. This is useful for client

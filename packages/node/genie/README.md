@@ -142,6 +142,14 @@ const questions = space.genieSampleQuestions(genieSpace);
 metadata by default. `space.genieSampleQuestions()` extracts curated starter
 questions and returns `[]` when none are configured.
 
+The serialized blob needs `Can Edit` on the space, while `Can Run` is enough for
+title and description. When the workspace rejects the serialized request for
+lack of permission, `getGenieSpace()` retries once without it and logs
+`serialized-space:forbidden`, so an app service principal holding only `Can Run`
+still resolves the space and simply reports no starter questions. Every other
+failure - a cancelled request, a missing space, a retry that also fails - is
+thrown.
+
 ## Options
 
 `chat.GenieChatOptions` is shared by both drivers:

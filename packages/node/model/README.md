@@ -21,6 +21,8 @@ Key features:
   endpoint id.
 - Supports class ceilings so callers can ask for a capability band without
   accidentally escalating to a larger model.
+- Supports `requiresTools` filtering so agent/model-proxy callers select only
+  endpoints verified for a complete function-call and result-replay round-trip.
 - Caches enriched catalogues per workspace host through AppKit cache utilities,
   and re-lists once on a resolve miss so a newly deployed model still resolves.
 - Builds the invocations URL and mints per-request auth headers for callers that
@@ -80,6 +82,7 @@ import { resolve } from "@dbx-tools/model";
 const ranked = await resolve.searchModels(client, host, {
   search: "opus",
   modelClass: "chat-thinking",
+  requiresTools: true,
   limit: 5,
 });
 ```
@@ -101,6 +104,7 @@ const ranked = resolve.rankModels(endpoints, { search: "sonnet", limit: 3 });
 const picked = resolve.resolveModel(endpoints, {
   explicit: "claude sonnet",
   modelClass: "chat-balanced",
+  requiresTools: true,
 });
 ```
 

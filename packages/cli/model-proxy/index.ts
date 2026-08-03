@@ -11,4 +11,4 @@ export type { BackendOptions } from "./src/backend.ts";
 export { CommanderError } from "./src/cli.ts";
 export { DEFAULT_BIND_HOST, DEFAULT_PORT, DEFAULT_RETRY } from "./src/defaults.ts";
 export type { RetryConfig } from "./src/defaults.ts";
-export type { ProxyServerOptions, StartProxyOptions } from "./src/server.ts";
+export type { ProxyServerOptions, StartProxyOptions, ModelProxyBackend } from "./src/server.ts";

@@ -87,12 +87,11 @@ export class DatabricksBackend {
    * deployed model resolves without a restart. An unmatched name comes back
    * unchanged so a deliberate endpoint id is never silently rewritten.
    */
-  async resolve(model: string): Promise<ResolvedModel> {
-    return resolve.rankModelIdLive(
-      (force) => this.models(force),
-      model,
-      this.threshold !== undefined ? { threshold: this.threshold } : {},
-    );
+  async resolve(model: string, options: { requiresTools?: boolean } = {}): Promise<ResolvedModel> {
+    return resolve.rankModelIdLive((force) => this.models(force), model, {
+      ...(this.threshold !== undefined ? { threshold: this.threshold } : {}),
+      ...(options.requiresTools !== undefined ? { requiresTools: options.requiresTools } : {}),
+    });
   }
 
   /**

@@ -10,12 +10,20 @@
  * workspace client's raw `apiClient` since the typed request shape has no flag
  * for it.
  *
+ * The serialized blob is also more privileged than the listing surface: the
+ * workspace API requires `Can Edit` on the space to return it, while `Can Run`
+ * is enough for title / description. A caller that only holds `Can Run` - an
+ * app service principal granted just enough to ask questions is the common case
+ * - would otherwise lose the whole space lookup to a `PERMISSION_DENIED` it
+ * cannot act on, so the fetch degrades to the unserialized request instead of
+ * failing (see {@link getGenieSpace}).
+ *
  * @module
  */
 
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 import { databricks } from "@dbx-tools/appkit";
-import { json, log, object, string } from "@dbx-tools/shared-core";
+import { error, json, log, object, string } from "@dbx-tools/shared-core";
 import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
 
 const logger = log.logger("genie/space");
@@ -32,6 +40,10 @@ export interface GetGenieSpaceOptions {
    * Request the `serialized_space` blob (catalogs, tables, sample questions,
    * prompts). Defaults to `true` - the only reason to skip it is when the
    * caller just needs title / description and wants the smaller payload.
+   *
+   * Requesting it is best-effort: the blob needs `Can Edit` on the space, so a
+   * caller without it gets the unserialized space back rather than an error,
+   * and {@link genieSampleQuestions} then reports no suggestions.
    */
   serialized?: boolean;
   /**
@@ -47,6 +59,13 @@ export interface GetGenieSpaceOptions {
  * through the raw `apiClient`, then validates the response against
  * {@link GenieSpaceSchema} (unknown fields like `etag` /
  * `parent_path` are stripped).
+ *
+ * When the serialized request is rejected for lack of permission (`403`, or a
+ * `PERMISSION_DENIED` / `Can Edit` message - the workspace API gates the blob
+ * behind `Can Edit`), it retries once without the flag so the caller still gets
+ * the space. Any other failure, and a retry that fails too, is rethrown: a
+ * cancelled request or a missing space must not look like an unserialized
+ * space.
  */
 export async function getGenieSpace(
   spaceId: string,
@@ -55,17 +74,45 @@ export async function getGenieSpace(
   const client = options?.workspaceClient ?? new WorkspaceClient({});
   const serialized = options?.serialized !== false;
   const ctx = options?.context ? databricks.toContext(options.context) : undefined;
-  const raw = await client.apiClient.request(
-    {
-      path: `/api/2.0/genie/spaces/${encodeURIComponent(spaceId)}`,
-      method: "GET",
-      query: serialized ? { include_serialized_space: true } : {},
-      headers: new Headers(),
-      raw: false,
-    },
-    ctx,
-  );
+  const request = (includeSerialized: boolean): Promise<unknown> =>
+    client.apiClient.request(
+      {
+        path: `/api/2.0/genie/spaces/${encodeURIComponent(spaceId)}`,
+        method: "GET",
+        query: includeSerialized ? { include_serialized_space: true } : {},
+        headers: new Headers(),
+        raw: false,
+      },
+      ctx,
+    );
+
+  let raw: unknown;
+  try {
+    raw = await request(serialized);
+  } catch (err) {
+    if (!serialized || !isSerializedSpaceForbidden(err)) throw err;
+    logger.debug("serialized-space:forbidden", {
+      spaceId,
+      error: error.errorMessage(err),
+    });
+    raw = await request(false);
+  }
   return genieModel.GenieSpaceSchema.parse(raw);
+}
+
+/**
+ * True when a failed space request was rejected for lack of permission, the one
+ * failure the unserialized retry can recover from. Matches on `403` and on the
+ * `PERMISSION_DENIED` / `Can Edit` wording the workspace API returns, since the
+ * SDK surfaces the error code without always carrying a status.
+ */
+function isSerializedSpaceForbidden(err: unknown): boolean {
+  const context = error.errorContext(err);
+  return (
+    context.hasStatusCode(403) ||
+    context.hasMessage("permission denied") ||
+    context.hasMessage("can edit")
+  );
 }
 
 /**

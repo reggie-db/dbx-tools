@@ -40,8 +40,30 @@ export interface EndpointCapabilities {
   chat: boolean;
   /** Embedding (vector) endpoint. */
   embedding: boolean;
-  /** Function / tool calling. Every chat endpoint on Databricks supports it. */
+  /** Complete function-tool round-trip (call plus function_call_output replay). */
   tools: boolean;
+}
+
+/**
+ * Provider families verified against Databricks Responses/Open Responses with
+ * both a forced function call and a stateless `function_call_output` replay.
+ *
+ * Databricks' endpoint list/OpenAPI currently exposes no tools capability bit.
+ * Keep this conservative: an unknown chat family is not agent-safe until it is
+ * verified. Gemini is excluded because it emits a call but Open Responses
+ * cannot replay the required thought signature; GPT-OSS rejects Responses
+ * passthrough entirely.
+ */
+export function supportsToolsByFamily(name: string): boolean {
+  const n = name.toLowerCase();
+  if (n.includes("gemini") || n.includes("gpt-oss")) return false;
+  return (
+    n.includes("claude") ||
+    n.includes("gpt") ||
+    n.includes("qwen") ||
+    n.includes("glm") ||
+    n.includes("llama")
+  );
 }
 
 /**
@@ -59,7 +81,8 @@ export function endpointCapabilities(endpoint: ServingEndpointSummary): Endpoint
   // Every non-embedding class is a chat band, so "classified but not embedding"
   // is the class-side test for chat capability.
   const chat = !embedding && (endpoint.task === CHAT_TASK || endpoint.class !== undefined);
-  return { chat, embedding, tools: chat };
+  const tools = chat && (endpoint.supportsTools ?? supportsToolsByFamily(endpoint.name));
+  return { chat, embedding, tools };
 }
 
 /** Family-heuristic classification of a single endpoint name. */

@@ -133,6 +133,7 @@ export async function listServingEndpointsUncached(
       ...(ep.task !== undefined ? { task: ep.task } : {}),
       ...(ep.state?.ready !== undefined ? { state: String(ep.state.ready) } : {}),
       ...(ep.description !== undefined ? { description: ep.description } : {}),
+      supportsTools: classify.supportsToolsByFamily(ep.name),
       ...(profile ? { profile } : {}),
     });
   }
@@ -307,6 +308,8 @@ export interface ResolvedModel {
 export interface ResolveModelOptions {
   /** Fuse.js threshold (0 = exact, 1 = anything). Default `0.4`. */
   threshold?: number;
+  /** Require a model verified for a complete function-tool round-trip. */
+  requiresTools?: boolean;
 }
 
 /** A serving endpoint paired with its fuzzy-match distance for a query. */

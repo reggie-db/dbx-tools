@@ -5,7 +5,12 @@ import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
 import { rankModels, resolveModel } from "../src/resolve.ts";
-import { resolveModelId, searchServingEndpoints } from "../src/serving.ts";
+import {
+  listServingEndpointsUncached,
+  resolveModelId,
+  searchServingEndpoints,
+  type WorkspaceClientLike,
+} from "../src/serving.ts";
 
 const { ModelClass } = model;
 
@@ -68,6 +73,28 @@ describe("searchServingEndpoints / resolveModelId", () => {
   });
 });
 
+describe("listServingEndpointsUncached tool capability", () => {
+  it("exposes the verified family policy on endpoint summaries", async () => {
+    const client = {
+      servingEndpoints: {
+        async *list() {
+          yield { name: "databricks-gpt-5-3-codex", task: CHAT_TASK };
+          yield { name: "databricks-gemini-3-5-flash", task: CHAT_TASK };
+        },
+      },
+    } as unknown as WorkspaceClientLike;
+
+    const endpoints = await listServingEndpointsUncached(client);
+    assert.deepEqual(
+      endpoints.map(({ name, supportsTools }) => ({ name, supportsTools })),
+      [
+        { name: "databricks-gpt-5-3-codex", supportsTools: true },
+        { name: "databricks-gemini-3-5-flash", supportsTools: false },
+      ],
+    );
+  });
+});
+
 describe("rankModels", () => {
   it("ranks a search match-then-class, version breaking the tie", () => {
     const ranked = rankModels([chat(OPUS_6), chat(OPUS_8), chat(OPUS_7)], {
@@ -123,6 +150,18 @@ describe("rankModels", () => {
   it("applies a limit", () => {
     assert.equal(rankModels(TIERED, { limit: 2 }).length, 2);
   });
+
+  it("filters out chat models without a complete tool round-trip", () => {
+    const ranked = rankModels(
+      [
+        chat("databricks-gpt-5-6-sol"),
+        chat("databricks-gemini-3-5-flash"),
+        chat("databricks-gpt-oss-120b"),
+      ],
+      { requiresTools: true },
+    );
+    assert.deepEqual(names(ranked), ["databricks-gpt-5-6-sol"]);
+  });
 });
 
 describe("resolveModel", () => {
@@ -165,5 +204,28 @@ describe("resolveModel", () => {
   it("falls back to the static floor with no intent and an empty catalogue", () => {
     const result = resolveModel([], {});
     assert.deepEqual(result, { modelId: FALLBACK_MODEL_IDS[0]!, source: "fallback" });
+  });
+
+  it("rejects an explicit model that is not tool-capable", () => {
+    assert.throws(
+      () =>
+        resolveModel([chat("databricks-gemini-3-5-flash")], {
+          explicit: "databricks-gemini-3-5-flash",
+          fuzzy: false,
+          requiresTools: true,
+        }),
+      /does not support function tools/,
+    );
+  });
+
+  it("selects only live tool-capable fallbacks", () => {
+    const result = resolveModel(
+      [chat("databricks-gemini-3-5-flash"), chat("databricks-claude-sonnet-5")],
+      {
+        fallbacks: ["databricks-gemini-3-5-flash", "databricks-claude-sonnet-5"],
+        requiresTools: true,
+      },
+    );
+    assert.deepEqual(result, { modelId: "databricks-claude-sonnet-5", source: "fallback" });
   });
 });

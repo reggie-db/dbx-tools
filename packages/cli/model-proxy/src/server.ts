@@ -3,7 +3,7 @@
  *
  * Databricks serving endpoints speak OpenAI wire formats, so this server is a
  * thin pass-through: it resolves the request's (possibly fuzzy) `model` to a
- * real endpoint id via the {@link DatabricksBackend}, stamps a fresh auth
+ * real endpoint id via the {@link ModelProxyBackend}, stamps a fresh auth
  * header, and forwards to the right Databricks URL:
  *
  *   - Chat Completions → `/serving-endpoints/<name>/invocations`, except for
@@ -33,10 +33,14 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { async as asyncUtil, error, json, log, object } from "@dbx-tools/shared-core";
-import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
+import {
+  classify,
+  openaiChat,
+  openaiResponses,
+  type ServingEndpointSummary,
+} from "@dbx-tools/shared-model";
 import { Agent } from "undici";
 
-import type { DatabricksBackend } from "./backend.ts";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT, DEFAULT_RETRY, type RetryConfig } from "./defaults.ts";
 
 const { chatToResponsesRequest, responseToChatCompletion, sanitizeOpenResponsesRequest } =
@@ -114,9 +118,22 @@ export interface StartProxyOptions extends ProxyServerOptions {
   port?: number;
 }
 
+/** Minimal backend contract consumed by the HTTP proxy and its test doubles. */
+export interface ModelProxyBackend {
+  authHeaders(): Promise<Record<string, string>>;
+  invocationsUrl(endpoint: string): string;
+  isResponsesOnly(endpoint: string): boolean;
+  models(force?: boolean): Promise<ServingEndpointSummary[]>;
+  resolve(
+    model: string,
+    options?: { requiresTools?: boolean },
+  ): Promise<{ modelId: string; matched: boolean; score?: number }>;
+  responsesUrl(endpoint: string): string;
+}
+
 /** Build (but do not start) the proxy HTTP server. */
 export function createProxyServer(
-  backend: DatabricksBackend,
+  backend: ModelProxyBackend,
   options: ProxyServerOptions = {},
 ): Server {
   const server = createServer((req, res) => {
@@ -231,7 +248,7 @@ export function backoffDelayMs(
  * and we would otherwise loop blind past the cap.
  */
 async function upstreamFetchRetrying(
-  backend: DatabricksBackend,
+  backend: ModelProxyBackend,
   url: string,
   headers: Record<string, string>,
   body: unknown,
@@ -283,7 +300,7 @@ function jitterFraction(): number {
  * `port: 0` request surfaces the OS-assigned port).
  */
 export async function startProxyServer(
-  backend: DatabricksBackend,
+  backend: ModelProxyBackend,
   options: StartProxyOptions = {},
 ): Promise<{ server: Server; url: string }> {
   const host = options.host ?? DEFAULT_BIND_HOST;
@@ -303,7 +320,7 @@ export async function startProxyServer(
 }
 
 async function handleRequest(
-  backend: DatabricksBackend,
+  backend: ModelProxyBackend,
   options: ProxyServerOptions,
   req: IncomingMessage,
   res: ServerResponse,
@@ -359,14 +376,14 @@ async function handleRequest(
  *     gets its own envelope. Only chat endpoints are advertised to Codex.
  */
 async function handleModels(
-  backend: DatabricksBackend,
+  backend: ModelProxyBackend,
   res: ServerResponse,
   codexShape: boolean,
 ): Promise<void> {
   const endpoints = await backend.models(true);
   if (codexShape) {
     const models = endpoints
-      .filter((endpoint) => classify.endpointCapabilities(endpoint).chat)
+      .filter((endpoint) => classify.endpointCapabilities(endpoint).tools)
       .map((endpoint) => ({
         slug: endpoint.name,
         display_name: endpoint.displayName ?? endpoint.name,
@@ -396,7 +413,7 @@ async function handleModels(
  * `/serving-endpoints/responses`; everything else goes to `/invocations`.
  */
 async function handleProxy(
-  backend: DatabricksBackend,
+  backend: ModelProxyBackend,
   req: IncomingMessage,
   res: ServerResponse,
   retry: RetryConfig,
@@ -408,7 +425,9 @@ async function handleProxy(
     return;
   }
 
-  const resolved = await backend.resolve(requested);
+  const requiresTools = Array.isArray(body.tools) && body.tools.length > 0;
+  const resolved = await resolveRequestedModel(backend, requested, requiresTools, res);
+  if (!resolved) return;
   body.model = resolved.modelId;
 
   if (backend.isResponsesOnly(resolved.modelId)) {
@@ -465,7 +484,7 @@ async function handleProxy(
  * Streaming is not translated yet - those clients should use `/v1/responses`.
  */
 async function proxyChatViaResponses(
-  backend: DatabricksBackend,
+  backend: ModelProxyBackend,
   body: Record<string, unknown>,
   requested: string,
   modelId: string,
@@ -531,7 +550,7 @@ async function proxyChatViaResponses(
  * those shapes.
  */
 async function handleResponses(
-  backend: DatabricksBackend,
+  backend: ModelProxyBackend,
   req: IncomingMessage,
   res: ServerResponse,
   retry: RetryConfig,
@@ -543,7 +562,9 @@ async function handleResponses(
     return;
   }
 
-  const resolved = await backend.resolve(requested);
+  const requiresTools = Array.isArray(body.tools) && body.tools.length > 0;
+  const resolved = await resolveRequestedModel(backend, requested, requiresTools, res);
+  if (!resolved) return;
   body.model = resolved.modelId;
 
   const upstreamUrl = backend.responsesUrl(resolved.modelId);
@@ -578,6 +599,30 @@ async function handleResponses(
     "x-resolved-model": resolved.modelId,
   });
   await streamBody(upstream, res);
+}
+
+/**
+ * Resolve one request, filtering fuzzy candidates by tool capability and
+ * rejecting an explicit/unknown id that cannot complete the same round-trip.
+ */
+async function resolveRequestedModel(
+  backend: ModelProxyBackend,
+  requested: string,
+  requiresTools: boolean,
+  res: ServerResponse,
+): Promise<{ modelId: string; matched: boolean; score?: number } | undefined> {
+  const resolved = await backend.resolve(requested, requiresTools ? { requiresTools: true } : {});
+  if (!requiresTools) return resolved;
+  const endpoint = (await backend.models()).find(
+    (candidate) => candidate.name === resolved.modelId,
+  );
+  if (endpoint && classify.endpointCapabilities(endpoint).tools) return resolved;
+  sendJson(
+    res,
+    400,
+    errorBody(`model ${resolved.modelId} does not support function tools`, "invalid_request_error"),
+  );
+  return undefined;
 }
 
 /**

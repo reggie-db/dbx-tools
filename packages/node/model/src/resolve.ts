@@ -57,6 +57,8 @@ export interface ResolveModelInput {
   fuzzy?: boolean;
   /** Fuse.js threshold forwarded to the fuzzy `search` match ({@link searchServingEndpoints}). */
   threshold?: number;
+  /** Require a model that supports a complete function-tool round-trip. */
+  requiresTools?: boolean;
   /**
    * Chat capability class to resolve when no `explicit` id is given. The live
    * catalogue is classified by its Foundation Model API scores and the top
@@ -129,7 +131,10 @@ export function rankModels(
   // class; bucket order is already best-first.
   const candidates: RankedModel[] = [];
   for (const modelClass of eligible) {
-    for (const endpoint of classified[modelClass]) candidates.push({ endpoint, modelClass });
+    for (const endpoint of classified[modelClass]) {
+      if (query.requiresTools && !classify.endpointCapabilities(endpoint).tools) continue;
+      candidates.push({ endpoint, modelClass });
+    }
   }
 
   const search = query.search?.trim();
@@ -181,6 +186,7 @@ export function rankModelId(
     search,
     limit: 1,
     ...(options.threshold !== undefined ? { threshold: options.threshold } : {}),
+    ...(options.requiresTools !== undefined ? { requiresTools: options.requiresTools } : {}),
   });
   if (!top) return { modelId: search, matched: false };
   return { modelId: top.endpoint.name, matched: true, score: top.score };
@@ -280,16 +286,24 @@ export function resolveModel(
 ): ResolvedModelSelection {
   if (input.explicit !== undefined) {
     if (input.fuzzy === false) {
+      if (input.requiresTools) assertToolSupport(endpoints, input.explicit);
       return { modelId: input.explicit, source: "explicit" };
     }
     const [top] = rankModels(endpoints, buildQuery(input, input.explicit));
+    if (input.requiresTools && !top) {
+      throw new Error(`No tool-capable model matches "${input.explicit}"`);
+    }
     return { modelId: top?.endpoint.name ?? input.explicit, source: "fuzzy-match" };
   }
 
   // Operator-pinned fallbacks win when present and live (e.g. a regulated
   // workspace restricted to an approved subset).
   if (input.modelClass === undefined && input.fallbacks && input.fallbacks.length > 0) {
-    const present = new Set(endpoints.map((e) => e.name));
+    const present = new Set(
+      endpoints
+        .filter((endpoint) => !input.requiresTools || classify.endpointCapabilities(endpoint).tools)
+        .map((endpoint) => endpoint.name),
+    );
     const pinned = input.fallbacks.find((id) => present.has(id));
     if (pinned) return { modelId: pinned, source: "fallback" };
   }
@@ -302,6 +316,16 @@ export function resolveModel(
   const floorSource =
     input.modelClass !== undefined ? modelsForClass(input.modelClass) : (input.fallbacks ?? []);
   const floor = object.sequence(floorSource).concat(FALLBACK_MODEL_IDS).distinct().toArray();
+  if (input.requiresTools) {
+    const available = new Set(
+      endpoints
+        .filter((endpoint) => classify.endpointCapabilities(endpoint).tools)
+        .map((endpoint) => endpoint.name),
+    );
+    const selected = floor.find((id) => available.has(id));
+    if (!selected) throw new Error("No tool-capable model is available");
+    return { modelId: selected, source };
+  }
   return { modelId: pickFirstAvailable(floor, endpoints), source };
 }
 
@@ -310,9 +334,18 @@ function buildQuery(input: ResolveModelInput, search: string | undefined): Model
   return {
     ...(search !== undefined ? { search } : {}),
     ...(input.modelClass !== undefined ? { modelClass: input.modelClass } : {}),
+    ...(input.requiresTools !== undefined ? { requiresTools: input.requiresTools } : {}),
     ...(input.threshold !== undefined ? { threshold: input.threshold } : {}),
     limit: 1,
   };
+}
+
+/** Throw when an explicit id is absent or not verified for function tools. */
+function assertToolSupport(endpoints: readonly ServingEndpointSummary[], modelId: string): void {
+  const endpoint = endpoints.find((candidate) => candidate.name === modelId);
+  if (!endpoint || !classify.endpointCapabilities(endpoint).tools) {
+    throw new Error(`Model "${modelId}" does not support function tools`);
+  }
 }
 
 /**

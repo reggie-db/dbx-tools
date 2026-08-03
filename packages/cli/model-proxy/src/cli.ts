@@ -170,13 +170,18 @@ export function buildProgram(): Command {
     program
       .command("models")
       .description("List resolvable Databricks serving endpoints (as JSON).")
-      .option("--chat", "only list chat-capable endpoints"),
-  ).action(async (_local: CommonOpts & { chat?: boolean }, command: Command) => {
-    const opts = globalOpts<CommonOpts & { chat?: boolean }>(command);
+      .option("--chat", "only list chat-capable endpoints")
+      .option("--tools", "only list endpoints verified for function tools"),
+  ).action(async (_local: CommonOpts & { chat?: boolean; tools?: boolean }, command: Command) => {
+    const opts = globalOpts<CommonOpts & { chat?: boolean; tools?: boolean }>(command);
     const backend = await DatabricksBackend.create(backendOptions(opts));
     const endpoints = await backend.models();
     const enriched = endpoints.map(enrichEndpoint);
-    const out = opts.chat ? enriched.filter((e) => e.capabilities.chat) : enriched;
+    const out = opts.tools
+      ? enriched.filter((e) => e.capabilities.tools)
+      : opts.chat
+        ? enriched.filter((e) => e.capabilities.chat)
+        : enriched;
     process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
   });
 
@@ -184,12 +189,13 @@ export function buildProgram(): Command {
     program
       .command("resolve")
       .description("Show what a fuzzy model name resolves to (as JSON).")
+      .option("--tools", "require a model verified for function tools")
       .argument("<query...>", "model name / fuzzy search terms"),
-  ).action(async (query: string[], _local: CommonOpts, command: Command) => {
-    const opts = globalOpts<CommonOpts>(command);
+  ).action(async (query: string[], _local: CommonOpts & { tools?: boolean }, command: Command) => {
+    const opts = globalOpts<CommonOpts & { tools?: boolean }>(command);
     const backend = await DatabricksBackend.create(backendOptions(opts));
     const search = query.join(" ");
-    const resolved = await backend.resolve(search);
+    const resolved = await backend.resolve(search, opts.tools ? { requiresTools: true } : {});
     // Same shape as one `models` entry when matched; null when nothing in the
     // catalogue scores within the threshold (caller can fall back to the query).
     if (!resolved.matched) {
@@ -210,7 +216,7 @@ function enrichEndpoint(endpoint: ServingEndpointSummary) {
   return {
     ...endpoint,
     // `chat` = OpenAI chat/completions + Responses; `embedding` = vectors;
-    // `tools` = function/tool calls (every chat endpoint here).
+    // `tools` = verified function-call plus tool-result replay.
     capabilities: classify.endpointCapabilities(endpoint),
   };
 }

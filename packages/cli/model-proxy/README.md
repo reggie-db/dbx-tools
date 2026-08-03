@@ -13,9 +13,8 @@ Key features:
 - OpenAI-compatible `/v1/*` forwarding for local tools that already know how to
   call chat/completions endpoints.
 - `POST /v1/responses` support for clients that speak only the OpenAI Responses
-  API (the Codex CLI, for one), translated to and from Chat Completions -
-  streaming included - by
-  [`@dbx-tools/shared-model`](../../shared/model)'s `openaiResponses`.
+  API (the Codex CLI, for one), forwarded to Databricks' native Responses/Open
+  Responses surface with JSON and SSE preserved.
 - Databricks SDK auth, including profile selection, token refresh, and workspace
   host resolution.
 - Fuzzy model names and model-class requests powered by
@@ -145,6 +144,79 @@ Use this when tests or local developer tools need a managed proxy lifecycle.
 This keeps the package small: Databricks already speaks the OpenAI schema, so
 the useful work is auth, endpoint resolution, and routing to the right surface.
 
+## Function Tools And Queue-Status Readiness
+
+The proxy preserves Responses function tools, function-call output items,
+streaming function-call events, and stateless tool-result replay. Requests that
+carry `tools` are resolved only against models with `capabilities.tools: true`;
+Codex's `?client_version=...` model catalogue also excludes unsupported models.
+
+Databricks does not currently advertise tool support in endpoint list/OpenAPI
+metadata, so the capability is a conservative policy verified live on the
+`DEFAULT` profile:
+
+- Full call and result replay: GPT/Codex, Claude, Qwen, GLM, Llama.
+- Excluded: Gemini, because replayed function calls require a thought signature
+  that Open Responses does not currently accept.
+- Excluded: GPT-OSS, because Databricks rejects Responses passthrough for it.
+
+Create a call with a dummy queue tool:
+
+```sh
+curl -s http://127.0.0.1:4000/v1/responses \
+  -H "Authorization: Bearer $DBX_MODEL_PROXY_KEY" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "databricks-gpt-5-3-codex",
+    "input": "Call queue_status before responding.",
+    "tools": [{
+      "type": "function",
+      "name": "queue_status",
+      "description": "Check whether user messages are queued",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }],
+    "tool_choice": {"type": "function", "name": "queue_status"}
+  }'
+```
+
+Databricks rejects `previous_response_id`, so replay the returned function call
+and its result together in the next request:
+
+```sh
+curl -s http://127.0.0.1:4000/v1/responses \
+  -H "Authorization: Bearer $DBX_MODEL_PROXY_KEY" \
+  -H "content-type: application/json" \
+  -d '{
+    "model": "databricks-gpt-5-3-codex",
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": "Call queue_status, then report queued work."
+      },
+      {
+        "type": "function_call",
+        "name": "queue_status",
+        "call_id": "<call_id from the first response>",
+        "arguments": "{}"
+      },
+      {
+        "type": "function_call_output",
+        "call_id": "<same call_id>",
+        "output": "{\"queued\":true,\"count\":2}"
+      }
+    ]
+  }'
+```
+
+Add `"stream": true` to the first request to receive
+`response.output_item.added`, `response.function_call_arguments.delta`, and
+`response.output_item.done` events unchanged.
+
 ## Timeouts And Cancellation
 
 A proxied turn takes as long as the model behind it, so the proxy imposes **no
@@ -202,12 +274,12 @@ PROXY_RETRY_ON_429=false dbx-tools-model-proxy
 
 Tune the policy with environment variables (all optional):
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `PROXY_RETRY_ON_429` | `true` | Master switch (loose boolean: `false`/`off`/`0`/`no`). `--no-retry-429` overrides it. |
-| `PROXY_RETRY_MAX` | `5` | Max retry attempts after the initial try. |
-| `PROXY_RETRY_BASE_MS` | `500` | First backoff, doubled each attempt. |
-| `PROXY_RETRY_MAX_MS` | `30000` | Ceiling for any single backoff, including a `Retry-After`. |
+| Variable              | Default | Meaning                                                                               |
+| --------------------- | ------- | ------------------------------------------------------------------------------------- |
+| `PROXY_RETRY_ON_429`  | `true`  | Master switch (loose boolean: `false`/`off`/`0`/`no`). `--no-retry-429` overrides it. |
+| `PROXY_RETRY_MAX`     | `5`     | Max retry attempts after the initial try.                                             |
+| `PROXY_RETRY_BASE_MS` | `500`   | First backoff, doubled each attempt.                                                  |
+| `PROXY_RETRY_MAX_MS`  | `30000` | Ceiling for any single backoff, including a `Retry-After`.                            |
 
 Precedence is CLI flag → env → built-in default.
 

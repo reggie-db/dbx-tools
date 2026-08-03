@@ -1429,6 +1429,17 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   pages, and DROPS (unwraps to text) any link whose target page doesn't exist on
   disk. When adding a docs generator change, keep links absolute — never emit a
   bare or `./`-relative cross-page link.
+- **Model tool capability means a complete Responses round-trip, not merely a
+  chat endpoint accepting `tools`.** Databricks endpoint list/OpenAPI metadata
+  currently exposes no tools bit, so `ServingEndpointSummary.supportsTools` and
+  `classify.endpointCapabilities().tools` use a conservative policy verified
+  through the local model proxy: GPT except GPT-OSS, Claude, Qwen, GLM, and
+  Llama. Gemini is excluded because its replayed function call requires a
+  thought signature Open Responses does not currently accept; GPT-OSS rejects
+  Responses passthrough. `requiresTools` must filter candidates BEFORE fuzzy
+  ranking/fallback, and model-proxy rejects tool-bearing requests whose resolved
+  endpoint is not capable. Update the policy only after testing both the initial
+  function call and stateless `function_call_output` replay.
 - **Model display names.** `ServingEndpointSummary` carries an optional
   `displayName` alongside `name` (the invoke id). It flows through `/models`
   (wire `ServingEndpointsResponseSchema`) automatically. Derivation lives in the

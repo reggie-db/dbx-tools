@@ -85,6 +85,12 @@ export const ServingEndpointSummarySchema = z.object({
   task: z.string().optional().describe("Task hint, e.g. 'llm/v1/chat' or 'llm/v1/embeddings'."),
   state: z.string().optional().describe("Deployment state, e.g. ready, updating, or failed."),
   description: z.string().optional().describe("Free-form endpoint description; informational."),
+  supportsTools: z
+    .boolean()
+    .optional()
+    .describe(
+      "Whether this endpoint supports a complete function-tool round-trip (call plus function_call_output replay). Derived from verified provider-family policy when Databricks exposes no capability attribute.",
+    ),
   profile: ModelProfileSchema.optional().describe(
     "Foundation Model API quality/speed/cost scores when the endpoint is a scored pay-per-token model; absent otherwise.",
   ),
@@ -122,6 +128,12 @@ export const ModelQuerySchema = z.object({
   modelClass: ModelClassSchema.optional().describe(
     "Capability ceiling: a chat class restricts to that band and the less-capable chat bands below it; 'embedding' restricts to embedding endpoints. Omit to consider every chat band.",
   ),
+  requiresTools: z
+    .boolean()
+    .optional()
+    .describe(
+      "When true, consider only endpoints that support a complete function-tool round-trip.",
+    ),
   limit: z
     .number()
     .int()

@@ -4,6 +4,7 @@ import {
   classifyByFamily,
   classifyEndpoints,
   endpointCapabilities,
+  supportsToolsByFamily,
   versionTuple,
 } from "../src/classify.ts";
 import { ModelClass, type ModelProfile, type ServingEndpointSummary } from "../src/model.ts";
@@ -70,9 +71,18 @@ describe("endpointCapabilities", () => {
 
   it("falls back to the classified class when the endpoint carries no task", () => {
     assert.equal(endpointCapabilities({ name: "custom", class: ModelClass.ChatFast }).chat, true);
+    assert.equal(endpointCapabilities({ name: "custom", class: ModelClass.ChatFast }).tools, false);
     assert.equal(
       endpointCapabilities({ name: "custom", class: ModelClass.Embedding }).embedding,
       true,
+    );
+  });
+
+  it("honors an explicit tool-capability stamp", () => {
+    assert.equal(endpointCapabilities({ ...chat("custom"), supportsTools: true }).tools, true);
+    assert.equal(
+      endpointCapabilities({ ...chat("databricks-gpt-5-6-sol"), supportsTools: false }).tools,
+      false,
     );
   });
 
@@ -95,6 +105,27 @@ describe("endpointCapabilities", () => {
       embedding: true,
       tools: false,
     });
+  });
+});
+
+describe("supportsToolsByFamily", () => {
+  it("allows provider families verified for call and result replay", () => {
+    for (const name of [
+      "databricks-gpt-5-6-sol",
+      "databricks-gpt-5-3-codex",
+      "databricks-claude-sonnet-5",
+      "databricks-qwen35-122b-a10b",
+      "databricks-glm-5-2",
+      "databricks-llama-4-maverick",
+    ]) {
+      assert.equal(supportsToolsByFamily(name), true, name);
+    }
+  });
+
+  it("rejects families without a complete Responses tool round-trip", () => {
+    assert.equal(supportsToolsByFamily("databricks-gemini-3-5-flash"), false);
+    assert.equal(supportsToolsByFamily("databricks-gpt-oss-120b"), false);
+    assert.equal(supportsToolsByFamily("custom-chat-endpoint"), false);
   });
 });
 
