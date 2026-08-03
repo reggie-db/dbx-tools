@@ -150,7 +150,7 @@ of the prompt line, and a styled `<h2>` code renders two blank lines below the
 prompt, so autofill stops being offered even though the HTML looks perfect. Keep
 the same information in both parts - a text alternative that disagrees with the
 HTML reads as phishing to spam filters. See
-[`@dbx-tools/cli-tunnel`](../../cli/tunnel) for a gate that does this.
+[`@dbx-tools/tunnel`](../../node/tunnel) for a gate that does this.
 
 ### Control the preheader (and the push notification)
 

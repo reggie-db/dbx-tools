@@ -101,18 +101,22 @@ resources:
       # public tunnel, OTP gate, staged client path, and deployment resource
       # bindings belong to this deployment definition instead.
       config:
+        # The server registers `tunnelInterceptor()` on its own `createApp`
+        # (`@dbx-tools/tunnel`), so the public portr tunnel + OTP gate run
+        # IN-PROCESS - the command runs the server directly rather than through a
+        # wrapper bin. Gate settings that were CLI flags are env now (see below):
+        # `TUNNEL_AUTH_ALLOW` is the old `--allow`.
         command:
-          - dbxt-tunnel
-          # No --subject / --brand-name: the defaults are the conventional
-          # one-time-code wording ("Your verification code") that iOS, Gmail,
-          # Outlook, and Android detect for autofill, and the display name comes
-          # from the repo brand context. A novel subject is what breaks that.
-          - --allow
-          - databricks.com
-          - --
           - bun
           - src/server.ts
         env:
+          # OTP gate allow-list (was the tunnel CLI's `--allow`). No subject /
+          # brand-name override: the defaults are the conventional one-time-code
+          # wording ("Your verification code") that iOS, Gmail, Outlook, and
+          # Android detect for autofill, and the display name comes from the repo
+          # brand context. A novel subject is what breaks that.
+          - name: TUNNEL_AUTH_ALLOW
+            value: databricks.com
           - name: DATABRICKS_GENIE_SPACE_ID
             value_from: genie-space
           - name: LAKEBASE_ENDPOINT

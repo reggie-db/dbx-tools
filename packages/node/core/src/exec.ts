@@ -93,6 +93,27 @@ export type ExecResult = {
   readonly stderr: string;
 };
 
+/**
+ * What {@link spawn} returns: the LIVE `ChildProcess` handle that is ALSO a
+ * `Promise<ExecResult>` resolving on exit.
+ *
+ * This is additive - the object still satisfies `Promise<ExecResult>`, so every
+ * existing `await spawn(...)` / `spawn(...).then(...)` caller is unchanged. What
+ * is new is that the same value is the live child: callers that want to supervise
+ * it (read `.pid`, `.kill(signal)`, listen for `exit`) can, without a second
+ * spawn. `@dbx-tools/appkit`'s `bindProcess` consumes exactly this - one code path
+ * supervises both a bare `ChildProcess` (e.g. portr) and a `spawn()` result.
+ *
+ * @example Await it (unchanged)
+ * const { stdout } = await spawn("git", ["rev-parse", "HEAD"], { stdout: "capture" });
+ *
+ * @example Supervise it
+ * const proc = spawn("bun", ["src/server.ts"]);
+ * ctx.bindProcess(proc);            // live handle
+ * const { exitCode } = await proc;  // still a promise
+ */
+export type ChildProcessResult = ChildProcess & Promise<ExecResult>;
+
 /** Options for {@link spawn}. Extends `SpawnOptions` except `stdio`, which is driven by `stdin` / `stdout` / `stderr`. */
 export type ExecOptions = Omit<SpawnOptions, "stdio"> & {
   /** `"inherit"` by default; `"pipe"` / `"ignore"` select modes, any other string is input. */
@@ -495,16 +516,24 @@ function linesFromCapturedOutput(output: string): string[] {
 }
 
 /**
- * Spawn a subprocess and wait for exit.
+ * Spawn a subprocess. Returns the LIVE child handle that is ALSO a
+ * `Promise<ExecResult>` resolving on exit - see {@link ChildProcessResult}.
+ *
+ * The promise half is the exact behaviour this function had before: it awaits
+ * exit (and any line reads / stdin write), then resolves to the {@link ExecResult}
+ * or rejects (spawn error other than a missing executable, or `check` on non-zero
+ * exit). Existing `await spawn(...)` callers are unaffected. The handle half lets a
+ * caller supervise the process (`.pid`, `.kill(signal)`, `exit` event) without a
+ * second spawn - e.g. `@dbx-tools/appkit`'s `bindProcess`.
  *
  * @param command - Executable to run (resolved on `PATH` when `shell` is set on options)
  * @param args - Arguments passed verbatim to the executable
  * @param options - Spawn, stdio, and check options
- * @returns Exit code, captured line arrays, and trimmed `stdout` / `stderr` getters
- * @throws When spawn fails for a reason other than a missing executable, line
- * reads fail, or `check` is true and exit code is non-zero
+ * @returns The live `ChildProcess`, awaitable to exit code + captured output
+ * @throws (on the promise) When spawn fails for a reason other than a missing
+ * executable, line reads fail, or `check` is true and exit code is non-zero
  */
-export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult> {
+export function spawn(...args: SpawnArgs<ExecOptions>): ChildProcessResult {
   const { command, commandArgs, options = {} } = parseSpawnArgs(args);
   const { stdin, stdout, stderr, check, trim, ...spawnOpts } = options;
   const stdoutLines: string[] = [];
@@ -524,25 +553,45 @@ export async function spawn(...args: SpawnArgs<ExecOptions>): Promise<ExecResult
   queueLineReads(reads, proc.stdout, stdoutHandler);
   queueLineReads(reads, proc.stderr, stderrHandler);
 
-  let exitCode = 1;
-  let commandNotFoundError: NodeJS.ErrnoException | undefined;
-  try {
-    exitCode = await waitForExit(proc);
-    await Promise.all([stdinWrite, ...reads]);
-  } catch (err) {
-    await Promise.allSettled([stdinWrite, ...reads]);
-    if (!isCommandNotFoundError(err)) throw err;
-    commandNotFoundError = err;
-    exitCode = COMMAND_NOT_FOUND_EXIT_CODE;
-  }
+  const completion = (async (): Promise<ExecResult> => {
+    let exitCode = 1;
+    let commandNotFoundError: NodeJS.ErrnoException | undefined;
+    try {
+      exitCode = await waitForExit(proc);
+      await Promise.all([stdinWrite, ...reads]);
+    } catch (err) {
+      await Promise.allSettled([stdinWrite, ...reads]);
+      if (!isCommandNotFoundError(err)) throw err;
+      commandNotFoundError = err;
+      exitCode = COMMAND_NOT_FOUND_EXIT_CODE;
+    }
 
-  const result = createExecResult(exitCode, stdoutLines, stderrLines, trim);
-  if (check && result.exitCode !== 0) {
-    const err = execError(command, commandArgs, result);
-    if (commandNotFoundError) err.cause = commandNotFoundError;
-    throw err;
-  }
-  return result;
+    const result = createExecResult(exitCode, stdoutLines, stderrLines, trim);
+    if (check && result.exitCode !== 0) {
+      const err = execError(command, commandArgs, result);
+      if (commandNotFoundError) err.cause = commandNotFoundError;
+      throw err;
+    }
+    return result;
+  })();
+
+  // Attach the promise interface onto the live child so ONE object is both. The
+  // methods are bound to `completion` so `this` is the real promise; the child
+  // owns no conflicting `then`/`catch`/`finally`, so this is purely additive.
+  return attachPromise(proc, completion);
+}
+
+/**
+ * Attach a promise's `then` / `catch` / `finally` onto a live object, returning
+ * the same object typed as both. Used by {@link spawn} to make its `ChildProcess`
+ * awaitable without wrapping it - so callers keep the live handle AND `await` it.
+ */
+function attachPromise<T extends object, R>(target: T, promise: Promise<R>): T & Promise<R> {
+  const hybrid = target as T & Promise<R>;
+  hybrid.then = promise.then.bind(promise);
+  hybrid.catch = promise.catch.bind(promise);
+  hybrid.finally = promise.finally.bind(promise);
+  return hybrid;
 }
 
 /**

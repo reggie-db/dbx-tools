@@ -37,7 +37,7 @@
  *     per-user attribution in Genie / Unity Catalog.
  *   - `"auto"`: OBO when the request carries an OBO token, the service principal
  *     when it does not. The mode for an app that serves BOTH the platform front
- *     door and a door with no OBO token to forward (a `@dbx-tools/cli-tunnel`
+ *     door and a door with no OBO token to forward (a `@dbx-tools/tunnel`
  *     gate, a Teams channel), since a single container serves both at once.
  *
  * What the service-principal path does NOT change is WHO the turn belongs to.

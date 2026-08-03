@@ -27,6 +27,13 @@ import { createApp as appkitCreateApp } from "@databricks/appkit";
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
 import { async, log } from "@dbx-tools/shared-core";
 
+import {
+  createInterceptorContext,
+  type Interceptor,
+  type InterceptorRuntime,
+  lifecycleBridge,
+  type ResolvedAppEnv,
+} from "./interceptor.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
 
@@ -63,6 +70,13 @@ export type CreateAppConfig<T extends AppKitPlugins = AppKitPlugins> = Omit<
   onPluginsReady?: (appkit: PluginMap<T>) => void | Promise<void>;
   /** Auto-configuration to run before AppKit boots. Defaults to `"provision"`. */
   autoConfigure?: AutoConfigureMode | false;
+  /**
+   * One or many {@link Interceptor}s handed an {@link InterceptorContext} once
+   * auto-configuration has computed the env. Each receives the resolved env, an
+   * AppKit-lifecycle hook, and `bindProcess` for concurrently-style supervision -
+   * see `./interceptor`. The tunnel is the primary consumer.
+   */
+  interceptor?: Interceptor | Interceptor[];
 };
 
 const logger = log.logger("create-app");
@@ -103,7 +117,7 @@ function usesPlugin<T extends AppKitPlugins>(
 export async function autoConfigure<T extends AppKitPlugins>(
   config?: CreateAppConfig<T>,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<LakebaseConnection | undefined> {
   const mode = config?.autoConfigure ?? DEFAULT_AUTO_CONFIGURE;
   const explicit = config?.autoConfigure !== undefined;
   const lakebasePluginPresent = usesPlugin(config, LAKEBASE_PLUGIN);
@@ -114,7 +128,7 @@ export async function autoConfigure<T extends AppKitPlugins>(
       provisioned: false,
       skippedReason: mode === false ? "disabled" : "no lakebase plugin",
     });
-    return;
+    return undefined;
   }
 
   const controller = new AbortController();
@@ -122,8 +136,9 @@ export async function autoConfigure<T extends AppKitPlugins>(
   async.tieAbortSignal(controller, AbortSignal.timeout(AUTO_CONFIGURE_TIMEOUT_MS));
 
   const provision = mode === "provision";
-  await autoConfigureLakebase(provision, controller.signal);
+  const resolved = await autoConfigureLakebase(provision, controller.signal);
   logger.info("ready", { autoConfigure: mode, lakebasePluginPresent, provisioned: provision });
+  return resolved;
 }
 
 /**
@@ -156,9 +171,30 @@ function redactLakebaseConnection(resolved: LakebaseConnection): Record<string, 
   };
 }
 
+/** Build the {@link ResolvedAppEnv} interceptors read, from the auto-config result. */
+function resolvedAppEnv(lakebase: LakebaseConnection | undefined): ResolvedAppEnv {
+  return {
+    ...(lakebase ? { lakebase } : {}),
+    ...(process.env.DATABRICKS_HOST ? { databricksHost: process.env.DATABRICKS_HOST } : {}),
+  };
+}
+
+/** Normalize the `interceptor?: Interceptor | Interceptor[]` option to an array. */
+function interceptorList(interceptor: CreateAppConfig["interceptor"]): Interceptor[] {
+  if (!interceptor) return [];
+  return Array.isArray(interceptor) ? interceptor : [interceptor];
+}
+
 /**
  * Auto-configuring drop-in for AppKit's `createApp`: same config, same typed
  * plugin-export map, with {@link autoConfigure} run first.
+ *
+ * When {@link CreateAppConfig.interceptor}s are given, each is invoked with an
+ * {@link InterceptorContext} AFTER auto-configuration computes the env and BEFORE
+ * AppKit boots - so an interceptor can read the resolved connection, register
+ * lifecycle handlers, and `bindProcess` a child. A hidden {@link lifecycleBridge}
+ * plugin is injected so those `onLifecycle` handlers fire on the genuine AppKit
+ * events; it has no exports, so the returned {@link PluginMap} is unchanged.
  *
  * @example
  * import { createApp } from "@dbx-tools/appkit";
@@ -169,8 +205,26 @@ function redactLakebaseConnection(resolved: LakebaseConnection): Record<string, 
 export async function createApp<T extends AppKitPlugins>(
   config?: CreateAppConfig<T>,
 ): Promise<PluginMap<T>> {
-  await autoConfigure(config);
+  const lakebase = await autoConfigure(config);
   const appConfig = { ...config };
   delete appConfig.autoConfigure;
+  delete appConfig.interceptor;
+
+  const interceptors = interceptorList(config?.interceptor);
+  if (interceptors.length === 0) {
+    return appkitCreateApp<T>(appConfig);
+  }
+
+  // Build the context from the computed env, run each interceptor (they register
+  // lifecycle handlers + bind processes), then inject the bridge that relays the
+  // REAL AppKit lifecycle into `runtime.emitLifecycle` during its `setup()`.
+  const runtime: InterceptorRuntime = createInterceptorContext(resolvedAppEnv(lakebase));
+  for (const interceptor of interceptors) {
+    await interceptor(runtime.context);
+  }
+  // Append the bridge to the plugins tuple. It is hidden and exports nothing, so
+  // the returned map still matches `PluginMap<T>`; the cast (through `unknown`) is
+  // only because appending widens the tuple type beyond `T`.
+  appConfig.plugins = [...(appConfig.plugins ?? []), lifecycleBridge({ runtime })] as unknown as T;
   return appkitCreateApp<T>(appConfig);
 }

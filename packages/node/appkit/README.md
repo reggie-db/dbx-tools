@@ -20,6 +20,12 @@ Lakebase auto-configuration without taking on a heavier feature package.
   `Context` values.
 - Lakebase cache-schema provisioning for deployments where the app identity must
   be granted access before persistent cache initialization.
+- An interceptor context on `createApp` (`interceptor?: Interceptor | Interceptor[]`)
+  that hands add-ons the computed env, AppKit lifecycle hooks (`onLifecycle`, using
+  AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary), signal
+  broadcast, and `bindProcess` for concurrently-style child supervision - any
+  bound process's death tears the app down, signals pass through. `@dbx-tools/tunnel`
+  is the primary consumer.
 
 ## Why Use This Over Native AppKit
 
@@ -99,7 +105,7 @@ pool. AppKit's PERSISTENT cache is the common case: it builds its own pool from
 env, and `createLakebasePool()` throws unless `LAKEBASE_ENDPOINT`, `PGHOST`,
 `PGDATABASE`, and a username are all present — while a Databricks App `postgres`
 resource binding supplies only the first. Miss one and the cache degrades silently
-to in-memory. `@dbx-tools/cli-tunnel`'s OTP gate calls this for exactly that
+to in-memory. `@dbx-tools/tunnel`'s OTP gate calls this for exactly that
 reason.
 
 ## Configuration
@@ -109,6 +115,7 @@ reason.
 | Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                 |
 | --------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema; `"env"` resolves the connection only; `false` skips auto-configuration. Omit it to gate the default on a `lakebase` plugin being registered, or set it explicitly to run regardless. |
+| `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env, `onLifecycle` (AppKit's `setup:complete` / `server:ready` / `shutdown`), `broadcastSignal`, and `bindProcess` for concurrently-style child supervision.              |
 
 Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
 still wants AppKit's PERSISTENT cache. AppKit only chooses Lakebase for
@@ -277,7 +284,7 @@ behaviour depends entirely on `NODE_ENV`:
 That throw is right for an app behind the front door, where a missing token means
 something is broken. It is fatal for an app whose traffic legitimately arrives
 without one - a public tunnel where callers authenticate by email code
-([`@dbx-tools/cli-tunnel`](../../cli/tunnel)), or a bot channel that validates its
+([`@dbx-tools/tunnel`](../../node/tunnel)), or a bot channel that validates its
 own inbound JWT (`POST /api/teams/messages`). Those apps must not run with
 `NODE_ENV=development` just to get the fallback, since that flag also relaxes
 secure cookies and unlocks other dev-only escape hatches.

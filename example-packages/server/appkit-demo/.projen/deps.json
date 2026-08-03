@@ -55,11 +55,6 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-tunnel",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/email",
       "version": "workspace:*",
       "type": "runtime"
@@ -76,6 +71,11 @@
     },
     {
       "name": "@dbx-tools/teams",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/tunnel",
       "version": "workspace:*",
       "type": "runtime"
     },

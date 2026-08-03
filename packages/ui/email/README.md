@@ -126,7 +126,7 @@ import { AuthGate } from "@dbx-tools/ui-email/react";
 
 `AuthGate` is the sign-in screen for an app fronted by the `@dbx-tools/email`
 auth plugin - typically one published through
-[`@dbx-tools/cli-tunnel`](../../cli/tunnel), where the hosting platform's own
+[`@dbx-tools/tunnel`](../../node/tunnel), where the hosting platform's own
 identity-aware proxy is not in the request path. It calls the plugin's
 `/api/email/auth/*` routes: on mount it checks `status`, renders `children`
 straight through when the gate is off or a session already exists, and otherwise

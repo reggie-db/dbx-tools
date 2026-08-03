@@ -21,7 +21,7 @@ const log = logger("shared/token");
  *
  * Exported because it is a wire contract several packages branch on, not just a
  * default argument: `@dbx-tools/appkit`'s `identity` module decides whether a
- * request can use OBO auth at all by its presence, and `@dbx-tools/cli-tunnel`
+ * request can use OBO auth at all by its presence, and `@dbx-tools/tunnel`
  * must know the name to strip inbound copies of it. One spelling, one place.
  */
 export const ACCESS_TOKEN_HEADER = "x-forwarded-access-token";
