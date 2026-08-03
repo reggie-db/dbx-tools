@@ -21,6 +21,10 @@ content is dropping in `<MastraChat/>`.
 - `src/pages/Brand.tsx` — a live `BrandPicker` that updates the whole site plus
   rich email previews that inherit the active brand, with one intentionally
   independent campaign identity.
+- `src/pages/Bus.tsx` — the Postgres topic bus. Publish a `type`/`metadata`/`body`
+  envelope and watch it arrive in every open viewer over an SSE stream, tagged
+  `you` or `other`. Open it in two tabs (the second one first — delivery is live,
+  not replayed) to see the fan-out.
 
 ## Build
 

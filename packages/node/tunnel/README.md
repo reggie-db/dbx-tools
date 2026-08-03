@@ -347,6 +347,13 @@ OPTIONAL peer dependency - a tunnel without the gate needs no mail - so the app
 that mounts `authGate` must include it (or run `TUNNEL_INSECURE=true` to skip the
 gate); a missing transport fails fast at boot.
 
+`GET /api/email/auth/status` is what a client asks before deciding to render a
+login screen, and it answers per REQUEST, not per deployment: on a non-tunnel
+`Host` it returns `{ authenticated: false, enabled: false }` without looking at
+the cookie, because that request was never going to be gated. So the same running
+app shows the OTP screen to a portr visitor and no login at all to a browser on
+`localhost` or the platform front door.
+
 ## Modules
 
 - `interceptor` - `tunnelInterceptor()`, the `createApp` interceptor that applies

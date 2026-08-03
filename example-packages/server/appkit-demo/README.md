@@ -21,10 +21,15 @@ backend.
   `send_email` tool: the model can call it, but the send suspends until the user
   approves it in the chat UI.
 - `lakebase()` (AppKit) — backs Mastra Memory.
+- `busDemo()` from `src/bus-demo.ts` — a `PostgresTopicBus` from
+  [`@dbx-tools/postgres`](../../../packages/node/postgres) on the Lakebase pool:
+  `POST /api/bus-demo/messages` broadcasts, `GET /api/bus-demo/events` streams to
+  every viewer. Backs the client's Bus page.
 
 ## Files
 
 - `src/server.ts` — the plugin list + agent definition (the only code here).
+- `src/bus-demo.ts` — the topic-bus plugin behind the Bus page.
 - `app.yaml` — Databricks App runtime env wiring (`genie-space`, `postgres`).
 - `databricks.yml` — Asset Bundle: the Lakebase autoscaling Postgres project,
   the app resource, and the deployed `command`/`env` overrides.

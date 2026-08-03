@@ -281,7 +281,15 @@ why to use this package anyway:
   keys are preserved for interoperability; structured keys are reduced to a
   stable signed 64-bit identifier. `PostgresTopicBus` reserves one connection
   for `LISTEN`, filters notifications by topic, and broadcasts JSON payloads
-  through `pg_notify` so every app instance receives the event.
+  through `pg_notify` so every app instance receives the event. The envelope is
+  fixed (`type` / `metadata` / `body` plus a generated `id`, `topic`, and
+  `publishedAt`), automatic machine/deployment context is merged UNDER caller
+  metadata, and a body that would not survive a JSON round trip unchanged is a
+  `TypeError` at the call rather than a coerced value at the listener. Delivery is
+  live and unstored — a dropped listener reconnects with bounded backoff but
+  misses whatever was published during the gap, so reach for a table or a queue
+  when a subscriber needs replay. `@databricks/appkit` is an OPTIONAL peer used
+  lazily for sender identity; do not make it a hard dependency.
 - `@dbx-tools/teams`: AppKit has no Teams / Adaptive Card surface, so use this
   whenever a Microsoft Teams channel should be able to chat with the app's
   agents, or an agent should emit a Teams card. Two things it buys: a real Bot

@@ -171,6 +171,10 @@ export function mountGate(
   // --- Login routes (open on tunnel traffic; answered in-process) ---
 
   const statusHandler = (async (req, res) => {
+    // A local or front-door caller is never gated, so the honest answer is that
+    // the gate does not apply - not the session state of a cookie it would never
+    // check. Without this, a browser on `localhost` renders the OTP login screen
+    // for a request that would have passed through untouched.
     if (!isTunnelHost(req, publicDomain)) {
       sendJson(res, 200, { authenticated: false, enabled: false });
       return;

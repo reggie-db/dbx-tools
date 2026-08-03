@@ -1,3 +1,18 @@
+// The message-bus page: a publisher on the left, every viewer's traffic on the
+// right.
+//
+// The point of the page is what you see with TWO of it open - a second tab, or
+// someone else's browser over the tunnel. Both subscribe to the same Postgres
+// topic through the `bus-demo` plugin's SSE stream, so a message published in one
+// arrives in all of them, tagged `you` or `other`.
+//
+// It also exercises the structured envelope directly: type, metadata, and body are
+// three separate inputs rather than one text box, and the received message renders
+// its body next to the merged metadata the server and the bus added.
+//
+// Delivery is live and unstored, so a viewer sees nothing published before it
+// connected - hence the copy telling you to open the second viewer first.
+
 import { hash, json } from "@dbx-tools/shared-core";
 import {
   Badge,
@@ -14,8 +29,13 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const API = "/api/bus-demo";
+/**
+ * Sentinel distinguishing "the text is not JSON" from a successful parse of the
+ * literal `null`, which a fallback of `null` or `undefined` could not.
+ */
 const INVALID_JSON = Symbol("invalid-json");
 
+/** The server's envelope, mirrored loosely - the page renders it, it does not trust it. */
 type BusMessage = {
   id: string;
   topic: string;
@@ -27,6 +47,13 @@ type BusMessage = {
 
 type ConnectionState = "connecting" | "connected" | "reconnecting";
 
+/**
+ * Read-or-create a value scoped to this TAB.
+ *
+ * `sessionStorage`, not `localStorage`, on purpose: two tabs of the same browser
+ * are two viewers here, and sharing an id would make one tab's messages read as
+ * `you` in the other.
+ */
 function sessionValue(key: string, create: () => string): string {
   const current = sessionStorage.getItem(key);
   if (current) return current;
@@ -35,6 +62,7 @@ function sessionValue(key: string, create: () => string): string {
   return value;
 }
 
+/** Metadata must be a JSON object; anything else is a message the user can act on. */
 function parseMetadata(value: string): Record<string, unknown> {
   const parsed = json.parseRecord(value);
   if (!parsed) {
@@ -43,12 +71,19 @@ function parseMetadata(value: string): Record<string, unknown> {
   return parsed;
 }
 
+/**
+ * Interpret the body box as JSON when it parses and as plain text when it does
+ * not, so `{"a":1}`, `42`, and `hello` all send something sensible without a
+ * format toggle. Empty input sends an empty string, since the bus rejects
+ * `undefined`.
+ */
 function parseBody(value: string): unknown {
   if (!value.trim()) return "";
   const parsed = json.parse<unknown | typeof INVALID_JSON>(value, INVALID_JSON);
   return parsed === INVALID_JSON ? value : parsed;
 }
 
+/** Pretty-print for display, falling back to `String` for values JSON omits. */
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2) ?? String(value);
 }
@@ -67,6 +102,8 @@ const Bus = () => {
   const [error, setError] = useState<string>();
   const endRef = useRef<HTMLDivElement>(null);
 
+  // Keyed by envelope id so a redelivery after a reconnect updates in place instead
+  // of appearing twice, and capped so a long-running viewer does not grow forever.
   const mergeMessages = useCallback((incoming: BusMessage[]) => {
     setMessages((current) => {
       const byId = new Map(current.map((message) => [message.id, message]));
@@ -76,6 +113,9 @@ const Bus = () => {
   }, []);
 
   useEffect(() => {
+    // `EventSource` reconnects on its own, so `onerror` is a status change rather
+    // than a failure - the stream usually comes back and re-fires `ready`. Messages
+    // published during the gap are gone; the bus does not replay.
     const source = new EventSource(`${API}/events`);
     source.onopen = () => setConnection("connected");
     source.onerror = () => setConnection("reconnecting");
@@ -168,8 +208,8 @@ const Bus = () => {
                 spellCheck={false}
               />
               <span className="text-muted-foreground block text-xs font-normal">
-                JSON object. Project, public IP, machine, runtime, request, and viewer context are
-                added when those keys are absent.
+                JSON object. Project, public IP, machine, deployment, request, and viewer context
+                are added for keys you leave out; a key you set here wins.
               </span>
             </label>
             <label className="block space-y-1.5 text-sm font-medium">

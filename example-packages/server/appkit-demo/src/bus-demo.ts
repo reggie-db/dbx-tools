@@ -1,3 +1,22 @@
+/**
+ * The demo's message-bus page, server side: one Postgres topic shared by every
+ * open browser tab.
+ *
+ * Shows the fan-out shape `@dbx-tools/postgres`'s {@link PostgresTopicBus} exists
+ * for. A `POST` broadcasts on the topic and an SSE stream per viewer replays
+ * whatever arrives, so a message typed in one tab shows up in all of them - and,
+ * over the tunnel, in another person's browser. Nothing is stored: this is live
+ * fan-out, not chat history, which is why a viewer only sees messages published
+ * after it connected.
+ *
+ * It is also where the structured envelope earns its keep. The route adds request
+ * context (who sent it, from which IP, through which host) as METADATA rather than
+ * folding it into the body, so the page can label a message `you` or `other` and
+ * show the merged context without the body having to carry a fixed schema.
+ *
+ * @module
+ */
+
 import {
   Plugin,
   lakebase,
@@ -11,9 +30,18 @@ import { PostgresTopicBus, isSerializableValue, type TopicMetadata } from "@dbx-
 import { error, log } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
+/**
+ * The single topic every viewer publishes and subscribes to. A real app would key
+ * this per room or per document; one constant is what makes every tab a peer.
+ */
 const TOPIC = "demo-viewers";
 const logger = log.logger("demo:bus");
 
+/**
+ * Zod refinement narrowing a parsed JSON object to bus metadata. The bus enforces
+ * the same rule on broadcast; checking here turns it into a 400 with the rest of
+ * the validation errors instead of a 500 from a rejected publish.
+ */
 function isTopicMetadata(value: unknown): value is TopicMetadata {
   return (
     Boolean(value) &&
@@ -33,6 +61,17 @@ const sendSchema = z.object({
 
 let environmentMetadata: Promise<Record<string, string>> | undefined;
 
+/**
+ * Context this process can only learn asynchronously, resolved once and reused for
+ * every broadcast.
+ *
+ * The bus fills in `project` and a public IP from the ENVIRONMENT on its own;
+ * running locally there is no such variable, so the demo discovers the real
+ * outbound IP over the network. That is exactly the case a
+ * `TopicMetadataProvider` is for - it is called per broadcast, hence the memoized
+ * promise. A failed lookup is logged and omitted rather than failing the publish,
+ * since the IP is a nice-to-have label.
+ */
 function resolveEnvironmentMetadata(): Promise<Record<string, string>> {
   environmentMetadata ??= (async () => {
     const metadata: Record<string, string> = {
@@ -48,6 +87,13 @@ function resolveEnvironmentMetadata(): Promise<Record<string, string>> {
   return environmentMetadata;
 }
 
+/**
+ * AppKit plugin owning the demo's bus, its send route, and its SSE stream.
+ *
+ * Construction is deferred to `setup:complete` because the bus needs the sibling
+ * native `lakebase` plugin's pool, which does not exist until every plugin has set
+ * up. Requests arriving before then get a 503 rather than a crash.
+ */
 class BusDemoPlugin extends Plugin {
   static manifest = {
     name: "bus-demo",
@@ -72,11 +118,15 @@ class BusDemoPlugin extends Plugin {
     });
   }
 
+  /** Returns the listener connection to the Lakebase pool on app shutdown. */
   async shutdown(): Promise<void> {
     await this.bus?.close();
   }
 
   override injectRoutes(router: IAppRouter): void {
+    // POST /api/bus-demo/messages - publish one message to every viewer. 202, not
+    // 201: nothing was created, and the notification only reaches sessions that
+    // are already listening.
     this.route(router, {
       name: "send",
       method: "post",
@@ -92,6 +142,10 @@ class BusDemoPlugin extends Plugin {
         const forwardedFor = req.get("x-forwarded-for")?.split(",")[0]?.trim();
         const message = await bus.broadcast(TOPIC, {
           type: parsed.data.type,
+          // Request context first so the caller's own `metadata` can override any
+          // of it, matching how the bus layers automatic context under the
+          // caller's. `viewerId` is what lets the page tell your messages from
+          // everyone else's.
           metadata: {
             viewerId: parsed.data.viewerId,
             user: parsed.data.user,
@@ -106,6 +160,9 @@ class BusDemoPlugin extends Plugin {
       },
     });
 
+    // GET /api/bus-demo/events - one SSE stream per open viewer. The subscription
+    // lives as long as the response, so the request's `close` is what unsubscribes;
+    // without that a reloaded tab leaks a listener writing to a dead socket.
     this.route(router, {
       name: "events",
       method: "get",
@@ -126,6 +183,8 @@ class BusDemoPlugin extends Plugin {
         });
         res.write(`event: ready\ndata: ${JSON.stringify({ topic: TOPIC })}\n\n`);
 
+        // Comment-only frames keep proxies and load balancers from closing an idle
+        // stream, which is otherwise the failure mode of a demo nobody is typing in.
         const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), 15_000);
         req.on("close", () => {
           clearInterval(heartbeat);
@@ -136,6 +195,11 @@ class BusDemoPlugin extends Plugin {
     });
   }
 
+  /**
+   * The bus or a 503. Covers the window between the server accepting connections
+   * and `setup:complete` building the bus, which a page loaded during a restart
+   * will hit.
+   */
   private requireBus(res: { status(code: number): { json(body: unknown): unknown } }) {
     if (this.bus) return this.bus;
     res.status(503).json({ error: "Message bus is still starting." });
@@ -143,4 +207,5 @@ class BusDemoPlugin extends Plugin {
   }
 }
 
+/** The `bus-demo` plugin factory, added to the demo server's plugin list. */
 export const busDemo = toPlugin(BusDemoPlugin);
