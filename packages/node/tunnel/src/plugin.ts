@@ -19,6 +19,7 @@
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
 import { brand, env, log, object, string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-email";
+import type { RequestHandler } from "express";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
 import {
   ALLOW_ENV,
@@ -31,13 +32,54 @@ import {
   SESSION_TTL_ENV,
   SUBJECT_ENV,
 } from "./env.ts";
-import { mountGate } from "./gate.ts";
+import { mountGate, type GateOptions } from "./gate.ts";
 import { CodeStore, signSession, verifySession } from "./otp.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { ensureEmailAvailable, sendCode as defaultSendCode } from "./send-code.ts";
 import { KEY_TTL_SECONDS, resolveSessionCutoff, signingKey } from "./signing-key.ts";
 
 const logger = log.logger("tunnel:auth");
+
+interface GateServerApplication {
+  get(path: string, handler: RequestHandler): unknown;
+  post(path: string, handler: RequestHandler): unknown;
+  use(path: string, handler: RequestHandler): unknown;
+}
+
+interface GateMountContext {
+  addRoute(method: string, path: string, handler: RequestHandler): void;
+  addMiddleware(path: string, handler: RequestHandler): void;
+  getPlugins(): ReadonlyMap<string, unknown>;
+}
+
+function serverApplication(context: GateMountContext): GateServerApplication | undefined {
+  const server = context.getPlugins().get("server") as
+    { serverApplication?: Partial<GateServerApplication> } | undefined;
+  const application = server?.serverApplication;
+  return application &&
+    typeof application.get === "function" &&
+    typeof application.post === "function" &&
+    typeof application.use === "function"
+    ? (application as GateServerApplication)
+    : undefined;
+}
+
+export function mountGateOnContext(context: GateMountContext, options: GateOptions): void {
+  const application = serverApplication(context);
+  if (application) {
+    mountGate(
+      options,
+      (method, path, handler) => application[method](path, handler),
+      (path, handler) => application.use(path, handler),
+    );
+    return;
+  }
+  mountGate(
+    options,
+    (method, path, handler) => context.addRoute(method, path, handler),
+    (path, handler) => context.addMiddleware(path, handler),
+  );
+}
 
 /** Options for the {@link authGate} plugin (all resolvable from env - see below). */
 export interface AuthGateConfig extends BasePluginConfig {
@@ -249,11 +291,16 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     if (this.resolved.insecure) {
       logger.warn("insecure mode - the tunnel runs OPEN with no email-OTP gate");
     } else {
-      this.mountGateRoutes();
-      // Fail fast (post-boot, once the email plugin has primed its transport):
-      // a gate that cannot email a code lets nobody in. `setup:complete` is when
-      // every plugin's `setup()` - including `email()`'s - has resolved.
-      this.context?.onLifecycle("setup:complete", () => ensureEmailAvailable());
+      // `server()` is deferred, so it does not exist during this plugin's setup.
+      // At `setup:complete` the Express app exists but has not injected plugin
+      // routes or static handling yet, which is the one point the gate can mount
+      // ahead of every protected route.
+      this.context?.onLifecycle("setup:complete", async () => {
+        this.mountGateRoutes();
+        // Fail fast once the sibling email plugin has primed its transport: a
+        // gate that cannot email a code lets nobody in.
+        await ensureEmailAvailable();
+      });
     }
 
     logger.info("ready", {
@@ -267,12 +314,10 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
 
   /**
    * Register the login routes (`/api/email/auth/*`) and the gating middleware on
-   * the app's OWN Express server, via `this.context`. Uses `addRoute`/`addMiddleware`
-   * (absolute paths) rather than `injectRoutes` because the login routes live at
-   * the client's fixed `/api/email/auth/*` contract, not under this plugin's
-   * `/api/authGate` base. Both buffer until the server plugin registers as the
-   * route target and flush middleware-before-routes, so the gate runs before the
-   * static handler and the app's own `/api/*` routes.
+   * the app's OWN Express server. At `setup:complete`, the deferred server plugin
+   * has constructed its Express app but has not injected plugin routes or static
+   * handling, so direct registration puts the gate first. The context's buffered
+   * route API remains a fallback for compatible non-standard server plugins.
    */
   private mountGateRoutes(): void {
     const context = this.context;
@@ -280,15 +325,11 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       logger.warn("no plugin context - the OTP gate cannot mount its routes");
       return;
     }
-    mountGate(
-      {
-        gate: this.exports(),
-        publicDomain: this.resolved.publicDomain,
-        forwardHeaders: this.resolved.forwardHeaders,
-      },
-      (method, path, handler) => context.addRoute(method, path, handler),
-      (path, handler) => context.addMiddleware(path, handler),
-    );
+    mountGateOnContext(context, {
+      gate: this.exports(),
+      publicDomain: this.resolved.publicDomain,
+      forwardHeaders: this.resolved.forwardHeaders,
+    });
   }
 
   /** The code sender: the configured `sendCode`, else the shared-transport default. */

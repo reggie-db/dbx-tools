@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import type { Request, RequestHandler, Response } from "express";
 import { SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
 import { AUTH_PREFIX, isTunnelHost, mountGate, type GateOptions } from "../src/gate.ts";
-import type { AuthGateApi } from "../src/plugin.ts";
+import { mountGateOnContext, type AuthGateApi } from "../src/plugin.ts";
 
 const PUBLIC_DOMAIN = "demo.apps.dbx.tools";
 
@@ -162,5 +162,49 @@ describe("gate middleware", () => {
     assert.ok(routes.has(`post ${AUTH_PREFIX}/request`));
     assert.ok(routes.has(`post ${AUTH_PREFIX}/verify`));
     assert.ok(routes.has(`post ${AUTH_PREFIX}/logout`));
+  });
+});
+
+describe("gate context mounting", () => {
+  it("mounts directly on the deferred server app instead of the late route buffer", () => {
+    const registrations: string[] = [];
+    let buffered = false;
+    const register = (method: string) => (path: string, _handler: RequestHandler) => {
+      registrations.push(`${method} ${path}`);
+    };
+
+    mountGateOnContext(
+      {
+        getPlugins: () =>
+          new Map([
+            [
+              "server",
+              {
+                serverApplication: {
+                  get: register("get"),
+                  post: register("post"),
+                  use: register("use"),
+                },
+              },
+            ],
+          ]),
+        addRoute: () => {
+          buffered = true;
+        },
+        addMiddleware: () => {
+          buffered = true;
+        },
+      },
+      { gate: fakeGate(), publicDomain: PUBLIC_DOMAIN },
+    );
+
+    assert.equal(buffered, false);
+    assert.deepEqual(registrations, [
+      `get ${AUTH_PREFIX}/status`,
+      `post ${AUTH_PREFIX}/request`,
+      `post ${AUTH_PREFIX}/verify`,
+      `post ${AUTH_PREFIX}/logout`,
+      "use /",
+    ]);
   });
 });
