@@ -252,7 +252,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
 });
 
 // cli-appkit-env: the `appkit-env` CLI - run AppKit auto-config (node-appkit's
-// `createApp.autoConfigure`) and print the env vars it added/changed as
+// `appkit.autoConfigure`) and print the env vars it added/changed as
 // eval-able shell / windows / json output. `cli`-tagged (commander from the
 // cli tag). Keeps its auto-discovered `@dbx-tools/cli-appkit-env` name; only
 // the bins are declared, as `dbx-tools-<name>` plus the short `dbxt-<name>`.
@@ -841,8 +841,24 @@ for (const task of [SCOPE, "dbxt"]) {
 
 // Run the demo server + client dev server together. Both are workspace members
 // now, so no nested projen synth or registry install - just their bun dev tasks.
+// `.env` is the committed-shape local secret file; `.env.local` optionally
+// overlays it. Both `--env-file` flags are missing-file tolerant under bun, so
+// a laptop with only `.env` still boots (loading `.env.local` alone used to
+// leave SMTP unset and crash the email plugin at createApp).
 root.addTask("demo", {
-  exec: 'NODE_ENV=development bun x concurrently --kill-others --names server,client "bun run --filter @dbx-tools/demo-appkit-server dev" "bun run --filter @dbx-tools/demo-appkit-app dev"',
+  env: {
+    NODE_ENV: "development",
+    BUN_CONFIG_ELIDE_LINES: "0",
+    LOG_LEVEL: "debug",
+  },
+  exec: `
+  bunx concurrently \
+    --raw \
+    --kill-others \
+    --names server,client \
+    "bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-server dev" \
+    "bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-app dev"
+  `.trim(),
   description: "Run the demo server and client dev servers",
 });
 

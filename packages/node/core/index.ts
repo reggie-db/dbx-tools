@@ -6,6 +6,7 @@ export * as bin from "./src/bin.ts";
 export * as brand from "./src/brand.ts";
 export * as exec from "./src/exec.ts";
 export * as file from "./src/file.ts";
+export * as fileLock from "./src/file-lock.ts";
 export * as processLock from "./src/process-lock.ts";
 export * as project from "./src/project.ts";
 export type { BinContext, BinSelectionContext, BinSelector, BinVersionOutput, BinVersionParser, BinOptions, BinUrl } from "./src/bin.ts";
@@ -13,4 +14,5 @@ export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContex
 export type { BrandContext, BrandContextInput } from "./src/brand.ts";
 export { COMMAND_NOT_FOUND_EXIT_CODE } from "./src/exec.ts";
 export type { ExecStdio, LineHandler, StdioOption, ExecResult, ChildProcessResult, ExecOptions, SyncExecStdio, SyncExecOptions, SpawnArgs } from "./src/exec.ts";
+export type { FileLockBackend, FileLockAcquisition, FileLockOptions } from "./src/file-lock.ts";
 export type { ProjectContext } from "./src/project.ts";

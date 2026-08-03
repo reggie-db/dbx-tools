@@ -112,7 +112,7 @@ supervise and no wrapper command to thread flags through.
 ## Run It
 
 ```ts
-import { createApp } from "@dbx-tools/appkit";
+import { appkit } from "@dbx-tools/appkit";
 import { email } from "@dbx-tools/email";
 import { server } from "@databricks/appkit";
 import { interceptor, plugin } from "@dbx-tools/tunnel";
@@ -120,7 +120,7 @@ import { interceptor, plugin } from "@dbx-tools/tunnel";
 const { tunnelInterceptor } = interceptor;
 const { authGate } = plugin;
 
-await createApp.createApp({
+await appkit.createApp({
   plugins: [
     server({ host, staticPath }),
     // Delivers the OTP codes; the gate reuses this shared transport.
@@ -329,11 +329,11 @@ app's shared `@dbx-tools/email` transport - so the minimal wiring is just an
 `allow` list (or `TUNNEL_AUTH_ALLOW`):
 
 ```ts
-import { createApp } from "@dbx-tools/appkit";
+import { appkit } from "@dbx-tools/appkit";
 import { email } from "@dbx-tools/email";
 import { authGate } from "@dbx-tools/tunnel";
 
-await createApp.createApp({
+await appkit.createApp({
   plugins: [
     server({ host, staticPath }),
     email(), // the gate reuses this transport to send codes

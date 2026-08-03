@@ -5,17 +5,17 @@
  * unit - concurrently-style, where any death takes the whole set down.
  *
  * An interceptor is a plain function `(ctx) => void | Promise<void>` passed to
- * {@link CreateAppConfig.interceptor} ("one or many"). {@link createApp} runs each
- * one AFTER auto-configuration has populated `process.env` but as part of booting
- * the app, so an interceptor sees the resolved connection and can bind processes
- * before or during setup.
+ * `appkit.createApp`'s `interceptor` option ("one or many"). `appkit.createApp`
+ * runs each one AFTER auto-configuration has populated `process.env` but as part
+ * of booting the app, so an interceptor sees the resolved connection and can bind
+ * processes before or during setup.
  *
  * The names here mirror AppKit's own vocabulary rather than inventing parallel
  * ones: {@link LifecycleEvent} and {@link InterceptorContext.onLifecycle} are the
  * exact shape of `PluginContext.onLifecycle` (`setup:complete` / `server:ready` /
  * `shutdown`). The bridge that makes that hook reachable from OUTSIDE a plugin -
  * where interceptors run - is {@link lifecycleBridge}, a tiny internal plugin
- * {@link createApp} injects to capture `this.context` and relay its events.
+ * `appkit.createApp` injects to capture `this.context` and relay its events.
  *
  * @module
  */
@@ -49,7 +49,7 @@ export type LifecycleHandler = () => void | Promise<void>;
  * they read COMPUTED values instead of re-reading `process.env` themselves.
  *
  * `lakebase` is the resolved Postgres connection when Lakebase auto-config ran
- * (see `create-app`'s `autoConfigure`), else `undefined`. `databricksHost` is the
+ * (see `appkit.autoConfigure`), else `undefined`. `databricksHost` is the
  * workspace host as resolved into the environment (`DATABRICKS_HOST`), which the
  * tunnel interceptor both reads and, when it must, sets.
  */
@@ -72,9 +72,9 @@ export type BindableProcess = Pick<ChildProcess, "pid" | "kill" | "killed" | "on
  * The handle passed to each interceptor.
  *
  * @example
- * import { createApp } from "@dbx-tools/appkit";
+ * import { appkit } from "@dbx-tools/appkit";
  *
- * await createApp({
+ * await appkit.createApp({
  *   plugins: [server()],
  *   interceptor: (ctx) => {
  *     const portr = spawnPortr(ctx.env.databricksHost);
@@ -120,7 +120,7 @@ const TEARDOWN_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
 /**
  * The mutable machinery behind an {@link InterceptorContext}. Split out so
  * {@link createInterceptorContext} can hand the public context to interceptors
- * while `create-app` retains the `emitLifecycle` side-channel the bridge drives.
+ * while `appkit.createApp` retains the `emitLifecycle` side-channel the bridge drives.
  */
 export interface InterceptorRuntime {
   /** The context handed to each interceptor. */
@@ -227,7 +227,7 @@ function hasOnLifecycle(context: unknown): context is LifecycleContextLike {
 }
 
 /**
- * The internal plugin {@link createApp} injects to make AppKit's lifecycle
+ * The internal plugin `appkit.createApp` injects to make AppKit's lifecycle
  * reachable from interceptor code. On `setup()` it reads its own `this.context`
  * (the real `PluginContext`) and forwards each {@link LifecycleEvent} to the
  * interceptor runtime, so `ctx.onLifecycle(...)` handlers fire on the genuine

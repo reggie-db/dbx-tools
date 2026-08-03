@@ -50,16 +50,16 @@ Use this package when the friction is around bootstrapping and reuse:
 
 ## Create An Auto-Configured App
 
-`createApp.createApp` is a drop-in wrapper around AppKit `createApp` with the
+`appkit.createApp` is a drop-in wrapper around AppKit `createApp` with the
 same config and the same typed plugin-export map. It runs
-`createApp.autoConfigure()` first so enabled capabilities can populate
+`appkit.autoConfigure()` first so enabled capabilities can populate
 environment variables before plugin setup runs.
 
 ```ts
 import { lakebase, server } from "@databricks/appkit";
-import { createApp } from "@dbx-tools/appkit";
+import { appkit } from "@dbx-tools/appkit";
 
-await createApp.createApp({
+await appkit.createApp({
   plugins: [server(), lakebase()],
 });
 ```
@@ -76,7 +76,7 @@ Databricks Asset Bundle validation, and deployed Apps.
 
 Boot-time resolution runs as the service principal before any plugin exists, so
 it sits outside AppKit's interceptor chain. It carries its own timeout, and
-`createApp.autoConfigure()` accepts an `AbortSignal` when a caller wants to
+`appkit.autoConfigure()` accepts an `AbortSignal` when a caller wants to
 cancel it earlier.
 
 Use the lower-level functions when you need to inspect or customize the result:
@@ -110,7 +110,7 @@ reason.
 
 ## Configuration
 
-`createApp.createApp()` accepts everything AppKit's `createApp` does, plus:
+`appkit.createApp()` accepts everything AppKit's `createApp` does, plus:
 
 | Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                 |
 | --------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -324,11 +324,10 @@ is shared. `@dbx-tools/appkit-mastra` exposes this as its `genieIdentity` option
 
 | Module             | Responsibility                                                                                                                                  |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createApp`        | `createApp()` wrapper and `autoConfigure()`.                                                                                                    |
+| `appkit`           | `createApp()` / `autoConfigure()`, plus execution context lookup and initialization.                                                            |
 | `lakebaseResolver` | Lakebase connection discovery, default picking, optional auto-create, and env application (`applyLakebaseEnv()` for the full set a pool needs). |
 | `pgaddress`        | Permissive Lakebase/Postgres address parser.                                                                                                    |
 | `config`           | Local/env/bundle/app-yaml config lookup.                                                                                                        |
-| `appkit`           | Execution context lookup and initialization.                                                                                                    |
 | `databricks`       | App env detection and SDK context cancellation adapters.                                                                                        |
 | `plugin`           | Typed AppKit plugin data, instance, and required-instance lookup.                                                                               |
 | `provision`        | Cache schema provisioning helpers.                                                                                                              |

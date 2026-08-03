@@ -6,7 +6,7 @@ backend.
 
 ## What it wires
 
-- `createApp` from [`@dbx-tools/appkit`](../../../packages/node/appkit) —
+- `appkit.createApp` from [`@dbx-tools/appkit`](../../../packages/node/appkit) —
   the auto-configuring wrapper that resolves Lakebase/Postgres env before the
   plugins run, then delegates to AppKit's `createApp`.
 - `mastra(...)` from

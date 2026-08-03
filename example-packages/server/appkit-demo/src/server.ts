@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { genie, lakebase, server } from "@databricks/appkit";
-import { createApp, databricks } from "@dbx-tools/appkit";
+import { appkit, databricks } from "@dbx-tools/appkit";
 import {
   agents,
   genie as mastraGenie,
@@ -31,7 +31,6 @@ import { logDependencies } from "./dependencies.ts";
 /** Default search index used by both AppKit resource validation and the plugin. */
 const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";
 
-const { createApp: createAppAuto } = createApp;
 const { email } = emailPlugin;
 const { defaultEmailBrand } = emailBrand;
 const { emailTool } = emailToolModule;
@@ -62,7 +61,7 @@ const clientDist =
 
 // AppKit demo wiring for `@dbx-tools/appkit-mastra`.
 //
-// `createAppAuto` here is the auto-configuring wrapper from
+// `appkit.createApp` here is the auto-configuring wrapper from
 // `@dbx-tools/appkit`, not AppKit's own. Because a `lakebase()`
 // plugin is in the list, it runs `autopg()` BEFORE delegating to
 // AppKit's `createApp` - resolving LAKEBASE_ENDPOINT / PGHOST /
@@ -221,7 +220,7 @@ logDependencies();
 // value instead of spelling the fallback only inside the plugin options.
 process.env.SEARCH_INDEX ??= DEFAULT_SEARCH_INDEX;
 
-await createAppAuto({
+await appkit.createApp({
   plugins: [
     server({ host, staticPath: clientDist }),
     genie(),

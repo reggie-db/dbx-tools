@@ -51,10 +51,10 @@ function resolvePublicPort(port?: number): number {
  * unconditionally and only actually tunnels where the deployment wired portr.
  *
  * @example
- * import { createApp } from "@dbx-tools/appkit";
+ * import { appkit } from "@dbx-tools/appkit";
  * import { tunnelInterceptor } from "@dbx-tools/tunnel";
  *
- * await createApp({
+ * await appkit.createApp({
  *   plugins: [server({ host, staticPath })],
  *   interceptor: tunnelInterceptor(),
  * });

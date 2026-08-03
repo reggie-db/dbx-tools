@@ -98,8 +98,8 @@ export const EmailPreview = ({ email, brand }: EmailPreviewProps) => {
           </ul>
         ) : null}
       </div>
-      <div className="bg-muted/30 p-3">
-        <EmailCard subject={subject} body={email.body || ""} brand={theme} />
+      <div style={{ backgroundColor: theme.surface }}>
+        <EmailCard subject={subject} body={email.body || ""} brand={theme} framed={false} />
       </div>
     </div>
   );

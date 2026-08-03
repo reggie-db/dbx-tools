@@ -209,6 +209,16 @@ export interface EmailDocumentProps extends EmailBodyProps {
   headers?: ReadonlyArray<readonly [string, string]>;
   footer?: string;
   /**
+   * Draw the card's own frame: rounded corners, border, drop shadow, and the
+   * 620px reading width. Delivered mail keeps it, because the card floats on the
+   * client's page background and the frame is what separates the two.
+   *
+   * Turn it off when the card already sits inside a surface that frames it - a
+   * browser preview's reading pane - so the two frames do not nest into a rounded
+   * card inside a rounded card.
+   */
+  framed?: boolean;
+  /**
    * Preheader text: the snippet a client shows next to the subject in a list, and
    * - the reason this is a prop - the text a mobile OS puts in the PUSH
    * NOTIFICATION body.
@@ -294,6 +304,7 @@ export const EmailCard = ({
   heading,
   headers,
   footer,
+  framed = true,
   brand: brandInput,
 }: EmailDocumentProps) => {
   const theme = resolveEmailBrand(brandInput);
@@ -301,16 +312,29 @@ export const EmailCard = ({
     <Container
       style={{
         backgroundColor: theme.surface,
-        border: `1px solid ${theme.border}`,
-        borderRadius: "16px",
-        boxShadow: "0 8px 30px rgba(27,49,57,0.08)",
         fontFamily: theme.fontFamily,
         margin: "0 auto",
-        maxWidth: "620px",
-        overflow: "hidden",
+        ...(framed
+          ? {
+              border: `1px solid ${theme.border}`,
+              borderRadius: "16px",
+              boxShadow: "0 8px 30px rgba(27,49,57,0.08)",
+              maxWidth: "620px",
+            }
+          : { maxWidth: "100%" }),
       }}
     >
-      <Section style={{ backgroundColor: theme.accent, padding: "22px 30px" }}>
+      <Section
+        style={{
+          backgroundColor: theme.accent,
+          padding: "22px 30px",
+          // The corners are set on the band itself rather than clipped by the
+          // container: React Email renders the container as a <table>, which
+          // `overflow: hidden` does not reliably clip, so the square band used to
+          // poke past the rounded edge.
+          ...(framed ? { borderRadius: "15px 15px 0 0" } : {}),
+        }}
+      >
         <BrandMark theme={theme} />
       </Section>
       <Section style={{ padding: "34px 34px 24px" }}>

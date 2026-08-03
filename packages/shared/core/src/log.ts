@@ -2,17 +2,20 @@
  * Tagged, leveled logging for every runtime - the one logger the whole
  * monorepo shares.
  *
- * {@link logger} resolves a tagged {@link Logger} via a {@link LoggerFactory}
- * chosen once at module load. {@link LogLevel} filtering runs through
- * {@link shouldEmit} in the consola reporter or in per-level wrappers on the
- * `console` fallbacks.
+ * {@link logger} resolves a tagged {@link Logger} via a {@link LoggerFactory}.
+ * The factory starts as a synchronous console sink so this module never uses
+ * top-level `await` (that left importers with a null namespace mid-load in
+ * browser bundles). A memoized async chain then upgrades to consola when it
+ * is available. {@link LogLevel} filtering runs through {@link shouldEmit} in
+ * the consola reporter or in per-level wrappers on the `console` fallbacks.
  *
  * Sink selection chains two factories with nullish coalescing (first match
  * wins):
  *
  * 1. {@link createConsolaLoggerFactory} when consola resolves and
  *    `LOG_CONSOLA_DISABLED` is not truthy.
- * 2. {@link createConsoleLoggerFactory} everywhere else.
+ * 2. {@link createConsoleLoggerFactory} everywhere else (also the sync
+ *    bootstrap before that promise settles).
  *
  * The console fallback writes formatted lines to `process.stderr` when it is
  * available (Bun `inspect` per argument when `LOG_BUN_CONSOLE_DISABLED` is
@@ -21,8 +24,8 @@
  * the `LEVEL` text prefix (devtools show severity) and keep only the `[name]`
  * tag.
  *
- * Env toggles (read once at init): `LOG_LEVEL`, `LOG_CONSOLA_DISABLED`,
- * `LOG_BUN_CONSOLE_DISABLED`.
+ * Env toggles: `LOG_LEVEL` (read per call), `LOG_CONSOLA_DISABLED` /
+ * `LOG_BUN_CONSOLE_DISABLED` (read once during factory init).
  *
  * Browser-safe: `process` / `Bun` / `window` / `document` are all reached
  * through `globalThis` and guarded, consola loads lazily, and `node:util` is
@@ -197,6 +200,19 @@ async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<Log
     globalProcessStdErr === undefined
       ? undefined
       : await import(/* @vite-ignore */ nodeUtil).catch(() => undefined);
+  return consoleLoggerFactory(globalProcessStdErr, utils);
+}
+
+/**
+ * The synchronous core of {@link createConsoleLoggerFactory}, split out so the
+ * same emitter also serves as the bootstrap sink before any async factory has
+ * resolved. `utils` is `node:util` when it loaded; without it, object arguments
+ * format through the `JSON.stringify` fallback.
+ */
+function consoleLoggerFactory(
+  globalProcessStdErr: any,
+  utils?: { inspect?: any } | undefined,
+): LoggerFactory {
   const bunInspect =
     globalBun !== undefined && !toBoolean(globalBun.env?.LOG_BUN_CONSOLE_DISABLED)
       ? globalBun.inspect
@@ -264,16 +280,52 @@ async function createConsoleLoggerFactory(globalProcessStdErr: any): Promise<Log
 }
 
 /**
- * Module-scoped {@link LoggerFactory}, initialized once via top-level `await`.
- * Delegates to {@link createConsolaLoggerFactory}, then
- * {@link createConsoleLoggerFactory}. Each {@link logger} call invokes the
- * chosen factory with a resolved tag. Env toggles are read only during init.
+ * Preferred factory: consola when it loads, else the full console sink (with
+ * optional `node:util` inspect). Memoized so concurrent / repeat callers share
+ * one in-flight promise and one settled result.
  */
-const createLogger: LoggerFactory = await (async () => {
+const resolveFactory = memoize(async (): Promise<LoggerFactory> => {
   return (
     (await createConsolaLoggerFactory()) ?? (await createConsoleLoggerFactory(globalProcessStdErr))
   );
-})();
+});
+
+/**
+ * Active factory starts as a sync console sink (no `await`, so this module
+ * finishes evaluating immediately) and swaps to {@link resolveFactory}'s
+ * result when that lands. Kick the resolve off at load so consola is usually
+ * ready before the first interesting log line.
+ */
+let activeFactory: LoggerFactory = consoleLoggerFactory(globalProcessStdErr);
+void resolveFactory().then(
+  (factory) => {
+    activeFactory = factory;
+  },
+  () => {
+    // Keep the sync console sink; never leave importers without a factory.
+  },
+);
+
+/**
+ * Build a logger that rebinds when {@link activeFactory} upgrades. Callers that
+ * capture `const log = logger("x")` at module scope still get consola once it
+ * arrives, without every call site waiting on a promise.
+ */
+function createLogger(name?: string): Logger {
+  let bound: { factory: LoggerFactory; logger: Logger } | undefined;
+  const sink = (): Logger => {
+    if (bound?.factory !== activeFactory) {
+      bound = { factory: activeFactory, logger: activeFactory(name) };
+    }
+    return bound.logger;
+  };
+  return Object.fromEntries(
+    [...LOG_LEVELS, "success", "start"].map((level) => [
+      level,
+      (...args: any[]) => sink()[level as keyof Logger](...args),
+    ]),
+  ) as Logger;
+}
 
 /**
  * Build a line prefix of `LEVEL [name]` on Node/Bun hosts, or `[name]` alone

@@ -6,7 +6,7 @@
  * `eval "$(dbx-tools-appkit-env)"` to load a resolved Lakebase connection into your shell.
  */
 
-import { createApp } from "@dbx-tools/appkit";
+import { appkit } from "@dbx-tools/appkit";
 import { log } from "@dbx-tools/shared-core";
 import { Command, CommanderError } from "commander";
 import {
@@ -35,7 +35,7 @@ const program = new Command()
     const format = opts.format ? parseEnvExportFormat(opts.format) : defaultEnvExportFormat();
     logger.debug("Snapshotting env vars");
     const before = snapshotEnv();
-    await createApp.autoConfigure({ autoConfigure: "env" });
+    await appkit.autoConfigure({ autoConfigure: "env" });
     const changes = diffEnv(before, snapshotEnv());
 
     process.stdout.write(formatEnvExport(changes, format));

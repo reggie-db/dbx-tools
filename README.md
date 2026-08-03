@@ -193,9 +193,9 @@ context fallback, and typed sibling plugin access.
 
 ```ts
 import { lakebase, server } from "@databricks/appkit";
-import { createApp } from "@dbx-tools/appkit";
+import { appkit } from "@dbx-tools/appkit";
 
-await createApp.createApp({
+await appkit.createApp({
   plugins: [server(), lakebase()],
 });
 ```
