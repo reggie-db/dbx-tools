@@ -91,7 +91,14 @@ const root = new projectApi.DBXToolsNodeProject({
 // `!` negation projen emits for them. So the dot-directories this repo actually
 // generates are named here instead. Whole directories, since nothing inside any
 // of them is ever committed.
-root.gitignore.addPatterns(".docs-build/", ".astro/", ".worktrees/", ".kanna/", ".polly/");
+root.gitignore.addPatterns(
+  ".docs-build/",
+  ".astro/",
+  ".worktrees/",
+  ".kanna/",
+  ".polly/",
+  ".home/",
+);
 
 // Least privilege at the workflow level: a job that omits its own
 // `permissions:` inherits read-only instead of the repo-wide token default.

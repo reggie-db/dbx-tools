@@ -88,6 +88,7 @@ jspm_packages/
 .worktrees/
 .kanna/
 .polly/
+.home/
 !/.projenrc.ts
 !/.github/workflows/release.yml
 !/.github/workflows/projen-release.yml

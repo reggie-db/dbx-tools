@@ -19,7 +19,7 @@ import {
   tool as emailToolModule,
 } from "@dbx-tools/email";
 import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
-import { brand as sharedBrand } from "@dbx-tools/shared-core";
+import { brand as sharedBrand, env as sharedEnv } from "@dbx-tools/shared-core";
 import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
 import { interceptor as tunnelInterceptorModule, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
 import { z } from "zod";
@@ -44,6 +44,8 @@ const { search } = searchPlugin;
 const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, syncIndexTool } =
   searchToolModule;
 const { defaultBrandContext } = sharedBrand;
+const mastraStorage = sharedEnv.boolean(undefined, "MASTRA_STORAGE") ?? true;
+const mastraMemory = sharedEnv.boolean(undefined, "MASTRA_MEMORY") ?? true;
 const { tunnelInterceptor } = tunnelInterceptorModule;
 const { authGate } = tunnelPlugin;
 
@@ -316,8 +318,8 @@ await createAppAuto({
       },
     }),
     mastra({
-      storage: true,
-      memory: true,
+      storage: mastraStorage,
+      memory: mastraMemory,
       agents: support,
       // Chat runs on-behalf-of the signed-in user by default, so the caller must
       // be a workspace member. Set MASTRA_GENIE_IDENTITY=service-principal (or
