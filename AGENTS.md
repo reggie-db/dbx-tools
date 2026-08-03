@@ -465,7 +465,7 @@ second package, put it in shared-core rather than duplicating it.
   strip inbound copies), and a stale second spelling is a silent auth bug.
 
 Node-only equivalents live in `@dbx-tools/core` (`bin.ensure` for idempotent
-executable downloads, archive selection, and atomic install;
+executable downloads, archive selection, version validation, and atomic install;
 `exec.spawn`/`spawnSync`; `project.root`/`name`/`repositoryUrl`/`npmRegistry`;
 `processLock.withProcessLock` for keyed mutual exclusion across the main thread
 and its workers - a module-level promise chain only serializes ONE thread, and

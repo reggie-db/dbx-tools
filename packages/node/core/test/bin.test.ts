@@ -13,6 +13,11 @@ import { bin } from "../index.ts";
 /** Zip containing one executable at `nested/tool`. */
 const EXECUTABLE_ZIP =
   "UEsDBBQAAAAAAAAAIQDihkXDEQAAABEAAAALAAAAbmVzdGVkL3Rvb2wjIS9iaW4vc2gKZXhpdCAwClBLAQIUAxQAAAAAAAAAIQDihkXDEQAAABEAAAALAAAAAAAAAAAAAADtgQAAAABuZXN0ZWQvdG9vbFBLBQYAAAAAAQABADkAAAA6AAAAAAA=";
+const EXECUTABLE_SOURCE = '#!/bin/sh\necho "example version 1.2.3.patchdev"\n';
+
+function executableUrl(source: string = EXECUTABLE_SOURCE): string {
+  return `data:application/octet-stream;base64,${Buffer.from(source).toString("base64")}`;
+}
 
 async function serveFile(path: string): Promise<{
   close: () => Promise<void>;
@@ -33,16 +38,31 @@ async function serveFile(path: string): Promise<{
   };
 }
 
+describe("bin.parseVersion", () => {
+  it("prefers deeper versions, then the highest version from stdout", () => {
+    assert.equal(
+      bin.parseVersion({
+        stdout: "tool 99.7, dependency v1.2.3rc1, release 2.0.1.patchdev",
+        stderr: "ignored fallback v300.0.0",
+      }),
+      "2.0.1.patchdev",
+    );
+    assert.equal(bin.parseVersion({ stdout: "supports v1 and 1.4", stderr: "" }), "1.4");
+  });
+
+  it("falls back to common Python-style versions on stderr", () => {
+    assert.equal(bin.parseVersion({ stdout: "tool", stderr: "Python 3.13.5rc1" }), "3.13.5rc1");
+  });
+});
+
 describe("bin.ensure", () => {
   it("downloads an executable and reuses the installed path", async () => {
     const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-home-"));
     try {
-      const payload = Buffer.from("#!/bin/sh\nexit 0\n").toString("base64");
-      const installed = await bin.ensure(
-        "example",
-        `data:application/octet-stream;base64,${payload}`,
-        { homeDir },
-      );
+      const installed = await bin.ensure("example", executableUrl(), {
+        homeDir,
+        minVersion: "1.2",
+      });
 
       assert.equal(installed.root, join(homeDir, ".example"));
       assert.equal(installed.binDir, join(homeDir, ".example", "bin"));
@@ -54,9 +74,18 @@ describe("bin.ensure", () => {
         () => {
           throw new Error("an existing executable must not resolve another download");
         },
-        { homeDir },
+        { homeDir, minVersion: "1.2.3" },
       );
       assert.deepEqual(reused, installed);
+
+      const majorOnly = await bin.ensure(
+        "example",
+        () => {
+          throw new Error("a partial minimum must reuse the installed binary");
+        },
+        { homeDir, minVersion: "1" },
+      );
+      assert.deepEqual(majorOnly, installed);
     } finally {
       await rm(homeDir, { recursive: true, force: true });
     }
@@ -65,11 +94,10 @@ describe("bin.ensure", () => {
   it("checks again under the process lock before downloading", async () => {
     const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-lock-"));
     let resolutions = 0;
-    const payload = Buffer.from("#!/bin/sh\nexit 0\n").toString("base64");
     const resolveUrl = async (): Promise<string> => {
       resolutions += 1;
       await new Promise((resolve) => setTimeout(resolve, 10));
-      return `data:application/octet-stream;base64,${payload}`;
+      return executableUrl();
     };
 
     try {
@@ -88,6 +116,80 @@ describe("bin.ensure", () => {
     }
   });
 
+  it("replaces an installed binary below the minimum version", async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-min-"));
+    const path = join(homeDir, ".example", "bin", "example");
+    await mkdir(join(homeDir, ".example", "bin"), { recursive: true });
+    await writeFile(path, '#!/bin/sh\necho "example 1.1"\n');
+    await chmod(path, 0o755);
+    let resolutions = 0;
+
+    try {
+      const installed = await bin.ensure(
+        "example",
+        () => {
+          resolutions += 1;
+          return executableUrl('#!/bin/sh\necho "example 1.3.5"\n');
+        },
+        { homeDir, minVersion: "1.2" },
+      );
+
+      assert.equal(resolutions, 1);
+      assert.match(await readFile(installed.path, "utf8"), /1\.3\.5/);
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports a custom version argument and parser", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-bin-version-"));
+    const homeDir = join(root, "home with spaces");
+    let parses = 0;
+    const source = [
+      "#!/bin/sh",
+      'if [ "$1" != "version" ]; then exit 2; fi',
+      'echo "release train alpha" >&2',
+      "",
+    ].join("\n");
+
+    try {
+      const installed = await bin.ensure("example", executableUrl(source), {
+        homeDir,
+        minVersion: "2",
+        versionArgument: "version",
+        versionParser: ({ stderr }) => {
+          parses += 1;
+          return stderr.includes("alpha") ? "2.1.0-dev.3" : undefined;
+        },
+      });
+
+      assert.equal(parses, 2);
+      await access(installed.path, constants.X_OK);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("throws when the renamed binary fails its final version check", async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-final-"));
+    let parses = 0;
+    try {
+      await assert.rejects(
+        bin.ensure("example", executableUrl(), {
+          homeDir,
+          versionParser: () => {
+            parses += 1;
+            return parses === 1 ? "1.2.3" : undefined;
+          },
+        }),
+        /installed binary is invalid after rename/,
+      );
+      assert.equal(parses, 2);
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
   it("unpacks tar archives and lets a selector prepare the binary", async () => {
     const root = await mkdtemp(join(tmpdir(), "dbx-bin-tar-"));
     const homeDir = join(root, "home");
@@ -95,7 +197,7 @@ describe("bin.ensure", () => {
     const archive = join(root, "example.tar.gz");
     await mkdir(join(fixture, "nested"), { recursive: true });
     const executable = join(fixture, "nested", "tool");
-    await writeFile(executable, "#!/bin/sh\nexit 0\n");
+    await writeFile(executable, EXECUTABLE_SOURCE);
     await chmod(executable, 0o755);
     await createTar({ cwd: fixture, file: archive, gzip: true }, ["nested"]);
     const server = await serveFile(archive);
@@ -111,7 +213,7 @@ describe("bin.ensure", () => {
         },
       });
 
-      assert.equal(await readFile(installed.path, "utf8"), "#!/bin/sh\nexit 0\n");
+      assert.equal(await readFile(installed.path, "utf8"), EXECUTABLE_SOURCE);
       await access(installed.path, constants.X_OK);
     } finally {
       await server.close();
@@ -129,6 +231,7 @@ describe("bin.ensure", () => {
       const installed = await bin.ensure("example", server.url, {
         autoUnpackage: true,
         homeDir: join(root, "home"),
+        versionParser: () => "1.2.3",
       });
 
       assert.equal(await readFile(installed.path, "utf8"), "#!/bin/sh\nexit 0\n");
@@ -139,20 +242,18 @@ describe("bin.ensure", () => {
     }
   });
 
-  it("rejects a selector result that is not executable", async () => {
+  it("makes a downloaded candidate executable before validating it", async () => {
     const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-mode-"));
     try {
-      const payload = Buffer.from("#!/bin/sh\nexit 0\n").toString("base64");
-      await assert.rejects(
-        bin.ensure("example", `data:application/octet-stream;base64,${payload}`, {
-          homeDir,
-          selector: async ({ source }) => {
-            await chmod(source, 0o644);
-            return source;
-          },
-        }),
-        /selected binary is not executable/,
-      );
+      const installed = await bin.ensure("example", executableUrl(), {
+        homeDir,
+        selector: async ({ source }) => {
+          await chmod(source, 0o644);
+          return source;
+        },
+      });
+
+      await access(installed.path, constants.X_OK);
     } finally {
       await rm(homeDir, { recursive: true, force: true });
     }

@@ -23,18 +23,14 @@ Key features:
 ## Install A Binary
 
 ```ts
-import { chmod } from "node:fs/promises";
 import { join } from "node:path";
 
 import { bin } from "@dbx-tools/core";
 
 const executable = await bin.ensure("tool", releaseUrl, {
   autoUnpackage: true,
-  selector: async ({ source }) => {
-    const path = join(source, "tool");
-    await chmod(path, 0o755);
-    return path;
-  },
+  minVersion: "1.2",
+  selector: ({ source }) => join(source, "tool"),
 });
 ```
 
@@ -45,8 +41,23 @@ callers use `processLock` with a check-lock-check-load sequence, preventing
 duplicate downloads across the main thread and wired workers. Direct downloads
 are selected by default. Zip, tar, tar.gz, and tgz archives can be unpacked
 automatically; a single-file archive needs no selector, while a selector can
-choose and prepare a binary from a larger archive. The selected file must be
-executable before it is atomically moved into place.
+choose a binary from a larger archive. The selected file is normalized to mode
+`0755` and must report an acceptable version before it is atomically moved into
+place; the final renamed path runs the same validation again before returning.
+
+Every candidate runs with `--version` before it is accepted. Set
+`versionArgument` for a different argument and `minVersion` to require a partial
+or complete numeric floor such as `1`, `1.2`, or `1.3.5`. The default parser
+searches stdout first, then stderr. It accepts one to three numeric components
+with common npm/Python suffixes such as `1.2.3-rc.1`, `1.2.3rc1`, or
+`1.2.3.patchdev`; candidates with more components rank first, then the highest
+numeric candidate wins. Supply `versionParser({ stdout, stderr })` for another
+output format.
+
+Successful installs log an info event with the source URL and destination path;
+credentials, query parameters, and fragments are removed from the URL. Set
+`LOG_LEVEL=debug` to trace access checks, version decisions, locking, downloads,
+archive extraction, and selection.
 
 ## Load Brand Context
 

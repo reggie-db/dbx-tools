@@ -10,7 +10,7 @@
  * @module
  */
 import { execFile, spawn } from "node:child_process";
-import { chmod, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
@@ -21,6 +21,7 @@ import { PUBLIC_DOMAIN_ENV } from "./env.ts";
 
 const logger = log.logger("tunnel:portr");
 const PORTR_LATEST_RELEASE_URL = "https://api.github.com/repos/amalshaji/portr/releases/latest";
+const PORTR_MIN_VERSION = "v1.0.15";
 const execFileAsync = promisify(execFile);
 
 interface PortrRelease {
@@ -110,11 +111,8 @@ export async function installPortr(options: PortrInstallOptions = {}): Promise<N
   const context = await bin.ensure("portr", portrDownloadUrl, {
     autoUnpackage: true,
     homeDir,
-    selector: async ({ source }) => {
-      const selected = join(source, "portr");
-      await chmod(selected, 0o755);
-      return selected;
-    },
+    minVersion: PORTR_MIN_VERSION,
+    selector: ({ source }) => join(source, "portr"),
   });
   return {
     ...process.env,
