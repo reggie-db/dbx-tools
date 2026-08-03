@@ -205,14 +205,16 @@ URL's hostname, and a bare host also matches its subdomains; a path entry
 design: `web_search` citations are silently filtered to the permitted set (the
 model never surfaces a source it then can't fetch), while an explicit `web_fetch`
 of a disallowed URL is refused with an error (a visible, correctable mistake).
+`web_fetch` accepts only HTTPS targets that resolve to public addresses, and
+reapplies both checks before every redirect request.
 
 Which of the two modes is in force is named by `urlPolicy`, and the effective
 mode is in the boot log:
 
-| `urlPolicy`      | Effect                                            |
-| ---------------- | ------------------------------------------------- |
-| `"allowlist"`    | Only `allowedUrls` entries are reachable          |
-| `"unrestricted"` | Any URL is reachable; the open mode, stated aloud |
+| `urlPolicy`      | Effect                                   |
+| ---------------- | ---------------------------------------- |
+| `"allowlist"`    | Only `allowedUrls` entries are reachable |
+| `"unrestricted"` | Any public HTTPS URL is reachable        |
 
 Leave `urlPolicy` unset and it follows `allowedUrls`: `"allowlist"` when there
 are entries, `"unrestricted"` when there are none. Set it to say which one you

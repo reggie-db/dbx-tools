@@ -167,8 +167,7 @@ const resolveFlock = functionModule.memoize(async (): Promise<FlockFn | undefine
     // the import only succeeds under Bun at runtime.
     const specifier = "bun:ffi";
     const ffi = (await import(specifier)) as unknown as BunFfiModule;
-    const libPath =
-      process.platform === "darwin" ? "libSystem.B.dylib" : `libc.${ffi.suffix}`;
+    const libPath = process.platform === "darwin" ? "libSystem.B.dylib" : `libc.${ffi.suffix}`;
     const lib = ffi.dlopen(libPath, {
       flock: { args: ["i32", "i32"], returns: "i32" },
     });
@@ -195,7 +194,7 @@ async function holdFlock<T>(
       flock(handle.fd, LOCK_UN);
     }
   } finally {
-    await handle.close().catch(() => { });
+    await handle.close().catch(() => {});
   }
 }
 
@@ -205,7 +204,7 @@ async function waitForFlock(
   lockPath: string,
   deadline: number | undefined,
 ): Promise<void> {
-  for (; ;) {
+  for (;;) {
     const rc = flock(fd, LOCK_EX | LOCK_NB);
     if (rc === 0) return;
     assertBeforeDeadline(lockPath, deadline);
@@ -233,15 +232,12 @@ async function holdLockDirectory<T>(
     return await fn();
   } finally {
     stopHeartbeat();
-    await rm(lockPath, { recursive: true, force: true }).catch(() => { });
+    await rm(lockPath, { recursive: true, force: true }).catch(() => {});
   }
 }
 
-async function acquireLockDirectory(
-  lockPath: string,
-  deadline: number | undefined,
-): Promise<void> {
-  for (; ;) {
+async function acquireLockDirectory(lockPath: string, deadline: number | undefined): Promise<void> {
+  for (;;) {
     try {
       await mkdir(lockPath);
       return;

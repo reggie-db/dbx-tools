@@ -54,7 +54,7 @@ const _loadChatExport = () => import("../support/export.ts");
 // fresh stream Response we run through the same chunk handler.
 //
 // On mount the transcript hydrates with the most recent page of thread
-// history from the Mastra plugin's `/history` endpoint; scrolling near
+// history from the Mastra plugin's `/route/history` endpoint; scrolling near
 // the top lazy-loads and prepends the next older page, with `ChatView`
 // preserving the visual scroll position across the prepend.
 
@@ -413,8 +413,11 @@ export const useMastraChat = (
     return ids;
   }, [sessionsTick]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const historyInFlightRef = useRef(false);
+  const [loadingMoreThreads, setLoadingMoreThreads] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const isLoadingMore = loadingMoreThreads.has(activeKey);
+  const historyInFlightRef = useRef(new Set<string>());
   const feedbackByMessageRef = useRef<Record<string, MessageFeedback>>({});
   feedbackByMessageRef.current = activeSession.feedbackByMessage;
   // Drains the next queued steer when a turn ends. Held in a ref because it
@@ -1159,7 +1162,7 @@ export const useMastraChat = (
 
     let cancelled = false;
     const controller = new AbortController();
-    historyInFlightRef.current = true;
+    historyInFlightRef.current.add(threadId);
     setIsLoadingHistory(true);
     mastraClient
       .history({
@@ -1187,10 +1190,14 @@ export const useMastraChat = (
         logger.error("history load error", {
           error: errorUtil.errorMessage(error),
         });
-        updateSession(threadId, (current) => ({ ...current, hasMoreHistory: false }));
+        updateSession(threadId, (current) => ({
+          ...current,
+          historyLoaded: true,
+          hasMoreHistory: false,
+        }));
       })
       .finally(() => {
-        historyInFlightRef.current = false;
+        historyInFlightRef.current.delete(threadId);
         if (!cancelled) setIsLoadingHistory(false);
       });
     return () => {
@@ -1202,9 +1209,9 @@ export const useMastraChat = (
   const loadOlderHistory = useCallback(() => {
     const threadId = activeKey;
     const session = getSession(threadId);
-    if (historyInFlightRef.current || !session.hasMoreHistory) return;
-    historyInFlightRef.current = true;
-    setIsLoadingMore(true);
+    if (historyInFlightRef.current.has(threadId) || !session.hasMoreHistory) return;
+    historyInFlightRef.current.add(threadId);
+    setLoadingMoreThreads((current) => new Set(current).add(threadId));
     const page = session.historyPage;
     updateSession(threadId, (current) => ({ ...current, historyPage: page + 1 }));
     mastraClient
@@ -1232,8 +1239,13 @@ export const useMastraChat = (
         }));
       })
       .finally(() => {
-        historyInFlightRef.current = false;
-        setIsLoadingMore(false);
+        historyInFlightRef.current.delete(threadId);
+        setLoadingMoreThreads((current) => {
+          if (!current.has(threadId)) return current;
+          const next = new Set(current);
+          next.delete(threadId);
+          return next;
+        });
       });
   }, [activeKey, activeThreadId, getSession, mastraClient, agentId, updateSession, writeMessages]);
 

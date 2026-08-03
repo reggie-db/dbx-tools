@@ -245,11 +245,10 @@ export async function searchModels(
  * point for any consumer that holds a `WorkspaceClient` and just wants a usable
  * model name - a Lakeflow job, a one-off script, or the Mastra plugin alike.
  *
- * Cheap exit: when an `explicit` name is given and `fuzzy` is off, the
- * catalogue is never fetched - the name is returned verbatim and Databricks
- * surfaces the canonical 404 if it doesn't exist. Catalogue fetches otherwise
- * fail loud: network / auth errors propagate so the caller sees the real SDK
- * message instead of a silent fallback.
+ * Cheap exit: when an `explicit` name is given, `fuzzy` is off, and tool
+ * capability is not required, the catalogue is never fetched. Catalogue
+ * fetches otherwise fail loud: network / auth errors propagate so the caller
+ * sees the real SDK message instead of a silent fallback.
  *
  * @param host - Workspace host used as the cache key. Pass the value resolved
  *   from `client.config.getHost()`.
@@ -259,7 +258,7 @@ export async function selectModel(
   host: string,
   input: SelectModelInput = {},
 ): Promise<ResolvedModelSelection> {
-  if (input.explicit !== undefined && input.fuzzy === false) {
+  if (input.explicit !== undefined && input.fuzzy === false && !input.requiresTools) {
     return { modelId: input.explicit, source: "explicit" };
   }
   const endpoints = await listServingEndpoints(client, host, {

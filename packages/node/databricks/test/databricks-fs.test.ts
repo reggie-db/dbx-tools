@@ -141,4 +141,23 @@ describe("DatabricksFileSystem", () => {
     const fs = await DatabricksFileSystem.create({ root: "~", client });
     assert.equal(fs.root, "/Workspace/Users/agent@databricks.com");
   });
+
+  it("closes a multi-block DBFS handle when an upload fails", async () => {
+    let closes = 0;
+    const client = {
+      dbfs: {
+        create: async () => ({ handle: 7 }),
+        addBlock: async () => {
+          throw new Error("upload failed");
+        },
+        close: async () => {
+          closes += 1;
+        },
+      },
+    } as unknown as WorkspaceClient;
+    const fs = new DatabricksFileSystem({ root: "/dbfs/tmp", client });
+
+    await assert.rejects(() => fs.writeFile("large.bin", Buffer.alloc(1024 * 1024 + 1)));
+    assert.equal(closes, 1);
+  });
 });

@@ -22,6 +22,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { fileLock } from "@dbx-tools/core";
 import { hash } from "@dbx-tools/shared-core";
 import {
   BaseFileSystem,
@@ -450,10 +451,12 @@ export async function rebuildFS(
 
   const stable = tmpFS(key, options);
   const stableHost = path.resolve(stable.root);
-  await rm(stableHost, { recursive: true, force: true });
-  await mkdir(path.dirname(stableHost), { recursive: true });
-  await rename(path.resolve(scratch.root), stableHost);
-  return stable;
+  return fileLock.withFileLock(["rebuildFS", stableHost], async () => {
+    await rm(stableHost, { recursive: true, force: true });
+    await mkdir(path.dirname(stableHost), { recursive: true });
+    await rename(path.resolve(scratch.root), stableHost);
+    return stable;
+  });
 }
 
 /**

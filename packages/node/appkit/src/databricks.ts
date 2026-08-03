@@ -12,12 +12,10 @@
 
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
-import { async, log, object } from "@dbx-tools/shared-core";
-
-const logger = log.logger("databricks");
+import { async, env as envUtil } from "@dbx-tools/shared-core";
 
 /** Highest valid TCP port number. */
-export const MAX_TCP_PORT = 65_535;
+export const MAX_TCP_PORT = envUtil.MAX_TCP_PORT;
 
 /**
  * Detect the Databricks App runtime from environment shape: requires a
@@ -32,37 +30,7 @@ export const MAX_TCP_PORT = 65_535;
  * const local = !databricks.isAppEnv();
  */
 export function isAppEnv(env: Record<string, string | undefined> = process.env): boolean {
-  const appName = env.DATABRICKS_APP_NAME?.trim();
-  const host = env.DATABRICKS_HOST?.trim();
-  const port = env.DATABRICKS_APP_PORT?.trim();
-
-  if (!appName || !host || !port) {
-    return false;
-  }
-
-  try {
-    const url = new URL(host);
-    if (!["http:", "https:"].includes(url.protocol)) {
-      logger.debug("app env rejected: host is not an http(s) URL");
-      return false;
-    }
-  } catch {
-    logger.debug("app env rejected: host is not a URL");
-    return false;
-  }
-
-  const portNumber = object.toNumber(port);
-  if (
-    portNumber === undefined ||
-    !Number.isInteger(portNumber) ||
-    portNumber < 1 ||
-    portNumber > MAX_TCP_PORT
-  ) {
-    logger.debug("app env rejected: DATABRICKS_APP_PORT is not a TCP port");
-    return false;
-  }
-
-  return true;
+  return envUtil.isAppEnv(env);
 }
 
 /** Either an SDK `Context` or a WHATWG `AbortSignal`. */

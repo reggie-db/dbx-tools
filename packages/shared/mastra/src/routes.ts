@@ -2,7 +2,7 @@
  * Route segments the Mastra plugin mounts under its `basePath`
  * (`/api/<plugin-name>`). Shared between the server's route
  * registration and the browser client (`MastraPluginClient` in
- * `@dbx-tools/appkit-mastra-ui`) so a relayout - or a rename of a
+ * `@dbx-tools/ui-mastra`) so a relayout - or a rename of a
  * sub-path - is a one-line change here and the two can never drift.
  *
  * The agent-scoped segments (`history`, `threads`, `suggestions`,

@@ -51,6 +51,8 @@ export const cardActionSchema = z.object({
   title: z.string().describe('Button label (e.g. "Open ticket", "View run").'),
   url: z
     .string()
+    .url()
+    .regex(/^https:\/\//i)
     .describe("Absolute https URL the button opens when tapped (an Action.OpenUrl target)."),
 });
 

@@ -20,11 +20,11 @@ import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 
+import { error, log } from "@dbx-tools/shared-core";
 import extractZip from "extract-zip";
 import { x as extractTar } from "tar";
 
-import { error, log } from "@dbx-tools/shared-core";
-import { withProcessLock } from "./process-lock.ts";
+import { withFileLock } from "./file-lock.ts";
 
 const execFileAsync = promisify(execFile);
 const logger = log.logger("core:bin");
@@ -314,7 +314,7 @@ export async function ensure(
   }
 
   logger.debug("waiting for binary install lock", { name, path: destination.path });
-  return withProcessLock(["bin.ensure", destination.path], async () => {
+  return withFileLock(["bin.ensure", destination.path], async () => {
     if (await isValidBin(destination.path, options)) {
       logger.debug("using binary installed by another caller", {
         name,

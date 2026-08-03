@@ -138,6 +138,42 @@ describe("lakebase search backend", () => {
     assert.equal(fake.rows.length, 1);
     assert.equal(fake.rows[0].search_text.includes("one updated"), true);
   });
+
+  it("destroys an aborted query client exactly once", async () => {
+    const releases: unknown[] = [];
+    let rejectQuery: ((reason: Error) => void) | undefined;
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const client = {
+      query: () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectQuery = reject;
+          markStarted?.();
+        }),
+      release: (destroy?: boolean) => {
+        releases.push(destroy);
+        if (destroy) rejectQuery?.(new Error("query aborted"));
+      },
+    };
+    const pool = {
+      connect: async () => client,
+      end: async () => {},
+    } as unknown as Pool;
+    const be = new LakebaseSearchBackend(
+      () => ({}),
+      "public",
+      () => pool,
+    );
+    const controller = new AbortController();
+    const pending = be.search("docs", "query", { signal: controller.signal });
+
+    await started;
+    controller.abort();
+    await assert.rejects(pending, /query aborted/);
+    assert.deepEqual(releases, [true]);
+  });
 });
 
 describe("lakebase query compilation", () => {

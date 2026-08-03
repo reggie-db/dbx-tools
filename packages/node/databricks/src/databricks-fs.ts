@@ -383,9 +383,14 @@ export class DatabricksFileSystem extends BaseFileSystem<"databricks"> {
     if (handle === undefined) {
       throw new FileSystemError("IO_ERROR", "DBFS upload handle missing", absolutePath);
     }
-    for (let offset = 0; offset < buffer.length; offset += DBFS_PUT_MAX_BYTES) {
-      const slice = buffer.subarray(offset, offset + DBFS_PUT_MAX_BYTES);
-      await client.dbfs.addBlock({ handle, data: slice.toString("base64") });
+    try {
+      for (let offset = 0; offset < buffer.length; offset += DBFS_PUT_MAX_BYTES) {
+        const slice = buffer.subarray(offset, offset + DBFS_PUT_MAX_BYTES);
+        await client.dbfs.addBlock({ handle, data: slice.toString("base64") });
+      }
+    } catch (err) {
+      await client.dbfs.close({ handle }).catch(() => undefined);
+      throw err;
     }
     await client.dbfs.close({ handle });
   }

@@ -53,7 +53,7 @@ Node.js v25.9.0
 3. `bunx` resolves/stages the package but **honors the `node` shebang**, handing
    the `.ts` file to Node rather than running it under Bun.
 4. **Node.js v25.9.0** (recently installed on this machine) only does
-   experimental TypeScript type-stripping for *your own* files — it **refuses
+   experimental TypeScript type-stripping for _your own_ files — it **refuses
    for anything under `node_modules`**, raising
    `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` and exiting 1.
 5. The Electron shell's coupled-lifecycle design (replacing launchd `KeepAlive`)

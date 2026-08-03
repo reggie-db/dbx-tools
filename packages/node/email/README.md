@@ -407,7 +407,8 @@ are not copied to disk.
 
 An oversized payload is rejected with a `ValidationError` before anything is
 handed to SMTP. The constants and the plugin's interceptor settings live in the
-`defaults` module.
+`defaults` module. Attachments accept inline `content` only; local paths and
+remote URLs are not part of the model-facing contract.
 
 ## Modules
 

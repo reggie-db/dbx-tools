@@ -229,11 +229,7 @@ const CONTENT_ENCODINGS: ReadonlySet<string> = new Set([
   "utf-16le",
 ]);
 
-/**
- * Decoded byte size of one attachment's inline content. A `path` attachment
- * contributes nothing: nodemailer streams it, so its bytes never sit in this
- * process and cannot be measured here.
- */
+/** Decoded byte size of one attachment's inline content. */
 function attachmentBytes(attachment: EmailAttachment): number {
   const { content, encoding } = attachment;
   if (content === undefined) return 0;
@@ -301,7 +297,6 @@ function toMailAttachments(
     filename: att.filename,
     ...(att.content !== undefined ? { content: att.content } : {}),
     ...(att.encoding !== undefined ? { encoding: att.encoding } : {}),
-    ...(att.path !== undefined ? { path: att.path } : {}),
     ...(att.contentType !== undefined ? { contentType: att.contentType } : {}),
   }));
 }

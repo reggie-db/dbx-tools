@@ -176,6 +176,25 @@ describe("gate middleware", () => {
     assert.equal(res.statusCode, 200);
     assert.deepEqual(res.jsonBody, { authenticated: false, enabled: false });
   });
+
+  it("does not expose request, verify, or logout on non-tunnel hosts", async () => {
+    const unavailable = async () => {
+      throw new Error("gate method should not be called");
+    };
+    const { routes } = mount({
+      gate: fakeGate({ request: unavailable, verify: unavailable }),
+    });
+
+    for (const path of ["request", "verify", "logout"]) {
+      const handler = routes.get(`post ${AUTH_PREFIX}/${path}`);
+      assert.ok(handler);
+      const res = makeRes();
+      await Promise.resolve(
+        handler(makeReq("127.0.0.1:6868", `${AUTH_PREFIX}/${path}`), res, () => {}),
+      );
+      assert.equal(res.statusCode, 404);
+    }
+  });
 });
 
 describe("gate context mounting", () => {

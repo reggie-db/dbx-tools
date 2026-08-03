@@ -4,7 +4,12 @@ import { describe, it } from "node:test";
 
 import type { DatabricksBackend } from "../src/backend.ts";
 import { DEFAULT_RETRY, resolveRetryConfig } from "../src/defaults.ts";
-import { backoffDelayMs, createProxyServer, parseRetryAfterMs } from "../src/server.ts";
+import {
+  backoffDelayMs,
+  createProxyServer,
+  parseRetryAfterMs,
+  type ModelProxyBackend,
+} from "../src/server.ts";
 
 /** Listen on an ephemeral port and resolve the bound port. */
 async function listen(server: Server): Promise<number> {
@@ -82,6 +87,48 @@ describe("upstream dispatcher", () => {
 
   it("survives the same stall with bodyTimeout disabled, as the proxy configures it", async () => {
     assert.equal(await readThroughStall(0), "data: first\n\ndata: second\n\n");
+  });
+});
+
+describe("429 retry authentication", () => {
+  it("replaces the stale Authorization header before retrying", async () => {
+    const authorizations: Array<string | undefined> = [];
+    const upstream = createServer((req, res) => {
+      authorizations.push(req.headers.authorization);
+      if (authorizations.length === 1) {
+        res.writeHead(429, { "retry-after": "0" });
+        res.end("throttled");
+      } else {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end('{"ok":true}');
+      }
+    });
+    const upstreamPort = await listen(upstream);
+    let token = 0;
+    const backend: ModelProxyBackend = {
+      authHeaders: async () => ({ authorization: `Bearer token-${++token}` }),
+      invocationsUrl: () => `http://127.0.0.1:${upstreamPort}/invocations`,
+      isResponsesOnly: () => false,
+      models: async () => [],
+      resolve: async (model) => ({ modelId: model, matched: true }),
+      responsesUrl: () => `http://127.0.0.1:${upstreamPort}/responses`,
+    };
+    const proxy = createProxyServer(backend, {
+      retry: { enabled: true, maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 },
+    });
+    const proxyPort = await listen(proxy);
+    try {
+      const response = await fetch(`http://127.0.0.1:${proxyPort}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "test-model", messages: [] }),
+      });
+      assert.equal(response.status, 200);
+      assert.deepEqual(authorizations, ["Bearer token-1", "Bearer token-2"]);
+    } finally {
+      proxy.close();
+      upstream.close();
+    }
   });
 });
 

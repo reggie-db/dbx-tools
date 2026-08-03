@@ -1,7 +1,7 @@
 /**
  * Per-request thread-selection wire convention shared by the Mastra
  * plugin server (`@dbx-tools/appkit-mastra`'s thread-id resolver) and
- * the browser chat client (`@dbx-tools/appkit-mastra-ui`).
+ * the browser chat client (`@dbx-tools/ui-mastra`).
  *
  * A chat client owns multiple conversations ("threads") for the same
  * resource (the authenticated user). It names the thread a given

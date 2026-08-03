@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { exec } from "../index.ts";
 
@@ -8,6 +11,20 @@ const QUIET_STDIO = {
   stdout: "ignore",
   stderr: "ignore",
 } as const;
+
+describe("shell-string arguments", () => {
+  it("keeps a single argument when options are omitted", async () => {
+    const parent = mkdtempSync(join(tmpdir(), "dbx-tools-exec-"));
+    const target = join(parent, "created");
+    try {
+      const result = await exec.spawn(`mkdir ${target}`);
+      assert.equal(result.exitCode, 0);
+      assert.equal(existsSync(target), true);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("missing executable", () => {
   it("returns exit code 127 from spawn when check is omitted", async () => {

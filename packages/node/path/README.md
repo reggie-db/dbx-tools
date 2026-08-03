@@ -56,9 +56,10 @@ tests.
 import { ignore } from "@dbx-tools/path";
 
 const matcher = ignore.ignorePathMatcher({
-  generated: true,
-  dependencies: true,
-  vcs: true,
+  defaults: true,
+  dot: true,
+  test: false,
+  lock: "auto",
 });
 ```
 
@@ -71,7 +72,8 @@ generated files, build output, VCS metadata, and package-manager output.
 import { scan } from "@dbx-tools/path";
 
 const options: scan.FileScanOptions = {
-  roots: ["workspaces", "example-packages"],
+  cwd: "workspaces",
+  ignore: ["generated/**"],
   followSymlinks: scan.FOLLOW_SYMLINKS_DEFAULT,
 };
 ```

@@ -9,6 +9,24 @@ afterEach(() => {
   for (const key of KEYS) delete process.env[key];
 });
 
+describe("env.isAppEnv", () => {
+  const valid = {
+    DATABRICKS_APP_NAME: "demo",
+    DATABRICKS_HOST: "https://workspace.example.com",
+    DATABRICKS_APP_PORT: "8000",
+  };
+
+  it("recognizes a complete Databricks App environment", () => {
+    assert.equal(env.isAppEnv(valid), true);
+  });
+
+  it("rejects invalid hosts, ports, and incomplete environments", () => {
+    assert.equal(env.isAppEnv({ ...valid, DATABRICKS_HOST: "file:///tmp" }), false);
+    assert.equal(env.isAppEnv({ ...valid, DATABRICKS_APP_PORT: "0" }), false);
+    assert.equal(env.isAppEnv({ ...valid, DATABRICKS_APP_NAME: "" }), false);
+  });
+});
+
 describe("env.text", () => {
   it("returns the first non-empty variable in order", () => {
     process.env.DBX_TOOLS_TEST_A = "  ";

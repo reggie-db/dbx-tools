@@ -17,7 +17,7 @@
 
 import { log } from "@dbx-tools/shared-core";
 import { gotScraping } from "got-scraping";
-import { assertUrlAllowed } from "./allowlist.ts";
+import { assertFetchUrlAllowed } from "./_fetch-url.ts";
 import type { ResolvedWebSearchConfig } from "./config.ts";
 import { toCallSettings, webFetchExecuteDefaults } from "./defaults.ts";
 import { decodeHtmlEntities, htmlToText } from "./html-text.ts";
@@ -60,14 +60,19 @@ export async function runWebFetch(
   config: ResolvedWebSearchConfig,
   signal?: AbortSignal,
 ): Promise<WebFetchResult> {
-  assertUrlAllowed(request.url, config.allowList);
+  await assertFetchUrlAllowed(request.url, config.allowList);
   const cap = Math.min(request.maxLength ?? config.fetchMaxLength, config.fetchMaxLength);
 
   // The response is cached before the format reduction, so the same page read
   // as text and as html shares one network round trip.
   const page = await executeRead(
     "page-fetch",
-    toCallSettings(webFetchExecuteDefaults, config.timeoutMs, ["web-search", "fetch", request.url]),
+    toCallSettings(webFetchExecuteDefaults, config.timeoutMs, [
+      "web-search",
+      "fetch",
+      request.url,
+      ...config.allowList.patterns,
+    ]),
     async (executeSignal): Promise<FetchedPage> => {
       const response = await gotScraping({
         url: request.url,
@@ -76,6 +81,13 @@ export async function runWebFetch(
         timeout: { request: config.timeoutMs },
         throwHttpErrors: false,
         followRedirect: true,
+        hooks: {
+          beforeRequest: [
+            async (options) => {
+              await assertFetchUrlAllowed(String(options.url), config.allowList);
+            },
+          ],
+        },
         ...(executeSignal ? { signal: executeSignal } : {}),
       });
       return {
@@ -87,6 +99,7 @@ export async function runWebFetch(
     },
     signal,
   );
+  await assertFetchUrlAllowed(page.url, config.allowList);
 
   const isHtml = !page.contentType || /html|xml/i.test(page.contentType);
   const rawContent = request.format === "html" || !isHtml ? page.body : htmlToText(page.body);

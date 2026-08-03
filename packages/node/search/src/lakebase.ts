@@ -371,14 +371,19 @@ export class LakebaseSearchBackend {
   ): Promise<{ rows: T[] }> {
     if (signal?.aborted) throw ExecutionError.canceled();
     const client = await pool.connect();
-    const onAbort = () => void client.release(true);
+    let released = false;
+    const onAbort = () => {
+      if (released) return;
+      released = true;
+      client.release(true);
+    };
     signal?.addEventListener("abort", onAbort, { once: true });
     try {
       const result = await client.query(sql, params);
       return { rows: result.rows as T[] };
     } finally {
       signal?.removeEventListener("abort", onAbort);
-      client.release();
+      if (!released) client.release();
     }
   }
 }

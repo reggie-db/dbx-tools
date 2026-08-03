@@ -92,7 +92,7 @@ export const resetTeamsAuth = (): void => {
   keySet = undefined;
   jwksUri = undefined;
   keySetSource = undefined;
-  tokenCache = undefined;
+  tokenCache.clear();
 };
 
 /**
@@ -212,7 +212,55 @@ interface CachedToken {
   expiresAt: number;
 }
 
-let tokenCache: CachedToken | undefined;
+/** Per-bot cached value plus a shared in-flight refresh. */
+interface TokenCacheEntry {
+  value?: CachedToken;
+  refresh?: Promise<CachedToken>;
+}
+
+const tokenCache = new Map<string, TokenCacheEntry>();
+
+/** Wait for a shared refresh while preserving per-caller cancellation. */
+function waitForToken(refresh: Promise<CachedToken>, signal?: AbortSignal): Promise<CachedToken> {
+  if (!signal) return refresh;
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(signal.reason ?? new Error("Connector token request aborted"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    refresh.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
+/** Fetch one Connector token without binding the shared refresh to one caller's signal. */
+async function refreshConnectorToken(
+  options: { appId: string; appPassword: string },
+  tenant: string,
+  now: number,
+): Promise<CachedToken> {
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: options.appId,
+    client_secret: options.appPassword,
+    scope: CONNECTOR_SCOPE,
+  });
+  const response = await fetch(LOGIN_TOKEN_URL(tenant), {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      `teams: could not obtain a Connector token (${response.status}) ${detail}`.trim(),
+    );
+  }
+  const payload = (await response.json()) as { access_token?: unknown; expires_in?: unknown };
+  const token = typeof payload.access_token === "string" ? payload.access_token : null;
+  if (!token) throw new Error("teams: token response carried no access_token");
+  const expiresIn = typeof payload.expires_in === "number" ? payload.expires_in : 3600;
+  logger.debug("connector token refreshed", { expiresIn });
+  return { token, expiresAt: now + expiresIn * 1000 - TOKEN_SKEW_MS };
+}
 
 /**
  * Fetch (or reuse) a Connector API access token for the bot's own app
@@ -227,34 +275,24 @@ export const connectorToken = async (options: {
   appTenantId?: string;
   signal?: AbortSignal;
 }): Promise<string> => {
+  const tenant = options.appTenantId ?? MULTI_TENANT;
+  const cacheKey = `${tenant}\0${options.appId}`;
   const now = Date.now();
-  if (tokenCache && tokenCache.expiresAt > now) return tokenCache.token;
-
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: options.appId,
-    client_secret: options.appPassword,
-    scope: CONNECTOR_SCOPE,
-  });
-  const response = await fetch(LOGIN_TOKEN_URL(options.appTenantId ?? MULTI_TENANT), {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body,
-    ...(options.signal ? { signal: options.signal } : {}),
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `teams: could not obtain a Connector token (${response.status}) ${detail}`.trim(),
-    );
+  let entry = tokenCache.get(cacheKey);
+  if (!entry) {
+    entry = {};
+    tokenCache.set(cacheKey, entry);
   }
-  const payload = (await response.json()) as { access_token?: unknown; expires_in?: unknown };
-  const token = typeof payload.access_token === "string" ? payload.access_token : null;
-  if (!token) throw new Error("teams: token response carried no access_token");
-  const expiresIn = typeof payload.expires_in === "number" ? payload.expires_in : 3600;
-  tokenCache = { token, expiresAt: now + expiresIn * 1000 - TOKEN_SKEW_MS };
-  logger.debug("connector token refreshed", { expiresIn });
-  return token;
+  if (entry.value && entry.value.expiresAt > now) return entry.value.token;
+  entry.refresh ??= refreshConnectorToken(options, tenant, now)
+    .then((value) => {
+      entry.value = value;
+      return value;
+    })
+    .finally(() => {
+      entry.refresh = undefined;
+    });
+  return (await waitForToken(entry.refresh, options.signal)).token;
 };
 
 /**

@@ -54,6 +54,11 @@ function isDebugEnabled(): boolean {
   return log.isLevelEnabled("debug");
 }
 
+/** Whether a migration failed only because this role does not own an existing object. */
+function isOwnershipMigrationError(err: unknown): boolean {
+  return error.errorContext(err).hasMessage("must be owner");
+}
+
 /**
  * Soften {@link PostgresStore.init} so a failed migration (e.g. Lakebase
  * `must be owner of table …` on `ALTER`) is logged once instead of rethrown
@@ -63,8 +68,8 @@ function isDebugEnabled(): boolean {
  * only way to keep serving against an already-usable schema is to treat
  * migration failure as success and mark the store initialized.
  *
- * Concurrent first callers share one soft attempt; `isInitialized` is set
- * before the soft promise settles so later callers skip DDL entirely.
+ * Concurrent first callers share one soft attempt. Non-ownership failures stay
+ * fatal so missing schemas/tables are retried or surfaced instead of hidden.
  */
 export function withSoftStorageInit(store: PostgresStore): PostgresStore {
   const soft = store as unknown as {
@@ -82,10 +87,7 @@ export function withSoftStorageInit(store: PostgresStore): PostgresStore {
       try {
         await originalInit();
       } catch (err) {
-        // Mark success-for-serving before logging so a racing caller that
-        // passed the `isInitialized` check still joins this promise rather
-        // than starting another DDL pass.
-        soft.isInitialized = true;
+        if (!isOwnershipMigrationError(err)) throw err;
         const message = error.errorMessage(err);
         if (!loggedMigrationErrors.has(message)) {
           loggedMigrationErrors.add(message);
@@ -103,8 +105,10 @@ export function withSoftStorageInit(store: PostgresStore): PostgresStore {
     })();
     try {
       await softInitPromise;
-    } finally {
       soft.isInitialized = true;
+    } catch (err) {
+      softInitPromise = undefined;
+      throw err;
     }
   };
   return store;

@@ -168,6 +168,13 @@ const Bus = () => {
     }
   };
 
+  const sendOnControlEnter = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.ctrlKey && event.key === "Enter") {
+      event.preventDefault();
+      event.currentTarget.requestSubmit();
+    }
+  };
+
   return (
     <div className="mx-auto grid h-full max-w-7xl gap-4 overflow-auto p-4 md:grid-cols-[24rem_1fr] md:overflow-hidden md:p-6">
       <Card className="h-fit">
@@ -179,7 +186,7 @@ const Bus = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" onSubmit={send}>
+          <form className="space-y-4" onSubmit={send} onKeyDown={sendOnControlEnter}>
             <label className="block space-y-1.5 text-sm font-medium">
               <span>Your name</span>
               <Input

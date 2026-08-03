@@ -17,7 +17,7 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { createLakebasePool, getWorkspaceClient, type CacheConfig } from "@databricks/appkit";
-import { error, log } from "@dbx-tools/shared-core";
+import { error, hash, log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("cache-storage");
 
@@ -29,11 +29,16 @@ function isDebugEnabled(): boolean {
   return log.isLevelEnabled("debug");
 }
 
+/** Whether a migration failed only because this role does not own an existing object. */
+function isOwnershipMigrationError(err: unknown): boolean {
+  return error.errorContext(err).hasMessage("must be owner");
+}
+
 type LakebasePool = ReturnType<typeof createLakebasePool>;
 type CacheStorage = NonNullable<CacheConfig["storage"]>;
 
 /** AppKit's internal persistent storage surface. */
-type PersistentStorageBase = CacheStorage & {
+export type PersistentStorageBase = CacheStorage & {
   initialize(): Promise<void>;
   initialized: boolean;
 };
@@ -47,7 +52,7 @@ let persistentStorageCtor: PersistentStorageConstructor | undefined | null = nul
 
 /**
  * Lazily resolve AppKit's internal `PersistentStorage` constructor. `null`
- * means the lookup already failed; `undefined` means not attempted yet.
+ * means not attempted yet; `undefined` means the lookup already failed.
  */
 function loadPersistentStorage(): PersistentStorageConstructor | undefined {
   if (persistentStorageCtor !== null) {
@@ -78,7 +83,7 @@ function loadPersistentStorage(): PersistentStorageConstructor | undefined {
 }
 
 /** Soften `initialize()` so a migration failure is logged once, not thrown. */
-function softenInitialize(storage: PersistentStorageBase): void {
+export function softenInitialize(storage: PersistentStorageBase): void {
   const originalInitialize = storage.initialize.bind(storage);
   let softInitPromise: Promise<void> | undefined;
 
@@ -88,7 +93,7 @@ function softenInitialize(storage: PersistentStorageBase): void {
       try {
         await originalInitialize();
       } catch (err) {
-        storage.initialized = true;
+        if (!isOwnershipMigrationError(err)) throw err;
         const message = error.errorMessage(err);
         if (!loggedMigrationErrors.has(message)) {
           loggedMigrationErrors.add(message);
@@ -102,10 +107,26 @@ function softenInitialize(storage: PersistentStorageBase): void {
     })();
     try {
       await softInitPromise;
-    } finally {
       storage.initialized = true;
+    } catch (err) {
+      softInitPromise = undefined;
+      throw err;
     }
   };
+}
+
+/** Verify the migrated cache table can serve the reads and writes AppKit needs. */
+export async function probeStorage(storage: PersistentStorageBase): Promise<void> {
+  const key = `dbx-tools:cache-probe:${hash.id()}`;
+  try {
+    await storage.set(key, { value: key, expiry: Date.now() + 60_000 });
+    const result = await storage.get(key);
+    if (result?.value !== key) {
+      throw new Error("persistent cache probe returned an unexpected value");
+    }
+  } finally {
+    await storage.delete(key).catch(() => undefined);
+  }
 }
 
 /**
@@ -131,6 +152,7 @@ export async function createSoftPersistentStorage(
       return undefined;
     }
     await storage.initialize();
+    await probeStorage(storage);
     return storage;
   } catch (err) {
     logger.debug("soft persistent cache unavailable", {

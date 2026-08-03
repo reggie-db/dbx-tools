@@ -20,6 +20,7 @@
 
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
+import { processLock } from "@dbx-tools/core";
 import { jwtVerify, SignJWT } from "jose";
 import { signingKey } from "./signing-key.ts";
 
@@ -72,10 +73,13 @@ export class CodeStore {
    * Replaces any pending code for the address.
    */
   async issue(email: string): Promise<string> {
-    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    const entry: CodeEntry = { hash: sha256(code), attempts: 0 };
-    await this.cache().set(this.key(email), entry, { ttl: this.ttlSeconds });
-    return code;
+    const key = this.key(email);
+    return processLock.withProcessLock(key, async () => {
+      const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+      const entry: CodeEntry = { hash: sha256(code), attempts: 0 };
+      await this.cache().set(key, entry, { ttl: this.ttlSeconds });
+      return code;
+    });
   }
 
   /**
@@ -86,19 +90,21 @@ export class CodeStore {
    */
   async verify(email: string, code: string): Promise<VerifyOutcome> {
     const key = this.key(email);
-    const entry = await this.cache().get<CodeEntry>(key);
-    if (!entry) return "expired";
-    const attempts = entry.attempts + 1;
-    if (safeEqualHex(entry.hash, sha256(code))) {
-      await this.cache().delete(key);
-      return "ok";
-    }
-    if (attempts >= this.maxAttempts) {
-      await this.cache().delete(key);
-      return "too-many-attempts";
-    }
-    await this.cache().set(key, { ...entry, attempts }, { ttl: this.ttlSeconds });
-    return "invalid";
+    return processLock.withProcessLock(key, async () => {
+      const entry = await this.cache().get<CodeEntry>(key);
+      if (!entry) return "expired";
+      const attempts = entry.attempts + 1;
+      if (safeEqualHex(entry.hash, sha256(code))) {
+        await this.cache().delete(key);
+        return "ok";
+      }
+      if (attempts >= this.maxAttempts) {
+        await this.cache().delete(key);
+        return "too-many-attempts";
+      }
+      await this.cache().set(key, { ...entry, attempts }, { ttl: this.ttlSeconds });
+      return "invalid";
+    });
   }
 }
 

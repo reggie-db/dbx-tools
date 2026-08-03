@@ -1,6 +1,31 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+
 import { async } from "../index.ts";
+
+describe("poll", () => {
+  it("waits between values skipped by the distinct filter", async () => {
+    let attempts = 0;
+    const values = async.poll(
+      () => {
+        attempts += 1;
+        return "same";
+      },
+      {
+        intervalMs: 20,
+        filter: "distinct",
+        timeoutMs: 55,
+      },
+    );
+
+    await assert.rejects(async () => {
+      for await (const _value of values) {
+        // The first value is yielded; later duplicates wait until timeout.
+      }
+    });
+    assert.ok(attempts < 10, `expected a paced poll, got ${attempts} attempts`);
+  });
+});
 
 describe("async.combineAbortSignals", () => {
   it("returns undefined when every source is absent", () => {

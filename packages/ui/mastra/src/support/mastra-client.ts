@@ -225,7 +225,7 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Fetch one page of thread history from `GET ${basePath}/history`.
+   * Fetch one page of thread history from `GET ${basePath}/route/history`.
    * Messages come back oldest -> newest so the caller can prepend them
    * to a live transcript. `threadId` targets a specific conversation
    * (sent as the `?threadId=` query so it doesn't depend on shared client
@@ -254,7 +254,7 @@ export class MastraPluginClient extends MastraClient {
   }
 
   /**
-   * Wipe a thread's history (`DELETE ${basePath}/history`). `threadId`
+   * Wipe a thread's history (`DELETE ${basePath}/route/history`). `threadId`
    * targets a specific conversation via the thread-selection header (so it
    * doesn't depend on shared client state); omit it to clear the per-session
    * cookie thread. The session cookie that anchors the thread id is

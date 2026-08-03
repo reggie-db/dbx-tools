@@ -4,7 +4,11 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
-import type { EmailAttachment, EmailMessage } from "@dbx-tools/shared-email";
+import {
+  emailMessageSchema,
+  type EmailAttachment,
+  type EmailMessage,
+} from "@dbx-tools/shared-email";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_COUNT,
@@ -39,6 +43,16 @@ function attachment(filename: string, bytes: number): EmailAttachment {
 after(() => resetEmailRuntime());
 
 describe("send validation", () => {
+  it("rejects model-controlled attachment paths and URLs", () => {
+    assert.throws(() =>
+      emailMessageSchema.parse(
+        message({
+          attachments: [{ filename: "secrets.txt", path: "/etc/passwd" } as EmailAttachment],
+        }),
+      ),
+    );
+  });
+
   it("rejects a message with no recipient", async () => {
     await assert.rejects(() => sendEmail(message({ to: [] }), FROM), /Missing required field: to/);
   });

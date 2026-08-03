@@ -45,7 +45,7 @@ const MAX_PER_PAGE = 200;
 export interface LoadHistoryOptions {
   agent: Agent;
   threadId: string;
-  resourceId?: string;
+  resourceId: string;
   page?: number;
   perPage?: number;
   /** When true, returns the *oldest* page first (chronological). */
@@ -81,7 +81,7 @@ export async function loadHistory(opts: LoadHistoryOptions): Promise<MastraHisto
   const startedAt = Date.now();
   const result = await memory.recall({
     threadId: opts.threadId,
-    ...(opts.resourceId ? { resourceId: opts.resourceId } : {}),
+    resourceId: opts.resourceId,
     page,
     perPage,
     orderBy: {
@@ -114,6 +114,7 @@ export async function loadHistory(opts: LoadHistoryOptions): Promise<MastraHisto
 export interface ClearHistoryOptions {
   agent: Agent;
   threadId: string;
+  resourceId: string;
 }
 
 /**
@@ -135,6 +136,15 @@ export async function clearHistory(opts: ClearHistoryOptions): Promise<{ cleared
     logger.debug("clear:no-memory", { agentId: opts.agent.id, threadId: opts.threadId });
     return { cleared: 0 };
   }
+  const existing = await memory.getThreadById({ threadId: opts.threadId });
+  if (!existing || existing.resourceId !== opts.resourceId) {
+    logger.debug("clear:not-owned", {
+      agentId: opts.agent.id,
+      threadId: opts.threadId,
+      found: existing !== null,
+    });
+    return { cleared: 0 };
+  }
   // Mastra's `deleteThread` cascades to the message table, so we
   // can't ask for a count after the fact. Read it pre-delete with a
   // one-page recall sized to fit common threads in a single round
@@ -143,6 +153,7 @@ export async function clearHistory(opts: ClearHistoryOptions): Promise<{ cleared
   try {
     const probe = await memory.recall({
       threadId: opts.threadId,
+      resourceId: opts.resourceId,
       page: 0,
       perPage: 1,
     });
@@ -158,19 +169,7 @@ export async function clearHistory(opts: ClearHistoryOptions): Promise<{ cleared
   }
 
   const startedAt = Date.now();
-  try {
-    await memory.deleteThread(opts.threadId);
-  } catch (err) {
-    // Mastra's `deleteThread` raises when the thread row was never
-    // created (e.g. clearing an empty session). Surface as a soft
-    // warn and treat as success - the user-facing semantic is
-    // "history is now empty" which is already true.
-    logger.warn("clear:delete-soft-failed", {
-      agentId: opts.agent.id,
-      threadId: opts.threadId,
-      error: error.errorMessage(err),
-    });
-  }
+  await memory.deleteThread(opts.threadId);
   logger.info("clear:done", {
     agentId: opts.agent.id,
     threadId: opts.threadId,
@@ -238,6 +237,11 @@ export function historyRoute(options: HistoryRouteOptions) {
       } as const;
     }
     const resourceId = requestContext.get(MASTRA_RESOURCE_ID_KEY) as string | undefined;
+    if (!resourceId) {
+      return {
+        error: c.json({ error: "resource id missing from request context" }, 400),
+      } as const;
+    }
     return { agentId, agent, threadId, resourceId } as const;
   };
 
@@ -250,7 +254,7 @@ export function historyRoute(options: HistoryRouteOptions) {
         const payload = await loadHistory({
           agent: ctx.agent,
           threadId: ctx.threadId,
-          ...(ctx.resourceId ? { resourceId: ctx.resourceId } : {}),
+          resourceId: ctx.resourceId,
           page: parseIntParam(c.req.query("page")),
           perPage: parseIntParam(c.req.query("perPage")),
         });
@@ -265,6 +269,7 @@ export function historyRoute(options: HistoryRouteOptions) {
         const { cleared } = await clearHistory({
           agent: ctx.agent,
           threadId: ctx.threadId,
+          resourceId: ctx.resourceId,
         });
         const payload: MastraClearHistoryResponse = {
           ok: true,

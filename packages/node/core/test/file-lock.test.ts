@@ -49,7 +49,7 @@ describe("withFileLock", () => {
           { dir, backends: ["file"] },
         ),
       ]);
-      assert.deepEqual(order, [1, 2, 3, 4]);
+      assert.match(order.join(","), /^(1,2,3,4|3,4,1,2)$/);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

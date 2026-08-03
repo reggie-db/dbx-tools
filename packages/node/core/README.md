@@ -37,8 +37,8 @@ const executable = await bin.ensure("tool", releaseUrl, {
 `bin.ensure()` installs to `$HOME/.<name>/bin/<name>` and returns its `root`,
 `binDir`, and executable `path`. An existing executable returns immediately, so
 a URL resolver is only called when installation is necessary. Concurrent
-callers use `processLock` with a check-lock-check-load sequence, preventing
-duplicate downloads across the main thread and wired workers. Direct downloads
+callers use a file lock with a check-lock-check-load sequence, preventing
+duplicate downloads across processes and worker threads. Direct downloads
 are selected by default. Zip, tar, tar.gz, and tgz archives can be unpacked
 automatically; a single-file archive needs no selector, while a selector can
 choose a binary from a larger archive. The selected file is normalized to mode

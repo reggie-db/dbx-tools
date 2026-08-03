@@ -125,6 +125,8 @@ export const EmailComposeView = ({
   const [showPreview, setShowPreview] = useState(false);
 
   const fileInput = useRef<HTMLInputElement>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const ids = useId();
   const fieldId = (name: string) => `${ids}-${name}`;
 
@@ -149,8 +151,8 @@ export const EmailComposeView = ({
   }, [to, cc, bcc, subject, body, attachments]);
 
   useEffect(() => {
-    onChange?.(buildMessage());
-  }, [buildMessage, onChange]);
+    onChangeRef.current?.(buildMessage());
+  }, [buildMessage]);
 
   const addFiles = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;

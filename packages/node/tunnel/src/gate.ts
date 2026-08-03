@@ -184,12 +184,20 @@ export function mountGate(
   }) as RequestHandler;
 
   const requestHandler = (async (req, res) => {
+    if (!isTunnelHost(req, publicDomain)) {
+      sendJson(res, 404, { error: "not found" });
+      return;
+    }
     const parsed = authRequestSchema.safeParse(json.parseRecord(await readBody(req)));
     if (!parsed.success) return sendJson(res, 200, { ok: true }); // anti-enumeration
     sendJson(res, 200, await gate.request(parsed.data.email, clientIp(req)));
   }) as RequestHandler;
 
   const verifyHandler = (async (req, res) => {
+    if (!isTunnelHost(req, publicDomain)) {
+      sendJson(res, 404, { error: "not found" });
+      return;
+    }
     const parsed = authVerifySchema.safeParse(json.parseRecord(await readBody(req)));
     if (!parsed.success) return sendJson(res, 200, { ok: false });
     const result = await gate.verify(parsed.data.email, parsed.data.code, clientIp(req));
@@ -203,7 +211,11 @@ export function mountGate(
     );
   }) as RequestHandler;
 
-  const logoutHandler = ((_req, res) => {
+  const logoutHandler = ((req, res) => {
+    if (!isTunnelHost(req, publicDomain)) {
+      sendJson(res, 404, { error: "not found" });
+      return;
+    }
     sendJson(res, 200, { ok: true }, `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`);
   }) as RequestHandler;
 

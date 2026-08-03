@@ -130,7 +130,7 @@ export const TeamsChat = ({
         if ((err as Error)?.name === "AbortError") return;
         setError((err as Error).message);
       } finally {
-        setPending(false);
+        if (abortRef.current === controller) setPending(false);
       }
     },
     [agentId, endpoint, pending, userName],

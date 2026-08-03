@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, describe, it } from "node:test";
 import { SignJWT, exportJWK, generateKeyPair, type CryptoKey } from "jose";
-import { resetTeamsAuth, verifyBotToken } from "../src/auth.ts";
+import { connectorToken, resetTeamsAuth, verifyBotToken } from "../src/auth.ts";
 
 /**
  * Inbound-token verification, exercised against a LOCAL key set.
@@ -131,6 +131,38 @@ describe("teams inbound token verification", () => {
         (err: Error) => err instanceof Error,
         `expected '${header ?? "undefined"}' to be rejected`,
       );
+    }
+  });
+});
+
+describe("teams connector token cache", () => {
+  it("keeps tokens isolated by tenant and app id", async () => {
+    const originalFetch = globalThis.fetch;
+    let requests = 0;
+    globalThis.fetch = async (_input, init) => {
+      requests += 1;
+      const body = init?.body as URLSearchParams;
+      return new Response(
+        JSON.stringify({
+          access_token: `${body.get("client_id")}:${requests}`,
+          expires_in: 3600,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    resetTeamsAuth();
+    try {
+      const appOne = await Promise.all([
+        connectorToken({ appId: "app-one", appPassword: "secret" }),
+        connectorToken({ appId: "app-one", appPassword: "secret" }),
+      ]);
+      assert.deepEqual(appOne, ["app-one:1", "app-one:1"]);
+      assert.equal(await connectorToken({ appId: "app-two", appPassword: "secret" }), "app-two:2");
+      assert.equal(await connectorToken({ appId: "app-one", appPassword: "secret" }), "app-one:1");
+      assert.equal(requests, 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+      resetTeamsAuth();
     }
   });
 });

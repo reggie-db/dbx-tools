@@ -39,6 +39,17 @@ describe("adaptive card builder", () => {
     assert.equal(document.actions?.[0].url, "https://example.com/1");
   });
 
+  it("rejects non-HTTPS OpenUrl actions", () => {
+    for (const url of ["javascript:alert(1)", "http://example.com", "file:///etc/passwd"]) {
+      assert.throws(() =>
+        buildAdaptiveCard({
+          title: "Unsafe",
+          actions: [{ title: "Open", url }],
+        }),
+      );
+    }
+  });
+
   it("echoes the title in the card result", () => {
     const result = buildCardResult({ title: "Report" });
     assert.equal(result.title, "Report");
@@ -62,7 +73,9 @@ describe("teams config resolution", () => {
     assert.equal(config.webhookUrl, "https://example.webhook.office.com/abc");
   });
 
-  it("rejects a webhook URL that is not absolute", () => {
-    assert.throws(() => resolveTeamsConfig({ webhookUrl: "not-a-url" }));
+  it("rejects a webhook URL that is not absolute HTTPS", () => {
+    for (const webhookUrl of ["not-a-url", "http://example.com", "file:///tmp/webhook"]) {
+      assert.throws(() => resolveTeamsConfig({ webhookUrl }));
+    }
   });
 });

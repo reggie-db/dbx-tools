@@ -37,6 +37,7 @@ import {
 import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
 import { async, log } from "@dbx-tools/shared-core";
 
+import { createSoftPersistentStorage } from "./_cache-storage.ts";
 import {
   createInterceptorContext,
   type Interceptor,
@@ -44,7 +45,6 @@ import {
   lifecycleBridge,
   type ResolvedAppEnv,
 } from "./interceptor.ts";
-import { createSoftPersistentStorage } from "./_cache-storage.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
 

@@ -15,8 +15,7 @@
  * `dbx-tools` root task first (see below); a normal consumer constructs,
  * `applyToProjects`es, synths.
  */
-import { JsonFile } from "projen";
-import { mixin, project, project as projectApi } from "@dbx-tools/projen";
+import { project, project as projectApi } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
 
@@ -69,6 +68,10 @@ const root = new projectApi.DBXToolsNodeProject({
     "zod@catalog:",
   ],
 });
+
+// `projen/` is an extra workspace member rather than an attached subproject, so
+// the engine cannot discover its generated barrel for the root formatter.
+root.prettier?.addIgnorePattern("projen/index.ts");
 
 // ---------------------------------------------------------------------------
 // Lockfile: bun.lock stays UNTRACKED (projen's `*.lock` default ignore)
@@ -124,18 +127,6 @@ for (const name of ["build", "pull-request-lint"]) {
   });
 }
 
-// Without an explicit cap a wedged runner burns the full 6-hour default before
-// anyone finds out.
-for (const job of ["build", "self-mutation"]) {
-  root
-    .tryFindObjectFile(".github/workflows/build.yml")
-    ?.addOverride(`jobs.${job}.timeout-minutes`, 30);
-}
-root
-  .tryFindObjectFile(".github/workflows/pull-request-lint.yml")
-  ?.addOverride("jobs.validate.timeout-minutes", 10);
-
-
 // ---------------------------------------------------------------------------
 // pnpm workspace: build-script allowances + version overrides
 // ---------------------------------------------------------------------------
@@ -181,24 +172,6 @@ root.pnpmWorkspace?.addCatalog("sql-formatter", "^15.6.9");
 // The Adaptive Cards JavaScript renderer, used by the `ui-teams` package to
 // render Teams cards in the browser. Browser-only (loaded in ui-tagged code).
 root.pnpmWorkspace?.addCatalog("adaptivecards", "^3.0.5");
-
-
-// ---------------------------------------------------------------------------
-// Per-package mixins
-// ---------------------------------------------------------------------------
-// File-level and negated-selector mixins that don't fit the project-selector
-// The root's own tsconfig targets a file, not a project, so it stays a raw mixin.
-root.with(
-  mixin.create(
-    (file): file is JsonFile =>
-      file instanceof JsonFile &&
-      file.path === "tsconfig.json" &&
-      file.project === root,
-    (file) => {
-      file.addOverride("include", [".projenrc.ts"]);
-    },
-  ),
-);
 
 // ---------------------------------------------------------------------------
 // Per-package dependency rules (selected by package name + tag)
@@ -475,7 +448,7 @@ project.applyToProjects(root, { identifierName: "path", tags: "node" }, (p) => {
 // node-fs: local-disk FileSystem implementation of the shared-fs contract.
 // shared-fs stays browser-safe (types only); the Node runtime lives here.
 project.applyToProjects(root, { identifierName: "fs", tags: "node" }, (p) => {
-  p.addDeps("@dbx-tools/shared-fs@workspace:*", "@dbx-tools/appkit@workspace:*");
+  p.addDeps("@dbx-tools/core@workspace:*", "@dbx-tools/shared-fs@workspace:*");
 });
 
 // shared-model: browser-safe zod wire contracts + pure endpoint classifier.

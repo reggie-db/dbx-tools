@@ -32,7 +32,7 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { async as asyncUtil, error, json, log, object } from "@dbx-tools/shared-core";
+import { async as asyncUtil, error, json, log, object, string } from "@dbx-tools/shared-core";
 import {
   classify,
   openaiChat,
@@ -91,10 +91,7 @@ const RESPONSES_PATHS = new Set(["/v1/responses", "/responses"]);
  * waiting on a release of this package.
  */
 function extraDropFields(): string[] {
-  return (process.env.PROXY_DROP_FIELDS ?? "")
-    .split(",")
-    .map((field) => field.trim())
-    .filter((field) => field.length > 0);
+  return string.parseList(process.env.PROXY_DROP_FIELDS);
 }
 
 /** Options shared by {@link createProxyServer} and {@link startProxyServer}. */
@@ -280,7 +277,7 @@ async function upstreamFetchRetrying(
       return response;
     }
     // Fresh auth header per attempt so a long backoff can't outlive the token.
-    const retryHeaders = { ...(await backend.authHeaders()), ...headers };
+    const retryHeaders = { ...headers, ...(await backend.authHeaders()) };
     response = await upstreamFetch(url, retryHeaders, payload, signal);
   }
   return response;

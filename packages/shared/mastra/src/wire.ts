@@ -26,7 +26,7 @@
  * ({@link MASTRA_ROUTES}) and the embed-marker grammar in `marker.ts`,
  * so this file stays purely declarative (schemas + inferred types).
  * The browser client that drives these routes (`MastraPluginClient`)
- * ships from `@dbx-tools/appkit-mastra-ui`.
+ * ships from `@dbx-tools/ui-mastra`.
  *
  * @module
  */
@@ -51,7 +51,7 @@ import { z } from "zod";
  * Fields:
  *   - `basePath`: plugin mount path. Always `/api/<pluginName>`. Feed
  *     it to `new MastraPluginClient(config)` (from
- *     `@dbx-tools/appkit-mastra-ui`) to get a typed client over every
+ *     `@dbx-tools/ui-mastra`) to get a typed client over every
  *     route plus the standard agent stream.
  *   - `defaultAgent`: agent id the client converses with when it
  *     doesn't name one.
@@ -114,7 +114,7 @@ export type ServingEndpointsResponse = z.infer<typeof ServingEndpointsResponseSc
 /**
  * Structural shape for an AI SDK V5 `UIMessage`. Defined locally
  * so the shared types package stays dependency-free (no `ai`
- * import). The runtime values returned by the `/history` endpoint
+ * import). The runtime values returned by the `/route/history` endpoint
  * are produced by `toAISdkV5Messages` and are 1:1 compatible with
  * `UIMessage` from the `ai` package; clients can safely cast when
  * needed.
@@ -128,7 +128,7 @@ export const MastraHistoryUIMessageSchema = z.object({
 export type MastraHistoryUIMessage = z.infer<typeof MastraHistoryUIMessageSchema>;
 
 /**
- * JSON payload returned by `GET ${basePath}/history`.
+ * JSON payload returned by `GET ${basePath}/route/history`.
  *
  * Fields:
  *   - `uiMessages`: page of UI-formatted messages, oldest -> newest.
@@ -151,7 +151,7 @@ export const MastraHistoryResponseSchema = z.object({
 export type MastraHistoryResponse = z.infer<typeof MastraHistoryResponseSchema>;
 
 /**
- * JSON payload returned by `DELETE ${basePath}/history`. Deletes
+ * JSON payload returned by `DELETE ${basePath}/route/history`. Deletes
  * every persisted message + workflow snapshot tied to the caller's
  * thread, so the next chat turn starts from a clean slate. The
  * session cookie that anchors the thread id is preserved so the

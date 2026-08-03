@@ -744,6 +744,25 @@ class WorkspaceValidationTasks extends Component {
 }
 
 /**
+ * Bound the default validation workflows when a root opts into them.
+ *
+ * Projen otherwise leaves jobs at GitHub's six-hour ceiling. Missing workflows
+ * are a no-op, so roots that keep the engine defaults (`github`/build workflow
+ * off) do not gain new files.
+ */
+class WorkflowTimeouts extends Component {
+  public override preSynthesize(): void {
+    const build = this.project.tryFindObjectFile(".github/workflows/build.yml");
+    for (const job of ["build", "self-mutation"]) {
+      build?.addOverride(`jobs.${job}.timeout-minutes`, 30);
+    }
+    this.project
+      .tryFindObjectFile(".github/workflows/pull-request-lint.yml")
+      ?.addOverride("jobs.validate.timeout-minutes", 10);
+  }
+}
+
+/**
  * Ignore each `codegen`-declaring package's `src/` from the root ESLint config.
  * Those modules are read-only (ts-to-zod); lint `--fix` otherwise EACCES-crashes
  * on them. Runs in `preSynthesize` so mixin-added `codegen.inputs` are visible.
@@ -765,6 +784,30 @@ class EslintIgnoreCodegen extends Component {
       // them - the failure mode being invisible, since ESLint just reports less.
       for (const module of codegenModulePaths(codegen.inputs)) {
         eslint.addIgnorePattern(`${rel}/${module}`);
+      }
+    }
+  }
+}
+
+/**
+ * Keep generated package barrels and codegen modules out of root formatting.
+ *
+ * Their generators own the layout and may mark outputs read-only. Package paths
+ * are derived from attached subprojects so custom `packageRoots` need no manual
+ * Prettier patterns.
+ */
+class PrettierIgnoreGenerated extends Component {
+  public override preSynthesize(): void {
+    const prettier = javascript.Prettier.of(this.project);
+    if (!prettier) return;
+    const rootAbs = resolve(this.project.outdir);
+    for (const sub of this.project.subprojects) {
+      if (!(sub instanceof javascript.NodeProject)) continue;
+      const rel = toPosix(relative(rootAbs, sub.outdir));
+      prettier.addIgnorePattern(`${rel}/index.ts`);
+      const codegen = sub.package.manifest.codegen as { inputs?: string[] } | undefined;
+      for (const module of codegenModulePaths(codegen?.inputs ?? [])) {
+        prettier.addIgnorePattern(`${rel}/${module}`);
       }
     }
   }
@@ -1096,6 +1139,8 @@ function initProject(
   }
 
   new WorkspaceValidationTasks(project);
+  new WorkflowTimeouts(project);
+  new PrettierIgnoreGenerated(project);
 
   new GeneratedSource(project);
   // The `bump` task (compute next version + commit + tag + push) is useful on

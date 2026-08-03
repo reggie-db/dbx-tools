@@ -200,7 +200,7 @@ export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeams
   const cardVersion =
     env.string(overrides?.cardVersion, CARD_VERSION_ENV) ?? card.ADAPTIVE_CARD_VERSION;
   const webhookUrl = env.string(overrides?.webhookUrl, WEBHOOK_URL_ENV);
-  if (webhookUrl !== null && !isAbsoluteUrl(webhookUrl)) {
+  if (webhookUrl !== null && !isHttpsUrl(webhookUrl)) {
     throw ValidationError.invalidValue(
       WEBHOOK_URL_ENV,
       webhookUrl,
@@ -224,12 +224,10 @@ export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeams
   };
 }
 
-/** Whether `value` parses as an absolute URL. */
-function isAbsoluteUrl(value: string): boolean {
+/** Whether `value` parses as an absolute HTTPS URL. */
+function isHttpsUrl(value: string): boolean {
   try {
-    // eslint-disable-next-line no-new
-    new URL(value);
-    return true;
+    return new URL(value).protocol === "https:";
   } catch {
     return false;
   }

@@ -235,6 +235,30 @@ describe("scratchFS / rebuildFS", () => {
     });
   });
 
+  it("serializes concurrent swaps for the same stable root", async () => {
+    await withOsRoot("rebuild-concurrent", async (os) => {
+      let ready = 0;
+      let release: (() => void) | undefined;
+      const bothReady = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const materialize = (value: string) => async (scratch: LocalFileSystem) => {
+        await scratch.writeFile("v.txt", value);
+        ready += 1;
+        if (ready === 2) release?.();
+        await bothReady;
+      };
+
+      const [first, second] = await Promise.all([
+        rebuildFS("tools", materialize("1"), { os }),
+        rebuildFS("tools", materialize("2"), { os }),
+      ]);
+
+      assert.equal(first.root, second.root);
+      assert.match(await first.readFile("v.txt", { encoding: "utf8" }), /^[12]$/);
+    });
+  });
+
   it("leaves the previous tree intact when a rebuild fails", async () => {
     await withOsRoot("rebuild-failure", async (os) => {
       const good = await rebuildFS("tools", (s) => s.writeFile("v.txt", "1"), { os });

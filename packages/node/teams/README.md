@@ -167,7 +167,7 @@ environment variable.
   builder targets. Defaults to `1.5` (what Teams supports).
 - `webhookUrl` / `TEAMS_WEBHOOK_URL` - optional Teams incoming-webhook URL. When
   unset, posting is disabled and the plugin only builds cards for a UI to
-  render. A value that is not an absolute URL fails config resolution.
+  render. A value that is not an absolute HTTPS URL fails config resolution.
 - `agentPlugin` / `TEAMS_AGENT_PLUGIN` - registered name of the sibling plugin
   whose agents answer a conversation turn. Defaults to `mastra`; set it when the
   Mastra plugin is mounted under a `config.name` override.

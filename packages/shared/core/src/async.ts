@@ -151,8 +151,12 @@ export async function* poll<T, A = Record<string, unknown>>(
       const value = await producer(ctx);
       if (options.filter) {
         if (options.filter === "distinct") {
-          if (deepEqual(previous, value)) continue;
+          if (deepEqual(previous, value)) {
+            await sleep(intervalMs, controller.signal);
+            continue;
+          }
         } else if (!(await options.filter(value, ctx))) {
+          await sleep(intervalMs, controller.signal);
           continue;
         }
       }

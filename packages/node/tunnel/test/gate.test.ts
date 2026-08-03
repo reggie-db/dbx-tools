@@ -70,6 +70,18 @@ describe("code store (cache-backed)", () => {
     assert.equal(await store.verify("b@b.com", "444444"), "expired"); // burned
   });
 
+  it("counts concurrent wrong attempts without losing updates", async () => {
+    const store = new CodeStore(60, 3);
+    await store.issue("parallel@b.com");
+    const outcomes = await Promise.all([
+      store.verify("parallel@b.com", "111111"),
+      store.verify("parallel@b.com", "222222"),
+      store.verify("parallel@b.com", "333333"),
+    ]);
+    assert.deepEqual(outcomes.sort(), ["invalid", "invalid", "too-many-attempts"].sort());
+    assert.equal(await store.verify("parallel@b.com", "444444"), "expired");
+  });
+
   it("issues a 6-digit code", async () => {
     const store = new CodeStore(60, 5);
     assert.match(await store.issue("c@b.com"), /^\d{6}$/);

@@ -102,7 +102,7 @@ function normalizeIgnore(
     },
     add(ignore) {
       ignoreLike?.add?.(ignore);
-      ignoreMatcher = ignoreMatcher.and(...pathMatchTests(ignore));
+      ignoreMatcher = ignoreMatcher.or(...pathMatchTests(ignore));
     },
   };
 }

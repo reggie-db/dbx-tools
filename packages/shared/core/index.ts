@@ -21,6 +21,7 @@ export * as token from "./src/token.ts";
 export type { PollContext, PollProducer, PollOptions } from "./src/async.ts";
 export { DEFAULT_BRAND_ASSETS, BrandAssetSetSchema, BrandColorsSchema, BrandVoiceSchema, BrandContextSchema, defaultBrandContext } from "./src/brand.ts";
 export type { BrandContext, BrandContextInput, BrandAssetSet } from "./src/brand.ts";
+export { MAX_TCP_PORT } from "./src/env.ts";
 export type { EnvKey } from "./src/env.ts";
 export type { ErrorContext } from "./src/error.ts";
 export type { ExecutionResult, Executor, ExecutionFailure, RunOptions } from "./src/execution.ts";

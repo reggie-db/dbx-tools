@@ -46,7 +46,7 @@ deploy failure** (vanilla pnpm only warns).
 ### 2. PATH depends on regular-dep vs workspace layout
 
 Runtime `PATH` includes the **root** `node_modules/.bin`
-(`…:.venv/bin:node_modules/.bin`) but **not** any workspace *member's* `.bin`.
+(`…:.venv/bin:node_modules/.bin`) but **not** any workspace _member's_ `.bin`.
 
 - `bun` as a **root/top-level dependency** → pnpm links `bun`/`bunx` into root
   `node_modules/.bin` → **bare `bun` works, no PATH export.** Works as

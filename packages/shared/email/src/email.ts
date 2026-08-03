@@ -15,33 +15,27 @@
 import { z } from "zod";
 
 /** Schema for a single file attached to an outbound email. */
-export const emailAttachmentSchema = z.object({
-  filename: z.string().describe('File name shown to the recipient (e.g. "report.pdf").'),
-  content: z
-    .string()
-    .optional()
-    .describe(
-      'Inline file content as a string. For binary data set `encoding` (e.g. "base64"). Provide this or `path`, not both.',
-    ),
-  encoding: z
-    .string()
-    .optional()
-    .describe(
-      'Encoding of `content` (e.g. "base64", "utf-8", "hex"). Defaults to utf-8 when omitted.',
-    ),
-  path: z
-    .string()
-    .optional()
-    .describe(
-      "Read the content from here instead of inlining it: a local file path, a data: URI, or an https URL. Provide this or `content`, not both.",
-    ),
-  contentType: z
-    .string()
-    .optional()
-    .describe(
-      'MIME type override (e.g. "application/pdf"). Inferred from the filename when omitted.',
-    ),
-});
+export const emailAttachmentSchema = z
+  .object({
+    filename: z.string().describe('File name shown to the recipient (e.g. "report.pdf").'),
+    content: z
+      .string()
+      .optional()
+      .describe('Inline file content as a string. For binary data set `encoding` (e.g. "base64").'),
+    encoding: z
+      .string()
+      .optional()
+      .describe(
+        'Encoding of `content` (e.g. "base64", "utf-8", "hex"). Defaults to utf-8 when omitted.',
+      ),
+    contentType: z
+      .string()
+      .optional()
+      .describe(
+        'MIME type override (e.g. "application/pdf"). Inferred from the filename when omitted.',
+      ),
+  })
+  .strict();
 
 /** A single file attached to an {@link EmailMessage}. */
 export type EmailAttachment = z.infer<typeof emailAttachmentSchema>;

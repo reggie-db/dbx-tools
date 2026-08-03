@@ -175,12 +175,6 @@ interface ParsedSpawnArgs<T extends SpawnOptions> {
 function parseSpawnArgs<T extends SpawnOptions>(input: SpawnArgs<T>): ParsedSpawnArgs<T> {
   let [value, ...values] = input;
   const [command, ...commandArgs] = shlex(value);
-  if (commandArgs.length == 1 && values.length === 0) {
-    return {
-      command,
-      commandArgs: [],
-    };
-  }
 
   const last = values.at(-1);
   const options =

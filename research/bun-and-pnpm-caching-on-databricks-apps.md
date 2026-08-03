@@ -18,7 +18,7 @@ For the local toolchain rather than the deploy path, see
   different, incompatible format. It does **not** reuse pnpm's store, and you
   cannot make it.
 - **Best pattern: let pnpm install, use bun only to run.** One cache, no `bun
-  install`, full bun runtime.
+install`, full bun runtime.
 
 ## Does `bun install` reuse pnpm's warm store?
 
@@ -49,7 +49,7 @@ into that directory alongside pnpm's. The formats are structurally incompatible:
 - **bun cache:** per-package folders like `is-odd@3.0.1@@localhost@@@1`.
 
 `BUN_INSTALL_CACHE_DIR` / `bunfig.toml` `[install.cache].dir` only relocate
-*bun's own* cache; they can't read pnpm's. The only real "reuse" is at the
+_bun's own_ cache; they can't read pnpm's. The only real "reuse" is at the
 resolution level: if node_modules already exists, bun runs against it without
 downloading.
 

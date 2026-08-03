@@ -1,7 +1,7 @@
 /**
  * Per-request model-override wire convention shared by the Mastra
  * plugin server (`@dbx-tools/appkit-mastra`'s `extractModelOverride`)
- * and the browser chat client (`@dbx-tools/appkit-mastra-ui`). Kept
+ * and the browser chat client (`@dbx-tools/ui-mastra`). Kept
  * here so the header / query / body field names can never drift
  * between the side that sets them and the side that reads them.
  *

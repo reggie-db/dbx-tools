@@ -23,12 +23,42 @@ interface ProcessLike {
   env?: Record<string, string | undefined>;
 }
 
+/** Highest valid TCP port number. */
+export const MAX_TCP_PORT = 65_535;
+
 /** One env var name, or several tried in order. */
 export type EnvKey = string | readonly string[];
 
 /** The ambient environment, or `{}` off-process (a browser). */
 function environment(): Record<string, string | undefined> {
   return (globalThis as { process?: ProcessLike }).process?.env ?? {};
+}
+
+/**
+ * Detect the Databricks App runtime from its required environment shape.
+ *
+ * A valid app has a non-empty name, an HTTP(S) workspace host, and a valid
+ * `DATABRICKS_APP_PORT`. Reads the ambient environment when none is supplied.
+ */
+export function isAppEnv(source: Record<string, string | undefined> = environment()): boolean {
+  const appName = source.DATABRICKS_APP_NAME?.trim();
+  const host = source.DATABRICKS_HOST?.trim();
+  const port = source.DATABRICKS_APP_PORT?.trim();
+  if (!appName || !host || !port) return false;
+
+  try {
+    if (!["http:", "https:"].includes(new URL(host).protocol)) return false;
+  } catch {
+    return false;
+  }
+
+  const portNumber = toNumber(port);
+  return (
+    portNumber !== undefined &&
+    Number.isInteger(portNumber) &&
+    portNumber >= 1 &&
+    portNumber <= MAX_TCP_PORT
+  );
 }
 
 /**

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { assertFetchUrlAllowed } from "../src/_fetch-url.ts";
 import {
   assertUrlAllowed,
   normalizeUrlPattern,
@@ -56,6 +57,44 @@ describe("web-search allow-list", () => {
     const list = toUrlAllowList(parseAllowedUrls(["databricks.com"]));
     assert.throws(() => assertUrlAllowed("https://evil.example.com/", list), /allow-list/);
     assert.doesNotThrow(() => assertUrlAllowed("https://databricks.com/", list));
+  });
+});
+
+describe("web-fetch network policy", () => {
+  const unrestricted = toUrlAllowList([]);
+  const publicDns = async () => [{ address: "93.184.216.34", family: 4 }];
+
+  it("accepts an allowed HTTPS URL that resolves publicly", async () => {
+    await assert.doesNotReject(() =>
+      assertFetchUrlAllowed("https://example.com/page", unrestricted, publicDns),
+    );
+  });
+
+  it("rejects non-HTTPS URLs and embedded credentials", async () => {
+    await assert.rejects(() =>
+      assertFetchUrlAllowed("http://example.com/page", unrestricted, publicDns),
+    );
+    await assert.rejects(() =>
+      assertFetchUrlAllowed("https://user:secret@example.com/page", unrestricted, publicDns),
+    );
+  });
+
+  it("rejects literal and DNS-resolved private addresses", async () => {
+    await assert.rejects(() =>
+      assertFetchUrlAllowed("https://127.0.0.1/admin", unrestricted, publicDns),
+    );
+    await assert.rejects(() =>
+      assertFetchUrlAllowed("https://example.com/admin", unrestricted, async () => [
+        { address: "169.254.169.254", family: 4 },
+      ]),
+    );
+  });
+
+  it("applies the allow-list to every concrete target", async () => {
+    const restricted = toUrlAllowList(["docs.example.com"]);
+    await assert.rejects(() =>
+      assertFetchUrlAllowed("https://redirect.example.net/private", restricted, publicDns),
+    );
   });
 });
 

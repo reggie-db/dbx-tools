@@ -5,8 +5,8 @@ import { BrandIcon, useBrand } from "@dbx-tools/ui-branding/react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 
 /**
- * Email one-time-code sign-in gate for an app fronted by the `@dbx-tools/email`
- * auth plugin - an app reachable on the public internet, where the hosting
+ * Email one-time-code sign-in gate for an app fronted by the
+ * `@dbx-tools/tunnel` `authGate` plugin - an app reachable on the public internet, where the hosting
  * platform's own identity-aware proxy is not in the request path.
  *
  * Wrap the app in `<AuthGate>...</AuthGate>`. It calls the plugin's
@@ -38,6 +38,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
     credentials: "same-origin",
   });
+  if (!res.ok) throw new Error(`Authentication request failed (${res.status})`);
   return (await res.json()) as T;
 }
 
@@ -68,7 +69,10 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
   useEffect(() => {
     let cancelled = false;
     void fetch(`${AUTH_BASE}/status`, { credentials: "same-origin" })
-      .then((res) => res.json() as Promise<AuthStatus>)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Authentication status failed (${res.status})`);
+        return res.json() as Promise<AuthStatus>;
+      })
       .then((status) => {
         if (cancelled) return;
         if (!status.enabled) setPhase("open");
@@ -108,6 +112,8 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
             : "If an account exists for that email address, a verification code is on its way.",
         );
         setPhase("code");
+      } catch {
+        setNotice("Unable to request a verification code. Try again.");
       } finally {
         setBusy(false);
       }
@@ -135,6 +141,8 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
               : "That verification code is incorrect or has expired.",
           );
         }
+      } catch {
+        setNotice("Unable to verify the code. Try again.");
       } finally {
         setBusy(false);
       }

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { CacheManager } from "@databricks/appkit";
 
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
-import { rankModels, resolveModel } from "../src/resolve.ts";
+import { rankModels, resolveModel, selectModel } from "../src/resolve.ts";
 import {
   listServingEndpointsUncached,
   resolveModelId,
@@ -227,5 +228,28 @@ describe("resolveModel", () => {
       },
     );
     assert.deepEqual(result, { modelId: "databricks-claude-sonnet-5", source: "fallback" });
+  });
+});
+
+describe("selectModel", () => {
+  it("checks tool support for an explicit non-fuzzy model", async () => {
+    await CacheManager.getInstance();
+    const client = {
+      servingEndpoints: {
+        async *list() {
+          yield { name: "databricks-gemini-3-5-flash", task: CHAT_TASK };
+        },
+      },
+    } as WorkspaceClientLike;
+
+    await assert.rejects(
+      () =>
+        selectModel(client, `https://tools-${Date.now()}.example.com`, {
+          explicit: "databricks-gemini-3-5-flash",
+          fuzzy: false,
+          requiresTools: true,
+        }),
+      /does not support function tools/,
+    );
   });
 });

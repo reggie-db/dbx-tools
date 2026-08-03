@@ -76,12 +76,13 @@ function actionElements(spec: card.CardSpec): CardElement[] {
  * the `adaptivecards` package or post to a Teams incoming webhook.
  */
 export function buildAdaptiveCard(spec: card.CardSpec): card.AdaptiveCard {
+  const validated = card.cardSpecSchema.parse(spec);
   const body: CardElement[] = [
-    ...headingElements(spec),
-    ...textElements(spec),
-    ...factElements(spec),
+    ...headingElements(validated),
+    ...textElements(validated),
+    ...factElements(validated),
   ];
-  const actions = actionElements(spec);
+  const actions = actionElements(validated);
   const document: card.AdaptiveCard = {
     type: "AdaptiveCard",
     $schema: card.ADAPTIVE_CARD_SCHEMA_URL,
