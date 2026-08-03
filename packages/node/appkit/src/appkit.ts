@@ -44,6 +44,7 @@ import {
   lifecycleBridge,
   type ResolvedAppEnv,
 } from "./interceptor.ts";
+import { createSoftPersistentStorage } from "./_cache-storage.ts";
 import { applyLakebaseEnv, type LakebaseConnection } from "./lakebase-resolver.ts";
 import { provisionCacheSchema } from "./provision.ts";
 
@@ -210,6 +211,22 @@ async function autoConfigureLakebase(
   return resolved;
 }
 
+/**
+ * Whether `createApp` should inject soft-fail Lakebase cache storage.
+ *
+ * Skips when the caller disabled the cache, already supplied a storage
+ * backend (including in-memory), or Lakebase is not in play.
+ */
+function shouldInjectSoftPersistentCache(
+  config: CreateAppConfig | undefined,
+  lakebase: LakebaseConnection | undefined,
+): boolean {
+  const cache = config?.cache;
+  if (cache?.enabled === false) return false;
+  if (cache?.storage) return false;
+  return Boolean(lakebase) || usesPlugin(config, LAKEBASE_PLUGIN);
+}
+
 function redactLakebaseConnection(resolved: LakebaseConnection): Record<string, unknown> {
   return {
     project: resolved.project,
@@ -275,6 +292,17 @@ export async function createApp<T extends AppKitPlugins>(
   const appConfig = { ...config };
   delete appConfig.autoConfigure;
   delete appConfig.interceptor;
+
+  if (shouldInjectSoftPersistentCache(config, lakebase)) {
+    logger.debug("createApp: inject soft persistent cache storage");
+    const storage = await createSoftPersistentStorage(config?.cache);
+    if (storage) {
+      appConfig.cache = { ...config?.cache, storage };
+      logger.debug("createApp: soft persistent cache storage ready");
+    } else {
+      logger.debug("createApp: soft persistent cache storage unavailable");
+    }
+  }
 
   if (interceptors.length === 0) {
     logger.debug("createApp: no interceptors; delegating to AppKit createApp", {

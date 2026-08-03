@@ -8,7 +8,10 @@
  *   **per-agent** namespacing via {@link agentStorageSchemaName} so
  *   conversation history stays isolated between agents in the same
  *   database. `PostgresStore` auto-creates the schema with
- *   `CREATE SCHEMA IF NOT EXISTS` on init.
+ *   `CREATE SCHEMA IF NOT EXISTS` on init. A failed migration (common on
+ *   Lakebase when the connecting role is not the table owner) is logged
+ *   and skipped via {@link withSoftStorageInit} so existing tables keep
+ *   serving instead of retrying DDL on every request.
  * - **Memory** (semantic recall via `PgVector`): defaults to a single
  *   **shared** instance across every agent. Cross-agent recall on one
  *   index is almost always what users want; opt into per-agent recall
@@ -30,7 +33,7 @@
  */
 
 import { getUsernameWithApiLookup } from "@databricks/appkit";
-import { hash, log } from "@dbx-tools/shared-core";
+import { error, hash, log } from "@dbx-tools/shared-core";
 import { fastembed } from "@mastra/fastembed";
 import { Memory } from "@mastra/memory";
 import { PgVector, PostgresStore } from "@mastra/pg";
@@ -42,6 +45,47 @@ import { agentStorageSchemaName } from "./storage-schema.ts";
 import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 
 const logger = log.logger("mastra/memory");
+
+/** Whether `LOG_LEVEL` is currently at or below debug. */
+function isDebugEnabled(): boolean {
+  return log.isLevelEnabled("debug");
+}
+
+/**
+ * Soften {@link PostgresStore.init} so a failed migration (e.g. Lakebase
+ * `must be owner of table …` on `ALTER`) is logged once instead of rethrown
+ * on every storage call.
+ *
+ * Mastra's `augmentWithInit` retries init forever when it throws, so the
+ * only way to keep serving against an already-usable schema is to treat
+ * migration failure as success and mark the store initialized.
+ */
+export function withSoftStorageInit(store: PostgresStore): PostgresStore {
+  const soft = store as unknown as {
+    init: () => Promise<void>;
+    id: string;
+    schema?: string;
+    isInitialized: boolean;
+  };
+  const originalInit = soft.init.bind(soft);
+  soft.init = async () => {
+    try {
+      await originalInit();
+    } catch (err) {
+      if (isDebugEnabled()) {
+        logger.error("mastra storage migration failed", err);
+      } else {
+        logger.warn("mastra storage migration failed", {
+          error: error.errorMessage(err),
+          storeId: soft.id,
+          schema: soft.schema,
+        });
+      }
+      soft.isInitialized = true;
+    }
+  };
+  return store;
+}
 
 /**
  * Build a dedicated **service-principal** Lakebase pool for Mastra
@@ -129,15 +173,21 @@ export class MemoryBuilder {
     const setting = this.config.storage;
     if (!setting) return undefined;
     if (typeof setting === "object") {
-      return new PostgresStore(
-        withId(setting, "mastra-store__instance") as ConstructorParameters<typeof PostgresStore>[0],
+      return withSoftStorageInit(
+        new PostgresStore(
+          withId(setting, "mastra-store__instance") as ConstructorParameters<
+            typeof PostgresStore
+          >[0],
+        ),
       );
     }
-    return new PostgresStore({
-      id: "mastra-store__instance",
-      schemaName: "mastra_instance",
-      pool: this.servicePrincipalPool,
-    });
+    return withSoftStorageInit(
+      new PostgresStore({
+        id: "mastra-store__instance",
+        schemaName: "mastra_instance",
+        pool: this.servicePrincipalPool,
+      }),
+    );
   }
 
   /**
@@ -192,17 +242,23 @@ export class MemoryBuilder {
   private buildStorage(agentId: string, setting: StorageSetting): PostgresStore | undefined {
     if (!setting) return undefined;
     if (typeof setting === "boolean") {
-      return new PostgresStore({
-        id: `mastra-store__${agentId}`,
-        schemaName: agentStorageSchemaName(agentId),
-        pool: this.servicePrincipalPool,
-      });
+      return withSoftStorageInit(
+        new PostgresStore({
+          id: `mastra-store__${agentId}`,
+          schemaName: agentStorageSchemaName(agentId),
+          pool: this.servicePrincipalPool,
+        }),
+      );
     }
     // Cast: `withId` guarantees `id` is set, but the distributive
     // Omit + `id?: string` shape doesn't structurally narrow to the
     // discriminated union members. Runtime shape is identical.
-    return new PostgresStore(
-      withId(setting, `mastra-store__${agentId}`) as ConstructorParameters<typeof PostgresStore>[0],
+    return withSoftStorageInit(
+      new PostgresStore(
+        withId(setting, `mastra-store__${agentId}`) as ConstructorParameters<
+          typeof PostgresStore
+        >[0],
+      ),
     );
   }
 

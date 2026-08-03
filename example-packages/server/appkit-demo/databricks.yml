@@ -1,47 +1,37 @@
 bundle:
   name: dbx-tools-demo
+  engine: direct
 
-# Lakebase Autoscaling resources backing the demo's memory tools. Deploys
-# a single autoscaling Postgres endpoint with scale-to-zero enabled, so
-# the compute idles for free between user sessions and wakes on the next
-# connection.
-#
-# Layout: one project, one branch (`main`). The read-write endpoint named
-# `primary` is auto-created by Lakebase when the branch is created and
-# inherits the autoscaling + suspend settings from
-# `default_endpoint_settings` on the project. The default `production`
-# branch is also auto-provisioned with its own endpoint when the project
-# is created; the demo doesn't use it. Delete it manually with
-# `databricks postgres delete-branch projects/dbx-tools-demo-lb/branches/production`
-# if you want a tidier project.
-#
-# Why no explicit `postgres_endpoints` resource: every new branch
-# (including the production default) auto-provisions a `primary` r/w
-# endpoint at branch-creation time. Declaring our own `postgres_endpoints`
-# entry collides with it ("read_write endpoint already exists") because a
-# branch can only hold ONE read-write endpoint at a time. Configuring
-# `default_endpoint_settings` on the project gives us the same effect
-# without the conflict.
-#
-# Deploy:
-#   databricks bundle validate
-#   databricks bundle deploy
-#
-# After deploy, look up the endpoint host with:
-#   databricks postgres get-endpoint projects/dbx-tools-demo-lb/branches/main/endpoints/primary
-# and paste `status.hosts.host` into .env as PGHOST.
-#
-# If you deployed an earlier revision of this bundle that landed the
-# endpoint with the wrong settings (1-1 CU, 0s suspend), force it to
-# match the project defaults with:
-#   databricks postgres update-endpoint \
-#     projects/dbx-tools-demo-lb/branches/main/endpoints/primary \
-#     --json '{"spec": {"autoscaling_limit_min_cu": 0.5, "autoscaling_limit_max_cu": 2, "suspend_timeout_duration": "300s"}}' \
-#     --update-mask "spec.autoscaling_limit_min_cu,spec.autoscaling_limit_max_cu,spec.suspend_timeout_duration"
-#
-# Tear-down (note: `databricks bundle destroy` does NOT work for Lakebase
-# read-write endpoints; you have to delete the whole project):
-#   databricks postgres delete-project projects/dbx-tools-demo-lb
+variables:
+  app_name:
+    default: dbx-tools-demo
+  lakebase_project_id:
+    default: dbx-tools-demo-v2
+  genie_space_id:
+    default: 01f1890bd0cd1a7d93cb3c6dba8ab1e5
+  warehouse_id:
+    default: a2171589c3905bc7
+  experiment_id:
+    default: "798709075143130"
+  secret_scope:
+    default: dbx-tools-demo
+  tunnel_auth_allow:
+    default: databricks.com
+  lakebase_endpoint:
+    default: projects/${var.lakebase_project_id}/branches/production/endpoints/primary
+  genie_identity:
+    default: auto
+  mlflow_tracking_uri:
+    default: databricks
+  otel_propagators:
+    default: none
+  client_dist:
+    default: ./client-dist
+  tunnel_public_domain:
+    default: demo.apps.dbx.tools
+
+workspace:
+  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 
 # The demo is deployed to the AWS FEVM workspace. Pinning `host` here (rather
 # than relying on whichever profile happens to be active) is what keeps
@@ -50,6 +40,7 @@ bundle:
 targets:
   dev:
     default: true
+    mode: development
     workspace:
       host: https://fevm-reggie-pierce-aws.cloud.databricks.com
       # Named explicitly because more than one profile in `~/.databrickscfg`
@@ -57,10 +48,12 @@ targets:
       profile: FEVM-REGGIE-PIERCE-AWS
 
 resources:
+  # Lakebase Autoscaling project backing the demo's memory tools. Lakebase
+  # automatically provisions the `production` branch and its `primary`
+  # read-write endpoint. The endpoint inherits these project defaults.
   postgres_projects:
     demo_project:
-      project_id: dbx-tools-demo-lb
-      display_name: dbx-tools-js demo
+      project_id: ${var.lakebase_project_id}
       pg_version: 17
       # Settings that flow into every auto-created endpoint (including
       # the `primary` endpoint on every branch). 0.5 CU floor is the
@@ -71,13 +64,8 @@ resources:
         autoscaling_limit_min_cu: 0.5
         autoscaling_limit_max_cu: 2
         suspend_timeout_duration: 300s
-
-  postgres_branches:
-    demo_branch:
-      parent: ${resources.postgres_projects.demo_project.id}
-      branch_id: main
-      is_protected: false
-      no_expiry: true
+      lifecycle:
+        prevent_destroy: true
 
   # The demo app itself. It was originally created with `databricks apps
   # create`; declaring it here keeps the resource bindings and the OAuth
@@ -93,9 +81,11 @@ resources:
   #   - sql                       -> warehouse queries behind the Genie/SQL tools.
   apps:
     demo_app:
-      name: dbx-tools-demo
+      name: ${var.app_name}
       description: "dbx-tools AppKit + Mastra demo (Fuel Mart)"
       source_code_path: .
+      lifecycle:
+        prevent_destroy: true
       # Bundle app config overrides app.yaml for the deployed app. Keep the
       # source app.yaml usable as the ordinary local/default app config; the
       # public tunnel, OTP gate, staged client path, and deployment resource
@@ -116,24 +106,26 @@ resources:
           # Android detect for autofill, and the display name comes from the repo
           # brand context. A novel subject is what breaks that.
           - name: TUNNEL_AUTH_ALLOW
-            value: databricks.com
+            value: ${var.tunnel_auth_allow}
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse
           - name: DATABRICKS_GENIE_SPACE_ID
             value_from: genie-space
           - name: LAKEBASE_ENDPOINT
-            value_from: postgres
+            value: ${var.lakebase_endpoint}
           # The demo is served through the OTP tunnel, where callers authenticate
           # by email and no OBO token exists to forward - `user` would fail every
           # turn with AppKit's AuthenticationError. `auto` keeps OBO for
           # front-door (workspace UI) traffic and falls back to the app service
           # principal per-request for tunnel callers.
           - name: MASTRA_GENIE_IDENTITY
-            value: auto
+            value: ${var.genie_identity}
           - name: MLFLOW_EXPERIMENT_ID
             value_from: mlflow-experiment
           - name: MLFLOW_TRACKING_URI
-            value: databricks
+            value: ${var.mlflow_tracking_uri}
           - name: OTEL_PROPAGATORS
-            value: none
+            value: ${var.otel_propagators}
           - name: SMTP_HOST
             value_from: smtp-host
           - name: SMTP_PORT
@@ -150,9 +142,9 @@ resources:
           # derived per on-behalf-of user, and system mail (the tunnel's sign-in
           # code) goes out as no-reply@EMAIL_DOMAIN.
           - name: CLIENT_DIST
-            value: ./client-dist
+            value: ${var.client_dist}
           - name: TUNNEL_PUBLIC_DOMAIN
-            value: demo.apps.dbx.tools
+            value: ${var.tunnel_public_domain}
           - name: PORTR_TOKEN
             value_from: portr-token
           # TUNNEL_AUTH_JWT_SECRET is deliberately NOT set: the gate persists its
@@ -176,11 +168,11 @@ resources:
         - name: genie-space
           genie_space:
             name: Fuel Mart Store Intelligence
-            space_id: 01f1890bd0cd1a7d93cb3c6dba8ab1e5
+            space_id: ${var.genie_space_id}
             permission: CAN_RUN
-        - name: warehouse
+        - name: sql-warehouse
           sql_warehouse:
-            id: a2171589c3905bc7
+            id: ${var.warehouse_id}
             permission: CAN_USE
         # Lakebase binding that lets autopg mint a working OAuth token as
         # the app service principal. Without it Mastra's PostgresStore init
@@ -190,8 +182,8 @@ resources:
         # `databricks_postgres`.
         - name: postgres
           postgres:
-            branch: projects/dbx-tools-demo-lb/branches/main
-            database: projects/dbx-tools-demo-lb/branches/main/databases/databricks-postgres
+            branch: projects/${var.lakebase_project_id}/branches/production
+            database: projects/${var.lakebase_project_id}/branches/production/databases/databricks-postgres
             permission: CAN_CONNECT_AND_CREATE
         # MLflow experiment the agent's traces and user feedback land in
         # (`/Users/reggie.pierce@databricks.com/dbx-tools-demo`).
@@ -215,54 +207,54 @@ resources:
         # `@dbx-tools/appkit-mastra` README "Databricks Apps -> Unity Catalog".
         - name: mlflow-experiment
           experiment:
-            experiment_id: "798709075143130"
+            experiment_id: ${var.experiment_id}
             permission: CAN_EDIT
         # SMTP + sender config for the approval-gated email tool, read from
         # the `dbx-tools-demo` secret scope and surfaced to the runtime by
         # the matching `value_from` entries in the app config above.
         - name: smtp-host
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: smtp-host
             permission: READ
         - name: smtp-port
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: smtp-port
             permission: READ
         - name: smtp-secure
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: smtp-secure
             permission: READ
         - name: smtp-user
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: smtp-user
             permission: READ
         - name: smtp-password
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: smtp-password
             permission: READ
         - name: email-domain
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: email-domain
             permission: READ
         - name: email-from
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: email-from
             permission: READ
         # Public tunnel + OTP gate secrets used only by the deployed command.
         - name: portr-token
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: portr-token
             permission: READ
         - name: auth-jwt-secret
           secret:
-            scope: dbx-tools-demo
+            scope: ${var.secret_scope}
             key: auth-jwt-secret
             permission: READ
