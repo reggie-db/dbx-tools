@@ -27,11 +27,9 @@ gating middleware on the app's OWN Express server (no separate proxy process).
   no separate process: `createApp({ interceptor: tunnelInterceptor() })`. A no-op
   when no `PORTR_TOKEN` / `TUNNEL_PUBLIC_DOMAIN` is set, so it is safe to register
   unconditionally.
-- Branded from the repo-wide brand context: the code email's accent colour, font,
-  logo, and display name come from the app's own `branding/brand.yaml` (via
-  `@dbx-tools/core`'s `loadBrandContext()`), falling back to the dbx-tools
-  default - so the sign-in email looks like the app it fronts with nothing to
-  configure. `TUNNEL_AUTH_BRAND_NAME` overrides just the name.
+- Uses the shared email-template brand for the code email's color, font, and
+  logo. The displayed app name defaults to the dbx-tools brand and can be set
+  with `brandName` or `TUNNEL_AUTH_BRAND_NAME`.
 - Conventional one-time-code copy, so platform autofill works: the email is
   `Your verification code is: / <code> / This code expires in N minutes`, and the
   code input carries `autocomplete="one-time-code"`. iOS, Gmail, Outlook, and

@@ -1,5 +1,3 @@
-import { brand, object } from "@dbx-tools/shared-core";
-import { useBrand } from "@dbx-tools/ui-branding/react";
 import {
   Button,
   Card,
@@ -12,6 +10,8 @@ import {
   Separator,
   cn,
 } from "@databricks/appkit-ui/react";
+import { brand, object } from "@dbx-tools/shared-core";
+import { useBrand } from "@dbx-tools/ui-branding/react";
 import { useEffect, useId, useMemo, useState } from "react";
 
 const COLOR_FIELDS = [

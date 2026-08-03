@@ -20,6 +20,8 @@ Reusable PostgreSQL utilities for Node.js packages in `dbx-tools`.
   public IP.
 - Holds one dedicated pooled connection for `LISTEN`, so every app instance
   receives every broadcast without competing consumers.
+- Reconnects the dedicated listener with bounded exponential backoff after a
+  connection error while subscribers remain active.
 
 ## Quick Start
 
@@ -75,8 +77,9 @@ the constructor to enrich messages with async context such as a discovered
 public IP or app-specific instance id.
 
 Notifications are live and limited by PostgreSQL's `NOTIFY` payload size. The
-message must be JSON serializable. Use a table or queue when subscribers need
-replay or durable delivery.
+message must round-trip through JSON without coercion: non-finite numbers,
+cycles, class instances, functions, symbols, and `undefined` are rejected. Use a
+table or queue when subscribers need replay or durable delivery.
 
 ## Why A Separate Package?
 

@@ -23,11 +23,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import type * as ts from "typescript";
 import { find } from "@dbx-tools/path";
+import { log } from "@dbx-tools/shared-core";
+import type * as ts from "typescript";
 import { lazyRequire } from "./_lazy-require.ts";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated.ts";
-import { log } from "@dbx-tools/shared-core";
 import {
   type RecordedPackage,
   isModuleFile,

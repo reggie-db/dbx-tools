@@ -46,10 +46,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
+import { log, object } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";
 import { lazyRequire } from "./_lazy-require.ts";
 import { header, isReadonly, makeReadonly, makeWritable } from "./generated.ts";
-import { log, object } from "@dbx-tools/shared-core";
 import { readPackageManifest, repoRoot, recordedPackages } from "./packages.ts";
 
 const logger = log.logger("projen:codegen");

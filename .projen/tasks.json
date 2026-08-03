@@ -153,8 +153,17 @@
       },
       "steps": [
         {
-          "exec": "eslint --ext .ts,.tsx --fix --no-error-on-unmatched-pattern $@ packages example-packages",
+          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern $@ packages example-packages projen",
           "receiveArgs": true
+        }
+      ]
+    },
+    "eslint:fix": {
+      "name": "eslint:fix",
+      "description": "Fix ESLint issues across the codebase",
+      "steps": [
+        {
+          "exec": "bun run eslint -- --fix"
         }
       ]
     },

@@ -1,9 +1,9 @@
 #!/usr/bin/env -S bun
 import { resolve } from "node:path";
 import { log } from "@dbx-tools/shared-core";
+import { repoRoot, syncResynthPaths } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
 import { watchLoop } from "../src/watch.ts";
-import { repoRoot, syncResynthPaths } from "../src/packages.ts";
 
 const logger = log.logger("projen:projenrc");
 

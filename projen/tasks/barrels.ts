@@ -1,9 +1,9 @@
 #!/usr/bin/env -S bun
 import { sep } from "node:path";
-import { generateBarrels } from "../src/barrels.ts";
 import { log, string } from "@dbx-tools/shared-core";
-import { watchLoop, watchRoots } from "../src/watch.ts";
+import { generateBarrels } from "../src/barrels.ts";
 import { recordedPackages } from "../src/packages.ts";
+import { watchLoop, watchRoots } from "../src/watch.ts";
 
 const logger = log.logger("projen:barrels");
 

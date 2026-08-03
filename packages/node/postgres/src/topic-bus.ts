@@ -1,15 +1,15 @@
 /** Topic-based process fan-out over PostgreSQL LISTEN/NOTIFY. @module */
 
-import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
+import { async as asyncUtil, error, hash, json, string } from "@dbx-tools/shared-core";
 import type { Notification, PoolClient } from "pg";
-
-import { error, json, string } from "@dbx-tools/shared-core";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
 
 const DEFAULT_CHANNEL = "dbx_tools_topic_bus";
 const MAX_NOTIFY_BYTES = 7_900;
+const MIN_RECONNECT_DELAY_MS = 250;
+const MAX_RECONNECT_DELAY_MS = 5_000;
 
 type AppKitExecutionContext = {
   userEmail?: unknown;
@@ -27,6 +27,27 @@ export type SerializablePrimitive = string | number | boolean | null;
 export type SerializableValue =
   SerializablePrimitive | SerializableValue[] | { [key: string]: SerializableValue };
 export type TopicMetadata = Record<string, SerializableValue>;
+
+/** True when a value can round-trip through JSON without loss or coercion. */
+export function isSerializableValue(
+  value: unknown,
+  ancestors: Set<object> = new Set(),
+): value is SerializableValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value !== "object") return false;
+
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return false;
+  if (ancestors.has(value)) return false;
+
+  ancestors.add(value);
+  const valid = Array.isArray(value)
+    ? value.every((entry) => isSerializableValue(entry, ancestors))
+    : Object.values(value).every((entry) => isSerializableValue(entry, ancestors));
+  ancestors.delete(value);
+  return valid;
+}
 
 export interface TopicMessage<TBody extends SerializableValue = SerializableValue> {
   id: string;
@@ -130,7 +151,9 @@ function decode(value: string | undefined): TopicMessage | undefined {
     !record.metadata ||
     typeof record.metadata !== "object" ||
     Array.isArray(record.metadata) ||
-    !("body" in record)
+    !("body" in record) ||
+    !isSerializableValue(record.metadata) ||
+    !isSerializableValue(record.body)
   ) {
     return undefined;
   }
@@ -156,6 +179,8 @@ export class PostgresTopicBus {
   private readonly listeners = new Map<string, Set<TopicListener>>();
   private client: PoolClient | undefined;
   private starting: Promise<void> | undefined;
+  private reconnecting: Promise<void> | undefined;
+  private readonly reconnectAbort = new AbortController();
   private closed = false;
 
   constructor(
@@ -170,7 +195,9 @@ export class PostgresTopicBus {
   async start(): Promise<void> {
     if (this.client) return;
     if (this.closed) throw new Error("Postgres topic bus is closed");
-    this.starting ??= this.connect();
+    this.starting ??= this.connect().finally(() => {
+      this.starting = undefined;
+    });
     await this.starting;
   }
 
@@ -180,10 +207,13 @@ export class PostgresTopicBus {
   ): Promise<TopicMessage<TBody>> {
     if (!topic.trim()) throw new TypeError("Topic must not be empty");
     if (!input.type.trim()) throw new TypeError("Message type must not be empty");
+    if (!isSerializableValue(input.metadata ?? {}) || !isSerializableValue(input.body)) {
+      throw new TypeError("Message metadata and body must be JSON serializable without coercion");
+    }
     if (this.closed) throw new Error("Postgres topic bus is closed");
     const automatic = await this.resolveMetadata();
     const message: TopicMessage<TBody> = {
-      id: randomUUID(),
+      id: hash.id(),
       topic,
       type: input.type,
       metadata: { ...automatic, ...input.metadata },
@@ -231,7 +261,9 @@ export class PostgresTopicBus {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.reconnectAbort.abort(new Error("Postgres topic bus is closed"));
     await this.starting?.catch(() => undefined);
+    await this.reconnecting?.catch(() => undefined);
     const client = this.client;
     this.client = undefined;
     this.listeners.clear();
@@ -253,6 +285,7 @@ export class PostgresTopicBus {
       client.on("notification", this.handleNotification);
       client.on("error", this.handleClientError);
       await client.query(`LISTEN ${quoteIdentifier(this.channel)}`);
+      if (this.closed) throw new Error("Postgres topic bus is closed");
       this.client = client;
     } catch (cause) {
       client.removeListener("notification", this.handleNotification);
@@ -273,5 +306,36 @@ export class PostgresTopicBus {
 
   private readonly handleClientError = (cause: Error): void => {
     this.onError(cause);
+    const client = this.client;
+    if (!client) return;
+    this.client = undefined;
+    client.removeListener("notification", this.handleNotification);
+    client.removeListener("error", this.handleClientError);
+    client.release(cause);
+    if (this.closed || this.listeners.size === 0) return;
+    this.reconnecting ??= this.reconnect().finally(() => {
+      this.reconnecting = undefined;
+    });
   };
+
+  private async reconnect(): Promise<void> {
+    let delay = 0;
+    while (!this.closed && this.listeners.size > 0) {
+      if (delay > 0) {
+        try {
+          await asyncUtil.sleep(delay, this.reconnectAbort.signal);
+        } catch {
+          return;
+        }
+      }
+      try {
+        await this.start();
+        return;
+      } catch (cause) {
+        if (this.closed) return;
+        this.onError(cause);
+        delay = delay === 0 ? MIN_RECONNECT_DELAY_MS : Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
+      }
+    }
+  }
 }

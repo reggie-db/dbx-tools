@@ -6,9 +6,8 @@
  * package at `packages/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
  * it from the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
  *
- * The runnable sample app lives in its own standalone project under `demo/` (its
- * own `demo/.projenrc.ts` + nested pnpm workspace, consuming the published
- * `@dbx-tools/*` packages) - it is NOT part of this synth.
+ * The runnable sample app lives under `example-packages/` and is synthesized as
+ * part of this workspace alongside the published packages it consumes.
  *
  * Per-package tweaks are MIXINS applied with `project.applyToProjects(root, {...},
  * cb)` (constructs-native, across the subtree; the built-in tag mixins already ran
@@ -314,12 +313,6 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
   p.addDeps("@dbx-tools/databricks@workspace:*", "@databricks/zerobus-ingest-sdk@^1.1.0");
 });
 
-// node-databricks-map: early / unfinished. Keep it out of `pnpm -r publish`
-// until it has a real surface.
-project.applyToProjects(root, { identifierName: "databricks-map", tags: "node" }, (p) => {
-  p.package.addField("private", true);
-});
-
 // node-email: server-side email add-on - SMTP transport (nodemailer) / local
 // outbox, React Email rendering, on-behalf-of sender
 // derivation, the approval-gated `send_email` Mastra tool, and the AppKit
@@ -572,7 +565,7 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
   p.package.addField("name", `@${SCOPE}/cli`);
   p.package.file.readonly = false;
   p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbxt: "./bin/dbx-tools.ts" });
-  p.addDeps("@dbx-tools/core@workspace:*");
+  p.addDeps("@clack/prompts@catalog:", "@dbx-tools/core@workspace:*");
 });
 
 // cli-model-proxy: local OpenAI-compatible proxy in front of Databricks Model
@@ -616,11 +609,6 @@ project.applyToProjects(
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
-    // `brand.loadBrandContext()`: the gate's email copy + styling come from the
-    // host's own `branding/brand.yaml` when it has one, so the sign-in email
-    // matches the app it fronts. Node-only (reads the file), hence node-core
-    // rather than shared-core.
-    "@dbx-tools/core@workspace:*",
     // Browser-safe login wire schemas + the session cookie name - imported
     // statically by the gate, so a regular dep.
     "@dbx-tools/shared-email@workspace:*",

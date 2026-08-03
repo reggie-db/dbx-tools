@@ -31,11 +31,12 @@ function readDBXToolsConfig(pkg: javascript.NodePackage): Record<string, unknown
 
 function loadConfig(dbxToolsConfig: DBXToolsConfig, pkg: javascript.NodePackage) {
   const { tags, ...config } = readDBXToolsConfig(pkg);
-  if (Array.isArray(tags))
+  if (Array.isArray(tags)) {
     object
       .sequence(tags)
       .filter((v: unknown) => typeof v === "string")
       .forEach((v: string) => dbxToolsConfig.tags.push(v));
+  }
   Object.entries(config).forEach(([key, value]) => {
     dbxToolsConfig[key] = value;
   });

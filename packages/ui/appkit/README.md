@@ -1,45 +1,30 @@
 # @dbx-tools/ui-appkit
 
-Shared React/Vite/Tailwind foundation for AppKit-oriented UI packages.
+Shared React and Tailwind foundation for AppKit-oriented UI packages.
 
 Import this package when a React client or feature UI package needs the same
-Vite plugin setup and base stylesheet used by dbx-tools AppKit UI components.
-It centralizes React refresh, Tailwind v4, Streamdown base styles, and a shiki
-token paint shim for streamed markdown/code output.
+base stylesheet and component imports used by dbx-tools AppKit UI components.
+It centralizes Tailwind v4, Streamdown base styles, and a shiki token paint shim
+for streamed markdown/code output.
 
 Key features:
 
-- Shared Vite plugin factory for React and Tailwind v4.
 - Stable `@dbx-tools/ui-appkit/react` re-export of AppKit's React component
   primitives for feature packages.
 - `BrandPicker`, a controlled AppKit-native editor for portable identity,
   color tokens, document metadata, and assets.
 - AppKit UI stylesheet import path for host applications and feature packages.
 - Streamdown/code-block styling used by streaming chat and Markdown surfaces.
-- One place to evolve UI build assumptions for feature packages such as
+- One place to evolve UI styling assumptions for feature packages such as
   [`@dbx-tools/ui-email`](../email) and [`@dbx-tools/ui-mastra`](../mastra).
 
 ## Why Not Just AppKit UI?
 
 Use `@databricks/appkit-ui` directly in app code when you only need AppKit's
 components and hooks. This package exists for dbx-tools feature packages and
-hosts that want one stable import path for AppKit primitives, React/Tailwind Vite
-setup, Streamdown/shiki styling, and Tailwind source registration.
-
-## Configure Vite
-
-```ts
-import { appkitUiVitePlugins } from "@dbx-tools/ui-appkit/vite";
-import { defineConfig } from "vite";
-
-export default defineConfig({
-  plugins: appkitUiVitePlugins(),
-});
-```
-
-`vite.appkitUiVitePlugins()` returns the React plugin and Tailwind v4 plugin.
-Using it keeps host applications and feature packages on the same Vite/Tailwind
-integration.
+hosts that want one stable import path for AppKit primitives,
+Streamdown/shiki styling, and Tailwind source registration. Host applications
+remain responsible for their own Bun, Vite, or other build configuration.
 
 ## Import Styles
 
@@ -80,14 +65,12 @@ Feature packages should depend on this package instead of each owning their own
 Tailwind and Streamdown base setup. That gives downstream host apps one place to
 look for:
 
-- Vite plugin defaults;
 - shared markdown/code styling;
 - AppKit UI peer assumptions;
 - future shared React utilities.
 
 ## Module
 
-- `./vite` - `appkitUiVitePlugins()` for React + Tailwind v4 Vite projects.
 - `./react` - AppKit React UI kit re-export plus the controlled `BrandPicker`.
 - `./styles.css` - Tailwind/Streamdown/shiki base stylesheet.
 

@@ -359,12 +359,6 @@ rule above; the verdicts are recorded here so the audit is not re-litigated:
   `@react-email/components` + `react`, and it is the one package both a server
   and a browser consumer share. Two consumers, and a real dependency.
 
-The genuinely questionable one is `node/databricks-map`: no consumers, no
-external deps, and an unfinished spike. It stays only because it is `private`
-(so it ships to nobody and is excluded from the docs site) and its README says
-so plainly. If it is still untouched next time this list is reviewed, delete it
-rather than growing a third rationale for keeping it.
-
 ## Shared utilities - check here before writing a helper
 
 `@dbx-tools/shared-core` is the browser-safe base EVERY package
@@ -414,7 +408,7 @@ second package, put it in shared-core rather than duplicating it.
 - `token` also owns the front-door header NAMES - `ACCESS_TOKEN_HEADER`,
   `USER_ID_HEADER`, `USER_EMAIL_HEADER`. Never spell `"x-forwarded-access-token"`
   in a package: several places branch on it (`@dbx-tools/appkit`'s `identity`
-  decides whether OBO is possible by its presence, `@dbx-tools/cli-tunnel` must
+  decides whether OBO is possible by its presence, `@dbx-tools/tunnel` must
   strip inbound copies), and a stale second spelling is a silent auth bug.
 
 Node-only equivalents live in `@dbx-tools/core` (`exec.spawn`/`spawnSync`,

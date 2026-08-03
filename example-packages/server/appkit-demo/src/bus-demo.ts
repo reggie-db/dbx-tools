@@ -7,19 +7,12 @@ import {
 } from "@databricks/appkit";
 import { plugin as pluginLookup } from "@dbx-tools/appkit";
 import { net as databricksNet } from "@dbx-tools/databricks";
-import { PostgresTopicBus, type SerializableValue, type TopicMetadata } from "@dbx-tools/postgres";
+import { PostgresTopicBus, isSerializableValue, type TopicMetadata } from "@dbx-tools/postgres";
 import { error, log } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 const TOPIC = "demo-viewers";
 const logger = log.logger("demo:bus");
-
-function isSerializableValue(value: unknown): value is SerializableValue {
-  if (value === null || ["string", "number", "boolean"].includes(typeof value)) return true;
-  if (Array.isArray(value)) return value.every(isSerializableValue);
-  if (typeof value !== "object") return false;
-  return Object.values(value).every(isSerializableValue);
-}
 
 function isTopicMetadata(value: unknown): value is TopicMetadata {
   return (

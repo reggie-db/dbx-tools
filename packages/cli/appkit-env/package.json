@@ -27,7 +27,6 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@clack/prompts": "catalog:",
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",

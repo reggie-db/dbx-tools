@@ -17,6 +17,7 @@ import type { IMixin as ConstructsMixin } from "constructs";
 import { javascript } from "projen";
 import { BunBuildFile, BunDevServerFile, BunfigFile } from "./bun-app.ts";
 import { create } from "./mixin.ts";
+import * as projectPredicate from "./project-predicate.ts";
 import {
   addPackageFiles,
   applyCompilerOptions,
@@ -25,7 +26,6 @@ import {
   applyTasks,
   srcModuleExports,
 } from "./project.ts";
-import * as projectPredicate from "./project-predicate.ts";
 
 /** Node compiler options: ES2022 lib + node types, deliberately no DOM. */
 const NODE_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
@@ -137,7 +137,7 @@ export const PACKAGE_TAG_MIXINS = {
     // register and no launcher shim to generate. In a WORKSPACE checkout the
     // manifest still points at the `.ts` entry, which Node type-strips on its own
     // because the package is not under `node_modules`.
-    p.addDeps("commander@catalog:", "@clack/prompts@catalog:");
+    p.addDeps("commander@catalog:");
     p.addDevDeps("@types/node@catalog:");
     // A CLI compiles code OUTSIDE `src/` - its root `index.ts` barrel and the
     // `bin/` entries - which the src-only tag default doesn't reach.

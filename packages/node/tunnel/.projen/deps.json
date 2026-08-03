@@ -35,11 +35,6 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/core",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:*",
       "type": "runtime"

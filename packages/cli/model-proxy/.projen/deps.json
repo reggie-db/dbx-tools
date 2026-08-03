@@ -15,11 +15,6 @@
       "type": "build"
     },
     {
-      "name": "@clack/prompts",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "@databricks/sdk-experimental",
       "version": "catalog:",
       "type": "runtime"

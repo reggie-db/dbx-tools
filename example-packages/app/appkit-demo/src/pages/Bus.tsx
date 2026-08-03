@@ -1,3 +1,4 @@
+import { hash, json } from "@dbx-tools/shared-core";
 import {
   Badge,
   Button,
@@ -10,10 +11,10 @@ import {
   ScrollArea,
   cn,
 } from "@dbx-tools/ui-appkit/react";
-import { hash } from "@dbx-tools/shared-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const API = "/api/bus-demo";
+const INVALID_JSON = Symbol("invalid-json");
 
 type BusMessage = {
   id: string;
@@ -35,20 +36,17 @@ function sessionValue(key: string, create: () => string): string {
 }
 
 function parseMetadata(value: string): Record<string, unknown> {
-  const parsed = JSON.parse(value) as unknown;
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  const parsed = json.parseRecord(value);
+  if (!parsed) {
     throw new TypeError("Metadata must be a JSON object.");
   }
-  return parsed as Record<string, unknown>;
+  return parsed;
 }
 
 function parseBody(value: string): unknown {
   if (!value.trim()) return "";
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return value;
-  }
+  const parsed = json.parse<unknown | typeof INVALID_JSON>(value, INVALID_JSON);
+  return parsed === INVALID_JSON ? value : parsed;
 }
 
 function jsonText(value: unknown): string {
@@ -83,9 +81,10 @@ const Bus = () => {
     source.onerror = () => setConnection("reconnecting");
     source.addEventListener("ready", () => setConnection("connected"));
     source.onmessage = (event) => {
-      try {
-        mergeMessages([JSON.parse(event.data) as BusMessage]);
-      } catch {
+      const message = json.parse<BusMessage>(event.data);
+      if (message) {
+        mergeMessages([message]);
+      } else {
         setError("A bus event could not be decoded.");
       }
     };

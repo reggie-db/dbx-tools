@@ -6,22 +6,16 @@
  * {@link DBXToolsNodeProject} (monorepo root) and {@link DBXToolsTypeScriptProject}
  * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
  */
-import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
-import { ignore, match, PathMatchInput } from "@dbx-tools/path";
-import { project as coreProject } from "@dbx-tools/core";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { project as coreProject } from "@dbx-tools/core";
+import { ignore, match, PathMatchInput } from "@dbx-tools/path";
+import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
+import { IConstruct } from "constructs";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
 import { ReleaseTrigger } from "projen/lib/release";
+import { mixin, projectPredicate } from "..";
 import { generateBarrels } from "./barrels.ts";
-import { codegenModulePaths, generateCodegen } from "./codegen.ts";
-import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
-import { resolvePkgRoot } from "./engine-root.ts";
-import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
-import { applyCompiledPublish } from "./publish.ts";
-import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
-import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
-import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import {
   BUN_APP_OVERRIDES,
   BunBuildFile,
@@ -29,7 +23,9 @@ import {
   BunfigFile,
   RootBunfigFile,
 } from "./bun-app.ts";
-import { DBXToolsVsCode } from "./vscode.ts";
+import { codegenModulePaths, generateCodegen } from "./codegen.ts";
+import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
+import { resolvePkgRoot } from "./engine-root.ts";
 import {
   DEFAULT_PACKAGE_ROOTS,
   type DiscoveredPackage,
@@ -39,8 +35,12 @@ import {
   scanPackages,
   toPosix,
 } from "./packages.ts";
-import { mixin, projectPredicate } from "..";
-import { IConstruct } from "constructs";
+import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
+import { applyCompiledPublish } from "./publish.ts";
+import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
+import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
+import { DBXToolsRootTsconfig } from "./tsconfig.ts";
+import { DBXToolsVsCode } from "./vscode.ts";
 
 /**
  * The dbx-tools project surface, backed by projen's Node toolchain. A single
@@ -953,14 +953,20 @@ function initProject(
   // each file to its own package tsconfig (so type-aware rules work tree-wide), and
   // `import/no-extraneous-dependencies` still checks each file against its nearest
   // package.json. Formatting defers to the root Prettier to avoid rule/formatter
-  // conflicts (e.g. quote style). Spawned from `test`, so ignorePatterns must cover
-  // every read-only generated path - `--fix` EACCES-crashes on them otherwise.
+  // conflicts (e.g. quote style). The normal task is check-only so CI never
+  // repairs the worktree it is meant to validate; `eslint:fix` is the explicit
+  // local mutation path.
   const eslint = new javascript.Eslint(project, {
-    dirs: [...roots],
+    dirs: [...roots, "projen"],
     fileExtensions: [".ts", ".tsx"],
     projectService: true,
     prettier: Boolean(project.prettier),
     tsconfigPath: "./tsconfig.json",
+    commandOptions: { fix: false },
+  });
+  project.addTask("eslint:fix", {
+    description: "Fix ESLint issues across the codebase",
+    exec: "bun run eslint -- --fix",
   });
   // Generated read-only outputs (barrels, openapi clients, app scripts, codegen).
   // ESLint --fix cannot rewrite them; they are stamped by the barrel generator /
@@ -969,6 +975,7 @@ function initProject(
     eslint.addIgnorePattern(`${root}/openapi/**`);
     eslint.addIgnorePattern(`${root}/**/index.ts`);
   }
+  eslint.addIgnorePattern("projen/index.ts");
   // The generated bun app scripts + unmanaged overrides live at the package root,
   // outside any `src/**` tsconfig include, so the type-aware parser cannot resolve
   // them to a project. ESLint still cannot parse them.
@@ -1242,21 +1249,24 @@ export function applyToProjects<P extends Project>(
   let pred = projectPredicate.isProject();
   if (!options?.includeNonDBXToolsProjects) pred = pred.and(projectPredicate.isDBXToolsProject());
   if (!options?.includeRoots) pred = pred.and((p) => p.parent != null);
-  if (options?.identifierPackageName)
+  if (options?.identifierPackageName) {
     pred = pred.and(
       projectPredicate.hasIdentifierPackageName(
         ...object.toOneOrMany(options.identifierPackageName),
       ),
     );
+  }
   if (options?.name) pred = pred.and(projectPredicate.hasName(...object.toOneOrMany(options.name)));
-  if (options?.identifierScope)
+  if (options?.identifierScope) {
     pred = pred.and(
       projectPredicate.hasIdentifierScope(...object.toOneOrMany(options.identifierScope)),
     );
-  if (options?.identifierName)
+  }
+  if (options?.identifierName) {
     pred = pred.and(
       projectPredicate.hasIdentifierName(...object.toOneOrMany(options.identifierName)),
     );
+  }
   if (options?.tags) pred = pred.and(projectPredicate.hasTag(...object.toOneOrMany(options.tags)));
   if (options?.path) pred = pred.and(projectPredicate.hasPath(...object.toOneOrMany(options.path)));
   const projectMixin = mixin.create(pred, (p) => {

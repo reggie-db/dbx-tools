@@ -97,7 +97,7 @@ export interface AuthGateConfig extends BasePluginConfig {
    * This is the subject TEMPLATE, not the literal line sent: the code is spliced
    * into it (`"123456 is your verification code"`) because a push notification
    * shows only the subject and preheader, and that notification is what mobile
-   * autofill reads. See `codeEmailSubject` in `./app.ts`.
+   * autofill reads. See `codeEmailSubject` in `./code-email.ts`.
    */
   subject?: string;
   /**

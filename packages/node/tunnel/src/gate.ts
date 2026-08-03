@@ -23,8 +23,8 @@
  */
 
 import { http, json, log, token } from "@dbx-tools/shared-core";
-import type { Request, RequestHandler, Response } from "express";
 import { authRequestSchema, authVerifySchema, SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
+import type { Request, RequestHandler, Response } from "express";
 import { toHeaderPolicy } from "./headers.ts";
 import type { AuthGateApi } from "./plugin.ts";
 

@@ -48,6 +48,7 @@
     "packages/**/index.ts",
     "example-packages/openapi/**",
     "example-packages/**/index.ts",
+    "projen/index.ts",
     "**/dev.ts",
     "**/build.ts",
     "**/stage-deploy.ts",

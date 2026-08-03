@@ -39,12 +39,12 @@
  *   - `false`: never publish locally.
  *   - a URL: always publish to that registry.
  */
-import { exec, project } from "@dbx-tools/core";
-import { log, net } from "@dbx-tools/shared-core";
-import { Command, Option } from "commander";
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { exec, project } from "@dbx-tools/core";
+import { log, net } from "@dbx-tools/shared-core";
+import { Command, Option } from "commander";
 
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;

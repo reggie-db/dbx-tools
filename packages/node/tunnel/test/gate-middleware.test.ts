@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Request, RequestHandler, Response } from "express";
 import { SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
+import type { Request, RequestHandler, Response } from "express";
 import { AUTH_PREFIX, isTunnelHost, mountGate, type GateOptions } from "../src/gate.ts";
 import { mountGateOnContext, type AuthGateApi } from "../src/plugin.ts";
 

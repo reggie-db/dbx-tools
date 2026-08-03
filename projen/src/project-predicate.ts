@@ -1,3 +1,5 @@
+import { relative } from "node:path";
+import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
 import {
   object,
   predicate,
@@ -7,11 +9,9 @@ import {
 } from "@dbx-tools/shared-core";
 import { IConstruct } from "constructs";
 import { Project } from "projen";
-import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project.ts";
-import { toPosix } from "./packages.ts";
-import { relative } from "node:path";
-import { match, PathMatchInput, PathMatchPredicate } from "@dbx-tools/path";
 import { project } from "..";
+import { toPosix } from "./packages.ts";
+import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project.ts";
 
 /**
  * Guard: the construct is a projen {@link Project} - the base every builder here

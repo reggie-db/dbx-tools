@@ -29,8 +29,8 @@
  */
 import type { javascript } from "projen";
 import { typescript } from "projen";
-import { addPackageFiles, applyCompilerOptions, applyIncludes } from "./project.ts";
 import { isDBXToolsProject } from "./project-predicate.ts";
+import { addPackageFiles, applyCompilerOptions, applyIncludes } from "./project.ts";
 
 /** Directory `tsc` emits into, and the root of every published entry point. */
 export const COMPILED_DIR = "lib";

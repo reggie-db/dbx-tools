@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun
-import { generateBarrels } from "../src/barrels.ts";
 import { log, string } from "@dbx-tools/shared-core";
+import { generateBarrels } from "../src/barrels.ts";
 import { generateOpenapi, isTsoaController } from "../src/openapi.ts";
 import { runSynth } from "../src/scaffold.ts";
 import { watchLoop, watchRoots } from "../src/watch.ts";

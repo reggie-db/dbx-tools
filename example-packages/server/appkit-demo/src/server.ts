@@ -24,8 +24,8 @@ import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams
 import { interceptor as tunnelInterceptorModule, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
-import { logDependencies } from "./dependencies.ts";
 import { busDemo } from "./bus-demo.ts";
+import { logDependencies } from "./dependencies.ts";
 
 /** Default search index used by both AppKit resource validation and the plugin. */
 const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";

@@ -8,14 +8,16 @@ import { PostgresTopicBus } from "../src/topic-bus.ts";
 class FakeClient extends EventEmitter {
   readonly queries: Array<{ text: string; values?: unknown[] }> = [];
   released = false;
+  releaseError: Error | undefined;
 
   async query(text: string, values?: unknown[]): Promise<QueryResult> {
     this.queries.push({ text, values });
     return { rows: [], command: "", rowCount: 0, oid: 0, fields: [] };
   }
 
-  release(): void {
+  release(error?: Error): void {
     this.released = true;
+    this.releaseError = error;
   }
 }
 
@@ -112,5 +114,46 @@ describe("PostgresTopicBus", () => {
         }),
       TypeError,
     );
+    await assert.rejects(
+      () => bus.broadcast("invalid", { type: "test.invalid", body: Number.POSITIVE_INFINITY }),
+      TypeError,
+    );
+  });
+
+  it("reconnects a listener after its dedicated connection fails", async () => {
+    const first = new FakeClient();
+    const second = new FakeClient();
+    const clients = [first, second];
+    const pool = {
+      connect: async () => clients.shift()!,
+      query: async () => ({ rows: [], command: "", rowCount: 0, oid: 0, fields: [] }),
+    };
+    const errors: unknown[] = [];
+    const received: unknown[] = [];
+    const bus = new PostgresTopicBus(pool, { onError: (cause) => errors.push(cause) });
+    await bus.listen("orders", (message) => received.push(message.body));
+
+    const connectionError = new Error("connection lost");
+    first.emit("error", connectionError);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(first.released, true);
+    assert.equal(first.releaseError, connectionError);
+    assert.equal(second.queries[0]?.text, 'LISTEN "dbx_tools_topic_bus"');
+    second.emit("notification", {
+      channel: "dbx_tools_topic_bus",
+      payload: JSON.stringify({
+        id: "event-reconnected",
+        topic: "orders",
+        type: "order.updated",
+        metadata: {},
+        body: { id: 9 },
+        publishedAt: new Date().toISOString(),
+      }),
+    } satisfies Notification);
+    await Promise.resolve();
+    assert.deepEqual(received, [{ id: 9 }]);
+    assert.deepEqual(errors, [connectionError]);
+    await bus.close();
   });
 });

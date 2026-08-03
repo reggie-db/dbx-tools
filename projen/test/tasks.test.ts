@@ -62,6 +62,15 @@ describe("workspace validation tasks", () => {
     );
   });
 
+  it("checks lint without mutating and exposes fixes explicitly", () => {
+    const lintCommand = tasks.root.tasks.eslint.steps?.[0]?.exec ?? "";
+    const fixCommand = tasks.root.tasks["eslint:fix"].steps?.[0]?.exec ?? "";
+    assert.doesNotMatch(lintCommand, /--fix/);
+    assert.match(lintCommand, /\bpackages\b/);
+    assert.match(lintCommand, /\bprojen$/);
+    assert.equal(fixCommand, "bun run eslint -- --fix");
+  });
+
   // `*` selects workspace MEMBERS only. If it matched the root the delegating
   // step would re-enter itself, so a root fan-out must never name the root.
   it("cannot recurse into the root task that delegates", () => {
