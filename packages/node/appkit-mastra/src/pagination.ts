@@ -7,6 +7,8 @@
  * @module
  */
 
+import { object } from "@dbx-tools/shared-core";
+
 /** Bounds for {@link clampPerPage}. */
 export interface PerPageBounds {
   /** Page size used for empty / non-positive / non-numeric inputs. */
@@ -29,8 +31,7 @@ export function clampPerPage(value: number | undefined, bounds: PerPageBounds): 
  * can apply its built-in defaults.
  */
 export function parseIntParam(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) return undefined;
+  const n = object.toNumber(value);
+  if (n === undefined || n < 0) return undefined;
   return Math.trunc(n);
 }

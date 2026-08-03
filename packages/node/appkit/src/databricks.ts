@@ -12,7 +12,7 @@
 
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
-import { async, log } from "@dbx-tools/shared-core";
+import { async, log, object } from "@dbx-tools/shared-core";
 
 const logger = log.logger("databricks");
 
@@ -51,8 +51,13 @@ export function isAppEnv(env: Record<string, string | undefined> = process.env):
     return false;
   }
 
-  const portNumber = Number(port);
-  if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > MAX_TCP_PORT) {
+  const portNumber = object.toNumber(port);
+  if (
+    portNumber === undefined ||
+    !Number.isInteger(portNumber) ||
+    portNumber < 1 ||
+    portNumber > MAX_TCP_PORT
+  ) {
     logger.debug("app env rejected: DATABRICKS_APP_PORT is not a TCP port");
     return false;
   }

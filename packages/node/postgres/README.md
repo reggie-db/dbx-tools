@@ -11,6 +11,8 @@ them without a second database client or connection pool.
 
 - Converts an arbitrary structured key (string, array, object, `Date`, or an
   explicit `bigint`) into a stable signed 64-bit advisory-lock identifier.
+- Derives a legal Postgres channel name from whatever identifies a channel, so no
+  call site has to sanitize an app name or a tenant id into an identifier.
 - Holds a session lock on one dedicated pooled connection for the whole callback,
   and hands that connection to the callback so protected work runs on it.
 - Holds a transaction lock released atomically by `COMMIT` or `ROLLBACK`, which is
@@ -53,9 +55,12 @@ await withAdvisoryTransactionLock(pool, { schema: "my_feature", version: 1 }, as
 `advisoryLockId(key)` exposes the same reduction on its own. A `bigint` key is
 used directly (narrowed to 64 bits) rather than hashed, so a lock can interoperate
 with another implementation that publishes its numeric lock id — `pgmq`'s
-installer lock, for instance. Anything else is serialized to a stable form and
-hashed, meaning key order in an object does not matter but a `1` and a `"1"` are
-different locks. A non-finite number or a cyclic key throws `TypeError`.
+installer lock, for instance. Anything else is canonicalized with
+`object.toStableKey` from `@dbx-tools/shared-core` and hashed, so key order in an
+object does not matter while a `1` and a `"1"` stay different locks. An array is
+read as several parts, so `["invoice", 7]` and `"invoice_7"` are different locks. A
+non-finite number or a cyclic key throws `TypeError` rather than yielding an
+identity two callers could disagree about.
 
 ## Topic Bus
 
@@ -134,8 +139,10 @@ reaches the listener as something other than what was sent, so all of them throw
 `TypeError` at the call instead. Cycles, functions, symbols, bigints, and class
 instances are rejected for the same reason.
 
-`isSerializableValue` is exported so a route can apply the same rule to an
-untrusted request body and answer 400 rather than 500.
+The rule lives in `@dbx-tools/shared-core` as `object.isSerializableValue` and
+`object.SerializableValue`, so a route can apply the same check to an untrusted
+request body and answer 400 rather than 500, and a browser-side caller can share
+the type.
 
 The encoded envelope is capped at 7900 bytes, under PostgreSQL's 8000-byte
 `NOTIFY` limit, and a larger one throws `RangeError`. Automatic metadata counts
@@ -162,11 +169,36 @@ through `onError`, which defaults to swallowing them — wire it to a logger in
 anything long-running. A failing listener never affects the publisher or the other
 listeners.
 
-All processes must agree on the `channel` (default `dbx_tools_topic_bus`), which
-must be identifier-shaped or the constructor throws. One channel carries many
-topics, so adding a topic costs nothing; give a genuinely high-volume unrelated
-stream its own channel instead, since every listening session decodes every
-message on the channel.
+One channel carries many topics, so adding a topic costs nothing; give a genuinely
+high-volume unrelated stream its own channel instead, since every listening
+session decodes every message on the channel.
+
+### Naming A Channel
+
+`channel` takes whatever identifies the channel, not a pre-sanitized identifier —
+a name, a tenant id, a `[env, feature]` pair, a config object. One value or many:
+an array is read as several parts, anything else as one.
+
+```ts
+new PostgresTopicBus(pool, { channel: "billing-events" }).channelName;
+// "billing_events_3x55ck"
+new PostgresTopicBus(pool, { channel: ["billing", "production"] }).channelName;
+// "billing_production_008jgf"
+```
+
+The parts are tokenized into the readable half and a short hash of their canonical
+form (`object.toStableKey`) is appended. The hash is what makes the mapping
+trustworthy: tokenizing alone is lossy, so `my-app`, `my_app`, and `myApp` would
+collapse onto one channel, and a name long enough to hit Postgres's 63-character
+limit would collide with anything sharing its leading tokens. With the suffix the
+readable part stays readable and distinct inputs stay distinct — including
+`["billing", "prod"]` versus `"billing_prod"`, which differ in structure.
+
+Derivation is deterministic across processes and runs, so every participant that
+passes equivalent parts lands on the same channel without coordinating. Object key
+order does not matter; a different spelling does. Read `bus.channelName` to see
+what a set of parts resolved to, or to confirm two processes agree. Defaults to a
+shared `dbx_tools_topic_bus` channel.
 
 ## Why A Separate Package?
 

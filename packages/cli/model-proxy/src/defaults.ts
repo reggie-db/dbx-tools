@@ -43,10 +43,8 @@ export const DEFAULT_RETRY: RetryConfig = {
 
 /** Positive integer from an env var, or `undefined` when unset/unparseable. */
 function envInt(name: string): number | undefined {
-  const raw = process.env[name];
-  if (raw === undefined || raw.trim() === "") return undefined;
-  const value = Number(raw);
-  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined;
+  const value = object.toNumber(process.env[name]);
+  return value !== undefined && value >= 0 ? Math.floor(value) : undefined;
 }
 
 /**

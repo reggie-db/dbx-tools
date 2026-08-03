@@ -28,7 +28,7 @@ export type { MemoizeOptions } from "./src/function.ts";
 export type { HeaderLike } from "./src/http.ts";
 export type { LogLevel, Logger } from "./src/log.ts";
 export type { UrlLike, IpVersion, ParsedIp, Cidr, UrlBuilder, ParseEmailsOptions } from "./src/net.ts";
-export type { Sequence, Container, Collection, OneOrMany, NameLike, NonFunctionKeys, DeepEqualComparator } from "./src/object.ts";
+export type { Sequence, Container, Collection, OneOrMany, NameLike, NonFunctionKeys, SerializablePrimitive, SerializableValue, ToNumberOptions, ToDateOptions, ToDurationOptions, DeepEqualComparator } from "./src/object.ts";
 export type { PatternOptions } from "./src/pattern.ts";
 export type { PredicateFunction, TypePredicateFunction, PredicateInput, Predicate } from "./src/predicate.ts";
 export type { TokenizeOptions, KeyOptions, IdentifierOptions, Description } from "./src/string.ts";

@@ -46,7 +46,8 @@ describe("PostgresTopicBus", () => {
       body: { id: 7 },
     });
     assert.equal(queries[0]?.text, "SELECT pg_notify($1, $2)");
-    assert.equal(queries[0]?.values?.[0], "dbx_tools_topic_bus");
+    assert.equal(queries[0]?.values?.[0], bus.channelName);
+    assert.match(bus.channelName, /^dbx_tools_topic_bus_[0-9a-z]{6}$/);
     const encoded = JSON.parse(String(queries[0]?.values?.[1]));
     assert.equal(encoded.type, "order.updated");
     assert.deepEqual(encoded.body, { id: 7 });
@@ -63,12 +64,13 @@ describe("PostgresTopicBus", () => {
   it("uses one dedicated LISTEN connection and filters by topic", async () => {
     const { client, pool } = fixture();
     const bus = new PostgresTopicBus(pool);
+    const channel = bus.channelName;
     const received: unknown[] = [];
     const unsubscribe = await bus.listen("orders", (message) => received.push(message.body));
-    assert.equal(client.queries[0]?.text, 'LISTEN "dbx_tools_topic_bus"');
+    assert.equal(client.queries[0]?.text, `LISTEN "${channel}"`);
 
     client.emit("notification", {
-      channel: "dbx_tools_topic_bus",
+      channel,
       payload: JSON.stringify({
         id: "event-1",
         topic: "orders",
@@ -79,7 +81,7 @@ describe("PostgresTopicBus", () => {
       }),
     } satisfies Notification);
     client.emit("notification", {
-      channel: "dbx_tools_topic_bus",
+      channel,
       payload: JSON.stringify({
         id: "event-2",
         topic: "other",
@@ -94,13 +96,41 @@ describe("PostgresTopicBus", () => {
 
     await unsubscribe();
     await bus.close();
-    assert.equal(client.queries.at(-1)?.text, 'UNLISTEN "dbx_tools_topic_bus"');
+    assert.equal(client.queries.at(-1)?.text, `UNLISTEN "${channel}"`);
     assert.equal(client.released, true);
   });
 
-  it("rejects invalid channels and oversized notifications", async () => {
+  it("derives a legal channel name from arbitrary parts", () => {
     const { pool } = fixture();
-    assert.throws(() => new PostgresTopicBus(pool, { channel: "bad-channel" }), TypeError);
+    const channel = (value?: unknown) =>
+      new PostgresTopicBus(pool, ...(value === undefined ? [] : [{ channel: value }])).channelName;
+
+    // Every derived name is a legal, non-truncated Postgres identifier.
+    for (const value of ["my-app", "!!!", "", 42, null, { a: 1 }, "a".repeat(200)]) {
+      const name = channel(value);
+      assert.match(name, /^[A-Za-z_][A-Za-z0-9_]*$/, `not an identifier: ${name}`);
+      assert.ok(name.length <= 63, `too long: ${name}`);
+    }
+
+    // Deterministic, so two processes given the same parts agree.
+    assert.equal(channel("billing"), channel("billing"));
+    assert.equal(channel({ env: "prod", app: "x" }), channel({ app: "x", env: "prod" }));
+
+    // The hash suffix keeps spellings the tokenizer would collapse apart, and
+    // separates part STRUCTURE from an equivalent single string.
+    const collapsed = new Set(["my-app", "my_app", "myApp"].map(channel));
+    assert.equal(collapsed.size, 3);
+    assert.notEqual(channel(["billing", "prod"]), channel("billing_prod"));
+
+    // The readable half survives, and an object contributes identity without
+    // spelling `object_object`.
+    assert.match(channel("my-app"), /^my_app_/);
+    assert.match(channel(["billing", "prod"]), /^billing_prod_/);
+    assert.match(channel({ a: 1 }), /^bus_/);
+  });
+
+  it("rejects oversized and unserializable notifications", async () => {
+    const { pool } = fixture();
     const bus = new PostgresTopicBus(pool);
     await assert.rejects(
       () => bus.broadcast("large", { type: "test.large", body: "x".repeat(8_000) }),
@@ -131,6 +161,7 @@ describe("PostgresTopicBus", () => {
     const errors: unknown[] = [];
     const received: unknown[] = [];
     const bus = new PostgresTopicBus(pool, { onError: (cause) => errors.push(cause) });
+    const channel = bus.channelName;
     await bus.listen("orders", (message) => received.push(message.body));
 
     const connectionError = new Error("connection lost");
@@ -139,9 +170,9 @@ describe("PostgresTopicBus", () => {
 
     assert.equal(first.released, true);
     assert.equal(first.releaseError, connectionError);
-    assert.equal(second.queries[0]?.text, 'LISTEN "dbx_tools_topic_bus"');
+    assert.equal(second.queries[0]?.text, `LISTEN "${channel}"`);
     second.emit("notification", {
-      channel: "dbx_tools_topic_bus",
+      channel,
       payload: JSON.stringify({
         id: "event-reconnected",
         topic: "orders",

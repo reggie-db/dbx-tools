@@ -2,12 +2,16 @@
  * Dependency-free object + iterable utilities.
  *
  * Value guards / coercions / shape types: {@link isRecord} narrows parsed JSON
- * to a record, {@link toBoolean} coerces loose truthy/falsy values, {@link
- * toDuration} parses `1h30m` / `2 milliseconds` to millis, {@link toDate}
- * coerces a date/ISO string/epoch number/relative duration, {@link optional}
+ * to a record, {@link toNumber} coerces a hand-typed numeral, {@link toBoolean}
+ * coerces loose truthy/falsy values, {@link toDuration} parses `1h30m` /
+ * `2 milliseconds` to millis, {@link toDate} coerces a date/ISO string/epoch
+ * number/relative duration (`toDate` and `toDuration` fall back to each other, so
+ * either accepts both readings), {@link optional}
  * spreads a field only when it is present, {@link deepEqual} compares
- * structurally, and {@link NameLike}/{@link NonFunctionKeys} describe object
- * shapes.
+ * structurally, {@link isSerializableValue} rejects anything a JSON round trip
+ * would lose or coerce, {@link toStableKey} canonicalizes a value so an identity
+ * can be derived from it, and {@link NameLike}/{@link NonFunctionKeys} describe
+ * object shapes.
  *
  * Iterable helpers: {@link generator} flattens mixed arguments; {@link sequence}
  * wraps source(s) in a lazy, `Array`-compatible {@link Sequence}. Every
@@ -815,6 +819,155 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** A JSON scalar. `undefined` is deliberately absent - `JSON.stringify` drops it. */
+export type SerializablePrimitive = string | number | boolean | null;
+
+/**
+ * Any value that survives a `JSON.stringify`/`JSON.parse` round trip unchanged.
+ *
+ * Use it instead of `unknown` on a boundary that will serialize its input - a
+ * message payload, a cache entry, a config blob written to disk - so a `Date`,
+ * a `Map`, or a class instance is a compile error at the call site rather than a
+ * receiver quietly getting a string or `{}`. {@link isSerializableValue} is the
+ * runtime half, for input the compiler cannot vouch for.
+ */
+export type SerializableValue =
+  SerializablePrimitive | SerializableValue[] | { [key: string]: SerializableValue };
+
+/**
+ * True when `value` survives a JSON round trip with no loss and no coercion.
+ *
+ * Stricter than "`JSON.stringify` did not throw", because that succeeds while
+ * silently CHANGING the value: a `Date` becomes a string, `NaN` and `Infinity`
+ * become `null`, a `Map` becomes `{}`, and `undefined` disappears from an object
+ * or turns into `null` inside an array. Each of those reaches the far side as
+ * something other than what was sent, so all of them are rejected here.
+ *
+ * Rejected: non-finite numbers, `undefined`, functions, symbols, bigints, class
+ * instances and anything else with a prototype other than `Object.prototype` or
+ * `null` (`Date`, `Map`, `Set`, `RegExp`, `Buffer`), and any object graph
+ * containing a cycle. Accepted: strings, booleans, `null`, finite numbers, plain
+ * objects, arrays, and nestings of those.
+ *
+ * Narrows to {@link SerializableValue} rather than asserting, so it also serves
+ * as the validator for untrusted input - a request body, a decoded notification
+ * payload - where the answer should be a 400 and not a throw. Never throws.
+ *
+ * Distinct from {@link deepEqual}'s notion of comparable: that one HANDLES
+ * `Date`/`Map`/`Set` structurally, while this one rejects them precisely because
+ * JSON cannot carry them.
+ *
+ * @param ancestors Cycle-detection set for the recursive walk. Internal; callers
+ *   pass one value.
+ *
+ * @example
+ * isSerializableValue({ a: [1, "x", null] }); // true
+ * isSerializableValue({ at: new Date() });    // false - would become a string
+ * isSerializableValue(Number.NaN);            // false - would become null
+ */
+export function isSerializableValue(
+  value: unknown,
+  ancestors: Set<object> = new Set(),
+): value is SerializableValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value !== "object") return false;
+
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return false;
+  if (ancestors.has(value)) return false;
+
+  ancestors.add(value);
+  const valid = Array.isArray(value)
+    ? value.every((entry) => isSerializableValue(entry, ancestors))
+    : Object.values(value).every((entry) => isSerializableValue(entry, ancestors));
+  ancestors.delete(value);
+  return valid;
+}
+
+/**
+ * Canonical string for a structured value, for deriving a STABLE IDENTITY from
+ * it - an advisory-lock id, a channel name, a cache key.
+ *
+ * The guarantee is two-way, which is what makes it safe to hash: values that
+ * should share an identity produce the same string (object key order does not
+ * matter), and values that should not are never conflated. Every token carries
+ * its type, so `1` and `"1"` differ; a string carries its length, so
+ * `["a", "bc"]` and `["ab", "c"]` differ; arrays keep order while object keys
+ * are sorted.
+ *
+ * `JSON.stringify` cannot do this job - key order leaks in, `undefined` vanishes,
+ * `1` and `"1"` collide after quoting is stripped, and a cycle throws a
+ * `TypeError` naming neither the value nor the caller's intent.
+ *
+ * Deliberately strict where a silent answer would be a WRONG identity rather
+ * than a missing one, since two callers disagreeing about a lock or a channel is
+ * invisible until it corrupts something. Throws `TypeError` on a cycle, on a
+ * non-finite number (`NaN` is not equal to itself, so it cannot have a stable
+ * identity), and on a `function` or `symbol` (no meaningful value identity).
+ * `undefined` and `null` are accepted as distinct tokens.
+ *
+ * `Date` is canonicalized by instant, unlike the hash canonicalizer in
+ * `./hash.ts`, which folds every `Date` onto one token. Prefer this function when
+ * distinctness is a correctness requirement; prefer `hash.fnvHash` when a short,
+ * collision-tolerant digest is enough.
+ *
+ * @param value - The value to canonicalize.
+ * @param seen - Cycle-detection set for the recursive walk. Internal; callers
+ *   pass one value.
+ *
+ * @example
+ * toStableKey({ a: 1, b: 2 }) === toStableKey({ b: 2, a: 1 }); // true
+ * toStableKey(1) !== toStableKey("1");                         // true
+ */
+export function toStableKey(value: unknown, seen: Set<object> = new Set()): string {
+  if (value === null) return "null";
+
+  switch (typeof value) {
+    case "string":
+      // Length-prefixed so concatenated neighbours cannot be re-split
+      // differently: `["a","bc"]` and `["ab","c"]` must not agree.
+      return `string:${value.length}:${value}`;
+    case "boolean":
+      return `boolean:${value}`;
+    case "bigint":
+      return `bigint:${value}`;
+    case "number":
+      if (!Number.isFinite(value)) throw new TypeError("Stable keys require finite numbers");
+      // `-0 === 0` but they stringify differently, so pick one spelling.
+      return `number:${Object.is(value, -0) ? "-0" : value}`;
+    case "undefined":
+      return "undefined";
+    case "object": {
+      if (seen.has(value)) throw new TypeError("Stable keys cannot contain cycles");
+      seen.add(value);
+      try {
+        if (value instanceof Date) return `date:${value.toISOString()}`;
+        if (Array.isArray(value)) {
+          return `array:[${value.map((item) => toStableKey(item, seen)).join(",")}]`;
+        }
+        if (value instanceof Set) {
+          // Sorted by canonical form, so insertion order does not leak.
+          return `set:[${[...value]
+            .map((item) => toStableKey(item, seen))
+            .sort()
+            .join(",")}]`;
+        }
+        const entries: Iterable<[unknown, unknown]> =
+          value instanceof Map ? value : Object.entries(value);
+        return `${value instanceof Map ? "map" : "object"}:{${[...entries]
+          .map(([key, item]) => `${toStableKey(key, seen)}=${toStableKey(item, seen)}`)
+          .sort()
+          .join(",")}}`;
+      } finally {
+        seen.delete(value);
+      }
+    }
+    default:
+      throw new TypeError(`Unsupported stable key type: ${typeof value}`);
+  }
+}
+
 /**
  * `{ [key]: value }` when `value` is present, otherwise `undefined` - so an
  * absent optional field stays ABSENT when spread, rather than becoming an
@@ -835,6 +988,97 @@ export function optional<K extends string, V>(
   value: V | null | undefined,
 ): Record<K, V> | undefined {
   return value === null || value === undefined ? undefined : ({ [key]: value } as Record<K, V>);
+}
+
+/**
+ * Options for {@link toNumber}.
+ *
+ * Both switches turn OFF a leniency that is helpful for a hand-typed setting but
+ * wrong when the string's other characters carry meaning. {@link toDate} and
+ * {@link toDuration} disable both, since a space inside `2026 08 02` is a field
+ * separator and a percent has no epoch or millisecond reading.
+ */
+export interface ToNumberOptions {
+  /**
+   * Whether internal digit-group separators are stripped, so `"1,000"` and
+   * `"1 000"` read as `1000`. Defaults to `true`.
+   *
+   * Placement is not validated when enabled, so `"1,00,0"` also reads as `1000`.
+   * Disable it when whitespace or a comma delimits FIELDS rather than grouping
+   * digits, because stripping them silently fuses those fields into one number.
+   */
+  separators?: boolean;
+  /**
+   * Whether a trailing percent sign divides the result by `100`, so `"25%"` reads
+   * as `0.25`. Defaults to `true`.
+   *
+   * Disable it where a percentage has no meaning, so `"25%"` is a miss rather
+   * than a number two orders of magnitude away from what the text says.
+   */
+  percent?: boolean;
+}
+
+/**
+ * Coerce a loose numeric value to a real, FINITE `number`, or `undefined` when it
+ * carries no numeric meaning.
+ *
+ * The one place a hand-typed number is interpreted, alongside {@link toBoolean},
+ * {@link toDate}, and {@link toDuration}. Reach for it instead of `Number(x)` or a
+ * hand-rolled numeric regex: bare `Number` maps `""`, `null`, `[]`, and
+ * whitespace to `0` and anything else to `NaN`, so a caller has to re-check the
+ * result every time, and ad hoc regexes tend to drift in what they accept.
+ *
+ * Accepts: a finite `number`; a `bigint`; or a decimal string with an optional
+ * leading sign, leading/trailing whitespace, whitespace after the sign,
+ * digit-group separators (`"1,000"`, `"1 000"`), a bare fraction (`".5"`), a
+ * trailing point (`"1."`), scientific notation (`"1e3"`), and an optional
+ * trailing percent sign (`"25%"`, `"1.5 %"`). A trailing `%` divides the parsed
+ * value by `100`, so `"25%"` becomes `0.25`.
+ *
+ * Separators are stripped without validating their placement, so `"1,00,0"` reads
+ * as `1000`; this is a coercion for hand-typed configuration, not a locale-aware
+ * validator. Anything else, including `NaN`, `Infinity`, an empty or
+ * whitespace-only string, `null`, `undefined`, a boolean, multiple signs,
+ * malformed exponents, misplaced percent signs, or `"12px"`, returns `undefined`.
+ *
+ * Returns `undefined` rather than throwing, matching the other coercions, so it
+ * composes naturally with `??` fallbacks.
+ *
+ * @example
+ * toNumber("1,000");   // 1000
+ * toNumber(" -2.5 ");  // -2.5
+ * toNumber("1e3");     // 1000
+ * toNumber("12.5 %");  // 0.125
+ * toNumber("");        // undefined  (Number("") would be 0)
+ * toNumber("12px");    // undefined
+ * toNumber("1 000", { separators: false }); // undefined
+ */
+export function toNumber(value: unknown, options: ToNumberOptions = {}): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  } else if (typeof value === "bigint") {
+    return toNumber(Number(value), options);
+  } else if (typeof value === "string") {
+    // Strip surrounding whitespace, whitespace after a leading sign, digit-group
+    // separators (both `,` and the space in `"1 000"`), leaving a bare numeral for
+    // the shape test below to accept or reject.
+    const text = value.replace(
+      options.separators === false ? /(^\s+|\s+$)/g : /(^\s+|\s+$|(?<=^[+-])\s+|(?<=\d)\s+|,)/g,
+      "",
+    );
+    if (text) {
+      const match = text.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(%)?$/i);
+      if (match && !(match[2] && options.percent === false)) {
+        const number = Number(match[1]);
+        return toNumber(match[2] ? number / 100 : number, options);
+      }
+    }
+  } else {
+    // A boxed `Number`, or anything with a numeric `toString`. `String(value)`
+    // routes it back through the string branch, which rejects what is not numeric.
+    return toNumber(String(value), options);
+  }
+  return undefined;
 }
 
 /**
@@ -886,6 +1130,19 @@ export function toBoolean(value: unknown): boolean | undefined {
 const SECONDS_CEILING = 1e11;
 
 /**
+ * A number for {@link toDate} and {@link toDuration}, read with none of
+ * {@link toNumber}'s string leniencies.
+ *
+ * Both leniencies are actively harmful here. A space or comma separates FIELDS in
+ * a date (`2026 08 02` would fuse into the epoch `20260802`), and a percentage has
+ * no reading as an instant or a length of time, so `25%` must be a miss rather
+ * than `250ms`.
+ */
+function toBareNumber(value: unknown): number | undefined {
+  return toNumber(value, { separators: false, percent: false });
+}
+
+/**
  * Milliseconds per unit, keyed by SINGULAR alias. {@link toDuration} retries a
  * lookup without a trailing `s`, so every plural spelling is covered without
  * listing it (`ms` is already singular, hence its own entry).
@@ -913,6 +1170,47 @@ const DURATION_UNIT_MS: ReadonlyMap<string, number> = new Map(
 const DURATION_TERM = /([+-]?)(\d+(?:\.\d+)?)\s*([a-z]+)/g;
 
 /**
+ * Options for {@link toDate}.
+ *
+ * The mirror of {@link ToDurationOptions}: each function can fall back to the
+ * other, so each has one switch turning that fallback off.
+ */
+export interface ToDateOptions {
+  /**
+   * Whether a {@link toDuration} expression is read as an instant relative to
+   * now, so `-7d` and `7 days ago` become `now - 7 days`. Defaults to `true`.
+   *
+   * Set `false` when the value must be a real date and a relative expression
+   * should be a miss - a stored timestamp, a user-supplied `Date` header, an
+   * `expires_at` field - since a duration silently resolving against the current
+   * clock makes the same input mean something different on every call. Also what
+   * {@link toDuration} passes when it recurses, so the two cannot bounce a value
+   * between them forever.
+   */
+  parseDuration?: boolean;
+}
+
+/**
+ * Options for {@link toDuration}.
+ *
+ * The mirror of {@link ToDateOptions}: each function can fall back to the other,
+ * so each has one switch turning that fallback off.
+ */
+export interface ToDurationOptions {
+  /**
+   * Whether a {@link toDate} value is read as the signed offset from now, so
+   * `2026-08-02` becomes however long until (or since) that instant. Defaults to
+   * `true`.
+   *
+   * Set `false` when only a length of time is meaningful - a timeout, a poll
+   * interval, a cache TTL - because a date would otherwise yield a plausible but
+   * wrong number that also drifts with the clock. Also what {@link toDate} passes
+   * when it recurses.
+   */
+  parseDate?: boolean;
+}
+
+/**
  * Coerce a loose duration to MILLISECONDS, or `undefined` when it can't be
  * interpreted.
  *
@@ -933,19 +1231,29 @@ const DURATION_TERM = /([+-]?)(\d+(?:\.\d+)?)\s*([a-z]+)/g;
  * returning `1` silently would be worse than returning nothing - which is also
  * what keeps {@link toDate} from mistaking `1 Jan 2026` for a duration.
  *
+ * A value that is not a duration at all is offered to {@link toDate} and, when it
+ * IS a date, read as the signed offset from now (`date - now`), which makes the
+ * two functions inverses: a past instant is negative, a future one positive.
+ * `options.parseDate: false` turns that off when only a length of time makes
+ * sense - see {@link ToDurationOptions}.
+ *
  * @example
  * toDuration("30s");                    // 30_000
  * toDuration("1 hour 30 minutes");      // 5_400_000
  * toDuration("-7 days");                // -604_800_000
  * toDuration("2 weeks ago");            // -1_209_600_000
+ * toDuration("2026-08-02");             // ms from now to that instant
+ * toDuration("2026-08-02", { parseDate: false }); // undefined
  * toDuration("soon");                   // undefined
  */
-export function toDuration(value: unknown): number | undefined {
-  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
-  if (typeof value !== "string") return undefined;
-  // A unitless string means the same as the unitless number: milliseconds.
-  if (/^[+-]?\d+(\.\d+)?$/.test(value.trim())) return toDuration(Number(value.trim()));
-
+export function toDuration(value: unknown, options: ToDurationOptions = {}): number | undefined {
+  // A bare number is already milliseconds, the same reading `toDate` gives an
+  // epoch value, so this must run before any date interpretation.
+  const num = toBareNumber(value);
+  if (num !== undefined) return num;
+  if (typeof value !== "string") {
+    return options.parseDate === false ? undefined : dateAsDuration(value);
+  }
   let text = value
     .toLowerCase()
     .replaceAll(/[,_]/g, "")
@@ -960,23 +1268,42 @@ export function toDuration(value: unknown): number | undefined {
   if (!text) return undefined;
 
   const terms = [...text.matchAll(DURATION_TERM)];
-  if (terms.length === 0) return undefined;
+  if (terms.length === 0) {
+    return options.parseDate === false ? undefined : dateAsDuration(value);
+  }
 
   // Everything outside the matched terms must be separators only; otherwise the
   // string is something else that merely CONTAINS a duration-shaped fragment.
   let leftover = text;
   for (const term of terms) leftover = leftover.replace(term[0], " ");
-  if (leftover.trim()) return undefined;
+  if (leftover.trim()) {
+    // A duration-shaped fragment inside other text is usually a DATE - `"2026-08-02"`
+    // matches two terms and leaves separators behind.
+    return options.parseDate === false ? undefined : dateAsDuration(value);
+  }
 
   let total = 0;
   let sign = 1;
   for (const [, explicitSign, amount, unit] of terms) {
     if (explicitSign) sign = explicitSign === "-" ? -1 : 1;
     const unitMs = DURATION_UNIT_MS.get(unit) ?? DURATION_UNIT_MS.get(unit.replace(/s$/, ""));
-    if (unitMs === undefined) return undefined;
+    if (unitMs === undefined) {
+      return options.parseDate === false ? undefined : dateAsDuration(value);
+    }
     total += sign * Number(amount) * unitMs;
   }
   return negate ? -total : total;
+}
+
+/**
+ * A date read as the signed offset from now (`date - now`), which is what makes
+ * {@link toDuration} and {@link toDate} inverses of each other. Recurses with
+ * duration parsing DISABLED so the two cannot hand a value back and forth
+ * forever.
+ */
+function dateAsDuration(value: unknown): number | undefined {
+  const date = toDate(value, { parseDuration: false });
+  return date === undefined ? undefined : date.getTime() - Date.now();
 }
 
 /**
@@ -998,6 +1325,10 @@ export function toDuration(value: unknown): number | undefined {
  * 1.7 billion years out. Numeric strings are therefore routed to the epoch path,
  * never to `Date.parse`.
  *
+ * The duration fallback runs LAST, after `Date.parse`, so a real date is never
+ * mistaken for an offset. `options.parseDuration: false` removes it entirely when
+ * the value must be an absolute instant - see {@link ToDateOptions}.
+ *
  * Like {@link toBoolean} this NEVER throws and returns `undefined` for anything
  * uninterpretable, so a caller decides whether a bad value is fatal, a warning,
  * or a fallback.
@@ -1008,9 +1339,10 @@ export function toDuration(value: unknown): number | undefined {
  * toDate("1785697899");        // seconds -> 2026-08-02T...
  * toDate(1785697899000);       // millis  -> the same instant
  * toDate("30 days ago");       // now - 30d
+ * toDate("30 days ago", { parseDuration: false }); // undefined
  * toDate("nope");              // undefined
  */
-export function toDate(value: unknown): Date | undefined {
+export function toDate(value: unknown, options: ToDateOptions = {}): Date | undefined {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? undefined : value;
   }
@@ -1023,11 +1355,14 @@ export function toDate(value: unknown): Date | undefined {
   const text = value.trim().toLowerCase();
   if (text === "now" || text === "today") return new Date();
 
-  const offsetMs = toDuration(value);
-  if (offsetMs !== undefined) return fromMs(Date.now() + offsetMs);
-
   const parsed = Date.parse(value.trim());
-  return Number.isNaN(parsed) ? undefined : new Date(parsed);
+  if (!Number.isNaN(parsed)) return new Date(parsed);
+
+  if (options.parseDuration === false) return undefined;
+  // Recurses with date parsing DISABLED so the two cannot hand a value back and
+  // forth forever.
+  const offsetMs = toDuration(value, { parseDate: false });
+  return offsetMs === undefined ? undefined : fromMs(Date.now() + offsetMs);
 }
 
 /** A `Date` for epoch `ms`, or `undefined` when it is out of representable range. */
@@ -1036,17 +1371,13 @@ function fromMs(ms: number): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-/** Epoch milliseconds for a numeric value/string, or `undefined` when not one. */
+/**
+ * Epoch milliseconds for a numeric value/string, or `undefined` when not one,
+ * applying the seconds-vs-millis inference at {@link SECONDS_CEILING}.
+ */
 function toEpochMs(value: unknown): number | undefined {
-  let numeric: number;
-  if (typeof value === "number") {
-    numeric = value;
-  } else if (typeof value === "string" && /^[+-]?\d+(\.\d+)?$/.test(value.trim())) {
-    numeric = Number(value.trim());
-  } else {
-    return undefined;
-  }
-  if (!Number.isFinite(numeric)) return undefined;
+  const numeric = toBareNumber(value);
+  if (numeric === undefined) return undefined;
   return Math.abs(numeric) < SECONDS_CEILING ? numeric * 1000 : numeric;
 }
 

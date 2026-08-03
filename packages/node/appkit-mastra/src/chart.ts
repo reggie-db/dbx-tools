@@ -28,7 +28,16 @@
  */
 
 import { AppKitError, CacheManager, ExecutionError } from "@databricks/appkit";
-import { async, error, hash, json, log, string, type BrandContext } from "@dbx-tools/shared-core";
+import {
+  async,
+  error,
+  hash,
+  json,
+  log,
+  object,
+  string,
+  type BrandContext,
+} from "@dbx-tools/shared-core";
 import { marker, wire, type Chart, type ChartResult } from "@dbx-tools/shared-mastra";
 import { model } from "@dbx-tools/shared-model";
 import { Agent } from "@mastra/core/agent";
@@ -99,19 +108,18 @@ const chartDataPointSchema = z
       if (v === null || v === undefined) return null;
       if (typeof v === "number") return Number.isFinite(v) ? v : null;
       if (typeof v === "string") {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : null;
+        return object.toNumber(v) ?? null;
       }
       // Scatter `[x, y]` or heatmap `[xIndex, yIndex, value]`. Coerce
       // stringified components; reject if any component is non-finite.
       if (Array.isArray(v) && (v.length === 2 || v.length === 3)) {
-        const nums = v.map((c) => (typeof c === "number" ? c : Number(c)));
-        return nums.every((n) => Number.isFinite(n)) ? nums : null;
+        const nums = v.map((c) => object.toNumber(c));
+        return nums.every((n) => n !== undefined) ? nums : null;
       }
       if (typeof v === "object" && v !== null && "value" in v) {
         const obj = v as { name?: unknown; value: unknown };
-        const val = typeof obj.value === "number" ? obj.value : Number(obj.value);
-        if (!Number.isFinite(val)) return null;
+        const val = object.toNumber(obj.value);
+        if (val === undefined) return null;
         // Coerce numeric / boolean / nullish names to strings so a
         // pie slice keyed on a year (`2024`) or category id is
         // accepted without round-tripping through the catch arm.

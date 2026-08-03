@@ -43,6 +43,8 @@
  * @module
  */
 
+import { object } from "@dbx-tools/shared-core";
+
 /** Postgres TLS modes accepted by {@link SslMode}, in `PGSSLMODE` spelling. */
 export const SSL_MODES = ["require", "disable", "prefer"] as const;
 
@@ -138,10 +140,8 @@ function parseUri(s: string): ParsedAddress {
   }
   const result: ParsedAddress = {};
   if (url.hostname) result.host = url.hostname;
-  if (url.port) {
-    const port = Number.parseInt(url.port, 10);
-    if (!Number.isNaN(port)) result.port = port;
-  }
+  const port = object.toNumber(url.port);
+  if (port !== undefined) result.port = port;
   if (url.username) {
     try {
       result.user = decodeURIComponent(url.username);

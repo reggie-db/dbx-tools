@@ -21,6 +21,7 @@
 
 import { WorkspaceClient } from "@databricks/sdk-experimental";
 import { databricks } from "@dbx-tools/appkit";
+import { object } from "@dbx-tools/shared-core";
 import type { GenieDatasetData } from "@dbx-tools/shared-mastra";
 
 /**
@@ -35,15 +36,16 @@ export const STATEMENT_ROW_CAP = 500;
 /**
  * Best-effort numeric coercion for the Statement Execution API's
  * all-strings cells. Leaves non-numeric strings (and explicit
- * `null`s) intact; everything else flows through `Number`.
+ * `null`s) intact.
+ *
+ * Both of {@link object.toNumber}'s string leniencies are disabled, because a
+ * cell's other characters belong to the VALUE: a `"1,000"` in a text column is
+ * the string the query returned, and a `"25%"` must not silently arrive as
+ * `0.25` in a table the user is reading.
  */
 function coerceCell(cell: string | null): unknown {
   if (cell === null) return null;
-  if (/^-?\d+(\.\d+)?$/.test(cell)) {
-    const n = Number(cell);
-    if (Number.isFinite(n)) return n;
-  }
-  return cell;
+  return object.toNumber(cell, { separators: false, percent: false }) ?? cell;
 }
 
 /**

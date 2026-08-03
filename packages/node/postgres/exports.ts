@@ -7,6 +7,3 @@ export {
   withAdvisoryLock,
   withAdvisoryTransactionLock,
 } from "./src/advisory-lock.ts";
-// Callers validating a request body or config value before broadcasting need the
-// same serializability rule the bus enforces, rather than a second approximation.
-export { isSerializableValue } from "./src/topic-bus.ts";

@@ -9,11 +9,20 @@
  */
 
 import { createHash } from "node:crypto";
+import { object } from "@dbx-tools/shared-core";
 import type { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 
 const SIGNED_BIGINT_BITS = 64;
 
-/** Any value that can be reduced to a stable advisory-lock identity. */
+/**
+ * What names a lock. Anything reducible to a stable identity: a string, an id, a
+ * `["invoice", id]` pair, a config object, or an explicit `bigint` to interoperate
+ * with another implementation's published lock id.
+ *
+ * One value or many: an array is read as multiple parts, anything else as a single
+ * part. So `["invoice", 7]` and `"invoice_7"` are different locks, since the
+ * canonical form sees different structure.
+ */
 export type AdvisoryLockKey = unknown;
 
 /** Structural pool shape accepted by the lock helpers. */
@@ -29,51 +38,22 @@ export interface PgQueryable {
 
 type UnlockRow = QueryResultRow & { unlocked: boolean };
 
-function stableKey(value: unknown, seen = new Set<object>()): string {
-  if (value === null) return "null";
-
-  switch (typeof value) {
-    case "string":
-      return `string:${value.length}:${value}`;
-    case "boolean":
-      return `boolean:${value}`;
-    case "bigint":
-      return `bigint:${value}`;
-    case "number":
-      if (!Number.isFinite(value)) throw new TypeError("Advisory lock numbers must be finite");
-      return `number:${Object.is(value, -0) ? "-0" : value}`;
-    case "undefined":
-      return "undefined";
-    case "object": {
-      if (seen.has(value)) throw new TypeError("Advisory lock keys cannot contain cycles");
-      seen.add(value);
-      try {
-        if (value instanceof Date) return `date:${value.toISOString()}`;
-        if (Array.isArray(value)) {
-          return `array:[${value.map((item) => stableKey(item, seen)).join(",")}]`;
-        }
-        const record = value as Record<string, unknown>;
-        return `object:{${Object.keys(record)
-          .sort()
-          .map((key) => `${stableKey(key, seen)}=${stableKey(record[key], seen)}`)
-          .join(",")}}`;
-      } finally {
-        seen.delete(value);
-      }
-    }
-    default:
-      throw new TypeError(`Unsupported advisory lock key type: ${typeof value}`);
-  }
-}
-
 /**
  * Convert an arbitrary structured key into PostgreSQL's signed 64-bit advisory
  * lock namespace. A bigint is preserved directly so callers can interoperate
  * with another implementation that publishes its lock ID.
+ *
+ * Everything else is canonicalized with `object.toStableKey` and hashed, so key
+ * order in an object does not matter while a `1` and a `"1"` stay different locks.
+ * A cycle, a non-finite number, or a function/symbol key throws `TypeError`
+ * rather than yielding an identity two callers could disagree about.
  */
 export function advisoryLockId(key: AdvisoryLockKey): bigint {
   if (typeof key === "bigint") return BigInt.asIntN(SIGNED_BIGINT_BITS, key);
-  const digest = createHash("sha256").update(stableKey(key)).digest();
+  const parts = object.toOneOrMany(key);
+  const digest = createHash("sha256")
+    .update(parts.map((part) => object.toStableKey(part)).join("\u0000"))
+    .digest();
   return digest.readBigInt64BE(0);
 }
 

@@ -15,7 +15,7 @@
  * @module
  */
 
-import { toBoolean } from "./object.ts";
+import { toBoolean, toNumber } from "./object.ts";
 import { parseList, trimToNull } from "./string.ts";
 
 /** `process`-shaped view off `globalThis`, so no node types are needed. */
@@ -120,9 +120,8 @@ export function positiveInt(configured: unknown, keys: EnvKey, fallback: number)
 }
 
 function toPositiveNumber(value: unknown): number | undefined {
-  if (value === null || value === undefined || value === "") return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  const parsed = toNumber(value);
+  return parsed !== undefined && parsed > 0 ? parsed : undefined;
 }
 
 function toPositiveInt(value: unknown): number | undefined {

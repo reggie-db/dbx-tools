@@ -25,7 +25,7 @@
  */
 
 import type { Interceptor, InterceptorContext } from "@dbx-tools/appkit";
-import { log } from "@dbx-tools/shared-core";
+import { log, object } from "@dbx-tools/shared-core";
 import { installPortr, resolvePortrConfig, startPortr, writePortrConfig } from "./portr.ts";
 
 const logger = log.logger("tunnel:interceptor");
@@ -46,7 +46,7 @@ export interface TunnelInterceptorOptions {
 
 /** Resolve the public port portr should target: explicit, else the Apps contract. */
 function resolvePublicPort(port?: number): number {
-  return port ?? Number(process.env.DATABRICKS_APP_PORT ?? 8000);
+  return port ?? object.toNumber(process.env.DATABRICKS_APP_PORT) ?? 8000;
 }
 
 /**

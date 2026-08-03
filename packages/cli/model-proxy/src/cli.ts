@@ -20,6 +20,7 @@
 
 import { spawn } from "node:child_process";
 import type { Server } from "node:http";
+import { object } from "@dbx-tools/shared-core";
 import { classify, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { Command, CommanderError } from "commander";
 
@@ -59,7 +60,7 @@ function backendOptions(opts: CommonOpts): BackendOptions {
   return {
     ...(opts.profile ? { profile: opts.profile } : {}),
     ...(opts.workspaceHost ? { host: opts.workspaceHost } : {}),
-    ...(opts.threshold !== undefined ? { threshold: Number(opts.threshold) } : {}),
+    ...object.optional("threshold", object.toNumber(opts.threshold)),
   };
 }
 
@@ -83,7 +84,7 @@ async function startProxy(
   const retry = resolveRetryConfig(opts.retry429 === false ? { enabled: false } : {});
   const { server, url } = await startProxyServer(backend, {
     host: opts.host,
-    port: Number(opts.port),
+    port: object.toNumber(opts.port) ?? DEFAULT_PORT,
     retry,
     ...(apiKey ? { apiKey } : {}),
   });

@@ -279,7 +279,8 @@ why to use this package anyway:
   across packages. Advisory locks belong to a dedicated connection, so callers
   must not reproduce them with separate `pool.query()` calls. Explicit bigint
   keys are preserved for interoperability; structured keys are reduced to a
-  stable signed 64-bit identifier. `PostgresTopicBus` reserves one connection
+  stable signed 64-bit identifier through `object.toStableKey`, which also derives
+  the bus's channel name - one identity rule, not two. `PostgresTopicBus` reserves one connection
   for `LISTEN`, filters notifications by topic, and broadcasts JSON payloads
   through `pg_notify` so every app instance receives the event. The envelope is
   fixed (`type` / `metadata` / `body` plus a generated `id`, `topic`, and
@@ -290,6 +291,9 @@ why to use this package anyway:
   misses whatever was published during the gap, so reach for a table or a queue
   when a subscriber needs replay. `@databricks/appkit` is an OPTIONAL peer used
   lazily for sender identity; do not make it a hard dependency.
+  Both `channel` and the advisory-lock key take one value OR an array of parts, and
+  neither needs to be identifier-shaped - the package sanitizes and hashes. Do not
+  add a caller-side slugifier for either.
 - `@dbx-tools/teams`: AppKit has no Teams / Adaptive Card surface, so use this
   whenever a Microsoft Teams channel should be able to chat with the app's
   agents, or an agent should emit a Teams card. Two things it buys: a real Bot
@@ -387,15 +391,53 @@ second package, put it in shared-core rather than duplicating it.
 - `object` - `isRecord` (narrowing parsed JSON), `deepEqual` (never compare via
   `JSON.stringify`), `toBoolean`, `optional` (spread a field only when present),
   plus the lazy `Sequence` transforms.
+- `object.isSerializableValue` / `SerializableValue` - the ONE definition of "this
+  survives a JSON round trip unchanged". Type a serializing boundary (a message
+  payload, a cache entry) as `SerializableValue` and validate untrusted input with
+  the guard, which narrows rather than throwing. Do not settle for "`stringify`
+  did not throw": that SUCCEEDS while changing the value, turning a `Date` into a
+  string, `NaN` into `null`, a `Map` into `{}`, and dropping `undefined`.
+- `object.toStableKey` - canonical string for deriving a stable IDENTITY from a
+  structured value (advisory-lock id, notification channel, cache key). Object key
+  order does not matter; types and structure do, so `1` and `"1"` differ and
+  `["a","bc"]` differs from `["ab","c"]`. Throws on a cycle, a non-finite number,
+  or a function/symbol rather than inventing an identity two callers could
+  disagree about. `@dbx-tools/postgres` derives BOTH its lock ids and its channel
+  names through it - do not hand-roll a second canonicalizer, and do not reach for
+  `JSON.stringify` (key order leaks, `1`/`"1"` collide). `hash.fnvHash` has its own
+  looser canonicalizer that folds every `Date` onto one token; prefer it only when
+  a short collision-tolerant digest is enough.
+- `object.toNumber` - the ONE place a hand-typed NUMBER is interpreted, and the
+  base the other coercions build on. Takes a finite number, a `bigint`, or a
+  decimal string with a sign, surrounding whitespace, digit-group separators
+  (`"1,000"`, `"1 000"`), a bare fraction, a trailing point, an exponent, or a
+  trailing `%` (divided by 100). Returns `undefined` for everything else, so a
+  caller stops re-checking `Number`'s output - bare `Number` maps `""`, `null`,
+  `[]`, and whitespace to `0`. Do not write another `/^-?\d+(\.\d+)?$/` +
+  `Number()` pair: the ones this replaced each accepted a different subset.
+  `ToNumberOptions` turns off the two string leniencies (`separators`, `percent`)
+  where the other characters carry meaning - a SQL cell, an epoch, a date whose
+  spaces separate fields.
 - `object.toDate` / `object.toDuration` - the ONE place hand-typed dates and
-  durations are interpreted. `toDate` takes a `Date`, a date/ISO string, epoch
-  seconds OR millis (inferred; `Date.parse("1785697899")` would read that as a
-  YEAR), `now`, or a relative duration (`-30d`, `7 days ago`). `toDuration` takes
-  `1h30m` / `2 milliseconds` / `-7d`, lenient about whitespace, case, plurals,
-  and abbreviations. Both return `undefined` rather than throwing, like
-  `toBoolean`. Do not hand-roll a `1e11` seconds-vs-millis check or a
-  `(\d+)(ms|s|m|h)` regex in a package - `cli-tunnel`'s `--session-cutoff` is the
-  reference consumer.
+  durations are interpreted, both built on `toNumber`. `toDate` takes a `Date`, a
+  date/ISO string, epoch seconds OR millis (inferred; `Date.parse("1785697899")`
+  would read that as a YEAR), or `now`. `toDuration` takes `1h30m` /
+  `2 milliseconds` / `-7d`, lenient about whitespace, case, plurals, and
+  abbreviations. Both return `undefined` rather than throwing, like `toBoolean`.
+  Do not hand-roll a `1e11` seconds-vs-millis check or a `(\d+)(ms|s|m|h)` regex
+  in a package - `cli-tunnel`'s `--session-cutoff` is the reference consumer.
+
+  They are also INVERSES, each falling back to the other: a duration reaching
+  `toDate` resolves against now (`-30d`, `7 days ago`), and a date reaching
+  `toDuration` becomes the signed offset from now (`date - now`, so past is
+  negative). Each recurses with the other's parser off, so they cannot bounce a
+  value forever, and each tries its OWN reading first - `toDate` runs
+  `Date.parse` before the duration fallback, so a real date is never mistaken for
+  an offset. `ToDateOptions.parseDuration` / `ToDurationOptions.parseDate`
+  (default `true`) turn the fallback off where only one reading is valid: a
+  stored timestamp must not resolve against the current clock, and a timeout must
+  not accept a date.
+
 - `pattern` - `toPatternMatcher` / `toPattern` / `escapeRegExp`: a config
   allow-list of literals, shell globs, and `/regex/` literals compiled to one
   predicate. EVERY configurable allow-list in this repo takes those three shapes

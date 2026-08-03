@@ -206,9 +206,41 @@ const isRunnable = predicate
 short-circuits. `predicate.create()` returns composable predicates with `and`,
 `or`, and `negate`, used heavily by the projen engine.
 
-## Dates And Durations
+## Serializable Values And Stable Identities
 
 ```ts
+if (object.isSerializableValue(requestBody)) {
+  await bus.broadcast("orders", { type: "order.updated", body: requestBody });
+}
+
+const key = object.toStableKey({ schema: "billing", version: 2 });
+```
+
+`object.isSerializableValue()` answers "does this survive a JSON round trip
+unchanged", which is stricter than `JSON.stringify` not throwing: that succeeds
+while turning a `Date` into a string, `NaN` into `null`, and a `Map` into `{}`,
+and while dropping `undefined`. It narrows to `SerializableValue` instead of
+throwing, so it doubles as the validator for a request body. Type a serializing
+boundary as `SerializableValue` to catch the same mistakes at compile time.
+
+`object.toStableKey()` canonicalizes a value so an identity can be derived from
+it. Object key order does not affect the result, but types and structure do:
+`1` and `"1"` differ, and so do `["a", "bc"]` and `["ab", "c"]`. It throws on a
+cycle, a non-finite number, or a function/symbol rather than returning an
+identity two callers could disagree about. `@dbx-tools/postgres` derives both its
+advisory-lock ids and its notification channel names through it. Use
+`hash.fnvHash()` instead when a short collision-tolerant digest is enough — its
+canonicalizer is looser and folds every `Date` onto one token.
+
+## Numbers, Dates, And Durations
+
+```ts
+object.toNumber("1,000"); //     1000
+object.toNumber(" -2.5 "); //    -2.5
+object.toNumber("12.5 %"); //    0.125
+object.toNumber(""); //          undefined - `Number("")` would be 0
+object.toNumber("12px"); //      undefined
+
 object.toDate("2026-08-02"); //  a date or ISO instant
 object.toDate("1785697899"); //  epoch SECONDS (not the year 1785697899)
 object.toDate(1785697899000); // epoch millis
@@ -219,14 +251,24 @@ object.toDate("nope"); //        undefined - never throws
 object.toDuration("1 hour 30 minutes"); // 5_400_000
 object.toDuration("2ms"); //               2
 object.toDuration("-7d"); //               -604_800_000
+object.toDuration("2026-08-02"); //        ms from now until that instant
 ```
 
-Both are for values typed by HAND into env vars, CLI flags, and config files, so
-they are deliberately lenient: whitespace between amount and unit is optional,
-units are case-insensitive, and plurals and abbreviations are equivalent (`2ms`
-=== `2 milliseconds`, `1h` === `1 hr` === `1 Hour`). Signs make a duration an
-OFFSET, which is what lets `toDate` read `-30d` / `12 hours ago` / `in 45s` as
-instants.
+All three are for values typed by HAND into env vars, CLI flags, and config
+files, so they are deliberately lenient: whitespace between amount and unit is
+optional, units are case-insensitive, and plurals and abbreviations are
+equivalent (`2ms` === `2 milliseconds`, `1h` === `1 hr` === `1 Hour`). Signs make
+a duration an OFFSET, which is what lets `toDate` read `-30d` / `12 hours ago` /
+`in 45s` as instants.
+
+`toNumber` is the base the other two are built on, and the reason to reach for it
+over `Number(value)` is that `Number` invents values: `""`, `null`, `[]`, and a
+whitespace string all become `0`, so every caller has to re-check the result.
+`toNumber` returns `undefined` instead, and accepts the spellings a person
+actually types — digit-group separators, a bare fraction, a trailing point, an
+exponent, a trailing percent. `ToNumberOptions` disables the `separators` and
+`percent` leniencies for a string whose other characters carry meaning; a SQL
+cell uses that so `"1,000"` in a text column stays the string the query returned.
 
 `toDate` exists rather than `new Date(value)` because a bare epoch usually
 arrives as a STRING (`date +%s`, a JSON field, a copied log line) and
@@ -237,6 +279,26 @@ duration parse instead of being skipped, so `1 fortnight` is `undefined` rather
 than `1`. Neither function throws - like `toBoolean` they return `undefined`, so
 the caller decides whether a bad value is fatal, a warning, or a fallback
 (`@dbx-tools/tunnel`'s `TUNNEL_AUTH_SESSION_CUTOFF` warns and carries on).
+
+### Dates And Durations Are Inverses
+
+Each function falls back to the other, so one field accepts both readings: a
+duration reaching `toDate` resolves against now, and a date reaching
+`toDuration` becomes the signed offset from now (`date - now`, so a past instant
+is negative). Each tries its own reading first — `toDate` runs `Date.parse`
+before the duration fallback — and recurses with the other's parser off, so a
+value cannot bounce between them.
+
+```ts
+object.toDate("30 days ago", { parseDuration: false }); //  undefined
+object.toDuration("2026-08-02", { parseDate: false }); //    undefined
+```
+
+Turn the fallback off where only one reading can be correct. A stored timestamp
+or an `expires_at` field must not accept a duration, because resolving against
+the current clock makes the same input mean something different on every call. A
+timeout or a poll interval must not accept a date, because it would yield a
+plausible but wrong number that also drifts.
 
 ## Iterables
 
@@ -369,9 +431,10 @@ without paying formatting cost when disabled.
 - `json` - non-throwing `parse()` and record-narrowing `parseRecord()`.
 - `string` - tokenization, slugs, identifiers, human labels, string coercion,
   config lists, descriptions, pluralization, and HTML escaping.
-- `object` - record checks, boolean/date/duration coercion, present-only field
-  spreading, deep equality, shape types, and lazy sequence transforms +
-  collection helpers.
+- `object` - record checks, number/boolean/date/duration coercion, present-only
+  field spreading, deep equality, JSON-round-trip guards
+  (`isSerializableValue`), canonical identity keys (`toStableKey`), shape types,
+  and lazy sequence transforms + collection helpers.
 - `env` - config-over-environment resolution: strings, booleans, positive
   numbers/integers, and lists, with env-name fallback chains. `name()` gives the
   primary variable name for a log line or error - an `EnvKey` may be a bare

@@ -26,8 +26,8 @@ import {
 } from "@databricks/appkit";
 import { plugin as pluginLookup } from "@dbx-tools/appkit";
 import { net as databricksNet } from "@dbx-tools/databricks";
-import { PostgresTopicBus, isSerializableValue, type TopicMetadata } from "@dbx-tools/postgres";
-import { error, log } from "@dbx-tools/shared-core";
+import { PostgresTopicBus, type TopicMetadata } from "@dbx-tools/postgres";
+import { error, log, object } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
 /**
@@ -43,12 +43,7 @@ const logger = log.logger("demo:bus");
  * the validation errors instead of a 500 from a rejected publish.
  */
 function isTopicMetadata(value: unknown): value is TopicMetadata {
-  return (
-    Boolean(value) &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    isSerializableValue(value)
-  );
+  return object.isRecord(value) && object.isSerializableValue(value);
 }
 
 const sendSchema = z.object({
@@ -56,7 +51,7 @@ const sendSchema = z.object({
   user: z.string().trim().min(1).max(80),
   type: z.string().trim().min(1).max(120),
   metadata: z.record(z.string(), z.unknown()).refine(isTopicMetadata).default({}),
-  body: z.unknown().refine(isSerializableValue, "Body must be JSON serializable"),
+  body: z.unknown().refine(object.isSerializableValue, "Body must be JSON serializable"),
 });
 
 let environmentMetadata: Promise<Record<string, string>> | undefined;

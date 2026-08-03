@@ -25,12 +25,29 @@
  */
 
 import { hostname } from "node:os";
-import { async as asyncUtil, error, hash, json, string } from "@dbx-tools/shared-core";
+import { async as asyncUtil, error, hash, json, object, string } from "@dbx-tools/shared-core";
 import type { Notification, PoolClient } from "pg";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
 
+/**
+ * `@dbx-tools/shared-core` owns the JSON-round-trip rule; this alias just keeps the
+ * generic signatures below readable. Consumers import the type from shared-core.
+ */
+type SerializableValue = object.SerializableValue;
+
+/** Channel parts used when a caller names no channel of its own. */
 const DEFAULT_CHANNEL = "dbx_tools_topic_bus";
+/**
+ * `NAMEDATALEN - 1`. Postgres TRUNCATES a longer channel name rather than
+ * rejecting it, which would split publishers and listeners onto different
+ * channels while every call looked like it succeeded.
+ */
+const MAX_CHANNEL_LENGTH = 63;
+/** Base-32 chars of the channel's identity suffix. Max 7 - the digest is 32 bits. */
+const CHANNEL_HASH_LENGTH = 6;
+/** Body used when the parts tokenize to nothing, or lead with a digit. */
+const CHANNEL_FALLBACK = "bus";
 /**
  * Encoded-envelope ceiling. PostgreSQL caps a `NOTIFY` payload at 8000 bytes and
  * fails the statement past that, so the bus rejects the message first with a size
@@ -63,19 +80,6 @@ type AppKitModule = {
  */
 let appKitModule: Promise<AppKitModule | undefined> | undefined;
 
-/** A JSON scalar. `undefined` is deliberately absent - `JSON.stringify` drops it. */
-export type SerializablePrimitive = string | number | boolean | null;
-
-/**
- * Any value that survives a `JSON.stringify`/`JSON.parse` round trip unchanged.
- *
- * The bus takes this rather than `unknown` so a `Date`, a `Map`, or a class
- * instance is a compile error at the call site instead of a listener that quietly
- * receives a string or `{}`. {@link isSerializableValue} is the runtime half.
- */
-export type SerializableValue =
-  SerializablePrimitive | SerializableValue[] | { [key: string]: SerializableValue };
-
 /**
  * Flat-keyed context travelling alongside a message body: who sent it, from
  * where, in which deployment. Values may nest, but the keys are the addressable
@@ -83,48 +87,6 @@ export type SerializableValue =
  * path into the body.
  */
 export type TopicMetadata = Record<string, SerializableValue>;
-
-/**
- * True when `value` survives a JSON round trip with no loss and no coercion.
- *
- * Stricter than "`JSON.stringify` did not throw", because that succeeds while
- * silently changing the value: a `Date` becomes a string, `NaN` and `Infinity`
- * become `null`, a `Map` becomes `{}`, and `undefined` disappears from an object
- * or turns into `null` inside an array. Each of those reaches the listener as
- * something other than what was sent, so all of them are rejected here.
- *
- * Rejected: non-finite numbers, `undefined`, functions, symbols, bigints, class
- * instances and anything else with a prototype other than `Object.prototype` or
- * `null` (`Date`, `Map`, `Set`, `RegExp`, `Buffer`), and any object graph
- * containing a cycle. Accepted: strings, booleans, `null`, finite numbers, plain
- * objects, arrays, and nestings of those.
- *
- * Also the validator for untrusted input - a request body or a decoded `NOTIFY`
- * payload - since it narrows to {@link SerializableValue} instead of asserting.
- * Never throws.
- *
- * @param ancestors Cycle-detection set for the recursive walk. Internal; callers
- *   pass one value.
- */
-export function isSerializableValue(
-  value: unknown,
-  ancestors: Set<object> = new Set(),
-): value is SerializableValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
-  if (typeof value === "number") return Number.isFinite(value);
-  if (typeof value !== "object") return false;
-
-  const prototype = Object.getPrototypeOf(value);
-  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return false;
-  if (ancestors.has(value)) return false;
-
-  ancestors.add(value);
-  const valid = Array.isArray(value)
-    ? value.every((entry) => isSerializableValue(entry, ancestors))
-    : Object.values(value).every((entry) => isSerializableValue(entry, ancestors));
-  ancestors.delete(value);
-  return valid;
-}
 
 /**
  * The wire envelope every subscriber receives, and what {@link
@@ -166,7 +128,7 @@ export interface TopicPublishInput<TBody extends SerializableValue = Serializabl
    * can override a machine default (`project`) or add its own (`traceId`).
    */
   metadata?: TopicMetadata;
-  /** The payload. Must satisfy {@link isSerializableValue}. */
+  /** The payload. Must satisfy `object.isSerializableValue`. */
   body: TBody;
 }
 
@@ -195,12 +157,22 @@ export type TopicMetadataProvider = () => TopicMetadata | PromiseLike<TopicMetad
 /** Construction options for {@link PostgresTopicBus}. */
 export interface PostgresTopicBusOptions {
   /**
-   * Postgres notification channel shared by every participating process, so all
-   * of them must agree on it. Must be a valid unquoted-identifier-shaped name
-   * (letter or `_`, then letters/digits/`_`, 63 chars max) or the constructor
-   * throws `TypeError`. Defaults to `dbx_tools_topic_bus`.
+   * What identifies this channel - anything, not just an identifier: a name, an
+   * id, a `[env, feature]` pair, a config object. The parts are tokenized into a
+   * legal Postgres channel name with a short hash of the originals appended, so
+   * the derivation is deterministic and no call site has to sanitize. See
+   * {@link PostgresTopicBus.channelName} for the resolved name.
+   *
+   * One value or many: an array is read as multiple parts
+   * ({@link object.OneOrMany}), anything else as a single part. So
+   * `["billing", "prod"]` and `"billing_prod"` are different channels, since the
+   * hash sees different structure.
+   *
+   * Every participating process must pass EQUIVALENT parts, since a different
+   * spelling hashes to a different channel. Defaults to a shared
+   * `dbx_tools_topic_bus` channel.
    */
-  channel?: string;
+  channel?: unknown;
   /**
    * Extra context added to every message this bus publishes, either a fixed
    * record or a {@link TopicMetadataProvider} called per broadcast. Overrides
@@ -297,16 +269,56 @@ async function senderMetadata(): Promise<TopicMetadata> {
 }
 
 /**
- * Validate a channel name at CONSTRUCTION so a bad one fails at startup rather
- * than on the first broadcast. The pattern is Postgres's unquoted identifier
- * shape within `NAMEDATALEN - 1`; longer names would be silently truncated by the
- * server, which would split publishers and listeners onto different channels.
+ * Derive a legal Postgres channel name from whatever a caller used to identify
+ * the channel.
+ *
+ * Callers think in terms of what the channel IS - an app name, a tenant id, a
+ * `[env, feature]` pair, a config object - and none of those are identifiers.
+ * Rejecting them pushed the sanitizing onto every call site, which is how two
+ * services end up disagreeing about whether the channel is `my-app`, `my_app`,
+ * or `myApp` and silently never hear each other.
+ *
+ * The parts are tokenized and joined into an identifier, then a short hash of the
+ * ORIGINAL parts is appended. The hash is what makes the mapping trustworthy:
+ * tokenizing alone is lossy, so `my-app` and `my_app` and `myApp` would collapse
+ * onto one channel, and a name long enough to hit `NAMEDATALEN` would collide
+ * with anything sharing its leading tokens. With the suffix, the readable part
+ * stays readable and distinct inputs stay distinct.
+ *
+ * Deterministic across processes and runs, which is the whole point - two
+ * services given the same parts must land on the same channel without
+ * coordinating. Hash inputs are structure-aware, so `["a", "b"]` and `["a_b"]`
+ * differ, and object key order does not.
  */
-function channelName(value: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(value)) {
-    throw new TypeError("Postgres notification channel must be a valid identifier");
-  }
-  return value;
+function channelName(parts: object.OneOrMany<unknown>): string {
+  // Hash the CANONICAL form, the same rule `advisoryLockId` uses, so structure and
+  // types decide identity: `["a","b"]` differs from `["ab"]`, `1` from `"1"`, and
+  // object key order does not matter. Hashing the raw parts would instead lean on
+  // the hash module's canonicalizer, which folds every `Date` onto one token.
+  const suffix = hash.fnvHashWithOptions(
+    { length: CHANNEL_HASH_LENGTH },
+    parts.map((part) => object.toStableKey(part)).join("\u0000"),
+  );
+  // Only parts that stringify to something a reader recognizes contribute to the
+  // readable half. An object would tokenize from `String(value)` as
+  // `object_object`, which is noise - it still shapes the hash, so identity is
+  // unaffected.
+  const labelled = parts.filter((part) => {
+    const type = typeof part;
+    return type === "string" || type === "number" || type === "boolean" || type === "bigint";
+  });
+  // Truncate rather than cap through the tokenizer: `trim` would DROP a single
+  // token longer than the budget, turning one long name into the bare fallback and
+  // making every long name look alike. The hash still separates them, but the
+  // channel is unreadable in a log.
+  const body = string
+    .toIdentifierWithOptions({ delimiter: "_" }, ...labelled)
+    .slice(0, MAX_CHANNEL_LENGTH - suffix.length - 1)
+    .replace(/_+$/, "");
+  // An identifier cannot start with a digit and the hash alphabet is
+  // digit-leading, so a numeric or empty body needs a letter in front.
+  const prefix = /^[A-Za-z_]/.test(body) ? body : `${CHANNEL_FALLBACK}_${body}`;
+  return `${prefix}_${suffix}`.replace(/_+/g, "_");
 }
 
 /** Quote a validated channel for `LISTEN`/`UNLISTEN`, which take no parameters. */
@@ -336,8 +348,8 @@ function decode(value: string | undefined): TopicMessage | undefined {
     typeof record.metadata !== "object" ||
     Array.isArray(record.metadata) ||
     !("body" in record) ||
-    !isSerializableValue(record.metadata) ||
-    !isSerializableValue(record.body)
+    !object.isSerializableValue(record.metadata) ||
+    !object.isSerializableValue(record.body)
   ) {
     return undefined;
   }
@@ -373,10 +385,17 @@ function decode(value: string | undefined): TopicMessage | undefined {
  * listeners; its failure goes to `onError`.
  *
  * Not safe to share one instance across unrelated channels - construct one bus
- * per channel.
+ * per channel. The channel itself is DERIVED from the `channel` option rather
+ * than taken literally; see {@link PostgresTopicBusOptions.channel} and
+ * {@link PostgresTopicBus.channelName}.
  */
 export class PostgresTopicBus {
-  private readonly channel: string;
+  /**
+   * The resolved Postgres channel this bus listens and publishes on, derived from
+   * the `channel` option. Read it to confirm two processes agree, or to log what a
+   * set of parts actually resolved to.
+   */
+  readonly channelName: string;
   private readonly metadata: TopicMetadata | TopicMetadataProvider | undefined;
   private readonly onError: (cause: unknown) => void;
   private readonly listeners = new Map<string, Set<TopicListener>>();
@@ -390,7 +409,9 @@ export class PostgresTopicBus {
     private readonly pool: PgPoolLike & PgQueryable,
     options: PostgresTopicBusOptions = {},
   ) {
-    this.channel = channelName(options.channel ?? DEFAULT_CHANNEL);
+    this.channelName = channelName(
+      object.toOneOrMany(options.channel === undefined ? DEFAULT_CHANNEL : options.channel),
+    );
     this.metadata = options.metadata;
     this.onError = options.onError ?? (() => undefined);
   }
@@ -422,7 +443,7 @@ export class PostgresTopicBus {
    * Validation is deliberately front-loaded, since a message that fails on the
    * wire is far harder to diagnose than one rejected at the call: `TypeError` for a
    * blank topic or type, or a body/metadata that would not round-trip through JSON
-   * unchanged ({@link isSerializableValue}); `RangeError` when the encoded
+   * unchanged (`object.isSerializableValue`); `RangeError` when the encoded
    * envelope exceeds the `NOTIFY` payload limit, which the automatic metadata
    * counts against - send a reference and let the receiver fetch the payload.
    * Throws if the bus is closed.
@@ -433,7 +454,10 @@ export class PostgresTopicBus {
   ): Promise<TopicMessage<TBody>> {
     if (!topic.trim()) throw new TypeError("Topic must not be empty");
     if (!input.type.trim()) throw new TypeError("Message type must not be empty");
-    if (!isSerializableValue(input.metadata ?? {}) || !isSerializableValue(input.body)) {
+    if (
+      !object.isSerializableValue(input.metadata ?? {}) ||
+      !object.isSerializableValue(input.body)
+    ) {
       throw new TypeError("Message metadata and body must be JSON serializable without coercion");
     }
     if (this.closed) throw new Error("Postgres topic bus is closed");
@@ -458,7 +482,7 @@ export class PostgresTopicBus {
     if (Buffer.byteLength(encoded, "utf8") > MAX_NOTIFY_BYTES) {
       throw new RangeError(`Postgres notification exceeds ${MAX_NOTIFY_BYTES} bytes`);
     }
-    await this.pool.query("SELECT pg_notify($1, $2)", [this.channel, encoded]);
+    await this.pool.query("SELECT pg_notify($1, $2)", [this.channelName, encoded]);
     return message;
   }
 
@@ -526,7 +550,7 @@ export class PostgresTopicBus {
     client.removeListener("error", this.handleClientError);
     let releaseError: Error | undefined;
     try {
-      await client.query(`UNLISTEN ${quoteIdentifier(this.channel)}`);
+      await client.query(`UNLISTEN ${quoteIdentifier(this.channelName)}`);
     } catch (cause) {
       releaseError = error.toError(cause);
     }
@@ -547,7 +571,7 @@ export class PostgresTopicBus {
     try {
       client.on("notification", this.handleNotification);
       client.on("error", this.handleClientError);
-      await client.query(`LISTEN ${quoteIdentifier(this.channel)}`);
+      await client.query(`LISTEN ${quoteIdentifier(this.channelName)}`);
       if (this.closed) throw new Error("Postgres topic bus is closed");
       this.client = client;
     } catch (cause) {
@@ -567,7 +591,7 @@ export class PostgresTopicBus {
    * stalling the notification connection.
    */
   private readonly handleNotification = (notification: Notification): void => {
-    if (notification.channel !== this.channel) return;
+    if (notification.channel !== this.channelName) return;
     const message = decode(notification.payload);
     if (!message) return;
     for (const listener of this.listeners.get(message.topic) ?? []) {

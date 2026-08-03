@@ -58,7 +58,7 @@ import {
 } from "@databricks/appkit";
 import { plugin } from "@dbx-tools/appkit";
 import { serving as nodeServing } from "@dbx-tools/model";
-import { async, error, log, string } from "@dbx-tools/shared-core";
+import { async, error, log, object, string } from "@dbx-tools/shared-core";
 import {
   feedback,
   routes,
@@ -1164,8 +1164,8 @@ type EmbedResolver = (
 function parseTimeoutMs(raw: unknown): number | undefined {
   const v = Array.isArray(raw) ? raw[0] : raw;
   if (typeof v !== "string") return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0) return undefined;
+  const n = object.toNumber(v);
+  if (n === undefined || n <= 0) return undefined;
   return Math.min(Math.floor(n), MAX_EMBED_POLL_TIMEOUT_MS);
 }
 
@@ -1179,8 +1179,8 @@ function parseTimeoutMs(raw: unknown): number | undefined {
 function parseStatementLimit(raw: unknown): number | undefined {
   const v = Array.isArray(raw) ? raw[0] : raw;
   if (typeof v !== "string") return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n) || n < 0) return undefined;
+  const n = object.toNumber(v);
+  if (n === undefined || n < 0) return undefined;
   return Math.floor(n);
 }
 

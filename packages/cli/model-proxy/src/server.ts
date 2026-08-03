@@ -32,7 +32,7 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { async as asyncUtil, error, json, log } from "@dbx-tools/shared-core";
+import { async as asyncUtil, error, json, log, object } from "@dbx-tools/shared-core";
 import { classify, openaiChat, openaiResponses } from "@dbx-tools/shared-model";
 import { Agent } from "undici";
 
@@ -192,7 +192,8 @@ async function upstreamFetch(
 export function parseRetryAfterMs(header: string | null, nowMs: number): number | undefined {
   if (!header) return undefined;
   const trimmed = header.trim();
-  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
+  const seconds = object.toNumber(trimmed, { separators: false, percent: false });
+  if (seconds !== undefined) return Math.max(0, seconds) * 1000;
   const when = Date.parse(trimmed);
   if (Number.isNaN(when)) return undefined;
   return Math.max(0, when - nowMs);
