@@ -55,7 +55,17 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/databricks",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/email",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/postgres",
       "version": "workspace:*",
       "type": "runtime"
     },

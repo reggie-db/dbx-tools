@@ -361,6 +361,15 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
 });
 
+// node-postgres: connection-correct Postgres utilities shared by packages.
+// Advisory locks reserve one PoolClient for the full protected callback.
+project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) => {
+  p.addDeps("pg@^8.22.0");
+  p.addPeerDeps("@databricks/appkit@catalog:");
+  p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
+  p.addDevDeps("@databricks/appkit@catalog:", "@types/pg@^8");
+});
+
 // node-teams: server-side Teams Adaptive Card add-on. A deterministic builder
 // compiles the small `CardSpec` a model drafts into a valid Adaptive Card 1.5
 // document, exposed as the `create_teams_card` Mastra tool + the AppKit `teams`
@@ -771,6 +780,8 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/appkit-mastra@workspace:*",
+    "@dbx-tools/databricks@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
     "@dbx-tools/email@workspace:*",
     "@dbx-tools/appkit-web-search@workspace:*",
     "@dbx-tools/teams@workspace:*",

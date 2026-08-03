@@ -58,7 +58,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.61",
+  "version": "0.0.0",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -79,6 +79,7 @@
     "packages/node/genie",
     "packages/node/model",
     "packages/node/path",
+    "packages/node/postgres",
     "packages/node/search",
     "packages/node/teams",
     "packages/node/tunnel",

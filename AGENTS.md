@@ -49,6 +49,8 @@ Primary package areas:
 - `packages/node/appkit` and `packages/cli/appkit-env` — AppKit defaults,
   Lakebase env/config resolution, execution-context helpers, plugin lookup, SDK
   cancellation, and cache-schema provisioning.
+- `packages/node/postgres` — reusable Postgres advisory-lock primitives plus a
+  topic bus built on dedicated `LISTEN` connections and `NOTIFY` broadcasts.
 - `packages/node/appkit-mastra`, `packages/shared/mastra`, and
   `packages/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
   and the matching React chat UI.
@@ -273,6 +275,13 @@ why to use this package anyway:
   tool and resolves its own web-capable model (so an agent on a non-web model
   still searches); `web_fetch` uses got-scraping. Same add-on shape as
   node-email (Mastra tool pair + AppKit plugin priming a shared runtime).
+- `@dbx-tools/postgres`: use for connection-correct Postgres utilities shared
+  across packages. Advisory locks belong to a dedicated connection, so callers
+  must not reproduce them with separate `pool.query()` calls. Explicit bigint
+  keys are preserved for interoperability; structured keys are reduced to a
+  stable signed 64-bit identifier. `PostgresTopicBus` reserves one connection
+  for `LISTEN`, filters notifications by topic, and broadcasts JSON payloads
+  through `pg_notify` so every app instance receives the event.
 - `@dbx-tools/teams`: AppKit has no Teams / Adaptive Card surface, so use this
   whenever a Microsoft Teams channel should be able to chat with the app's
   agents, or an agent should emit a Teams card. Two things it buys: a real Bot
@@ -459,7 +468,7 @@ formatting alone — a reformat mid-task inflates the diff, invalidates the revi
 you already did, and hides the behavior change you are actually making.
 
 When that final step arrives, prefer
-`bun exec prettier --write <the files you edited>`. Run the repo-wide `format`
+`bunx prettier --write <the files you edited>`. Run the repo-wide `format`
 task only when reformatting the repo IS the change. Either way, check
 `git status` / `git diff --stat` before finishing and revert files you did not
 mean to touch, so a behavior change is not buried in reflowed whitespace.

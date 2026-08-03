@@ -4,6 +4,7 @@ import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui-branding/react
 import { useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Brand from "@/pages/Brand";
+import Bus from "@/pages/Bus";
 import Cards from "@/pages/Cards";
 import Conversations from "@/pages/Conversations";
 import Search from "@/pages/Search";
@@ -39,6 +40,12 @@ const BASE_ROUTES: RouteDef[] = [
     label: "Cards",
     description: "A simulated Teams chat where the agent answers in Adaptive Cards",
     element: <Cards />,
+  },
+  {
+    path: "/bus",
+    label: "Bus",
+    description: "Postgres topic broadcasts shared live across multiple viewers",
+    element: <Bus />,
   },
   {
     path: "/search",

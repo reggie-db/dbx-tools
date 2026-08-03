@@ -163,6 +163,19 @@ describe("gate middleware", () => {
     assert.ok(routes.has(`post ${AUTH_PREFIX}/verify`));
     assert.ok(routes.has(`post ${AUTH_PREFIX}/logout`));
   });
+
+  it("reports the gate disabled on non-tunnel hosts", async () => {
+    const { routes } = mount();
+    const handler = routes.get(`get ${AUTH_PREFIX}/status`);
+    assert.ok(handler);
+    const res = makeRes();
+    await (handler as (req: Request, res: Response) => Promise<void>)(
+      makeReq("127.0.0.1:6868", `${AUTH_PREFIX}/status`),
+      res,
+    );
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.jsonBody, { authenticated: false, enabled: false });
+  });
 });
 
 describe("gate context mounting", () => {

@@ -171,6 +171,10 @@ export function mountGate(
   // --- Login routes (open on tunnel traffic; answered in-process) ---
 
   const statusHandler = (async (req, res) => {
+    if (!isTunnelHost(req, publicDomain)) {
+      sendJson(res, 200, { authenticated: false, enabled: false });
+      return;
+    }
     const cookie = http.parseCookies(req.headers.cookie ?? null)[SESSION_COOKIE_NAME];
     sendJson(res, 200, await gate.status(cookie));
   }) as RequestHandler;

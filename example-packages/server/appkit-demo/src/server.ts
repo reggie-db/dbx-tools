@@ -25,6 +25,7 @@ import { interceptor as tunnelInterceptorModule, plugin as tunnelPlugin } from "
 import { z } from "zod";
 
 import { logDependencies } from "./dependencies.ts";
+import { busDemo } from "./bus-demo.ts";
 
 /** Default search index used by both AppKit resource validation and the plugin. */
 const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";
@@ -224,6 +225,9 @@ await createAppAuto({
     server({ host, staticPath: clientDist }),
     genie(),
     lakebase(),
+    // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
+    // Lakebase connection and fans topic broadcasts out to its browser viewers.
+    busDemo(),
     // Validates SMTP config + verifies connectivity at startup, and
     // primes the transport the approval-gated `send_email` tool reuses.
     // `brand` styles every rendered email (accent, font, header logo)
