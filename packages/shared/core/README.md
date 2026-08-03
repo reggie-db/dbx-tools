@@ -408,6 +408,10 @@ const getRanges = functionModule.memoize(fetchRanges, {
 promises, and supports TTL-based refresh. It is useful for public metadata feeds,
 SDK catalogues, and expensive computed constants.
 
+Serializing whole callbacks rather than caching one value is a Node concern
+(it needs `node:worker_threads`), so it lives in
+[`@dbx-tools/core`](../../node/core)'s `processLock` instead.
+
 ## Logging
 
 ```ts

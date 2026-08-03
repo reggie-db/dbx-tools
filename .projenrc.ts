@@ -229,7 +229,7 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // / fs / process depends on node-core instead. (shared-core is added by the
 // blanket base-dep mixin above, so this package needs no rule of its own.)
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
-  p.addDeps("yaml");
+  p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml");
 });
 
 // node-appkit: the base for Node-side AppKit + experimental-SDK helpers.
@@ -609,6 +609,7 @@ project.applyToProjects(
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/core@workspace:*",
     // Browser-safe login wire schemas + the session cookie name - imported
     // statically by the gate, so a regular dep.
     "@dbx-tools/shared-email@workspace:*",

@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
+    "extract-zip": "^2.0.1",
+    "tar": "^7.5.22",
     "yaml": "^2.9.0"
   },
   "main": "index.ts",

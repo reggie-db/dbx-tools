@@ -355,6 +355,19 @@ the cookie, because that request was never going to be gated. So the same runnin
 app shows the OTP screen to a portr visitor and no login at all to a browser on
 `localhost` or the platform front door.
 
+## Verify The Live Portr Install
+
+The normal test task skips the networked portr release download. Run the
+integration test explicitly when validating GitHub release discovery, archive
+selection, executable installation, and the downloaded CLI:
+
+```sh
+RUN_LIVE_INSTALL_TEST=1 bun test packages/node/tunnel/test/portr-install.integration.test.ts
+```
+
+The test installs into an isolated temporary home, runs `portr --version`, logs
+the selected release and executable path, then removes the temporary directory.
+
 ## Modules
 
 - `interceptor` - `tunnelInterceptor()`, the `createApp` interceptor that applies

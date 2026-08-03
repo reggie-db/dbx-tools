@@ -20,6 +20,16 @@
       "type": "runtime"
     },
     {
+      "name": "extract-zip",
+      "version": "^2.0.1",
+      "type": "runtime"
+    },
+    {
+      "name": "tar",
+      "version": "^7.5.22",
+      "type": "runtime"
+    },
+    {
       "name": "yaml",
       "type": "runtime"
     }

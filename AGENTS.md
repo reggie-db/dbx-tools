@@ -455,14 +455,22 @@ second package, put it in shared-core rather than duplicating it.
 - `error` (`toError` / `errorMessage` / `errorContext`), `log.logger`,
   `hash.id` (id generation - no `nanoid`), `net.urlBuilder`,
   `http.createFetchError`, `function.memoize`, `predicate`, `token`.
+- `functionModule.memoize` caches ONE value and shares an in-flight promise
+  between callers in the same runtime. To serialize whole callbacks across
+  worker threads, use `@dbx-tools/core`'s `processLock.withProcessLock`.
 - `token` also owns the front-door header NAMES - `ACCESS_TOKEN_HEADER`,
   `USER_ID_HEADER`, `USER_EMAIL_HEADER`. Never spell `"x-forwarded-access-token"`
   in a package: several places branch on it (`@dbx-tools/appkit`'s `identity`
   decides whether OBO is possible by its presence, `@dbx-tools/tunnel` must
   strip inbound copies), and a stale second spelling is a silent auth bug.
 
-Node-only equivalents live in `@dbx-tools/core` (`exec.spawn`/`spawnSync`,
-`project.root`/`name`/`repositoryUrl`/`npmRegistry`) and `@dbx-tools/path`
+Node-only equivalents live in `@dbx-tools/core` (`bin.ensure` for idempotent
+executable downloads, archive selection, and atomic install;
+`exec.spawn`/`spawnSync`; `project.root`/`name`/`repositoryUrl`/`npmRegistry`;
+`processLock.withProcessLock` for keyed mutual exclusion across the main thread
+and its workers - a module-level promise chain only serializes ONE thread, and
+reach for `@dbx-tools/postgres`'s `withAdvisoryLock` when the scope is a
+deployment rather than a process) and `@dbx-tools/path`
 (`find.findFiles`, `watch.watchFiles`, `match.toPathMatcher`,
 `ignore.ignorePatterns`). The projen
 engine uses these too - it must not re-probe `npm prefix` / `git rev-parse` on

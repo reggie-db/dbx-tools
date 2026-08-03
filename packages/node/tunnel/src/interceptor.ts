@@ -5,16 +5,10 @@
  *
  * This is the in-process replacement for the old `dbxt-tunnel -- <cmd>` wrapper.
  * Instead of the tunnel being the main process that spawns the app as a child, the
- * APP is the main process and hands this interceptor its context. The interceptor:
- *
- *   1. applies the workspace host the context computed to `process.env`
- *      (`DATABRICKS_HOST`), so portr and any later SDK call agree on the workspace;
- *   2. installs + launches portr, pointed at the app's PUBLIC port;
- *   3. `bindProcess`es portr so the app and the tunnel live and die as one -
- *      signals pass through and either death tears the pair down (the
- *      concurrently-style supervision that used to be `superviseExit`);
- *   4. registers an AppKit `shutdown` lifecycle handler so an orderly app shutdown
- *      also stops portr.
+ * APP is the main process and hands this interceptor its context. The interceptor
+ * applies the computed workspace host, installs and launches portr on the app's
+ * public port, binds the child process to the app, and stops portr during an
+ * orderly AppKit shutdown.
  *
  * The email-OTP GATE is a separate concern: it is the `authGate` AppKit plugin,
  * which registers the login routes + a gating middleware on the app's own server.
@@ -66,17 +60,11 @@ function resolvePublicPort(port?: number): number {
  * });
  */
 export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Interceptor {
-  return (ctx: InterceptorContext): void => {
-    // 1. Apply the computed workspace host so portr + the SDK agree. The context
-    //    already resolved it (from the env / auto-config); set it only when it is
-    //    known and not already present, so an explicit env wins.
+  return async (ctx: InterceptorContext): Promise<void> => {
     if (ctx.env.databricksHost) {
       process.env.DATABRICKS_HOST ??= ctx.env.databricksHost;
     }
 
-    // 2. Resolve portr wiring. No token / domain -> no tunnel; leave the app alone.
-    //    `resolvePortrConfig` already falls back to TUNNEL_PUBLIC_DOMAIN itself, so
-    //    the explicit option is passed straight through.
     const port = resolvePublicPort(options.port);
     const portrConfig = resolvePortrConfig({
       publicDomain: options.publicDomain,
@@ -88,14 +76,11 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
       return;
     }
 
-    // 3. Install + launch portr, then bind it: the app and portr now share a fate.
-    const portrEnv = installPortr();
-    writePortrConfig(portrConfig, portrEnv);
-    const portr = startPortr(portrConfig, portrEnv);
+    const portrEnv = await installPortr();
+    await writePortrConfig(portrConfig, portrEnv);
+    const portr = await startPortr(portrConfig, portrEnv);
     ctx.bindProcess(portr);
 
-    // 4. An orderly AppKit shutdown also stops portr (belt-and-suspenders with the
-    //    signal pass-through `bindProcess` already installed).
     ctx.onLifecycle("shutdown", () => {
       if (!portr.killed) portr.kill("SIGTERM");
     });

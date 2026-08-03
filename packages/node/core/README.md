@@ -1,6 +1,7 @@
 # @dbx-tools/core
 
-Node-only core helpers for process execution and project discovery.
+Node-only core helpers for binary installation, process execution, and project
+discovery.
 
 Import this package when code needs `node:child_process`, `node:fs`, or
 `node:path`. Browser-safe utilities live in
@@ -16,6 +17,36 @@ Key features:
   the current working directory.
 - Safe filesystem stat and project naming helpers for CLIs and projen synth.
 - YAML/JSON brand-context discovery and loading with shared Zod validation.
+- Idempotent executable downloads with zip/tar extraction and atomic installs.
+- Keyed mutual exclusion across the main thread and its worker threads.
+
+## Install A Binary
+
+```ts
+import { chmod } from "node:fs/promises";
+import { join } from "node:path";
+
+import { bin } from "@dbx-tools/core";
+
+const executable = await bin.ensure("tool", releaseUrl, {
+  autoUnpackage: true,
+  selector: async ({ source }) => {
+    const path = join(source, "tool");
+    await chmod(path, 0o755);
+    return path;
+  },
+});
+```
+
+`bin.ensure()` installs to `$HOME/.<name>/bin/<name>` and returns its `root`,
+`binDir`, and executable `path`. An existing executable returns immediately, so
+a URL resolver is only called when installation is necessary. Concurrent
+callers use `processLock` with a check-lock-check-load sequence, preventing
+duplicate downloads across the main thread and wired workers. Direct downloads
+are selected by default. Zip, tar, tar.gz, and tgz archives can be unpacked
+automatically; a single-file archive needs no selector, while a selector can
+choose and prepare a binary from a larger archive. The selected file must be
+executable before it is atomically moved into place.
 
 ## Load Brand Context
 
@@ -80,6 +111,50 @@ const argv = exec.shlex('pnpm exec prettier --write "README.md"');
 `shlex()` is a small parser for command strings that need to become argv arrays.
 Prefer explicit argv arrays when possible.
 
+## Serialize Work Across Threads
+
+```ts
+import { processLock } from "@dbx-tools/core";
+
+await processLock.withProcessLock(["cache", name], async () => {
+  if (!(await exists(name))) await build(name);
+});
+```
+
+`withProcessLock()` runs the callback while holding the named lock, releasing it
+when the callback settles. Callers sharing a key are serialized; distinct keys
+run concurrently. The key is any value with a stable identity - a string, a
+`["invoice", id]` tuple, a config object - canonicalized by `object.toStableKey`,
+so structure counts: `["invoice", 7]` and `"invoice_7"` are different locks.
+
+Use it instead of a module-level promise chain when worker threads are involved.
+A promise chain only serializes the thread it lives on, so a worker pool runs one
+callback per thread; the coordinator here is shared, so the key admits one
+callback for the whole process.
+
+Workers opt in when they are constructed:
+
+```ts
+import { Worker } from "node:worker_threads";
+
+new Worker(url, processLock.processLockWorkerOptions({ workerData: { tenant } }));
+```
+
+That preserves your own `workerData` and `transferList`, and lets the worker lock
+during module initialization. For a worker you did not construct, call
+`attachProcessLock(worker)` and have the worker `await processLockAttached()`
+first - the port arrives by message, so it is not available quite as early.
+
+A thread that exits while holding a lock releases it, so a crashed worker cannot
+wedge a key. Locks are held only as long as the callback runs, and an idle lock
+never keeps the process from exiting.
+
+The scope is the THREADS of one process - `withProcessLock` shares nothing with a
+second `node` invocation or another replica. When the critical section spans a
+deployment, use
+[`@dbx-tools/postgres`](../postgres)'s `withAdvisoryLock`, which puts the arbiter
+in PostgreSQL where every replica can see it.
+
 ## Discover Project Roots
 
 ```ts
@@ -97,6 +172,11 @@ basename. `project.stat()` returns `undefined` instead of throwing.
 ## Modules
 
 - `exec` - async/sync process spawning, stdio handling, abort wiring, and shlex.
+- `bin` - executable download, optional archive extraction, selection, and
+  atomic installation.
 - `project` - root discovery, project naming, git-remote parsing, and safe
   filesystem stat.
 - `brand` - YAML/JSON discovery, parsing, validation, and asset path resolution.
+- `processLock` - keyed mutual exclusion across the main thread and its workers,
+  with worker wiring (`processLockWorkerOptions`, `attachProcessLock`,
+  `processLockAttached`).

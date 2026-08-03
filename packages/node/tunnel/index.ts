@@ -25,7 +25,7 @@ export { CodeStore } from "./src/otp.ts";
 export type { VerifyOutcome } from "./src/otp.ts";
 export { AuthGatePlugin, authGate } from "./src/plugin.ts";
 export type { AuthGateConfig, SendCodeOptions, ResolvedAuthGateConfig, AuthGateApi } from "./src/plugin.ts";
-export type { PortrConfig } from "./src/portr.ts";
+export type { PortrInstallOptions, PortrConfig } from "./src/portr.ts";
 export { RateLimiter } from "./src/rate-limit.ts";
 export { KEY_TTL_SECONDS } from "./src/signing-key.ts";
 export type { SigningKey } from "./src/signing-key.ts";

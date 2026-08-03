@@ -1,23 +1,38 @@
 /**
- * portr install + config + launch for the tunnel CLI.
+ * portr install, config, and launch support for the tunnel runtime.
  *
- * Some hosts (Databricks Apps among them) mount the container's `$HOME` read-only
- * on cold start, so the portr binary and its config are placed under a writable,
- * cwd-rooted `.home` unconditionally - it costs nothing where `$HOME` is writable.
- * The install is idempotent (the installer skips when the on-PATH binary is
- * current). The config is rendered from `TUNNEL_PUBLIC_DOMAIN` (`<subdomain>.<server>`)
- * + `PORTR_TOKEN` and points portr at the PUBLIC port (the proxy listens there).
+ * The binary and config use portr's conventional `$HOME/.portr` tree. The
+ * install is idempotent (the installer skips an existing executable). The
+ * config is rendered from `TUNNEL_PUBLIC_DOMAIN`
+ * (`<subdomain>.<server>`) + `PORTR_TOKEN` and points portr at the PUBLIC port
+ * (the proxy listens there).
  *
  * @module
  */
-
-import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { chmod, writeFile } from "node:fs/promises";
+import os from "node:os";
 import { delimiter, join } from "node:path";
+import { promisify } from "node:util";
+
+import { bin } from "@dbx-tools/core";
 import { env, log } from "@dbx-tools/shared-core";
 import { PUBLIC_DOMAIN_ENV } from "./env.ts";
 
 const logger = log.logger("tunnel:portr");
+const PORTR_LATEST_RELEASE_URL = "https://api.github.com/repos/amalshaji/portr/releases/latest";
+const execFileAsync = promisify(execFile);
+
+interface PortrRelease {
+  tag_name: string;
+  assets: Array<{ name: string; browser_download_url: string }>;
+}
+
+/** Options for installing the portr executable. */
+export interface PortrInstallOptions {
+  /** Home directory containing `.portr`; defaults to the OS home directory. */
+  homeDir?: string;
+}
 
 /** Resolved portr wiring, or `undefined` when no tunnel is configured. */
 export interface PortrConfig {
@@ -54,35 +69,68 @@ export function resolvePortrConfig(opts: {
   return { subdomain, server, token, port: opts.port };
 }
 
-/** The writable home portr installs + configures under (Apps `$HOME` is read-only). */
-function portrHome(): string {
-  const home = join(process.cwd(), ".home");
-  mkdirSync(join(home, ".portr", "bin"), { recursive: true });
-  return home;
+/** GitHub release asset name for the current or supplied OS/architecture. */
+export function portrAssetName(
+  version: string,
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): string {
+  const osName = platform === "darwin" ? "Darwin" : platform === "linux" ? "Linux" : undefined;
+  const archName = arch === "arm64" ? "arm64" : arch === "x64" ? "x86_64" : undefined;
+  if (!osName || !archName) {
+    throw new Error(`portr has no supported release asset for ${platform}/${arch}`);
+  }
+  return `portr_${version}_${osName}_${archName}.zip`;
 }
 
-/** Install portr (idempotent) into the cwd-rooted home and return the child env. */
-export function installPortr(): NodeJS.ProcessEnv {
-  const home = portrHome();
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    HOME: home,
-    PORTR_AUTO_ADD_PATH: "no",
-    PATH: [join(home, ".portr", "bin"), process.env.PATH ?? ""].join(delimiter),
-  };
-  logger.info("installing portr (idempotent)");
-  const res = spawnSync("bash", ["-c", "curl -sSf https://install.portr.dev | sh"], {
-    env,
-    stdio: "inherit",
+async function portrDownloadUrl(): Promise<string> {
+  const releaseResponse = await fetch(PORTR_LATEST_RELEASE_URL, {
+    headers: {
+      accept: "application/vnd.github+json",
+      "user-agent": "@dbx-tools/tunnel",
+    },
   });
-  if (res.status !== 0) throw new Error("portr install failed");
-  return env;
+  if (!releaseResponse.ok) {
+    throw new Error(`portr release lookup failed (${releaseResponse.status})`);
+  }
+  const release = (await releaseResponse.json()) as PortrRelease;
+  const version = release.tag_name.replace(/^v/, "");
+
+  const assetName = portrAssetName(version);
+  const asset = release.assets.find((candidate) => candidate.name === assetName);
+  if (!asset) throw new Error(`portr release ${release.tag_name} has no ${assetName}`);
+
+  logger.info("installing portr", { version, asset: assetName });
+  return asset.browser_download_url;
+}
+
+/** Install portr when absent and return the environment used by its process. */
+export async function installPortr(options: PortrInstallOptions = {}): Promise<NodeJS.ProcessEnv> {
+  const homeDir = options.homeDir ?? os.homedir();
+  const context = await bin.ensure("portr", portrDownloadUrl, {
+    autoUnpackage: true,
+    homeDir,
+    selector: async ({ source }) => {
+      const selected = join(source, "portr");
+      await chmod(selected, 0o755);
+      return selected;
+    },
+  });
+  return {
+    ...process.env,
+    HOME: homeDir,
+    PORTR_AUTO_ADD_PATH: "no",
+    PATH: [context.binDir, process.env.PATH ?? ""].join(delimiter),
+  };
 }
 
 /** Render `~/.portr/config.yaml` for the resolved tunnel. */
-export function writePortrConfig(config: PortrConfig, env: NodeJS.ProcessEnv): void {
-  const path = join(env.HOME!, ".portr", "config.yaml");
-  writeFileSync(
+export async function writePortrConfig(
+  config: PortrConfig,
+  childEnv: NodeJS.ProcessEnv,
+): Promise<void> {
+  const path = join(childEnv.HOME ?? os.homedir(), ".portr", "config.yaml");
+  await writeFile(
     path,
     [
       `server_url: ${config.server}`,
@@ -100,14 +148,13 @@ export function writePortrConfig(config: PortrConfig, env: NodeJS.ProcessEnv): v
 }
 
 /** Launch `portr start` as a child process (caller supervises + kills it). */
-export function startPortr(config: PortrConfig, env: NodeJS.ProcessEnv): ReturnType<typeof spawn> {
+export async function startPortr(
+  config: PortrConfig,
+  childEnv: NodeJS.ProcessEnv,
+): Promise<ReturnType<typeof spawn>> {
   // Reclaim the subdomain from any portr left by a previous boot in this container.
-  spawnSync("pkill", ["-x", "portr"], { stdio: "ignore" });
-  logger.info(`portr tunneling https://${config.subdomain}.${config.server} -> :${config.port}`);
-  return spawn("portr", ["start"], { env, stdio: "inherit" });
-}
+  await execFileAsync("pkill", ["-x", "portr"]).catch(() => undefined);
 
-/** True when the installed portr binary path exists (post-install sanity). */
-export function portrInstalled(env: NodeJS.ProcessEnv): boolean {
-  return existsSync(join(env.HOME!, ".portr", "bin", "portr"));
+  logger.info(`portr tunneling https://${config.subdomain}.${config.server} -> :${config.port}`);
+  return spawn("portr", ["start"], { env: childEnv, stdio: "inherit" });
 }
