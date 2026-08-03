@@ -12,11 +12,14 @@
  *    Kernel releases the lock when the fd closes (including process death).
  * 2. **file** — atomic lock-directory creation. This is the strategy used by
  *    `proper-lockfile`: `mkdir` is atomic on Windows, Unix, and network file
- *    systems where `open(..., "wx")` may not be reliable. Optional stale
- *    detection uses the directory mtime plus a heartbeat.
+ *    systems where `open(..., "wx")` may not be reliable. Stale detection is
+ *    always on (fixed {@link STALE_MS} + heartbeat) so a crashed holder on this
+ *    backend can be reclaimed.
  *
  * The first backend that can be *initialized* is used for the whole call. A busy
- * lock waits; an unavailable backend falls through to the next.
+ * lock waits; an unavailable backend falls through to the next. Callers may only
+ * bound how long to wait ({@link FileLockOptions.timeoutMs}); stale timing is
+ * not configurable so every holder and waiter agrees.
  *
  * @module
  */
@@ -37,6 +40,16 @@ const DEFAULT_BACKENDS: readonly FileLockBackend[] = ["flock", "file"];
 /** Poll interval while waiting for a contended OS lock. */
 const POLL_MS = 50;
 
+/**
+ * Age after which an unrefreshed lock directory may be removed.
+ * Matches `proper-lockfile`'s default. Not caller-configurable: every process
+ * must share the same threshold or a live holder can be mistaken for stale.
+ */
+const STALE_MS = object.toNumber(process.env.FILE_LOCK_STALE_MS) ?? 10_000;
+
+/** Heartbeat interval for refreshing lock-directory mtime (`STALE_MS / 2`). */
+const UPDATE_MS = object.toNumber(process.env.FILE_LOCK_UPDATE_MS) ?? STALE_MS / 2;
+
 /** `flock(2)` operation bits (Linux / macOS / BSD). */
 const LOCK_EX = 2;
 const LOCK_NB = 4;
@@ -56,18 +69,9 @@ export interface FileLockOptions {
   backends?: readonly FileLockBackend[];
   /**
    * Stop waiting and throw after this many milliseconds. Omit to poll forever.
+   * This is the only wait-loop knob; stale reclaim timing is fixed.
    */
   timeoutMs?: number;
-  /**
-   * Age after which an unrefreshed lock directory may be removed. Omit to
-   * disable stale detection. Only used by the `file` backend.
-   */
-  staleMs?: number;
-  /**
-   * Interval for refreshing the lock directory mtime when `staleMs` is set.
-   * Defaults to half of `staleMs`.
-   */
-  updateMs?: number;
   /** Invoked once the backend for this call has been chosen. */
   onAcquire?: (acquisition: FileLockAcquisition) => void;
 }
@@ -98,7 +102,9 @@ export async function withFileLock<T>(
   fn: () => T | Promise<T>,
   options: FileLockOptions = {},
 ): Promise<T> {
-  validateOptions(options);
+  if (options.timeoutMs !== undefined && options.timeoutMs < 0) {
+    throw new TypeError("timeoutMs must be non-negative");
+  }
   const id = lockId(key);
   const backends = options.backends ?? DEFAULT_BACKENDS;
   const dir = options.dir ?? join(tmpdir(), "dbx-tools-locks");
@@ -121,7 +127,7 @@ export async function withFileLock<T>(
         const lockPath = join(dir, `${id}.lock`);
         logger.debug("acquiring lock", { backend, key: id, path: lockPath });
         options.onAcquire?.({ backend });
-        return holdLockDirectory(lockPath, deadline, options.staleMs, options.updateMs, fn);
+        return holdLockDirectory(lockPath, deadline, fn);
       }
       default: {
         const _exhaustive: never = backend;
@@ -131,23 +137,6 @@ export async function withFileLock<T>(
   }
 
   throw new Error("withFileLock: no lock backend available");
-}
-
-function validateOptions(options: FileLockOptions): void {
-  if (options.timeoutMs !== undefined && options.timeoutMs < 0) {
-    throw new TypeError("timeoutMs must be non-negative");
-  }
-  if (options.staleMs !== undefined && options.staleMs <= 0) {
-    throw new TypeError("staleMs must be positive");
-  }
-  if (options.updateMs !== undefined) {
-    if (options.staleMs === undefined) {
-      throw new TypeError("updateMs requires staleMs");
-    }
-    if (options.updateMs <= 0 || options.updateMs > options.staleMs / 2) {
-      throw new TypeError("updateMs must be positive and no greater than half of staleMs");
-    }
-  }
 }
 
 /** Canonical filesystem-safe id for a lock key. */
@@ -206,7 +195,7 @@ async function holdFlock<T>(
       flock(handle.fd, LOCK_UN);
     }
   } finally {
-    await handle.close().catch(() => {});
+    await handle.close().catch(() => { });
   }
 }
 
@@ -216,7 +205,7 @@ async function waitForFlock(
   lockPath: string,
   deadline: number | undefined,
 ): Promise<void> {
-  for (;;) {
+  for (; ;) {
     const rc = flock(fd, LOCK_EX | LOCK_NB);
     if (rc === 0) return;
     assertBeforeDeadline(lockPath, deadline);
@@ -228,51 +217,49 @@ async function waitForFlock(
  * Atomic lock-directory creation — the portable / Windows path.
  *
  * `mkdir` is the same primitive used by `proper-lockfile`: it is atomic across
- * supported local and network filesystems. When stale detection is enabled,
- * the holder refreshes mtime so a live long-running lock is never reclaimed.
+ * supported local and network filesystems. The holder refreshes mtime on a fixed
+ * heartbeat so a live long-running lock is never reclaimed; a crashed holder's
+ * directory becomes reclaimable after {@link STALE_MS}.
  */
 async function holdLockDirectory<T>(
   lockPath: string,
   deadline: number | undefined,
-  staleMs: number | undefined,
-  updateMs: number | undefined,
   fn: () => T | Promise<T>,
 ): Promise<T> {
   await ensureParentDir(lockPath);
-  await acquireLockDirectory(lockPath, deadline, staleMs);
-  const stopHeartbeat = startHeartbeat(lockPath, staleMs, updateMs);
+  await acquireLockDirectory(lockPath, deadline);
+  const stopHeartbeat = startHeartbeat(lockPath);
   try {
     return await fn();
   } finally {
     stopHeartbeat();
-    await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+    await rm(lockPath, { recursive: true, force: true }).catch(() => { });
   }
 }
 
 async function acquireLockDirectory(
   lockPath: string,
   deadline: number | undefined,
-  staleMs: number | undefined,
 ): Promise<void> {
-  for (;;) {
+  for (; ;) {
     try {
       await mkdir(lockPath);
       return;
     } catch (cause) {
       const err = cause as NodeJS.ErrnoException;
       if (err.code !== "EEXIST") throw error.toError(cause);
-      if (staleMs !== undefined) await maybeReclaimStale(lockPath, staleMs);
+      await maybeReclaimStale(lockPath);
       assertBeforeDeadline(lockPath, deadline);
       await async.sleep(POLL_MS);
     }
   }
 }
 
-async function maybeReclaimStale(lockPath: string, staleMs: number): Promise<void> {
+async function maybeReclaimStale(lockPath: string): Promise<void> {
   try {
     const { mtimeMs } = await stat(lockPath);
     const age = Date.now() - mtimeMs;
-    if (age < staleMs) return;
+    if (age < STALE_MS) return;
     logger.debug("reclaiming stale lock directory", { path: lockPath, ageMs: age });
     await rm(lockPath, { recursive: true, force: true });
   } catch (cause) {
@@ -281,13 +268,7 @@ async function maybeReclaimStale(lockPath: string, staleMs: number): Promise<voi
   }
 }
 
-function startHeartbeat(
-  lockPath: string,
-  staleMs: number | undefined,
-  updateMs: number | undefined,
-): () => void {
-  if (staleMs === undefined) return () => {};
-  const intervalMs = updateMs ?? Math.max(1, Math.floor(staleMs / 2));
+function startHeartbeat(lockPath: string): () => void {
   const timer = setInterval(() => {
     const now = new Date();
     void utimes(lockPath, now, now).catch((cause) => {
@@ -296,7 +277,7 @@ function startHeartbeat(
         error: error.errorMessage(cause),
       });
     });
-  }, intervalMs);
+  }, UPDATE_MS);
   timer.unref();
   return () => clearInterval(timer);
 }
