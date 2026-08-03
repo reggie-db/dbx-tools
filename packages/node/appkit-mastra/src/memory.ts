@@ -46,6 +46,9 @@ import { summaryModel, TITLE_INSTRUCTIONS } from "./summarize.ts";
 
 const logger = log.logger("mastra/memory");
 
+/** Process-wide dedupe so instance + per-agent stores share one ownership log. */
+const loggedMigrationErrors = new Set<string>();
+
 /** Whether `LOG_LEVEL` is currently at or below debug. */
 function isDebugEnabled(): boolean {
   return log.isLevelEnabled("debug");
@@ -59,6 +62,9 @@ function isDebugEnabled(): boolean {
  * Mastra's `augmentWithInit` retries init forever when it throws, so the
  * only way to keep serving against an already-usable schema is to treat
  * migration failure as success and mark the store initialized.
+ *
+ * Concurrent first callers share one soft attempt; `isInitialized` is set
+ * before the soft promise settles so later callers skip DDL entirely.
  */
 export function withSoftStorageInit(store: PostgresStore): PostgresStore {
   const soft = store as unknown as {
@@ -68,19 +74,36 @@ export function withSoftStorageInit(store: PostgresStore): PostgresStore {
     isInitialized: boolean;
   };
   const originalInit = soft.init.bind(soft);
+  let softInitPromise: Promise<void> | undefined;
+
   soft.init = async () => {
-    try {
-      await originalInit();
-    } catch (err) {
-      if (isDebugEnabled()) {
-        logger.error("mastra storage migration failed", err);
-      } else {
-        logger.warn("mastra storage migration failed", {
-          error: error.errorMessage(err),
-          storeId: soft.id,
-          schema: soft.schema,
-        });
+    if (soft.isInitialized) return;
+    softInitPromise ??= (async () => {
+      try {
+        await originalInit();
+      } catch (err) {
+        // Mark success-for-serving before logging so a racing caller that
+        // passed the `isInitialized` check still joins this promise rather
+        // than starting another DDL pass.
+        soft.isInitialized = true;
+        const message = error.errorMessage(err);
+        if (!loggedMigrationErrors.has(message)) {
+          loggedMigrationErrors.add(message);
+          if (isDebugEnabled()) {
+            logger.error("mastra storage migration failed", err);
+          } else {
+            logger.warn("mastra storage migration failed", {
+              error: message,
+              storeId: soft.id,
+              schema: soft.schema,
+            });
+          }
+        }
       }
+    })();
+    try {
+      await softInitPromise;
+    } finally {
       soft.isInitialized = true;
     }
   };

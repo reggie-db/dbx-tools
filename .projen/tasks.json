@@ -128,8 +128,7 @@
       "description": "Run the demo server and client dev servers",
       "env": {
         "NODE_ENV": "development",
-        "BUN_CONFIG_ELIDE_LINES": "0",
-        "LOG_LEVEL": "debug"
+        "BUN_CONFIG_ELIDE_LINES": "0"
       },
       "steps": [
         {

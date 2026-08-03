@@ -848,8 +848,7 @@ for (const task of [SCOPE, "dbxt"]) {
 root.addTask("demo", {
   env: {
     NODE_ENV: "development",
-    BUN_CONFIG_ELIDE_LINES: "0",
-    LOG_LEVEL: "debug",
+    BUN_CONFIG_ELIDE_LINES: "0"
   },
   exec: `
   bunx concurrently \

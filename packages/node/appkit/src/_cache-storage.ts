@@ -21,6 +21,9 @@ import { error, log } from "@dbx-tools/shared-core";
 
 const logger = log.logger("cache-storage");
 
+/** Process-wide dedupe for soft migration warnings. */
+const loggedMigrationErrors = new Set<string>();
+
 /** Whether `LOG_LEVEL` is currently at or below debug. */
 function isDebugEnabled(): boolean {
   return log.isLevelEnabled("debug");
@@ -74,20 +77,32 @@ function loadPersistentStorage(): PersistentStorageConstructor | undefined {
   }
 }
 
-/** Soften `initialize()` so a migration failure is logged, not thrown. */
+/** Soften `initialize()` so a migration failure is logged once, not thrown. */
 function softenInitialize(storage: PersistentStorageBase): void {
   const originalInitialize = storage.initialize.bind(storage);
+  let softInitPromise: Promise<void> | undefined;
+
   storage.initialize = async () => {
-    try {
-      await originalInitialize();
-    } catch (err) {
-      if (isDebugEnabled()) {
-        logger.error("persistent cache migration failed", err);
-      } else {
-        logger.warn("persistent cache migration failed", {
-          error: error.errorMessage(err),
-        });
+    if (storage.initialized) return;
+    softInitPromise ??= (async () => {
+      try {
+        await originalInitialize();
+      } catch (err) {
+        storage.initialized = true;
+        const message = error.errorMessage(err);
+        if (!loggedMigrationErrors.has(message)) {
+          loggedMigrationErrors.add(message);
+          if (isDebugEnabled()) {
+            logger.error("persistent cache migration failed", err);
+          } else {
+            logger.warn("persistent cache migration failed", { error: message });
+          }
+        }
       }
+    })();
+    try {
+      await softInitPromise;
+    } finally {
       storage.initialized = true;
     }
   };
