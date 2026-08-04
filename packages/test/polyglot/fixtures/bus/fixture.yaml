@@ -1,0 +1,19 @@
+$schema: ../../schema.json
+functions:
+  channelName:
+    tests:
+      - name: default channel value
+        args: [dbx_tools_topic_bus]
+        expected: dbx_tools_topic_bus_3kj9bt
+      - name: single label
+        args: [billing]
+        expected: billing_1m8m64
+      - name: label parts
+        args: [[billing, prod]]
+        expected: billing_prod_091p2g
+      - name: joined label remains distinct
+        args: [billing_prod]
+        expected: billing_prod_3er7fp
+      - name: structured identity
+        args: [{ a: 1 }]
+        expected: bus_0xnqsa

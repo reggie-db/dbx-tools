@@ -1,0 +1,101 @@
+{
+  "$schema": "../../schema.json",
+  "functions": {
+    "fnvHash": {
+      "tests": [
+        {
+          "name": "fnv default length",
+          "args": ["string:7:billing"],
+          "expected": "1m8m64"
+        },
+        {
+          "name": "fnv joined stable keys",
+          "args": ["string:7:billing\u0000string:4:prod"],
+          "expected": "091p2g"
+        },
+        {
+          "name": "fnv maximum digest length",
+          "args": ["string:7:billing"],
+          "options": { "length": 7 },
+          "expected": "1m8m64b"
+        },
+        {
+          "name": "fnv zero length",
+          "args": ["billing"],
+          "options": { "length": 0 },
+          "expected": ""
+        }
+      ]
+    },
+    "toStableKey": {
+      "tests": [
+        { "name": "stable null", "args": [null], "expected": "null" },
+        { "name": "stable string uses utf16 length", "args": ["😀"], "expected": "string:2:😀" },
+        { "name": "stable type tags", "args": ["1"], "expected": "string:1:1" },
+        { "name": "stable number", "args": [1], "expected": "number:1" },
+        {
+          "name": "stable negative zero",
+          "args": [{ "$type": "negativeZero" }],
+          "expected": "number:-0"
+        },
+        {
+          "name": "stable array boundaries",
+          "args": [["a", "bc"]],
+          "expected": "array:[string:1:a,string:2:bc]"
+        },
+        {
+          "name": "stable array order",
+          "args": [[2, 1]],
+          "expected": "array:[number:2,number:1]"
+        },
+        {
+          "name": "stable object key order",
+          "args": [{ "b": 2, "a": 1 }],
+          "expected": "object:{string:1:a=number:1,string:1:b=number:2}"
+        },
+        {
+          "name": "stable set order",
+          "args": [{ "$type": "set", "values": [2, 1] }],
+          "expected": "set:[number:1,number:2]"
+        },
+        { "name": "stable cycle error", "args": [{ "$type": "cycle" }], "error": "TypeError" },
+        {
+          "name": "stable non-finite error",
+          "args": [{ "$type": "nan" }],
+          "error": "TypeError"
+        }
+      ]
+    },
+    "toIdentifier": {
+      "tests": [
+        {
+          "name": "identifier multiple values",
+          "args": ["billing", "Prod"],
+          "expected": "billing-prod"
+        },
+        { "name": "identifier camel case", "args": ["myApp"], "expected": "my-app" },
+        {
+          "name": "identifier acronym boundary",
+          "args": ["XMLHttpRequest"],
+          "expected": "xml-http-request"
+        },
+        {
+          "name": "identifier punctuation",
+          "args": ["already_snake"],
+          "expected": "already-snake"
+        }
+      ]
+    }
+  },
+  "tests": [
+    {
+      "name": "explicit target override",
+      "path": {
+        "typescript": "string.toIdentifier",
+        "python": "to_identifier"
+      },
+      "args": ["fixtureOverride"],
+      "expected": "fixture-override"
+    }
+  ]
+}

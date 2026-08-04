@@ -15,5 +15,5 @@ currently needed by more than one implementation:
 These functions exist so Python packages do not copy the TypeScript algorithms
 locally and silently drift. Add broader helpers only when another Python package
 actually needs them. Their shared behavior is tested from
-`packages/test/polyglot/fixtures/core-identity.json`, not duplicated in this
+`packages/test/polyglot/fixtures/core/fixture.json`, not duplicated in this
 package.

@@ -1,0 +1,17 @@
+$schema: ../../schema.json
+modules:
+  typescript: "@dbx-tools/appkit"
+  python: dbx_tools.postgres
+functions:
+  parseAddress:
+    path:
+      typescript: pgaddress.parseAddress
+      python: parse_address
+    result:
+      python: camelKeys
+  parseResourcePath:
+    path:
+      typescript: pgaddress.parseResourcePath
+      python: parse_resource_path
+    result:
+      python: camelKeys

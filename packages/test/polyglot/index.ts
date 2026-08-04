@@ -3,4 +3,4 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as harness from "./src/harness.ts";
-export type { RuntimeFunction, RuntimeModule, ModuleRoot, ModuleRegistry, FixtureCase, FixtureSuite, FixtureResult } from "./src/harness.ts";
+export type { Runtime, RuntimeValue, InvokeMode, ResultMode, TargetOverrides, FixtureCase, FunctionDefinition, FixtureSuite, FixtureResult } from "./src/harness.ts";

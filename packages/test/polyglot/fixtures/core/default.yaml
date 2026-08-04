@@ -1,0 +1,20 @@
+$schema: ../../schema.json
+modules:
+  typescript: "@dbx-tools/shared-core"
+  python: dbx_tools.core
+functions:
+  fnvHash:
+    path:
+      typescript: hash.fnvHashWithOptions
+      python: fnv_hash
+    invoke:
+      typescript: optionsFirst
+      python: keywordOptions
+  toStableKey:
+    path:
+      typescript: object.toStableKey
+      python: to_stable_key
+  toIdentifier:
+    path:
+      typescript: string.toIdentifier
+      python: to_identifier

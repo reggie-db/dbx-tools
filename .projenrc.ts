@@ -876,7 +876,7 @@ new TextFile(root, "pyproject.toml", {
     "dependencies = []",
     "",
     "[dependency-groups]",
-    'dev = ["pytest>=8.4,<9", "pytest-asyncio>=1.1,<2", "ruff>=0.12,<1"]',
+    'dev = ["pytest>=8.4,<9", "pytest-asyncio>=1.1,<2", "pyyaml>=6.0,<7", "ruff>=0.12,<1"]',
     "",
     "[tool.uv]",
     "package = false",

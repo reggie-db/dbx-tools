@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, relative, resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import {
   expectedResults,
-  readJson,
+  readFixture,
   type FixtureResult,
   type FixtureSuite,
 } from "../src/harness.ts";
@@ -13,11 +13,10 @@ import {
 const packageRoot = resolve(import.meta.dir, "..");
 const repositoryRoot = resolve(packageRoot, "../../..");
 const fixtureRoot = resolve(packageRoot, "fixtures");
-const registryPath = resolve(fixtureRoot, "modules.json");
-const fixturePaths = readdirSync(fixtureRoot)
-  .filter((name) => name.endsWith(".json") && name !== "modules.json")
-  .sort()
-  .map((name) => resolve(fixtureRoot, name));
+const fixturePattern = /(?:^|\.)fixture\.(?:json|ya?ml)$/;
+const fixturePaths = recursiveFiles(fixtureRoot)
+  .filter((path) => fixturePattern.test(basename(path)))
+  .sort();
 
 function run(command: string[], cwd: string): FixtureResult[] {
   const child = Bun.spawnSync(command, { cwd, stderr: "pipe", stdout: "pipe" });
@@ -27,11 +26,11 @@ function run(command: string[], cwd: string): FixtureResult[] {
 
 describe("polyglot fixture parity", () => {
   for (const fixturePath of fixturePaths) {
-    it(basename(fixturePath, ".json"), { timeout: 20_000 }, () => {
-      const expected = expectedResults(readJson<FixtureSuite>(fixturePath));
-      const typescript = run(["bun", "bin/run.ts", registryPath, fixturePath], packageRoot);
+    it(relative(fixtureRoot, fixturePath), { timeout: 20_000 }, () => {
+      const expected = expectedResults(readFixture(fixturePath));
+      const typescript = run(["bun", "bin/run.ts", fixturePath], packageRoot);
       const python = run(
-        ["uv", "run", "python", resolve(packageRoot, "python/run.py"), registryPath, fixturePath],
+        ["uv", "run", "python", resolve(packageRoot, "python/run.py"), fixturePath],
         repositoryRoot,
       );
 
@@ -41,3 +40,10 @@ describe("polyglot fixture parity", () => {
     });
   }
 });
+
+function recursiveFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(directory, entry.name);
+    return entry.isDirectory() ? recursiveFiles(path) : [path];
+  });
+}

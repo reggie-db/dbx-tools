@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dbx.tools/schemas/polyglot-fixture.json",
+  "title": "dbx-tools polyglot fixture document",
+  "description": "A fixture suite or directory default. Defaults may omit tests and are merged from the fixture root down.",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "modules": { "$ref": "#/$defs/runtimeModules" },
+    "functions": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/functionDefinition" }
+    },
+    "tests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/testCase" }
+    }
+  },
+  "anyOf": [{ "required": ["modules"] }, { "required": ["functions"] }, { "required": ["tests"] }],
+  "additionalProperties": false,
+  "$defs": {
+    "runtimeModules": {
+      "type": "object",
+      "properties": {
+        "typescript": { "type": "string", "minLength": 1 },
+        "python": { "type": "string", "minLength": 1 }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "runtimeStringOverride": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "properties": {
+            "typescript": { "type": "string", "minLength": 1 },
+            "python": { "type": "string", "minLength": 1 }
+          },
+          "minProperties": 1,
+          "additionalProperties": false
+        }
+      ]
+    },
+    "invokeModes": {
+      "type": "object",
+      "properties": {
+        "typescript": { "enum": ["positional", "optionsFirst"] },
+        "python": { "enum": ["positional", "keywordOptions"] }
+      },
+      "additionalProperties": false
+    },
+    "resultModes": {
+      "type": "object",
+      "properties": {
+        "typescript": { "enum": ["identity", "camelKeys"] },
+        "python": { "enum": ["identity", "camelKeys"] }
+      },
+      "additionalProperties": false
+    },
+    "targetOverrides": {
+      "type": "object",
+      "properties": {
+        "module": { "$ref": "#/$defs/runtimeStringOverride" },
+        "path": { "$ref": "#/$defs/runtimeStringOverride" },
+        "invoke": { "$ref": "#/$defs/invokeModes" },
+        "result": { "$ref": "#/$defs/resultModes" }
+      }
+    },
+    "testCase": {
+      "allOf": [
+        { "$ref": "#/$defs/targetOverrides" },
+        {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "function": { "type": "string", "minLength": 1 },
+            "args": { "type": "array" },
+            "options": { "type": "object" },
+            "expected": {},
+            "error": { "type": "string", "minLength": 1 }
+          },
+          "oneOf": [{ "required": ["expected"] }, { "required": ["error"] }]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "functionDefinition": {
+      "allOf": [
+        { "$ref": "#/$defs/targetOverrides" },
+        {
+          "type": "object",
+          "properties": {
+            "tests": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/testCase" }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

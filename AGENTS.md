@@ -515,15 +515,18 @@ Only port the helper subset needed by multiple Python packages; do not mirror
 all of shared-core speculatively. When moving duplicated Python helper code into
 `packages/py/core`, move its unit tests into `packages/py/core/tests` in the same
 change. When a contract must remain identical across languages, put shared JSON
-fixtures plus one emitter per runtime in `packages/test/polyglot`, then compare
-each emitter to the expected output and to the other runtime. Once common cases
-move there, remove their duplicate assertions from the TypeScript and Python
-package suites; retain only inputs or behavior that truly exist in one runtime.
-Use `packages/test/polyglot/fixtures/modules.json` for module/function-path
-differences; contract files should contain only the logical root, shared
-function name, arguments/options, and expected result/error. The generic runners
-discover fixture files automatically, so do not add a per-contract emitter or
-test file.
+or YAML fixtures in `packages/test/polyglot`, then compare each generic runtime
+runner to the expected output and to the other runtime. Once common cases move
+there, remove their duplicate assertions from the TypeScript and Python package
+suites; retain only inputs or behavior that truly exist in one runtime. Organize
+each contract as a fixture directory. Put shared TypeScript/Python module names
+and export-path mappings in that directory's `default.json` / `default.yaml`;
+parent defaults inherit into child directories. Group cases under logical
+function names, and use a test-level `module` / `path` override only for an
+exceptional target. The generic runners recursively discover `fixture.json`,
+`fixture.yaml`, and `*.fixture.<format>`, so fixtures and directory defaults must
+be the only contract-specific content: do not add a per-contract emitter or test
+file.
 
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:

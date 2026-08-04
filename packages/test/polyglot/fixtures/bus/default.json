@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schema.json",
+  "modules": {
+    "typescript": "@dbx-tools/postgres",
+    "python": "dbx_tools.bus"
+  },
+  "functions": {
+    "channelName": {
+      "path": {
+        "typescript": "topicBus.channelName",
+        "python": "channel_name"
+      }
+    }
+  }
+}
