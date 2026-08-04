@@ -47,6 +47,44 @@ The engine treats generated barrels, tests, declaration files, and folders
 without exported source modules as implementation details. They do not create
 new package membership.
 
+## Add A Python uv Workspace
+
+`DBXToolsPythonWorkspace` attaches Python packaging to an existing projen root
+without turning Python packages into JavaScript workspace projects. It generates
+the root and member `pyproject.toml` files, standard `py:*` tasks, the VS Code
+interpreter setting, and an optional manual PyPI trusted-publishing workflow.
+
+```ts
+import { project, projectPy } from "@dbx-tools/projen";
+
+const root = new project.DBXToolsNodeProject({ name: "my-apps" });
+const repository = {
+  url: "https://github.com/example/my-apps.git",
+  ref: "main",
+  root: "python/packages",
+} as const;
+
+new projectPy.DBXToolsPythonWorkspace(root, {
+  repository,
+  packages: [
+    {
+      directory: "core",
+      name: "my-apps-core",
+      module: "my_apps.core",
+      description: "Shared Python helpers",
+    },
+  ],
+  interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
+  release: true,
+});
+```
+
+Use `projectPy.pythonGitDependency(repository, name, directory)` for an internal
+dependency that must also resolve when a package is installed directly through a
+Git `#subdirectory=` URL. `root.vscode` is projen's existing VS Code component;
+dbx-tools reuses it rather than constructing a second `.vscode/settings.json`
+owner.
+
 ## Customize Packages With Mixins
 
 ```ts

@@ -5,7 +5,7 @@
  * is delivered by `.vscode/tasks.json` (`runOn: folderOpen`) - projen has no native
  * tasks.json component, so a `JsonFile` is the idiomatic emitter.
  */
-import { Component, JsonFile, type Project, vscode } from "projen";
+import { Component, JsonFile, javascript, vscode } from "projen";
 
 /**
  * Configures root `.vscode/settings.json`, `extensions.json`, and `tasks.json`.
@@ -15,10 +15,10 @@ export class DBXToolsVsCode extends Component {
   /** projen's built-in VsCode component (settings + extension recommendations). */
   readonly vsCode: vscode.VsCode;
 
-  constructor(scope: Project) {
+  constructor(scope: javascript.NodeProject) {
     super(scope);
 
-    this.vsCode = new vscode.VsCode(scope);
+    this.vsCode = scope.vscode ?? new vscode.VsCode(scope);
     this.vsCode.settings.addSettings({
       "typescript.tsdk": "node_modules/typescript/lib",
       "typescript.preferences.importModuleSpecifier": "non-relative",
