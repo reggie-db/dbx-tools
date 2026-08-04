@@ -1,0 +1,138 @@
+[
+  {
+    "name": "null address",
+    "operation": "parseAddress",
+    "input": null,
+    "expected": {}
+  },
+  {
+    "name": "empty address",
+    "operation": "parseAddress",
+    "input": "",
+    "expected": {}
+  },
+  {
+    "name": "whitespace address",
+    "operation": "parseAddress",
+    "input": "   ",
+    "expected": {}
+  },
+  {
+    "name": "unrecognized address",
+    "operation": "parseAddress",
+    "input": "Not An Address",
+    "expected": {}
+  },
+  {
+    "name": "postgres uri",
+    "operation": "parseAddress",
+    "input": "postgresql://me%40acme.com@ep-1.database.eastus2.azuredatabricks.net:5433/app%20db?sslmode=disable",
+    "expected": {
+      "host": "ep-1.database.eastus2.azuredatabricks.net",
+      "port": 5433,
+      "user": "me@acme.com",
+      "database": "app db",
+      "sslMode": "disable"
+    }
+  },
+  {
+    "name": "camel-case ssl mode",
+    "operation": "parseAddress",
+    "input": "postgres://h.example.com/db?sslMode=PrEfEr",
+    "expected": {
+      "host": "h.example.com",
+      "database": "db",
+      "sslMode": "prefer"
+    }
+  },
+  {
+    "name": "unsupported ssl mode",
+    "operation": "parseAddress",
+    "input": "postgres://h.example.com/db?sslmode=verify-full",
+    "expected": {
+      "host": "h.example.com",
+      "database": "db"
+    }
+  },
+  {
+    "name": "endpoint resource",
+    "operation": "parseAddress",
+    "input": "projects/demo/branches/production/endpoints/ep-1",
+    "expected": {
+      "project": "demo",
+      "branch": "production",
+      "endpointId": "ep-1",
+      "endpoint": "projects/demo/branches/production/endpoints/ep-1"
+    }
+  },
+  {
+    "name": "database resource",
+    "operation": "parseAddress",
+    "input": "projects/demo/branches/production/databases/databricks-postgres",
+    "expected": {
+      "project": "demo",
+      "branch": "production",
+      "databaseResourceId": "databricks-postgres"
+    }
+  },
+  {
+    "name": "project resource",
+    "operation": "parseAddress",
+    "input": "projects/demo",
+    "expected": {
+      "project": "demo"
+    }
+  },
+  {
+    "name": "branch resource",
+    "operation": "parseAddress",
+    "input": "projects/demo/branches/main",
+    "expected": {
+      "project": "demo",
+      "branch": "main"
+    }
+  },
+  {
+    "name": "malformed resource",
+    "operation": "parseAddress",
+    "input": "projects/demo/branches",
+    "expected": {}
+  },
+  {
+    "name": "hostname",
+    "operation": "parseAddress",
+    "input": "ep-1.database.azuredatabricks.net",
+    "expected": {
+      "host": "ep-1.database.azuredatabricks.net"
+    }
+  },
+  {
+    "name": "project id",
+    "operation": "parseAddress",
+    "input": "dbx-tools-demo",
+    "expected": {
+      "project": "dbx-tools-demo"
+    }
+  },
+  {
+    "name": "resource parser rejects branch id",
+    "operation": "parseResourcePath",
+    "input": "production",
+    "expected": {}
+  },
+  {
+    "name": "resource parser null",
+    "operation": "parseResourcePath",
+    "input": null,
+    "expected": {}
+  },
+  {
+    "name": "resource parser branch",
+    "operation": "parseResourcePath",
+    "input": "projects/demo/branches/main",
+    "expected": {
+      "project": "demo",
+      "branch": "main"
+    }
+  }
+]

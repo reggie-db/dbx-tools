@@ -31,8 +31,9 @@
       "typescript": {
         "project": [
           "tsconfig.json",
-          "js-packages/**/tsconfig.json",
-          "example-packages/**/tsconfig.json"
+          "packages/js/**/tsconfig.json",
+          "packages/test/**/tsconfig.json",
+          "packages/example/**/tsconfig.json"
         ],
         "alwaysTryTypes": true
       }
@@ -47,10 +48,12 @@
     "node_modules/",
     "*.generated.ts",
     "coverage",
-    "js-packages/openapi/**",
-    "js-packages/**/index.ts",
-    "example-packages/openapi/**",
-    "example-packages/**/index.ts",
+    "packages/js/openapi/**",
+    "packages/js/**/index.ts",
+    "packages/test/openapi/**",
+    "packages/test/**/index.ts",
+    "packages/example/openapi/**",
+    "packages/example/**/index.ts",
     "projen/index.ts",
     "**/dev.ts",
     "**/build.ts",
@@ -58,7 +61,7 @@
     "**/bunfig.override.toml",
     "**/bun-dev.override.ts",
     "**/bun-build.override.ts",
-    "js-packages/shared/genie/src/dashboards.ts"
+    "packages/js/shared/genie/src/dashboards.ts"
   ],
   "rules": {
     "curly": [

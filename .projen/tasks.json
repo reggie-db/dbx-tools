@@ -100,7 +100,7 @@
       "name": "dbx-tools",
       "steps": [
         {
-          "exec": "bun js-packages/cli/dbx-tools/bin/dbx-tools.ts",
+          "exec": "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
           "receiveArgs": true
         }
       ]
@@ -109,7 +109,7 @@
       "name": "dbxt",
       "steps": [
         {
-          "exec": "bun js-packages/cli/dbx-tools/bin/dbx-tools.ts",
+          "exec": "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
           "receiveArgs": true
         }
       ]
@@ -141,7 +141,7 @@
       "description": "Emit local Python hello-world messages onto the demo bus",
       "steps": [
         {
-          "exec": "zsh -lc '\n    eval \"$(\n      cd example-packages/server/appkit-demo\n      bun ../../../js-packages/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet\n    )\"\n    exec uv run python example-packages/python/bus-emitter.py\n  '"
+          "exec": "zsh -lc '\n    eval \"$(\n      cd packages/example/server/appkit-demo\n      bun ../../../js/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet\n    )\"\n    exec uv run python packages/example/python/bus-emitter.py\n  '"
         }
       ]
     },
@@ -166,7 +166,7 @@
       },
       "steps": [
         {
-          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern $@ js-packages example-packages projen",
+          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern $@ packages/js packages/test packages/example projen",
           "receiveArgs": true
         }
       ]
@@ -241,7 +241,7 @@
       "description": "Format Python workspace packages",
       "steps": [
         {
-          "exec": "uv run ruff format py-packages example-packages/python"
+          "exec": "uv run ruff format packages/py packages/test packages/example/python"
         }
       ]
     },
@@ -250,7 +250,7 @@
       "description": "Lint Python workspace packages",
       "steps": [
         {
-          "exec": "uv run ruff check py-packages example-packages/python"
+          "exec": "uv run ruff check packages/py packages/test packages/example/python"
         }
       ]
     },

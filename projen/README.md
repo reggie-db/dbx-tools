@@ -204,7 +204,7 @@ file contract as the CLI.
 The engine registers its commands as projen tasks on the workspace root, so run
 them with `bun run <task>` - `sync` (add `--watch`), `barrels`, `openapi`, and
 `clean`.
-[`@dbx-tools/cli`](../js-packages/cli/dbx-tools) is only needed to
+[`@dbx-tools/cli`](../packages/js/cli/dbx-tools) is only needed to
 bootstrap a folder that has no `.projenrc.ts` or toolchain yet.
 
 ## Run Tasks From The ROOT

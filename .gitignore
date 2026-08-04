@@ -94,11 +94,11 @@ jspm_packages/
 .ruff_cache/
 **/__pycache__/
 **/*.py[cod]
-py-packages/*/dist/
-!uv.lock
+packages/py/*/dist/
 !/pyproject.toml
-!/py-packages/postgres/pyproject.toml
-!/py-packages/bus/pyproject.toml
+!/packages/py/core/pyproject.toml
+!/packages/py/postgres/pyproject.toml
+!/packages/py/bus/pyproject.toml
 !/.projenrc.ts
 !/.github/workflows/release.yml
 !/.github/workflows/projen-release.yml

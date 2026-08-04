@@ -2,11 +2,11 @@
  * projen definition. `new DBXToolsNodeProject(...)` constructs the monorepo root
  * and, from its `packageRoots`, scans + attaches a
  * `DBXToolsTypeScriptProject` per `src`-bearing package folder at any depth under
- * `js-packages/`. The engine itself is dogfooded as a normal auto-discovered `cli`
- * package at `js-packages/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
+ * `packages/js/`. The engine itself is dogfooded as a normal auto-discovered `cli`
+ * package at `packages/js/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
  * it from the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
  *
- * The runnable sample app lives under `example-packages/` and is synthesized as
+ * The runnable sample app lives under `packages/example/` and is synthesized as
  * part of this workspace alongside the published packages it consumes.
  *
  * Per-package tweaks are MIXINS applied with `project.applyToProjects(root, {...},
@@ -26,10 +26,11 @@ const SCOPE = "dbx-tools";
 const root = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
-  // `js-packages` is the product; `example-packages` holds the runnable demo app
+  // `packages/js` is the JavaScript product tree; `packages/example` holds the runnable demo app
   // (server + React app), merged in from the former standalone `demo/` workspace
   // so it dogfoods the `@dbx-tools/*` packages as `workspace:*` source siblings.
-  packageRoots: ["js-packages", "example-packages"],
+  packageRoots: ["packages/js", "packages/test", "packages/example"],
+  packageTagPaths: { polyglot: ["node"] },
   // Any pnpm-workspace setting the engine does not manage itself, typed by
   // projen's own `PnpmWorkspaceYamlSchema`. `overrides` forces every transitive
   // glob onto v13: older majors are deprecated upstream (10.x now ships under
@@ -75,15 +76,12 @@ const root = new projectApi.DBXToolsNodeProject({
 root.prettier?.addIgnorePattern("projen/index.ts");
 
 // ---------------------------------------------------------------------------
-// Lockfile: bun.lock stays UNTRACKED (projen's `*.lock` default ignore)
+// Lockfiles stay UNTRACKED (projen's `*.lock` default ignore)
 // ---------------------------------------------------------------------------
-// Deliberately NOT committed, same rationale the old `pnpm-lock.yaml` had here:
-// a lockfile RESOLVED on a dev machine whose active npm registry is a local
-// verdaccio bakes `localhost:4873` tarball URLs into `bun.lock`, and CI (which
-// has no verdaccio) then fails every install with ConnectionRefused. Leaving it
-// untracked makes CI resolve fresh from public npm every time. bun does not need
-// a committed lockfile; the trade-off (CI re-resolves) is the same one the repo
-// already accepted for pnpm. Verify before ever committing one:
+// Deliberately NOT committed: a lockfile resolved on a dev machine can bake its
+// active npm or Python registry into `bun.lock` / `uv.lock`, then fail in CI or
+// on another developer's machine. Local installs still generate both files, but
+// the repo ignores them and CI resolves fresh. Verify before ever committing one:
 //   grep -c 'localhost:4873' bun.lock
 
 // ---------------------------------------------------------------------------
@@ -106,8 +104,7 @@ root.gitignore.addPatterns(
   ".ruff_cache/",
   "**/__pycache__/",
   "**/*.py[cod]",
-  "py-packages/*/dist/",
-  "!uv.lock",
+  "packages/py/*/dist/",
 );
 
 // Least privilege at the workflow level: a job that omits its own
@@ -185,10 +182,21 @@ root.pnpmWorkspace?.addCatalog("adaptivecards", "^3.0.5");
 // Per-package dependency rules (selected by package name + tag)
 // ---------------------------------------------------------------------------
 
+project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
+  p.package.addField("name", `@${SCOPE}/test-polyglot`);
+  p.package.addField("private", true);
+  p.package.addField(
+    "description",
+    "Cross-runtime parity tests for dbx-tools JavaScript and Python packages",
+  );
+  p.addDeps("@dbx-tools/appkit@workspace:*", "@dbx-tools/postgres@workspace:*");
+  p.tsconfig?.addInclude("bin/**/*.ts");
+});
+
 // shared-core is the light, browser-safe base: EVERY package (except
 // shared-core itself) gets it automatically, regardless of tag. When in doubt,
 // reach for shared-core - so the per-package rules below never add it.
-project.applyToProjects(root, { path: "js-packages/**", identifierName: "!shared-core" }, (p) => {
+project.applyToProjects(root, { path: "packages/js/**", identifierName: "!shared-core" }, (p) => {
   p.addDeps("@dbx-tools/shared-core@workspace:*");
 });
 
@@ -205,7 +213,7 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 });
 
 // node-core: the Node-only half of the shared runtime (exec + project). Lives
-// under js-packages/node/, so the `node` tag auto-applies (node types + ES2022
+// under packages/js/node/, so the `node` tag auto-applies (node types + ES2022
 // lib, no DOM). shared-core stays browser-safe; anything needing child_process
 // / fs / process depends on node-core instead. (shared-core is added by the
 // blanket base-dep mixin above, so this package needs no rule of its own.)
@@ -440,7 +448,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
 
 // node-path: filesystem path helpers - glob find, ignore rules, path
 // matching, package scan, and watch. It shells out (node-core exec) and uses
-// chokidar/glob, so it lives under js-packages/node/ (the `node` tag
+// chokidar/glob, so it lives under packages/js/node/ (the `node` tag
 // auto-applies). Pin explicit ranges: bare names resolve against the local
 // registry, which can return stale majors (e.g. minimatch@3 lacks the
 // `{ Minimatch }` ESM export the code imports, chokidar@1 predates the v4 API).
@@ -741,11 +749,11 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 // Demo app (merged from the former standalone `demo/` workspace)
 // ---------------------------------------------------------------------------
 // The runnable sample: an AppKit server + a React/Vite-free (bun) client, now
-// members of the single workspace under `example-packages/`. They consume the
+// members of the single workspace under `packages/example/`. They consume the
 // `@dbx-tools/*` packages as `workspace:*` source siblings (no registry, no
 // `.pnpmfile.cjs` linking) - editing a package is reflected immediately.
 
-// example-packages/server/appkit-demo: the AppKit server. `server` tag supplies
+// packages/example/server/appkit-demo: the AppKit server. `server` tag supplies
 // express + the `bun --watch`/`bun` dev/start tasks.
 project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "server" }, (p) => {
   p.package.addField("name", "@dbx-tools/demo-appkit-server");
@@ -787,7 +795,7 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
   p.addDevDeps("@types/compression@^1.8.1", "@types/pg@^8", "@types/json-schema@^7");
 });
 
-// example-packages/app/appkit-demo: the React client. `app` tag supplies react +
+// packages/example/app/appkit-demo: the React client. `app` tag supplies react +
 // the bun dev server / `bun build` (Tailwind via bun-plugin-tailwind).
 project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }, (p) => {
   p.package.addField("name", "@dbx-tools/demo-appkit-app");
@@ -819,6 +827,13 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // projen-owned package.json files above.
 const pythonPackages = [
   {
+    directory: "core",
+    name: "dbx-tools-core",
+    module: "dbx_tools.core",
+    description: "Dependency-free cross-runtime identity helpers for dbx-tools Python packages",
+    dependencies: [],
+  },
+  {
     directory: "postgres",
     name: "dbx-tools-postgres",
     module: "dbx_tools.postgres",
@@ -836,7 +851,12 @@ const pythonPackages = [
     name: "dbx-tools-bus",
     module: "dbx_tools.bus",
     description: "Async Postgres LISTEN/NOTIFY topic bus compatible with dbx-tools Node",
-    dependencies: ["asyncpg>=0.30,<1", "dbx-tools-postgres", "sqlalchemy>=2.0.41,<3"],
+    dependencies: [
+      "asyncpg>=0.30,<1",
+      "dbx-tools-core",
+      "dbx-tools-postgres",
+      "sqlalchemy>=2.0.41,<3",
+    ],
   },
 ] as const;
 
@@ -858,27 +878,27 @@ new TextFile(root, "pyproject.toml", {
     "package = false",
     "",
     "[tool.uv.workspace]",
-    'members = ["py-packages/*"]',
+    'members = ["packages/py/*"]',
     "",
     "[tool.uv.sources]",
     ...pythonPackages.map((pkg) => `${pkg.name} = { workspace = true }`),
     "",
     "[tool.pytest.ini_options]",
     'asyncio_mode = "auto"',
-    'testpaths = ["py-packages"]',
+    'testpaths = ["packages/py"]',
     "",
     "[tool.ruff]",
     'target-version = "py311"',
     "line-length = 100",
     "",
     "[tool.ruff.lint.per-file-ignores]",
-    '"py-packages/bus/src/dbx_tools/bus/topic_bus.py" = ["BLE001"]',
+    '"packages/py/bus/src/dbx_tools/bus/topic_bus.py" = ["BLE001"]',
     "",
   ],
 });
 
 for (const pkg of pythonPackages) {
-  new TextFile(root, `py-packages/${pkg.directory}/pyproject.toml`, {
+  new TextFile(root, `packages/py/${pkg.directory}/pyproject.toml`, {
     marker: false,
     readonly: true,
     lines: [
@@ -913,11 +933,11 @@ root.addTask("py:test", {
   description: "Run Python workspace tests",
 });
 root.addTask("py:lint", {
-  exec: "uv run ruff check py-packages example-packages/python",
+  exec: "uv run ruff check packages/py packages/test packages/example/python",
   description: "Lint Python workspace packages",
 });
 root.addTask("py:format", {
-  exec: "uv run ruff format py-packages example-packages/python",
+  exec: "uv run ruff format packages/py packages/test packages/example/python",
   description: "Format Python workspace packages",
 });
 root.addTask("py:build", {
@@ -927,10 +947,10 @@ root.addTask("py:build", {
 root.addTask("demo:emitter", {
   exec: `zsh -lc '
     eval "$(
-      cd example-packages/server/appkit-demo
-      bun ../../../js-packages/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet
+      cd packages/example/server/appkit-demo
+      bun ../../../js/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet
     )"
-    exec uv run python example-packages/python/bus-emitter.py
+    exec uv run python packages/example/python/bus-emitter.py
   '`,
   description: "Emit local Python hello-world messages onto the demo bus",
 });
@@ -940,7 +960,7 @@ root.addTask("demo:emitter", {
 // `.ts` entry directly.
 for (const task of [SCOPE, "dbxt"]) {
   root.addTask(task, {
-    exec: "bun js-packages/cli/dbx-tools/bin/dbx-tools.ts",
+    exec: "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
     receiveArgs: true,
   });
 }

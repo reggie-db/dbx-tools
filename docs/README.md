@@ -11,7 +11,7 @@ Starlight. Do not hand-maintain a second copy of package documentation.
 Source of truth:
 
 - `README.md` becomes the docs homepage.
-- `js-packages/**/README.md` becomes the package reference.
+- `packages/js/**/README.md` becomes the package reference.
 - `docs/*.md` guides become the site's Guides section.
 - `docs/scripts/sync-readmes.mjs` rewrites local README links for the site,
   generates Starlight content, and publishes `llms.txt` / `llms-full.txt`.

@@ -42,33 +42,33 @@ Serving integrations, approval-gated email flows, and AppKit-oriented React UI.
 The repo also includes a projen/pnpm workspace generator because the packages are
 dogfooded here, but that is contributor tooling, not the primary product story.
 Keep generator details in `projen/README.md` and
-`js-packages/cli/dbx-tools/README.md`.
+`packages/js/cli/dbx-tools/README.md`.
 
 Primary package areas:
 
-- `js-packages/node/appkit` and `js-packages/cli/appkit-env` — AppKit defaults,
+- `packages/js/node/appkit` and `packages/js/cli/appkit-env` — AppKit defaults,
   Lakebase env/config resolution, execution-context helpers, plugin lookup, SDK
   cancellation, and cache-schema provisioning.
-- `js-packages/node/postgres` — reusable Postgres advisory-lock primitives plus a
+- `packages/js/node/postgres` — reusable Postgres advisory-lock primitives plus a
   topic bus built on dedicated `LISTEN` connections and `NOTIFY` broadcasts.
-- `js-packages/node/appkit-mastra`, `js-packages/shared/mastra`, and
-  `js-packages/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
+- `packages/js/node/appkit-mastra`, `packages/js/shared/mastra`, and
+  `packages/js/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
   and the matching React chat UI.
-- `js-packages/node/genie` and `js-packages/shared/genie` — low-level Genie
+- `packages/js/node/genie` and `packages/js/shared/genie` — low-level Genie
   drivers, typed async events, snapshot diffing, and browser-safe Genie
   contracts. `shared/genie` also owns the codegen'd `src/dashboards.ts` (zod
   schemas from the upstream SDK `.d.ts`) that its Genie schemas widen; that used
   to be a separate `shared-sdk-model` package with exactly one consumer.
-- `js-packages/node/model`, `js-packages/shared/model`, and
-  `js-packages/cli/model-proxy` — intent-based Model Serving endpoint selection,
+- `packages/js/node/model`, `packages/js/shared/model`, and
+  `packages/js/cli/model-proxy` — intent-based Model Serving endpoint selection,
   shared schemas/classification, and local OpenAI-compatible proxying.
-- `js-packages/node/email`, `js-packages/shared/email-template`,
-  `js-packages/shared/email`, and `js-packages/ui/email` — approval-gated email
+- `packages/js/node/email`, `packages/js/shared/email-template`,
+  `packages/js/shared/email`, and `packages/js/ui/email` — approval-gated email
   tool/runtime, a universal React Email presentation layer, shared payload
   schemas, and matching React approval/compose surfaces. Outbound HTML and
   browser previews share the same React Email components, with the repository
   brand applied unless a consumer supplies its own `EmailBrand`.
-- `js-packages/node/appkit-web-search` — web-search add-on: `web_search` (the
+- `packages/js/node/appkit-web-search` — web-search add-on: `web_search` (the
   Databricks Model Serving NATIVE web-search tool — the model searches the web
   server-side and returns answer + citations; resolves its OWN web-capable model
   via `@dbx-tools/model`, Gemini→GPT, independent of the agent's chat model) +
@@ -77,7 +77,7 @@ Primary package areas:
   optional URL allow-list (built on `@dbx-tools/path`'s `match`) filtering
   citations / refusing disallowed fetches, per-tool approval gating, and the
   AppKit `web-search` plugin. Same shape as node-email.
-- `js-packages/node/teams`, `js-packages/shared/teams`, and `js-packages/ui/teams`
+- `packages/js/node/teams`, `packages/js/shared/teams`, and `packages/js/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
   registration can point at: it validates the inbound Bot Service JWT
@@ -124,23 +124,29 @@ Primary package areas:
   `AdaptiveCardGallery` built on the `adaptivecards` JS renderer (which ships no
   markdown parser — `ui-teams` installs `marked` as its `onProcessMarkdown`).
   Same add-on shape as node-email.
-- `js-packages/ui/appkit` — AppKit UI/Tailwind foundation used by feature UI
+- `packages/js/ui/appkit` — AppKit UI/Tailwind foundation used by feature UI
   packages.
-- `js-packages/node/databricks` and `js-packages/node/databricks-zerobus` —
+- `packages/js/node/databricks` and `packages/js/node/databricks-zerobus` —
   workspace/cloud/Zerobus infrastructure helpers.
-- `js-packages/shared/core`, `js-packages/node/core`, and `js-packages/node/path`
+- `packages/js/shared/core`, `packages/js/node/core`, and `packages/js/node/path`
   — cross-runtime and Node utility foundations.
-- `py-packages/postgres` — Python Lakebase/Postgres address parsing and
+- `packages/py/core` — dependency-free Python identity helpers shared by Python
+  packages. Keep this base deliberately small so importing a hash, stable key,
+  or identifier formatter does not pull database/runtime dependencies with it.
+- `packages/py/postgres` — Python Lakebase/Postgres address parsing and
   WorkspaceClient-backed connection resolution. Keep its accepted address shapes
-  aligned with `js-packages/node/appkit/src/pgaddress.ts`.
-- `py-packages/bus` — Python async Postgres topic bus. Its public lifecycle and
-  wire envelope mirror `js-packages/node/postgres`'s `PostgresTopicBus` so Node
+  aligned with `packages/js/node/appkit/src/pgaddress.ts`.
+- `packages/py/bus` — Python async Postgres topic bus. Its public lifecycle and
+  wire envelope mirror `packages/js/node/postgres`'s `PostgresTopicBus` so Node
   and Python services can share a channel.
 
-- **`js-packages/`** — JavaScript and TypeScript package content goes here.
-- **`py-packages/`** — Python packages in the root uv workspace go here.
-- **`example-packages/`** — seed/example packages when present. Do not make
+- **`packages/js/`** — JavaScript and TypeScript package content goes here.
+- **`packages/py/`** — Python packages in the root uv workspace go here.
+- **`packages/example/`** — seed/example packages when present. Do not make
   root docs primarily about examples.
+- **`packages/test/`** — private cross-package and cross-runtime test harnesses.
+  Shared polyglot fixtures and separate runtime emitters belong under
+  `packages/test/polyglot`, not inside one language package's unit-test tree.
 
 > Local dir is `dbx-tools/`; the GitHub repo is `reggie-db/dbx-tools`
 > (default branch **`main`**).
@@ -168,7 +174,7 @@ Root README rules:
 - Do not lead with projen, package discovery, generated files, barrels, mixins,
   or package-scanning internals.
 - Link to `projen/README.md` and
-  `js-packages/cli/dbx-tools/README.md` only under contributor/development
+  `packages/js/cli/dbx-tools/README.md` only under contributor/development
   context.
 
 Package README rules:
@@ -185,8 +191,8 @@ Package README rules:
 
 Docs site rules:
 
-- Source of truth is `README.md` plus `js-packages/**/README.md`.
-- `py-packages/**/README.md` documents contributor-facing Python workspace
+- Source of truth is `README.md` plus `packages/js/**/README.md`.
+- `packages/py/**/README.md` documents contributor-facing Python workspace
   packages until Python publishing/docs discovery is added.
 - A `private: true` package is EXCLUDED from the site by both generators. A
   private package never reaches npm, so a page for it documents something a
@@ -495,6 +501,23 @@ Cross-package contracts that are easy to duplicate by accident:
   (`invocations`, `responses`, `open-responses`, `chat/completions`). Never
   hard-code a `/serving-endpoints/...` string in a consumer.
 
+Python has the same reuse rule, with a deliberately smaller dependency-free
+base in `dbx_tools.core`. Before copying a TypeScript identity algorithm into a
+Python package, check these first:
+
+- `dbx_tools.core.hash.fnv_hash` - FNV-1a hashing compatible with the subset of
+  `shared-core` used by Python packages;
+- `dbx_tools.core.object.to_stable_key` - strict structured identity
+  canonicalization;
+- `dbx_tools.core.string.to_identifier` - readable identifier tokenization.
+
+Only port the helper subset needed by multiple Python packages; do not mirror
+all of shared-core speculatively. When moving duplicated Python helper code into
+`packages/py/core`, move its unit tests into `packages/py/core/tests` in the same
+change. When a contract must remain identical across languages, put shared JSON
+fixtures plus one emitter per runtime in `packages/test/polyglot`, then compare
+each emitter to the expected output and to the other runtime.
+
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:
 
@@ -517,14 +540,14 @@ utility is an invisible one.
 ## Formatting and diff hygiene
 
 Python package metadata is synthesized from the Python section in `.projenrc.ts`.
-Do not hand-edit the root or `py-packages/*/pyproject.toml` files. Run `bunx
+Do not hand-edit the root or `packages/py/*/pyproject.toml` files. Run `bunx
 projen`, then `uv sync --all-packages`. Use `uv run pytest`, `uv run ruff check
-py-packages`, and `uv run ruff format py-packages` for Python validation and
-formatting. Keep `uv.lock` committed; `.venv/`, Python caches, and built wheels
-are ignored.
+packages/py`, and `uv run ruff format packages/py` for Python validation and
+formatting. `uv.lock` and `bun.lock` are local install artifacts and must remain
+untracked; `.venv/`, Python caches, and built wheels are ignored too.
 
 `bun run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
-does not exclude `js-packages/`. Some committed files predate the current
+does not exclude `packages/js/`. Some committed files predate the current
 `printWidth: 100` and were never reformatted, so a repo-wide run rewraps them and
 churns dozens of lines that have nothing to do with your change.
 
@@ -542,7 +565,7 @@ task only when reformatting the repo IS the change. Either way, check
 mean to touch, so a behavior change is not buried in reflowed whitespace.
 
 Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
-over `js-packages`). It autofixes, so it can reformat too — same timing rule applies:
+over `packages/js`). It autofixes, so it can reformat too — same timing rule applies:
 run it when finishing up, not between edits.
 
 ## Vocabulary (important)
@@ -556,7 +579,7 @@ run it when finishing up, not between edits.
 - **scope** — reserved for the npm `@scope/` in package identifiers (e.g. the
   `@dbx-tools` in `@dbx-tools/ui-app`). Don't call tags "scopes".
 - **package** — a `src`-bearing folder under a `packageRoots`
-  root (e.g. `js-packages/ui/app`), named `@<scope>/<path-dash-joined>`.
+  root (e.g. `packages/js/ui/app`), named `@<scope>/<path-dash-joined>`.
 
 ## Mental model
 
@@ -643,7 +666,7 @@ run it when finishing up, not between edits.
   and augments each with the `name` + `tags` from its own `package.json` — what
   every post-synth command (`barrels`, the watcher, `openapi`) uses.
 - **Discovery + tag resolution.** Under each `packageRoots` root (this
-  repo passes `["js-packages", "example-packages"]`), ANY `src`-bearing folder at
+  repo passes `["packages/js", "packages/example"]`), ANY `src`-bearing folder at
   ANY depth is a package. Its path relative to the root is decomposed into
   cumulative dash-join **tag candidates**: `ui/app` → `[ui, ui-app]`;
   `dir/another/path` → `[dir, dir-another, dir-another-path]`. Each candidate is
@@ -720,7 +743,7 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
   `@dbx-tools/shared-core` predicates (narrowing a construct):
   `projectPredicate.hasIdentifierName("shared-core", ...)` (unscoped npm name glob via
   `match.toPathMatcher`, `→ Project`), `projectPredicate.hasTag(tag, ...tags)` (all tags
-  required, `→ DBXToolsProject`), and `projectPredicate.hasPath("js-packages/**", ...)`
+  required, `→ DBXToolsProject`), and `projectPredicate.hasPath("packages/js/**", ...)`
   (root-relative folder glob, `→ Project`), plus the `isProject()` /
   `isDBXToolsProject()` guards. Three more match the name from a different angle:
   `hasName` (the RAW projen `project.name`, verbatim, no `PackageIdentifier`
@@ -747,8 +770,8 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
     after the defaults.
 - **Names**: `PackageIdentifier.of(scope, relPath)`
   (`project.ts`): normalized, lowercased, the root-relative path dash-joined as
-  `@<scope>/<seg-seg-...>` (e.g. `js-packages/shared/core` → `@dbx-tools/shared-core`,
-  `js-packages/cli/dbx-tools` → `@dbx-tools/cli-dbx-tools`). The `scope` option
+  `@<scope>/<seg-seg-...>` (e.g. `packages/js/shared/core` → `@dbx-tools/shared-core`,
+  `packages/js/cli/dbx-tools` → `@dbx-tools/cli-dbx-tools`). The `scope` option
   defaults to the resolved project `name`; the `name` option, if omitted, is
   auto-detected (git remote → folder name). This repo passes `scope: "dbx-tools"`,
   giving `@dbx-tools/*` packages. The engine keeps its derived name UNLESS
@@ -758,7 +781,7 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
 
 ```
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbx-tools root task
-js-packages/
+packages/js/
   cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbx-tools` + `dbxt` bins)
     bin/dbx-tools.ts                      # commander entry: sync | barrels | openapi | clean
     index.ts                              # generated barrel (public API surface)
@@ -784,7 +807,7 @@ projen/                                   # the projen engine (`@dbx-tools/proje
     openapi.ts                            # openapi generator (tsoa controllers -> spec + client)
     clean.ts, generated.ts, tsconfig.ts, bun-app.ts, vscode.ts, engine-root.ts, dbx-tools-config.ts
   tasks/                                  # projen task scripts (bump, sync, barrels, openapi, projenrc, clean, emit)
-example-packages/
+packages/example/
   cli/main/ server/api/ shared/core/ shared/fun/ shared/neat/ app/appkit/   # seed examples, each a real subproject
 ```
 
@@ -923,7 +946,7 @@ bun run openapi              # generate the openapi packages from tsoa controlle
 bun run clean                # remove generated files (read-only ones); interactive picker, -y to skip
 bun run --filter '*' compile # type-check every package (projen's per-package compile: tsc --build)
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
-bun run eslint               # lint (autofix) every package under `js-packages`
+bun run eslint               # lint (autofix) every package under `packages/js`
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
 ```
 
@@ -1014,9 +1037,9 @@ surface of every package at once; regenerate with `bun run barrels`.
 
 ## Working on the packages via the demo app
 
-The runnable sample lives under `example-packages/` as two ordinary workspace
-members - `example-packages/server/appkit-demo` (`@dbx-tools/demo-appkit-server`,
-`server` tag) and `example-packages/app/appkit-demo` (`@dbx-tools/demo-appkit-app`,
+The runnable sample lives under `packages/example/` as two ordinary workspace
+members - `packages/example/server/appkit-demo` (`@dbx-tools/demo-appkit-server`,
+`server` tag) and `packages/example/app/appkit-demo` (`@dbx-tools/demo-appkit-app`,
 `app` tag). It is no longer a standalone workspace: both members declare their
 `@dbx-tools/*` deps as `workspace:*`, so bun resolves them from source in the one
 `node_modules`. Editing a package is reflected in the demo immediately - there is
@@ -1073,7 +1096,7 @@ the platform's pnpm build phase reads.
 Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated files.
 
 - **The engine ships on its own tag but at the SAME version, and one `bump` cuts
-  both.** `bun run bump` at the root publishes the `js-packages/**` members via the
+  both.** `bun run bump` at the root publishes the `packages/js/**` members via the
   `v*` tag -> `release` workflow -> `bun publish`es each non-private one, which by
   definition cannot exclude `projen/` now that it is a workspace member. So the
   engine's separate publication uses a second namespace: tag `projen-v*` ->
@@ -1243,11 +1266,12 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   row other than the CJS one goes red, the compiled emit or the specifier pass
   broke; check that `lib/index.js` exists and that no relative specifier in
   `lib/**` is still extensionless.
-- **`bun.lock` is git-IGNORED** (`**/*.lock` in `.gitignore`; `git check-ignore
-bun.lock` matches, `git ls-files bun.lock` is empty). It is a local/CI install
-  artifact, regenerated by `bun install`; the release publish task even deletes it
-  and reinstalls to re-resolve `workspace:*` after a version stamp (see the release
-  gotcha below). Do not commit it. CI installs are plain `bun install`.
+- **`bun.lock` and `uv.lock` are git-IGNORED** (`**/*.lock` in `.gitignore`;
+  `git check-ignore bun.lock uv.lock` matches, and neither appears in
+  `git ls-files`). They are local install artifacts regenerated by `bun install`
+  and `uv sync`; do not commit them. The release publish task also deletes
+  `bun.lock` and reinstalls to re-resolve `workspace:*` after a version stamp
+  (see the release gotcha below). CI installs are plain `bun install` / `uv sync`.
 - **Do NOT set `workflowPackageCache: true`, and do not add `cache: bun` to a
   hand-written workflow** without understanding the implications. `bun.lock` is not
   tracked, so a lockfile-keyed cache has no stable key to hash - keep caching off to
@@ -1264,7 +1288,7 @@ bun.lock` matches, `git ls-files bun.lock` is empty). It is a local/CI install
   until projen can emit `eslint.config.*`. Do not hand-write a flat config
   beside the generated one - two configs is worse than one stale one.
 - **The engine is dogfooded as a normal auto-discovered package**, not a hand-
-  authored special case: it lives at `js-packages/cli/dbx-tools` (tag `cli`,
+  authored special case: it lives at `packages/js/cli/dbx-tools` (tag `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` selects it with
   `project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, ...)` and:
@@ -1276,8 +1300,8 @@ bun.lock` matches, `git ls-files bun.lock` is empty). It is a local/CI install
   come from the `cli` tag, so a CLI needs no per-package config for either.
   It is the ONLY package in the repo that overrides its name: every other one,
   CLIs included, keeps what discovery derives from its path
-  (`js-packages/cli/model-proxy` -> `@dbx-tools/cli-model-proxy`,
-  `js-packages/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
+  (`packages/js/cli/model-proxy` -> `@dbx-tools/cli-model-proxy`,
+  `packages/js/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
   package, MOVE ITS FOLDER - do not add a name override.
   The projen engine itself lives in `projen`
   (`@dbx-tools/projen`). It is a workspace member (via `extraWorkspaceMembers`
@@ -1379,8 +1403,8 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
   OpenAPI 3 spec from the decorators + TS types, then openapi-typescript +
   openapi-fetch produce a read-only `<sourcePackage root>/openapi/<name>`
   package (`openapi.json` + `src/schema.ts` + `src/client.ts`) - colocated under
-  the SAME root as the controller it came from (`example-packages/server/
-api`'s controllers generate `example-packages/openapi/api`), not a hardcoded
+  the SAME root as the controller it came from (`packages/example/server/
+api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   root. tsoa/typescript/openapi-typescript are lazy-loaded (only `bun run
 openapi` / a watched controller edit needs them). The openapi watcher (started by
   `bun run sync --watch`, under `concurrently`) regenerates it automatically when a
@@ -1463,7 +1487,7 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   / `mlflow.spanOutputs` because Mastra's `mastra.agent_run.*` attrs sit on a
   child the view never reads. Do not adopt `mlflow-tracing` TS SDK for this
   path (it steals the global provider and writes a different store). Details
-  live in `js-packages/node/appkit-mastra/README.md` under Feedback And
+  live in `packages/js/node/appkit-mastra/README.md` under Feedback And
   Observability.
 - **Generated API-docs links are ABSOLUTE, base-prefixed, and verify-and-drop.**
   Starlight serves every content page at a trailing-slash directory route
