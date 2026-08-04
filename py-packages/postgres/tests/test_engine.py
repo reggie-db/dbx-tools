@@ -5,6 +5,7 @@ from typing import Any
 
 from dbx_tools.postgres import (
     PostgresEngineConfig,
+    ResolvedPostgresConnection,
     autoscaling_credential_provider,
     install_credential_injection,
     resolve_postgres_connection,
@@ -101,6 +102,17 @@ def test_workspace_credentials_are_injected_per_physical_connect() -> None:
     listeners[0](None, None, [], second)
     assert first["password"] == "token-1"
     assert second["password"] == "token-2"
+
+
+def test_asyncpg_url_uses_driver_ssl_parameter() -> None:
+    resolved = ResolvedPostgresConnection(
+        host="host.example.com",
+        database="analytics",
+        user="user@example.com",
+    )
+
+    assert resolved.url("postgresql+asyncpg").query == {"ssl": "require"}
+    assert resolved.url("postgresql+psycopg").query == {"sslmode": "require"}
 
 
 def test_autoscaling_credentials_are_injected_per_physical_connect() -> None:

@@ -141,7 +141,7 @@
       "description": "Emit local Python hello-world messages onto the demo bus",
       "steps": [
         {
-          "exec": "eval \"$(\n      cd example-packages/server/appkit-demo\n      bun ../../../js-packages/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet\n    )\"\n    uv run python example-packages/python/bus-emitter.py"
+          "exec": "zsh -lc '\n    eval \"$(\n      cd example-packages/server/appkit-demo\n      bun ../../../js-packages/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet\n    )\"\n    exec uv run python example-packages/python/bus-emitter.py\n  '"
         }
       ]
     },

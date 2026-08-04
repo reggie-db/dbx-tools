@@ -925,13 +925,13 @@ root.addTask("py:build", {
   description: "Build every Python workspace package",
 });
 root.addTask("demo:emitter", {
-  exec: `
+  exec: `zsh -lc '
     eval "$(
       cd example-packages/server/appkit-demo
       bun ../../../js-packages/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet
     )"
-    uv run python example-packages/python/bus-emitter.py
-  `.trim(),
+    exec uv run python example-packages/python/bus-emitter.py
+  '`,
   description: "Emit local Python hello-world messages onto the demo bus",
 });
 

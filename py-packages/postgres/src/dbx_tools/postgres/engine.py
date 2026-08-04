@@ -60,6 +60,7 @@ class ResolvedPostgresConnection:
     instance_name: str | None = None
 
     def url(self, drivername: str) -> URL:
+        ssl_parameter = "ssl" if drivername.endswith("+asyncpg") else "sslmode"
         return URL.create(
             drivername,
             username=self.user,
@@ -67,7 +68,7 @@ class ResolvedPostgresConnection:
             host=self.host,
             port=self.port,
             database=self.database,
-            query={"sslmode": self.ssl_mode},
+            query={ssl_parameter: self.ssl_mode},
         )
 
 
