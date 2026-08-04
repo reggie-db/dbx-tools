@@ -166,9 +166,15 @@ Read the package README for each feature area. They are written as the
 package-level source of truth: key features, import examples, configuration or
 runtime behavior, module maps, and links to adjacent packages.
 
-### Python Workspace
+### Python Packages
 
-The root uv workspace currently contains three unpublished Python counterparts:
+Install the published Python packages by distribution name:
+
+```bash
+pip install dbx-tools-core dbx-tools-postgres dbx-tools-model
+```
+
+The root uv workspace contains these Python counterparts:
 
 | Package                                      | Purpose                                                                                                                                                                                                                                                                            |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -279,18 +279,13 @@ export class DBXToolsPythonWorkspace extends Component {
     if (!project.github) return;
     const workflow = new GithubWorkflow(project.github, options.workflowName ?? "python-release");
     workflow.file?.addOverride("permissions", { contents: "read" });
-    workflow.on({ workflowDispatch: {} });
+    workflow.on({ push: { tags: ["v*"] }, workflowDispatch: {} });
     workflow.file?.addOverride("on.workflow_dispatch", {
       inputs: {
         version: {
           description: "Python package version to build",
           type: "string",
           required: true,
-        },
-        publish: {
-          description: "Upload the validated distributions to PyPI",
-          type: "boolean",
-          default: false,
         },
       },
     });
@@ -303,7 +298,9 @@ export class DBXToolsPythonWorkspace extends Component {
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
         {
           name: "Stamp workspace versions",
-          env: { VERSION: "${{ inputs.version }}" },
+          env: {
+            VERSION: "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
+          },
           run: this.renderVersionStampScript(),
         },
         {
@@ -331,7 +328,7 @@ export class DBXToolsPythonWorkspace extends Component {
     });
     for (const pkg of this.packages) {
       workflow.addJob(`publish-${pkg.packageOptions.directory}`, {
-        if: "${{ inputs.publish }}",
+        if: "${{ github.event_name == 'push' }}",
         needs: ["build"],
         environment: {
           name:
@@ -367,7 +364,7 @@ export class DBXToolsPythonWorkspace extends Component {
       "import os",
       "import re",
       "",
-      'version = os.environ["VERSION"]',
+      'version = os.environ["VERSION"].removeprefix("v")',
       `package_files = sorted(Path(${quote(this.repository.root)}).glob("*/pyproject.toml"))`,
       "packages = {}",
       "for path in package_files:",

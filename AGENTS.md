@@ -266,8 +266,10 @@ Package README rules:
 Docs site rules:
 
 - Source of truth is `README.md` plus `packages/js/**/README.md`.
-- `packages/py/**/README.md` documents contributor-facing Python workspace
-  packages until Python publishing/docs discovery is added.
+- `packages/py/**/README.md` documents the published Python packages on GitHub.
+  Python package discovery is not yet part of the generated docs site, so keep
+  their install and runtime guidance in those READMEs and summarize them in the
+  root README's Python Packages table.
 - A `private: true` package is EXCLUDED from the site by both generators. A
   private package never reaches npm, so a page for it documents something a
   reader cannot install. Both `discoverPackages()` functions filter on it, which
@@ -519,7 +521,7 @@ workspace-only path. Check with `uv build --offline --package <name>`.
 **Then finish the paperwork.** Add the package to `pythonPackages` in
 `.projenrc.ts` and run `bunx projen` (never hand-edit a `pyproject.toml`), write
 the package `README.md` in the same shape as its Node counterpart's, add a Layout
-bullet in this file, and add a row to the root README's Python Workspace table.
+bullet in this file, and add a row to the root README's Python Packages table.
 If a port later MOVES, the docs above are the ones that go stale first — the
 Layout bullet, the workspace table, the notebook and example imports, and the
 polyglot `default.json` module mapping.
@@ -1189,18 +1191,22 @@ What is configured, and why:
   timeout and a wide socket pool for exactly that), and it accepts LOCAL
   publishes (`publish.allow_offline: true`), so a `bun run bump` can be installed
   and tested without waiting on a public release.
-- **pip/uv -> corp PyPI mirror** `https://pypi-proxy.dev.databricks.com/simple`
-  (`~/.config/pip/pip.conf`, `~/.config/uv/uv.toml`). There is no local Python
-  registry, so Python dependencies resolve through that mirror only.
+- **pip/uv -> local devpi** at `http://localhost:3141/reggie/dev/+simple/`,
+  which inherits from the corporate PyPI mirror and supports local uploads. The
+  launchd/watchdog setup points pip and uv at devpi only while it is healthy and
+  restores the corporate index when it is unavailable.
 
-`bun run bump` publishes to BOTH: the pushed tag triggers the GitHub workflow
-that publishes to public npm (from CI, which is not behind this block), and
-`--local-registry auto` additionally publishes to verdaccio because the
-configured registry is a loopback host.
+`bun run bump` publishes the complete release: its `v*` tag triggers the npm,
+PyPI, and docs workflows; `--local-registry auto` also publishes npm packages to
+loopback Verdaccio, and `--local-pypi auto` publishes Python packages when uv's
+default index is a loopback devpi `+simple` URL. A proxpi-style `/index/` cache
+is read-only and is not treated as a publish target.
 
-A Databricks notebook or job is a DIFFERENT network with its own index, which is
-why the Python packages are installed there from a `git+https://github.com/...`
-URL rather than from a published wheel.
+A Databricks notebook or job is a different network with its own package index.
+Documentation and notebooks install the published distributions by name
+(`dbx-tools-core`, `dbx-tools-postgres`, and `dbx-tools-model`). Each Python
+package README also documents the Git `#subdirectory=` form as an alternative
+for testing unreleased `main` branch changes.
 
 ## The `dbx` CLI
 

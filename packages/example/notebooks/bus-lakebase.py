@@ -10,7 +10,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install --quiet "git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/postgres"
+# MAGIC %pip install --quiet dbx-tools-postgres
 
 # COMMAND ----------
 

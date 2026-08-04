@@ -84,12 +84,20 @@ describe("DBXToolsPythonWorkspace", () => {
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
     const release = readFileSync(join(outdir, ".github/workflows/python-release.yml"), "utf8");
+    assert.match(release, /^    tags:\n      - v\*$/m);
+    assert.match(
+      release,
+      /VERSION: \$\{\{ github\.event_name == 'push' && github\.ref_name \|\| inputs\.version \}\}/,
+    );
+    assert.match(release, /version = os\.environ\["VERSION"\]\.removeprefix\("v"\)/);
     assert.match(release, /^  publish-core:$/m);
     assert.match(release, /^      name: pypi-fixture-core$/m);
     assert.match(release, /^          packages-dir: dist\/core$/m);
     assert.match(release, /^  publish-app:$/m);
     assert.match(release, /^      name: pypi-fixture-app$/m);
     assert.match(release, /^          packages-dir: dist\/app$/m);
+    assert.match(release, /if: \$\{\{ github\.event_name == 'push' \}\}/);
+    assert.doesNotMatch(release, /inputs\.publish/);
     assert.doesNotMatch(release, /^  publish:$/m);
     assert.ok(project.tasks.tryFind("py:sync"));
     assert.ok(project.tasks.tryFind("py:build"));

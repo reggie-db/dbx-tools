@@ -273,6 +273,11 @@ Use `--local-registry false` or `--local-pypi false` to disable either local
 publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
 auto-detection; `--python-root` defaults to `packages/py`.
 
+The pushed `v*` tag is also the public release boundary: it triggers npm
+publishing, stamps and publishes every Python distribution to PyPI, and rebuilds
+and deploys the documentation site. Ordinary pushes to `main` publish none of
+those surfaces.
+
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
 

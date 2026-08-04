@@ -2,7 +2,13 @@
 
 Dependency-free Python helpers shared by dbx-tools packages.
 
-Install directly from this monorepo:
+Install from PyPI:
+
+```bash
+pip install dbx-tools-core
+```
+
+To install the current `main` branch directly from the repository instead:
 
 ```bash
 pip install "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core"

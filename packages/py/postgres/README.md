@@ -2,10 +2,16 @@
 
 Python Lakebase/Postgres connection setup, advisory locks, and topic fan-out for
 services that already hold a Databricks `WorkspaceClient`. This package is
-currently an unpublished workspace package, and is the Python counterpart to
-`@dbx-tools/postgres` plus `@dbx-tools/appkit`'s address parsing.
+the Python counterpart to `@dbx-tools/postgres` plus `@dbx-tools/appkit`'s
+address parsing.
 
-Install directly from this monorepo:
+Install from PyPI:
+
+```bash
+pip install dbx-tools-postgres
+```
+
+To install the current `main` branch directly from the repository instead:
 
 ```bash
 pip install "dbx-tools-postgres @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/postgres"

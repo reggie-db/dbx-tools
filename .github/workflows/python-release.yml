@@ -2,16 +2,15 @@
 
 name: python-release
 on:
+  push:
+    tags:
+      - v*
   workflow_dispatch:
     inputs:
       version:
         description: Python package version to build
         type: string
         required: true
-      publish:
-        description: Upload the validated distributions to PyPI
-        type: boolean
-        default: false
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,7 +23,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Stamp workspace versions
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
         run: |-
           chmod -R u+w packages/py
           python - <<'PY'
@@ -32,7 +31,7 @@ jobs:
           import os
           import re
 
-          version = os.environ["VERSION"]
+          version = os.environ["VERSION"].removeprefix("v")
           package_files = sorted(Path("packages/py").glob("*/pyproject.toml"))
           packages = {}
           for path in package_files:
@@ -84,7 +83,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-core
       url: https://pypi.org/project/dbx-tools-core/
-    if: ${{ inputs.publish }}
+    if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download distributions
         uses: actions/download-artifact@v8
@@ -104,7 +103,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-postgres
       url: https://pypi.org/project/dbx-tools-postgres/
-    if: ${{ inputs.publish }}
+    if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download distributions
         uses: actions/download-artifact@v8
@@ -124,7 +123,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-model
       url: https://pypi.org/project/dbx-tools-model/
-    if: ${{ inputs.publish }}
+    if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download distributions
         uses: actions/download-artifact@v8

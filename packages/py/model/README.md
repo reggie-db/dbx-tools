@@ -4,7 +4,13 @@ Python contracts and runtime helpers for Databricks Model Serving. This package
 mirrors the reusable parts of `@dbx-tools/shared-model` and `@dbx-tools/model`
 without AppKit cache or Mastra dependencies.
 
-Install directly from this monorepo:
+Install from PyPI:
+
+```bash
+pip install dbx-tools-model
+```
+
+To install the current `main` branch directly from the repository instead:
 
 ```bash
 pip install "dbx-tools-model @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/model"
