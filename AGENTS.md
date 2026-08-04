@@ -527,6 +527,15 @@ Cross-package contracts that are easy to duplicate by accident:
   extended-thinking block types. Both wire sanitizers (Responses and Chat
   Completions) MUST strip the same set; Anthropic signs these blocks, so a
   replay that mutates one is rejected.
+- Anthropic's "assistant message prefill" rule needs a repair on BOTH wire
+  surfaces, because Databricks rejects any transcript ending on an assistant
+  turn: `openaiResponses.repairTrailingAssistantInput` (Responses `input`, used
+  by the model proxy) and `appkit-mastra`'s `repairAssistantPrefill` (Chat
+  Completions `messages`). Order matters - the reasoning strip CREATES the
+  offending shape when a turn ended on a `reasoning` item, so the prefill repair
+  runs after it. Neither may touch a trailing `function_call` / `tool_calls`
+  turn: an unanswered tool call fails a DIFFERENT provider rule, and dropping it
+  would discard a call the client is about to answer.
 - `@dbx-tools/model` `invoke.*_PATH` / `*Url` - the Databricks serving paths
   (`invocations`, `responses`, `open-responses`, `chat/completions`). Never
   hard-code a `/serving-endpoints/...` string in a consumer.

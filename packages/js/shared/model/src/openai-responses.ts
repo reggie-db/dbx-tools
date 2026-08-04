@@ -32,6 +32,9 @@
  *   - {@link sanitizeOpenResponsesInput} rewrites `output_*` content part types
  *     in `input` to `input_*`, and drops Claude thinking / reasoning blocks
  *     that Open Responses rejects on replay (`redacted_thinking`, …).
+ *   - {@link repairTrailingAssistantInput} drops a trailing assistant turn that
+ *     Anthropic reads as a prefill request, the Responses-side counterpart to
+ *     `@dbx-tools/appkit-mastra`'s `repairAssistantPrefill`.
  *
  * Only the surface real clients exercise is translated; unknown fields are
  * ignored rather than rejected, so a newer client degrades instead of breaking.
@@ -756,12 +759,74 @@ export function sanitizeOpenResponsesInput(body: Record<string, unknown>): Recor
 }
 
 /**
+ * Drop trailing assistant turns so the transcript ends on something Anthropic
+ * will continue from.
+ *
+ * Databricks Open Responses rejects a body whose last item is an assistant
+ * message with `"This model does not support assistant message prefill. The
+ * conversation must end with a user message."` (the upstream Bedrock route
+ * disallows prefill). Two ways a real client hits it:
+ *
+ * 1. The client replays its own last answer. The Codex CLI does this when a turn
+ *    ends without a tool call and the next request carries the full transcript.
+ * 2. {@link sanitizeOpenResponsesInput} CREATES the shape: a turn that ended in a
+ *    `reasoning` item is stripped for replay compatibility, promoting the
+ *    assistant message before it to last. Running this repair after that strip
+ *    is what keeps one fix from causing the other failure.
+ *
+ * Dropping is correct rather than lossy: a trailing assistant turn carries text
+ * the model itself just produced, so it is context the provider does not need
+ * repeated in order to continue. Appending a synthetic `"Continue."` user turn
+ * also satisfies the provider, but it puts words in the user's mouth that show
+ * up in the model's context, so this takes the honest option.
+ *
+ * A trailing `function_call` is left ALONE. It is also an assistant-side item,
+ * but Anthropic rejects an unanswered `tool_use` on a different rule
+ * (`tool_use` ids without `tool_result`), and dropping it would silently discard
+ * a tool call the client is about to answer. That is the client's bug to fix,
+ * not something to paper over here.
+ *
+ * Returns a shallow copy when anything changes; otherwise the input body.
+ */
+export function repairTrailingAssistantInput(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!Array.isArray(body.input) || body.input.length === 0) return body;
+
+  const input = [...body.input];
+  let changed = false;
+  // A loop, not one check: stripping reasoning can leave several assistant
+  // turns in a row at the end.
+  while (input.length > 0 && isAssistantMessageItem(input[input.length - 1])) {
+    input.pop();
+    changed = true;
+  }
+  // Never send an empty `input`: an all-assistant transcript is not something
+  // this repair can rescue, so leave the body for the provider to reject with
+  // its own message rather than inventing a request.
+  if (!changed || input.length === 0) return body;
+  return { ...body, input };
+}
+
+/**
+ * Whether an `input` item is an assistant MESSAGE (the prefill trigger), as
+ * opposed to a `function_call` or any other assistant-side item type.
+ */
+function isAssistantMessageItem(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  if (item.role !== "assistant") return false;
+  return item.type === undefined || item.type === "message";
+}
+
+/**
  * Full Open Responses request sanitizer: strip non-`function` tools, rewrite
- * `output_*` content parts, and drop thinking / reasoning blocks. Safe no-op
+ * `output_*` content parts, drop thinking / reasoning blocks, and drop a
+ * trailing assistant turn the provider would read as a prefill. Safe no-op
  * when nothing needs changing.
  */
 export function sanitizeOpenResponsesRequest(
   body: Record<string, unknown>,
 ): Record<string, unknown> {
-  return sanitizeOpenResponsesInput(sanitizeResponsesTools(body));
+  return repairTrailingAssistantInput(sanitizeOpenResponsesInput(sanitizeResponsesTools(body)));
 }

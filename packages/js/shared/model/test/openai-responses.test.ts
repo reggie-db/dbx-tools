@@ -312,3 +312,77 @@ describe("sanitizeOpenResponsesRequest", () => {
     assert.deepEqual(out.tools, [{ type: "function", name: "f", parameters: {} }]);
   });
 });
+
+describe("repairTrailingAssistantInput", () => {
+  const user = { type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] };
+
+  it("drops a trailing assistant message the provider reads as a prefill", () => {
+    const out = sanitizeOpenResponsesRequest({
+      input: [
+        user,
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+      ],
+    });
+    assert.deepEqual(out.input, [user]);
+  });
+
+  it("drops the assistant turn a stripped reasoning item promoted to last", () => {
+    // The failure this whole repair exists for: stripping the trailing
+    // `reasoning` item is what leaves an assistant message at the end.
+    const out = sanitizeOpenResponsesRequest({
+      input: [
+        user,
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "answer" }] },
+        { type: "reasoning", summary: [], content: [{ type: "reasoning_text", text: "plan" }] },
+      ],
+    });
+    assert.deepEqual(out.input, [user]);
+  });
+
+  it("drops a run of trailing assistant turns, not just the last one", () => {
+    const out = sanitizeOpenResponsesRequest({
+      input: [
+        user,
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "one" }] },
+        { type: "message", role: "assistant", content: [{ type: "output_text", text: "two" }] },
+      ],
+    });
+    assert.deepEqual(out.input, [user]);
+  });
+
+  it("leaves a transcript that already ends with a user turn alone", () => {
+    const input = [
+      { type: "message", role: "assistant", content: [{ type: "input_text", text: "answer" }] },
+      user,
+    ];
+    const out = sanitizeOpenResponsesRequest({ input: [...input] });
+    assert.deepEqual(out.input, input);
+  });
+
+  it("keeps a trailing function_call so an unanswered tool call is not silently dropped", () => {
+    const input = [user, { type: "function_call", call_id: "c1", name: "f", arguments: "{}" }];
+    const out = sanitizeOpenResponsesRequest({ input: [...input] });
+    assert.deepEqual(out.input, input);
+  });
+
+  it("keeps a trailing function_call_output, which is the normal tool turn", () => {
+    const input = [
+      user,
+      { type: "function_call", call_id: "c1", name: "f", arguments: "{}" },
+      { type: "function_call_output", call_id: "c1", output: "12:00" },
+    ];
+    const out = sanitizeOpenResponsesRequest({ input: [...input] });
+    assert.deepEqual(out.input, input);
+  });
+
+  it("never empties input: an all-assistant transcript is left for the provider to reject", () => {
+    const input = [
+      { type: "message", role: "assistant", content: [{ type: "output_text", text: "a" }] },
+    ];
+    const out = sanitizeOpenResponsesRequest({ input: [...input] });
+    // `output_text` is still rewritten; the repair just refuses to empty `input`.
+    assert.deepEqual(out.input, [
+      { type: "message", role: "assistant", content: [{ type: "input_text", text: "a" }] },
+    ]);
+  });
+});

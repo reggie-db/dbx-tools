@@ -137,7 +137,15 @@ Use this when tests or local developer tools need a managed proxy lifecycle.
      Responses the proxy strips non-`function` tools, rewrites prior-turn
      `output_*` content parts to `input_*`, and drops Claude
      `thinking` / `redacted_thinking` / `reasoning` blocks (replay of those
-     signed blobs fails with "Invalid `data` in `redacted_thinking`").
+     signed blobs fails with "Invalid `data` in `redacted_thinking`"). It then
+     drops a trailing assistant message, which Anthropic reads as a prefill
+     request and rejects with "This model does not support assistant message
+     prefill. The conversation must end with a user message." A client replaying
+     its own last answer produces that shape, and so does the reasoning strip
+     above when the turn ended on a `reasoning` item — so the two repairs run in
+     that order. A trailing `function_call` is deliberately kept: an unanswered
+     tool call fails a different provider rule, and dropping it would discard a
+     call the client is about to answer.
 5. JSON or SSE response bodies are piped back (with a chat↔Responses
    translation only when a chat client hit a Responses-only model).
 
