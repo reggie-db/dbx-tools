@@ -142,6 +142,13 @@ Primary package areas:
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
+  Every package must remain directly pip-installable from this repository with
+  `git+https://...@main#subdirectory=packages/py/<name>`. Keep the Git URL,
+  branch, and package root centralized in `.projenrc.ts`'s `pythonRepository`;
+  generate package `Source` URLs and internal Python Git dependencies from it.
+  Do not copy lfp-build's `${PROJECT_ROOT}` file-reference mode here: that is a
+  local workspace convenience, while pip ignores uv workspace sources when it
+  resolves a package selected by Git `#subdirectory`.
 - **`packages/example/`** — seed/example packages when present. Do not make
   root docs primarily about examples.
 - **`packages/test/`** — private cross-package and cross-runtime test harnesses.

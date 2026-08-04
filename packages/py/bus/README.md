@@ -4,6 +4,13 @@ Async Postgres topic fan-out for Python services. This package is currently an
 unpublished uv-workspace package and is the Python counterpart to
 `@dbx-tools/postgres`'s `PostgresTopicBus`.
 
+Install directly from this monorepo. Its internal core and Postgres dependencies
+use generated Git subdirectory references to the same repository branch:
+
+```bash
+pip install "dbx-tools-bus @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/bus"
+```
+
 The public lifecycle and wire shape match Node:
 
 - `PostgresTopicBus(engine, options)`;

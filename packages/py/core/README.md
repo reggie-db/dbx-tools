@@ -2,6 +2,12 @@
 
 Dependency-free Python helpers shared by dbx-tools packages.
 
+Install directly from this monorepo:
+
+```bash
+pip install "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core"
+```
+
 The package intentionally contains only the cross-runtime identity primitives
 currently needed by more than one implementation:
 

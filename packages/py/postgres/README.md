@@ -4,6 +4,12 @@ Python Lakebase/Postgres connection setup for services that already hold a
 Databricks `WorkspaceClient`. This package is currently an unpublished workspace
 package.
 
+Install directly from this monorepo:
+
+```bash
+pip install "dbx-tools-postgres @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/postgres"
+```
+
 Key features:
 
 - accepts the same Postgres URI, Lakebase resource path, hostname, and project-id

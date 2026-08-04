@@ -829,6 +829,21 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // package discovery roots. Their pyproject files are generated here so Python
 // metadata, workspace links, and validation commands stay as reproducible as the
 // projen-owned package.json files above.
+// pip clones the whole Git repository for a `#subdirectory=` install, but unlike
+// uv it does not apply the root workspace's `[tool.uv.sources]` while resolving
+// a member's dependencies. Keep the public Git root/ref and package root in one
+// generated definition so packages with internal dependencies can point pip at
+// their sibling subdirectories without duplicating path strings.
+const pythonRepository = {
+  url: "https://github.com/reggie-db/dbx-tools.git",
+  ref: "main",
+  root: "packages/py",
+} as const;
+
+const pythonPackagePath = (directory: string) => `${pythonRepository.root}/${directory}`;
+const pythonGitDependency = (name: string, directory: string) =>
+  `${name} @ git+${pythonRepository.url}@${pythonRepository.ref}#subdirectory=${pythonPackagePath(directory)}`;
+
 const pythonPackages = [
   {
     directory: "core",
@@ -857,8 +872,8 @@ const pythonPackages = [
     description: "Async Postgres LISTEN/NOTIFY topic bus compatible with dbx-tools Node",
     dependencies: [
       "asyncpg>=0.30,<1",
-      "dbx-tools-core",
-      "dbx-tools-postgres",
+      pythonGitDependency("dbx-tools-core", "core"),
+      pythonGitDependency("dbx-tools-postgres", "postgres"),
       "sqlalchemy>=2.0.41,<3",
     ],
   },
@@ -903,7 +918,7 @@ new TextFile(root, "pyproject.toml", {
 });
 
 for (const pkg of pythonPackages) {
-  new TextFile(root, `packages/py/${pkg.directory}/pyproject.toml`, {
+  new TextFile(root, `${pythonPackagePath(pkg.directory)}/pyproject.toml`, {
     marker: false,
     readonly: true,
     lines: [
@@ -915,6 +930,9 @@ for (const pkg of pythonPackages) {
       'readme = "README.md"',
       'requires-python = ">=3.11"',
       `dependencies = [${pkg.dependencies.map((dependency) => `"${dependency}"`).join(", ")}]`,
+      "",
+      "[project.urls]",
+      `Source = "${pythonRepository.url.replace(/\.git$/, "")}/tree/${pythonRepository.ref}/${pythonPackagePath(pkg.directory)}"`,
       "",
       "[build-system]",
       'requires = ["uv_build>=0.11.28,<0.12.0"]',
