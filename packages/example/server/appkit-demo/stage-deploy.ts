@@ -36,7 +36,7 @@ if (!version) {
 }
 
 const serverDir = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(serverDir, "../../..");
+const repoRoot = resolve(serverDir, "../../../..");
 const clientDist = resolve(serverDir, "../../app/appkit-demo/dist");
 const outDir = join(tmpdir(), "dbx-tools-deploy-app");
 

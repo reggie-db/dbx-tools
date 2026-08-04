@@ -1,0 +1,4 @@
+#!/bin/sh
+echo call >> .polyglot-bundle-calls
+cat .polyglot-bundle-output
+exit "$(cat .polyglot-bundle-status)"

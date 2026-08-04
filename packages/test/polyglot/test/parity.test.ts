@@ -13,6 +13,7 @@ import {
 const packageRoot = resolve(import.meta.dir, "..");
 const repositoryRoot = resolve(packageRoot, "../../..");
 const fixtureRoot = resolve(packageRoot, "fixtures");
+const supportBin = resolve(packageRoot, "test/support/bin");
 const fixturePaths = recursiveFiles(fixtureRoot)
   .filter(
     (path) => /\.(?:json|ya?ml)$/.test(path) && !/^default\.(?:json|ya?ml)$/.test(basename(path)),
@@ -20,7 +21,12 @@ const fixturePaths = recursiveFiles(fixtureRoot)
   .sort();
 
 function run(command: string[], cwd: string): FixtureResult[] {
-  const child = Bun.spawnSync(command, { cwd, stderr: "pipe", stdout: "pipe" });
+  const child = Bun.spawnSync(command, {
+    cwd,
+    env: { ...process.env, PATH: `${supportBin}:${process.env.PATH ?? ""}` },
+    stderr: "pipe",
+    stdout: "pipe",
+  });
   assert.equal(child.exitCode, 0, child.stderr.toString());
   return JSON.parse(child.stdout.toString()) as FixtureResult[];
 }

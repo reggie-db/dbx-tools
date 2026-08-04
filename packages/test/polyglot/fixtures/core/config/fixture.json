@@ -1,0 +1,416 @@
+{
+  "$schema": "../../../schema.json",
+  "description": "Config key precedence, coercion, dotenv discovery, and Databricks bundle fallback stay identical across runtimes.",
+  "functions": {
+    "configName": {
+      "tests": [
+        {
+          "name": "primary scoped name",
+          "args": ["AUTH_SUBJECT", { "scope": "DBX_TOOLS", "prefix": "TUNNEL" }],
+          "expected": "DBX_TOOLS_TUNNEL_AUTH_SUBJECT"
+        },
+        {
+          "name": "first input name wins",
+          "args": [["PUBLIC_DOMAIN", "DOMAIN"], { "prefix": "TUNNEL" }],
+          "expected": "DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN"
+        }
+      ]
+    },
+    "environmentText": {
+      "tests": [
+        {
+          "name": "scoped environment wins",
+          "args": [
+            {
+              "DBX_TOOLS_TUNNEL_AUTH_SUBJECT": "scoped",
+              "TUNNEL_AUTH_SUBJECT": "prefixed",
+              "AUTH_SUBJECT": "bare"
+            },
+            "AUTH_SUBJECT",
+            { "scope": "DBX_TOOLS", "prefix": "TUNNEL" }
+          ],
+          "expected": "scoped"
+        },
+        {
+          "name": "prefixed environment fallback",
+          "args": [
+            { "TUNNEL_AUTH_SUBJECT": "prefixed", "AUTH_SUBJECT": "bare" },
+            "AUTH_SUBJECT",
+            { "scope": "DBX_TOOLS", "prefix": "TUNNEL" }
+          ],
+          "expected": "prefixed"
+        },
+        {
+          "name": "bare environment fallback",
+          "args": [
+            { "AUTH_SUBJECT": "bare" },
+            "AUTH_SUBJECT",
+            { "scope": "DBX_TOOLS", "prefix": "TUNNEL" }
+          ],
+          "expected": "bare"
+        }
+      ]
+    },
+    "configString": {
+      "tests": [
+        {
+          "name": "configured string wins",
+          "args": [" configured ", { "DBX_TOOLS_SAMPLE": "environment" }, "SAMPLE"],
+          "expected": "configured"
+        },
+        {
+          "name": "blank configured string falls back",
+          "args": ["  ", { "DBX_TOOLS_SAMPLE": " environment " }, "SAMPLE"],
+          "expected": "environment"
+        }
+      ]
+    },
+    "configBoolean": {
+      "tests": [
+        { "name": "boolean yes", "args": [" yes "], "expected": true },
+        { "name": "boolean off", "args": ["OFF"], "expected": false },
+        { "name": "boolean unknown", "args": ["sometimes"], "expected": null }
+      ]
+    },
+    "configPositiveNumber": {
+      "tests": [
+        { "name": "positive percentage", "args": ["25%", 2], "expected": 0.25 },
+        { "name": "positive grouped number", "args": ["1,000.5", 2], "expected": 1000.5 },
+        { "name": "non-positive number falls back", "args": [0, 2], "expected": 2 }
+      ]
+    },
+    "configPositiveInt": {
+      "tests": [
+        { "name": "positive integer floors", "args": ["10.9", 2], "expected": 10 },
+        { "name": "invalid integer falls back", "args": ["many", 2], "expected": 2 }
+      ]
+    },
+    "configList": {
+      "tests": [
+        {
+          "name": "list splits and deduplicates",
+          "args": ["docs.example.com, *.databricks.com docs.example.com"],
+          "expected": ["docs.example.com", "*.databricks.com"]
+        },
+        {
+          "name": "typed list preserves first occurrence",
+          "args": [[" first ", "second", " first "]],
+          "expected": ["first", "second"]
+        }
+      ]
+    },
+    "isDatabricksAppEnv": {
+      "tests": [
+        {
+          "name": "complete Databricks App environment",
+          "args": [
+            {
+              "DATABRICKS_APP_NAME": "demo",
+              "DATABRICKS_HOST": "https://workspace.example.com",
+              "DATABRICKS_APP_PORT": "8000"
+            }
+          ],
+          "expected": true
+        },
+        {
+          "name": "explicit true forces Databricks App environment",
+          "args": [
+            {
+              "DBX_TOOLS_DATABRICKS_APP_ENV": "yes"
+            }
+          ],
+          "expected": true
+        },
+        {
+          "name": "explicit false disables Databricks App environment",
+          "args": [
+            {
+              "DBX_TOOLS_DATABRICKS_APP_ENV": "off",
+              "DATABRICKS_APP_NAME": "demo",
+              "DATABRICKS_HOST": "https://workspace.example.com",
+              "DATABRICKS_APP_PORT": "8000"
+            }
+          ],
+          "expected": false
+        },
+        {
+          "name": "invalid override falls back to detection",
+          "args": [
+            {
+              "DBX_TOOLS_DATABRICKS_APP_ENV": "automatic",
+              "DATABRICKS_APP_NAME": "demo",
+              "DATABRICKS_HOST": "https://workspace.example.com",
+              "DATABRICKS_APP_PORT": "8000"
+            }
+          ],
+          "expected": true
+        },
+        {
+          "name": "file host rejected",
+          "args": [
+            {
+              "DATABRICKS_APP_NAME": "demo",
+              "DATABRICKS_HOST": "file:///tmp",
+              "DATABRICKS_APP_PORT": "8000"
+            }
+          ],
+          "expected": false
+        },
+        {
+          "name": "zero port rejected",
+          "args": [
+            {
+              "DATABRICKS_APP_NAME": "demo",
+              "DATABRICKS_HOST": "https://workspace.example.com",
+              "DATABRICKS_APP_PORT": "0"
+            }
+          ],
+          "expected": false
+        }
+      ]
+    },
+    "dotenvValues": {
+      "tests": [
+        {
+          "name": "dotenv parsing matches Node",
+          "args": [
+            {
+              ".env": "export QUOTED='  kept  '\nPLAIN=value # trailing\nA.B=dotted\nA-B=hyphenated\n1KEY=numeric\nOPEN=\"unterminated\nNEXT=value\n"
+            },
+            null,
+            ".",
+            ["QUOTED", "PLAIN", "A.B", "A-B", "1KEY", "OPEN", "NEXT", "MISSING"],
+            { "scope": [] }
+          ],
+          "expected": [
+            "kept",
+            "value",
+            "dotted",
+            "hyphenated",
+            "numeric",
+            "\"unterminated",
+            "value",
+            null
+          ]
+        },
+        {
+          "name": "nearest dotenv wins through project root",
+          "args": [
+            { ".env": "SAMPLE=from-root\n", "packages/.env": "SAMPLE=from-parent\n" },
+            null,
+            "packages/app",
+            ["SAMPLE"],
+            { "scope": [] }
+          ],
+          "expected": ["from-parent"]
+        },
+        {
+          "name": "dotenv does not traverse without project root",
+          "args": [
+            { ".env": "SAMPLE=from-parent\n" },
+            null,
+            "nested",
+            ["SAMPLE"],
+            { "scope": [] },
+            false
+          ],
+          "expected": [null]
+        },
+        {
+          "name": "exact production dotenv wins",
+          "args": [
+            {
+              ".env": "SAMPLE=from-default\n",
+              ".env.production": "SAMPLE=from-production\n",
+              ".env.prod": "SAMPLE=from-prod\n"
+            },
+            "production",
+            ".",
+            ["SAMPLE"],
+            { "scope": [] }
+          ],
+          "expected": ["from-production"]
+        },
+        {
+          "name": "exact prod dotenv wins",
+          "args": [
+            {
+              ".env": "SAMPLE=from-default\n",
+              ".env.production": "SAMPLE=from-production\n",
+              ".env.prod": "SAMPLE=from-prod\n"
+            },
+            "prod",
+            ".",
+            ["SAMPLE"],
+            { "scope": [] }
+          ],
+          "expected": ["from-prod"]
+        },
+        {
+          "name": "dotenv override disables reads",
+          "args": [
+            { ".env": "SAMPLE=hidden\n" },
+            null,
+            ".",
+            ["SAMPLE"],
+            { "scope": [] },
+            true,
+            { "DBX_TOOLS_CONFIG_DOTENV": "false" }
+          ],
+          "expected": [null]
+        },
+        {
+          "name": "dotenv override enables reads inside an App",
+          "args": [
+            { ".env": "SAMPLE=forced\n" },
+            null,
+            ".",
+            ["SAMPLE"],
+            { "scope": [] },
+            true,
+            {
+              "DBX_TOOLS_CONFIG_DOTENV": "true",
+              "DATABRICKS_APP_NAME": "demo",
+              "DATABRICKS_HOST": "https://workspace.example.com",
+              "DATABRICKS_APP_PORT": "8000"
+            }
+          ],
+          "expected": ["forced"]
+        }
+      ]
+    },
+    "dotenvCachedValue": {
+      "tests": [
+        {
+          "name": "dotenv is read once per context",
+          "args": ["first", "second"],
+          "expected": ["first", "first"]
+        }
+      ]
+    },
+    "bundleValues": {
+      "tests": [
+        {
+          "name": "bundle app precedes variables and partial JSON is usable",
+          "args": [
+            {
+              "resources": {
+                "apps": {
+                  "demo": {
+                    "config": {
+                      "env": [
+                        { "name": "SAMPLE", "value": "from-app" },
+                        { "name": "IGNORED", "value_from": "warehouse" },
+                        { "name": "INTERPOLATED", "value": "${var.value}" }
+                      ]
+                    }
+                  }
+                }
+              },
+              "variables": {
+                "sample": { "value": "from-variable" },
+                "fallback_name": { "default": "from-default" }
+              }
+            },
+            1,
+            ["SAMPLE", "FALLBACK_NAME", "IGNORED", "INTERPOLATED"],
+            { "scope": [], "sources": "bundle" }
+          ],
+          "expected": {
+            "values": ["from-app", "from-default", null, null],
+            "calls": 1
+          }
+        },
+        {
+          "name": "malformed bundle variable rejects variables block",
+          "args": [
+            {
+              "variables": {
+                "sample": { "value": "valid" },
+                "malformed": { "value": 123 }
+              }
+            },
+            0,
+            ["SAMPLE"],
+            { "scope": [], "sources": "bundle" }
+          ],
+          "expected": { "values": [null], "calls": 1 }
+        },
+        {
+          "name": "environment answer keeps bundle lazy",
+          "args": [
+            { "variables": { "sample": { "value": "bundle" } } },
+            0,
+            ["SAMPLE"],
+            {},
+            { "DBX_TOOLS_SAMPLE": "environment" }
+          ],
+          "expected": { "values": ["environment"], "calls": 0 }
+        },
+        {
+          "name": "explicit working directory bundle is cached",
+          "args": [
+            { "variables": { "sample": { "value": "cached" } } },
+            0,
+            ["SAMPLE", "SAMPLE"],
+            { "scope": [], "sources": "bundle" },
+            {}
+          ],
+          "expected": { "values": ["cached", "cached"], "calls": 1 }
+        },
+        {
+          "name": "bundle override disables reads",
+          "args": [
+            { "variables": { "sample": { "value": "hidden" } } },
+            0,
+            ["SAMPLE"],
+            { "scope": [], "sources": "bundle" },
+            { "DBX_TOOLS_CONFIG_BUNDLE": "false" }
+          ],
+          "expected": { "values": [null], "calls": 0 }
+        },
+        {
+          "name": "production disables bundle reads by default",
+          "args": [
+            { "variables": { "sample": { "value": "hidden" } } },
+            0,
+            ["SAMPLE"],
+            { "scope": [], "sources": "bundle" },
+            { "NODE_ENV": "production" }
+          ],
+          "expected": { "values": [null], "calls": 0 }
+        },
+        {
+          "name": "bundle override enables reads in production",
+          "args": [
+            { "variables": { "sample": { "value": "forced" } } },
+            0,
+            ["SAMPLE"],
+            { "scope": [], "sources": "bundle" },
+            {
+              "NODE_ENV": "production",
+              "DBX_TOOLS_CONFIG_BUNDLE": "true"
+            }
+          ],
+          "expected": { "values": ["forced"], "calls": 1 }
+        },
+        {
+          "name": "bundle override enables reads inside an App",
+          "args": [
+            { "variables": { "sample": { "value": "forced" } } },
+            0,
+            ["SAMPLE"],
+            { "scope": [], "sources": "bundle" },
+            {
+              "DBX_TOOLS_CONFIG_BUNDLE": "true",
+              "DATABRICKS_APP_NAME": "demo",
+              "DATABRICKS_HOST": "https://workspace.example.com",
+              "DATABRICKS_APP_PORT": "8000"
+            }
+          ],
+          "expected": { "values": ["forced"], "calls": 1 }
+        }
+      ]
+    }
+  }
+}

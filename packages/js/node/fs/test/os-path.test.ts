@@ -3,7 +3,6 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { config } from "@dbx-tools/core";
 import {
   clearOsPathsCache,
   resolveLocalHome,
@@ -67,7 +66,6 @@ describe("os-path home", () => {
     const cwd = await mkdtemp(path.join(tmpdir(), "dbx-app-home-cwd-"));
     const appHome = path.join(cwd, "app-home");
     try {
-      assert.equal(config.isDatabricksAppEnv(APP_ENV), true);
       assert.equal(
         resolveLocalHome({
           cwd,

@@ -2,5 +2,6 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export * as config from "./src/config.ts";
 export * as harness from "./src/harness.ts";
 export type { Runtime, RuntimeValue, InvokeMode, ResultMode, TargetOverrides, FixtureCase, FunctionDefinition, FixtureSuite, FixtureResult } from "./src/harness.ts";

@@ -192,6 +192,7 @@ project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
   );
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/core@workspace:*",
     "@dbx-tools/postgres@workspace:*",
     "@dbx-tools/shared-core@workspace:*",
   );

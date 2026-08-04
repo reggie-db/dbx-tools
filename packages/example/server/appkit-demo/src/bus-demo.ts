@@ -3,11 +3,10 @@
  * open browser tab.
  *
  * Shows the fan-out shape `@dbx-tools/postgres`'s {@link PostgresTopicBus} exists
- * for. A `POST` broadcasts on the topic and an SSE stream per viewer replays
- * whatever arrives, so a message typed in one tab shows up in all of them - and,
- * over the tunnel, in another person's browser. Nothing is stored: this is live
- * fan-out, not chat history, which is why a viewer only sees messages published
- * after it connected.
+ * for. A `POST` persists and broadcasts on the topic, while an SSE stream per
+ * viewer replays stored history before forwarding live messages. A message typed
+ * in one tab therefore shows up in all of them - and, over the tunnel, in another
+ * person's browser - without disappearing when a viewer reconnects or reloads.
  *
  * It is also where the structured envelope earns its keep. The route adds request
  * context (who sent it, from which IP, through which host) as METADATA rather than
@@ -26,7 +25,7 @@ import {
 } from "@databricks/appkit";
 import { plugin as pluginLookup } from "@dbx-tools/appkit";
 import { net as databricksNet } from "@dbx-tools/databricks";
-import { PostgresTopicBus, type TopicMetadata } from "@dbx-tools/postgres";
+import { PostgresTopicBus, type TopicMessage, type TopicMetadata } from "@dbx-tools/postgres";
 import { error, log, object } from "@dbx-tools/shared-core";
 import { z } from "zod";
 
@@ -35,6 +34,7 @@ import { z } from "zod";
  * this per room or per document; one constant is what makes every tab a peer.
  */
 const TOPIC = "demo-viewers";
+const HISTORY_LIMIT = 200;
 const logger = log.logger("demo:bus");
 
 /**
@@ -107,9 +107,11 @@ class BusDemoPlugin extends Plugin {
         metadata: resolveEnvironmentMetadata,
         onError: (cause) =>
           logger.error("topic listener failed", { error: error.errorMessage(cause) }),
+        persist: { ttl: "7 days" },
       });
       await this.bus.start();
-      logger.info("ready", { topic: TOPIC });
+      await this.bus.history(TOPIC, { limit: 1 });
+      logger.info("ready", { historyLimit: HISTORY_LIMIT, persistent: true, topic: TOPIC });
     });
   }
 
@@ -119,9 +121,7 @@ class BusDemoPlugin extends Plugin {
   }
 
   override injectRoutes(router: IAppRouter): void {
-    // POST /api/bus-demo/messages - publish one message to every viewer. 202, not
-    // 201: nothing was created, and the notification only reaches sessions that
-    // are already listening.
+    // POST /api/bus-demo/messages - persist one message and notify every viewer.
     this.route(router, {
       name: "send",
       method: "post",
@@ -155,9 +155,11 @@ class BusDemoPlugin extends Plugin {
       },
     });
 
-    // GET /api/bus-demo/events - one SSE stream per open viewer. The subscription
-    // lives as long as the response, so the request's `close` is what unsubscribes;
-    // without that a reloaded tab leaks a listener writing to a dead socket.
+    // GET /api/bus-demo/events - one SSE stream per open viewer. Subscribe before
+    // reading history and buffer live notifications until replay completes; doing
+    // those in the opposite order leaves a gap where a committed message can be
+    // missed. Envelope ids deduplicate messages present in both the history query
+    // and the live buffer.
     this.route(router, {
       name: "events",
       method: "get",
@@ -173,9 +175,22 @@ class BusDemoPlugin extends Plugin {
         });
         res.flushHeaders();
 
-        const unsubscribe = await bus.listen(TOPIC, (message) => {
+        const writeMessage = (message: TopicMessage) => {
           res.write(`id: ${message.id}\nevent: message\ndata: ${JSON.stringify(message)}\n\n`);
+        };
+        const buffered: TopicMessage[] = [];
+        let replaying = true;
+        const unsubscribe = await bus.listen(TOPIC, (message) => {
+          if (replaying) buffered.push(message);
+          else writeMessage(message);
         });
+        const history = await bus.history(TOPIC, { limit: HISTORY_LIMIT });
+        const replayed = new Set(history.messages.map(({ message }) => message.id));
+        for (const { message } of history.messages) writeMessage(message);
+        replaying = false;
+        for (const message of buffered) {
+          if (!replayed.has(message.id)) writeMessage(message);
+        }
         res.write(`event: ready\ndata: ${JSON.stringify({ topic: TOPIC })}\n\n`);
 
         // Comment-only frames keep proxies and load balancers from closing an idle

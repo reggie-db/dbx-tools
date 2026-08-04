@@ -1,7 +1,7 @@
 # @dbx-tools/core
 
-Node-only core helpers for binary installation, process execution, and project
-discovery.
+Node-only core helpers for layered configuration, binary installation, process
+execution, locking, and project discovery.
 
 Import this package when code needs `node:child_process`, `node:fs`, or
 `node:path`. Browser-safe utilities live in
@@ -20,6 +20,8 @@ Key features:
   Databricks bundle App config or variables.
 - YAML/JSON brand-context discovery and loading with shared Zod validation.
 - Idempotent executable downloads with zip/tar extraction and atomic installs.
+- Cross-process file locks with a Bun `flock(2)` fast path and a portable,
+  stale-reclaiming lock-directory fallback.
 - Keyed mutual exclusion across the main thread and its worker threads.
 
 ## Install A Binary
@@ -94,6 +96,28 @@ produce names such as `DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN`, then
 `TUNNEL_PUBLIC_DOMAIN`, then `PUBLIC_DOMAIN`. `.env.production` and `.env.prod`
 are checked before `.env` when `NODE_ENV=production`; development uses
 `.env.development` and `.env.dev`.
+
+Bundle lookup runs `databricks bundle validate --output json` only after earlier
+sources miss. It reads literal values from the single App's `config.env` first,
+then root bundle variables, accepts usable partial JSON from a failed validation,
+and caches each dotenv file or validated bundle once per resolved working-
+directory context. Bundle cache entries also include the Databricks profile.
+Deployed Apps skip dotenv and bundle lookup after `isDatabricksAppEnv()`
+recognizes the required App name, HTTP(S) host, and valid port. Set
+`DBX_TOOLS_DATABRICKS_APP_ENV=true` or `false` to force that result; unrecognized
+values leave automatic detection in place.
+
+`DBX_TOOLS_CONFIG_DOTENV` and `DBX_TOOLS_CONFIG_BUNDLE` independently force
+those file sources on or off. A recognized boolean takes precedence over App
+runtime detection, so `true` can enable a local source inside an App and `false`
+can suppress it during local development. Absent or unrecognized values keep
+the default: read files outside an App and skip them inside one. Bundle reads
+also default off when `NODE_ENV=production`; set
+`DBX_TOOLS_CONFIG_BUNDLE=true` to opt into bundle validation there.
+
+Use `config.string()`, `boolean()`, `positiveNumber()`, `positiveInt()`, and
+`list()` to normalize typed options and text-based configuration through one
+rule. `config.ENV_ONLY` disables file fallbacks for exact environment reads.
 
 ## Run Commands
 
@@ -188,6 +212,28 @@ deployment, use
 [`@dbx-tools/postgres`](../postgres)'s `withAdvisoryLock`, which puts the arbiter
 in PostgreSQL where every replica can see it.
 
+## Serialize Work Across Processes
+
+```ts
+import { fileLock } from "@dbx-tools/core";
+
+await fileLock.withFileLock(["cache", name], async () => {
+  if (!(await exists(name))) await build(name);
+});
+```
+
+`withFileLock()` serializes processes on the same machine or shared filesystem.
+Under Bun on Unix it prefers a kernel `flock(2)` lock, which the OS releases if
+the process dies. Plain Node, Windows, and systems without the FFI path use
+atomic lock-directory creation with a heartbeat and stale-lock reclamation.
+Callers can select the lock directory, restrict the backend cascade, observe the
+chosen backend, or set a wait timeout. Lock keys use the same stable structured
+identity as process and Postgres advisory locks.
+
+Use `processLock.withProcessLock()` when only threads in one process compete,
+`fileLock.withFileLock()` when local processes compete, and Postgres advisory
+locks when multiple app replicas need one arbiter.
+
 ## Discover Project Roots
 
 ```ts
@@ -210,6 +256,11 @@ basename. `project.stat()` returns `undefined` instead of throwing.
 - `project` - root discovery, project naming, git-remote parsing, and safe
   filesystem stat.
 - `brand` - YAML/JSON discovery, parsing, validation, and asset path resolution.
+- `config` - scoped environment, dotenv, and validated Databricks bundle lookup,
+  including runtime detection and typed coercion helpers.
+- `file` - best-effort filesystem stat.
+- `fileLock` - cascading cross-process locks using `flock` or portable lock
+  directories.
 - `processLock` - keyed mutual exclusion across the main thread and its workers,
   with worker wiring (`processLockWorkerOptions`, `attachProcessLock`,
   `processLockAttached`).

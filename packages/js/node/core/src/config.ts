@@ -14,10 +14,11 @@
  *     the spawn happens once per working directory and a `cwd` change misses
  *     rather than returning another project's config.
  *
- * Inside a deployed Databricks App both file sources are skipped outright
+ * Inside a deployed Databricks App both file sources are skipped by default
  * ({@link isDatabricksAppEnv}): the platform has already turned them into real
  * environment variables, there is no bundle to validate, and the `databricks`
- * CLI is not on the image.
+ * CLI is not on the image. Boolean environment overrides can force either file
+ * source on or off when a tool needs different behavior.
  *
  * Node-only (`child_process`, `fs`, `process`).
  *
@@ -35,12 +36,12 @@ import { root as resolveProjectRoot } from "./project.ts";
 
 const logger = log.logger("config");
 
-type ConfigKey = string | readonly string[];
+export type ConfigKey = string | readonly string[];
 
 /** Where a value may come from, consulted in the order given. */
-type ConfigSource = "env" | "dotenv" | "bundle";
+export type ConfigSource = "env" | "dotenv" | "bundle";
 
-interface ConfigOptions {
+export interface ConfigOptions {
   /**
    * Outermost namespaces tried before each key. Defaults to `DBX_TOOLS`.
    */
@@ -77,6 +78,15 @@ const NODE_ENV_ALTERNATIVES = {
 
 /** Highest valid TCP port number. */
 export const MAX_TCP_PORT = 65_535;
+
+/** Boolean environment override for {@link isDatabricksAppEnv}. */
+export const DATABRICKS_APP_ENV_KEY = "DBX_TOOLS_DATABRICKS_APP_ENV";
+
+/** Boolean environment override for project `.env` reads. */
+export const CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV";
+
+/** Boolean environment override for Databricks bundle reads. */
+export const CONFIG_BUNDLE_KEY = "DBX_TOOLS_CONFIG_BUNDLE";
 
 /** Exact process-environment lookup for callers that do not read local config files. */
 export const ENV_ONLY = { scope: [] as const, sources: "env" as const };
@@ -126,10 +136,17 @@ const bundleVariablesSchema = z.object({
 
 /**
  * Detect a Databricks App runtime from its required name, host, and port.
+ *
+ * `DBX_TOOLS_DATABRICKS_APP_ENV` takes precedence when it contains a recognized
+ * boolean value. This lets local tools emulate the deployed runtime (`true`) or
+ * lets unusual deployed processes retain local config lookup (`false`). An
+ * absent or unrecognized override falls back to structural detection.
  */
 export function isDatabricksAppEnv(
   source: Record<string, string | undefined> = process.env,
 ): boolean {
+  const override = object.toBoolean(source[DATABRICKS_APP_ENV_KEY]);
+  if (override !== undefined) return override;
   const appName = source.DATABRICKS_APP_NAME?.trim();
   const host = source.DATABRICKS_HOST?.trim();
   const port = source.DATABRICKS_APP_PORT?.trim();
@@ -322,19 +339,20 @@ function toPositiveNumber(value: unknown): number | undefined {
  * The Databricks bundle output for `cwd` - `databricks bundle validate --output
  * json` run from the directory holding `databricks.yml`, with the config file's
  * path. A non-zero validation may still return partial JSON with usable
- * variables. `undefined` when there is no bundle, the CLI produces no JSON, or
- * this process is a deployed Databricks App.
+ * variables. `undefined` when bundle reads are disabled, there is no bundle, or
+ * the CLI produces no JSON.
  *
- * Cached per working directory and `DATABRICKS_CONFIG_PROFILE` through
- * {@link context.cached}, so changing either cannot return another context's
- * bundle. A lookup for some other directory is not cached at all.
+ * Cached once per resolved working-directory context and
+ * `DATABRICKS_CONFIG_PROFILE` through {@link context.cached}, so repeated
+ * lookups do not rerun validation and changing either cannot return another
+ * context's bundle.
  */
 export function bundleFile(cwd?: string | null): ConfigFile | undefined {
+  const production = process.env.NODE_ENV?.trim().toLowerCase() === "production";
+  if (!fileSourceEnabled(CONFIG_BUNDLE_KEY, !production && !isDatabricksAppEnv())) return undefined;
   const profile = stringModule.trimToNull(process.env.DATABRICKS_CONFIG_PROFILE);
-  return context.cached(
-    ["config", "bundle", profile ?? ""],
-    (resolved) => loadBundleFile(resolved ?? ".", profile),
-    cwd,
+  return cachedConfig(["bundle", profile ?? ""], cwd, (resolved) =>
+    loadBundleFile(resolved, profile),
   );
 }
 
@@ -391,14 +409,24 @@ function resolvedString(value: unknown): string | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Parsed `.env` for `cwd`, or `{}`. Cached per working directory. */
+/** Parsed `.env` for `cwd`, or `{}`. Read once per resolved context. */
 function dotenv(cwd?: string | null): Record<string, string | undefined> {
+  if (!fileSourceEnabled(CONFIG_DOTENV_KEY)) return {};
   const environments = nodeEnvNames(process.env.NODE_ENV);
-  return context.cached(
-    ["config", "dotenv", ...environments],
-    (resolved) => loadDotenv(resolved ?? ".", environments),
-    cwd,
+  return cachedConfig(["dotenv", ...environments], cwd, (resolved) =>
+    loadDotenv(resolved, environments),
   );
+}
+
+/** Cache every target directory separately within the active process context. */
+function cachedConfig<T>(
+  name: readonly string[],
+  cwd: string | null | undefined,
+  loader: (resolved: string) => T,
+): T {
+  const active = context.getContext() ?? "";
+  const resolved = resolve(cwd ?? ".");
+  return context.cached(["config", active, resolved, ...name], () => loader(resolved));
 }
 
 /**
@@ -437,7 +465,6 @@ function read(
  * discovered project roots so a package-local file wins over the workspace's.
  */
 function findConfigFile(cwd: string, names: readonly string[]): string | undefined {
-  if (isDatabricksAppEnv()) return undefined;
   const start = resolve(cwd);
   const root = resolveProjectRoot(start);
   const pathFromRoot = root ? relative(root, start) : undefined;
@@ -457,6 +484,11 @@ function findConfigFile(cwd: string, names: readonly string[]): string | undefin
     if (boundary === undefined || dir === boundary) break;
   }
   return undefined;
+}
+
+/** A recognized source override, else the caller's automatic default. */
+function fileSourceEnabled(key: string, fallback: boolean = !isDatabricksAppEnv()): boolean {
+  return object.toBoolean(process.env[key]) ?? fallback;
 }
 
 function loadDotenv(

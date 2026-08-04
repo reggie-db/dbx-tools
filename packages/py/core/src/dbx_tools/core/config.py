@@ -54,9 +54,12 @@ ROOT_MARKERS = (
     "package.json",
 )
 MAX_TCP_PORT = 65_535
+DATABRICKS_APP_ENV_KEY = "DBX_TOOLS_DATABRICKS_APP_ENV"
+CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV"
+CONFIG_BUNDLE_KEY = "DBX_TOOLS_CONFIG_BUNDLE"
 ENV_ONLY: ConfigOptions = {"scope": (), "sources": "env"}
 
-_CACHE: dict[tuple[str, ...], tuple[str, object]] = {}
+_CACHE: dict[tuple[str, ...], object] = {}
 _NUMBER_PATTERN = re.compile(
     r"^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(%)?$",
     re.IGNORECASE,
@@ -71,6 +74,9 @@ def clear_cache() -> None:
 
 def is_databricks_app_env(source: Mapping[str, str | None] | None = None) -> bool:
     values = os.environ if source is None else source
+    override = _to_boolean(values.get(DATABRICKS_APP_ENV_KEY))
+    if override is not None:
+        return override
     app_name = _trim_to_none(values.get("DATABRICKS_APP_NAME"))
     host = _trim_to_none(values.get("DATABRICKS_HOST"))
     port = _trim_to_none(values.get("DATABRICKS_APP_PORT"))
@@ -140,6 +146,10 @@ def list(
 
 
 def bundle_file(cwd: str | None = None) -> ConfigFile | None:
+    production = _trim_to_none(os.environ.get("NODE_ENV"))
+    default_enabled = (production or "").lower() != "production" and not is_databricks_app_env()
+    if not _file_source_enabled(CONFIG_BUNDLE_KEY, default_enabled):
+        return None
     return _cached(("config", "bundle"), _load_bundle_file, cwd)
 
 
@@ -187,6 +197,8 @@ def _read(source: ConfigSource, cwd: str | None) -> Iterator[Mapping[str, object
 
 
 def _dotenv(cwd: str | None) -> dict[str, str]:
+    if not _file_source_enabled(CONFIG_DOTENV_KEY):
+        return {}
     environments = _node_env_names(os.environ.get("NODE_ENV"))
     return _cached(
         ("config", "dotenv", *environments),
@@ -209,8 +221,6 @@ def _node_env_names(node_env: object) -> builtins.list[str]:
 
 
 def _find_config_file(cwd: str, names: Sequence[str]) -> str | None:
-    if is_databricks_app_env():
-        return None
     start = Path(cwd).resolve()
     root = _project_root(start)
     boundary = root if root is not None and _is_relative_to(start, root) else None
@@ -226,6 +236,13 @@ def _find_config_file(cwd: str, names: Sequence[str]) -> str | None:
         if boundary is None or directory == boundary:
             return None
         directory = directory.parent
+
+
+def _file_source_enabled(key: str, fallback: bool | None = None) -> bool:
+    override = _to_boolean(os.environ.get(key))
+    if override is not None:
+        return override
+    return not is_databricks_app_env() if fallback is None else fallback
 
 
 def _load_dotenv(cwd: str | None, environments: Sequence[str]) -> dict[str, str]:
@@ -497,15 +514,13 @@ def _cached(
     loader: Callable[[str | None], object],
     context: str | None,
 ):
-    resolved = _context(context) or os.getcwd()
-    cacheable = _context(resolved) == _context(os.getcwd())
-    if cacheable:
-        entry = _CACHE.get(slot)
-        if entry is not None and entry[0] == resolved:
-            return entry[1]
+    active = str(Path.cwd().resolve())
+    resolved = str(Path(_context(context) or active).resolve())
+    key = (*slot, active, resolved)
+    if key in _CACHE:
+        return _CACHE[key]
     value = loader(resolved)
-    if cacheable:
-        _CACHE[slot] = (resolved, value)
+    _CACHE[key] = value
     return value
 
 

@@ -10,8 +10,8 @@
 // three separate inputs rather than one text box, and the received message renders
 // its body next to the merged metadata the server and the bus added.
 //
-// Delivery is live and unstored, so a viewer sees nothing published before it
-// connected - hence the copy telling you to open the second viewer first.
+// Delivery is persisted in Lakebase. Each SSE connection receives stored history
+// before live fan-out, so reloads and transient reconnects recover recent messages.
 
 import { hash, json } from "@dbx-tools/shared-core";
 import {
@@ -114,8 +114,8 @@ const Bus = () => {
 
   useEffect(() => {
     // `EventSource` reconnects on its own, so `onerror` is a status change rather
-    // than a failure - the stream usually comes back and re-fires `ready`. Messages
-    // published during the gap are gone; the bus does not replay.
+    // than a failure. The server replays persisted history before live messages;
+    // mergeMessages deduplicates envelopes already seen by this viewer.
     const source = new EventSource(`${API}/events`);
     source.onopen = () => setConnection("connected");
     source.onerror = () => setConnection("reconnecting");
@@ -182,7 +182,7 @@ const Bus = () => {
           <CardTitle>Send to the bus</CardTitle>
           <CardDescription>
             Open this page in another tab or browser. Every viewer listens to the same
-            Lakebase-backed topic. Notifications are live, so open the other viewer first.
+            Lakebase-backed topic, and recent messages survive reloads and reconnects.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -243,7 +243,8 @@ const Bus = () => {
           <div>
             <CardTitle>Listener output</CardTitle>
             <CardDescription>
-              Each notification includes its structured body and merged metadata context.
+              Persisted history arrives first, followed by live notifications with structured body
+              and merged metadata context.
             </CardDescription>
           </div>
           <Badge variant={connection === "connected" ? "default" : "secondary"}>{connection}</Badge>
