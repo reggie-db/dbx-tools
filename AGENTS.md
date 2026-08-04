@@ -291,7 +291,7 @@ why to use this package anyway:
   fallbacks. Native AppKit Serving is best when the endpoint alias is known.
 - `@dbx-tools/cli-model-proxy`: use for local OpenAI-compatible clients and
   tools that know `OPENAI_BASE_URL` but not AppKit. Installs the
-  `dbx-tools-model-proxy` bin plus the short `dbxt-model-proxy` alias.
+  `dbx-tools-model-proxy` bin plus the short `dbx-model-proxy` alias.
 - `@dbx-tools/ui-appkit`: use as a stable foundation/re-export for dbx-tools UI
   packages and hosts, not as a replacement for `@databricks/appkit-ui` in simple
   app code.
@@ -831,7 +831,7 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
 ```
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbx-tools root task
 packages/js/
-  cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbx-tools` + `dbxt` bins)
+  cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbx-tools` + `dbx` bins)
     bin/dbx-tools.ts                      # commander entry: sync | barrels | openapi | clean
     index.ts                              # generated barrel (public API surface)
     src/
@@ -1051,7 +1051,7 @@ URL rather than from a published wheel.
 
 ## The `dbx-tools` CLI
 
-`@dbx-tools/cli` ships the `dbx-tools` bin (aliased `dbxt`). It exists for the
+`@dbx-tools/cli` ships the `dbx-tools` bin (aliased `dbx`). It exists for the
 one thing projen cannot do for itself: a folder with no `.projenrc.ts` or
 toolchain installed yet, where there are no tasks to run. `dbx-tools sync`
 bootstraps that folder and then forwards to projen from then on.
@@ -1232,7 +1232,7 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   because the root bump releases both at ONE version - if the two ever diverge,
   this specifier starts requesting an engine that was never published.
 - **An established workspace pins its engine forever unless the CLI moves it.**
-  Bootstrap installs the engine once; every later `dbxt` run took the
+  Bootstrap installs the engine once; every later `dbx` run took the
   "established workspace" path, which only installed when `node_modules` was
   missing and never looked at the engine's VERSION. So a workspace scaffolded
   months earlier kept resolving its original engine no matter how current the CLI
@@ -1380,7 +1380,7 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` selects it with
   `project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, ...)` and:
   overrides the name to `@dbx-tools/cli` (`p.package.addField("name", ...)`),
-  adds its bins - `dbx-tools` plus the short `dbxt` alias, both pointing at
+  adds its bins - `dbx-tools` plus the short `dbx` alias, both pointing at
   `./bin/dbx-tools.js` (npm exposes every `bin` key as its own command) - and
   depends on `@dbx-tools/projen`. That is ALL it declares: tsconfig
   (`rootDir: "."` + the `index.ts`/`bin/**/*.ts` includes) and the `exports` map
@@ -1406,15 +1406,15 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   renders `bin` lazily (`bin: () => this.renderBin()`) and keeps the map private
   - reading `manifest.bin` directly hands you the function and silently finds no
     entries.
-    In-repo, run a CLI through its root task (`bun dbxt ...`, which is
+    In-repo, run a CLI through its root task (`bun dbx ...`, which is
     `bun <bin>/<name>.ts`) rather than the bin path: the `.ts` entry runs under
     `bun`, resolving sibling `@dbx-tools/*` imports from source in the workspace.
     A consumer's install resolves the same imports to `lib/`.
-- **CLI command names are `dbx-tools-<name>` plus a short `dbxt-<name>` alias**,
+- **CLI command names are `dbx-tools-<name>` plus a short `dbx-<name>` alias**,
   and the `bin/` entry file is named after the primary command - so
   `bin/dbx-tools-model-proxy.ts` backs `dbx-tools-model-proxy` /
-  `dbxt-model-proxy`. `@dbx-tools/cli` is the degenerate case of the same rule
-  (`bin/dbx-tools.ts` -> `dbx-tools` / `dbxt`). Note the package name and the
+  `dbx-model-proxy`. `@dbx-tools/cli` is the degenerate case of the same rule
+  (`bin/dbx-tools.ts` -> `dbx-tools` / `dbx`). Note the package name and the
   command deliberately DIVERGE (`@dbx-tools/cli-model-proxy` ships
   `dbx-tools-model-proxy`), so `npx @dbx-tools/cli-model-proxy` can't pick a bin
   on its own - name the command: `npx --package @dbx-tools/cli-model-proxy

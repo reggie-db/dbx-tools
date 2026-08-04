@@ -11,8 +11,8 @@
     "clean": "projen clean",
     "clobber": "projen clobber",
     "compile": "projen compile",
+    "dbx": "projen dbx",
     "dbx-tools": "projen dbx-tools",
-    "dbxt": "projen dbxt",
     "default": "projen default",
     "demo": "projen demo",
     "demo:emitter": "projen demo:emitter",
@@ -65,7 +65,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.75",
+  "version": "0.0.0",
   "type": "module",
   "private": true,
   "workspaces": [

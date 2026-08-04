@@ -6,8 +6,8 @@
     "directory": "packages/js/cli/model-proxy"
   },
   "bin": {
-    "dbx-tools-model-proxy": "./bin/dbx-tools-model-proxy.ts",
-    "dbxt-model-proxy": "./bin/dbx-tools-model-proxy.ts"
+    "dbx-model-proxy": "./bin/dbx-tools-model-proxy.ts",
+    "dbx-tools-model-proxy": "./bin/dbx-tools-model-proxy.ts"
   },
   "scripts": {
     "build": "projen build",
@@ -41,8 +41,8 @@
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
     "bin": {
-      "dbx-tools-model-proxy": "./lib/bin/dbx-tools-model-proxy.js",
-      "dbxt-model-proxy": "./lib/bin/dbx-tools-model-proxy.js"
+      "dbx-model-proxy": "./lib/bin/dbx-tools-model-proxy.js",
+      "dbx-tools-model-proxy": "./lib/bin/dbx-tools-model-proxy.js"
     },
     "exports": {
       ".": {

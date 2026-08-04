@@ -45,7 +45,7 @@ dbx-tools-model-proxy --profile my-workspace --port 4000
 ```
 
 The package installs two equivalent commands: `dbx-tools-model-proxy` and the
-shorter `dbxt-model-proxy`. Neither matches the package name, so a one-off run
+shorter `dbx-model-proxy`. Neither matches the package name, so a one-off run
 has to name the command explicitly:
 
 ```sh

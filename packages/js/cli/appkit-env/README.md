@@ -27,7 +27,7 @@ and prints only new or changed variables. On POSIX shells the default output is
 `export KEY=value`.
 
 The package installs two equivalent commands: `dbx-tools-appkit-env` and the
-shorter `dbxt-appkit-env`. Neither matches the package name, so a one-off run
+shorter `dbx-appkit-env`. Neither matches the package name, so a one-off run
 has to name the command explicitly:
 
 ```sh

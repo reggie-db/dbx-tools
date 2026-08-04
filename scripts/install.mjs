@@ -139,7 +139,7 @@ const globalPackages = [];
 if (version("pnpm") !== pnpmVersion) {
   globalPackages.push(`pnpm@${pnpmVersion}`);
 }
-if (!succeeds("dbxt", ["--help"]) || !succeeds("dbx-tools", ["--help"])) {
+if (!succeeds("dbx", ["--help"]) || !succeeds("dbx-tools", ["--help"])) {
   globalPackages.push(CLI_PACKAGE);
 }
 if (globalPackages.length > 0) {
@@ -151,12 +151,12 @@ const installedPnpmVersion = version("pnpm");
 if (installedPnpmVersion !== pnpmVersion) {
   throw new Error(`expected pnpm ${pnpmVersion}, found ${installedPnpmVersion ?? "none"}`);
 }
-if (!succeeds("dbxt", ["--help"]) || !succeeds("dbx-tools", ["--help"])) {
-  throw new Error(`${CLI_PACKAGE} installed without usable dbxt and dbx-tools commands`);
+if (!succeeds("dbx", ["--help"]) || !succeeds("dbx-tools", ["--help"])) {
+  throw new Error(`${CLI_PACKAGE} installed without usable dbx and dbx-tools commands`);
 }
 
 log(`using pnpm ${installedPnpmVersion}`);
-log("dbxt and dbx-tools commands are ready");
+log("dbx and dbx-tools commands are ready");
 if (root) {
   // `install` resolves packages so it takes the flag; `exec` forwards trailing
   // arguments to projen, so it must not.

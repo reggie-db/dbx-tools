@@ -96,8 +96,8 @@
         }
       ]
     },
-    "dbx-tools": {
-      "name": "dbx-tools",
+    "dbx": {
+      "name": "dbx",
       "steps": [
         {
           "exec": "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
@@ -105,8 +105,8 @@
         }
       ]
     },
-    "dbxt": {
-      "name": "dbxt",
+    "dbx-tools": {
+      "name": "dbx-tools",
       "steps": [
         {
           "exec": "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",

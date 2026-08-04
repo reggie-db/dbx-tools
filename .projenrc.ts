@@ -248,11 +248,11 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
 // `appkit.autoConfigure`) and print the env vars it added/changed as
 // eval-able shell / windows / json output. `cli`-tagged (commander from the
 // cli tag). Keeps its auto-discovered `@dbx-tools/cli-appkit-env` name; only
-// the bins are declared, as `dbx-tools-<name>` plus the short `dbxt-<name>`.
+// the bins are declared, as `dbx-tools-<name>` plus the short `dbx-<name>`.
 project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" }, (p) => {
   p.package.addBin({
     [`${SCOPE}-appkit-env`]: "./bin/dbx-tools-appkit-env.ts",
-    "dbxt-appkit-env": "./bin/dbx-tools-appkit-env.ts",
+    "dbx-appkit-env": "./bin/dbx-tools-appkit-env.ts",
   });
   p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
 });
@@ -550,14 +550,14 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 // cli-dbx-tools: the published CLI. The ONLY package that overrides its
 // auto-discovered name (`@dbx-tools/cli-dbx-tools` -> the bare `@dbx-tools/cli`);
 // every other package keeps whatever discovery derives from its path. Ships the
-// `dbx-tools` bin (plus the short `dbxt` alias - npm exposes every `bin` key as
+// `dbx-tools` bin (plus the short `dbx` alias - npm exposes every `bin` key as
 // its own command). Tsconfig/exports come from the `cli` tag.
 // (shared-core comes from the blanket base-dep mixin above.) No `pnpm` dep: the
 // CLI drives `bun` (the ambient runtime) - see `src/bun.ts`.
 project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, (p) => {
   p.package.addField("name", `@${SCOPE}/cli`);
   p.package.file.readonly = false;
-  p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbxt: "./bin/dbx-tools.ts" });
+  p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbx: "./bin/dbx-tools.ts" });
   p.addDeps("@clack/prompts@catalog:", "@dbx-tools/core@workspace:*");
 });
 
@@ -565,14 +565,14 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
 // Serving. `cli`-tagged (commander comes from the cli tag). Reuses node-model's
 // resolver + shared-model contracts; the SDK is a runtime dep for auth/host.
 // Keeps its auto-discovered `@dbx-tools/cli-model-proxy` name; only the bins are
-// declared, as `dbx-tools-<name>` plus the short `dbxt-<name>`.
+// declared, as `dbx-tools-<name>` plus the short `dbx-<name>`.
 project.applyToProjects(
   root,
   { identifierName: "cli-model-proxy", tags: "cli" },
   (p) => {
     p.package.addBin({
       [`${SCOPE}-model-proxy`]: "./bin/dbx-tools-model-proxy.ts",
-      "dbxt-model-proxy": "./bin/dbx-tools-model-proxy.ts",
+      "dbx-model-proxy": "./bin/dbx-tools-model-proxy.ts",
     });
     p.addDeps(
       "@dbx-tools/model@workspace:*",
@@ -985,9 +985,9 @@ root.addTask("demo:emitter", {
 });
 
 // In-repo runners for the CLI, mirroring the two bins the published
-// `@dbx-tools/cli` installs (`dbx-tools` + the short `dbxt` alias). bun runs the
+// `@dbx-tools/cli` installs (`dbx-tools` + the short `dbx` alias). bun runs the
 // `.ts` entry directly.
-for (const task of [SCOPE, "dbxt"]) {
+for (const task of [SCOPE, "dbx"]) {
   root.addTask(task, {
     exec: "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
     receiveArgs: true,

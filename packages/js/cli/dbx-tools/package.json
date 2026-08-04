@@ -6,8 +6,8 @@
     "directory": "packages/js/cli/dbx-tools"
   },
   "bin": {
-    "dbx-tools": "./bin/dbx-tools.ts",
-    "dbxt": "./bin/dbx-tools.ts"
+    "dbx": "./bin/dbx-tools.ts",
+    "dbx-tools": "./bin/dbx-tools.ts"
   },
   "scripts": {
     "build": "projen build",
@@ -39,8 +39,8 @@
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
     "bin": {
-      "dbx-tools": "./lib/bin/dbx-tools.js",
-      "dbxt": "./lib/bin/dbx-tools.js"
+      "dbx": "./lib/bin/dbx-tools.js",
+      "dbx-tools": "./lib/bin/dbx-tools.js"
     },
     "exports": {
       ".": {

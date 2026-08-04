@@ -6,8 +6,8 @@
     "directory": "packages/js/cli/appkit-env"
   },
   "bin": {
-    "dbx-tools-appkit-env": "./bin/dbx-tools-appkit-env.ts",
-    "dbxt-appkit-env": "./bin/dbx-tools-appkit-env.ts"
+    "dbx-appkit-env": "./bin/dbx-tools-appkit-env.ts",
+    "dbx-tools-appkit-env": "./bin/dbx-tools-appkit-env.ts"
   },
   "scripts": {
     "build": "projen build",
@@ -39,8 +39,8 @@
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
     "bin": {
-      "dbx-tools-appkit-env": "./lib/bin/dbx-tools-appkit-env.js",
-      "dbxt-appkit-env": "./lib/bin/dbx-tools-appkit-env.js"
+      "dbx-appkit-env": "./lib/bin/dbx-tools-appkit-env.js",
+      "dbx-tools-appkit-env": "./lib/bin/dbx-tools-appkit-env.js"
     },
     "exports": {
       ".": {

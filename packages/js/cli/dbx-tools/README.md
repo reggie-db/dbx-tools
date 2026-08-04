@@ -2,7 +2,7 @@
 
 Bootstrap CLI for the dbx-tools projen workspace engine.
 
-Run the `dbx-tools` command (aliased `dbxt`) to turn a folder that has no
+Run the `dbx-tools` command (aliased `dbx`) to turn a folder that has no
 `.projenrc.ts` or toolchain yet into a working dbx-tools workspace. Once that
 workspace exists, everything else is a projen task you run with
 `bun run <task>` - the CLI only forwards to projen from that point on. Import
