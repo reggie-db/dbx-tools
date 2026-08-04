@@ -10,9 +10,9 @@ databricks workspace import /Shared/dbx-tools-bus-lakebase \
   --format SOURCE --language PYTHON --overwrite
 ```
 
-| Notebook                             | What it proves                                                               |
-| ------------------------------------ | ---------------------------------------------------------------------------- |
-| [`bus-lakebase.py`](bus-lakebase.py) | `dbx-tools-bus` publish/listen on Lakebase, on the driver and in a Spark UDF |
+| Notebook                             | What it proves                                                                    |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| [`bus-lakebase.py`](bus-lakebase.py) | `dbx-tools-postgres` publish/listen on Lakebase, on the driver and in a Spark UDF |
 
 ## `bus-lakebase.py`
 
@@ -31,7 +31,7 @@ It exits with `dbutils.notebook.exit(json.dumps(results))`, so a job run's outpu
 is a machine-readable pass/fail per stage.
 
 Two Databricks-runtime details it demonstrates, both explained in
-[`packages/py/bus/README.md`](../../py/bus/README.md): install with `%pip` (a
+[`packages/py/postgres/README.md`](../../py/postgres/README.md): install with `%pip` (a
 `--target` install shadows `typing_extensions` and breaks the import), and drive
 the async bus on its own thread because a notebook kernel already runs an event
 loop.

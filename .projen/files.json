@@ -18,7 +18,6 @@
     ".vscode/settings.json",
     ".vscode/tasks.json",
     "bunfig.toml",
-    "packages/py/bus/pyproject.toml",
     "packages/py/core/pyproject.toml",
     "packages/py/model/pyproject.toml",
     "packages/py/postgres/pyproject.toml",

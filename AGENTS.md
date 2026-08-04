@@ -134,13 +134,17 @@ Primary package areas:
   packages. Keep this base deliberately small so importing a hash, stable key,
   or identifier formatter does not pull database/runtime dependencies with it.
 - `packages/py/postgres` — Python Lakebase/Postgres address parsing and
-  WorkspaceClient-backed connection resolution plus sync/async advisory locks.
-  Keep its accepted address shapes aligned with
+  WorkspaceClient-backed connection resolution, sync/async advisory locks, and
+  the async topic bus. It is the port of ONE Node package
+  (`packages/js/node/postgres`, plus that package's address helper in
+  `packages/js/node/appkit`), so everything Node keeps in `node/postgres` stays
+  here rather than fanning out into a Python package per module. Keep its
+  accepted address shapes aligned with
   `packages/js/node/appkit/src/pgaddress.ts`, and keep advisory-lock ids aligned
   with `packages/js/node/postgres/src/advisory-lock.ts` through polyglot fixtures.
-- `packages/py/bus` — Python async Postgres topic bus. Its public lifecycle and
-  wire envelope mirror `packages/js/node/postgres`'s `PostgresTopicBus` so Node
-  and Python services can share a channel. Two Databricks-runtime facts, verified
+  Its `topic_bus` module's public lifecycle and wire envelope mirror
+  `packages/js/node/postgres`'s `PostgresTopicBus` so Node and Python services
+  can share a channel. Two Databricks-runtime facts, verified
   on serverless notebook compute and documented in the package README, are easy
   to rediscover the hard way: a notebook kernel ALREADY runs an event loop (so
   `asyncio.run` in a cell raises, and the fix is a short-lived thread with its
@@ -180,11 +184,21 @@ Primary package areas:
   Python ships no browser bundle, so the tier would name a distinction that
   nothing checks. A Node `shared/<x>` contract and its `node/<x>` runtime
   therefore collapse into ONE `packages/py/<x>`: `shared/core` plus `node/core`
-  are both `dbx_tools.core`, and `node/postgres`'s bus lives in
-  `dbx_tools.bus`. Name a Python package after the capability a caller asks for
-  (`model`, `genie`, `databricks`), and let the module split inside `src/` carry
-  the contract/runtime distinction — `classify.py` next to `serving.py` rather
-  than two packages.
+  are both `dbx_tools.core`, and `node/postgres`'s advisory locks and topic bus
+  are both `dbx_tools.postgres`. Name a Python package after the capability a
+  caller asks for (`model`, `genie`, `databricks`), and let the module split
+  inside `src/` carry the distinctions a tag or a filename carries in Node —
+  `classify.py` next to `serving.py`, `topic_bus.py` next to `engine.py`, rather
+  than a package each.
+
+  The unit that becomes a Python package is a Node PACKAGE, never a Node MODULE.
+  `topic-bus.ts` is one file in `node/postgres` because a bus needs the same
+  connection machinery an engine does; a `packages/py/bus` reproduced that file's
+  prominence rather than its package's boundary, and it had to depend on
+  `dbx-tools-postgres` to do anything — the signal that it was inside that
+  boundary all along. When a Python name is more famous than the Node package it
+  came from, export the name, not a package — importing `PostgresTopicBus` from
+  `dbx_tools.postgres` reads exactly like the Node import it mirrors.
 
   Split a Python package out only for the reason the JavaScript tree splits:
   to keep a dependency out of a consumer's install. `dbx_tools.core` stays
@@ -445,6 +459,66 @@ rule above; the verdicts are recorded here so the audit is not re-litigated:
 - `shared/email-template` (`email` + `ui-email`) - KEEP. Isolates
   `@react-email/components` + `react`, and it is the one package both a server
   and a browser consumer share. Two consumers, and a real dependency.
+
+## Porting a TypeScript package to Python
+
+Read this BEFORE creating anything under `packages/py`. The layout rules live in
+the `packages/py/` bullet of the Layout section; this is the procedure and the
+judgement calls that keep a port from drifting away from the Node package it
+mirrors.
+
+**Start from a real Python consumer.** A port exists because some Python process
+needs it — a notebook, a collector, a job. Port the surface that consumer calls
+and stop. `packages/py/model` deliberately has no AppKit `CacheManager`, no
+Mastra adapter, and no browser-only schema, because nothing on the Python side
+asked for them and each one would have pulled a dependency in.
+
+**Mirror the Node PACKAGE boundary, not the file tree.** One Node package becomes
+at most one `packages/py/<x>`, and a Node `shared/<x>` + `node/<x>` pair collapses
+into that same one. Never promote a Node MODULE to a Python package: if the new
+package would have to depend on the port of its own Node package to function, it
+belongs inside it. A famous export earns a name (`PostgresTopicBus`), not a
+distribution.
+
+**Port the pure functions first, and keep them importable without a client.** The
+deterministic half of a Node package (parsing, classification, id derivation,
+payload shaping) is what a fixture can pin and what a caller can unit test, so
+give it its own module — `classify.py`, `address.py` — with no `WorkspaceClient`
+import anywhere in it. The client-touching half goes beside it (`serving.py`,
+`engine.py`).
+
+**Type the boundary structurally.** Accept a `typing.Protocol` describing the
+methods actually used (`WorkspaceClientLike`, `AsyncEngineLike`) rather than a
+concrete SDK or SQLAlchemy class. That is what lets a caller pass a fake in a test
+and a Spark executor pass something that never had Databricks auth.
+
+**Keep both spellings of a public name.** Python callers expect
+`channel_name`; a reader porting Node code expects `channelName`. Export both
+(the snake_case function plus a camelCase alias) and list both in a sorted
+`__all__`, exactly as `dbx_tools.postgres` and `dbx_tools.core` already do. This
+is also what lets one polyglot fixture name one function per runtime.
+
+**Pin deterministic behavior in `packages/test/polyglot`, not twice.** Any rule
+both runtimes must agree on — a lock id, a channel name, a parsed address, a
+classification — belongs in a shared fixture under
+`packages/test/polyglot/fixtures/<contract>/`, with the per-runtime export path in
+the directory's `default.json`. Language-specific tests stay for
+language-specific concerns (async lifecycle, context-manager cleanup). A drifted
+port then fails as a parity mismatch instead of passing two agreeing-with-itself
+suites.
+
+**Prove it installs the way a consumer installs it.** Every Python package must
+stay `pip install`-able by Git `#subdirectory` on its own, so internal
+dependencies use the generated `pythonGitDependency` reference and never a
+workspace-only path. Check with `uv build --offline --package <name>`.
+
+**Then finish the paperwork.** Add the package to `pythonPackages` in
+`.projenrc.ts` and run `bunx projen` (never hand-edit a `pyproject.toml`), write
+the package `README.md` in the same shape as its Node counterpart's, add a Layout
+bullet in this file, and add a row to the root README's Python Workspace table.
+If a port later MOVES, the docs above are the ones that go stale first — the
+Layout bullet, the workspace table, the notebook and example imports, and the
+polyglot `default.json` module mapping.
 
 ## Shared utilities - check here before writing a helper
 

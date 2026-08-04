@@ -98,7 +98,6 @@ packages/py/*/dist/
 !/pyproject.toml
 !/packages/py/core/pyproject.toml
 !/packages/py/postgres/pyproject.toml
-!/packages/py/bus/pyproject.toml
 !/packages/py/model/pyproject.toml
 !/.projenrc.ts
 !/.github/workflows/release.yml

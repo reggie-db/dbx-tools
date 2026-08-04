@@ -15,11 +15,12 @@ small, reusable surfaces that already have at least one real Python consumer.
 
 ## Existing Python baseline
 
-Three Python packages already demonstrate the desired pattern:
+Two Python packages already demonstrate the desired pattern:
 
 - `packages/py/core` translates the cross-runtime identifier, stable-key, and FNV hash contracts.
-- `packages/py/postgres` translates Lakebase address parsing and connection resolution.
-- `packages/py/bus` translates the Node Postgres topic-bus envelope and lifecycle.
+- `packages/py/postgres` translates Lakebase address parsing, connection resolution, advisory
+  locks, and the Node topic-bus envelope and lifecycle, mirroring the one Node package those all
+  live in.
 
 They use shared fixtures under `packages/test/polyglot`, support direct Git `#subdirectory`
 installation, and avoid dragging Node-only dependencies into Python. New ports should follow the

@@ -168,14 +168,13 @@ runtime behavior, module maps, and links to adjacent packages.
 
 ### Python Workspace
 
-The root uv workspace currently contains four unpublished Python counterparts:
+The root uv workspace currently contains three unpublished Python counterparts:
 
-| Package                                      | Purpose                                                                                                                                                                                                                                    |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`dbx-tools-core`](packages/py/core)         | Provides the dependency-free stable-key, FNV hash, and identifier helpers shared by Python packages and cross-runtime fixtures.                                                                                                            |
-| [`dbx-tools-postgres`](packages/py/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, and provides connection-correct sync/async advisory locks with cross-runtime lock ids.                          |
-| [`dbx-tools-bus`](packages/py/bus)           | Exposes the Node `PostgresTopicBus` lifecycle and wire envelope over an async SQLAlchemy/asyncpg engine, including cross-language channel-name derivation.                                                                                 |
-| [`dbx-tools-model`](packages/py/model)       | Lists and classifies Databricks Model Serving endpoints, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies. |
+| Package                                      | Purpose                                                                                                                                                                                                                                                                            |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`dbx-tools-core`](packages/py/core)         | Provides the dependency-free stable-key, FNV hash, and identifier helpers shared by Python packages and cross-runtime fixtures.                                                                                                                                                    |
+| [`dbx-tools-postgres`](packages/py/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
+| [`dbx-tools-model`](packages/py/model)       | Lists and classifies Databricks Model Serving endpoints, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies.                                         |
 
 ### Load One Brand File
 

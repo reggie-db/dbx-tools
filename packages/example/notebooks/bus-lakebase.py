@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # dbx-tools Python message bus on Lakebase
 # MAGIC
-# MAGIC Validates `dbx-tools-bus` (`PostgresTopicBus`) against a Lakebase endpoint using
+# MAGIC Validates `dbx-tools-postgres`'s `PostgresTopicBus` against a Lakebase endpoint using
 # MAGIC `WorkspaceClient`-backed connect-time credential injection.
 # MAGIC
 # MAGIC 1. driver publish/listen round trip
@@ -10,7 +10,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install --quiet "git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/bus"
+# MAGIC %pip install --quiet "git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/postgres"
 
 # COMMAND ----------
 
@@ -24,9 +24,10 @@ import os
 import traceback
 
 from databricks.sdk import WorkspaceClient
-from dbx_tools.bus import PostgresTopicBus, TopicPublishInput
 from dbx_tools.postgres import (
     PostgresEngineConfig,
+    PostgresTopicBus,
+    TopicPublishInput,
     create_async_engine,
     resolve_postgres_connection,
 )
@@ -187,8 +188,8 @@ def publish_from_udf(partition_key: str) -> str:
     import os as _os
 
     try:
-        from dbx_tools.bus import PostgresTopicBus as _Bus
-        from dbx_tools.bus import TopicPublishInput as _Input
+        from dbx_tools.postgres import PostgresTopicBus as _Bus
+        from dbx_tools.postgres import TopicPublishInput as _Input
         from dbx_tools.postgres import install_credential_injection as _inject
         from sqlalchemy import URL
         from sqlalchemy.ext.asyncio import create_async_engine as _create_async_engine

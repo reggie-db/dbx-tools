@@ -859,25 +859,14 @@ const pythonPackages = [
     directory: "postgres",
     name: "dbx-tools-postgres",
     module: "dbx_tools.postgres",
-    description: "WorkspaceClient-backed Lakebase Postgres resolution and SQLAlchemy engines",
+    description:
+      "WorkspaceClient-backed Lakebase Postgres resolution, SQLAlchemy engines, advisory locks, and LISTEN/NOTIFY topic bus",
     dependencies: [
       "asyncpg>=0.30,<1",
       "databricks-sdk>=0.63.0,<1",
       "greenlet>=3.2,<4",
       pythonGitDependency("dbx-tools-core", "core"),
       "psycopg[binary]>=3.2.9,<4",
-      "sqlalchemy>=2.0.41,<3",
-    ],
-  },
-  {
-    directory: "bus",
-    name: "dbx-tools-bus",
-    module: "dbx_tools.bus",
-    description: "Async Postgres LISTEN/NOTIFY topic bus compatible with dbx-tools Node",
-    dependencies: [
-      "asyncpg>=0.30,<1",
-      pythonGitDependency("dbx-tools-core", "core"),
-      pythonGitDependency("dbx-tools-postgres", "postgres"),
       "sqlalchemy>=2.0.41,<3",
     ],
   },
@@ -922,7 +911,7 @@ new TextFile(root, "pyproject.toml", {
     "line-length = 100",
     "",
     "[tool.ruff.lint.per-file-ignores]",
-    '"packages/py/bus/src/dbx_tools/bus/topic_bus.py" = ["BLE001"]',
+    '"packages/py/postgres/src/dbx_tools/postgres/topic_bus.py" = ["BLE001"]',
     '"packages/test/polyglot/python/run.py" = ["BLE001"]',
     // Databricks notebooks are plain `.py` source files so they diff and lint,
     // but the runtime injects `dbutils` and `spark` as globals, so F821 there

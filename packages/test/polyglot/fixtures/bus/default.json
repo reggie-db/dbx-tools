@@ -2,7 +2,7 @@
   "$schema": "../../schema.json",
   "modules": {
     "typescript": "@dbx-tools/postgres",
-    "python": "dbx_tools.bus"
+    "python": "dbx_tools.postgres"
   },
   "functions": {
     "channelName": {

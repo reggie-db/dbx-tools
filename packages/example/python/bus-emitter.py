@@ -4,8 +4,7 @@ import asyncio
 import random
 
 from databricks.sdk import WorkspaceClient
-from dbx_tools.bus import PostgresTopicBus, TopicPublishInput
-from dbx_tools.postgres import create_async_engine
+from dbx_tools.postgres import PostgresTopicBus, TopicPublishInput, create_async_engine
 
 TOPIC = "demo-viewers"
 MIN_DELAY_SECONDS = 5.0
