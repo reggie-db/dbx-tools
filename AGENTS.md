@@ -1656,13 +1656,17 @@ bundler` overlay (`SHARED_COMPILER_OPTIONS` in `project.ts`) because projen's
 - **OpenAPI** (`openapi.ts`, `bun run openapi`): scans **every discovered**
   `server`/`node` package for **tsoa** controllers (classes with
   `@Route`/`@Get`/... - no JSDoc/YAML). For each, tsoa's `generateSpec` infers an
-  OpenAPI 3 spec from the decorators + TS types, then openapi-typescript +
+  OpenAPI 3 spec from the decorators + TS types, then Speakeasy's
+  `openapi spec optimize` extracts duplicate inline schemas into reusable
+  `components.schemas`. Generation and optimization happen in a sibling
+  temporary directory; only the finished spec is moved to `openapi.json`, then openapi-typescript +
   openapi-fetch produce a read-only `<sourcePackage root>/openapi/<name>`
   package (`openapi.json` + `src/schema.ts` + `src/client.ts`) - colocated under
   the SAME root as the controller it came from (`packages/example/server/
 api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
-  root. tsoa/typescript/openapi-typescript are lazy-loaded (only `bun run
-openapi` / a watched controller edit needs them). The openapi watcher (started by
+  root. tsoa/typescript/openapi-typescript are lazy-loaded and Speakeasy's pinned
+  `openapi` binary is installed lazily through `@dbx-tools/core`'s `bin.ensure`
+  (only `bun run openapi` / a watched controller edit needs them). The openapi watcher (started by
   `bun run sync --watch`, under `concurrently`) regenerates it automatically when a
   controller changes.
 - **Brand theming is a `[data-brand]` token bridge, opt-in by detection.**
