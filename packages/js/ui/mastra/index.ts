@@ -23,6 +23,7 @@ export * as supportDownload from "./src/support/download.ts";
 export * as supportExport from "./src/support/export.ts";
 export * as supportMastraClient from "./src/support/mastra-client.ts";
 export * as supportMastraStream from "./src/support/mastra-stream.ts";
+export * as supportModelSelection from "./src/support/model-selection.ts";
 export * as supportShikiPlugin from "./src/support/shiki-plugin.ts";
 export * as supportThreadLabels from "./src/support/thread-labels.ts";
 export * as supportThreadSessions from "./src/support/thread-sessions.ts";
@@ -52,6 +53,7 @@ export type { ExportFormat, ExportBrand, EmbedResolver, ExportChatOptions } from
 export { MastraPluginClient, useMastraConfig, useMastraClient, useMastraModels, useMastraDefaultModel, useMastraSuggestions, useMastraThreads, useChartFetch, useStatementFetch } from "./src/support/mastra-client.ts";
 export type { ByIdFetchState } from "./src/support/mastra-client.ts";
 export type { MastraStreamChunk, MastraStreamResponse } from "./src/support/mastra-stream.ts";
+export { modelStorageKey, readStoredModel, storeSelectedModel } from "./src/support/model-selection.ts";
 export { DEFAULT_THREAD_SESSION_KEY } from "./src/support/thread-sessions.ts";
 export type { ThreadSession } from "./src/support/thread-sessions.ts";
 export { THREAD_TAB_SEED_MAX } from "./src/support/thread-tabs.ts";

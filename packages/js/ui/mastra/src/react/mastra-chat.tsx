@@ -25,6 +25,11 @@ import {
 } from "../support/mastra-client.ts";
 import type { MastraStreamResponse } from "../support/mastra-stream.ts";
 import {
+  modelStorageKey,
+  readStoredModel,
+  storeSelectedModel,
+} from "../support/model-selection.ts";
+import {
   createThreadSession,
   DEFAULT_THREAD_SESSION_KEY,
   enqueueSteer,
@@ -250,7 +255,6 @@ class StreamAborted extends Error {}
 export const useMastraChat = (
   options: UseMastraChatOptions = {},
 ): Omit<ChatViewProps, "className"> => {
-  const [model, setModel] = useState("");
   // One client drives both the agent stream and the plugin's custom
   // routes (history / threads / models / suggestions / feedback /
   // embeds). Its identity is
@@ -258,6 +262,20 @@ export const useMastraChat = (
   // using it as a hook dep doesn't refire the initial-history fetch on
   // every parent render.
   const mastraClient = useMastraClient();
+  const agentId = options.agentId ?? mastraClient.defaultAgent;
+  const showModelPicker = Boolean(options.showModelPicker);
+  const modelKey = modelStorageKey(mastraClient.basePath, agentId);
+  const [model, setModel] = useState(() => (showModelPicker ? readStoredModel(modelKey) : ""));
+  const handleModelChange = useCallback(
+    (nextModel: string) => {
+      setModel(nextModel);
+      storeSelectedModel(modelKey, nextModel);
+    },
+    [modelKey],
+  );
+  useEffect(() => {
+    setModel(showModelPicker ? readStoredModel(modelKey) : "");
+  }, [modelKey, showModelPicker]);
   // The selected model rides each turn as a per-call override (see
   // `runStream`), never stored on the shared client - so two threads can
   // stream under different models without clobbering each other. Mirror it
@@ -265,7 +283,6 @@ export const useMastraChat = (
   // `model` to its dependency list.
   const modelRef = useRef(model);
   modelRef.current = model;
-  const agentId = options.agentId ?? mastraClient.defaultAgent;
   // Built-in conversation management. When on, the chat always drives an
   // explicit client thread id (rather than leaning on the per-session
   // cookie) so it can reference, persist, and switch between the
@@ -359,7 +376,6 @@ export const useMastraChat = (
   );
   // Picker is opt-in: an omitted (or falsy) `showModelPicker` keeps it
   // hidden and skips the catalogue fetch entirely.
-  const showModelPicker = Boolean(options.showModelPicker);
   const { models } = useMastraModels(showModelPicker);
   // The humanized name of the model the active agent falls back to when no
   // model is pinned, so the picker can label its default option. Fetched only
@@ -1453,7 +1469,7 @@ export const useMastraChat = (
     // it (ChatView shows it only when both are present).
     models: showModelPicker ? models : undefined,
     model,
-    onModelChange: showModelPicker ? setModel : undefined,
+    onModelChange: showModelPicker ? handleModelChange : undefined,
     defaultModelName: showModelPicker ? (defaultModelName ?? undefined) : undefined,
     onLoadMore: loadOlderHistory,
     isLoadingMore,
