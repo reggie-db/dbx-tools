@@ -1,12 +1,17 @@
 /**
- * `dbx-tools-model-proxy` CLI.
+ * `dbx model-proxy` CLI.
  *
- * Run bare, it serves: a loopback OpenAI-compatible endpoint that fronts
+ * Run bare (`dbx model-proxy`), it serves: a loopback OpenAI-compatible endpoint that fronts
  * Databricks Model Serving with fuzzy model names and per-request auth. `chat`
  * starts that same proxy and hands off to an off-the-shelf terminal client
  * wired to it. `models` lists the resolvable endpoints; `resolve` shows what a
  * fuzzy name snaps to. Auth comes from the standard Databricks SDK resolution
  * (env vars, `--profile`, or `databricks auth login`).
+ *
+ * This package ships no bin of its own: {@link buildProgram} is mounted as the
+ * `model-proxy` subcommand of the single `dbx` CLI (`@dbx-tools/cli`), which
+ * imports this module lazily so an unrelated `dbx` command never pays for the
+ * Databricks SDK load.
  *
  * Shared flags (`--profile`, `--workspace-host`, `--threshold`, …) are declared
  * on the root *and* redeclared on subcommands for help discoverability. Commander
@@ -99,13 +104,13 @@ function addAuthOptions(command: Command): Command {
     .option("-t, --threshold <n>", "fuzzy match threshold (0..1)");
 }
 
-/** Build the `dbx-tools-model-proxy` commander program (no side effects until parsed). */
-export function buildProgram(): Command {
+/** Build the `dbx model-proxy` commander program (no side effects until parsed). */
+export function buildProgram(name = "dbx model-proxy"): Command {
   // Serving is the root action, not a subcommand: the bare command runs the
   // proxy, and `chat`/`models`/`resolve` are the named detours off it.
   const program = addAuthOptions(
     new Command()
-      .name("dbx-tools-model-proxy")
+      .name(name)
       .description("Local OpenAI-compatible proxy to Databricks Model Serving.")
       .option("-p, --port <port>", "port to listen on", String(DEFAULT_PORT))
       .option("-H, --host <host>", "address to bind", DEFAULT_BIND_HOST)

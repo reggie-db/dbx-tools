@@ -290,8 +290,8 @@ why to use this package anyway:
   `embedding`), class ceilings, cached enriched catalogues, model pickers, and
   fallbacks. Native AppKit Serving is best when the endpoint alias is known.
 - `@dbx-tools/cli-model-proxy`: use for local OpenAI-compatible clients and
-  tools that know `OPENAI_BASE_URL` but not AppKit. Installs the
-  `dbx-tools-model-proxy` bin plus the short `dbx-model-proxy` alias.
+  tools that know `OPENAI_BASE_URL` but not AppKit. Ships no bin - it is the
+  `dbx model-proxy` command group of the single `dbx` CLI (`@dbx-tools/cli`).
 - `@dbx-tools/ui-appkit`: use as a stable foundation/re-export for dbx-tools UI
   packages and hosts, not as a replacement for `@databricks/appkit-ui` in simple
   app code.
@@ -831,8 +831,8 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
 ```
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbx-tools root task
 packages/js/
-  cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbx-tools` + `dbx` bins)
-    bin/dbx-tools.ts                      # commander entry: sync | barrels | openapi | clean
+  cli/dbx-tools/                          # the ONLY bin (`@dbx-tools/cli`, `dbx` + `dbx-tools`)
+    bin/dbx-tools.ts                      # commander entry: dev | model-proxy | appkit
     index.ts                              # generated barrel (public API surface)
     src/
       bootstrap.ts                        # bootstraps a COMPLETELY EMPTY folder (see Commands)
@@ -1049,16 +1049,29 @@ A Databricks notebook or job is a DIFFERENT network with its own index, which is
 why the Python packages are installed there from a `git+https://github.com/...`
 URL rather than from a published wheel.
 
-## The `dbx-tools` CLI
+## The `dbx` CLI
 
-`@dbx-tools/cli` ships the `dbx-tools` bin (aliased `dbx`). It exists for the
-one thing projen cannot do for itself: a folder with no `.projenrc.ts` or
-toolchain installed yet, where there are no tasks to run. `dbx-tools sync`
-bootstraps that folder and then forwards to projen from then on.
+`@dbx-tools/cli` ships the repo's ONLY bin, `dbx` (aliased `dbx-tools`), with
+three command groups: `dev` (workspace lifecycle -> projen), `model-proxy`, and
+`appkit`. The latter two live in their own packages
+(`@dbx-tools/cli-model-proxy`, `@dbx-tools/cli-appkit-env`) and are mounted as
+ARG-FORWARDING commands that `await import()` the sibling's `buildProgram(name)`
+only once the name is matched - so `dbx dev` never loads the Databricks SDK or
+AppKit. Those packages therefore declare NO bin; adding one back re-splits a
+surface a user should only have to install once. Each forwarding command sets
+`helpOption(false)` so `--help` reaches the child and the child prints its own
+help; `buildProgram` takes the display name (`dbx model-proxy`) so help output
+names the real invocation rather than a bin that no longer exists.
+
+`dev` exists for the one thing projen cannot do for itself: a folder with no
+`.projenrc.ts` or toolchain installed yet, where there are no tasks to run.
+`dbx dev sync` bootstraps that folder and then forwards to projen from then on.
+It is an EXPLICIT subcommand, not the bare root action, so a projen task name
+can never collide with (or be shadowed by) a sibling command group.
 
 Inside an established workspace the CLI only forwards, so prefer the
-`bun run <task>` forms above - do not document `dbx-tools barrels` /
-`dbx-tools openapi` / `dbx-tools clean` as the way to run engine tasks.
+`bun run <task>` forms above - do not document `dbx dev barrels` /
+`dbx dev openapi` / `dbx dev clean` as the way to run engine tasks.
 
 - **`projen sync --watch` is the always-on watcher** (the generated `sync` task run
   with `--watch`, also the VS Code folder-open task). `sync`'s `receiveArgs` forwards
@@ -1078,15 +1091,15 @@ Inside an established workspace the CLI only forwards, so prefer the
   deliberately NOT used: it `fs.watch`es the whole repo recursively and re-synths
   (full post, so it installs) on EVERY file change, so a mere source edit forced a
   full re-synth + install. Run it as `bun run sync --watch`.
-- **`dbx-tools sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
+- **`dbx dev sync` on a completely empty folder bootstraps it** (`bootstrap.ts`):
   `bun init`, seed a minimal `pnpm-workspace.yaml` (for Databricks Apps deploy),
   `bun add -D projen typescript@^5.9.3 <engine specifier>`, write a minimal
   `.projenrc.ts` if none exists, synth (`post: false` - skips projen's own
   post-synth install), then reconcile the install itself
   (`bun install --force`) and regenerate barrels. Scaffolds **no** package folders
-  or sample code - just enough for `bunx projen`/`dbx-tools sync` to work from
+  or sample code - just enough for `bunx projen`/`dbx dev sync` to work from
   here on.
-- **`dbx-tools sync` on an existing workspace** just runs projen once (full synth,
+- **`dbx dev sync` on an existing workspace** just runs projen once (full synth,
   installs, regenerates barrels via the post-synth component) - which is exactly
   what `bun run sync` does directly, so prefer that once a workspace exists.
 - **`bun run sync --watch`** forwards to `projen sync --watch`, which does one
@@ -1410,15 +1423,18 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
     `bun <bin>/<name>.ts`) rather than the bin path: the `.ts` entry runs under
     `bun`, resolving sibling `@dbx-tools/*` imports from source in the workspace.
     A consumer's install resolves the same imports to `lib/`.
-- **CLI command names are `dbx-tools-<name>` plus a short `dbx-<name>` alias**,
-  and the `bin/` entry file is named after the primary command - so
-  `bin/dbx-tools-model-proxy.ts` backs `dbx-tools-model-proxy` /
-  `dbx-model-proxy`. `@dbx-tools/cli` is the degenerate case of the same rule
-  (`bin/dbx-tools.ts` -> `dbx-tools` / `dbx`). Note the package name and the
-  command deliberately DIVERGE (`@dbx-tools/cli-model-proxy` ships
-  `dbx-tools-model-proxy`), so `npx @dbx-tools/cli-model-proxy` can't pick a bin
-  on its own - name the command: `npx --package @dbx-tools/cli-model-proxy
-dbx-tools-model-proxy`, or just install it.
+- **There is exactly ONE bin in the repo**: `bin/dbx-tools.ts` in
+  `@dbx-tools/cli`, declared as `dbx` + the `dbx-tools` alias (npm exposes every
+  `bin` key as its own command). A new CLI surface is a SUBCOMMAND of `dbx`, not
+  a new bin - the sibling packages under `packages/js/cli/` export
+  `buildProgram(name?)` from their `src/cli.ts` and the root program mounts them
+  as lazily-imported forwarding commands (see "The `dbx` CLI"). That is what keeps
+  one install, one `--help`, and one place a user has to remember, and it keeps a
+  heavy dep (the Databricks SDK, AppKit) off the startup path of unrelated
+  commands. It also removes the old `npx --package ... <divergent-command>` trap:
+  the only installable CLI package is `@dbx-tools/cli` and its bin matches.
+  A sibling CLI package still publishes (its `src` is importable, and `./cli` is
+  an export subpath), it just contributes no command name of its own.
 - **The root keeps the engine itself resolvable across synths** via
   `engineSelfDependency()` (`project.ts`): resolves the `@dbx-tools/cli`
   package (`dbx-tools`) via `require.resolve` when installed; if that

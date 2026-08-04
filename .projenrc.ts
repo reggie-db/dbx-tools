@@ -244,16 +244,12 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
   p.addDevDeps("@databricks/appkit@catalog:");
 });
 
-// cli-appkit-env: the `appkit-env` CLI - run AppKit auto-config (node-appkit's
-// `appkit.autoConfigure`) and print the env vars it added/changed as
-// eval-able shell / windows / json output. `cli`-tagged (commander from the
-// cli tag). Keeps its auto-discovered `@dbx-tools/cli-appkit-env` name; only
-// the bins are declared, as `dbx-tools-<name>` plus the short `dbx-<name>`.
+// cli-appkit-env: the `dbx appkit` command group - run AppKit auto-config
+// (node-appkit's `appkit.autoConfigure`) and print the env vars it added/changed
+// as eval-able shell / windows / json output. `cli`-tagged (commander from the
+// cli tag) but ships NO bin: `@dbx-tools/cli` mounts its `buildProgram()` as
+// `dbx appkit`, lazily, so AppKit only loads when that command is named.
 project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" }, (p) => {
-  p.package.addBin({
-    [`${SCOPE}-appkit-env`]: "./bin/dbx-tools-appkit-env.ts",
-    "dbx-appkit-env": "./bin/dbx-tools-appkit-env.ts",
-  });
   p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
 });
 
@@ -547,33 +543,40 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 // the single bun workspace (added via `extraWorkspaceMembers`). It synthesizes
 // itself, so there is no engine rule here.
 
-// cli-dbx-tools: the published CLI. The ONLY package that overrides its
-// auto-discovered name (`@dbx-tools/cli-dbx-tools` -> the bare `@dbx-tools/cli`);
-// every other package keeps whatever discovery derives from its path. Ships the
-// `dbx-tools` bin (plus the short `dbx` alias - npm exposes every `bin` key as
-// its own command). Tsconfig/exports come from the `cli` tag.
+// cli-dbx-tools: the published CLI, and the repo's ONLY bin. The ONLY package
+// that overrides its auto-discovered name (`@dbx-tools/cli-dbx-tools` -> the bare
+// `@dbx-tools/cli`); every other package keeps whatever discovery derives from its
+// path. Ships the `dbx-tools` bin plus the short `dbx` alias (npm exposes every
+// `bin` key as its own command). The sibling CLI packages contribute COMMANDS
+// rather than bins - `dbx model-proxy` and `dbx appkit` - and stay separate
+// packages so their heavy deps (the Databricks SDK, AppKit) are `await import()`ed
+// only when named; see `src/cli.ts`. They are workspace deps here because the
+// installed `dbx` has to be able to reach them.
+// Tsconfig/exports come from the `cli` tag.
 // (shared-core comes from the blanket base-dep mixin above.) No `pnpm` dep: the
 // CLI drives `bun` (the ambient runtime) - see `src/bun.ts`.
 project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, (p) => {
   p.package.addField("name", `@${SCOPE}/cli`);
   p.package.file.readonly = false;
   p.package.addBin({ [SCOPE]: "./bin/dbx-tools.ts", dbx: "./bin/dbx-tools.ts" });
-  p.addDeps("@clack/prompts@catalog:", "@dbx-tools/core@workspace:*");
+  p.addDeps(
+    "@clack/prompts@catalog:",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/cli-model-proxy@workspace:*",
+    "@dbx-tools/cli-appkit-env@workspace:*",
+  );
 });
 
-// cli-model-proxy: local OpenAI-compatible proxy in front of Databricks Model
-// Serving. `cli`-tagged (commander comes from the cli tag). Reuses node-model's
-// resolver + shared-model contracts; the SDK is a runtime dep for auth/host.
-// Keeps its auto-discovered `@dbx-tools/cli-model-proxy` name; only the bins are
-// declared, as `dbx-tools-<name>` plus the short `dbx-<name>`.
+// cli-model-proxy: the `dbx model-proxy` command group - a local
+// OpenAI-compatible proxy in front of Databricks Model Serving. `cli`-tagged
+// (commander comes from the cli tag). Reuses node-model's resolver +
+// shared-model contracts; the SDK is a runtime dep for auth/host. Ships NO bin:
+// `@dbx-tools/cli` mounts its `buildProgram()` as `dbx model-proxy`, lazily, so
+// the SDK only loads when that command is named.
 project.applyToProjects(
   root,
   { identifierName: "cli-model-proxy", tags: "cli" },
   (p) => {
-    p.package.addBin({
-      [`${SCOPE}-model-proxy`]: "./bin/dbx-tools-model-proxy.ts",
-      "dbx-model-proxy": "./bin/dbx-tools-model-proxy.ts",
-    });
     p.addDeps(
       "@dbx-tools/model@workspace:*",
       "@dbx-tools/shared-model@workspace:*",
@@ -977,7 +980,7 @@ root.addTask("demo:emitter", {
   exec: `zsh -lc '
     eval "$(
       cd packages/example/server/appkit-demo
-      bun ../../../js/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet
+      bun ../../../js/cli/dbx-tools/bin/dbx-tools.ts appkit env --quiet
     )"
     exec uv run python packages/example/python/bus-emitter.py
   '`,

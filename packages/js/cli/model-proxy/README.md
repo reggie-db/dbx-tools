@@ -1,8 +1,8 @@
-# dbx-tools-model-proxy
+# @dbx-tools/cli-model-proxy
 
 Local OpenAI-compatible proxy for Databricks Model Serving.
 
-Import this package or run its CLI when a tool expects the OpenAI API shape but
+Import this package or run `dbx model-proxy` when a tool expects the OpenAI API shape but
 you want Databricks Model Serving auth, endpoint discovery, and fuzzy model
 names. Chat/completions and embeddings bodies are forwarded verbatim: the proxy
 resolves the requested model, mints/refreshes Databricks auth through the SDK,
@@ -41,16 +41,20 @@ nothing about AppKit:
 ## Run The Proxy
 
 ```sh
-dbx-tools-model-proxy --profile my-workspace --port 4000
+dbx model-proxy --profile my-workspace --port 4000
 ```
 
-The package installs two equivalent commands: `dbx-tools-model-proxy` and the
-shorter `dbx-model-proxy`. Neither matches the package name, so a one-off run
-has to name the command explicitly:
+This package ships no bin of its own. It contributes the `model-proxy` command
+group to the single `dbx` CLI in [`@dbx-tools/cli`](../dbx-tools), which is what
+you install:
 
 ```sh
-npx --package @dbx-tools/cli-model-proxy dbx-tools-model-proxy
+npm install --global @dbx-tools/cli
+dbx model-proxy --help
 ```
+
+`dbx` imports this package lazily, so the Databricks SDK loads only when a
+`model-proxy` command actually runs.
 
 Then point any OpenAI-compatible client at `http://127.0.0.1:4000/v1`:
 
@@ -69,8 +73,8 @@ putting another trusted access-control layer in front of it.
 ## Use A Terminal Chat Client
 
 ```sh
-dbx-tools-model-proxy chat --profile my-workspace --model "claude sonnet"
-dbx-tools-model-proxy chat --client "aichat" --model "chat fast"
+dbx model-proxy chat --profile my-workspace --model "claude sonnet"
+dbx model-proxy chat --client "aichat" --model "chat fast"
 ```
 
 `chat` starts the proxy, sets `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and
@@ -81,8 +85,8 @@ client without editing that client's config.
 ## Inspect Model Resolution
 
 ```sh
-dbx-tools-model-proxy models --profile my-workspace
-dbx-tools-model-proxy resolve claude sonnet --profile my-workspace
+dbx model-proxy models --profile my-workspace
+dbx model-proxy resolve claude sonnet --profile my-workspace
 ```
 
 These commands are useful when a client request resolves unexpectedly. They use
@@ -93,7 +97,7 @@ prefers `opus-5` over `opus-4-7`).
 ## Require A Client API Key
 
 ```sh
-dbx-tools-model-proxy --api-key "$LOCAL_PROXY_KEY"
+dbx model-proxy --api-key "$LOCAL_PROXY_KEY"
 ```
 
 With `--api-key` or `PROXY_API_KEY`, callers must send
@@ -276,8 +280,8 @@ is relayed unchanged.
 Disable it (relay 429s straight through) with the flag or the env var:
 
 ```sh
-dbx-tools-model-proxy --no-retry-429
-PROXY_RETRY_ON_429=false dbx-tools-model-proxy
+dbx model-proxy --no-retry-429
+PROXY_RETRY_ON_429=false dbx model-proxy
 ```
 
 Tune the policy with environment variables (all optional):
@@ -313,12 +317,13 @@ workspace or a new client version trips a field this package doesn't know
 about yet:
 
 ```sh
-PROXY_DROP_FIELDS=some_new_field,another dbx-tools-model-proxy
+PROXY_DROP_FIELDS=some_new_field,another dbx model-proxy
 ```
 
 ## Modules
 
-- `cli` - Commander program and `runCli()`.
+- `cli` - the `dbx model-proxy` commander program: `buildProgram(name?)` (what
+  `@dbx-tools/cli` mounts) and `runCli()` for standalone parsing.
 - `backend` - `DatabricksBackend`, auth, model resolution, and upstream request
   forwarding.
 - `server` - Express proxy app and `startProxyServer()`.

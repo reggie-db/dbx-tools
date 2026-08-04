@@ -231,7 +231,7 @@ expects OpenAI-compatible endpoints but you want Databricks auth and Model
 Serving resolution.
 
 ```sh
-dbx-tools-model-proxy --profile my-workspace --port 4000
+dbx model-proxy --profile my-workspace --port 4000
 ```
 
 Then point the client at `http://127.0.0.1:4000/v1`.

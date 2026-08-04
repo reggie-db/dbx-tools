@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@clack/prompts": "catalog:",
+    "@dbx-tools/cli-appkit-env": "workspace:*",
+    "@dbx-tools/cli-model-proxy": "workspace:*",
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:"

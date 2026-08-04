@@ -5,10 +5,6 @@
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
     "directory": "packages/js/cli/appkit-env"
   },
-  "bin": {
-    "dbx-appkit-env": "./bin/dbx-tools-appkit-env.ts",
-    "dbx-tools-appkit-env": "./bin/dbx-tools-appkit-env.ts"
-  },
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -38,14 +34,14 @@
     "access": "public",
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
-    "bin": {
-      "dbx-appkit-env": "./lib/bin/dbx-tools-appkit-env.js",
-      "dbx-tools-appkit-env": "./lib/bin/dbx-tools-appkit-env.js"
-    },
     "exports": {
       ".": {
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
+      },
+      "./cli": {
+        "types": "./lib/src/cli.d.ts",
+        "default": "./lib/src/cli.js"
       },
       "./env-export": {
         "types": "./lib/src/env-export.d.ts",
@@ -59,6 +55,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./cli": "./src/cli.ts",
     "./env-export": "./src/env-export.ts",
     "./package.json": "./package.json"
   },

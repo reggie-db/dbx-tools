@@ -5,10 +5,6 @@
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
     "directory": "packages/js/cli/model-proxy"
   },
-  "bin": {
-    "dbx-model-proxy": "./bin/dbx-tools-model-proxy.ts",
-    "dbx-tools-model-proxy": "./bin/dbx-tools-model-proxy.ts"
-  },
   "scripts": {
     "build": "projen build",
     "compile": "projen compile",
@@ -40,10 +36,6 @@
     "access": "public",
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
-    "bin": {
-      "dbx-model-proxy": "./lib/bin/dbx-tools-model-proxy.js",
-      "dbx-tools-model-proxy": "./lib/bin/dbx-tools-model-proxy.js"
-    },
     "exports": {
       ".": {
         "types": "./lib/index.d.ts",
