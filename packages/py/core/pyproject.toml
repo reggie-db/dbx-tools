@@ -4,7 +4,7 @@ name = "dbx-tools-core"
 version = "0.0.0"
 description = "Dependency-free cross-runtime identity helpers for dbx-tools Python packages"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = []
 
 [project.urls]

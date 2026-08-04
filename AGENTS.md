@@ -146,6 +146,9 @@ Primary package areas:
   `git+https://...@main#subdirectory=packages/py/<name>`. Keep the Git URL,
   branch, and package root centralized in `.projenrc.ts`'s `pythonRepository`;
   generate package `Source` URLs and internal Python Git dependencies from it.
+  Keep the root and every member's `requires-python` generated from the same
+  `pythonRequires` value; the default Databricks serverless notebook runtime is
+  part of the supported floor and must be covered by the Python test matrix.
   Do not copy lfp-build's `${PROJECT_ROOT}` file-reference mode here: that is a
   local workspace convenience, while pip ignores uv workspace sources when it
   resolves a package selected by Git `#subdirectory`.

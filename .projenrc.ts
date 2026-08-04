@@ -839,6 +839,8 @@ const pythonRepository = {
   ref: "main",
   root: "packages/py",
 } as const;
+const pythonRequires = ">=3.10";
+const pythonRuffTarget = "py310";
 
 const pythonPackagePath = (directory: string) => `${pythonRepository.root}/${directory}`;
 const pythonGitDependency = (name: string, directory: string) =>
@@ -887,7 +889,7 @@ new TextFile(root, "pyproject.toml", {
     "[project]",
     'name = "dbx-tools-python-workspace"',
     'version = "0.0.0"',
-    'requires-python = ">=3.11"',
+    `requires-python = "${pythonRequires}"`,
     "dependencies = []",
     "",
     "[dependency-groups]",
@@ -907,7 +909,7 @@ new TextFile(root, "pyproject.toml", {
     'testpaths = ["packages/py"]',
     "",
     "[tool.ruff]",
-    'target-version = "py311"',
+    `target-version = "${pythonRuffTarget}"`,
     "line-length = 100",
     "",
     "[tool.ruff.lint.per-file-ignores]",
@@ -928,7 +930,7 @@ for (const pkg of pythonPackages) {
       'version = "0.0.0"',
       `description = "${pkg.description}"`,
       'readme = "README.md"',
-      'requires-python = ">=3.11"',
+      `requires-python = "${pythonRequires}"`,
       `dependencies = [${pkg.dependencies.map((dependency) => `"${dependency}"`).join(", ")}]`,
       "",
       "[project.urls]",

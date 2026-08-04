@@ -11,7 +11,7 @@ import socket
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Protocol, TypeAlias
 
 from dbx_tools.core import fnv_hash, to_identifier, to_stable_key
@@ -156,7 +156,7 @@ class PostgresTopicBus:
             type=publish.type,
             metadata={**automatic, **publish.metadata},
             body=publish.body,
-            published_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            published_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         )
         encoded = json.dumps(message.as_dict(), separators=(",", ":"), allow_nan=False)
         if len(encoded.encode("utf-8")) > _MAX_NOTIFY_BYTES:
