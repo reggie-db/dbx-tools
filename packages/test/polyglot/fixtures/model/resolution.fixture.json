@@ -1,0 +1,53 @@
+{
+  "$schema": "../../schema.json",
+  "modules": {
+    "typescript": "@dbx-tools/model",
+    "python": "dbx_tools.model"
+  },
+  "functions": {
+    "rankModels": {
+      "path": { "typescript": "resolve.rankModels", "python": "rank_models" },
+      "tests": [
+        {
+          "name": "rank by class without search",
+          "args": [
+            [
+              { "name": "databricks-claude-opus-4-8", "task": "llm/v1/chat" },
+              { "name": "databricks-claude-sonnet-4-6", "task": "llm/v1/chat" },
+              { "name": "databricks-claude-haiku-4-5", "task": "llm/v1/chat" },
+              { "name": "databricks-bge-large-en", "task": "llm/v1/embeddings" }
+            ],
+            { "modelClass": "chat-balanced" }
+          ],
+          "expected": [
+            {
+              "endpoint": { "name": "databricks-claude-sonnet-4-6", "task": "llm/v1/chat" },
+              "modelClass": "chat-balanced"
+            },
+            {
+              "endpoint": { "name": "databricks-claude-haiku-4-5", "task": "llm/v1/chat" },
+              "modelClass": "chat-fast"
+            }
+          ]
+        },
+        {
+          "name": "rank exact search",
+          "args": [
+            [
+              { "name": "databricks-claude-opus-4-8", "task": "llm/v1/chat" },
+              { "name": "databricks-claude-sonnet-4-6", "task": "llm/v1/chat" }
+            ],
+            { "search": "databricks-claude-sonnet-4-6", "limit": 1 }
+          ],
+          "expected": [
+            {
+              "endpoint": { "name": "databricks-claude-sonnet-4-6", "task": "llm/v1/chat" },
+              "modelClass": "chat-balanced",
+              "score": 0
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

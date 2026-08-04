@@ -134,8 +134,10 @@ Primary package areas:
   packages. Keep this base deliberately small so importing a hash, stable key,
   or identifier formatter does not pull database/runtime dependencies with it.
 - `packages/py/postgres` — Python Lakebase/Postgres address parsing and
-  WorkspaceClient-backed connection resolution. Keep its accepted address shapes
-  aligned with `packages/js/node/appkit/src/pgaddress.ts`.
+  WorkspaceClient-backed connection resolution plus sync/async advisory locks.
+  Keep its accepted address shapes aligned with
+  `packages/js/node/appkit/src/pgaddress.ts`, and keep advisory-lock ids aligned
+  with `packages/js/node/postgres/src/advisory-lock.ts` through polyglot fixtures.
 - `packages/py/bus` — Python async Postgres topic bus. Its public lifecycle and
   wire envelope mirror `packages/js/node/postgres`'s `PostgresTopicBus` so Node
   and Python services can share a channel. Two Databricks-runtime facts, verified
@@ -152,6 +154,11 @@ Primary package areas:
   `install_credential_injection(engine.sync_engine, lambda: token)` supplies it
   without a `WorkspaceClient` on the executor. Do not `listen` from a UDF — the
   invocation is short-lived and the connection is not.
+- `packages/py/model` — Python Model Serving invocation, endpoint listing,
+  classification, resolution, chat sanitization, and embedding helpers. It
+  mirrors the reusable `shared/model` + `node/model` contract without AppKit
+  cache or Mastra dependencies; deterministic behavior belongs in the shared
+  model polyglot fixtures.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
@@ -165,6 +172,29 @@ Primary package areas:
   Do not copy lfp-build's `${PROJECT_ROOT}` file-reference mode here: that is a
   local workspace convenience, while pip ignores uv workspace sources when it
   resolves a package selected by Git `#subdirectory`.
+
+  Naming is flat: `packages/py/<name>` builds distribution `dbx-tools-<name>`
+  and imports as `dbx_tools.<name>`. There is no `node`/`shared`/`ui` segment.
+  The JavaScript tree needs those tiers because a browser bundle must not be
+  able to reach `node:fs`, and each tag's tsconfig `lib`/`types` enforces it.
+  Python ships no browser bundle, so the tier would name a distinction that
+  nothing checks. A Node `shared/<x>` contract and its `node/<x>` runtime
+  therefore collapse into ONE `packages/py/<x>`: `shared/core` plus `node/core`
+  are both `dbx_tools.core`, and `node/postgres`'s bus lives in
+  `dbx_tools.bus`. Name a Python package after the capability a caller asks for
+  (`model`, `genie`, `databricks`), and let the module split inside `src/` carry
+  the contract/runtime distinction — `classify.py` next to `serving.py` rather
+  than two packages.
+
+  Split a Python package out only for the reason the JavaScript tree splits:
+  to keep a dependency out of a consumer's install. `dbx_tools.core` stays
+  dependency-free, `dbx_tools.postgres` owns SQLAlchemy and the SDK, and a port
+  that needs neither must not import them transitively. Merging a Node
+  `shared`/`node` pair costs nothing when the runtime half's dependencies are
+  the ones the caller wanted anyway; when they are not, keep the pure functions
+  importable without the client (`dbx_tools.model.classify` needs no
+  `WorkspaceClient`).
+
 - **`packages/example/`** — seed/example packages when present. Do not make
   root docs primarily about examples. `packages/example/notebooks/` holds
   Databricks notebooks in `# Databricks notebook source` source format, which is

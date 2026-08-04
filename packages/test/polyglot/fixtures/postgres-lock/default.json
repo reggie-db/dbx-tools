@@ -1,0 +1,13 @@
+{
+  "$schema": "../../schema.json",
+  "modules": {
+    "typescript": "@dbx-tools/postgres",
+    "python": "dbx_tools.postgres"
+  },
+  "functions": {
+    "advisoryLockId": {
+      "path": { "typescript": "advisoryLock.advisoryLockId", "python": "advisory_lock_id" },
+      "result": { "typescript": "string", "python": "string" }
+    }
+  }
+}

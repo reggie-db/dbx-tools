@@ -5,7 +5,7 @@ version = "0.0.0"
 description = "WorkspaceClient-backed Lakebase Postgres resolution and SQLAlchemy engines"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["asyncpg>=0.30,<1", "databricks-sdk>=0.63.0,<1", "greenlet>=3.2,<4", "psycopg[binary]>=3.2.9,<4", "sqlalchemy>=2.0.41,<3"]
+dependencies = ["asyncpg>=0.30,<1", "databricks-sdk>=0.63.0,<1", "greenlet>=3.2,<4", "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core", "psycopg[binary]>=3.2.9,<4", "sqlalchemy>=2.0.41,<3"]
 
 [project.urls]
 Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/postgres"

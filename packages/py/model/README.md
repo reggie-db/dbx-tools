@@ -1,0 +1,50 @@
+# `dbx-tools-model`
+
+Python contracts and runtime helpers for Databricks Model Serving. This package
+mirrors the reusable parts of `@dbx-tools/shared-model` and `@dbx-tools/model`
+without AppKit cache or Mastra dependencies.
+
+Install directly from this monorepo:
+
+```bash
+pip install "dbx-tools-model @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/model"
+```
+
+Key features:
+
+- stable Pydantic endpoint, profile, query, and ranked-result models;
+- live endpoint listing through a structural `WorkspaceClient` protocol;
+- score-driven model classification with family fallbacks;
+- exact and fuzzy endpoint resolution with deterministic class ordering;
+- Databricks invocation URL and per-request authentication helpers;
+- OpenAI chat request sanitization and content extraction;
+- embedding vector extraction with optional dimension validation.
+
+```python
+from databricks.sdk import WorkspaceClient
+from dbx_tools.model import ModelClass, list_serving_endpoints, resolve_model
+
+endpoints = list_serving_endpoints(WorkspaceClient())
+selection = resolve_model(endpoints, model_class=ModelClass.CHAT_BALANCED)
+print(selection.model_id)
+```
+
+The Python port intentionally omits AppKit `CacheManager` integration,
+Mastra-specific adapters, and browser-only schemas. Callers can cache the plain
+Pydantic results with their preferred Python cache.
+
+## Relationship to the Databricks SDK
+
+Use the native SDK directly when an endpoint name is already known and its typed
+query method fits the request. Use this package when endpoint choice, stable
+cross-runtime models, OpenAI-shaped HTTP invocation, or provider-neutral chat
+and embedding normalization is the repetitive part.
+
+## Module map
+
+- `models` — Pydantic wire contracts;
+- `classify`, `classes`, `fallback` — model taxonomy and ordering;
+- `resolve` — exact/fuzzy ranking and single-model selection;
+- `serving` — structural `WorkspaceClient` endpoint listing;
+- `invoke` — URLs, SDK authentication headers, and JSON POST helpers;
+- `chat`, `embedding` — request sanitization and response extraction.

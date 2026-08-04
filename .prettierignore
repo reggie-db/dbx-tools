@@ -56,6 +56,7 @@ projen/index.ts
 bunfig.toml
 packages/py/bus/pyproject.toml
 packages/py/core/pyproject.toml
+packages/py/model/pyproject.toml
 packages/py/postgres/pyproject.toml
 pyproject.toml
 tsconfig.base.json

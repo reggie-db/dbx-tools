@@ -18,6 +18,7 @@ members = ["packages/py/*"]
 dbx-tools-core = { workspace = true }
 dbx-tools-postgres = { workspace = true }
 dbx-tools-bus = { workspace = true }
+dbx-tools-model = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

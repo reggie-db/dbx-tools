@@ -21,7 +21,11 @@ Key features:
 - injects a fresh database credential on SQLAlchemy's `do_connect` event rather
   than storing an expiring password in the engine URL, using the SDK's
   provisioned-instance API or the Autoscaling `/postgres/credentials` endpoint;
-- supports sync psycopg and asyncpg SQLAlchemy engines.
+- supports sync psycopg and asyncpg SQLAlchemy engines;
+- derives advisory-lock ids from the same stable structured keys as the Node
+  package and holds one checked-out connection for the full critical section;
+- provides blocking and try-lock context managers for session and transaction
+  locks, with sync and async SQLAlchemy variants.
 
 ```python
 from databricks.sdk import WorkspaceClient
@@ -37,3 +41,10 @@ engine = create_async_engine(
 
 Pass `credential_provider=` to either engine factory to inject credentials from
 another source while retaining the same connect-time rotation behavior.
+
+```python
+from dbx_tools.postgres import advisory_transaction_lock
+
+with advisory_transaction_lock(engine, ["schema-install", "v2"]) as connection:
+    connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS ...")
+```

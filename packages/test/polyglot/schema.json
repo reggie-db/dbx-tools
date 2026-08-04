@@ -53,8 +53,8 @@
     "resultModes": {
       "type": "object",
       "properties": {
-        "typescript": { "enum": ["identity", "camelKeys"] },
-        "python": { "enum": ["identity", "camelKeys"] }
+        "typescript": { "enum": ["identity", "camelKeys", "string"] },
+        "python": { "enum": ["identity", "camelKeys", "string"] }
       },
       "additionalProperties": false
     },

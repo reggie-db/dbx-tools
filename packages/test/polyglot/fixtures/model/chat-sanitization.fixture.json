@@ -1,0 +1,47 @@
+{
+  "$schema": "../../schema.json",
+  "functions": {
+    "chatContentToText": {
+      "tests": [
+        { "name": "chat string", "args": ["hello"], "expected": "hello" },
+        {
+          "name": "chat structured parts",
+          "args": [
+            [
+              { "type": "text", "text": "one" },
+              { "type": "image", "url": "x" },
+              { "type": "output_text", "text": "two" }
+            ],
+            { "separator": "|" }
+          ],
+          "expected": "one|two"
+        },
+        {
+          "name": "chat filtered parts",
+          "args": [
+            [
+              { "type": "input_text", "text": "in" },
+              { "type": "output_text", "text": "out" }
+            ],
+            { "types": ["output_text"] }
+          ],
+          "expected": "out"
+        }
+      ]
+    },
+    "stripUnsupportedChatFields": {
+      "tests": [
+        {
+          "name": "strip unsupported fields",
+          "args": [{ "store": true, "metadata": {}, "messages": [] }],
+          "expected": ["store", "metadata"]
+        },
+        {
+          "name": "strip extra fields",
+          "args": [{ "messages": [], "custom": true }, ["custom"]],
+          "expected": ["custom"]
+        }
+      ]
+    }
+  }
+}

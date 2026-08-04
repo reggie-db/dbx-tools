@@ -864,6 +864,7 @@ const pythonPackages = [
       "asyncpg>=0.30,<1",
       "databricks-sdk>=0.63.0,<1",
       "greenlet>=3.2,<4",
+      pythonGitDependency("dbx-tools-core", "core"),
       "psycopg[binary]>=3.2.9,<4",
       "sqlalchemy>=2.0.41,<3",
     ],
@@ -879,6 +880,13 @@ const pythonPackages = [
       pythonGitDependency("dbx-tools-postgres", "postgres"),
       "sqlalchemy>=2.0.41,<3",
     ],
+  },
+  {
+    directory: "model",
+    name: "dbx-tools-model",
+    module: "dbx_tools.model",
+    description: "Databricks Model Serving invocation, classification, and endpoint resolution",
+    dependencies: ["databricks-sdk>=0.63.0,<1", "pydantic>=2.9,<3"],
   },
 ] as const;
 

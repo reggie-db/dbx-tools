@@ -1,0 +1,109 @@
+{
+  "$schema": "../../schema.json",
+  "functions": {
+    "versionTuple": {
+      "tests": [
+        {
+          "name": "version point release",
+          "args": ["databricks-claude-opus-4-10"],
+          "expected": [4, 10, 0]
+        },
+        {
+          "name": "version parameter size",
+          "args": ["databricks-meta-llama-3-3-70b"],
+          "expected": [3, 3, 70]
+        },
+        { "name": "version absent", "args": ["databricks-bge-large-en"], "expected": [0, 0, 0] }
+      ]
+    },
+    "classifyByFamily": {
+      "tests": [
+        {
+          "name": "family opus",
+          "args": ["databricks-claude-opus-4-8"],
+          "expected": { "class": "chat-thinking", "rank": 4008000 }
+        },
+        {
+          "name": "family gpt nano",
+          "args": ["databricks-gpt-5-nano"],
+          "expected": { "class": "chat-fast", "rank": 5000000 }
+        },
+        { "name": "family unknown", "args": ["custom-endpoint"], "expected": null }
+      ]
+    },
+    "supportsToolsByFamily": {
+      "tests": [
+        { "name": "tools claude", "args": ["databricks-claude-sonnet-4-6"], "expected": true },
+        { "name": "tools gemini excluded", "args": ["databricks-gemini-3-pro"], "expected": false },
+        { "name": "tools unknown excluded", "args": ["custom-chat"], "expected": false }
+      ]
+    },
+    "endpointCapabilities": {
+      "tests": [
+        {
+          "name": "capabilities chat tools",
+          "args": [{ "name": "databricks-claude-sonnet-4-6", "task": "llm/v1/chat" }],
+          "expected": { "chat": true, "embedding": false, "tools": true }
+        },
+        {
+          "name": "capabilities embedding",
+          "args": [{ "name": "databricks-bge-large-en", "task": "llm/v1/embeddings" }],
+          "expected": { "chat": false, "embedding": true, "tools": false }
+        }
+      ]
+    },
+    "classifyEndpoints": {
+      "tests": [
+        {
+          "name": "classification buckets and ordering",
+          "args": [
+            [
+              {
+                "name": "thinking",
+                "task": "llm/v1/chat",
+                "profile": { "quality": 9, "speed": 2, "cost": 3 }
+              },
+              {
+                "name": "balanced",
+                "task": "llm/v1/chat",
+                "profile": { "quality": 5, "speed": 3, "cost": 2 }
+              },
+              {
+                "name": "fast",
+                "task": "llm/v1/chat",
+                "profile": { "quality": 1, "speed": 9, "cost": 1 }
+              },
+              { "name": "databricks-claude-sonnet-4-6", "task": "llm/v1/chat" },
+              { "name": "embed", "task": "llm/v1/embeddings" }
+            ]
+          ],
+          "expected": {
+            "chat-thinking": [
+              {
+                "name": "thinking",
+                "task": "llm/v1/chat",
+                "profile": { "quality": 9, "speed": 2, "cost": 3 }
+              }
+            ],
+            "chat-balanced": [
+              {
+                "name": "balanced",
+                "task": "llm/v1/chat",
+                "profile": { "quality": 5, "speed": 3, "cost": 2 }
+              },
+              { "name": "databricks-claude-sonnet-4-6", "task": "llm/v1/chat" }
+            ],
+            "chat-fast": [
+              {
+                "name": "fast",
+                "task": "llm/v1/chat",
+                "profile": { "quality": 1, "speed": 9, "cost": 1 }
+              }
+            ],
+            "embedding": [{ "name": "embed", "task": "llm/v1/embeddings" }]
+          }
+        }
+      ]
+    }
+  }
+}

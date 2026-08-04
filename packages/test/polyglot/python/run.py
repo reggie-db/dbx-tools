@@ -146,6 +146,8 @@ def _camel_key(value: str) -> str:
 
 
 def _normalize(value: Any, mode: str) -> Any:
+    if mode == "string":
+        return str(value)
     if hasattr(value, "as_dict") and callable(value.as_dict):
         value = value.as_dict()
     if isinstance(value, list):

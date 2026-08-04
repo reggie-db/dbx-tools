@@ -4,7 +4,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 export type Runtime = "typescript" | "python";
 export type RuntimeValue = string | Partial<Record<Runtime, string>>;
 export type InvokeMode = "positional" | "optionsFirst" | "keywordOptions";
-export type ResultMode = "identity" | "camelKeys";
+export type ResultMode = "identity" | "camelKeys" | "string";
 
 export interface TargetOverrides {
   module?: RuntimeValue;
@@ -214,6 +214,7 @@ function resolveFunction(
 }
 
 function normalizeResult(value: unknown, mode: ResultMode): unknown {
+  if (mode === "string") return String(value);
   if (Array.isArray(value)) return value.map((item) => normalizeResult(item, mode));
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(
