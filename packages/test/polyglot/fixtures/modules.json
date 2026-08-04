@@ -1,0 +1,50 @@
+{
+  "core": {
+    "typescript": {
+      "module": "@dbx-tools/shared-core",
+      "functions": {
+        "fnvHash": { "path": "hash.fnvHashWithOptions", "options": "first" },
+        "toStableKey": { "path": "object.toStableKey" },
+        "toIdentifier": { "path": "string.toIdentifier" }
+      }
+    },
+    "python": {
+      "module": "dbx_tools.core",
+      "functions": {
+        "fnvHash": { "path": "fnv_hash", "options": "keyword" },
+        "toStableKey": { "path": "to_stable_key" },
+        "toIdentifier": { "path": "to_identifier" }
+      }
+    }
+  },
+  "pgaddress": {
+    "typescript": {
+      "module": "@dbx-tools/appkit",
+      "functions": {
+        "parseAddress": { "path": "pgaddress.parseAddress" },
+        "parseResourcePath": { "path": "pgaddress.parseResourcePath" }
+      }
+    },
+    "python": {
+      "module": "dbx_tools.postgres",
+      "functions": {
+        "parseAddress": { "path": "parse_address", "result": "camelKeys" },
+        "parseResourcePath": { "path": "parse_resource_path", "result": "camelKeys" }
+      }
+    }
+  },
+  "bus": {
+    "typescript": {
+      "module": "@dbx-tools/postgres",
+      "functions": {
+        "channelName": { "path": "topicBus.channelName" }
+      }
+    },
+    "python": {
+      "module": "dbx_tools.bus",
+      "functions": {
+        "channelName": { "path": "channel_name" }
+      }
+    }
+  }
+}

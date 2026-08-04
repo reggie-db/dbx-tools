@@ -200,6 +200,9 @@ order does not matter; a different spelling does. Read `bus.channelName` to see
 what a set of parts resolved to, or to confirm two processes agree. Defaults to a
 shared `dbx_tools_topic_bus` channel.
 
+`topicBus.channelName(parts)` exposes the derivation without constructing a bus,
+which is useful for configuration checks and cross-runtime contract tests.
+
 ## Why A Separate Package?
 
 Advisory locks are connection-scoped, and that is easy to get wrong invisibly:
@@ -218,6 +221,7 @@ native surface to prefer here.
 | Module         | Purpose                                                            |
 | -------------- | ------------------------------------------------------------------ |
 | `advisoryLock` | Stable lock IDs plus session- and transaction-scoped lock helpers. |
+| `topicBus`     | Topic bus, message contracts, and deterministic `channelName`.     |
 | `topicBus`     | Structured topic broadcast/listen over PostgreSQL `NOTIFY`.        |
 
 Both modules are also flattened onto the package root, so

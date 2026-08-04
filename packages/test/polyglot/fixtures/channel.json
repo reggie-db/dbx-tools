@@ -1,27 +1,35 @@
-[
-  {
-    "name": "default channel value",
-    "input": "dbx_tools_topic_bus",
-    "expected": "dbx_tools_topic_bus_3kj9bt"
-  },
-  {
-    "name": "single label",
-    "input": "billing",
-    "expected": "billing_1m8m64"
-  },
-  {
-    "name": "label parts",
-    "input": ["billing", "prod"],
-    "expected": "billing_prod_091p2g"
-  },
-  {
-    "name": "joined label remains distinct",
-    "input": "billing_prod",
-    "expected": "billing_prod_3er7fp"
-  },
-  {
-    "name": "structured identity",
-    "input": { "a": 1 },
-    "expected": "bus_0xnqsa"
-  }
-]
+{
+  "root": "bus",
+  "cases": [
+    {
+      "name": "default channel value",
+      "function": "channelName",
+      "args": ["dbx_tools_topic_bus"],
+      "expected": "dbx_tools_topic_bus_3kj9bt"
+    },
+    {
+      "name": "single label",
+      "function": "channelName",
+      "args": ["billing"],
+      "expected": "billing_1m8m64"
+    },
+    {
+      "name": "label parts",
+      "function": "channelName",
+      "args": [["billing", "prod"]],
+      "expected": "billing_prod_091p2g"
+    },
+    {
+      "name": "joined label remains distinct",
+      "function": "channelName",
+      "args": ["billing_prod"],
+      "expected": "billing_prod_3er7fp"
+    },
+    {
+      "name": "structured identity",
+      "function": "channelName",
+      "args": [{ "a": 1 }],
+      "expected": "bus_0xnqsa"
+    }
+  ]
+}

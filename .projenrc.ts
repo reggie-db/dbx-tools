@@ -897,6 +897,7 @@ new TextFile(root, "pyproject.toml", {
     "",
     "[tool.ruff.lint.per-file-ignores]",
     '"packages/py/bus/src/dbx_tools/bus/topic_bus.py" = ["BLE001"]',
+    '"packages/test/polyglot/python/run.py" = ["BLE001"]',
     "",
   ],
 });

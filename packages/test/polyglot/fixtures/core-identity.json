@@ -1,118 +1,121 @@
-[
-  {
-    "name": "fnv default length",
-    "operation": "fnvHash",
-    "value": "string:7:billing",
-    "expected": { "result": "1m8m64" }
-  },
-  {
-    "name": "fnv joined stable keys",
-    "operation": "fnvHash",
-    "value": "string:7:billing\u0000string:4:prod",
-    "expected": { "result": "091p2g" }
-  },
-  {
-    "name": "fnv maximum digest length",
-    "operation": "fnvHash",
-    "value": "string:7:billing",
-    "length": 7,
-    "expected": { "result": "1m8m64b" }
-  },
-  {
-    "name": "fnv zero length",
-    "operation": "fnvHash",
-    "value": "billing",
-    "length": 0,
-    "expected": { "result": "" }
-  },
-  {
-    "name": "stable null",
-    "operation": "toStableKey",
-    "value": null,
-    "expected": { "result": "null" }
-  },
-  {
-    "name": "stable string uses utf16 length",
-    "operation": "toStableKey",
-    "value": "😀",
-    "expected": { "result": "string:2:😀" }
-  },
-  {
-    "name": "stable type tags",
-    "operation": "toStableKey",
-    "value": "1",
-    "expected": { "result": "string:1:1" }
-  },
-  {
-    "name": "stable number",
-    "operation": "toStableKey",
-    "value": 1,
-    "expected": { "result": "number:1" }
-  },
-  {
-    "name": "stable negative zero",
-    "operation": "toStableKey",
-    "value": { "$type": "negativeZero" },
-    "expected": { "result": "number:-0" }
-  },
-  {
-    "name": "stable array boundaries",
-    "operation": "toStableKey",
-    "value": ["a", "bc"],
-    "expected": { "result": "array:[string:1:a,string:2:bc]" }
-  },
-  {
-    "name": "stable array order",
-    "operation": "toStableKey",
-    "value": [2, 1],
-    "expected": { "result": "array:[number:2,number:1]" }
-  },
-  {
-    "name": "stable object key order",
-    "operation": "toStableKey",
-    "value": { "b": 2, "a": 1 },
-    "expected": { "result": "object:{string:1:a=number:1,string:1:b=number:2}" }
-  },
-  {
-    "name": "stable set order",
-    "operation": "toStableKey",
-    "value": { "$type": "set", "values": [2, 1] },
-    "expected": { "result": "set:[number:1,number:2]" }
-  },
-  {
-    "name": "stable cycle error",
-    "operation": "toStableKey",
-    "value": { "$type": "cycle" },
-    "expected": { "error": "TypeError" }
-  },
-  {
-    "name": "stable non-finite error",
-    "operation": "toStableKey",
-    "value": { "$type": "nan" },
-    "expected": { "error": "TypeError" }
-  },
-  {
-    "name": "identifier multiple values",
-    "operation": "toIdentifier",
-    "values": ["billing", "Prod"],
-    "expected": { "result": "billing-prod" }
-  },
-  {
-    "name": "identifier camel case",
-    "operation": "toIdentifier",
-    "values": ["myApp"],
-    "expected": { "result": "my-app" }
-  },
-  {
-    "name": "identifier acronym boundary",
-    "operation": "toIdentifier",
-    "values": ["XMLHttpRequest"],
-    "expected": { "result": "xml-http-request" }
-  },
-  {
-    "name": "identifier punctuation",
-    "operation": "toIdentifier",
-    "values": ["already_snake"],
-    "expected": { "result": "already-snake" }
-  }
-]
+{
+  "root": "core",
+  "cases": [
+    {
+      "name": "fnv default length",
+      "function": "fnvHash",
+      "args": ["string:7:billing"],
+      "expected": "1m8m64"
+    },
+    {
+      "name": "fnv joined stable keys",
+      "function": "fnvHash",
+      "args": ["string:7:billing\u0000string:4:prod"],
+      "expected": "091p2g"
+    },
+    {
+      "name": "fnv maximum digest length",
+      "function": "fnvHash",
+      "args": ["string:7:billing"],
+      "options": { "length": 7 },
+      "expected": "1m8m64b"
+    },
+    {
+      "name": "fnv zero length",
+      "function": "fnvHash",
+      "args": ["billing"],
+      "options": { "length": 0 },
+      "expected": ""
+    },
+    {
+      "name": "stable null",
+      "function": "toStableKey",
+      "args": [null],
+      "expected": "null"
+    },
+    {
+      "name": "stable string uses utf16 length",
+      "function": "toStableKey",
+      "args": ["😀"],
+      "expected": "string:2:😀"
+    },
+    {
+      "name": "stable type tags",
+      "function": "toStableKey",
+      "args": ["1"],
+      "expected": "string:1:1"
+    },
+    {
+      "name": "stable number",
+      "function": "toStableKey",
+      "args": [1],
+      "expected": "number:1"
+    },
+    {
+      "name": "stable negative zero",
+      "function": "toStableKey",
+      "args": [{ "$type": "negativeZero" }],
+      "expected": "number:-0"
+    },
+    {
+      "name": "stable array boundaries",
+      "function": "toStableKey",
+      "args": [["a", "bc"]],
+      "expected": "array:[string:1:a,string:2:bc]"
+    },
+    {
+      "name": "stable array order",
+      "function": "toStableKey",
+      "args": [[2, 1]],
+      "expected": "array:[number:2,number:1]"
+    },
+    {
+      "name": "stable object key order",
+      "function": "toStableKey",
+      "args": [{ "b": 2, "a": 1 }],
+      "expected": "object:{string:1:a=number:1,string:1:b=number:2}"
+    },
+    {
+      "name": "stable set order",
+      "function": "toStableKey",
+      "args": [{ "$type": "set", "values": [2, 1] }],
+      "expected": "set:[number:1,number:2]"
+    },
+    {
+      "name": "stable cycle error",
+      "function": "toStableKey",
+      "args": [{ "$type": "cycle" }],
+      "error": "TypeError"
+    },
+    {
+      "name": "stable non-finite error",
+      "function": "toStableKey",
+      "args": [{ "$type": "nan" }],
+      "error": "TypeError"
+    },
+    {
+      "name": "identifier multiple values",
+      "function": "toIdentifier",
+      "args": ["billing", "Prod"],
+      "expected": "billing-prod"
+    },
+    {
+      "name": "identifier camel case",
+      "function": "toIdentifier",
+      "args": ["myApp"],
+      "expected": "my-app"
+    },
+    {
+      "name": "identifier acronym boundary",
+      "function": "toIdentifier",
+      "args": ["XMLHttpRequest"],
+      "expected": "xml-http-request"
+    },
+    {
+      "name": "identifier punctuation",
+      "function": "toIdentifier",
+      "args": ["already_snake"],
+      "expected": "already-snake"
+    }
+  ]
+}

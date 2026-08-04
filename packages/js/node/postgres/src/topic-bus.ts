@@ -282,7 +282,8 @@ async function senderMetadata(): Promise<TopicMetadata> {
  * coordinating. Hash inputs are structure-aware, so `["a", "b"]` and `["a_b"]`
  * differ, and object key order does not.
  */
-function channelName(parts: object.OneOrMany<unknown>): string {
+export function channelName(value: unknown): string {
+  const parts = object.toOneOrMany(value);
   // Hash the CANONICAL form, the same rule `advisoryLockId` uses, so structure and
   // types decide identity: `["a","b"]` differs from `["ab"]`, `1` from `"1"`, and
   // object key order does not matter. Hashing the raw parts would instead lean on
@@ -402,7 +403,7 @@ export class PostgresTopicBus {
     options: PostgresTopicBusOptions = {},
   ) {
     this.channelName = channelName(
-      object.toOneOrMany(options.channel === undefined ? DEFAULT_CHANNEL : options.channel),
+      options.channel === undefined ? DEFAULT_CHANNEL : options.channel,
     );
     this.metadata = options.metadata;
     this.onError = options.onError ?? (() => undefined);

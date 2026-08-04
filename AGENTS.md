@@ -519,6 +519,11 @@ fixtures plus one emitter per runtime in `packages/test/polyglot`, then compare
 each emitter to the expected output and to the other runtime. Once common cases
 move there, remove their duplicate assertions from the TypeScript and Python
 package suites; retain only inputs or behavior that truly exist in one runtime.
+Use `packages/test/polyglot/fixtures/modules.json` for module/function-path
+differences; contract files should contain only the logical root, shared
+function name, arguments/options, and expected result/error. The generic runners
+discover fixture files automatically, so do not add a per-contract emitter or
+test file.
 
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:
