@@ -5,8 +5,6 @@ _BASE32_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz"
 
 def fnv_hash(value: str, *, length: int = 6) -> str:
     """Match TypeScript ``fnvHashWithOptions`` for one string value."""
-    if length <= 0:
-        raise ValueError("length must be greater than zero")
     digest = 0x811C9DC5
     for token in ("[", "string:", value, ",", "]"):
         encoded = token.encode("utf-16-le", "surrogatepass")

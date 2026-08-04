@@ -10,7 +10,8 @@ def to_stable_key(value: object, seen: set[int] | None = None) -> str:
     if value is None:
         return "null"
     if isinstance(value, str):
-        return f"string:{len(value)}:{value}"
+        utf16_length = len(value.encode("utf-16-le", "surrogatepass")) // 2
+        return f"string:{utf16_length}:{value}"
     if isinstance(value, bool):
         return f"boolean:{str(value).lower()}"
     if isinstance(value, int):

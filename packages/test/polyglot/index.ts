@@ -3,6 +3,8 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as channel from "./src/channel.ts";
+export * as coreIdentity from "./src/core-identity.ts";
 export * as pgaddress from "./src/pgaddress.ts";
 export type { ChannelCase, ChannelResult } from "./src/channel.ts";
+export type { CoreIdentityCase, CoreIdentityResult } from "./src/core-identity.ts";
 export type { PgAddressOperation, PgAddressCase, PgAddressResult } from "./src/pgaddress.ts";

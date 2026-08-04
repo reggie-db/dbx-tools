@@ -238,23 +238,13 @@ describe("object.isSerializableValue", () => {
 });
 
 describe("object.toStableKey", () => {
-  it("ignores object key order but not array order", () => {
-    assert.equal(object.toStableKey({ a: 1, b: 2 }), object.toStableKey({ b: 2, a: 1 }));
-    assert.notEqual(object.toStableKey([1, 2]), object.toStableKey([2, 1]));
-  });
-
-  it("keeps values distinct that a looser canonicalizer would conflate", () => {
-    assert.notEqual(object.toStableKey(1), object.toStableKey("1"));
-    // Length-prefixing is what stops concatenated neighbours from re-splitting.
-    assert.notEqual(object.toStableKey(["a", "bc"]), object.toStableKey(["ab", "c"]));
+  it("keeps TypeScript-only values distinct", () => {
     // Unlike the hash module's canonicalizer, a Date is identified by instant.
     assert.notEqual(object.toStableKey(new Date(0)), object.toStableKey(new Date(1)));
     assert.notEqual(object.toStableKey(null), object.toStableKey(undefined));
-    assert.notEqual(object.toStableKey(0), object.toStableKey(-0));
   });
 
-  it("sorts set and map entries so insertion order does not leak", () => {
-    assert.equal(object.toStableKey(new Set([1, 2])), object.toStableKey(new Set([2, 1])));
+  it("sorts Map entries so insertion order does not leak", () => {
     assert.equal(
       object.toStableKey(
         new Map([
@@ -271,12 +261,7 @@ describe("object.toStableKey", () => {
     );
   });
 
-  it("throws rather than inventing an identity it cannot guarantee", () => {
-    const cyclic: Record<string, unknown> = {};
-    cyclic.self = cyclic;
-    assert.throws(() => object.toStableKey(cyclic), TypeError);
-    // NaN is not equal to itself, so it has no stable identity.
-    assert.throws(() => object.toStableKey(Number.NaN), TypeError);
+  it("throws for TypeScript-only values without meaningful identity", () => {
     assert.throws(() => object.toStableKey(() => 1), TypeError);
     assert.throws(() => object.toStableKey(Symbol("x")), TypeError);
   });

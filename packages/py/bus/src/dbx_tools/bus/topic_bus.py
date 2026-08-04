@@ -284,7 +284,9 @@ def channel_name(channel: object = _DEFAULT_CHANNEL) -> str:
     stable = "\0".join(to_stable_key(part) for part in parts)
     suffix = fnv_hash(stable, length=_CHANNEL_HASH_LENGTH)
     labels = [part for part in parts if isinstance(part, (str, int, float, bool))]
-    body = to_identifier(*labels)[: _MAX_CHANNEL_LENGTH - len(suffix) - 1].rstrip("_")
+    body = to_identifier(*labels, delimiter="_")[: _MAX_CHANNEL_LENGTH - len(suffix) - 1].rstrip(
+        "_"
+    )
     prefix = body if re.match(r"^[A-Za-z_]", body) else f"{_CHANNEL_FALLBACK}_{body}"
     return re.sub(r"_+", "_", f"{prefix}_{suffix}")
 

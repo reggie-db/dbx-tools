@@ -516,7 +516,9 @@ all of shared-core speculatively. When moving duplicated Python helper code into
 `packages/py/core`, move its unit tests into `packages/py/core/tests` in the same
 change. When a contract must remain identical across languages, put shared JSON
 fixtures plus one emitter per runtime in `packages/test/polyglot`, then compare
-each emitter to the expected output and to the other runtime.
+each emitter to the expected output and to the other runtime. Once common cases
+move there, remove their duplicate assertions from the TypeScript and Python
+package suites; retain only inputs or behavior that truly exist in one runtime.
 
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:

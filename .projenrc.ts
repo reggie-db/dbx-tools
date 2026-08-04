@@ -189,7 +189,11 @@ project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
     "description",
     "Cross-runtime parity tests for dbx-tools JavaScript and Python packages",
   );
-  p.addDeps("@dbx-tools/appkit@workspace:*", "@dbx-tools/postgres@workspace:*");
+  p.addDeps(
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+  );
   p.tsconfig?.addInclude("bin/**/*.ts");
 });
 

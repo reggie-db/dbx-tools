@@ -25,7 +25,8 @@
   },
   "dependencies": {
     "@dbx-tools/appkit": "workspace:*",
-    "@dbx-tools/postgres": "workspace:*"
+    "@dbx-tools/postgres": "workspace:*",
+    "@dbx-tools/shared-core": "workspace:*"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

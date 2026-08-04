@@ -15,5 +15,8 @@ bun run --filter @dbx-tools/test-polyglot test
 
 `fixtures/pgaddress.json` owns the Lakebase/Postgres address cases.
 `fixtures/channel.json` owns Postgres topic-channel identity cases, covering the
-shared stable-key, identifier, and FNV rules. Each test fails if either runtime
-drifts from the expected output or from its counterpart.
+composed bus behavior. `fixtures/core-identity.json` directly owns the shared
+FNV, stable-key, and identifier contract. Each test fails if either runtime
+drifts from the expected output or from its counterpart. Runtime-specific cases
+that cannot cross the JSON fixture boundary remain in their native package
+suites.
