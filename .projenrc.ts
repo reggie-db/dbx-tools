@@ -915,6 +915,10 @@ new TextFile(root, "pyproject.toml", {
     "[tool.ruff.lint.per-file-ignores]",
     '"packages/py/bus/src/dbx_tools/bus/topic_bus.py" = ["BLE001"]',
     '"packages/test/polyglot/python/run.py" = ["BLE001"]',
+    // Databricks notebooks are plain `.py` source files so they diff and lint,
+    // but the runtime injects `dbutils` and `spark` as globals, so F821 there
+    // reports names that exist at run time.
+    '"packages/example/notebooks/*.py" = ["BLE001", "F821"]',
     "",
   ],
 });
@@ -958,11 +962,11 @@ root.addTask("py:test", {
   description: "Run Python workspace tests",
 });
 root.addTask("py:lint", {
-  exec: "uv run ruff check packages/py packages/test packages/example/python",
+  exec: "uv run ruff check packages/py packages/test packages/example/python packages/example/notebooks",
   description: "Lint Python workspace packages",
 });
 root.addTask("py:format", {
-  exec: "uv run ruff format packages/py packages/test packages/example/python",
+  exec: "uv run ruff format packages/py packages/test packages/example/python packages/example/notebooks",
   description: "Format Python workspace packages",
 });
 root.addTask("py:build", {

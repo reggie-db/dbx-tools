@@ -138,7 +138,20 @@ Primary package areas:
   aligned with `packages/js/node/appkit/src/pgaddress.ts`.
 - `packages/py/bus` — Python async Postgres topic bus. Its public lifecycle and
   wire envelope mirror `packages/js/node/postgres`'s `PostgresTopicBus` so Node
-  and Python services can share a channel.
+  and Python services can share a channel. Two Databricks-runtime facts, verified
+  on serverless notebook compute and documented in the package README, are easy
+  to rediscover the hard way: a notebook kernel ALREADY runs an event loop (so
+  `asyncio.run` in a cell raises, and the fix is a short-lived thread with its
+  own loop, not `nest_asyncio` — the bus's `LISTEN` connection is bound to
+  whichever loop started it), and a `pip install --target` leaves the runtime's
+  preloaded `typing_extensions` shadowing the installed one so
+  `dbx_tools.postgres` fails to import with `TypeAliasType`. Use `%pip`, which
+  restarts the process. Publishing from a Spark UDF works BECAUSE credentials are
+  injected at connect time: executors have no Databricks auth, so the driver
+  mints a token, the UDF closes over it, and
+  `install_credential_injection(engine.sync_engine, lambda: token)` supplies it
+  without a `WorkspaceClient` on the executor. Do not `listen` from a UDF — the
+  invocation is short-lived and the connection is not.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
@@ -153,7 +166,14 @@ Primary package areas:
   local workspace convenience, while pip ignores uv workspace sources when it
   resolves a package selected by Git `#subdirectory`.
 - **`packages/example/`** — seed/example packages when present. Do not make
-  root docs primarily about examples.
+  root docs primarily about examples. `packages/example/notebooks/` holds
+  Databricks notebooks in `# Databricks notebook source` source format, which is
+  a plain `.py` file that diffs and lints — never commit `.ipynb` here. Take
+  connection details from `dbutils.widgets` with no default pointing at a
+  specific workspace, and end with
+  `dbutils.notebook.exit(json.dumps(results))` so a job run's output is a
+  machine-readable pass/fail per stage rather than something a human has to read
+  out of cell output.
 - **`packages/test/`** — private cross-package and cross-runtime test harnesses.
   Shared polyglot fixtures and separate runtime emitters belong under
   `packages/test/polyglot`, not inside one language package's unit-test tree.

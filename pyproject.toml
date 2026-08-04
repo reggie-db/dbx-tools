@@ -30,3 +30,4 @@ line-length = 100
 [tool.ruff.lint.per-file-ignores]
 "packages/py/bus/src/dbx_tools/bus/topic_bus.py" = ["BLE001"]
 "packages/test/polyglot/python/run.py" = ["BLE001"]
+"packages/example/notebooks/*.py" = ["BLE001", "F821"]
