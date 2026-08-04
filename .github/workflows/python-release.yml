@@ -62,25 +62,28 @@ jobs:
               path.write_text(source, encoding="utf-8")
           PY
       - name: Build distributions
-        run: uv build --all-packages
+        run: |-
+          uv build --package dbx-tools-core --out-dir dist/core
+          uv build --package dbx-tools-postgres --out-dir dist/postgres
+          uv build --package dbx-tools-model --out-dir dist/model
       - name: Validate distributions
         run: |-
-          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq 6
-          uvx twine check dist/*
+          test "$(find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 6
+          uvx twine check dist/*/*.whl dist/*/*.tar.gz
       - name: Upload distributions
         uses: actions/upload-artifact@v7
         with:
           name: python-distributions
           path: dist
     timeout-minutes: 20
-  publish:
+  publish-core:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
-      name: pypi
-      url: https://pypi.org/
+      name: pypi-dbx-tools-core
+      url: https://pypi.org/project/dbx-tools-core/
     if: ${{ inputs.publish }}
     steps:
       - name: Download distributions
@@ -88,10 +91,50 @@ jobs:
         with:
           name: python-distributions
           path: dist
-      - name: Publish to PyPI
+      - name: Publish dbx-tools-core to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist
+          packages-dir: dist/core
+    timeout-minutes: 10
+  publish-postgres:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-postgres
+      url: https://pypi.org/project/dbx-tools-postgres/
+    if: ${{ inputs.publish }}
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish dbx-tools-postgres to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/postgres
+    timeout-minutes: 10
+  publish-model:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-model
+      url: https://pypi.org/project/dbx-tools-model/
+    if: ${{ inputs.publish }}
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish dbx-tools-model to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/model
     timeout-minutes: 10
 permissions:
   contents: read

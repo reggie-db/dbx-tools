@@ -5,13 +5,26 @@
 import { type PathMatchInput } from "@dbx-tools/path";
 import { object, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
-import { Project } from "projen";
+import { Project, type ProjectOptions } from "projen";
 import * as mixin from "./mixin.ts";
 import * as projectPredicate from "./project-predicate.ts";
-import type { DBXToolsProject } from "./project-js.ts";
+import type { DBXToolsJavaScriptProject } from "./project-js.ts";
 
 export * from "./project-js.ts";
 export * from "./project-py.ts";
+
+/** Runtime family implemented by a dbx-tools project. */
+export type DBXToolsProjectLanguage = "javascript" | "python";
+
+/** Options shared by every dbx-tools project implementation. */
+export interface DBXToolsProjectOptions extends Partial<
+  Pick<ProjectOptions, "name" | "parent" | "outdir">
+> {}
+
+/** Minimal language-agnostic project contract. */
+export interface DBXToolsProject extends Project {
+  readonly language: DBXToolsProjectLanguage;
+}
 
 /** Filters selecting which projects an {@link applyToProjects} call runs against. */
 export interface ApplyToProjectsOptions {
@@ -45,8 +58,8 @@ type ApplyToAllProjectsOptions = Omit<ApplyToProjectsOptions, "includeNonDBXTool
 export function applyToProjects(
   construct: IConstruct,
   ...args:
-    | [ApplyToDBXToolsProjectsOptions, ...OneOrMany<(project: DBXToolsProject) => void>]
-    | OneOrMany<(project: DBXToolsProject) => void>
+    | [ApplyToDBXToolsProjectsOptions, ...OneOrMany<(project: DBXToolsJavaScriptProject) => void>]
+    | OneOrMany<(project: DBXToolsJavaScriptProject) => void>
 ): void;
 
 export function applyToProjects(
@@ -71,7 +84,7 @@ export function applyToProjects<P extends Project>(
   const callbacks = (hasOptions ? rest : args) as OneOrMany<(project: Project) => void>;
   let predicate = projectPredicate.isProject();
   if (!options?.includeNonDBXToolsProjects) {
-    predicate = predicate.and(projectPredicate.isDBXToolsProject());
+    predicate = predicate.and(projectPredicate.isDBXToolsJavaScriptProject());
   }
   if (!options?.includeRoots) predicate = predicate.and((project) => project.parent != null);
   if (options?.identifierPackageName) {

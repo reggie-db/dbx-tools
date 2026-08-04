@@ -36,11 +36,11 @@ export { repoRoot, DEFAULT_PACKAGE_ROOTS, DiscoveredPackage } from "./src/packag
 export type { RecordedPackage } from "./src/packages.ts";
 export { PnpmWorkspaceState } from "./src/pnpm-workspace.ts";
 export type { Catalog, AllowBuilds, DBXToolsPNPMWorkspaceOptions } from "./src/pnpm-workspace.ts";
-export type { ApplyToProjectsOptions } from "./src/project.ts";
+export type { DBXToolsProjectLanguage, DBXToolsProjectOptions, DBXToolsProject, ApplyToProjectsOptions } from "./src/project.ts";
 export { PackageIdentifier, PROJEN_VERSION, DBXToolsNodeProject, ROOT_INSTALL_ONLY_MIXIN, DBXToolsTypeScriptProject } from "./src/project-js.ts";
-export type { DBXToolsProject, DBXToolsProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
-export { DBXToolsPythonWorkspace } from "./src/project-py.ts";
-export type { PythonRepositoryOptions, PythonPackageOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
+export type { DBXToolsJavaScriptProject, DBXToolsJavaScriptProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
+export { DBXToolsPythonProject, DBXToolsPythonWorkspace } from "./src/project-py.ts";
+export type { PythonRepositoryOptions, PythonPackageOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
 export { DBXToolsRelease } from "./src/release.ts";
 export type { StandaloneRelease, DBXToolsReleaseOptions } from "./src/release.ts";

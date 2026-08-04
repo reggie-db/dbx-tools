@@ -250,6 +250,7 @@ export class PnpmWorkspaceState {
    */
   public resolveMembers(project: Project, extraMembers: readonly string[] = []): void {
     const members = project.subprojects
+      .filter((sub): sub is javascript.NodeProject => sub instanceof javascript.NodeProject)
       .map((sub) => toPosix(relative(project.outdir, sub.outdir)))
       .filter(Boolean);
     // `extraMembers` are workspace siblings NOT attached as subprojects (e.g. the

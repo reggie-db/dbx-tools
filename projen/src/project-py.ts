@@ -1,8 +1,9 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
 import { string } from "@dbx-tools/shared-core";
-import { Component, TextFile, type Project, javascript, vscode } from "projen";
+import { Component, type Project, javascript, python, vscode } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
+import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 
 /** Git location used by direct `#subdirectory=` package dependencies. */
 export interface PythonRepositoryOptions {
@@ -12,7 +13,7 @@ export interface PythonRepositoryOptions {
 }
 
 /** One independently installable Python package in the uv workspace. */
-export interface PythonPackageOptions {
+export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly directory: string;
   readonly name: string;
   readonly module: string;
@@ -20,10 +21,19 @@ export interface PythonPackageOptions {
   readonly dependencies?: readonly string[];
 }
 
+/** Options for one projen-native Python workspace member. */
+export interface DBXToolsPythonProjectOptions extends DBXToolsProjectOptions {
+  readonly parent: Project;
+  readonly package: PythonPackageOptions;
+  readonly repository: Required<PythonRepositoryOptions>;
+  readonly requiresPython: string;
+}
+
 /** Python release workflow configuration. */
 export interface PythonReleaseOptions {
   readonly workflowName?: string;
-  readonly environment?: string;
+  /** GitHub environment by Python distribution name. Defaults to `pypi-<name>`. */
+  readonly environments?: Readonly<Record<string, string>>;
   readonly environmentUrl?: string;
 }
 
@@ -69,27 +79,112 @@ function projectVscode(project: Project): vscode.VsCode | undefined {
   return (project as Project & { readonly vscode?: vscode.VsCode }).vscode;
 }
 
+/** A Python package implemented with projen's `PythonProject` and uv backend. */
+export class DBXToolsPythonProject extends python.PythonProject implements DBXToolsProject {
+  readonly language = "python" as const;
+  readonly packageOptions: PythonPackageOptions;
+  readonly uv: python.Uv;
+
+  constructor(options: DBXToolsPythonProjectOptions) {
+    const pkg = options.package;
+    super({
+      parent: options.parent,
+      outdir: pythonPackagePath(options.repository, pkg.directory),
+      name: pkg.name,
+      moduleName: pkg.module,
+      authorName: "",
+      authorEmail: "",
+      version: "0.0.0",
+      description: pkg.description,
+      github: false,
+      sample: false,
+      pytest: false,
+      projenrcPython: false,
+      projenrcJs: false,
+      projenrcTs: false,
+      pip: false,
+      venv: false,
+      setuptools: false,
+      poetry: false,
+      uv: true,
+      projenCommand: options.parent.projenCommand,
+      uvOptions: {
+        project: {
+          name: pkg.name,
+          version: "0.0.0",
+          description: pkg.description,
+          readme: "README.md",
+          requiresPython: options.requiresPython,
+          dependencies: [...(pkg.dependencies ?? [])],
+          urls: {
+            Source: `${options.repository.url.replace(/\.git$/, "")}/tree/${options.repository.ref}/${pythonPackagePath(options.repository, pkg.directory)}`,
+          },
+        },
+        buildSystem: {
+          requires: ["uv_build>=0.11.28,<0.12.0"],
+          buildBackend: "uv_build",
+        },
+        uv: {
+          buildBackend: {
+            moduleName: pkg.module,
+            moduleRoot: "src",
+            namespace: true,
+          },
+        },
+      },
+    });
+    this.packageOptions = pkg;
+    if (!(this.packagingManager instanceof python.Uv)) {
+      throw new Error(`Expected uv packaging for ${pkg.name}`);
+    }
+    this.uv = this.packagingManager;
+    this.uv.file.addDeletionOverride("project.authors");
+    this.uv.file.addDeletionOverride("dependency-groups");
+    this.uv.file.readonly = true;
+
+    for (const path of [".gitattributes", ".gitignore"]) {
+      this.tryRemoveFile(path);
+    }
+  }
+
+  /** The root workspace owns dependency installation for every member. */
+  public override postSynthesize(): void {}
+}
+
 /**
- * Generates a root uv workspace, member package metadata, Python tasks, editor
- * interpreter selection, and an optional trusted-publishing workflow.
+ * Generates a root uv workspace, projen-native Python member projects, Python
+ * tasks, editor interpreter selection, and an optional publishing workflow.
  */
 export class DBXToolsPythonWorkspace extends Component {
-  readonly packages: readonly PythonPackageOptions[];
+  readonly packages: readonly DBXToolsPythonProject[];
   readonly repository: Required<PythonRepositoryOptions>;
   readonly requiresPython: string;
+  readonly file: python.PyprojectTomlFile;
 
   constructor(project: javascript.NodeProject, options: DBXToolsPythonWorkspaceOptions) {
     super(project);
-    this.packages = options.packages;
     this.repository = {
       url: options.repository.url,
       ref: options.repository.ref ?? "main",
       root: options.repository.root ?? "packages/py",
     };
     this.requiresPython = options.requiresPython ?? ">=3.10";
-
-    this.emitWorkspace(project, options);
-    this.emitPackages(project);
+    this.file = this.emitWorkspace(project, options);
+    this.packages = options.packages.map(
+      (pkg) =>
+        new DBXToolsPythonProject({
+          parent: project,
+          package: pkg,
+          repository: this.repository,
+          requiresPython: this.requiresPython,
+        }),
+    );
+    for (const pkg of this.packages) {
+      const pyproject = `/${pythonPackagePath(this.repository, pkg.packageOptions.directory)}/pyproject.toml`;
+      project.gitignore.include(pyproject);
+      project.gitattributes.addAttributes(pyproject, "linguist-generated");
+      project.prettier?.addIgnorePattern(pyproject.slice(1));
+    }
     this.addTasks(project, options);
 
     const interpreterPath = options.interpreterPath ?? "${workspaceFolder}/.venv/bin/python";
@@ -115,81 +210,45 @@ export class DBXToolsPythonWorkspace extends Component {
   private emitWorkspace(
     project: javascript.NodeProject,
     options: DBXToolsPythonWorkspaceOptions,
-  ): void {
-    const devDependencies = options.devDependencies ?? DEFAULT_DEV_DEPENDENCIES;
+  ): python.PyprojectTomlFile {
     const testPaths = options.testPaths ?? [this.repository.root];
-    const ruffTarget = options.ruffTarget ?? "py310";
     const perFileIgnores = options.ruffPerFileIgnores ?? {};
-    new TextFile(project, "pyproject.toml", {
-      marker: false,
-      readonly: true,
-      lines: [
-        '# ~~ Generated by projen. To modify, edit .projenrc.ts and run "bunx projen".',
-        "[project]",
-        `name = ${quote(options.workspaceName ?? `${string.toSlug(project.name)}-python-workspace`)}`,
-        'version = "0.0.0"',
-        `requires-python = ${quote(this.requiresPython)}`,
-        "dependencies = []",
-        "",
-        "[dependency-groups]",
-        `dev = [${devDependencies.map(quote).join(", ")}]`,
-        "",
-        "[tool.uv]",
-        "package = false",
-        "",
-        "[tool.uv.workspace]",
-        `members = [${quote(`${this.repository.root}/*`)}]`,
-        "",
-        "[tool.uv.sources]",
-        ...this.packages.map((pkg) => `${pkg.name} = { workspace = true }`),
-        "",
-        "[tool.pytest.ini_options]",
-        'asyncio_mode = "auto"',
-        `testpaths = [${testPaths.map(quote).join(", ")}]`,
-        "",
-        "[tool.ruff]",
-        `target-version = ${quote(ruffTarget)}`,
-        "line-length = 100",
-        "",
-        "[tool.ruff.lint.per-file-ignores]",
-        ...Object.entries(perFileIgnores).map(
-          ([path, rules]) => `${quote(path)} = [${rules.map(quote).join(", ")}]`,
-        ),
-        "",
-      ],
+    const file = new python.PyprojectTomlFile(project, {
+      project: {
+        name: options.workspaceName ?? `${string.toSlug(project.name)}-python-workspace`,
+        version: "0.0.0",
+        requiresPython: this.requiresPython,
+        dependencies: [],
+      },
+      dependencyGroups: {
+        dev: [...(options.devDependencies ?? DEFAULT_DEV_DEPENDENCIES)],
+      },
+      tool: {
+        uv: python.uvConfig.toJson_UvConfiguration({
+          package: false,
+          workspace: { members: [`${this.repository.root}/*`] },
+        }),
+        pytest: {
+          ini_options: {
+            asyncio_mode: "auto",
+            testpaths: testPaths,
+          },
+        },
+        ruff: {
+          "target-version": options.ruffTarget ?? "py310",
+          "line-length": 100,
+          lint: {
+            "per-file-ignores": perFileIgnores,
+          },
+        },
+      },
     });
-  }
-
-  private emitPackages(project: javascript.NodeProject): void {
-    for (const pkg of this.packages) {
-      new TextFile(project, `${this.packagePath(pkg.directory)}/pyproject.toml`, {
-        marker: false,
-        readonly: true,
-        lines: [
-          '# ~~ Generated by projen. To modify, edit .projenrc.ts and run "bunx projen".',
-          "[project]",
-          `name = ${quote(pkg.name)}`,
-          'version = "0.0.0"',
-          `description = ${quote(pkg.description)}`,
-          'readme = "README.md"',
-          `requires-python = ${quote(this.requiresPython)}`,
-          `dependencies = [${(pkg.dependencies ?? []).map(quote).join(", ")}]`,
-          "",
-          "[project.urls]",
-          `Source = ${quote(`${this.repository.url.replace(/\.git$/, "")}/tree/${this.repository.ref}/${this.packagePath(pkg.directory)}`)}`,
-          "",
-          "[build-system]",
-          'requires = ["uv_build>=0.11.28,<0.12.0"]',
-          'build-backend = "uv_build"',
-          "",
-          "[tool.uv.build-backend]",
-          `module-name = ${quote(pkg.module)}`,
-          'module-root = "src"',
-          "namespace = true",
-          "",
-        ],
-      });
-    }
+    file.addOverride(
+      "tool.uv.sources",
+      Object.fromEntries(options.packages.map((pkg) => [pkg.name, { workspace: true }])),
+    );
+    file.readonly = true;
+    return file;
   }
 
   private addTasks(project: javascript.NodeProject, options: DBXToolsPythonWorkspaceOptions): void {
@@ -247,12 +306,20 @@ export class DBXToolsPythonWorkspace extends Component {
           env: { VERSION: "${{ inputs.version }}" },
           run: this.renderVersionStampScript(),
         },
-        { name: "Build distributions", run: "uv build --all-packages" },
+        {
+          name: "Build distributions",
+          run: this.packages
+            .map(
+              (pkg) =>
+                `uv build --package ${pkg.packageOptions.name} --out-dir dist/${pkg.packageOptions.directory}`,
+            )
+            .join("\n"),
+        },
         {
           name: "Validate distributions",
           run: [
-            `test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq ${this.packages.length * 2}`,
-            "uvx twine check dist/*",
+            `test "$(find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) | wc -l | tr -d ' ')" -eq ${this.packages.length * 2}`,
+            "uvx twine check dist/*/*.whl dist/*/*.tar.gz",
           ].join("\n"),
         },
         {
@@ -262,29 +329,34 @@ export class DBXToolsPythonWorkspace extends Component {
         },
       ],
     });
-    workflow.addJob("publish", {
-      if: "${{ inputs.publish }}",
-      needs: ["build"],
-      environment: {
-        name: options.environment ?? "pypi",
-        url: options.environmentUrl ?? "https://pypi.org/",
-      },
-      runsOn: ["ubuntu-latest"],
-      permissions: { idToken: JobPermission.WRITE },
-      timeoutMinutes: 10,
-      steps: [
-        {
-          name: "Download distributions",
-          uses: "actions/download-artifact@v8",
-          with: { name: "python-distributions", path: "dist" },
+    for (const pkg of this.packages) {
+      workflow.addJob(`publish-${pkg.packageOptions.directory}`, {
+        if: "${{ inputs.publish }}",
+        needs: ["build"],
+        environment: {
+          name:
+            options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
+          url:
+            options.environmentUrl ??
+            `https://pypi.org/project/${pkg.packageOptions.name.replaceAll("_", "-")}/`,
         },
-        {
-          name: "Publish to PyPI",
-          uses: "pypa/gh-action-pypi-publish@release/v1",
-          with: { "packages-dir": "dist" },
-        },
-      ],
-    });
+        runsOn: ["ubuntu-latest"],
+        permissions: { idToken: JobPermission.WRITE },
+        timeoutMinutes: 10,
+        steps: [
+          {
+            name: "Download distributions",
+            uses: "actions/download-artifact@v8",
+            with: { name: "python-distributions", path: "dist" },
+          },
+          {
+            name: `Publish ${pkg.packageOptions.name} to PyPI`,
+            uses: "pypa/gh-action-pypi-publish@release/v1",
+            with: { "packages-dir": `dist/${pkg.packageOptions.directory}` },
+          },
+        ],
+      });
+    }
   }
 
   private renderVersionStampScript(): string {

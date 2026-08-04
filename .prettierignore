@@ -38,6 +38,9 @@
 **/*-lock.yml
 **/*.lock
 projen/index.ts
+packages/py/core/pyproject.toml
+packages/py/postgres/pyproject.toml
+packages/py/model/pyproject.toml
 .eslintrc.json
 .gitattributes
 .github/pull_request_template.md
@@ -55,9 +58,6 @@ projen/index.ts
 .vscode/settings.json
 .vscode/tasks.json
 bunfig.toml
-packages/py/core/pyproject.toml
-packages/py/model/pyproject.toml
-packages/py/postgres/pyproject.toml
 pyproject.toml
 tsconfig.base.json
 tsconfig.json

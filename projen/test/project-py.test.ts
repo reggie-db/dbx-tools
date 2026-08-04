@@ -26,6 +26,7 @@ describe("DBXToolsPythonWorkspace", () => {
       name: "fixture",
       outdir,
       defaultTagMixins: false,
+      github: true,
     });
     assert.equal(project.vsCode?.vsCode, project.vscode);
 
@@ -55,23 +56,41 @@ describe("DBXToolsPythonWorkspace", () => {
       ruffTarget: "py312",
       lintPaths: ["python"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
+      release: true,
     });
 
     project.synth();
 
     const workspace = readFileSync(join(outdir, "pyproject.toml"), "utf8");
-    assert.match(workspace, /members = \["python\/packages\/\*"\]/);
+    assert.match(workspace, /members = \[\s*"python\/packages\/\*"\s*\]/);
     assert.match(workspace, /requires-python = ">=3\.12"/);
-    assert.match(workspace, /target-version = "py312"/);
+    assert.match(workspace, /target[_-]version = "py312"/);
 
     const app = readFileSync(join(outdir, "python/packages/app/pyproject.toml"), "utf8");
     assert.match(
       app,
       /fixture-core @ git\+https:\/\/github\.com\/example\/fixture\.git@main#subdirectory=python\/packages\/core/,
     );
+    assert.doesNotMatch(app, /\[dependency-groups\]/);
 
     const settings = readFileSync(join(outdir, ".vscode/settings.json"), "utf8");
     assert.match(settings, /python\/\.venv\/bin\/python/);
+    const packageJson = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
+      workspaces?: string[];
+    };
+    assert.doesNotMatch(
+      readFileSync(join(outdir, "pnpm-workspace.yaml"), "utf8"),
+      /python\/packages/,
+    );
+    assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
+    const release = readFileSync(join(outdir, ".github/workflows/python-release.yml"), "utf8");
+    assert.match(release, /^  publish-core:$/m);
+    assert.match(release, /^      name: pypi-fixture-core$/m);
+    assert.match(release, /^          packages-dir: dist\/core$/m);
+    assert.match(release, /^  publish-app:$/m);
+    assert.match(release, /^      name: pypi-fixture-app$/m);
+    assert.match(release, /^          packages-dir: dist\/app$/m);
+    assert.doesNotMatch(release, /^  publish:$/m);
     assert.ok(project.tasks.tryFind("py:sync"));
     assert.ok(project.tasks.tryFind("py:build"));
   });

@@ -29,7 +29,7 @@
  */
 import type { javascript } from "projen";
 import { typescript } from "projen";
-import { isDBXToolsProject } from "./project-predicate.ts";
+import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import { addPackageFiles, applyCompilerOptions, applyIncludes } from "./project.ts";
 
 /** Directory `tsc` emits into, and the root of every published entry point. */
@@ -63,7 +63,7 @@ export const COMPILED_COMPILER_OPTIONS: javascript.TypeScriptCompilerOptions = {
  */
 export function publishesCompiled(pkg: javascript.NodeProject): boolean {
   if (!(pkg instanceof typescript.TypeScriptProject) || !pkg.parent) return false;
-  return isDBXToolsProject()(pkg) && !pkg.dbxToolsConfig.tags.includes("ui");
+  return isDBXToolsJavaScriptProject()(pkg) && !pkg.dbxToolsConfig.tags.includes("ui");
 }
 
 /** The `./lib/...` stem of a source path, or `undefined` if it is not TypeScript. */

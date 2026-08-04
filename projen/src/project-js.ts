@@ -1,10 +1,10 @@
 /**
  * The dbx-tools project surface plus package tooling: the single
- * {@link DBXToolsProject} interface, the projen Node/TypeScript project classes,
+ * {@link DBXToolsJavaScriptProject} interface, the projen Node/TypeScript project classes,
  * naming, guards, manifest fields, and the shared root init.
  *
  * {@link DBXToolsNodeProject} (monorepo root) and {@link DBXToolsTypeScriptProject}
- * (a package, or a standalone compiling root) both implement {@link DBXToolsProject}.
+ * (a package, or a standalone compiling root) both implement {@link DBXToolsJavaScriptProject}.
  */
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -41,13 +41,14 @@ import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
+import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
 
 /**
  * The dbx-tools project surface, backed by projen's Node toolchain. A single
  * interface for both the monorepo root and each package: it carries the
  * `dbxToolsConfig` component plus the npm-naming and root-only file components.
  */
-export interface DBXToolsProject extends javascript.NodeProject {
+export interface DBXToolsJavaScriptProject extends DBXToolsProject, javascript.NodeProject {
   /** The package's `dbxToolsConfig` component (tags + `package.json` config). */
   readonly dbxToolsConfig: DBXToolsConfig;
   /** npm scope (the `@scope` in `@scope/pkg`), without the leading `@`. */
@@ -342,7 +343,9 @@ export const PROJEN_VERSION = "^0.101.16";
  * inherits the root's config rather than emitting its own. `name`/`defaultReleaseBranch`
  * are resolved/applied by the caller.
  */
-function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProjectOptions {
+function defaultProjectOptions(
+  options: DBXToolsJavaScriptProjectOptions,
+): DBXToolsJavaScriptProjectOptions {
   const isRoot = options.parent === undefined;
   return {
     // Bun owns install/run/build/test locally and in CI. projen renders
@@ -420,7 +423,7 @@ function defaultProjectOptions(options: DBXToolsProjectOptions): DBXToolsProject
  * pristine array to seed a child's fresh one. Spread AFTER `...options`.
  */
 function copiedGitIgnoreOptions(
-  options: DBXToolsProjectOptions,
+  options: DBXToolsJavaScriptProjectOptions,
 ): Pick<javascript.NodeProjectOptions, "gitIgnoreOptions"> {
   if (!options.gitIgnoreOptions?.ignorePatterns) return {};
   return {
@@ -460,8 +463,9 @@ function defaultTypeScriptProjectOptions(
 const DEV_DEPS_ROOT: string[] = ["typescript@^5.9.3", "@types/bun@^1.3.14"];
 
 /** Options for {@link DBXToolsNodeProject} (the monorepo root). */
-export interface DBXToolsProjectOptions
+export interface DBXToolsJavaScriptProjectOptions
   extends
+    CommonProjectOptions,
     Partial<javascript.NodeProjectOptions>,
     DBXToolsConfigOptions,
     DBXToolsPNPMWorkspaceOptions {
@@ -529,7 +533,7 @@ export interface DBXToolsProjectOptions
 
 /** Options for {@link DBXToolsTypeScriptProject} (a package, or a compiling root). */
 export interface DBXToolsTypeScriptProjectOptions
-  extends Partial<typescript.TypeScriptProjectOptions>, DBXToolsProjectOptions {
+  extends Partial<typescript.TypeScriptProjectOptions>, DBXToolsJavaScriptProjectOptions {
   /** Emit the projen-owned bun app scaffolding (`bunfig.toml`/`dev.ts`/`build.ts`). */
   readonly bunApp?: boolean;
 }
@@ -539,7 +543,11 @@ export interface DBXToolsTypeScriptProjectOptions
  * {@link DBXToolsTypeScriptProject} per `src`-bearing folder, then emits the
  * shared config, tasks, `pnpm-workspace.yaml`, and barrels-on-synth.
  */
-export class DBXToolsNodeProject extends javascript.NodeProject implements DBXToolsProject {
+export class DBXToolsNodeProject
+  extends javascript.NodeProject
+  implements DBXToolsJavaScriptProject
+{
+  readonly language = "javascript" as const;
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
   pnpmWorkspace?: PnpmWorkspaceState;
@@ -548,7 +556,7 @@ export class DBXToolsNodeProject extends javascript.NodeProject implements DBXTo
   private readonly extraWorkspaceMembers: readonly string[];
   private readonly rootInstallOnly: boolean;
 
-  constructor(options: DBXToolsProjectOptions = {}) {
+  constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
     const { name, scope } = resolveIdentity(options);
     const releaseDefaults =
       options.release && options.releaseTrigger === undefined
@@ -622,8 +630,9 @@ export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
  */
 export class DBXToolsTypeScriptProject
   extends typescript.TypeScriptProject
-  implements DBXToolsProject
+  implements DBXToolsJavaScriptProject
 {
+  readonly language = "javascript" as const;
   readonly scope: string;
   readonly dbxToolsConfig: DBXToolsConfig;
   pnpmWorkspace?: PnpmWorkspaceState;
@@ -816,7 +825,7 @@ class PrettierIgnoreGenerated extends Component {
 /** Default leading path segment stripped from a package's name (not its tag). */
 const DEFAULT_OMIT_RELATIVE_PREFIX = ["node"];
 
-/** Normalize the {@link DBXToolsProjectOptions.omitRelativePrefix} option to a slug list. */
+/** Normalize the {@link DBXToolsJavaScriptProjectOptions.omitRelativePrefix} option to a slug list. */
 function resolveOmitRelativePrefix(option: OneOrMany<string> | undefined): string[] {
   const raw = option === undefined ? DEFAULT_OMIT_RELATIVE_PREFIX : option;
   const list = Array.isArray(raw) ? raw : [raw];
@@ -943,7 +952,7 @@ export function taskScript(_project: javascript.NodeProject, script: string, arg
  */
 function initProject(
   project: DBXToolsNodeProject | DBXToolsTypeScriptProject,
-  options: DBXToolsProjectOptions,
+  options: DBXToolsJavaScriptProjectOptions,
 ): void {
   // projen's GithubProject seeds a `# replace this` SampleReadme on every
   // project. READMEs are hand-written and owned outside projen, so drop the
@@ -1101,7 +1110,7 @@ function initProject(
 
   // Already-attached subprojects, keyed by repo-relative member path.
   const rootAbs = resolve(project.outdir);
-  const existing = new Map<string, DBXToolsProject>();
+  const existing = new Map<string, DBXToolsJavaScriptProject>();
   for (const sub of project.subprojects) {
     if (sub instanceof DBXToolsNodeProject || sub instanceof DBXToolsTypeScriptProject) {
       existing.set(toPosix(relative(rootAbs, sub.outdir)), sub);
@@ -1182,7 +1191,7 @@ class ChildGitignore extends IgnoreFile {
  */
 function swapChildGitignore(
   project: javascript.NodeProject,
-  options: DBXToolsProjectOptions,
+  options: DBXToolsJavaScriptProjectOptions,
 ): void {
   project.tryRemoveFile(".gitignore");
   const fresh = new ChildGitignore(project, ".gitignore", {

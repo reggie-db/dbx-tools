@@ -11,7 +11,8 @@ import { IConstruct } from "constructs";
 import { Project } from "projen";
 import { project } from "..";
 import { toPosix } from "./packages.ts";
-import { DBXToolsProject, DBXToolsNodeProject, DBXToolsTypeScriptProject } from "./project-js.ts";
+import type { DBXToolsProject } from "./project.ts";
+import type { DBXToolsJavaScriptProject } from "./project-js.ts";
 
 /**
  * Guard: the construct is a projen {@link Project} - the base every builder here
@@ -27,11 +28,19 @@ export function isProject(): Predicate<IConstruct, Project> {
   return predicate.create((c: IConstruct): c is Project => Project.isProject(c));
 }
 
-/** Guard: the construct is a {@link DBXToolsProject} (a DBXTools Node or TypeScript project). */
+/** Guard: the construct implements the language-agnostic {@link DBXToolsProject} contract. */
 export function isDBXToolsProject(): Predicate<IConstruct, DBXToolsProject> {
   return isProject().and(
     (project): project is DBXToolsProject =>
-      project instanceof DBXToolsNodeProject || project instanceof DBXToolsTypeScriptProject,
+      (project as Partial<DBXToolsProject>).language === "javascript" ||
+      (project as Partial<DBXToolsProject>).language === "python",
+  );
+}
+
+/** Guard: the construct is a dbx-tools JavaScript/TypeScript project. */
+export function isDBXToolsJavaScriptProject(): Predicate<IConstruct, DBXToolsJavaScriptProject> {
+  return isDBXToolsProject().and(
+    (project): project is DBXToolsJavaScriptProject => project.language === "javascript",
   );
 }
 
@@ -97,14 +106,16 @@ export function hasIdentifierScope(
 
 /**
  * Matches DBXTools packages carrying every listed tag (`dbxToolsConfig.tags`), narrowing
- * {@link Project} to {@link DBXToolsProject} (tags live only on DBXTools packages). Also the
+ * {@link Project} to {@link DBXToolsJavaScriptProject} (tags live only on JavaScript packages). Also the
  * guard backing each built-in {@link PACKAGE_TAG_MIXINS} entry. Keep it in the SAME `.and(...)`
  * as any name/path filter (or last when chaining) - a later non-tag `.and` re-widens to
  * {@link Project} and drops the narrowing.
  */
-export function hasTag(...tags: OneOrMany<PathMatchInput>): Predicate<IConstruct, DBXToolsProject> {
+export function hasTag(
+  ...tags: OneOrMany<PathMatchInput>
+): Predicate<IConstruct, DBXToolsJavaScriptProject> {
   const matchers = projectMatchers(...tags);
-  return isDBXToolsProject().and((project) =>
+  return isDBXToolsJavaScriptProject().and((project) =>
     matchers.every((matcher) => project.dbxToolsConfig.tags.some((tag) => matcher(tag))),
   );
 }
