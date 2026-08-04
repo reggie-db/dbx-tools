@@ -258,14 +258,13 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
    *
    * In `"user"` mode (the default) this is `this.asUser(req)` - AppKit's own
    * proxy that runs every call inside `runInUserContext`, so `getExecutionContext()`
-   * returns the caller's OBO client, exactly as before this option existed. In
-   * `"service-principal"` mode it is `this` unwrapped, so the same methods run in
-   * the ambient service context and `getExecutionContext()` returns the app
-   * service principal's client - the same "just don't enter `asUser`" pattern
-   * AppKit's own service-context calls use. One helper covers every workspace
-   * call the chat path makes (serving catalogue, Genie suggestions, `ask_genie`
-   * via the dispatched agent turn, statement fetch, feedback), so the identity
-   * decision lives in one place.
+   * returns the caller's OBO client. In `"service-principal"` mode it is `this`
+   * unwrapped, so the same methods run in the ambient service context and
+   * `getExecutionContext()` returns the app service principal's client - the same
+   * "just don't enter `asUser`" pattern AppKit's own service-context calls use. One
+   * helper covers every workspace call the chat path makes (serving catalogue,
+   * Genie suggestions, `ask_genie` via the dispatched agent turn, statement fetch,
+   * feedback), so the identity decision lives in one place.
    */
   private scopedSelf(req: express.Request): this {
     return useServicePrincipal(this.identityMode, req) ? this : this.asUser(req);

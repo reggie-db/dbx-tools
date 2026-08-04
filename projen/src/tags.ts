@@ -105,7 +105,7 @@ export const PACKAGE_TAG_MIXINS = {
       // generated `dev.ts`/`build.ts` use; no `vite/client`.
       types: ["bun"],
       // `@/` -> `src/` alias, resolved by both tsc and bun's bundler (bun reads
-      // tsconfig `paths`). Replaces the old Vite `resolve.alias` for `@`.
+      // tsconfig `paths`).
       baseUrl: ".",
       paths: { "@/*": ["./src/*"] },
     });

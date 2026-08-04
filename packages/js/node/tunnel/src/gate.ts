@@ -2,10 +2,10 @@
  * The tunnel's in-app AUTH GATE - Express middleware + login routes the
  * {@link AuthGatePlugin} registers on the app's OWN server via `this.context`.
  *
- * This replaces the old standalone reverse-proxy (`proxy.ts`): the app is now the
- * process, so there is nothing to forward to. Instead the gate is middleware that
- * either short-circuits (401, or answers the open login routes) or calls `next()`
- * to let the app's real handlers run. It is the "stands in for AppKit auth" path:
+ * The gate is MIDDLEWARE, not a reverse proxy - the app is the process, so there is
+ * nothing to forward to. It either short-circuits (401, or answers the open login
+ * routes) or calls `next()` to let the app's real handlers run. It is the
+ * "stands in for AppKit auth" path:
  * a portr caller proves an email via OTP, and on success the gate injects the
  * identity headers AppKit reads, so a gated request runs like a front-door one.
  *

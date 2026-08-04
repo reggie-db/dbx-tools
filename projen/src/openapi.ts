@@ -118,7 +118,7 @@ export async function generateOpenapi(): Promise<string[]> {
   const written: string[] = [];
   for (const p of pkgs) {
     // The generated package's folder is the source's leaf folder name (`api`), not
-    // its npm name - `p.name` is now the (possibly-overridden) manifest name.
+    // its npm name - `p.name` is the (possibly-overridden) manifest name.
     const leaf = p.relPath.split("/").pop() ?? p.relPath;
     const outDir = join(repoRoot, p.root, OPENAPI_TAG, leaf);
     const srcDir = join(outDir, "src");

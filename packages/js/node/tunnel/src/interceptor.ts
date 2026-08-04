@@ -3,11 +3,10 @@
  * portr tunnel, consuming the {@link InterceptorContext} `@dbx-tools/appkit`'s
  * `createApp` hands it.
  *
- * This is the in-process replacement for the old `dbxt-tunnel -- <cmd>` wrapper.
- * Instead of the tunnel being the main process that spawns the app as a child, the
- * APP is the main process and hands this interceptor its context. The interceptor
- * applies the computed workspace host, installs and launches portr on the app's
- * public port, binds the child process to the app, and stops portr during an
+ * The tunnel runs IN-PROCESS: the APP is the main process and hands this interceptor
+ * its context, rather than a wrapper process spawning the app as a child. The
+ * interceptor applies the computed workspace host, installs and launches portr on the
+ * app's public port, binds the child process to the app, and stops portr during an
  * orderly AppKit shutdown.
  *
  * The email-OTP GATE is a separate concern: it is the `authGate` AppKit plugin,

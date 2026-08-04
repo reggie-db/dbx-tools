@@ -203,8 +203,8 @@ export function applyTasks(pkg: javascript.NodeProject, tasks?: Record<string, T
  */
 export function applyExports(pkg: javascript.NodeProject, exports: Record<string, string>): void {
   pkg.package.addField("exports", exports);
-  // Keep the legacy entry points honest about the map that just replaced them.
-  // A subpath-only surface (the `ui` tag's `./react` + `./styles.css`) has no
+  // Keep the `main`/`types` entry points consistent with the map. A subpath-only
+  // surface (the `ui` tag's `./react` + `./styles.css`) has no
   // `.` export, so the constructor's `main`/`types` would keep advertising a
   // root entry that every exports-aware resolver ignores - the contradiction
   // publint reports as "exports is missing the root entrypoint".
@@ -673,8 +673,8 @@ export class DBXToolsTypeScriptProject
     // `bun test` intercepts `node:test` (the suites keep using node:test) and
     // runs it with bun's own fast runner. Args are FILTERS, not globs; a bare
     // directory auto-discovers `*.test.ts` recursively. But `bun test` EXITS 1
-    // when it matches no files (unlike the old `tsx --test 'glob'`, which was a
-    // no-op), so guard it: only invoke when a `*.test.ts` exists, else succeed.
+    // when it matches no files, so guard it: only invoke when a `*.test.ts`
+    // exists, else succeed.
     this.testTask.exec("bun test test", {
       condition: 'find test -name "*.test.ts" 2>/dev/null | grep -q .',
     });

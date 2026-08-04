@@ -102,8 +102,7 @@ export interface InterceptorContext {
   /**
    * Supervise a child process alongside the app, concurrently-style: signals pass
    * through, and if EITHER the child or the app dies the whole set comes down.
-   * Generalizes the tunnel's old hand-rolled `superviseExit`. Safe to call for
-   * several children; teardown is idempotent.
+   * Safe to call for several children; teardown is idempotent.
    */
   bindProcess(child: BindableProcess): void;
 }

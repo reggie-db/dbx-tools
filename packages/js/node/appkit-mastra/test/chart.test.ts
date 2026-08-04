@@ -123,8 +123,8 @@ describe("planToEchartsOption", () => {
   });
 
   // A model asked for a bridge often builds the running total itself and
-  // returns it alongside the deltas, which used to render as a plain
-  // two-series bar chart (the base bars dominating the steps).
+  // returns it alongside the deltas. Left in, that renders as a plain
+  // two-series bar chart with the base bars dominating the steps.
   it("ignores a hand-built cumulative base series on a waterfall", () => {
     const option = planToEchartsOption(
       {

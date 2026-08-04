@@ -244,7 +244,7 @@ describe("remote skill caching", () => {
    * workspace API reports a path the caller may not touch as
    * `RESOURCE_DOES_NOT_EXIST`, and `mkdirs` on an existing directory succeeds even
    * then - so nothing before the first real write reveals the problem, and that
-   * write used to abort `setup:complete` and leave the whole agent surface 503.
+   * write would otherwise abort `setup:complete` and leave the whole agent surface 503.
    *
    * The client here is the minimum shape the write path touches: `mkdirs` accepts
    * (as the real API does) and `import` refuses the way Databricks does.

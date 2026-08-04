@@ -3,14 +3,14 @@
  *
  * This project is intentionally a VANILLA projen `TypeScriptProject` - it does
  * NOT build on the dbx-tools engine it ships (no self-hosting), so it can be
- * synthesized and edited without the bootstrap cycle that dogfooding created.
- * It lives inside the repo AND is now a member of the single bun workspace (the
+ * synthesized and edited without the bootstrap cycle dogfooding would create.
+ * It lives inside the repo AND is a member of the single bun workspace (the
  * root lists `projen` via `extraWorkspaceMembers`, since this project synthesizes
  * ITSELF and is not a root subproject).
  *
  * The engine imports three `@dbx-tools/*` utility packages at runtime
  * (`shared-core`, `node-core`, `node-path`). As workspace siblings they are
- * declared `workspace:*` and bun links them from local source - no `.pnpmfile.cjs`.
+ * declared `workspace:*` and bun links them from local source.
  */
 import { readFileSync } from "node:fs";
 import { javascript, typescript } from "projen";
@@ -31,9 +31,8 @@ const PACKAGE_VERSION =
 const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",
   defaultReleaseBranch: "main",
-  // A member of the single bun workspace. No nested `pnpm-workspace.yaml` marker
-  // (that was only to isolate the old standalone workspace); bun resolves the
-  // `workspace:*` sibling deps from the root install.
+  // A member of the single bun workspace. No nested `pnpm-workspace.yaml` marker is
+  // needed - bun resolves the `workspace:*` sibling deps from the root install.
   packageManager: NodePackageManager.BUN,
   // The projenrc runner is reset to `bun` below (bun runs `.ts` directly). This
   // package is `type: module` and `.projenrc.ts` does a directory import

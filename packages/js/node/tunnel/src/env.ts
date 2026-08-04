@@ -3,17 +3,17 @@
  *
  * Every setting is `TUNNEL_`-prefixed, matching the repo convention of naming a
  * variable after the package that owns it (`MASTRA_*`, `TEAMS_*`,
- * `WEB_SEARCH_*`). The gate's original names were unprefixed (`AUTH_SUBJECT`,
- * `PUBLIC_DOMAIN`, ...), which is a real hazard for a package that runs as a
- * WRAPPER: the tunnel and the app it wraps share one environment, so a generic
- * name is one the wrapped app may already use for something else, and
- * `PUBLIC_DOMAIN` in particular reads like an app-wide setting rather than a
- * portr detail. `EMAIL_AUTH_ALLOW` was worse than generic - it sat in
- * `@dbx-tools/email`'s `EMAIL_*` namespace while configuring the gate, not email.
+ * `WEB_SEARCH_*`). The prefix matters most for a package that runs as a WRAPPER:
+ * the tunnel and the app it wraps share one environment, so an unprefixed name
+ * (`AUTH_SUBJECT`, `PUBLIC_DOMAIN`, ...) is one the wrapped app may already use for
+ * something else, and a bare `PUBLIC_DOMAIN` reads like an app-wide setting rather
+ * than a portr detail. A name in ANOTHER package's namespace is worse than generic:
+ * `EMAIL_AUTH_ALLOW` sits in `@dbx-tools/email`'s `EMAIL_*` namespace while
+ * configuring the gate, not email.
  *
  * Each entry is an {@link EnvKey} list, EARLIEST-WINS, whose first element is the
- * current name and whose remaining elements are the deprecated originals. A
- * deployment set up against the old names keeps working; nothing needs a
+ * current name and whose remaining elements are deprecated aliases, so a deployment
+ * configured against an unprefixed name keeps working and nothing needs a
  * coordinated rename. Read them through `env.string` / `env.positiveInt` /
  * `env.list`, which accept the list directly.
  *

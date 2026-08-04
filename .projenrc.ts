@@ -58,9 +58,9 @@ const root = new projectApi.DBXToolsNodeProject({
   // lockfile - does not apply. `setup-bun` does its own caching. Leave off.
   workflowPackageCache: false,
   depsUpgrade: false,
-  // `@dbx-tools/projen` (the engine) lives in `projen/`, now a member of the
-  // single bun workspace, so it links from source via `workspace:*` - no
-  // `.pnpmfile.cjs`. `.projenrc.ts` imports it by source path either way.
+  // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
+  // workspace, so it links from source via `workspace:*`. `.projenrc.ts` imports it
+  // by source path either way.
   devDeps: [
     "concurrently",
     "@dbx-tools/shared-core@workspace:*",
@@ -87,11 +87,10 @@ root.prettier?.addIgnorePattern("projen/index.ts");
 // ---------------------------------------------------------------------------
 // Generated dot-directories
 // ---------------------------------------------------------------------------
-// The engine deliberately no longer blanket-ignores dot-paths - `**/.*` also
-// excluded the DIRECTORIES holding generated files, which silently voided every
-// `!` negation projen emits for them. So the dot-directories this repo actually
-// generates are named here instead. Whole directories, since nothing inside any
-// of them is ever committed.
+// The dot-directories this repo generates are named individually rather than
+// covered by a blanket `**/.*`, which would also exclude the DIRECTORIES holding
+// generated files and silently void every `!` negation projen emits for them.
+// Whole directories, since nothing inside any of them is ever committed.
 root.gitignore.addPatterns(
   ".docs-build/",
   ".astro/",
@@ -525,11 +524,10 @@ project.applyToProjects(root, { identifierName: "shared-mastra", tags: "shared" 
 // below names the input); `src/genie-model.ts` extends those schemas with the
 // fields Genie ships on the wire that the SDK does not type yet.
 //
-// The generated schemas used to be their own `shared-sdk-model` package. They are
-// here now because they were never separable in practice: shared-genie was the
-// only consumer, both are zod-only browser-safe contracts, and the generator
-// happily writes a generated module alongside hand-written ones. Splitting them
-// bought a package boundary and cost an extra hop for every Genie type. The SDK
+// The generated schemas live HERE rather than in a package of their own: shared-genie
+// is their only consumer, both are zod-only browser-safe contracts, and the generator
+// writes a generated module alongside hand-written ones without complaint. A separate
+// package would buy a boundary and cost an extra hop for every Genie type. The SDK
 // stays a devDep - codegen reads its declarations, nothing imports it at runtime.
 project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }, (p) => {
   p.addDeps("zod@catalog:");
@@ -627,7 +625,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
 // AppKit's UI kit (`@databricks/appkit-ui/react`) and the shared stylesheet.
 // `ui`-tagged (React + jsx come from the ui tag). Tailwind v4 is compiled by the
 // `app` tag's `bun-plugin-tailwind`, so this component library ships no bundler
-// preset - the old `./vite` export is gone under bun.
+// preset of its own.
 project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) => {
   p.addDeps(
     "@databricks/appkit-ui@catalog:",
@@ -753,12 +751,12 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 });
 
 // ---------------------------------------------------------------------------
-// Demo app (merged from the former standalone `demo/` workspace)
+// Demo app
 // ---------------------------------------------------------------------------
-// The runnable sample: an AppKit server + a React/Vite-free (bun) client, now
-// members of the single workspace under `packages/example/`. They consume the
-// `@dbx-tools/*` packages as `workspace:*` source siblings (no registry, no
-// `.pnpmfile.cjs` linking) - editing a package is reflected immediately.
+// The runnable sample: an AppKit server + a bun-bundled React client, both members
+// of the single workspace under `packages/example/`. They consume the
+// `@dbx-tools/*` packages as `workspace:*` source siblings rather than from the
+// registry, so editing a package is reflected immediately.
 
 // packages/example/server/appkit-demo: the AppKit server. `server` tag supplies
 // express + the `bun --watch`/`bun` dev/start tasks.

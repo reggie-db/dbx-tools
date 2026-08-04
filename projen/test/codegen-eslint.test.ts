@@ -44,8 +44,8 @@ describe("codegen eslint ignores", () => {
     );
   });
 
-  // The ignore used to be a blanket `<pkg>/src/**`, which assumed a codegen package
-  // is ENTIRELY generated. It is not: shared-genie generates `dashboards.ts` next to
+  // The ignore must name the generated MODULE, not a blanket `<pkg>/src/**`: a codegen
+  // package is not entirely generated - shared-genie generates `dashboards.ts` next to
   // a hand-written `genie-model.ts`. A blanket ignore stops linting the hand-written
   // module, and the symptom is invisible - ESLint simply reports fewer problems.
   it("does not ignore a hand-written module in the same package", () => {

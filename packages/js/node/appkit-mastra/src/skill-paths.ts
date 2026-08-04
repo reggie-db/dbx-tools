@@ -3,9 +3,9 @@
  *
  * Two modules need these paths and must agree on them: `workspaces.ts` MOUNTS
  * them per request (see `DEFAULT_SKILL_FOLDERS`), and `remote-skills.ts`
- * WRITES provisioned skills into them at startup. They were previously spelled
- * out in both, so a change to one silently provisioned skills into a tree the
- * other never scanned.
+ * WRITES provisioned skills into them at startup. They live here rather than being
+ * spelled out in both, where a change to one would silently provision skills into a
+ * tree the other never scanned.
  *
  * @module
  */

@@ -522,7 +522,7 @@ export interface MastraPluginConfig extends BasePluginConfig {
    *
    * - `"user"` (default): always OBO. Per-user attribution, and Genie / Unity
    *   Catalog row filters apply per user. Correct when every caller is a
-   *   workspace member, and unchanged from before this option existed.
+   *   workspace member.
    * - `"service-principal"`: always the app service principal. Needs no OBO
    *   scopes and works for any caller who can open the app, at the cost of
    *   per-user attribution in Genie / Unity Catalog.

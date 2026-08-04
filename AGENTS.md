@@ -617,6 +617,42 @@ Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
 over `packages/js`). It autofixes, so it can reformat too — same timing rule applies:
 run it when finishing up, not between edits.
 
+## Comments describe the code, not the changes to it
+
+A comment is read by someone looking at the CURRENT code, who has no idea what it
+looked like before. Git history already records what changed, so a comment that
+narrates a refactor is noise that ages into a lie. Write every comment as a
+description of how the code behaves NOW and why it is shaped that way.
+
+Do not write, in code or docstrings:
+
+- "replaces the old X", "this is the in-process replacement for Y", "X is gone now";
+- "used to be its own package", "was previously spelled out in both", "before this
+  module the fallback was ...";
+- "the regression this pins", "this fixes ...", "the bug was ...";
+- "now a member of the workspace", "is now the manifest name" — the "now" is only
+  meaningful against a past the reader cannot see;
+- section headers naming a migration (`Demo app (merged from the former ...)`).
+
+The RATIONALE those comments were carrying is usually worth keeping — rewrite it in
+the present tense as a constraint on the current design. A hard-won failure mode
+stays valuable when phrased as what WOULD happen, because that is what stops the
+next person undoing it:
+
+- instead of "the ignore used to be a blanket `<pkg>/src/**`, which broke linting",
+  write "the ignore must name the generated MODULE, not a blanket `<pkg>/src/**`: a
+  codegen package is not entirely generated, and a blanket ignore silently stops
+  linting the hand-written modules beside it";
+- instead of "before this module the key was per-process, so restarts logged
+  everyone out", write "the key must OUTLIVE the process: a per-process key would
+  invalidate every outstanding cookie on restart".
+
+Naming a superseded tool is fine when the tool is still a live consideration
+(`@types/bun` supplies these globals, not `vite/client`), and "legacy"/"deprecated"
+are fine when they describe something the code STILL supports today — a deprecated
+env-var alias it still reads, a legacy transport it still serves. The test is
+whether the sentence is about the code as it stands or about the act of changing it.
+
 ## Vocabulary (important)
 
 - **tag** — a label a package carries (Bit-style; it names the target

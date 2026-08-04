@@ -69,9 +69,9 @@ describe("teams conversation turn", () => {
   });
 
   it("answers first WITHOUT structured output so the agent's tools can run", async () => {
-    // The regression this pins: asking for the answer and the card shape in one
-    // request makes the model format instead of answering, so it never queries
-    // its data sources and the card comes back full of placeholders.
+    // What this pins: asking for the answer and the card shape in ONE request makes
+    // the model format instead of answering, so it never queries its data sources
+    // and the card comes back full of placeholders.
     const calls: { prompt: string; options: Record<string, unknown> }[] = [];
     const agent: CardAgentLike = {
       generate: async (prompt, options) => {

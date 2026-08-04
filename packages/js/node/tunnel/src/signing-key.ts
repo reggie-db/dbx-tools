@@ -1,13 +1,13 @@
 /**
  * The gate's HS256 session-signing key, persisted in AppKit's cache.
  *
- * The key decides whether a session COOKIE still verifies. Before this module the
- * fallback was `randomBytes(32)` per process, so every restart invalidated every
- * outstanding cookie and each signed-in user had to request a new code - painful
- * for a tunnel, which restarts whenever the app it wraps does. Now the key is
- * stored in the cache AppKit already configured (memory, or Lakebase when the
- * host wires a persistent `CacheStorage`), so with persistent storage a restart
- * keeps sessions alive for {@link KEY_TTL_SECONDS}.
+ * The key decides whether a session COOKIE still verifies, so it must OUTLIVE the
+ * process: a per-process `randomBytes(32)` would invalidate every outstanding cookie
+ * on restart and make each signed-in user request a new code - painful for a tunnel,
+ * which restarts whenever the app it wraps does. So the key is stored in the cache
+ * AppKit already configured (memory, or Lakebase when the host wires a persistent
+ * `CacheStorage`), and with persistent storage a restart keeps sessions alive for
+ * {@link KEY_TTL_SECONDS}.
  *
  * An explicitly configured `TUNNEL_AUTH_JWT_SECRET` still wins outright. That is
  * the right answer for a fleet: an operator-held secret needs no shared cache and

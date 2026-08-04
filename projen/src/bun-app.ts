@@ -1,8 +1,8 @@
 /**
  * Bun browser-app scaffolding as first-class projen file components.
  *
- * Replaces the old Vite toolchain (`vite.ts`). An `app`-tagged package gets three
- * generated, read-only files that stand in for `vite dev` / `vite build`:
+ * An `app`-tagged package gets three generated, read-only files that provide its
+ * whole dev/build toolchain:
  *
  * - {@link BunfigFile} - `bunfig.toml` wiring `bun-plugin-tailwind` into both the
  *   dev server (`[serve.static]`) and `Bun.build` (`[build]`) so Tailwind v4's
@@ -17,8 +17,7 @@
  * Each file supports an unmanaged OVERRIDE beside it (`bunfig.override.toml`,
  * `bun-dev.override.ts`, `bun-build.override.ts`): the dev/build scripts import
  * the override's default export and merge it over the generated options, so a
- * package tweaks its server/bundle WITHOUT editing the projen-owned file - the
- * same escape hatch the Vite generator offered via `vite.config.override.*`.
+ * package tweaks its server/bundle WITHOUT editing the projen-owned file.
  *
  * bun runs these `.ts` files directly. Being package-ROOT files (not under
  * `src/`), they are outside the package's `tsconfig` include, so their `Bun.*`
@@ -42,8 +41,7 @@ export const BUN_APP_OVERRIDES = ["bunfig.override.toml", BUN_DEV_OVERRIDE, BUN_
  * rejects passing a value built against one to an API typed by the other
  * ("separate declarations of a private property"). The hoisted linker de-dupes to
  * a single flat copy (npm-style), which is what keeps identity-based singletons
- * (AppKit `CacheManager`, Mastra classes, one React) coherent - the same coherence
- * the old cross-workspace `.pnpmfile.cjs` bridge used to guarantee.
+ * (AppKit `CacheManager`, Mastra classes, one React) coherent.
  */
 export class RootBunfigFile extends TextFile {
   constructor(project: Project) {

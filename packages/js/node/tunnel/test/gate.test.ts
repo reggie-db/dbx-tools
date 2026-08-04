@@ -249,7 +249,8 @@ describe("session force-clear cutoff", () => {
 describe("gate config", () => {
   // The name a recipient reads in the code email must come from the shared brand
   // context, not a hardcoded product string, so a themed app's sign-in mail
-  // matches the app. Pinned because the old default was the literal "This app".
+  // matches the app. Pinned so the default can never regress to a literal like
+  // "This app".
   it("defaults brandName to the brand context name", () => {
     const resolved = resolveAuthGateConfig({});
     assert.equal(resolved.brandName, brand.defaultBrandContext.name);
