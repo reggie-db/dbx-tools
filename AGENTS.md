@@ -1011,6 +1011,44 @@ runs them with its own fast runner). The generated task is
 with no tests a no-op. bun does NOT support `describe()` nested inside `test()`
 (bun issue #5090); keep suites flat.
 
+## Package registries: public npm and PyPI are NOT reachable
+
+This machine has NO route to `registry.npmjs.org` or `pypi.org` - corp blocks
+them, permanently. A direct fetch does not even fail fast with a clean error; it
+hangs and then returns nothing (`curl` exit 7 / HTTP `000`, and `npm view`
+reports a misleading "check your proxy" error). So do NOT read a failed registry
+probe as "the publish did not work":
+
+- **Never verify a release by querying public npm from here.** Read the GitHub
+  Actions `release` run log instead - the `+ <pkg>@<version>` lines and
+  `published N packages @ <version>` are the authoritative confirmation.
+  `gh run view <id> --log` works, because GitHub itself IS reachable.
+- **Do not "fix" a hanging install** by pointing a tool at the public registry,
+  and do not add a registry/index URL to a committed config. What is already
+  configured below is correct.
+
+What is configured, and why:
+
+- **npm/bun -> local verdaccio** at `http://localhost:4873/` (`~/.npmrc`), which
+  proxies the corp mirror `https://npm-proxy.dev.databricks.com/` as its `corp`
+  uplink and caches tarballs on disk. Two reasons it exists: the corp proxy is
+  slow enough to hang mid-transfer on large tarballs (its config carries a 180s
+  timeout and a wide socket pool for exactly that), and it accepts LOCAL
+  publishes (`publish.allow_offline: true`), so a `bun run bump` can be installed
+  and tested without waiting on a public release.
+- **pip/uv -> corp PyPI mirror** `https://pypi-proxy.dev.databricks.com/simple`
+  (`~/.config/pip/pip.conf`, `~/.config/uv/uv.toml`). There is no local Python
+  registry, so Python dependencies resolve through that mirror only.
+
+`bun run bump` publishes to BOTH: the pushed tag triggers the GitHub workflow
+that publishes to public npm (from CI, which is not behind this block), and
+`--local-registry auto` additionally publishes to verdaccio because the
+configured registry is a loopback host.
+
+A Databricks notebook or job is a DIFFERENT network with its own index, which is
+why the Python packages are installed there from a `git+https://github.com/...`
+URL rather than from a published wheel.
+
 ## The `dbx-tools` CLI
 
 `@dbx-tools/cli` ships the `dbx-tools` bin (aliased `dbxt`). It exists for the
