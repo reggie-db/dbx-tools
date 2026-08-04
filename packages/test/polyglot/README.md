@@ -10,9 +10,14 @@ bun run --filter @dbx-tools/test-polyglot test
 
 ## Fixture layout
 
-The test recursively discovers `fixture.json`, `fixture.yaml`, `fixture.yml`, and
-files named `*.fixture.<format>` below `fixtures/`. Contract-specific TypeScript
-or Python runner code is not needed.
+The test recursively discovers every `.json`, `.yaml`, and `.yml` document below
+`fixtures/` except directory defaults named `default.*`. Use descriptive names
+such as `classification.json`.
+
+Top-level fixture directories follow the TypeScript source-of-truth package,
+with contracts nested beneath them where needed. For example, topic-bus fixtures
+live in `fixtures/postgres/bus`, while the Python target is still free to map to
+`dbx_tools.postgres` through inherited defaults.
 
 Each directory may contain one `default.json`, `default.yaml`, or `default.yml`.
 Defaults inherit from the `fixtures/` root toward the fixture and are merged in
@@ -41,6 +46,7 @@ functions:
 A fixture normally groups tests under logical function names:
 
 ```yaml
+description: Stable-key behavior shared by TypeScript and Python.
 functions:
   toStableKey:
     tests:
@@ -75,8 +81,11 @@ adding code to either runner:
 ```
 
 `invoke` adapts options passed first in TypeScript or as Python keyword
-arguments. `result` can normalize Python snake-case object keys to camel case.
-See `schema.json` for the complete fixture contract.
+arguments. The `value` mode reads a constant instead of calling a function.
+`result` can normalize Python snake-case object keys to camel case. Every suite
+should have a concise `description`; add function or test descriptions where the
+name alone does not explain the compatibility rule. See `schema.json` for the
+complete fixture contract.
 
 The harness uses native Bun and uv rather than Pyodide so tests exercise the
 same runtimes and package-resolution paths used in production. Runtime-specific

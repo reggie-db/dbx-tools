@@ -17,6 +17,8 @@
  */
 import { project, project as projectApi } from "@dbx-tools/projen";
 import { TextFile } from "projen";
+import { GithubWorkflow } from "projen/lib/github";
+import { JobPermission } from "projen/lib/github/workflows-model";
 
 const SCOPE = "dbx-tools";
 
@@ -971,6 +973,113 @@ root.addTask("py:build", {
   exec: "uv build --all-packages",
   description: "Build every Python workspace package",
 });
+
+// PyPI is unreachable from the corporate network, so publishing must happen in
+// GitHub Actions. Keep this workflow manual-only: it always builds and validates,
+// while the upload job additionally requires an explicit `publish` input, the
+// protected `pypi` environment, and PyPI Trusted Publishing configuration.
+if (root.github) {
+  const pythonRelease = new GithubWorkflow(root.github, "python-release");
+  pythonRelease.file?.addOverride("permissions", { contents: "read" });
+  pythonRelease.on({ workflowDispatch: {} });
+  pythonRelease.file?.addOverride("on.workflow_dispatch", {
+    inputs: {
+      version: {
+        description: "Python package version to build",
+        type: "string",
+        required: true,
+      },
+      publish: {
+        description: "Upload the validated distributions to PyPI",
+        type: "boolean",
+        default: false,
+      },
+    },
+  });
+  pythonRelease.addJob("build", {
+    runsOn: ["ubuntu-latest"],
+    permissions: { contents: JobPermission.READ },
+    timeoutMinutes: 20,
+    steps: [
+      { name: "Checkout", uses: "actions/checkout@v6" },
+      { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+      {
+        name: "Stamp workspace versions",
+        env: { VERSION: "${{ inputs.version }}" },
+        run: [
+          "chmod -R u+w packages/py",
+          "python - <<'PY'",
+          "from pathlib import Path",
+          "import os",
+          "import re",
+          "",
+          'version = os.environ["VERSION"]',
+          'package_files = sorted(Path("packages/py").glob("*/pyproject.toml"))',
+          "packages = {}",
+          "for path in package_files:",
+          '    source = path.read_text(encoding="utf-8")',
+          '    name = re.search(r\'^name = "([^"]+)"$\', source, re.MULTILINE)',
+          '    if name is None:',
+          '        raise ValueError(f"Missing project name in {path}")',
+          "    packages[name.group(1)] = path.parent.name",
+          "",
+          "for path in package_files:",
+          '    source = path.read_text(encoding="utf-8")',
+          "    source, count = re.subn(",
+          '        r\'^version = "[^"]+"$\',',
+          '        f\'version = "{version}"\',',
+          "        source,",
+          "        count=1,",
+          "        flags=re.MULTILINE,",
+          "    )",
+          "    if count != 1:",
+          '        raise ValueError(f"Expected one project version in {path}")',
+          "    for name, directory in packages.items():",
+          "        source = re.sub(",
+          '            rf\'{re.escape(name)} @ git\\+[^" ]+#subdirectory=packages/py/{re.escape(directory)}\',',
+          '            f"{name}=={version}",',
+          "            source,",
+          "        )",
+          '    path.write_text(source, encoding="utf-8")',
+          "PY",
+        ].join("\n"),
+      },
+      { name: "Build distributions", run: "uv build --all-packages" },
+      {
+        name: "Validate distributions",
+        run: [
+          `test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq ${pythonPackages.length * 2}`,
+          "uvx twine check dist/*",
+        ].join("\n"),
+      },
+      {
+        name: "Upload distributions",
+        uses: "actions/upload-artifact@v7",
+        with: { name: "python-distributions", path: "dist" },
+      },
+    ],
+  });
+  pythonRelease.addJob("publish", {
+    if: "${{ inputs.publish }}",
+    needs: ["build"],
+    environment: { name: "pypi", url: "https://pypi.org/" },
+    runsOn: ["ubuntu-latest"],
+    permissions: { idToken: JobPermission.WRITE },
+    timeoutMinutes: 10,
+    steps: [
+      {
+        name: "Download distributions",
+        uses: "actions/download-artifact@v8",
+        with: { name: "python-distributions", path: "dist" },
+      },
+      {
+        name: "Publish to PyPI",
+        uses: "pypa/gh-action-pypi-publish@release/v1",
+        with: { "packages-dir": "dist" },
+      },
+    ],
+  });
+}
 root.addTask("demo:emitter", {
   exec: `zsh -lc '
     eval "$(

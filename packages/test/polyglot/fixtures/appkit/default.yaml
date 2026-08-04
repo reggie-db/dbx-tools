@@ -1,0 +1,3 @@
+description: Shared AppKit package targets for cross-runtime ports.
+modules:
+  typescript: "@dbx-tools/appkit"

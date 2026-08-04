@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema.json",
+  "description": "Hashing, stable-key, and identifier behavior shared across runtimes.",
   "functions": {
     "fnvHash": {
       "tests": [

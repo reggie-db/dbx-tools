@@ -132,10 +132,15 @@ def _decode_value(value: Any) -> Any:
     return {key: _decode_value(item) for key, item in value.items()}
 
 
-def _resolve_function(module: Any, path: str) -> Callable[..., Any]:
+def _resolve_target(module: Any, path: str) -> Any:
     value = module
     for key in path.split("."):
         value = getattr(value, key)
+
+    return value
+
+
+def _require_callable(value: Any, path: str) -> Callable[..., Any]:
     if not callable(value):
         raise TypeError(f"Not a callable export: {path}")
     return value
@@ -172,13 +177,15 @@ def main() -> None:
         if module is None:
             module = importlib.import_module(target["module"])
             modules[target["module"]] = module
-        function = _resolve_function(module, target["path"])
+        value = _resolve_target(module, target["path"])
         args = [_decode_value(item) for item in case.get("args", [])]
         try:
-            if target["invoke"] == "keywordOptions":
-                result = function(*args, **case.get("options", {}))
+            if target["invoke"] == "value":
+                result = value
+            elif target["invoke"] == "keywordOptions":
+                result = _require_callable(value, target["path"])(*args, **case.get("options", {}))
             elif target["invoke"] == "positional":
-                result = function(*args)
+                result = _require_callable(value, target["path"])(*args)
             else:
                 raise ValueError(f"Unsupported Python invoke mode: {target['invoke']}")
             results.append({"name": case["name"], "result": _normalize(result, target["result"])})

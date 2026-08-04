@@ -1,9 +1,5 @@
 {
-  "$schema": "../../schema.json",
-  "modules": {
-    "typescript": "@dbx-tools/postgres",
-    "python": "dbx_tools.postgres"
-  },
+  "description": "Shared topic-bus channel-name targets for TypeScript and Python.",
   "functions": {
     "channelName": {
       "path": {

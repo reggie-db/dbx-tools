@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema.json",
+  "description": "Structured advisory-lock keys reduce to identical signed 64-bit identifiers.",
   "functions": {
     "advisoryLockId": {
       "tests": [

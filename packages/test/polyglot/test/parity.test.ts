@@ -13,9 +13,10 @@ import {
 const packageRoot = resolve(import.meta.dir, "..");
 const repositoryRoot = resolve(packageRoot, "../../..");
 const fixtureRoot = resolve(packageRoot, "fixtures");
-const fixturePattern = /(?:^|\.)fixture\.(?:json|ya?ml)$/;
 const fixturePaths = recursiveFiles(fixtureRoot)
-  .filter((path) => fixturePattern.test(basename(path)))
+  .filter(
+    (path) => /\.(?:json|ya?ml)$/.test(path) && !/^default\.(?:json|ya?ml)$/.test(basename(path)),
+  )
   .sort();
 
 function run(command: string[], cwd: string): FixtureResult[] {

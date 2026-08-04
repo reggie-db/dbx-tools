@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema.json",
+  "description": "Chat content and message sanitization behavior shared across runtimes.",
   "functions": {
     "chatContentToText": {
       "tests": [

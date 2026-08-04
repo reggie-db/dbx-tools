@@ -1,4 +1,4 @@
-$schema: ../../schema.json
+description: Generated topic-bus channel names remain wire-compatible across runtimes.
 functions:
   channelName:
     tests:

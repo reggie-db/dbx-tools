@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema.json",
+  "description": "Model ranking and endpoint resolution behavior shared across runtimes.",
   "modules": {
     "typescript": "@dbx-tools/model",
     "python": "dbx_tools.model"

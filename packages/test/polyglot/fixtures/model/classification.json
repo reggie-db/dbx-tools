@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema.json",
+  "description": "Model name parsing and capability classification shared across runtimes.",
   "functions": {
     "versionTuple": {
       "tests": [

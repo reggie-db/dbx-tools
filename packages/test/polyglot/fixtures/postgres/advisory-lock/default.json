@@ -1,9 +1,5 @@
 {
-  "$schema": "../../schema.json",
-  "modules": {
-    "typescript": "@dbx-tools/postgres",
-    "python": "dbx_tools.postgres"
-  },
+  "description": "Shared advisory-lock identifier targets for TypeScript and Python.",
   "functions": {
     "advisoryLockId": {
       "path": { "typescript": "advisoryLock.advisoryLockId", "python": "advisory_lock_id" },

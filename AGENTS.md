@@ -505,7 +505,11 @@ classification — belongs in a shared fixture under
 the directory's `default.json`. Language-specific tests stay for
 language-specific concerns (async lifecycle, context-manager cleanup). A drifted
 port then fails as a parity mismatch instead of passing two agreeing-with-itself
-suites.
+suites. Treat the existing TypeScript implementation and its tests as the source
+of truth: port the TypeScript cases into the shared fixture first, then make
+Python satisfy that contract. Avoid changing TypeScript production code or
+expected behavior to accommodate the port; if Python cannot match it cleanly,
+stop and ask before introducing a cross-runtime divergence.
 
 **Prove it installs the way a consumer installs it.** Every Python package must
 stay `pip install`-able by Git `#subdirectory` on its own, so internal
@@ -662,14 +666,23 @@ or YAML fixtures in `packages/test/polyglot`, then compare each generic runtime
 runner to the expected output and to the other runtime. Once common cases move
 there, remove their duplicate assertions from the TypeScript and Python package
 suites; retain only inputs or behavior that truly exist in one runtime. Organize
-each contract as a fixture directory. Put shared TypeScript/Python module names
-and export-path mappings in that directory's `default.json` / `default.yaml`;
-parent defaults inherit into child directories. Group cases under logical
-function names, and use a test-level `module` / `path` override only for an
-exceptional target. The generic runners recursively discover `fixture.json`,
-`fixture.yaml`, and `*.fixture.<format>`, so fixtures and directory defaults must
-be the only contract-specific content: do not add a per-contract emitter or test
-file.
+fixtures by the TypeScript source-of-truth package, then by contract: for
+example, topic-bus cases belong under `fixtures/postgres/bus`, and address-parser
+cases under `fixtures/appkit/pgaddress` even when the Python port is exported by
+`dbx_tools.postgres`. Put shared TypeScript/Python module names and export-path
+mappings in that package or contract directory's `default.json` /
+`default.yaml`; parent defaults inherit into child directories. Group cases
+under logical function names, and use a test-level `module` / `path` override only for an
+exceptional target. Give every fixture suite a concise `description`, and use
+function/test descriptions when the intent is not clear from the name. Include
+constant parity cases when both runtimes independently encode protocol limits,
+wire names, retry bounds, or other compatibility-sensitive values. The generic
+runners recursively discover every JSON/YAML document except `default.*`, so
+fixtures and directory defaults must be the only contract-specific content. A
+small test-only adapter is acceptable when it is the only way to read a private
+TypeScript source-of-truth constant without exporting it from production code;
+do not add a per-contract runtime emitter when the generic harness can address
+the production export directly.
 
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:

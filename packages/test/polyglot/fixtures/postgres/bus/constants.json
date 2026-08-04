@@ -1,0 +1,72 @@
+{
+  "description": "Private topic-bus constants that must remain identical across TypeScript and Python.",
+  "modules": {
+    "typescript": "../test/support/topic-bus-source.ts",
+    "python": "dbx_tools.postgres.topic_bus"
+  },
+  "functions": {
+    "defaultChannel": {
+      "description": "The default LISTEN/NOTIFY channel seed.",
+      "path": {
+        "typescript": "DEFAULT_CHANNEL",
+        "python": "_DEFAULT_CHANNEL"
+      },
+      "invoke": { "typescript": "value", "python": "value" },
+      "tests": [{ "name": "default channel", "expected": "dbx_tools_topic_bus" }]
+    },
+    "maxChannelLength": {
+      "description": "Postgres identifier length limit applied to generated channels.",
+      "path": {
+        "typescript": "MAX_CHANNEL_LENGTH",
+        "python": "_MAX_CHANNEL_LENGTH"
+      },
+      "invoke": { "typescript": "value", "python": "value" },
+      "tests": [{ "name": "maximum channel length", "expected": 63 }]
+    },
+    "channelHashLength": {
+      "description": "Digest characters reserved in generated channel names.",
+      "path": {
+        "typescript": "CHANNEL_HASH_LENGTH",
+        "python": "_CHANNEL_HASH_LENGTH"
+      },
+      "invoke": { "typescript": "value", "python": "value" },
+      "tests": [{ "name": "channel hash length", "expected": 6 }]
+    },
+    "channelFallback": {
+      "description": "Identifier-safe prefix used when a generated channel cannot start directly.",
+      "path": {
+        "typescript": "CHANNEL_FALLBACK",
+        "python": "_CHANNEL_FALLBACK"
+      },
+      "invoke": { "typescript": "value", "python": "value" },
+      "tests": [{ "name": "channel fallback", "expected": "bus" }]
+    },
+    "maxNotifyBytes": {
+      "description": "Conservative encoded payload limit below Postgres's NOTIFY ceiling.",
+      "path": {
+        "typescript": "MAX_NOTIFY_BYTES",
+        "python": "_MAX_NOTIFY_BYTES"
+      },
+      "invoke": { "typescript": "value", "python": "value" },
+      "tests": [{ "name": "maximum notification bytes", "expected": 7900 }]
+    },
+    "minReconnectDelay": {
+      "description": "Initial reconnect backoff in seconds.",
+      "path": {
+        "typescript": "MIN_RECONNECT_DELAY",
+        "python": "_MIN_RECONNECT_DELAY"
+      },
+      "invoke": { "typescript": "value", "python": "value" },
+      "tests": [{ "name": "minimum reconnect delay", "expected": 0.25 }]
+    },
+    "maxReconnectDelay": {
+      "description": "Maximum reconnect backoff in seconds.",
+      "path": {
+        "typescript": "MAX_RECONNECT_DELAY",
+        "python": "_MAX_RECONNECT_DELAY"
+      },
+      "invoke": { "typescript": "value", "python": "value" },
+      "tests": [{ "name": "maximum reconnect delay", "expected": 5.0 }]
+    }
+  }
+}

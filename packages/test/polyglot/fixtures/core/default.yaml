@@ -1,4 +1,4 @@
-$schema: ../../schema.json
+description: Shared deterministic core helper targets for TypeScript and Python.
 modules:
   typescript: "@dbx-tools/shared-core"
   python: dbx_tools.core

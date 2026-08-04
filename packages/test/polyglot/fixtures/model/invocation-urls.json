@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schema.json",
+  "description": "Workspace Model Serving invocation URL selection shared across runtimes.",
   "modules": {
     "typescript": "@dbx-tools/model",
     "python": "dbx_tools.model"

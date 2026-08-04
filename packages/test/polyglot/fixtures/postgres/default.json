@@ -1,0 +1,7 @@
+{
+  "description": "Shared Postgres package targets for TypeScript and Python.",
+  "modules": {
+    "typescript": "@dbx-tools/postgres",
+    "python": "dbx_tools.postgres"
+  }
+}

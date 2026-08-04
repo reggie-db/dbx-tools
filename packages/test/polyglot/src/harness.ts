@@ -3,7 +3,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 
 export type Runtime = "typescript" | "python";
 export type RuntimeValue = string | Partial<Record<Runtime, string>>;
-export type InvokeMode = "positional" | "optionsFirst" | "keywordOptions";
+export type InvokeMode = "positional" | "optionsFirst" | "keywordOptions" | "value";
 export type ResultMode = "identity" | "camelKeys" | "string";
 
 export interface TargetOverrides {
@@ -15,6 +15,7 @@ export interface TargetOverrides {
 
 export interface FixtureCase extends TargetOverrides {
   name: string;
+  description?: string;
   function?: string;
   args?: unknown[];
   options?: Record<string, unknown>;
@@ -23,11 +24,13 @@ export interface FixtureCase extends TargetOverrides {
 }
 
 export interface FunctionDefinition extends TargetOverrides {
+  description?: string;
   tests?: FixtureCase[];
 }
 
 export interface FixtureSuite {
   $schema?: string;
+  description?: string;
   modules?: Partial<Record<Runtime, string>>;
   functions?: Record<string, FunctionDefinition>;
   tests?: FixtureCase[];
@@ -88,15 +91,17 @@ export async function runTypeScriptFixture(suite: FixtureSuite): Promise<Fixture
       moduleCache.get(resolved.target.module) ??
       ((await import(resolved.target.module)) as Record<string, unknown>);
     moduleCache.set(resolved.target.module, module);
-    const callable = resolveFunction(module, resolved.target.path);
     const args = (resolved.test.args ?? []).map(decodeValue);
     try {
+      const target = resolveTarget(module, resolved.target.path);
       const value =
-        resolved.target.invoke === "optionsFirst"
-          ? callable(resolved.test.options ?? {}, ...args)
-          : resolved.target.invoke === "positional"
-            ? callable(...args)
-            : throwUnsupportedInvoke("typescript", resolved.target.invoke);
+        resolved.target.invoke === "value"
+          ? target
+          : resolved.target.invoke === "optionsFirst"
+            ? requireCallable(target, resolved.target.path)(resolved.test.options ?? {}, ...args)
+            : resolved.target.invoke === "positional"
+              ? requireCallable(target, resolved.target.path)(...args)
+              : throwUnsupportedInvoke("typescript", resolved.target.invoke);
       results.push({
         name: resolved.test.name,
         result: normalizeResult(value, resolved.target.result),
@@ -201,14 +206,14 @@ function runtimeValue(value: RuntimeValue | undefined, runtime: Runtime): string
   return typeof value === "string" ? value : value?.[runtime];
 }
 
-function resolveFunction(
-  module: Record<string, unknown>,
-  path: string,
-): (...args: unknown[]) => unknown {
-  const value = path.split(".").reduce<unknown>((current, key) => {
+function resolveTarget(module: Record<string, unknown>, path: string): unknown {
+  return path.split(".").reduce<unknown>((current, key) => {
     if (current === null || typeof current !== "object") return undefined;
     return (current as Record<string, unknown>)[key];
   }, module);
+}
+
+function requireCallable(value: unknown, path: string): (...args: unknown[]) => unknown {
   if (typeof value !== "function") throw new TypeError(`Not a callable export: ${path}`);
   return value as (...args: unknown[]) => unknown;
 }

@@ -1,6 +1,5 @@
-$schema: ../../schema.json
+description: Shared Lakebase and Postgres address parser targets.
 modules:
-  typescript: "@dbx-tools/appkit"
   python: dbx_tools.postgres
 functions:
   parseAddress:
