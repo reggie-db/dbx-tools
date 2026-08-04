@@ -44,8 +44,9 @@
 
 import { randomBytes } from "node:crypto";
 import { CacheManager } from "@databricks/appkit";
-import { env, log, object } from "@dbx-tools/shared-core";
-import { JWT_SECRET_ENV, SESSION_CUTOFF_ENV } from "./env.ts";
+import { config } from "@dbx-tools/core";
+import { log, object } from "@dbx-tools/shared-core";
+import { TUNNEL_CONFIG } from "./_config.ts";
 
 const logger = log.logger("tunnel:signing-key");
 
@@ -85,12 +86,15 @@ interface StoredKey {
  * than not rotating.
  */
 export function resolveSessionCutoff(configured?: string | number | Date): number {
-  const raw = configured ?? env.text(SESSION_CUTOFF_ENV) ?? undefined;
+  const raw =
+    configured ?? config.text(["AUTH_SESSION_CUTOFF", "AUTH_SESSION_EPOCH"], TUNNEL_CONFIG);
   if (raw === undefined || raw === null || raw === "") return 0;
 
   const date = object.toDate(raw);
   if (!date) {
-    logger.warn(`ignoring unparseable ${env.name(SESSION_CUTOFF_ENV)}`, { value: String(raw) });
+    logger.warn(`ignoring unparseable ${config.name("AUTH_SESSION_CUTOFF", TUNNEL_CONFIG)}`, {
+      value: String(raw),
+    });
     return 0;
   }
   return clampToPast(date.getTime());
@@ -106,9 +110,12 @@ export function resolveSessionCutoff(configured?: string | number | Date): numbe
 function clampToPast(cutoffMs: number): number {
   const now = Date.now();
   if (cutoffMs <= now) return cutoffMs;
-  logger.warn(`${env.name(SESSION_CUTOFF_ENV)} is in the future - clamping to now`, {
-    configured: new Date(cutoffMs).toISOString(),
-  });
+  logger.warn(
+    `${config.name("AUTH_SESSION_CUTOFF", TUNNEL_CONFIG)} is in the future - clamping to now`,
+    {
+      configured: new Date(cutoffMs).toISOString(),
+    },
+  );
   return now;
 }
 
@@ -178,7 +185,7 @@ let pending: Promise<SigningKey> | undefined;
 export function signingKey(configuredCutoff?: string | number | Date): Promise<SigningKey> {
   pending ??= (async () => {
     const cutoffMs = resolveSessionCutoff(configuredCutoff);
-    const configured = env.text(JWT_SECRET_ENV);
+    const configured = config.text("AUTH_JWT_SECRET", TUNNEL_CONFIG);
     if (configured) {
       return { key: new TextEncoder().encode(configured), cutoffMs };
     }
@@ -186,7 +193,7 @@ export function signingKey(configuredCutoff?: string | number | Date): Promise<S
       return { key: await loadFromCache(cutoffMs), cutoffMs };
     } catch (error) {
       logger.warn(
-        `no ${env.name(JWT_SECRET_ENV)} and the cache is unavailable - using an ephemeral per-process key; sessions will not survive a restart`,
+        `no ${config.name("AUTH_JWT_SECRET", TUNNEL_CONFIG)} and the cache is unavailable - using an ephemeral per-process key; sessions will not survive a restart`,
         { error },
       );
       return { key: new Uint8Array(randomBytes(KEY_BYTES)), cutoffMs };

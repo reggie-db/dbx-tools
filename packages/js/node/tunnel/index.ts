@@ -4,7 +4,6 @@
 
 export * as allowlist from "./src/allowlist.ts";
 export * as codeEmail from "./src/code-email.ts";
-export * as env from "./src/env.ts";
 export * as gate from "./src/gate.ts";
 export * as headers from "./src/headers.ts";
 export * as interceptor from "./src/interceptor.ts";
@@ -15,9 +14,8 @@ export * as rateLimit from "./src/rate-limit.ts";
 export * as sendCode from "./src/send-code.ts";
 export * as signingKey from "./src/signing-key.ts";
 export type { CodeCopy } from "./src/code-email.ts";
-export { ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, MESSAGE_ENV, SESSION_TTL_ENV, CODE_TTL_ENV, JWT_SECRET_ENV, SESSION_CUTOFF_ENV, PUBLIC_DOMAIN_ENV, INSECURE_ENV, FORWARD_HEADERS_ENV } from "./src/env.ts";
-export { AUTH_PREFIX } from "./src/gate.ts";
-export type { GateOptions } from "./src/gate.ts";
+export { AUTH_PREFIX, UNAUTHORIZED_BODY, LOGOUT_SET_COOKIE } from "./src/gate.ts";
+export type { GateOptions, GateAction } from "./src/gate.ts";
 export { PROTECTED_HEADERS, DEFAULT_FORWARD_HEADERS } from "./src/headers.ts";
 export type { HeaderPolicy } from "./src/headers.ts";
 export type { TunnelInterceptorOptions } from "./src/interceptor.ts";

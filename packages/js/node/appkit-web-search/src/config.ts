@@ -45,8 +45,9 @@
  */
 
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
+import { config as runtimeConfig } from "@dbx-tools/core";
 import { serving } from "@dbx-tools/model";
-import { env, json, object, type OneOrMany, string } from "@dbx-tools/shared-core";
+import { json, object, type OneOrMany, string } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import { parseAllowedUrls, toUrlAllowList, type UrlAllowList } from "./allowlist.ts";
 
@@ -306,8 +307,8 @@ export const WEB_SEARCH_CONFIG_SCHEMA: JSONSchema7 = {
  * silently leave the built-in tool specs in place, so it throws.
  */
 function parseToolsEnv(): Record<string, unknown> {
-  const raw = env.text("WEB_SEARCH_TOOLS");
-  if (raw === null) return {};
+  const raw = runtimeConfig.text("WEB_SEARCH_TOOLS", runtimeConfig.ENV_ONLY);
+  if (raw === undefined) return {};
   const parsed = json.parseRecord(raw);
   if (!parsed) {
     throw new ConfigurationError(
@@ -322,10 +323,12 @@ function parseToolsEnv(): Record<string, unknown> {
 function resolveModelPin(config: WebSearchPluginConfig): { model?: string; source: ModelSource } {
   const fromConfig = string.trimToNull(config.model);
   if (fromConfig !== null) return { model: fromConfig, source: "config" };
-  const fromModelEnv = env.text(MODEL_ENV);
-  if (fromModelEnv !== null) return { model: fromModelEnv, source: MODEL_ENV };
-  const fromResourceEnv = env.text(SERVING_ENDPOINT_ENV);
-  if (fromResourceEnv !== null) return { model: fromResourceEnv, source: SERVING_ENDPOINT_ENV };
+  const fromModelEnv = runtimeConfig.text(MODEL_ENV, runtimeConfig.ENV_ONLY);
+  if (fromModelEnv !== undefined) return { model: fromModelEnv, source: MODEL_ENV };
+  const fromResourceEnv = runtimeConfig.text(SERVING_ENDPOINT_ENV, runtimeConfig.ENV_ONLY);
+  if (fromResourceEnv !== undefined) {
+    return { model: fromResourceEnv, source: SERVING_ENDPOINT_ENV };
+  }
   return { source: "none" };
 }
 
@@ -337,7 +340,7 @@ function resolveUrlPolicy(
   configured: UrlPolicyMode | undefined,
   patterns: readonly string[],
 ): UrlPolicyMode {
-  const raw = configured ?? env.text("WEB_SEARCH_URL_POLICY") ?? undefined;
+  const raw = configured ?? runtimeConfig.text("WEB_SEARCH_URL_POLICY", runtimeConfig.ENV_ONLY);
   if (raw === undefined) return patterns.length > 0 ? "allowlist" : "unrestricted";
   if (raw !== "allowlist" && raw !== "unrestricted") {
     throw new ConfigurationError(
@@ -395,34 +398,54 @@ export function resolveWebSearchConfig(
   config: WebSearchPluginConfig = {},
 ): ResolvedWebSearchConfig {
   const patterns = parseAllowedUrls(
-    config.allowedUrls ?? env.text("WEB_SEARCH_ALLOWED_URLS") ?? undefined,
+    config.allowedUrls ?? runtimeConfig.text("WEB_SEARCH_ALLOWED_URLS", runtimeConfig.ENV_ONLY),
   );
   const urlPolicy = resolveUrlPolicy(config.urlPolicy, patterns);
   const { model, source } = resolveModelPin(config);
-  const fallbacks = env.list(config.modelFallbacks, "WEB_SEARCH_MODEL_FALLBACKS");
+  const fallbacks = runtimeConfig.list(
+    config.modelFallbacks,
+    "WEB_SEARCH_MODEL_FALLBACKS",
+    undefined,
+    runtimeConfig.ENV_ONLY,
+  );
   return {
     ...(model ? { model } : {}),
     modelSource: source,
     modelFallbacks: fallbacks.length > 0 ? fallbacks : DEFAULT_MODEL_FALLBACKS,
     webSearchTools: { ...parseToolsEnv(), ...(config.webSearchTools ?? {}) },
-    fuzzy: env.boolean(config.modelFuzzyMatch, "WEB_SEARCH_FUZZY") ?? true,
-    fuzzyThreshold: env.positiveNumber(
+    fuzzy:
+      runtimeConfig.boolean(config.modelFuzzyMatch, "WEB_SEARCH_FUZZY", runtimeConfig.ENV_ONLY) ??
+      true,
+    fuzzyThreshold: runtimeConfig.positiveNumber(
       config.modelFuzzyThreshold,
       "WEB_SEARCH_FUZZY_THRESHOLD",
       serving.DEFAULT_FUZZY_THRESHOLD,
+      runtimeConfig.ENV_ONLY,
     ),
-    maxCitations: env.positiveInt(
+    maxCitations: runtimeConfig.positiveInt(
       config.maxCitations,
       "WEB_SEARCH_MAX_CITATIONS",
       DEFAULT_MAX_CITATIONS,
+      runtimeConfig.ENV_ONLY,
     ),
-    fetchMaxLength: env.positiveInt(
+    fetchMaxLength: runtimeConfig.positiveInt(
       config.fetchMaxLength,
       "WEB_SEARCH_FETCH_MAX_LENGTH",
       DEFAULT_FETCH_MAX_LENGTH,
+      runtimeConfig.ENV_ONLY,
     ),
-    timeoutMs: env.positiveInt(config.timeoutMs, "WEB_SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
-    scrapeFallback: env.boolean(config.scrapeFallback, "WEB_SEARCH_SCRAPE_FALLBACK") ?? true,
+    timeoutMs: runtimeConfig.positiveInt(
+      config.timeoutMs,
+      "WEB_SEARCH_TIMEOUT_MS",
+      DEFAULT_TIMEOUT_MS,
+      runtimeConfig.ENV_ONLY,
+    ),
+    scrapeFallback:
+      runtimeConfig.boolean(
+        config.scrapeFallback,
+        "WEB_SEARCH_SCRAPE_FALLBACK",
+        runtimeConfig.ENV_ONLY,
+      ) ?? true,
     urlPolicy,
     allowList: toUrlAllowList(urlPolicy === "allowlist" ? patterns : []),
     approval: toApprovalPolicy(config.approval),

@@ -29,6 +29,7 @@ import { async as asyncUtil, error, hash, json, object, string } from "@dbx-tool
 import type { Notification, PoolClient } from "pg";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
+import { cleanupExpired, history, persistedNotify, provisionMessageBusSchema, resolvePersistenceOptions, type DurationInput, type ResolvedTopicBusPersistenceOptions, type TopicBusPersistenceOptions, type TopicHistoryPage, type TopicPersistenceScope } from "./persistence.ts";
 
 /**
  * `@dbx-tools/shared-core` owns the JSON-round-trip rule; this alias just keeps the
@@ -130,6 +131,8 @@ export interface TopicPublishInput<TBody extends SerializableValue = Serializabl
   metadata?: TopicMetadata;
   /** The payload. Must satisfy `object.isSerializableValue`. */
   body: TBody;
+  scope?: TopicPersistenceScope;
+  ttl?: DurationInput | false;
 }
 
 /**
@@ -185,6 +188,7 @@ export interface PostgresTopicBusOptions {
    * swallowing them, so wire this to a logger in anything long-running.
    */
   onError?: (cause: unknown) => void;
+  persist?: boolean | TopicBusPersistenceOptions;
 }
 
 /**
@@ -397,6 +401,8 @@ export class PostgresTopicBus {
   private reconnecting: Promise<void> | undefined;
   private readonly reconnectAbort = new AbortController();
   private closed = false;
+  private readonly persistence?: ResolvedTopicBusPersistenceOptions;
+  private provisioning?: Promise<void>;
 
   constructor(
     private readonly pool: PgPoolLike & PgQueryable,
@@ -407,6 +413,7 @@ export class PostgresTopicBus {
     );
     this.metadata = options.metadata;
     this.onError = options.onError ?? (() => undefined);
+    this.persistence = options.persist ? resolvePersistenceOptions(options.persist === true ? true : options.persist) : undefined;
   }
 
   /**
@@ -472,11 +479,40 @@ export class PostgresTopicBus {
     if (!decode(encoded)) {
       throw new TypeError("Message type, metadata, and body must be JSON serializable");
     }
-    if (Buffer.byteLength(encoded, "utf8") > MAX_NOTIFY_BYTES) {
+    if (Buffer.byteLength(encoded, "utf8") > MAX_NOTIFY_BYTES && this.persistence?.payload !== "pointer") {
       throw new RangeError(`Postgres notification exceeds ${MAX_NOTIFY_BYTES} bytes`);
     }
-    await this.pool.query("SELECT pg_notify($1, $2)", [this.channelName, encoded]);
+    if (!this.persistence) await this.pool.query("SELECT pg_notify($1, $2)", [this.channelName, encoded]);
+    else {
+      if (this.persistence.provision) {
+        this.provisioning ??= provisionMessageBusSchema(this.pool, this.persistence);
+        await this.provisioning;
+      }
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        await persistedNotify(client, this.channelName, topic, message, encoded, this.persistence, input.scope ?? this.persistence.scope, input.ttl ?? this.persistence.ttl);
+        await client.query("COMMIT");
+      } catch (cause) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw cause;
+      } finally { client.release(); }
+    }
     return message;
+  }
+
+  async history<TBody extends SerializableValue>(topic: string, options: { after?: string; limit?: number; scope?: TopicPersistenceScope } = {}): Promise<TopicHistoryPage<TBody>> {
+    if (!this.persistence) throw new Error("Postgres topic bus persistence is disabled");
+    if (this.persistence.provision) {
+      this.provisioning ??= provisionMessageBusSchema(this.pool, this.persistence);
+      await this.provisioning;
+    }
+    return history<TBody>(this.pool, this.channelName, topic, this.persistence, options);
+  }
+
+  async cleanupExpired(options: { scope?: TopicPersistenceScope; limit?: number } = {}): Promise<number> {
+    if (!this.persistence) throw new Error("Postgres topic bus persistence is disabled");
+    return cleanupExpired(this.pool, this.persistence, options.scope ?? this.persistence.scope, options.limit);
   }
 
   /**

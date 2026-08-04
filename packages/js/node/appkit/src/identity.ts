@@ -53,7 +53,8 @@
  */
 
 import { ConfigurationError } from "@databricks/appkit";
-import { env, string, token, type EnvKey } from "@dbx-tools/shared-core";
+import { config } from "@dbx-tools/core";
+import { string, token } from "@dbx-tools/shared-core";
 
 /**
  * Header the Databricks Apps front door forwards the caller's OBO token on.
@@ -100,11 +101,11 @@ export interface HeaderBearing {
  */
 export function resolveIdentityMode(
   configured: string | undefined,
-  envKeys: EnvKey,
+  envKeys: string | readonly string[],
   field = "identity",
 ): IdentityMode {
-  const raw = env.string(configured, envKeys);
-  if (raw === null) return DEFAULT_IDENTITY_MODE;
+  const raw = config.string(configured, envKeys, config.ENV_ONLY);
+  if (raw === undefined) return DEFAULT_IDENTITY_MODE;
   const mode = raw.toLowerCase() as IdentityMode;
   if (!IDENTITY_MODES.includes(mode)) {
     const names = typeof envKeys === "string" ? envKeys : envKeys.join(" / ");

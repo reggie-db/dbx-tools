@@ -130,9 +130,14 @@ Primary package areas:
   workspace/cloud/Zerobus infrastructure helpers.
 - `packages/js/shared/core`, `packages/js/node/core`, and `packages/js/node/path`
   — cross-runtime and Node utility foundations.
-- `packages/py/core` — dependency-free Python identity helpers shared by Python
-  packages. Keep this base deliberately small so importing a hash, stable key,
-  or identifier formatter does not pull database/runtime dependencies with it.
+- `packages/py/core` — dependency-free Python configuration and identity helpers
+  shared by Python packages. Its `config` module mirrors
+  `packages/js/node/core/src/config.ts`: scoped environment lookup, project-root
+  `.env` discovery, lazy `databricks bundle validate --output json` fallback,
+  Databricks App detection, and the same string/boolean/positive-number/list
+  coercions. Keep this base deliberately small so importing config, a hash,
+  stable key, or identifier formatter does not pull database/runtime
+  dependencies with it.
 - `packages/py/postgres` — Python Lakebase/Postgres address parsing and
   WorkspaceClient-backed connection resolution, sync/async advisory locks, and
   the async topic bus. It is the port of ONE Node package
@@ -602,11 +607,11 @@ second package, put it in shared-core rather than duplicating it.
   `match.toPathMatcher` instead.
 - `async` - `sleep`, `tieAbortSignal`, `poll`. Do not import
   `node:timers/promises` for a delay.
-- `env` - `text` / `string` / `boolean` / `positiveInt` / `list` over an `EnvKey`
-  (one name, or an earliest-wins alias list), plus `name(keys)` for the primary
-  variable name when a log or error mentions it. Never index `keys[0]`: an
-  `EnvKey` may be a bare string, so that yields its first CHARACTER and names a
-  variable that does not exist.
+- `@dbx-tools/core` `config` - Node configuration through process env,
+  environment-specific `.env` files, and Databricks bundle App config or root
+  variables. `scope` and `prefix` compose names in that order; `text` /
+  `string` / `boolean` / `positiveInt` / `list` share one coercion and
+  precedence policy. Keep configuration out of browser-safe shared-core.
 - `error` (`toError` / `errorMessage` / `errorContext`), `log.logger`,
   `hash.id` (id generation - no `nanoid`), `net.urlBuilder`,
   `http.createFetchError`, `function.memoize`, `predicate`, `token`.

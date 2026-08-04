@@ -10,7 +10,6 @@ namespaces so call sites stay explicit:
 import {
   async,
   brand,
-  env,
   error,
   hash,
   http,
@@ -155,41 +154,6 @@ segments. `trimToNull()` / `trimToEmpty()` / `firstNonEmpty()` coerce an unknown
 field off parsed JSON. `parseList()` normalizes a config value that may arrive as
 an array or as one comma/whitespace-separated env string, de-duplicating as it
 goes.
-
-## Configuration From The Environment
-
-```ts
-const config = {
-  isDatabricksApp: env.isAppEnv(),
-  host: env.string(options.host, "SMTP_HOST"),
-  // Several names for one setting; earlier names win.
-  appId: env.string(options.appId, ["TEAMS_APP_ID", "MICROSOFT_APP_ID"]),
-  timeoutMs: env.positiveInt(options.timeoutMs, "SEARCH_TIMEOUT_MS", 30_000),
-  threshold: env.positiveNumber(options.threshold, "FUZZY_THRESHOLD", 0.4),
-  fuzzy: env.boolean(options.fuzzy, "SEARCH_FUZZY") ?? true,
-  fallbacks: env.list(options.fallbacks, "MODEL_FALLBACKS"),
-};
-```
-
-Every plugin resolves config the same way - the caller's typed value, else one or
-more environment variables, else a default - and hand-writing that chain per
-field is how `config.x ?? Number(process.env.X)` bugs get in. `positiveInt()`
-floors, so a count cannot go fractional; `positiveNumber()` keeps the fraction
-for a threshold or ratio. `boolean()` goes through `object.toBoolean()`, so the
-loose spellings an env var actually carries (`1`, `on`, `yes`) are accepted, and
-returns `undefined` when neither source is interpretable so `??` picks the
-default. A name that is SET but unusable is not skipped for a later name in the
-chain - ignoring what a deployment explicitly configured hides the mistake.
-
-Browser-safe: `process` is reached through `globalThis` and guarded, so every
-lookup simply misses off-process and the caller's fallback applies.
-`isAppEnv()` checks the required Databricks App name, workspace host, and valid
-TCP port shape without adding Node types to this shared package.
-
-Pair it with `object.optional()` when a resolved value is an optional field -
-`...object.optional("endpoint", env.string(...))` keeps an absent field ABSENT
-rather than setting it to an explicit `undefined`, which
-`exactOptionalPropertyTypes` rejects.
 
 ## Objects And Predicates
 
@@ -442,10 +406,6 @@ without paying formatting cost when disabled.
   field spreading, deep equality, JSON-round-trip guards
   (`isSerializableValue`), canonical identity keys (`toStableKey`), shape types,
   and lazy sequence transforms + collection helpers.
-- `env` - config-over-environment resolution, Databricks App runtime detection,
-  and TCP port bounds. `name()` gives the primary variable name for a log line
-  or error - an `EnvKey` may be a bare string, so indexing `keys[0]` yields a
-  character, not a name.
 - `predicate` - composable boolean/type predicates.
 - `pattern` - literal / glob / `/regex/` allow-list matching compiled to a
   predicate.

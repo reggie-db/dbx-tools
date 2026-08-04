@@ -10,13 +10,6 @@ import {
   codeEmailTextBody,
   expiresIn,
 } from "../src/code-email.ts";
-import {
-  ALLOW_ENV,
-  BRAND_NAME_ENV,
-  CODE_TTL_ENV,
-  SESSION_CUTOFF_ENV,
-  SUBJECT_ENV,
-} from "../src/env.ts";
 import { CodeStore, signSession, verifySession } from "../src/otp.ts";
 import { resolveAuthGateConfig } from "../src/plugin.ts";
 import { RateLimiter } from "../src/rate-limit.ts";
@@ -332,14 +325,6 @@ describe("env var names", () => {
         assert.equal(resolveAuthGateConfig({}).brandName, "Current");
       });
     });
-  });
-
-  it("lists the current name first in every alias list", () => {
-    // `env.*` is earliest-wins, so ordering IS the deprecation policy.
-    for (const keys of [ALLOW_ENV, SUBJECT_ENV, BRAND_NAME_ENV, CODE_TTL_ENV, SESSION_CUTOFF_ENV]) {
-      assert.ok(Array.isArray(keys));
-      assert.match(keys[0]!, /^TUNNEL_/);
-    }
   });
 });
 

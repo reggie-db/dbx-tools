@@ -2,7 +2,7 @@
  * Generic Databricks SDK glue (no AppKit): adapt WHATWG cancellation
  * (`AbortSignal` / `AbortController`) into the SDK's `Context` /
  * `CancellationToken` shapes so a single `AbortController` can drive every
- * in-flight SDK call, plus Databricks runtime-environment detection.
+ * in-flight SDK call.
  *
  * Server-only: leans on the Databricks SDK `Context`. Lives in node-appkit so
  * the browser-safe shared-core stays SDK-free.
@@ -12,26 +12,7 @@
 
 import type { CancellationToken } from "@databricks/sdk-experimental";
 import { Context } from "@databricks/sdk-experimental";
-import { async, env as envUtil } from "@dbx-tools/shared-core";
-
-/** Highest valid TCP port number. */
-export const MAX_TCP_PORT = envUtil.MAX_TCP_PORT;
-
-/**
- * Detect the Databricks App runtime from environment shape: requires a
- * non-empty `DATABRICKS_APP_NAME`, a `DATABRICKS_HOST` that parses as an
- * `http`/`https` URL, and a `DATABRICKS_APP_PORT` that is a valid TCP port.
- * Reads `process.env` when no `env` is passed.
- *
- * @example
- * import { databricks } from "@dbx-tools/appkit";
- *
- * // Skip bundle / app.yaml discovery when the app is already deployed.
- * const local = !databricks.isAppEnv();
- */
-export function isAppEnv(env: Record<string, string | undefined> = process.env): boolean {
-  return envUtil.isAppEnv(env);
-}
+import { async } from "@dbx-tools/shared-core";
 
 /** Either an SDK `Context` or a WHATWG `AbortSignal`. */
 export type ContextLike = Context | AbortSignal;

@@ -32,6 +32,7 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { config } from "@dbx-tools/core";
 import { async as asyncUtil, error, json, log, object, string } from "@dbx-tools/shared-core";
 import {
   classify,
@@ -91,7 +92,7 @@ const RESPONSES_PATHS = new Set(["/v1/responses", "/responses"]);
  * waiting on a release of this package.
  */
 function extraDropFields(): string[] {
-  return string.parseList(process.env.PROXY_DROP_FIELDS);
+  return string.parseList(config.text("PROXY_DROP_FIELDS", config.ENV_ONLY));
 }
 
 /** Options shared by {@link createProxyServer} and {@link startProxyServer}. */

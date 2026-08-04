@@ -22,10 +22,11 @@
  * @module
  */
 
+import type { IncomingMessage } from "node:http";
 import { http, json, log, token } from "@dbx-tools/shared-core";
 import { authRequestSchema, authVerifySchema, SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
 import type { Request, RequestHandler, Response } from "express";
-import { toHeaderPolicy } from "./headers.ts";
+import { toHeaderPolicy, type HeaderPolicy } from "./headers.ts";
 import type { AuthGateApi } from "./plugin.ts";
 
 const logger = log.logger("tunnel:gate");
@@ -56,7 +57,7 @@ export interface GateOptions {
  * over portr. Case-insensitive; the optional `:port` is ignored. When no public
  * domain is configured, nothing is tunnel traffic.
  */
-export function isTunnelHost(req: Request, publicDomain: string | undefined): boolean {
+export function isTunnelHost(req: IncomingMessage, publicDomain: string | undefined): boolean {
   if (!publicDomain) return false;
   const host = (req.headers.host ?? "").toLowerCase().split(":")[0];
   return host === publicDomain.toLowerCase().split(":")[0];
@@ -84,7 +85,7 @@ function sessionCookie(value: string, maxAgeSeconds: number): string {
  * rightmost, not the leftmost, stops a caller minting a fresh rate-limit bucket by
  * varying the header. Called before {@link stripHeaders}.
  */
-function clientIp(req: Request): string {
+export function clientIp(req: IncomingMessage): string {
   const forwarded = req.headers["x-forwarded-for"];
   const chain = (Array.isArray(forwarded) ? forwarded.join(",") : (forwarded ?? ""))
     .split(",")
@@ -98,7 +99,7 @@ function clientIp(req: Request): string {
  * handlers run, so the app never sees `dbx_auth` (it is the gate's concern).
  * Preserves other cookies; deletes the header when it becomes empty.
  */
-function stripSessionCookie(req: Request): void {
+function stripSessionCookie(req: IncomingMessage): void {
   const raw = req.headers.cookie;
   if (!raw) return;
   const kept = raw
@@ -120,7 +121,7 @@ function stripSessionCookie(req: Request): void {
  * `@dbx-tools/appkit`'s `identity: "auto"` detects, so a gated request runs as the
  * app service principal instead of throwing.
  */
-function injectIdentity(req: Request, email: string): void {
+function injectIdentity(req: IncomingMessage, email: string): void {
   req.headers[token.USER_ID_HEADER] = email;
   req.headers[token.USER_EMAIL_HEADER] = email;
 }
@@ -146,6 +147,80 @@ function readBody(req: Request): Promise<string> {
 }
 
 /**
+ * What the caller should do with a request, from {@link gateRequest}.
+ *
+ *   - `pass` - not tunnel traffic, or an open login route. Forward untouched.
+ *   - `allow` - tunnel traffic that is authorized. The request's headers have
+ *     ALREADY been rewritten (policy applied, identity injected, session cookie
+ *     stripped), so forward it as it now stands.
+ *   - `deny` - tunnel traffic with no valid session. Answer `401` with
+ *     {@link AUTH_PREFIX} as the login path.
+ */
+export type GateAction = "pass" | "allow" | "deny";
+
+/**
+ * THE gating decision, for one request, independent of how it will be answered.
+ *
+ * Both paths call this: the Express middleware below (where the app is the
+ * process) and `@dbx-tools/cli-tunnel`'s reverse proxy (where the app is a child
+ * process on a private port). A divergence between them would be a security bug
+ * the second path could not be tested into agreement - one path forgetting to
+ * strip `x-forwarded-access-token` is enough - so the decision, the header
+ * rewriting, and the identity injection live here once and the transports only
+ * differ in how they WRITE the outcome.
+ *
+ * Mutates `req.headers` on the `allow`/`pass`-with-cookie paths, which is exactly
+ * what both callers want: Express hands the same object to the app's handlers, and
+ * the proxy forwards it upstream.
+ */
+export async function gateRequest(
+  req: IncomingMessage,
+  options: GateOptions & { headerPolicy?: HeaderPolicy },
+): Promise<GateAction> {
+  const { gate, publicDomain } = options;
+  // Not tunnel traffic (platform front door, or any other local caller): the
+  // request is already authenticated, or is not ours to gate.
+  if (!isTunnelHost(req, publicDomain)) return "pass";
+
+  const path = (req.url ?? "/").split("?")[0] ?? "/";
+  // The login flow is open so the browser can render <AuthGate> and sign in.
+  if (path.startsWith(AUTH_PREFIX)) return "pass";
+
+  // Anti-spoof: only the gate may assert identity on tunnel traffic.
+  const policy = options.headerPolicy ?? toHeaderPolicy(options.forwardHeaders);
+  const removed = policy.apply(req.headers as Record<string, unknown>);
+  if (removed.length) logger.debug("stripped inbound headers", { removed });
+
+  // Static (non-API) loads freely so the SPA can render; drop the gate cookie.
+  if (!path.startsWith("/api/")) {
+    stripSessionCookie(req);
+    return "pass";
+  }
+
+  // Every other /api/* needs a valid OTP session.
+  const cookie = http.parseCookies(req.headers.cookie ?? null)[SESSION_COOKIE_NAME];
+  const email = await gate.session(cookie);
+  if (!email) return "deny";
+  injectIdentity(req, email);
+  stripSessionCookie(req);
+  return "allow";
+}
+
+/** The body of a `deny`, shared so both paths answer a 401 identically. */
+export const UNAUTHORIZED_BODY = {
+  error: "authentication required",
+  loginPath: AUTH_PREFIX,
+} as const;
+
+/** The `Set-Cookie` value that issues a verified session. */
+export function sessionSetCookie(sessionToken: string, maxAgeSeconds: number): string {
+  return sessionCookie(sessionToken, maxAgeSeconds);
+}
+
+/** The `Set-Cookie` value that clears the session. */
+export const LOGOUT_SET_COOKIE = `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`;
+
+/**
  * Register the login routes and the gating middleware on the app's Express
  * instance. Called from {@link AuthGatePlugin} with the router AppKit hands
  * `injectRoutes`, plus `this.context.addMiddleware` for the global gate.
@@ -162,11 +237,6 @@ export function mountGate(
   const { gate, publicDomain, forwardHeaders } = opts;
   const headerPolicy = toHeaderPolicy(forwardHeaders);
   logger.debug("gate mounted", { publicDomain, forward: headerPolicy.patterns });
-
-  const applyHeaderPolicy = (req: Request): void => {
-    const removed = headerPolicy.apply(req.headers as Record<string, unknown>);
-    if (removed.length) logger.debug("stripped inbound headers", { removed });
-  };
 
   // --- Login routes (open on tunnel traffic; answered in-process) ---
 
@@ -216,7 +286,7 @@ export function mountGate(
       sendJson(res, 404, { error: "not found" });
       return;
     }
-    sendJson(res, 200, { ok: true }, `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`);
+    sendJson(res, 200, { ok: true }, LOGOUT_SET_COOKIE);
   }) as RequestHandler;
 
   addRoute("get", `${AUTH_PREFIX}/status`, statusHandler);
@@ -227,34 +297,9 @@ export function mountGate(
   // --- The gate middleware (runs before static + the app's /api handlers) ---
 
   const gateMiddleware = (async (req, res, next) => {
-    // Not tunnel traffic (platform front door, or any other local caller): the
-    // request is already authenticated (or is not ours to gate). Pass through.
-    if (!isTunnelHost(req, publicDomain)) return next();
-
-    const path = (req.url ?? "/").split("?")[0] ?? "/";
-
-    // The login flow is open so the browser can render <AuthGate> and sign in.
-    if (path.startsWith(AUTH_PREFIX)) return next();
-
-    // Anti-spoof: only the gate may assert identity on tunnel traffic.
-    applyHeaderPolicy(req);
-
-    // Static (non-API) loads freely so the SPA can render; drop the gate cookie.
-    if (!path.startsWith("/api/")) {
-      stripSessionCookie(req);
-      return next();
-    }
-
-    // Every other /api/* needs a valid OTP session.
-    const cookie = http.parseCookies(req.headers.cookie ?? null)[SESSION_COOKIE_NAME];
-    const email = await gate.session(cookie);
-    if (!email) {
-      sendJson(res, 401, { error: "authentication required", loginPath: AUTH_PREFIX });
-      return;
-    }
-    injectIdentity(req, email);
-    stripSessionCookie(req);
-    next();
+    const action = await gateRequest(req, { gate, publicDomain, headerPolicy });
+    if (action === "deny") sendJson(res, 401, UNAUTHORIZED_BODY);
+    else next();
   }) as RequestHandler;
 
   addMiddleware("/", gateMiddleware);

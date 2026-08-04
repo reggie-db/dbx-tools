@@ -23,7 +23,8 @@
  */
 
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
-import { env, object, string } from "@dbx-tools/shared-core";
+import { config as runtimeConfig } from "@dbx-tools/core";
+import { object, string } from "@dbx-tools/shared-core";
 import type { SearchDocument, SearchMode } from "@dbx-tools/shared-search";
 import type { JSONSchema7 } from "json-schema";
 
@@ -237,7 +238,7 @@ function toResolvedIndex(entry: string | SearchIndexConfig): ResolvedIndexConfig
 
 /** Parse and validate a {@link SearchMode} from config or an env var. */
 function resolveMode(configured: SearchMode | undefined): SearchMode {
-  const raw = configured ?? env.text("SEARCH_MODE") ?? undefined;
+  const raw = configured ?? runtimeConfig.text("SEARCH_MODE", runtimeConfig.ENV_ONLY);
   if (raw === undefined) return DEFAULT_MODE;
   if (raw !== "hybrid" && raw !== "vector" && raw !== "keyword") {
     throw new ConfigurationError(
@@ -255,7 +256,11 @@ function resolveMode(configured: SearchMode | undefined): SearchMode {
  * and a bad mode throws a {@link ConfigurationError} naming the field.
  */
 export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSearchConfig {
-  const defaultIndexRaw = env.string(config.index, [INDEX_ENV, DATABRICKS_INDEX_ENV]) ?? undefined;
+  const defaultIndexRaw = runtimeConfig.string(
+    config.index,
+    [INDEX_ENV, DATABRICKS_INDEX_ENV],
+    runtimeConfig.ENV_ONLY,
+  );
 
   const configured = (config.indexes ?? [])
     .map(toResolvedIndex)
@@ -263,7 +268,12 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
 
   // Ensure the default index is represented in the known set.
   if (defaultIndexRaw && !configured.some((i) => i.name === defaultIndexRaw)) {
-    const envColumns = env.list(undefined, "SEARCH_COLUMNS");
+    const envColumns = runtimeConfig.list(
+      undefined,
+      "SEARCH_COLUMNS",
+      undefined,
+      runtimeConfig.ENV_ONLY,
+    );
     configured.unshift({
       name: defaultIndexRaw,
       alias: defaultAlias(defaultIndexRaw),
@@ -280,22 +290,41 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
   });
 
   const defaultIndex = defaultIndexRaw ?? indexes[0]?.name;
-  const columns = env.list(config.columns, "SEARCH_COLUMNS");
+  const columns = runtimeConfig.list(
+    config.columns,
+    "SEARCH_COLUMNS",
+    undefined,
+    runtimeConfig.ENV_ONLY,
+  );
 
   return {
     ...object.optional("defaultIndex", defaultIndex),
     indexes,
-    ...object.optional("endpoint", env.string(config.endpoint, ENDPOINT_ENV)),
+    ...object.optional(
+      "endpoint",
+      runtimeConfig.string(config.endpoint, ENDPOINT_ENV, runtimeConfig.ENV_ONLY),
+    ),
     ...(columns.length > 0 ? { columns } : {}),
-    pageSize: env.positiveInt(config.pageSize, "SEARCH_PAGE_SIZE", DEFAULT_PAGE_SIZE),
+    pageSize: runtimeConfig.positiveInt(
+      config.pageSize,
+      "SEARCH_PAGE_SIZE",
+      DEFAULT_PAGE_SIZE,
+      runtimeConfig.ENV_ONLY,
+    ),
     mode: resolveMode(config.mode),
     ...object.optional(
       "embeddingModel",
-      env.string(config.embeddingModel, "SEARCH_EMBEDDING_MODEL"),
+      runtimeConfig.string(config.embeddingModel, "SEARCH_EMBEDDING_MODEL", runtimeConfig.ENV_ONLY),
     ),
     basePath: DEFAULT_BASE_PATH,
-    timeoutMs: env.positiveInt(config.timeoutMs, "SEARCH_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
-    allowWrite: env.boolean(config.allowWrite, "SEARCH_WRITE") ?? false,
+    timeoutMs: runtimeConfig.positiveInt(
+      config.timeoutMs,
+      "SEARCH_TIMEOUT_MS",
+      DEFAULT_TIMEOUT_MS,
+      runtimeConfig.ENV_ONLY,
+    ),
+    allowWrite:
+      runtimeConfig.boolean(config.allowWrite, "SEARCH_WRITE", runtimeConfig.ENV_ONLY) ?? false,
     ...(config.ensureOnSetup ? { ensureOnSetup: config.ensureOnSetup } : {}),
   };
 }

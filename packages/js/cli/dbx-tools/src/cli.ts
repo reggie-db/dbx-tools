@@ -121,6 +121,13 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     async () => (await import("@dbx-tools/cli-appkit-env/cli")).buildProgram,
   );
 
+  addForwardedCommand(
+    program,
+    "tunnel",
+    "Run a public portr tunnel with an email-OTP gate",
+    async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
+  );
+
   return program;
 }
 

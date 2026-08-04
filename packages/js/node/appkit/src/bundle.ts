@@ -1,27 +1,32 @@
 /**
- * Layered configuration resolution for local development against a Databricks
- * App / Asset Bundle.
+ * DATABRICKS-APP configuration resolution: the bundle and `app.yaml` vocabulary.
+ *
+ * node-core's `config` module owns the generic lookup - environment, `.env`,
+ * `databricks bundle validate` - and knows nothing about what a bundle resource
+ * IS. That last part is this module: `sql_warehouse`, `genie_space`, and
+ * `postgres` are Databricks-App concepts, and an `app.yaml` / bundle
+ * `value_from` entry is a REFERENCE to one of them whose real value is the
+ * warehouse id or Genie space id sitting on the named resource. So this module
+ * extends node-core's resource schema, adds `app.yaml` (which the bundle CLI
+ * never sees), and resolves those references.
  *
  * Default sources: `explicit`, then `env`, then Databricks App `config.env`
  * (from {@link bundle}) and hard-coded `app.yaml` env entries (from
  * {@link appYaml}). Opt in to `cli` when a dev command wants flag overrides.
  *
- * Server-only (`node:child_process`, bundle root discovery). Databricks-app
- * specific, so it lives in node-appkit rather than shared-core.
+ * Server-only, and Databricks-app specific, so it lives in node-appkit rather
+ * than node-core.
  *
  * @module
  */
 
-import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { ValidationError } from "@databricks/appkit";
-import { file, project } from "@dbx-tools/core";
-import { functionModule, json, object, log, string } from "@dbx-tools/shared-core";
+import { config as coreConfig, file, project } from "@dbx-tools/core";
+import { context, object, log, string } from "@dbx-tools/shared-core";
 import { parse as parseYamlText } from "yaml";
 import { z } from "zod";
-
-import { isAppEnv } from "./databricks.ts";
 
 const logger = log.logger("config");
 
@@ -29,10 +34,7 @@ const logger = log.logger("config");
 export type BundleValidateJson = Record<string, unknown>;
 
 /** A config file discovered on disk with its parsed contents. */
-export interface ConfigFile {
-  path: string;
-  data: Record<string, unknown>;
-}
+export type ConfigFile = coreConfig.ConfigFile;
 
 /** Supported configuration sources, consulted in array order. */
 export type ConfigSource = "explicit" | "cli" | "env" | "bundle";
@@ -41,36 +43,19 @@ const defaultConfigSources: ConfigSource[] = ["explicit", "env", "bundle"];
 
 const APP_YAML_NAMES = ["app.yaml", "app.yml"] as const;
 
-const bundleValidateCache = new Map<string, BundleValidateJson | undefined>();
-
-const normalizedString = z
-  .string()
-  .transform((value) => value.trim())
-  .pipe(z.string().min(1));
-
-const bundleAppEnvEntrySchema = z.object({
-  name: normalizedString.optional(),
-  value: z.string().optional(),
-  value_from: normalizedString.optional(),
-});
-
-const bundleAppResourceSchema = z.object({
-  name: normalizedString.optional(),
-  sql_warehouse: z.object({ id: normalizedString.optional() }).optional(),
-  genie_space: z.object({ space_id: normalizedString.optional() }).optional(),
+export const bundleAppResourceSchema = coreConfig.bundleResourceSchema.extend({
+  sql_warehouse: z.object({ id: coreConfig.bundleValue.optional() }).optional(),
+  genie_space: z.object({ space_id: coreConfig.bundleValue.optional() }).optional(),
   postgres: z
     .object({
-      database: normalizedString.optional(),
-      branch: normalizedString.optional(),
-      endpoint: normalizedString.optional(),
+      database: coreConfig.bundleValue.optional(),
+      branch: coreConfig.bundleValue.optional(),
+      endpoint: coreConfig.bundleValue.optional(),
     })
     .optional(),
 });
 
-const bundleAppSchema = z.object({
-  name: normalizedString.optional(),
-  source_code_path: z.string().optional(),
-  config: z.object({ env: z.array(bundleAppEnvEntrySchema).optional() }).optional(),
+const bundleAppSchema = coreConfig.bundleAppSchema.extend({
   resources: z.array(bundleAppResourceSchema).optional(),
 });
 
@@ -78,22 +63,21 @@ const bundleValidateAppsSchema = z.object({
   resources: z.object({ apps: z.record(z.string(), bundleAppSchema).optional() }).optional(),
 });
 
-const appYamlEnvEntrySchema = z.object({
-  name: normalizedString,
-  value: z.string().optional(),
-  valueFrom: normalizedString.optional(),
+const appYamlEnvEntrySchema = coreConfig.bundleEnvEntrySchema.omit({ value_from: true }).extend({
+  name: coreConfig.bundleValue,
+  valueFrom: coreConfig.bundleValue.optional(),
 });
 
-const appYamlResourceSchema = z
-  .object({
-    name: normalizedString,
-    sql_warehouse: z.object({ id: normalizedString.optional() }).optional(),
-    genie_space: z.object({ space_id: normalizedString.optional() }).optional(),
+const appYamlResourceSchema = coreConfig.bundleResourceSchema
+  .extend({
+    name: coreConfig.bundleValue,
+    sql_warehouse: z.object({ id: coreConfig.bundleValue.optional() }).optional(),
+    genie_space: z.object({ space_id: coreConfig.bundleValue.optional() }).optional(),
     postgres: z
       .object({
-        database: normalizedString.optional(),
-        branch: normalizedString.optional(),
-        endpoint: normalizedString.optional(),
+        database: coreConfig.bundleValue.optional(),
+        branch: coreConfig.bundleValue.optional(),
+        endpoint: coreConfig.bundleValue.optional(),
       })
       .optional(),
   })
@@ -124,9 +108,6 @@ export interface ResolveConfigValueOptions {
   /** CLI flag values (when `cli` is listed in `sources`). */
   cli?: Record<string, ConfigMapValue>;
 }
-
-const bundleDefault = functionModule.memoize(() => loadBundle(process.cwd()));
-const appYamlDefault = functionModule.memoize(() => loadAppYaml(process.cwd()));
 
 function envKeysForName(name: string): object.Sequence<string> {
   const trimmed = name.trim();
@@ -231,8 +212,9 @@ export function flattenAppYamlEnv(data: unknown): Record<string, string> {
 
   const out: Record<string, string> = {};
   for (const entry of parsed.data.env) {
-    if (entry.value?.trim()) {
-      out[entry.name] = entry.value.trim();
+    const value = coreConfig.bundleValue.safeParse(entry.value);
+    if (value.success) {
+      out[entry.name] = value.data;
       continue;
     }
     if (!entry.valueFrom) continue;
@@ -268,8 +250,9 @@ export function flattenAppEnv(data: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   for (const entry of app.config.env) {
     if (!entry.name) continue;
-    if (entry.value) {
-      out[entry.name] = entry.value;
+    const value = coreConfig.bundleValue.safeParse(entry.value);
+    if (value.success) {
+      out[entry.name] = value.data;
       continue;
     }
     if (!entry.value_from) continue;
@@ -277,42 +260,6 @@ export function flattenAppEnv(data: unknown): Record<string, string> {
     if (resolved) out[entry.name] = resolved;
   }
   return out;
-}
-
-function validateBundle(root: string): BundleValidateJson | undefined {
-  const key = root;
-  if (bundleValidateCache.has(key)) {
-    return bundleValidateCache.get(key);
-  }
-
-  const args = ["bundle", "validate", "--output", "json"];
-  try {
-    const proc = spawnSync("databricks", args, {
-      cwd: root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const text = proc.stdout?.trim();
-    if (!text) {
-      bundleValidateCache.set(key, undefined);
-      return undefined;
-    }
-    const data = json.parse<BundleValidateJson>(text);
-    bundleValidateCache.set(key, data);
-    return data;
-  } catch {
-    bundleValidateCache.set(key, undefined);
-    return undefined;
-  }
-}
-
-async function loadBundle(cwd: string): Promise<ConfigFile | undefined> {
-  const configFile = resolveConfigFile(cwd, "databricks.yml");
-  if (configFile) {
-    const data = validateBundle(dirname(configFile));
-    if (data) return { path: configFile, data };
-  }
-  return undefined;
 }
 
 async function loadAppYaml(cwd: string): Promise<ConfigFile | undefined> {
@@ -334,7 +281,7 @@ async function loadAppYaml(cwd: string): Promise<ConfigFile | undefined> {
 }
 
 function resolveConfigFile(cwd: string, configFile: string): string | undefined {
-  if (isAppEnv()) return undefined;
+  if (coreConfig.isDatabricksAppEnv()) return undefined;
   for (const rootDir of project.resolveProjectRoots(cwd)) {
     const bundlePath = resolve(rootDir, configFile);
     if (file.statSync(bundlePath)?.isFile()) return bundlePath;
@@ -343,23 +290,24 @@ function resolveConfigFile(cwd: string, configFile: string): string | undefined 
 }
 
 /**
- * Locate the bundle root and run `databricks bundle validate --output json`.
- * When `cwd` is omitted or equals `process.cwd()`, the result is memoized for
- * the process lifetime. Returns `undefined` inside a Databricks App.
+ * The validated bundle for `cwd` - {@link coreConfig.bundleFile}, which caches it
+ * per working directory. Returns `undefined` inside a Databricks App, where the
+ * platform has already turned `config.env` into real environment variables and
+ * there is no bundle to validate.
  */
 export function bundle(cwd?: string): Promise<ConfigFile | undefined> {
-  if (isAppEnv()) return Promise.resolve(undefined);
-  return cwd && resolve(cwd) !== process.cwd() ? loadBundle(cwd) : bundleDefault();
+  return Promise.resolve(coreConfig.isDatabricksAppEnv() ? undefined : coreConfig.bundleFile(cwd));
 }
 
 /**
- * Locate and parse `app.yaml` / `app.yml` from the bundle or project root. When
- * `cwd` is omitted or equals `process.cwd()`, the result is memoized for the
- * process lifetime. Returns `undefined` inside a Databricks App.
+ * Locate and parse `app.yaml` / `app.yml` from the bundle or project root.
+ * Cached per working directory through {@link context.cached}, so a `cwd` change
+ * re-reads instead of returning another project's file. Returns `undefined`
+ * inside a Databricks App.
  */
 export function appYaml(cwd?: string): Promise<ConfigFile | undefined> {
-  if (isAppEnv()) return Promise.resolve(undefined);
-  return cwd && resolve(cwd) !== process.cwd() ? loadAppYaml(cwd) : appYamlDefault();
+  if (coreConfig.isDatabricksAppEnv()) return Promise.resolve(undefined);
+  return context.cached(["appkit", "appYaml"], (resolved) => loadAppYaml(resolved ?? "."), cwd);
 }
 
 /**
@@ -415,11 +363,11 @@ function resolveSources(options: ResolveConfigValueOptions): ConfigSource[] {
  * whatever the Databricks App / bundle definition supplies.
  *
  * @example
- * import { config } from "@dbx-tools/appkit";
+ * import { bundle } from "@dbx-tools/appkit";
  *
- * const warehouseId = await config.resolveConfigValue("DATABRICKS_WAREHOUSE_ID", {
+ * const warehouseId = await bundle.resolveConfigValue("DATABRICKS_WAREHOUSE_ID", {
  *   cli: { DATABRICKS_WAREHOUSE_ID: flags.warehouse },
- *   sources: config.withCliSources(),
+ *   sources: bundle.withCliSources(),
  * });
  */
 export async function resolveConfigValue(

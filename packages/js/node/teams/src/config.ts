@@ -29,7 +29,8 @@
  */
 
 import { ValidationError, type BasePluginConfig } from "@databricks/appkit";
-import { env, object } from "@dbx-tools/shared-core";
+import { config as runtimeConfig } from "@dbx-tools/core";
+import { object } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import type { JSONSchema7 } from "json-schema";
 
@@ -198,29 +199,49 @@ export const TEAMS_CONFIG_SCHEMA: JSONSchema7 = {
  */
 export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeamsConfig {
   const cardVersion =
-    env.string(overrides?.cardVersion, CARD_VERSION_ENV) ?? card.ADAPTIVE_CARD_VERSION;
-  const webhookUrl = env.string(overrides?.webhookUrl, WEBHOOK_URL_ENV);
-  if (webhookUrl !== null && !isHttpsUrl(webhookUrl)) {
+    runtimeConfig.string(overrides?.cardVersion, CARD_VERSION_ENV, runtimeConfig.ENV_ONLY) ??
+    card.ADAPTIVE_CARD_VERSION;
+  const webhookUrl = runtimeConfig.string(
+    overrides?.webhookUrl,
+    WEBHOOK_URL_ENV,
+    runtimeConfig.ENV_ONLY,
+  );
+  if (webhookUrl !== undefined && !isHttpsUrl(webhookUrl)) {
     throw ValidationError.invalidValue(
       WEBHOOK_URL_ENV,
       webhookUrl,
       "an absolute https URL for the Teams webhook",
     );
   }
-  const agentPlugin = env.string(overrides?.agentPlugin, AGENT_PLUGIN_ENV) ?? DEFAULT_AGENT_PLUGIN;
+  const agentPlugin =
+    runtimeConfig.string(overrides?.agentPlugin, AGENT_PLUGIN_ENV, runtimeConfig.ENV_ONLY) ??
+    DEFAULT_AGENT_PLUGIN;
   // Two independent conditions must BOTH hold: the operator asked for it, and
   // this is a development build. Gating on `NODE_ENV` as well means a stray
   // variable in a production environment cannot silently expose the endpoint.
-  const requested = env.boolean(overrides?.allowUnauthenticated, ALLOW_UNAUTHENTICATED_ENV);
+  const requested = runtimeConfig.boolean(
+    overrides?.allowUnauthenticated,
+    ALLOW_UNAUTHENTICATED_ENV,
+    runtimeConfig.ENV_ONLY,
+  );
   const allowUnauthenticated = requested === true && process.env.NODE_ENV === "development";
   return {
     cardVersion,
     agentPlugin,
     allowUnauthenticated,
     ...object.optional("webhookUrl", webhookUrl),
-    ...object.optional("appId", env.string(overrides?.appId, APP_ID_ENVS)),
-    ...object.optional("appPassword", env.string(overrides?.appPassword, APP_PASSWORD_ENVS)),
-    ...object.optional("appTenantId", env.string(overrides?.appTenantId, APP_TENANT_ENVS)),
+    ...object.optional(
+      "appId",
+      runtimeConfig.string(overrides?.appId, APP_ID_ENVS, runtimeConfig.ENV_ONLY),
+    ),
+    ...object.optional(
+      "appPassword",
+      runtimeConfig.string(overrides?.appPassword, APP_PASSWORD_ENVS, runtimeConfig.ENV_ONLY),
+    ),
+    ...object.optional(
+      "appTenantId",
+      runtimeConfig.string(overrides?.appTenantId, APP_TENANT_ENVS, runtimeConfig.ENV_ONLY),
+    ),
   };
 }
 

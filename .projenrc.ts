@@ -154,6 +154,9 @@ root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "^1.4.0");
 root.pnpmWorkspace?.addCatalog("@mastra/pg", "^1.14.2");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 root.pnpmWorkspace?.addCatalog("undici", "^7.17.0");
+// The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
+// pulls it, but the pin belongs with the other add-on runtime deps.
+root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
 // v4 + the Mastra chat-UI deps). These only load in ui/app-tagged (browser)
@@ -214,13 +217,15 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
   p.addDevDeps("consola@catalog:");
 });
 
-// node-core: the Node-only half of the shared runtime (exec + project). Lives
-// under packages/js/node/, so the `node` tag auto-applies (node types + ES2022
-// lib, no DOM). shared-core stays browser-safe; anything needing child_process
-// / fs / process depends on node-core instead. (shared-core is added by the
-// blanket base-dep mixin above, so this package needs no rule of its own.)
+// node-core: the Node-only half of the shared runtime (exec + project +
+// layered config). Lives under packages/js/node/, so the `node` tag auto-applies
+// (node types + ES2022 lib, no DOM). shared-core stays browser-safe; anything
+// needing child_process / fs / process depends on node-core instead. zod is here
+// for `config.ts`, which validates `databricks bundle validate` output.
+// (shared-core is added by the blanket base-dep mixin above, so this package
+// needs no rule of its own.)
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
-  p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml");
+  p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml", "zod@catalog:");
 });
 
 // node-appkit: the base for Node-side AppKit + experimental-SDK helpers.
@@ -307,6 +312,7 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
 // Mastra are runtime deps.
 project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-email@workspace:*",
     "@dbx-tools/shared-email-template@workspace:*",
     "@databricks/appkit@catalog:",
@@ -330,6 +336,7 @@ project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => 
 // exposing both Mastra tools. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/core@workspace:*",
     "@dbx-tools/path@workspace:*",
     "@dbx-tools/model@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
@@ -358,6 +365,7 @@ project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) 
 // AppKit + Mastra are runtime deps. Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-teams@workspace:*",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
@@ -380,6 +388,7 @@ project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => 
 // Mirrors the node-email add-on's shape.
 project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-search@workspace:*",
     "@dbx-tools/shared-model@workspace:*",
     "@dbx-tools/appkit@workspace:*",
@@ -561,6 +570,25 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/cli-model-proxy@workspace:*",
     "@dbx-tools/cli-appkit-env@workspace:*",
+    "@dbx-tools/cli-tunnel@workspace:*",
+  );
+});
+
+// cli-tunnel: the `dbx tunnel` command group - the WRAPPER path, for a project
+// that cannot register node-tunnel's interceptor + `authGate` plugin in-process.
+// `cli`-tagged (commander from the cli tag) and ships NO bin: `@dbx-tools/cli`
+// mounts its `buildProgram()` as `dbx tunnel`, lazily, so `dbx dev` pays for
+// neither the proxy nor AppKit. node-appkit + node-email are needed only by the
+// gate app, which sits behind a dynamic import, so an `--insecure` run loads
+// neither at runtime.
+project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p) => {
+  p.addDeps(
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/email@workspace:*",
+    "@dbx-tools/tunnel@workspace:*",
+    "@dbx-tools/shared-email@workspace:*",
+    "http-proxy-3@catalog:",
   );
 });
 
@@ -575,6 +603,7 @@ project.applyToProjects(
   { identifierName: "cli-model-proxy", tags: "cli" },
   (p) => {
     p.addDeps(
+      "@dbx-tools/core@workspace:*",
       "@dbx-tools/model@workspace:*",
       "@dbx-tools/shared-model@workspace:*",
       "@databricks/sdk-experimental@catalog:",
@@ -836,7 +865,7 @@ const pythonPackages: projectApi.PythonPackageOptions[] = [
     directory: "core",
     name: "dbx-tools-core",
     module: "dbx_tools.core",
-    description: "Dependency-free cross-runtime identity helpers for dbx-tools Python packages",
+    description: "Dependency-free configuration and identity helpers for dbx-tools Python packages",
     dependencies: [],
   },
   {

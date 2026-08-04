@@ -42,12 +42,12 @@ import {
   getWorkspaceClient,
   ValidationError,
 } from "@databricks/appkit";
-import { project } from "@dbx-tools/core";
+import { config as coreConfig, project } from "@dbx-tools/core";
 import { async, log, object, string } from "@dbx-tools/shared-core";
 import { z } from "zod";
-import { resolveConfigValue } from "./config.ts";
+import { resolveConfigValue } from "./bundle.ts";
 
-import { MAX_TCP_PORT, toContext } from "./databricks.ts";
+import { toContext } from "./databricks.ts";
 import {
   parseAddress,
   parseResourcePath,
@@ -195,7 +195,7 @@ const operationSchema = z.object({
 type Operation = z.infer<typeof operationSchema>;
 
 /** `PGPORT` must land inside the TCP port range. */
-const portSchema = z.coerce.number().int().min(1).max(MAX_TCP_PORT);
+const portSchema = z.coerce.number().int().min(1).max(coreConfig.MAX_TCP_PORT);
 
 const sslModeSchema = z.enum(SSL_MODES);
 
@@ -208,7 +208,11 @@ export function parsePort(value: string | number | undefined): number | undefine
   if (value === undefined || value === "") return undefined;
   const parsed = portSchema.safeParse(value);
   if (!parsed.success) {
-    throw ValidationError.invalidValue("PGPORT", value, `a TCP port between 1 and ${MAX_TCP_PORT}`);
+    throw ValidationError.invalidValue(
+      "PGPORT",
+      value,
+      `a TCP port between 1 and ${coreConfig.MAX_TCP_PORT}`,
+    );
   }
   return parsed.data;
 }
@@ -251,7 +255,7 @@ export function pollDelay(attempt: number, baseMs: number, signal?: AbortSignal)
  * Pull resolver inputs from `process.env`, parse the address blob, and
  * layer explicit config on top with this precedence:
  *
- *   `config.<field>` > `config.resolveConfigValue` (`env`, then bundle
+ *   `config.<field>` > `bundle.resolveConfigValue` (`env`, then bundle
  *   validate JSON) > whatever {@link parseAddress} recovered from the
  *   `endpoint` / `LAKEBASE_ENDPOINT` blob.
  *

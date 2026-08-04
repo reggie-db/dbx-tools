@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { ValidationError } from "@databricks/appkit";
-import { resolveConfigValue, withCliSources, type ConfigSource } from "../src/config.ts";
+import { resolveConfigValue, withCliSources, type ConfigSource } from "../src/bundle.ts";
 
 const ENV_KEY = "DBX_TOOLS_APPKIT_TEST_VALUE";
 

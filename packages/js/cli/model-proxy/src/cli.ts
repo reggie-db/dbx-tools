@@ -25,13 +25,13 @@
 
 import { spawn } from "node:child_process";
 import type { Server } from "node:http";
+import { config } from "@dbx-tools/core";
 import { object } from "@dbx-tools/shared-core";
 import { classify, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { Command, CommanderError } from "commander";
 
 import { DatabricksBackend, type BackendOptions } from "./backend.ts";
 import { DEFAULT_BIND_HOST, DEFAULT_PORT, resolveRetryConfig } from "./defaults.ts";
-import { startProxyServer } from "./server.ts";
 
 /**
  * Default terminal client for `chat`, launched via `bunx`. OpenHarness is an
@@ -83,10 +83,11 @@ async function startProxy(
   opts: ServeOpts,
 ): Promise<{ backend: DatabricksBackend; server: Server; url: string }> {
   const backend = await DatabricksBackend.create(backendOptions(opts));
-  const apiKey = opts.apiKey ?? process.env.PROXY_API_KEY;
+  const apiKey = config.string(opts.apiKey, "PROXY_API_KEY", config.ENV_ONLY);
   // `--no-retry-429` (opts.retry429 === false) is the only explicit override;
   // otherwise resolveRetryConfig layers PROXY_RETRY_* env then the on-default.
   const retry = resolveRetryConfig(opts.retry429 === false ? { enabled: false } : {});
+  const { startProxyServer } = await import("./server.ts");
   const { server, url } = await startProxyServer(backend, {
     host: opts.host,
     port: object.toNumber(opts.port) ?? DEFAULT_PORT,
@@ -139,7 +140,7 @@ export function buildProgram(name = "dbx model-proxy"): Command {
       .option(
         "--client <cmd>",
         "terminal chat CLI to launch (run via your shell)",
-        process.env.PROXY_CHAT_CLIENT ?? DEFAULT_CHAT_CLIENT,
+        config.text("PROXY_CHAT_CLIENT", config.ENV_ONLY) ?? DEFAULT_CHAT_CLIENT,
       ),
   ).action(async (_local: ServeOpts & { model?: string; client: string }, command: Command) => {
     const opts = globalOpts<ServeOpts & { model?: string; client: string }>(command);

@@ -45,6 +45,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/core",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/model",
       "version": "workspace:*",
       "type": "runtime"

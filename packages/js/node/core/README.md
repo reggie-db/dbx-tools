@@ -16,6 +16,8 @@ Key features:
 - Workspace/project root discovery from package-manager files, git metadata, and
   the current working directory.
 - Safe filesystem stat and project naming helpers for CLIs and projen synth.
+- Layered config from process env, environment-specific `.env` files, and
+  Databricks bundle App config or variables.
 - YAML/JSON brand-context discovery and loading with shared Zod validation.
 - Idempotent executable downloads with zip/tar extraction and atomic installs.
 - Keyed mutual exclusion across the main thread and its worker threads.
@@ -72,6 +74,26 @@ const context = await brand.loadBrandContext();
 files. Missing files return the complete dbx tools default context; malformed
 files fail validation. Use `loadBrandContextFile(path)` for an explicit file and
 `resolveBrandAssetPath(path, asset)` for relative asset references.
+
+## Resolve Configuration
+
+```ts
+import { config } from "@dbx-tools/core";
+
+const publicDomain = config.string(undefined, "PUBLIC_DOMAIN", {
+  prefix: "TUNNEL",
+});
+const timeoutMs = config.positiveInt(undefined, "TIMEOUT_MS", 30_000, {
+  prefix: "SEARCH",
+});
+```
+
+Resolution is lazy and follows process env, `.env`, then Databricks bundle
+configuration. The default `DBX_TOOLS` scope and an optional capability prefix
+produce names such as `DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN`, then
+`TUNNEL_PUBLIC_DOMAIN`, then `PUBLIC_DOMAIN`. `.env.production` and `.env.prod`
+are checked before `.env` when `NODE_ENV=production`; development uses
+`.env.development` and `.env.dev`.
 
 ## Run Commands
 

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { hash, json, net, string } from "@dbx-tools/shared-core";
+import { context, json, net, string } from "@dbx-tools/shared-core";
 import { statSync as stat } from "./file.ts";
 
 const ROOT_MARKERS = [
@@ -52,37 +52,22 @@ function projectContextCommandOutput(command: string, args: string[], cwd: strin
 }
 
 /**
- * `parseCommand`, memoized per `(command, args, cwd)` - stores the whole
- * {@link ProjectContext}. The cache key is a stable {@link hash.fnvHash} of that
- * tuple (order-sensitive over `args`), so `cwd` is part of the key and a lookup
- * in another directory can't collide with the default-cwd entry.
+ * {@link projectContextCommandOutput} through the process-context cache.
+ *
+ * These commands (`npm prefix`, `git rev-parse`, `gh repo view`) are pure
+ * functions of the directory they run in, so their output is worth keeping - but
+ * only while the process is still IN that directory. {@link context.cached}
+ * owns that rule: the slot remembers the `cwd` it was loaded under and misses
+ * once the process moves, and a lookup for some OTHER directory runs the command
+ * without caching, so it can't evict the hot entry. The slot name carries the
+ * command and its arguments (order-sensitive), so two commands never share one.
  */
-const parsedCommandCache = new Map<string, ProjectContext>();
-
 function projectContextCommand(command: string, args: string[], cwd?: string): ProjectContext {
-  const processCwd = resolve(process.cwd());
-  let cacheEnabled: boolean;
-  if (!cwd) {
-    cwd = processCwd;
-    cacheEnabled = true;
-  } else {
-    cwd = resolve(cwd);
-    if (cwd == processCwd) {
-      cacheEnabled = true;
-    } else {
-      cacheEnabled = false;
-    }
-  }
-  const cacheKey = cacheEnabled ? hash.fnvHash(command, args) : undefined;
-  const cacheHit = cacheKey ? parsedCommandCache.get(cacheKey) : undefined;
-  if (cacheHit?.cwd === cwd) {
-    return cacheHit;
-  }
-  const result = projectContextCommandOutput(command, args, cwd);
-  if (cacheKey) {
-    parsedCommandCache.set(cacheKey, result);
-  }
-  return result;
+  return context.cached(
+    ["project", command, ...args],
+    (resolved) => projectContextCommandOutput(command, args, resolved ?? resolve(cwd ?? ".")),
+    cwd ? resolve(cwd) : undefined,
+  );
 }
 
 function npmRoot(cwd?: string): string | undefined {

@@ -17,21 +17,12 @@
  */
 
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
-import { brand, env, log, object, string } from "@dbx-tools/shared-core";
+import { config as configModule } from "@dbx-tools/core";
+import { brand, log, object, string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-email";
 import type { RequestHandler } from "express";
+import { TUNNEL_CONFIG } from "./_config.ts";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
-import {
-  ALLOW_ENV,
-  BRAND_NAME_ENV,
-  CODE_TTL_ENV,
-  FORWARD_HEADERS_ENV,
-  INSECURE_ENV,
-  MESSAGE_ENV,
-  PUBLIC_DOMAIN_ENV,
-  SESSION_TTL_ENV,
-  SUBJECT_ENV,
-} from "./env.ts";
 import { mountGate, type GateOptions } from "./gate.ts";
 import { CodeStore, signSession, verifySession } from "./otp.ts";
 import { RateLimiter } from "./rate-limit.ts";
@@ -216,26 +207,36 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
     // TUNNEL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
-    // Hence `parseList` on each rather than `env.list`, which stops at the first
-    // source that yields anything.
-    allow: [...string.parseList(config.allow), ...string.parseList(env.text(ALLOW_ENV))],
-    subject: env.string(config.subject, SUBJECT_ENV) ?? DEFAULTS.subject,
-    brandName: env.string(config.brandName, BRAND_NAME_ENV) ?? DEFAULTS.brandName,
-    message: env.string(config.message, MESSAGE_ENV) ?? DEFAULTS.message,
-    sessionTtlSeconds: env.positiveInt(
+    // Hence `parseList` on each rather than `config.list`, which stops at the
+    // first source that yields anything.
+    allow: [
+      ...string.parseList(config.allow),
+      ...string.parseList(configModule.text(["AUTH_ALLOW", "EMAIL_AUTH_ALLOW"], TUNNEL_CONFIG)),
+    ],
+    subject: configModule.string(config.subject, "AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
+    brandName:
+      configModule.string(config.brandName, "AUTH_BRAND_NAME", TUNNEL_CONFIG) ?? DEFAULTS.brandName,
+    message: configModule.string(config.message, "AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
+    sessionTtlSeconds: configModule.positiveInt(
       config.sessionTtlSeconds,
-      SESSION_TTL_ENV,
+      "AUTH_SESSION_TTL",
       DEFAULTS.sessionTtlSeconds,
+      TUNNEL_CONFIG,
     ),
-    codeTtlSeconds: env.positiveInt(config.codeTtlSeconds, CODE_TTL_ENV, DEFAULTS.codeTtlSeconds),
+    codeTtlSeconds: configModule.positiveInt(
+      config.codeTtlSeconds,
+      "AUTH_CODE_TTL",
+      DEFAULTS.codeTtlSeconds,
+      TUNNEL_CONFIG,
+    ),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
     sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
-    publicDomain: env.string(config.publicDomain, PUBLIC_DOMAIN_ENV) ?? undefined,
+    publicDomain: configModule.string(config.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG),
     forwardHeaders: [
       ...string.parseList(config.forwardHeaders),
-      ...string.parseList(env.text(FORWARD_HEADERS_ENV)),
+      ...string.parseList(configModule.text("FORWARD_HEADERS", TUNNEL_CONFIG)),
     ],
-    insecure: env.boolean(config.insecure, INSECURE_ENV) ?? false,
+    insecure: configModule.boolean(config.insecure, "INSECURE", TUNNEL_CONFIG) ?? false,
   };
 }
 

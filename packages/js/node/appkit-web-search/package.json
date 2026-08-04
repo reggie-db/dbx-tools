@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
+    "@dbx-tools/core": "workspace:*",
     "@dbx-tools/model": "workspace:*",
     "@dbx-tools/path": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",

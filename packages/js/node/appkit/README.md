@@ -42,7 +42,7 @@ Use this package when the friction is around bootstrapping and reuse:
 - AppKit plugin instances are generic; the lookup helpers keep sibling-plugin
   access typed and errors actionable.
 - AppKit does not own your local CLI flags, bundle validation output, or
-  `app.yaml`; `config.resolveConfigValue()` gives setup scripts one resolution
+  `app.yaml`; `bundle.resolveConfigValue()` gives setup scripts one resolution
   path across those sources.
 - AppKit's `asUser(req)` throws outside `NODE_ENV=development` when a request
   carries no OBO token; `identity` makes falling back to the service principal a
@@ -158,22 +158,22 @@ await; `lakebaseResolver.applyLakebaseEnv()` resolves and applies the full set.
 
 ## Resolve Local And Bundle Config
 
-`config.resolveConfigValue()` checks explicit options, CLI overrides, env vars,
+`bundle.resolveConfigValue()` checks explicit options, CLI overrides, env vars,
 Databricks Asset Bundle validation output, and `app.yaml` env entries, in AppKit's
 precedence order: explicit config, then environment variable, then the app or
 bundle definition.
 
 ```ts
-import { config } from "@dbx-tools/appkit";
+import { bundle } from "@dbx-tools/appkit";
 
-const warehouseId = await config.resolveConfigValue("DATABRICKS_WAREHOUSE_ID", {
+const warehouseId = await bundle.resolveConfigValue("DATABRICKS_WAREHOUSE_ID", {
   cli: { DATABRICKS_WAREHOUSE_ID: flags.warehouse },
-  sources: config.withCliSources(),
+  sources: bundle.withCliSources(),
 });
 ```
 
 Use this in CLIs and setup scripts that should behave the same locally and in a
-Databricks App deployment. `config.bundle()` and `config.appYaml()` expose the
+Databricks App deployment. `bundle.bundle()` and `bundle.appYaml()` expose the
 parsed files when you need to diagnose which source won.
 
 ## Parse Lakebase Addresses
@@ -227,9 +227,6 @@ await client.apiClient.request(
   databricks.toContext(request.signal),
 );
 ```
-
-`databricks.isAppEnv()` checks the Databricks App environment shape for setup
-code that should skip local-only filesystem or bundle discovery.
 
 ## Look Up Sibling Plugins
 

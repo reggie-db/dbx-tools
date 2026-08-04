@@ -65,7 +65,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.82",
+  "version": "0.0.0",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -74,6 +74,7 @@
     "packages/js/cli/appkit-env",
     "packages/js/cli/dbx-tools",
     "packages/js/cli/model-proxy",
+    "packages/js/cli/tunnel",
     "packages/js/node/appkit",
     "packages/js/node/appkit-mastra",
     "packages/js/node/appkit-web-search",
@@ -143,6 +144,7 @@
     "@mastra/pg": "^1.14.2",
     "@opentelemetry/api": "^1.9.1",
     "undici": "^7.17.0",
+    "http-proxy-3": "^1.23.1",
     "tailwindcss": "^4.3.2",
     "tw-animate-css": "^1.4.0",
     "lucide-react": "^0.554.0",

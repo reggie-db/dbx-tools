@@ -71,6 +71,7 @@ packages/example/server/appkit-demo/index.ts
 packages/js/cli/appkit-env/index.ts
 packages/js/cli/dbx-tools/index.ts
 packages/js/cli/model-proxy/index.ts
+packages/js/cli/tunnel/index.ts
 packages/js/node/appkit/index.ts
 packages/js/node/appkit-mastra/index.ts
 packages/js/node/appkit-web-search/index.ts

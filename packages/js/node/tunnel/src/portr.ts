@@ -15,9 +15,9 @@ import os from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 
-import { bin } from "@dbx-tools/core";
-import { env, log } from "@dbx-tools/shared-core";
-import { PUBLIC_DOMAIN_ENV } from "./env.ts";
+import { bin, config } from "@dbx-tools/core";
+import { log } from "@dbx-tools/shared-core";
+import { TUNNEL_CONFIG } from "./_config.ts";
 
 const logger = log.logger("tunnel:portr");
 const PORTR_VERSION = "1.0.15-sse.2";
@@ -52,8 +52,8 @@ export function resolvePortrConfig(opts: {
   port: number;
 }): PortrConfig | undefined {
   // PORTR_* is upstream portr's own namespace, so it keeps its name.
-  const token = env.string(opts.token, "PORTR_TOKEN");
-  const domain = env.string(opts.publicDomain, PUBLIC_DOMAIN_ENV);
+  const token = config.string(opts.token, "PORTR_TOKEN");
+  const domain = config.string(opts.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG);
   if (!token) return undefined;
   let subdomain = opts.subdomain;
   let server: string | undefined;
@@ -61,7 +61,7 @@ export function resolvePortrConfig(opts: {
     subdomain ??= domain.split(".")[0];
     server = domain.slice(domain.indexOf(".") + 1);
   }
-  server ??= env.text("PORTR_SERVER") ?? undefined;
+  server ??= config.text("PORTR_SERVER");
   if (!subdomain || !server || server === domain) return undefined;
   return { subdomain, server, token, port: opts.port };
 }

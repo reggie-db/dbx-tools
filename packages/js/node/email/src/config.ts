@@ -26,7 +26,8 @@
  */
 import { resolve } from "node:path";
 import { ConfigurationError, ValidationError, type BasePluginConfig } from "@databricks/appkit";
-import { env, object } from "@dbx-tools/shared-core";
+import { config as runtimeConfig } from "@dbx-tools/core";
+import { object } from "@dbx-tools/shared-core";
 import type { JSONSchema7 } from "json-schema";
 import { defaultEmailBrand, type EmailBrand } from "./brand.ts";
 import { isSenderAllowed, parseAllowedSenders, systemSenderAddress } from "./sender.ts";
@@ -270,12 +271,16 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
 
 /** Parse the `SMTP_SECURE` env / config flag, defaulting by port. */
 function resolveSecure(flag: boolean | undefined, port: number): boolean {
-  return env.boolean(flag, "SMTP_SECURE") ?? port === IMPLICIT_TLS_SMTP_PORT;
+  return (
+    runtimeConfig.boolean(flag, "SMTP_SECURE", runtimeConfig.ENV_ONLY) ??
+    port === IMPLICIT_TLS_SMTP_PORT
+  );
 }
 
 /** Parse the `EMAIL_SENDER_POLICY` env / config value, defaulting to deny-by-default. */
 function resolveSenderPolicy(policy: SenderPolicy | undefined): SenderPolicy {
-  const raw = policy ?? env.text("EMAIL_SENDER_POLICY")?.toLowerCase();
+  const raw =
+    policy ?? runtimeConfig.text("EMAIL_SENDER_POLICY", runtimeConfig.ENV_ONLY)?.toLowerCase();
   if (raw === "unrestricted") return "unrestricted";
   if (raw === undefined || raw === "" || raw === "allowlist") return "allowlist";
   throw ValidationError.invalidValue("senderPolicy", raw, '"allowlist" or "unrestricted"');
@@ -308,7 +313,7 @@ function impliedSenderPatterns(sender: {
 
 /** Whether `EMAIL_OUTBOX_MODE` explicitly opts into the file/outbox fallback. */
 function isOutboxModeEnabled(): boolean {
-  return env.boolean(undefined, "EMAIL_OUTBOX_MODE") ?? false;
+  return runtimeConfig.boolean(undefined, "EMAIL_OUTBOX_MODE", runtimeConfig.ENV_ONLY) ?? false;
 }
 
 const SMTP_REQUIRED_FIELDS = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"] as const;
@@ -344,15 +349,19 @@ function missingSmtpFields(
  */
 export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmailConfig {
   const smtp = config.smtp ?? {};
-  const host = env.string(smtp.host, "SMTP_HOST") ?? undefined;
-  const user = env.string(smtp.user, "SMTP_USER") ?? undefined;
-  const pass = env.string(smtp.password, "SMTP_PASSWORD") ?? undefined;
-  const domain = env.string(config.domain, "EMAIL_DOMAIN") ?? undefined;
-  const from = env.string(config.from, "EMAIL_FROM") ?? undefined;
-  const systemFrom = env.string(config.systemFrom, "EMAIL_SYSTEM_FROM") ?? undefined;
+  const host = runtimeConfig.string(smtp.host, "SMTP_HOST", runtimeConfig.ENV_ONLY);
+  const user = runtimeConfig.string(smtp.user, "SMTP_USER", runtimeConfig.ENV_ONLY);
+  const pass = runtimeConfig.string(smtp.password, "SMTP_PASSWORD", runtimeConfig.ENV_ONLY);
+  const domain = runtimeConfig.string(config.domain, "EMAIL_DOMAIN", runtimeConfig.ENV_ONLY);
+  const from = runtimeConfig.string(config.from, "EMAIL_FROM", runtimeConfig.ENV_ONLY);
+  const systemFrom = runtimeConfig.string(
+    config.systemFrom,
+    "EMAIL_SYSTEM_FROM",
+    runtimeConfig.ENV_ONLY,
+  );
   const senderPolicy = resolveSenderPolicy(config.senderPolicy);
   const configuredSenders = parseAllowedSenders(
-    config.allowedSenders ?? env.text("EMAIL_ALLOWED_SENDERS") ?? undefined,
+    config.allowedSenders ?? runtimeConfig.text("EMAIL_ALLOWED_SENDERS", runtimeConfig.ENV_ONLY),
   );
   const allowedSenders =
     configuredSenders.length > 0 || senderPolicy === "unrestricted"
@@ -381,7 +390,12 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
         "Set EMAIL_DOMAIN to derive <user-local-part>@<domain> (and no-reply@<domain> for system mail), or EMAIL_FROM for a fixed address.",
       );
     }
-    const port = env.positiveInt(smtp.port, "SMTP_PORT", DEFAULT_SMTP_PORT);
+    const port = runtimeConfig.positiveInt(
+      smtp.port,
+      "SMTP_PORT",
+      DEFAULT_SMTP_PORT,
+      runtimeConfig.ENV_ONLY,
+    );
     return {
       mode: "smtp",
       host: host!,
@@ -400,7 +414,8 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   }
 
   const outDir = resolve(
-    env.string(config.outDir, "EMAIL_OUTBOX_DIR") ?? resolve(process.cwd(), "tmp"),
+    runtimeConfig.string(config.outDir, "EMAIL_OUTBOX_DIR", runtimeConfig.ENV_ONLY) ??
+      resolve(process.cwd(), "tmp"),
   );
   return { mode: "file", outDir, ...sender };
 }

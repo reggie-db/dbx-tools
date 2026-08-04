@@ -7,3 +7,5 @@ export {
   withAdvisoryLock,
   withAdvisoryTransactionLock,
 } from "./src/advisory-lock.ts";
+export { messageBusGrantStatements, provisionMessageBusSchema, resolvePersistenceOptions } from "./src/persistence.ts";
+export type { TopicPersistenceScope, TopicBusPersistenceOptions, StoredTopicMessage, TopicHistoryPage } from "./src/persistence.ts";

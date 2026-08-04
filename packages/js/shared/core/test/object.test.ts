@@ -2,6 +2,28 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { object } from "../index.ts";
 
+describe("object.sequence", () => {
+  it("treats a bare string as one scalar value", () => {
+    assert.deepEqual(object.sequence("DBX_TOOLS").toArray(), ["DBX_TOOLS"]);
+  });
+
+  it("iterates collections and joins sources lazily", () => {
+    const visited: string[] = [];
+    const trailing = {
+      *[Symbol.iterator]() {
+        visited.push("trailing");
+        yield "bundle";
+      },
+    };
+    const sequence = object.sequence(["env", "dotenv"], trailing);
+
+    assert.equal(sequence.at(0), "env");
+    assert.deepEqual(visited, []);
+    assert.deepEqual(sequence.toArray(), ["dotenv", "bundle"]);
+    assert.deepEqual(visited, ["trailing"]);
+  });
+});
+
 describe("object.toDate", () => {
   it("passes through a valid Date and rejects an invalid one", () => {
     const date = new Date("2026-08-02T12:00:00.000Z");

@@ -26,7 +26,8 @@
 /** Lazy sequence over iterable source(s). See {@link sequence}. */
 export type Sequence<T> = SequenceImpl<T>;
 
-type SequenceSource<T> = Iterable<T> | ReadonlyMap<unknown, T> | OneOrMany<T> | null | undefined;
+type SequenceSource<T> =
+  Iterable<T> | ReadonlyMap<unknown, T> | OneOrMany<T> | Extract<T, string> | null | undefined;
 
 /**
  * A non-scalar {@link Iterable} - one to treat as a collection of elements
@@ -159,7 +160,7 @@ function sequenceSources<T>(...sources: SequenceSource<T>[]): Iterable<T>[] {
   const sourceIterables: Iterable<T>[] = [];
   for (const source of sources) {
     if (source == null || (isCollection(source) && isEmpty(source))) continue;
-    sourceIterables.push(values(source));
+    sourceIterables.push(isContainer<T>(source) ? values(source) : [source as T]);
   }
   return sourceIterables;
 }
@@ -979,7 +980,7 @@ export function toStableKey(value: unknown, seen: Set<object> = new Set()): stri
  *
  * @example
  * return {
- *   ...optional("appId", env.text("MICROSOFT_APP_ID")),
+ *   ...optional("appId", configuredAppId),
  *   ...optional("endpoint", config.endpoint),
  * };
  */

@@ -1,5 +1,6 @@
 // Default values for the local Databricks model proxy.
 
+import { config } from "@dbx-tools/core";
 import { object } from "@dbx-tools/shared-core";
 
 /**
@@ -43,7 +44,7 @@ export const DEFAULT_RETRY: RetryConfig = {
 
 /** Positive integer from an env var, or `undefined` when unset/unparseable. */
 function envInt(name: string): number | undefined {
-  const value = object.toNumber(process.env[name]);
+  const value = object.toNumber(config.text(name, config.ENV_ONLY));
   return value !== undefined && value >= 0 ? Math.floor(value) : undefined;
 }
 
@@ -60,7 +61,7 @@ function envInt(name: string): number | undefined {
  * Tunables read `PROXY_RETRY_MAX`, `PROXY_RETRY_BASE_MS`, `PROXY_RETRY_MAX_MS`.
  */
 export function resolveRetryConfig(override: Partial<RetryConfig> = {}): RetryConfig {
-  const envEnabled = object.toBoolean(process.env.PROXY_RETRY_ON_429);
+  const envEnabled = object.toBoolean(config.text("PROXY_RETRY_ON_429", config.ENV_ONLY));
   const enabled = override.enabled ?? envEnabled ?? DEFAULT_RETRY.enabled;
   return {
     enabled,

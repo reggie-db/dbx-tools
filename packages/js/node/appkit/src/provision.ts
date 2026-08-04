@@ -22,9 +22,8 @@
  */
 
 import { createLakebasePool, getWorkspaceClient, ValidationError } from "@databricks/appkit";
+import { config } from "@dbx-tools/core";
 import { error, log } from "@dbx-tools/shared-core";
-
-import { isAppEnv } from "./databricks.ts";
 
 const defaultLogger = log.logger("provision");
 
@@ -101,7 +100,7 @@ export async function provisionCacheSchema(
   role: string | undefined,
   logger: log.Logger = defaultLogger,
 ): Promise<void> {
-  if (isAppEnv()) {
+  if (config.isDatabricksAppEnv()) {
     logger.debug("autopg: skip cache provisioning (inside a Databricks App)");
     return;
   }
