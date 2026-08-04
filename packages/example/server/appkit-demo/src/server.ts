@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { genie, lakebase, server } from "@databricks/appkit";
-import { appkit, databricks } from "@dbx-tools/appkit";
+import { appkit } from "@dbx-tools/appkit";
 import {
   agents,
   genie as mastraGenie,
@@ -14,8 +14,8 @@ import {
   tool as webSearchToolModule,
 } from "@dbx-tools/appkit-web-search";
 import {
-  brand as emailBrand,     
-  plugin as emailPlugin, 
+  brand as emailBrand,
+  plugin as emailPlugin,
   tool as emailToolModule,
 } from "@dbx-tools/email";
 import { config } from "@dbx-tools/core";
@@ -209,7 +209,7 @@ const support = createAgent(supportDefinition);
 // Apps platform is running us (it reaches the container over the
 // LAN-bound interface, so anything else won't accept traffic).
 // Override with `HOST=...` if you need a different bind address.
-const host = process.env.HOST ?? (databricks.isAppEnv() ? "0.0.0.0" : "127.0.0.1");
+const host = process.env.HOST ?? (config.isDatabricksAppEnv() ? "0.0.0.0" : "127.0.0.1");
 
 // Report what actually resolved before serving anything: the demo can run its
 // `@dbx-tools/*` packages from source or from the registry, and only the
