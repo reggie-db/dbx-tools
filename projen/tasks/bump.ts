@@ -30,12 +30,11 @@
  * `--publish` / `--no-publish` is an alias for `--push` (pushing the tag is
  * what publishes). The tag prefix comes from `--prefix` (default `v`).
  *
- * `--local-registry <value>` publishes the just-tagged version to a LOCAL
- * registry (e.g. a verdaccio) right after the git tag is pushed - so a local
- * `bun run bump` both fires the GitHub release (public npm) and populates your
- * local registry. Values:
+ * `--local-registry <value>` publishes npm packages to a LOCAL registry (e.g.
+ * verdaccio) right after the tag push. `--local-pypi <value>` does the same for
+ * Python packages through a writable devpi index. Values for both:
  *   - `auto` (default): publish only when `npm config get registry` is a
- *     loopback host (`localhost` / `127.0.0.0/8` / `::1`); otherwise skip.
+ *     loopback host, or uv's default index is a loopback devpi `+simple` URL.
  *   - `false`: never publish locally.
  *   - a URL: always publish to that registry.
  */
@@ -45,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
 import { log, net } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
+import { activePythonIndex, resolveLocalPypi } from "./python-registry.ts";
 
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;
@@ -188,6 +188,12 @@ program
     "publish locally after the tag push: 'auto' (only a loopback npm registry), 'false', or a registry URL",
     "auto",
   )
+  .option(
+    "--local-pypi <value>",
+    "publish Python packages locally: 'auto' (only a loopback devpi +simple index), 'false', or a devpi URL",
+    "auto",
+  )
+  .option("--python-root <path>", "Python workspace package root", "packages/py")
   .action(
     (opts: {
       level: Level;
@@ -199,7 +205,9 @@ program
       tag: boolean;
       push: boolean;
       publish: boolean;
+      localPypi: string;
       localRegistry: string;
+      pythonRoot: string;
     }) => {
       const pkgPath = resolve(process.cwd(), "package.json");
       if (!existsSync(pkgPath)) throw new Error(`no package.json in ${process.cwd()}`);
@@ -312,6 +320,45 @@ program
           check: true,
         });
         logger.success(`published ${version} to ${localRegistry}`);
+      }
+
+      const activeIndex = activePythonIndex();
+      const localPypi = resolveLocalPypi(opts.localPypi, activeIndex);
+      const pythonRoot = resolve(opts.pythonRoot);
+      if (
+        opts.localPypi.toLowerCase() === "auto" &&
+        activeIndex &&
+        net.isLoopbackHost(new URL(activeIndex)) &&
+        !localPypi
+      ) {
+        logger.info(`skipped local Python publish: ${activeIndex} is not a devpi +simple index`);
+      }
+      if (opts.version === false && localPypi) {
+        logger.info("skipped local Python publish (--no-version left packages unstamped)");
+      } else if (opts.version && localPypi && existsSync(pythonRoot)) {
+        logger.info(`publishing Python ${version} to local devpi ${localPypi.publishUrl}`);
+        const publishPythonScript = fileURLToPath(new URL("./publish-python.ts", import.meta.url));
+        exec.spawnSync(
+          "bun",
+          [
+            publishPythonScript,
+            version,
+            "--root",
+            pythonRoot,
+            "--index-url",
+            localPypi.indexUrl,
+            "--publish-url",
+            localPypi.publishUrl,
+          ],
+          {
+            cwd: process.cwd(),
+            stdout: "inherit",
+            stderr: "inherit",
+            stdin: "ignore",
+            check: true,
+          },
+        );
+        logger.success(`published Python ${version} to ${localPypi.publishUrl}`);
       }
 
       // Publishing can run package lifecycle hooks, including a standalone

@@ -260,6 +260,19 @@ a new package is covered without a re-synth. Work from the root:
 | `bun run barrels` | regenerate the read-only `index.ts` barrels        |
 | `bun run bump`    | version, tag, and publish                          |
 
+`bump` also mirrors a release into local registries when the active clients are
+pointed at loopback services. npm uses `npm config get registry` and publishes
+to a local Verdaccio automatically. Python prefers uv's default index and only
+treats a loopback `.../+simple/` URL as writable devpi; a read-only cache such as
+proxpi (`.../index/`) is deliberately ignored. The task stamps every Python
+member and its sibling dependencies to the release version, builds the workspace
+with uv, then runs `devpi upload --from-dir` against the derived writable index.
+Devpi client authentication remains in its normal `~/.devpi` state.
+
+Use `--local-registry false` or `--local-pypi false` to disable either local
+publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
+auto-detection; `--python-root` defaults to `packages/py`.
+
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
 
