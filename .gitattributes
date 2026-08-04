@@ -27,6 +27,9 @@
 /js-packages/openapi/** linguist-generated
 /package.json linguist-generated
 /pnpm-workspace.yaml linguist-generated
+/py-packages/bus/pyproject.toml linguist-generated
+/py-packages/postgres/pyproject.toml linguist-generated
+/pyproject.toml linguist-generated
 /tsconfig.base.json linguist-generated
 /tsconfig.json linguist-generated
 /tsconfig.projen.json linguist-generated linguist-language=JSON-with-Comments

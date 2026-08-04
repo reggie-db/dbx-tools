@@ -130,8 +130,15 @@ Primary package areas:
   workspace/cloud/Zerobus infrastructure helpers.
 - `js-packages/shared/core`, `js-packages/node/core`, and `js-packages/node/path`
   — cross-runtime and Node utility foundations.
+- `py-packages/postgres` — Python Lakebase/Postgres address parsing and
+  WorkspaceClient-backed connection resolution. Keep its accepted address shapes
+  aligned with `js-packages/node/appkit/src/pgaddress.ts`.
+- `py-packages/bus` — Python async Postgres topic bus. Its public lifecycle and
+  wire envelope mirror `js-packages/node/postgres`'s `PostgresTopicBus` so Node
+  and Python services can share a channel.
 
 - **`js-packages/`** — JavaScript and TypeScript package content goes here.
+- **`py-packages/`** — Python packages in the root uv workspace go here.
 - **`example-packages/`** — seed/example packages when present. Do not make
   root docs primarily about examples.
 
@@ -179,6 +186,8 @@ Package README rules:
 Docs site rules:
 
 - Source of truth is `README.md` plus `js-packages/**/README.md`.
+- `py-packages/**/README.md` documents contributor-facing Python workspace
+  packages until Python publishing/docs discovery is added.
 - A `private: true` package is EXCLUDED from the site by both generators. A
   private package never reaches npm, so a page for it documents something a
   reader cannot install. Both `discoverPackages()` functions filter on it, which
@@ -506,6 +515,13 @@ README as well; the docs site is generated from those READMEs, so an undocumente
 utility is an invisible one.
 
 ## Formatting and diff hygiene
+
+Python package metadata is synthesized from the Python section in `.projenrc.ts`.
+Do not hand-edit the root or `py-packages/*/pyproject.toml` files. Run `bunx
+projen`, then `uv sync --all-packages`. Use `uv run pytest`, `uv run ruff check
+py-packages`, and `uv run ruff format py-packages` for Python validation and
+formatting. Keep `uv.lock` committed; `.venv/`, Python caches, and built wheels
+are ignored.
 
 `bun run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
 does not exclude `js-packages/`. Some committed files predate the current

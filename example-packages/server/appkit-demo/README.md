@@ -39,12 +39,14 @@ backend.
 ## Run
 
 ```bash
-bun run dev
+bun run demo
 ```
 
-Serves the sibling [`@dbx-tools/demo-appkit-app`](../../app/appkit-demo) build
-(`../../app/appkit-demo/dist`) on the same port as the API. See the
-[demo README](../../README.md) for full setup and env.
+From the repository root, this starts the server, client, and a local uv Python
+emitter that publishes `Hello world` onto the Bus page every random 5–10 seconds.
+The emitter loads its Lakebase environment through `dbx-tools-appkit-env` and is
+not included in the Databricks App deployment. See the [demo README](../../README.md)
+for full setup and env.
 
 ## Deploy
 

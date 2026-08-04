@@ -125,14 +125,23 @@
     },
     "demo": {
       "name": "demo",
-      "description": "Run the demo server and client dev servers",
+      "description": "Run the local demo server, client, and Python bus emitter",
       "env": {
         "NODE_ENV": "development",
         "BUN_CONFIG_ELIDE_LINES": "0"
       },
       "steps": [
         {
-          "exec": "bunx concurrently     --raw     --kill-others     --names server,client     \"bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-server dev\"     \"bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-app dev\""
+          "exec": "bunx concurrently     --raw     --kill-others     --names server,client,emitter     \"bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-server dev\"     \"bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-app dev\"     \"bun --env-file=.env run demo:emitter\""
+        }
+      ]
+    },
+    "demo:emitter": {
+      "name": "demo:emitter",
+      "description": "Emit local Python hello-world messages onto the demo bus",
+      "steps": [
+        {
+          "exec": "eval \"$(\n      cd example-packages/server/appkit-demo\n      bun ../../../js-packages/cli/appkit-env/bin/dbx-tools-appkit-env.ts --quiet\n    )\"\n    uv run python example-packages/python/bus-emitter.py"
         }
       ]
     },
@@ -217,6 +226,51 @@
     "pre-compile": {
       "name": "pre-compile",
       "description": "Prepare the project for compilation"
+    },
+    "py:build": {
+      "name": "py:build",
+      "description": "Build every Python workspace package",
+      "steps": [
+        {
+          "exec": "uv build --all-packages"
+        }
+      ]
+    },
+    "py:format": {
+      "name": "py:format",
+      "description": "Format Python workspace packages",
+      "steps": [
+        {
+          "exec": "uv run ruff format py-packages example-packages/python"
+        }
+      ]
+    },
+    "py:lint": {
+      "name": "py:lint",
+      "description": "Lint Python workspace packages",
+      "steps": [
+        {
+          "exec": "uv run ruff check py-packages example-packages/python"
+        }
+      ]
+    },
+    "py:sync": {
+      "name": "py:sync",
+      "description": "Resolve and install every Python workspace package",
+      "steps": [
+        {
+          "exec": "uv sync --all-packages"
+        }
+      ]
+    },
+    "py:test": {
+      "name": "py:test",
+      "description": "Run Python workspace tests",
+      "steps": [
+        {
+          "exec": "uv run pytest"
+        }
+      ]
     },
     "sync": {
       "name": "sync",

@@ -54,6 +54,9 @@ projen/index.ts
 .vscode/settings.json
 .vscode/tasks.json
 bunfig.toml
+py-packages/bus/pyproject.toml
+py-packages/postgres/pyproject.toml
+pyproject.toml
 tsconfig.base.json
 tsconfig.json
 tsconfig.projen.json

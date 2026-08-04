@@ -166,6 +166,15 @@ Read the package README for each feature area. They are written as the
 package-level source of truth: key features, import examples, configuration or
 runtime behavior, module maps, and links to adjacent packages.
 
+### Python Workspace
+
+The root uv workspace currently contains two unpublished Python counterparts:
+
+| Package                                      | Purpose                                                                                                                                                                                                                            |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`dbx-tools-postgres`](py-packages/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, resolves connection fields with a Databricks `WorkspaceClient`, and creates SQLAlchemy engines whose credentials are injected at physical connect time. |
+| [`dbx-tools-bus`](py-packages/bus)           | Exposes the Node `PostgresTopicBus` lifecycle and wire envelope over an async SQLAlchemy/asyncpg engine, including cross-language channel-name derivation.                                                                         |
+
 ### Load One Brand File
 
 The root [`branding/brand.yaml`](branding/brand.yaml) is the canonical dbx tools
@@ -264,6 +273,9 @@ bunx projen
 bun run --filter '*' compile
 bun run --filter '*' test
 bun run format
+uv sync --all-packages
+uv run pytest
+uv run ruff check py-packages
 ```
 
 ## Documentation

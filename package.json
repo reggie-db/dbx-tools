@@ -15,6 +15,7 @@
     "dbxt": "projen dbxt",
     "default": "projen default",
     "demo": "projen demo",
+    "demo:emitter": "projen demo:emitter",
     "eject": "projen eject",
     "eslint": "projen eslint",
     "eslint:fix": "projen eslint:fix",
@@ -23,6 +24,11 @@
     "package": "projen package",
     "post-compile": "projen post-compile",
     "pre-compile": "projen pre-compile",
+    "py:build": "projen py:build",
+    "py:format": "projen py:format",
+    "py:lint": "projen py:lint",
+    "py:sync": "projen py:sync",
+    "py:test": "projen py:test",
     "sync": "projen sync",
     "test": "projen test",
     "projen": "projen"
@@ -59,7 +65,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.74",
+  "version": "0.0.0",
   "type": "module",
   "private": true,
   "workspaces": [
