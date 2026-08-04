@@ -14,12 +14,13 @@ import {
   tool as webSearchToolModule,
 } from "@dbx-tools/appkit-web-search";
 import {
-  brand as emailBrand,
-  plugin as emailPlugin,
+  brand as emailBrand,     
+  plugin as emailPlugin, 
   tool as emailToolModule,
 } from "@dbx-tools/email";
+import { config } from "@dbx-tools/core";
 import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
-import { brand as sharedBrand, env as sharedEnv } from "@dbx-tools/shared-core";
+import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
 import { interceptor as tunnelInterceptorModule, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
 import { z } from "zod";
@@ -45,8 +46,8 @@ const { search } = searchPlugin;
 const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, syncIndexTool } =
   searchToolModule;
 const { defaultBrandContext } = sharedBrand;
-const mastraStorage = sharedEnv.boolean(undefined, "MASTRA_STORAGE") ?? true;
-const mastraMemory = sharedEnv.boolean(undefined, "MASTRA_MEMORY") ?? true;
+const mastraStorage = config.boolean(undefined, "MASTRA_STORAGE", config.ENV_ONLY) ?? true;
+const mastraMemory = config.boolean(undefined, "MASTRA_MEMORY", config.ENV_ONLY) ?? true;
 const { tunnelInterceptor } = tunnelInterceptorModule;
 const { authGate } = tunnelPlugin;
 

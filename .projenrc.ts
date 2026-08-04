@@ -797,6 +797,7 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/appkit-mastra@workspace:*",
+    "@dbx-tools/core@workspace:*",
     "@dbx-tools/databricks@workspace:*",
     "@dbx-tools/postgres@workspace:*",
     "@dbx-tools/email@workspace:*",

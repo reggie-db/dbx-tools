@@ -61,10 +61,10 @@ resolved, and today the only way to see that is to read a log line.
 
 ### Options, and their env mapping
 
-Every option resolves flag -> env -> default, through `env.string` / `env.positiveInt` /
-`env.boolean` / `env.list` from `@dbx-tools/shared-core`, so the CLI and the plugin cannot
-drift. Reuse the `*_ENV` constants already exported from
-`packages/js/node/tunnel/src/env.ts:35` rather than restating names in the CLI.
+Every option resolves flag -> env -> default through `config.string` /
+`config.positiveInt` / `config.boolean` / `config.list` from
+`@dbx-tools/core`. The shared `scope` + `prefix` expansion keeps the CLI and
+plugin on the same names without a package-level env-constant module.
 
 | Flag                           | Env                                    | Default                        |
 | ------------------------------ | -------------------------------------- | ------------------------------ |
@@ -237,32 +237,26 @@ the second.
 
 ### Mechanism
 
-`env.text` already takes an `EnvKey` list and is earliest-wins
-(`packages/js/shared/core/src/env.ts:88`), so a rename is a one-line list change per variable and
-**no consumer breaks**:
+`config` composes a default `DBX_TOOLS` scope, a capability prefix, and the key
+in precedence order. The tunnel package keeps its prefix in the private
+`src/_config.ts`, so a setting reads the scoped name, the prefixed name, then
+the legacy bare name:
 
 ```ts
-export const ALLOW_ENV: EnvKey = [
-  "DBX_TOOLS_TUNNEL_AUTH_ALLOW",
-  "TUNNEL_AUTH_ALLOW",
-  "EMAIL_AUTH_ALLOW",
-];
+const TUNNEL_CONFIG = { prefix: "TUNNEL" } as const;
+const allow = config.text(["AUTH_ALLOW", "EMAIL_AUTH_ALLOW"], TUNNEL_CONFIG);
 ```
 
 Two supporting changes make the migration visible and enforceable:
 
-1. **A deprecation warning.** Add `env.deprecated(keys)` (or have `text` log once per key) that
-   warns when a value resolved from a non-primary name, naming the replacement. One warning per
-   variable per process, at startup, not per lookup.
-2. **Declare names as lists, always.** Several packages pass bare string literals inline
-   (`env.text("SEARCH_MODE")`, `env.boolean(config.allowWrite, "SEARCH_WRITE")`). Hoist every one
-   into an exported `*_ENV` constant in the package's `config.ts`, the way `node/teams` and
-   `node/tunnel` already do. Then the set of names a package reads is greppable, and the aliases
-   live in one place.
+1. **A deprecation warning.** Add a resolver option that logs once when a
+   non-primary name supplies the value, naming the replacement.
+2. **Keep irregular aliases explicit.** Scope/prefix expansion owns regular
+   names; only compatibility spellings such as `EMAIL_AUTH_ALLOW` belong in a
+   key list.
 
-A test that walks the exported `*_ENV` constants and asserts every primary name starts with
-`DBX_TOOLS_` or appears on the keep-unprefixed list turns this from a convention into a check.
-Put it in `packages/test` since it spans packages.
+A test of the shared key expansion and each package's irregular aliases turns
+the naming policy into a check without growing the public export surface.
 
 ### Also worth fixing while here
 
