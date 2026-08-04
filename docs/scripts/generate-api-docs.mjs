@@ -39,7 +39,7 @@ function packageSlug(name) {
     .replace(/\//g, "-");
 }
 
-/** Human label for a package's `packages/<group>/…` area (mirrors sync-readmes). */
+/** Human label for a package's `js-packages/<group>/…` area (mirrors sync-readmes). */
 function groupTitle(group) {
   switch (group) {
     case "node":
@@ -66,14 +66,14 @@ function firstParagraph(markdown) {
 }
 
 /**
- * Every PUBLISHED package under `packages/` that has a barrel to document.
+ * Every PUBLISHED package under `js-packages/` that has a barrel to document.
  *
  * `private: true` manifests are skipped for the same reason the README sync
  * skips them: an unpublished package has no installable API surface, so
  * generating a reference for it only adds pages a reader cannot use.
  */
 function discoverPackages() {
-  return walk(path.join(root, "packages"))
+  return walk(path.join(root, "js-packages"))
     .filter((p) => path.basename(p) === "package.json")
     .filter((packageJson) => JSON.parse(read(packageJson)).private !== true)
     .map((packageJson) => {
@@ -81,7 +81,7 @@ function discoverPackages() {
       const dir = path.dirname(packageJson);
       const entry = path.join(dir, "index.ts");
       const readme = path.join(dir, "README.md");
-      // `packages/<group>/<pkg>` -> the `<group>` segment, for the area column.
+      // `js-packages/<group>/<pkg>` -> the `<group>` segment, for the area column.
       const group = posix(path.relative(root, dir)).split("/")[1] ?? "other";
       return {
         name: pkg.name,
@@ -277,7 +277,7 @@ function buildApiIndex(packages) {
     "---",
     'title: "API Reference"',
     'description: "Generated TypeScript API reference for dbx-tools packages."',
-    'source: "packages"',
+    'source: "js-packages"',
     "---",
     "",
     "<!--",
@@ -441,7 +441,7 @@ function main() {
           noEmit: true,
           skipLibCheck: true,
         },
-        include: ["../../packages/**/*.ts", "../../packages/**/*.tsx"],
+        include: ["../../js-packages/**/*.ts", "../../js-packages/**/*.tsx"],
         exclude: ["../../**/dist", "../../**/node_modules"],
       },
       null,

@@ -100,7 +100,7 @@
       "name": "dbx-tools",
       "steps": [
         {
-          "exec": "bun packages/cli/dbx-tools/bin/dbx-tools.ts",
+          "exec": "bun js-packages/cli/dbx-tools/bin/dbx-tools.ts",
           "receiveArgs": true
         }
       ]
@@ -109,7 +109,7 @@
       "name": "dbxt",
       "steps": [
         {
-          "exec": "bun packages/cli/dbx-tools/bin/dbx-tools.ts",
+          "exec": "bun js-packages/cli/dbx-tools/bin/dbx-tools.ts",
           "receiveArgs": true
         }
       ]
@@ -157,7 +157,7 @@
       },
       "steps": [
         {
-          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern $@ packages example-packages projen",
+          "exec": "eslint --ext .ts,.tsx --no-error-on-unmatched-pattern $@ js-packages example-packages projen",
           "receiveArgs": true
         }
       ]

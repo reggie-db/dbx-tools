@@ -23,9 +23,9 @@
 /bunfig.toml linguist-generated
 /example-packages/**/index.ts linguist-generated
 /example-packages/openapi/** linguist-generated
+/js-packages/**/index.ts linguist-generated
+/js-packages/openapi/** linguist-generated
 /package.json linguist-generated
-/packages/**/index.ts linguist-generated
-/packages/openapi/** linguist-generated
 /pnpm-workspace.yaml linguist-generated
 /tsconfig.base.json linguist-generated
 /tsconfig.json linguist-generated

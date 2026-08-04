@@ -5,12 +5,12 @@ content is dropping in `<MastraChat/>`.
 
 ## What it wires
 
-- [`@dbx-tools/ui-mastra/react`](../../../packages/ui/mastra) — `MastraChat`
+- [`@dbx-tools/ui-mastra/react`](../../../js-packages/ui/mastra) — `MastraChat`
   drives the whole conversation (streaming, tool-session pills, approval cards,
   model picker, history pagination, chat export, and the thread switcher) by
   wiring itself from the Mastra plugin's published client config. No transport
   code lives here.
-- [`@dbx-tools/ui-appkit`](../../../packages/ui/appkit) — the AppKit UI kit
+- [`@dbx-tools/ui-appkit`](../../../js-packages/ui/appkit) — the AppKit UI kit
   re-export (`/react`) plus the shared Tailwind/Vite setup (`/vite`).
 
 ## Pages

@@ -74,7 +74,7 @@ function packageDir(name: string): string | undefined {
  * when that is not the demo's own install.
  *
  * A linked package's real path sits outside the demo tree (under the repo's
- * `packages/`), which is exactly what distinguishes source from registry - the
+ * `js-packages/`), which is exactly what distinguishes source from registry - the
  * symlink is the whole mechanism, so following it is the whole check.
  */
 function describe(name: string): string {

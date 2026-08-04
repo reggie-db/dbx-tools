@@ -42,33 +42,33 @@ Serving integrations, approval-gated email flows, and AppKit-oriented React UI.
 The repo also includes a projen/pnpm workspace generator because the packages are
 dogfooded here, but that is contributor tooling, not the primary product story.
 Keep generator details in `projen/README.md` and
-`packages/cli/dbx-tools/README.md`.
+`js-packages/cli/dbx-tools/README.md`.
 
 Primary package areas:
 
-- `packages/node/appkit` and `packages/cli/appkit-env` — AppKit defaults,
+- `js-packages/node/appkit` and `js-packages/cli/appkit-env` — AppKit defaults,
   Lakebase env/config resolution, execution-context helpers, plugin lookup, SDK
   cancellation, and cache-schema provisioning.
-- `packages/node/postgres` — reusable Postgres advisory-lock primitives plus a
+- `js-packages/node/postgres` — reusable Postgres advisory-lock primitives plus a
   topic bus built on dedicated `LISTEN` connections and `NOTIFY` broadcasts.
-- `packages/node/appkit-mastra`, `packages/shared/mastra`, and
-  `packages/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
+- `js-packages/node/appkit-mastra`, `js-packages/shared/mastra`, and
+  `js-packages/ui/mastra` — Mastra inside AppKit, shared route/wire contracts,
   and the matching React chat UI.
-- `packages/node/genie` and `packages/shared/genie` — low-level Genie
+- `js-packages/node/genie` and `js-packages/shared/genie` — low-level Genie
   drivers, typed async events, snapshot diffing, and browser-safe Genie
   contracts. `shared/genie` also owns the codegen'd `src/dashboards.ts` (zod
   schemas from the upstream SDK `.d.ts`) that its Genie schemas widen; that used
   to be a separate `shared-sdk-model` package with exactly one consumer.
-- `packages/node/model`, `packages/shared/model`, and
-  `packages/cli/model-proxy` — intent-based Model Serving endpoint selection,
+- `js-packages/node/model`, `js-packages/shared/model`, and
+  `js-packages/cli/model-proxy` — intent-based Model Serving endpoint selection,
   shared schemas/classification, and local OpenAI-compatible proxying.
-- `packages/node/email`, `packages/shared/email-template`,
-  `packages/shared/email`, and `packages/ui/email` — approval-gated email
+- `js-packages/node/email`, `js-packages/shared/email-template`,
+  `js-packages/shared/email`, and `js-packages/ui/email` — approval-gated email
   tool/runtime, a universal React Email presentation layer, shared payload
   schemas, and matching React approval/compose surfaces. Outbound HTML and
   browser previews share the same React Email components, with the repository
   brand applied unless a consumer supplies its own `EmailBrand`.
-- `packages/node/appkit-web-search` — web-search add-on: `web_search` (the
+- `js-packages/node/appkit-web-search` — web-search add-on: `web_search` (the
   Databricks Model Serving NATIVE web-search tool — the model searches the web
   server-side and returns answer + citations; resolves its OWN web-capable model
   via `@dbx-tools/model`, Gemini→GPT, independent of the agent's chat model) +
@@ -77,7 +77,7 @@ Primary package areas:
   optional URL allow-list (built on `@dbx-tools/path`'s `match`) filtering
   citations / refusing disallowed fetches, per-tool approval gating, and the
   AppKit `web-search` plugin. Same shape as node-email.
-- `packages/node/teams`, `packages/shared/teams`, and `packages/ui/teams`
+- `js-packages/node/teams`, `js-packages/shared/teams`, and `js-packages/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
   registration can point at: it validates the inbound Bot Service JWT
@@ -124,14 +124,14 @@ Primary package areas:
   `AdaptiveCardGallery` built on the `adaptivecards` JS renderer (which ships no
   markdown parser — `ui-teams` installs `marked` as its `onProcessMarkdown`).
   Same add-on shape as node-email.
-- `packages/ui/appkit` — AppKit UI/Tailwind foundation used by feature UI
+- `js-packages/ui/appkit` — AppKit UI/Tailwind foundation used by feature UI
   packages.
-- `packages/node/databricks` and `packages/node/databricks-zerobus` —
+- `js-packages/node/databricks` and `js-packages/node/databricks-zerobus` —
   workspace/cloud/Zerobus infrastructure helpers.
-- `packages/shared/core`, `packages/node/core`, and `packages/node/path`
+- `js-packages/shared/core`, `js-packages/node/core`, and `js-packages/node/path`
   — cross-runtime and Node utility foundations.
 
-- **`packages/`** — real content goes here.
+- **`js-packages/`** — JavaScript and TypeScript package content goes here.
 - **`example-packages/`** — seed/example packages when present. Do not make
   root docs primarily about examples.
 
@@ -161,7 +161,7 @@ Root README rules:
 - Do not lead with projen, package discovery, generated files, barrels, mixins,
   or package-scanning internals.
 - Link to `projen/README.md` and
-  `packages/cli/dbx-tools/README.md` only under contributor/development
+  `js-packages/cli/dbx-tools/README.md` only under contributor/development
   context.
 
 Package README rules:
@@ -178,7 +178,7 @@ Package README rules:
 
 Docs site rules:
 
-- Source of truth is `README.md` plus `packages/**/README.md`.
+- Source of truth is `README.md` plus `js-packages/**/README.md`.
 - A `private: true` package is EXCLUDED from the site by both generators. A
   private package never reaches npm, so a page for it documents something a
   reader cannot install. Both `discoverPackages()` functions filter on it, which
@@ -508,7 +508,7 @@ utility is an invisible one.
 ## Formatting and diff hygiene
 
 `bun run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
-does not exclude `packages/`. Some committed files predate the current
+does not exclude `js-packages/`. Some committed files predate the current
 `printWidth: 100` and were never reformatted, so a repo-wide run rewraps them and
 churns dozens of lines that have nothing to do with your change.
 
@@ -526,7 +526,7 @@ task only when reformatting the repo IS the change. Either way, check
 mean to touch, so a behavior change is not buried in reflowed whitespace.
 
 Lint is `bun run eslint` (root `.eslintrc.json`, ESLint 8 / `eslintrc` mode, run
-over `packages`). It autofixes, so it can reformat too — same timing rule applies:
+over `js-packages`). It autofixes, so it can reformat too — same timing rule applies:
 run it when finishing up, not between edits.
 
 ## Vocabulary (important)
@@ -540,7 +540,7 @@ run it when finishing up, not between edits.
 - **scope** — reserved for the npm `@scope/` in package identifiers (e.g. the
   `@dbx-tools` in `@dbx-tools/ui-app`). Don't call tags "scopes".
 - **package** — a `src`-bearing folder under a `packageRoots`
-  root (e.g. `packages/ui/app`), named `@<scope>/<path-dash-joined>`.
+  root (e.g. `js-packages/ui/app`), named `@<scope>/<path-dash-joined>`.
 
 ## Mental model
 
@@ -627,7 +627,7 @@ run it when finishing up, not between edits.
   and augments each with the `name` + `tags` from its own `package.json` — what
   every post-synth command (`barrels`, the watcher, `openapi`) uses.
 - **Discovery + tag resolution.** Under each `packageRoots` root (this
-  repo passes `["packages", "example-packages"]`), ANY `src`-bearing folder at
+  repo passes `["js-packages", "example-packages"]`), ANY `src`-bearing folder at
   ANY depth is a package. Its path relative to the root is decomposed into
   cumulative dash-join **tag candidates**: `ui/app` → `[ui, ui-app]`;
   `dir/another/path` → `[dir, dir-another, dir-another-path]`. Each candidate is
@@ -704,7 +704,7 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
   `@dbx-tools/shared-core` predicates (narrowing a construct):
   `projectPredicate.hasIdentifierName("shared-core", ...)` (unscoped npm name glob via
   `match.toPathMatcher`, `→ Project`), `projectPredicate.hasTag(tag, ...tags)` (all tags
-  required, `→ DBXToolsProject`), and `projectPredicate.hasPath("packages/**", ...)`
+  required, `→ DBXToolsProject`), and `projectPredicate.hasPath("js-packages/**", ...)`
   (root-relative folder glob, `→ Project`), plus the `isProject()` /
   `isDBXToolsProject()` guards. Three more match the name from a different angle:
   `hasName` (the RAW projen `project.name`, verbatim, no `PackageIdentifier`
@@ -731,8 +731,8 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
     after the defaults.
 - **Names**: `PackageIdentifier.of(scope, relPath)`
   (`project.ts`): normalized, lowercased, the root-relative path dash-joined as
-  `@<scope>/<seg-seg-...>` (e.g. `packages/shared/core` → `@dbx-tools/shared-core`,
-  `packages/cli/dbx-tools` → `@dbx-tools/cli-dbx-tools`). The `scope` option
+  `@<scope>/<seg-seg-...>` (e.g. `js-packages/shared/core` → `@dbx-tools/shared-core`,
+  `js-packages/cli/dbx-tools` → `@dbx-tools/cli-dbx-tools`). The `scope` option
   defaults to the resolved project `name`; the `name` option, if omitted, is
   auto-detected (git remote → folder name). This repo passes `scope: "dbx-tools"`,
   giving `@dbx-tools/*` packages. The engine keeps its derived name UNLESS
@@ -742,7 +742,7 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
 
 ```
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbx-tools root task
-packages/
+js-packages/
   cli/dbx-tools/                          # the CLI package (`@dbx-tools/cli`, `dbx-tools` + `dbxt` bins)
     bin/dbx-tools.ts                      # commander entry: sync | barrels | openapi | clean
     index.ts                              # generated barrel (public API surface)
@@ -907,7 +907,7 @@ bun run openapi              # generate the openapi packages from tsoa controlle
 bun run clean                # remove generated files (read-only ones); interactive picker, -y to skip
 bun run --filter '*' compile # type-check every package (projen's per-package compile: tsc --build)
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
-bun run eslint               # lint (autofix) every package under `packages`
+bun run eslint               # lint (autofix) every package under `js-packages`
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
 ```
 
@@ -1057,7 +1057,7 @@ the platform's pnpm build phase reads.
 Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated files.
 
 - **The engine ships on its own tag but at the SAME version, and one `bump` cuts
-  both.** `bun run bump` at the root publishes the `packages/**` members via the
+  both.** `bun run bump` at the root publishes the `js-packages/**` members via the
   `v*` tag -> `release` workflow -> `bun publish`es each non-private one, which by
   definition cannot exclude `projen/` now that it is a workspace member. So the
   engine's separate publication uses a second namespace: tag `projen-v*` ->
@@ -1248,7 +1248,7 @@ bun.lock` matches, `git ls-files bun.lock` is empty). It is a local/CI install
   until projen can emit `eslint.config.*`. Do not hand-write a flat config
   beside the generated one - two configs is worse than one stale one.
 - **The engine is dogfooded as a normal auto-discovered package**, not a hand-
-  authored special case: it lives at `packages/cli/dbx-tools` (tag `cli`,
+  authored special case: it lives at `js-packages/cli/dbx-tools` (tag `cli`,
   name `dbx-tools`), which auto-discovery would otherwise render as
   `@dbx-tools/cli-dbx-tools`. `.projenrc.ts` selects it with
   `project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, ...)` and:
@@ -1260,8 +1260,8 @@ bun.lock` matches, `git ls-files bun.lock` is empty). It is a local/CI install
   come from the `cli` tag, so a CLI needs no per-package config for either.
   It is the ONLY package in the repo that overrides its name: every other one,
   CLIs included, keeps what discovery derives from its path
-  (`packages/cli/model-proxy` -> `@dbx-tools/cli-model-proxy`,
-  `packages/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
+  (`js-packages/cli/model-proxy` -> `@dbx-tools/cli-model-proxy`,
+  `js-packages/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
   package, MOVE ITS FOLDER - do not add a name override.
   The projen engine itself lives in `projen`
   (`@dbx-tools/projen`). It is a workspace member (via `extraWorkspaceMembers`
@@ -1447,7 +1447,7 @@ openapi` / a watched controller edit needs them). The openapi watcher (started b
   / `mlflow.spanOutputs` because Mastra's `mastra.agent_run.*` attrs sit on a
   child the view never reads. Do not adopt `mlflow-tracing` TS SDK for this
   path (it steals the global provider and writes a different store). Details
-  live in `packages/node/appkit-mastra/README.md` under Feedback And
+  live in `js-packages/node/appkit-mastra/README.md` under Feedback And
   Observability.
 - **Generated API-docs links are ABSOLUTE, base-prefixed, and verify-and-drop.**
   Starlight serves every content page at a trailing-slash directory route

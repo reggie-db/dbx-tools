@@ -2,8 +2,8 @@
  * projen definition. `new DBXToolsNodeProject(...)` constructs the monorepo root
  * and, from its `packageRoots`, scans + attaches a
  * `DBXToolsTypeScriptProject` per `src`-bearing package folder at any depth under
- * `packages/`. The engine itself is dogfooded as a normal auto-discovered `cli`
- * package at `packages/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
+ * `js-packages/`. The engine itself is dogfooded as a normal auto-discovered `cli`
+ * package at `js-packages/cli/dbx-tools`; the `cli`/`dbx-tools` mixin below renames
  * it from the auto-derived `@dbx-tools/cli-dbx-tools` to the clean `@dbx-tools/cli`.
  *
  * The runnable sample app lives under `example-packages/` and is synthesized as
@@ -25,10 +25,10 @@ const SCOPE = "dbx-tools";
 const root = new projectApi.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
-  // `packages` is the product; `example-packages` holds the runnable demo app
+  // `js-packages` is the product; `example-packages` holds the runnable demo app
   // (server + React app), merged in from the former standalone `demo/` workspace
   // so it dogfoods the `@dbx-tools/*` packages as `workspace:*` source siblings.
-  packageRoots: ["packages", "example-packages"],
+  packageRoots: ["js-packages", "example-packages"],
   // Any pnpm-workspace setting the engine does not manage itself, typed by
   // projen's own `PnpmWorkspaceYamlSchema`. `overrides` forces every transitive
   // glob onto v13: older majors are deprecated upstream (10.x now ships under
@@ -180,7 +180,7 @@ root.pnpmWorkspace?.addCatalog("adaptivecards", "^3.0.5");
 // shared-core is the light, browser-safe base: EVERY package (except
 // shared-core itself) gets it automatically, regardless of tag. When in doubt,
 // reach for shared-core - so the per-package rules below never add it.
-project.applyToProjects(root, { path: "packages/**", identifierName: "!shared-core" }, (p) => {
+project.applyToProjects(root, { path: "js-packages/**", identifierName: "!shared-core" }, (p) => {
   p.addDeps("@dbx-tools/shared-core@workspace:*");
 });
 
@@ -197,7 +197,7 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 });
 
 // node-core: the Node-only half of the shared runtime (exec + project). Lives
-// under packages/node/, so the `node` tag auto-applies (node types + ES2022
+// under js-packages/node/, so the `node` tag auto-applies (node types + ES2022
 // lib, no DOM). shared-core stays browser-safe; anything needing child_process
 // / fs / process depends on node-core instead. (shared-core is added by the
 // blanket base-dep mixin above, so this package needs no rule of its own.)
@@ -432,7 +432,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
 
 // node-path: filesystem path helpers - glob find, ignore rules, path
 // matching, package scan, and watch. It shells out (node-core exec) and uses
-// chokidar/glob, so it lives under packages/node/ (the `node` tag
+// chokidar/glob, so it lives under js-packages/node/ (the `node` tag
 // auto-applies). Pin explicit ranges: bare names resolve against the local
 // registry, which can return stale majors (e.g. minimatch@3 lacks the
 // `{ Minimatch }` ESM export the code imports, chokidar@1 predates the v4 API).
@@ -807,7 +807,7 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // `.ts` entry directly.
 for (const task of [SCOPE, "dbxt"]) {
   root.addTask(task, {
-    exec: "bun packages/cli/dbx-tools/bin/dbx-tools.ts",
+    exec: "bun js-packages/cli/dbx-tools/bin/dbx-tools.ts",
     receiveArgs: true,
   });
 }

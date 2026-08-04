@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { brand } from "../../packages/node/core/index.ts";
+import { brand } from "../../js-packages/node/core/index.ts";
 
 const root = process.cwd();
 const sourceRoot = path.join(root, ".docs-build", "site");
@@ -82,7 +82,7 @@ function walk(dir, files = []) {
 }
 
 /**
- * Every PUBLISHED package under `packages/`, as the site's page set.
+ * Every PUBLISHED package under `js-packages/`, as the site's page set.
  *
  * A `private: true` manifest is skipped: it never reaches npm, so a page for it
  * documents something a reader cannot install. That also relaxes the
@@ -90,7 +90,7 @@ function walk(dir, files = []) {
  * spike is allowed to have no docs, a published package is not.
  */
 function discoverPackages() {
-  return walk(path.join(root, "packages"))
+  return walk(path.join(root, "js-packages"))
     .filter((p) => path.basename(p) === "package.json")
     .filter((packageJson) => JSON.parse(read(packageJson)).private !== true)
     .map((packageJson) => {

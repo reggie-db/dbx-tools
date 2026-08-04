@@ -6,23 +6,23 @@ backend.
 
 ## What it wires
 
-- `appkit.createApp` from [`@dbx-tools/appkit`](../../../packages/node/appkit) —
+- `appkit.createApp` from [`@dbx-tools/appkit`](../../../js-packages/node/appkit) —
   the auto-configuring wrapper that resolves Lakebase/Postgres env before the
   plugins run, then delegates to AppKit's `createApp`.
 - `mastra(...)` from
-  [`@dbx-tools/appkit-mastra`](../../../packages/node/appkit-mastra) — the
+  [`@dbx-tools/appkit-mastra`](../../../js-packages/node/appkit-mastra) — the
   Mastra agent as an AppKit plugin: OBO auth, Lakebase-backed storage/memory,
   workspace skills, model selection, history, threads, and scoped routes.
 - `genie()` + `plugins.genie?.toolkit()` — the agent drives the Genie space
   (`ask_genie`, `get_statement`, `prepare_chart`, …) for SQL-backed answers with
   streaming progress and inline charts.
 - `email()` + `emailTool()` from
-  [`@dbx-tools/email`](../../../packages/node/email) — an approval-gated
+  [`@dbx-tools/email`](../../../js-packages/node/email) — an approval-gated
   `send_email` tool: the model can call it, but the send suspends until the user
   approves it in the chat UI.
 - `lakebase()` (AppKit) — backs Mastra Memory.
 - `busDemo()` from `src/bus-demo.ts` — a `PostgresTopicBus` from
-  [`@dbx-tools/postgres`](../../../packages/node/postgres) on the Lakebase pool:
+  [`@dbx-tools/postgres`](../../../js-packages/node/postgres) on the Lakebase pool:
   `POST /api/bus-demo/messages` broadcasts, `GET /api/bus-demo/events` streams to
   every viewer. Backs the client's Bus page.
 

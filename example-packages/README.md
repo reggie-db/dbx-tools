@@ -69,7 +69,7 @@ streamed markdown). Its starter prompts come from the same place too: the page
 reads the agent's Genie sample questions off the Mastra plugin's `/suggestions`
 route (`useMastraSuggestions` + `dedupeSuggestions`, exactly what `MastraChat`
 does), so neither page offers a prompt the agent cannot answer. See
-[`@dbx-tools/teams`](../packages/node/teams/README.md) for the two-pass turn
+[`@dbx-tools/teams`](../js-packages/node/teams/README.md) for the two-pass turn
 that makes it so.
 
 The demo registers the plugin as `teams({ allowUnauthenticated: true })`, which
@@ -78,7 +78,7 @@ response, so the page works with no Azure Bot registration. That option is
 ignored unless `NODE_ENV=development` (which the local dev server sets). A real
 deployment sets `TEAMS_APP_ID` / `TEAMS_APP_PASSWORD` instead and gets the
 JWT-validated, Connector-delivered path — see
-[`@dbx-tools/teams`](../packages/node/teams/README.md).
+[`@dbx-tools/teams`](../js-packages/node/teams/README.md).
 
 ```tsx
 // app/appkit-demo/src/pages/Cards.tsx
@@ -108,7 +108,7 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
 
    ```bash
    # from the main repo root, publish the packages to your local registry:
-   pnpm -r --filter "./packages/**" publish \
+   pnpm -r --filter "./js-packages/**" publish \
      --registry http://localhost:4873 --no-git-checks
    ```
 
@@ -144,7 +144,7 @@ This demo consumes `@dbx-tools/*` from the registry set in [`.npmrc`](.npmrc).
    instead of reaching for `NODE_ENV=development`, which also relaxes secure
    cookies and other dev-only escape hatches. `auto` falls back per request, so
    front-door callers keep full per-user scoping. See
-   [`@dbx-tools/appkit`](../packages/node/appkit#choose-the-request-identity).
+   [`@dbx-tools/appkit`](../js-packages/node/appkit#choose-the-request-identity).
 
 ## Two dev modes
 
@@ -153,7 +153,7 @@ working on the `@dbx-tools/*` packages themselves.
 
 ### Dev-link mode (default) — for iterating on ALL packages in THIS repo
 
-When you're editing package source under `../packages/**`, the bump → publish →
+When you're editing package source under `../js-packages/**`, the bump → publish →
 update → restart loop is too slow. Link mode points BOTH demo members at local
 `@dbx-tools/*` source, so server changes land on restart and a
 `vite build --watch` rebuilds the client bundle on every UI edit. Beside the
@@ -163,7 +163,7 @@ packages this is the common case, so it is what a plain install gives you:
 pnpm install                                               # server + client use local source
 pnpm --filter @dbx-tools/demo-appkit-server dev            # restart for Node package edits
 pnpm --filter @dbx-tools/demo-appkit-app exec vite build --watch  # rebuild dist/ on UI source edits
-# edit ../packages/**/src, restart/refresh as appropriate — no republish.
+# edit ../js-packages/**/src, restart/refresh as appropriate — no republish.
 ```
 
 ### Consumer mode — for consuming projects
@@ -197,7 +197,7 @@ is the point. An earlier `scripts/dev-link.mjs` edited the app manifest and
 `pnpm-workspace.yaml` is also committed, so a forgotten undo landed local dev
 state in git.
 
-The local set is discovered automatically from `../packages/**`, so packages
+The local set is discovered automatically from `../js-packages/**`, so packages
 added, removed, or renamed need no edit. The hook also resolves every EXTERNAL
 dependency declared by those source packages from the main install and links
 the demo's matching dependencies to that exact package directory. This second
@@ -208,7 +208,7 @@ whole runtime graph gives both demo members and all linked sources one set of
 AppKit, Mastra, React, Zod, and other shared modules.
 
 The startup `dependencies` log reports what the process actually resolved.
-Local packages read `0.0.0 (linked from packages/...)`; consumer mode reports
+Local packages read `0.0.0 (linked from js-packages/...)`; consumer mode reports
 published versions such as `0.6.x`.
 
 ## Required env

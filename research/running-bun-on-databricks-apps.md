@@ -53,8 +53,8 @@ Runtime `PATH` includes the **root** `node_modules/.bin`
   `dependencies` or `devDependencies` (prefer `dependencies` for runtime
   semantics — see caveat below).
 - `bun` as a **workspace member's** dependency → bin lands in
-  `packages/<m>/node_modules/.bin`, which is **not** on PATH → bare `bun`
-  fails. You would need `export PATH="$PWD/packages/<m>/node_modules/.bin:$PATH"`
+  `js-packages/<m>/node_modules/.bin`, which is **not** on PATH → bare `bun`
+  fails. You would need `export PATH="$PWD/js-packages/<m>/node_modules/.bin:$PATH"`
   in the command, or hoist the dep to root.
 
 ## dependencies vs devDependencies
