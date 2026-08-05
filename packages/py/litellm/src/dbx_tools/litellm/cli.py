@@ -29,7 +29,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     profile = require_profile(parsed.profile)
     os.environ[PROFILE_ENV] = profile
     os.environ[DATABRICKS_PROFILE_ENV] = profile
-    if not _has_option(proxy_args, "--host"):
+    if not os.getenv("HOST") and not _has_option(proxy_args, "--host"):
         proxy_args.extend(["--host", "127.0.0.1"])
 
     if _has_config_argument(proxy_args):

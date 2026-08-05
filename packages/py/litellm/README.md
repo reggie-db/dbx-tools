@@ -39,7 +39,7 @@ uv run dbx-litellm --profile my-workspace --port 4000
 ```
 
 The launcher listens on `127.0.0.1` by default. Pass an explicit LiteLLM
-`--host` value to expose it on another interface.
+`--host` value or set `HOST` to expose it on another interface.
 
 The equivalent module invocation is:
 
@@ -121,6 +121,7 @@ families use LiteLLM's own Responses-to-Chat fallback.
 
 - `backend` — explicit-profile workspace client, endpoint cache, and model
   resolution;
+- `models` — Responses-only endpoint routing policy;
 - `provider` — LiteLLM `CustomLLM` adapter and exported `dbx_provider`
   singleton;
 - `routing` — model-only proxy hook for native Responses-only calls;

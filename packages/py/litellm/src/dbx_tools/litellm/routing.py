@@ -38,9 +38,7 @@ class DbxResponsesRouter(CustomLogger):
             requires_tools=isinstance(tools, list) and bool(tools),
         )
         routed = dict(data)
-        routed["model"] = (
-            f"databricks/{resolved}" if requires_responses_api(resolved) else resolved
-        )
+        routed["model"] = f"databricks/{resolved}" if requires_responses_api(resolved) else resolved
         return routed
 
 

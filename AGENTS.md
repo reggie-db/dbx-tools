@@ -180,7 +180,9 @@ Primary package areas:
   request to LiteLLM's built-in Databricks provider. Keep authentication,
   transport, parameter mapping, streaming, retries, embeddings, and
   Chat↔Responses conversion in LiteLLM; do not add provider-specific content
-  rewriting here.
+  rewriting here. The Responses pre-call hook may change only the resolved
+  model identifier so Responses-only endpoints reach LiteLLM's native
+  Databricks Responses provider.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
