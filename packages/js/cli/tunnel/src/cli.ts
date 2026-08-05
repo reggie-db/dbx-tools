@@ -162,9 +162,7 @@ export function buildProgram(name = "dbx tunnel"): Command {
       await run(cmd.opts<TunnelOptions>(), command);
     });
 
-  addOptions(
-    program.command("run").description("Wrap a command (the default action)"),
-  )
+  addOptions(program.command("run").description("Wrap a command (the default action)"))
     .argument("<command...>", "the command to wrap, after `--`")
     .action(async (command: string[], _options: TunnelOptions, cmd: Command) => {
       await run(cmd.opts<TunnelOptions>(), command);

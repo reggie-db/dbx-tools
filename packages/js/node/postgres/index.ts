@@ -6,6 +6,7 @@ export * as advisoryLock from "./src/advisory-lock.ts";
 export * as persistence from "./src/persistence.ts";
 export * as topicBus from "./src/topic-bus.ts";
 export type { AdvisoryLockKey, PgPoolLike, PgQueryable } from "./src/advisory-lock.ts";
+export { POINTER_VERSION } from "./src/persistence.ts";
 export type { DurationInput, ResolvedTopicBusPersistenceOptions } from "./src/persistence.ts";
 export { PostgresTopicBus } from "./src/topic-bus.ts";
 export type { TopicMetadata, TopicMessage, TopicPublishInput, TopicListener, TopicMetadataProvider, PostgresTopicBusOptions } from "./src/topic-bus.ts";

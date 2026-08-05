@@ -1,8 +1,9 @@
 # @dbx-tools/cli
 
-The single `dbx` CLI: workspace lifecycle, Model Serving proxy, and AppKit env.
+The single `dbx` CLI: workspace lifecycle, Model Serving proxy, AppKit env, and
+a gated public tunnel.
 
-This package installs one command, `dbx` (aliased `dbx-tools`), with three
+This package installs one command, `dbx` (aliased `dbx-tools`), with four
 groups:
 
 | Command           | What it does                                                             |
@@ -10,6 +11,7 @@ groups:
 | `dbx dev`         | Bootstrap or repair a dbx-tools workspace, then forward to projen.       |
 | `dbx model-proxy` | Local OpenAI-compatible proxy in front of Databricks Model Serving.      |
 | `dbx appkit env`  | Print the environment an AppKit app resolves, as eval-able shell output. |
+| `dbx tunnel`      | Front any command with a public portr tunnel and an email-OTP gate.      |
 
 Key features:
 
@@ -24,12 +26,13 @@ Key features:
   when the effective registry is not npmjs.
 - Importable CLI/root/bun helpers for tests and thin wrapper commands.
 
-`model-proxy` and `appkit` live in
-[`@dbx-tools/cli-model-proxy`](../model-proxy) and
-[`@dbx-tools/cli-appkit-env`](../appkit-env) and are imported LAZILY, only once
-their name is matched - so `dbx dev` never pays to load the Databricks SDK or
-AppKit. Run `dbx <group> --help` for a group's own flags; each forwards `--help`
-to the child program rather than answering it at the root.
+Every feature group lives in its own package -
+[`@dbx-tools/cli-model-proxy`](../model-proxy),
+[`@dbx-tools/cli-appkit-env`](../appkit-env), and
+[`@dbx-tools/cli-tunnel`](../tunnel) - and is imported LAZILY, only once its name
+is matched, so `dbx dev` never pays to load the Databricks SDK, AppKit, or the
+SMTP stack. Run `dbx <group> --help` for a group's own flags; each forwards
+`--help` to the child program rather than answering it at the root.
 
 ## Bootstrap A Workspace
 
@@ -81,6 +84,21 @@ eval "$(dbx appkit env --quiet)"
 See [`@dbx-tools/cli-model-proxy`](../model-proxy) and
 [`@dbx-tools/cli-appkit-env`](../appkit-env) for the full flag surface, auth
 resolution, and output formats.
+
+## Put A Gated Public URL In Front Of A Command
+
+```sh
+dbx tunnel status --allow databricks.com          # what would happen, nothing started
+dbx tunnel --allow databricks.com -- bun src/server.ts
+```
+
+`dbx tunnel` claims the public port, moves the wrapped command to a private
+loopback port, and reverse-proxies between them so an email one-time-code gate
+sits in front of traffic the command never has to know about. The command does
+not have to be a Node server - anything that honors `PORT` /
+`DATABRICKS_APP_PORT` works. An AppKit app should prefer the in-process plugin
+path instead; see [`@dbx-tools/cli-tunnel`](../tunnel) for that comparison, the
+full flag table, and the request flow.
 
 ## Use The CLI Internals
 

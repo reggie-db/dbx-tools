@@ -44,6 +44,7 @@ await mem.writeFile("note.txt", "hi");
 | `baseFS.normalizeFileSystemRoot`         | Join root segments (stringify / FNV-hash)                  |
 | `FileSystemRootInput`                    | `root` option: one or many non-null segments               |
 | `MemoryFileSystem`                       | In-memory adapter (tests / reference)                      |
+| `memoryFS`                               | The module behind it, if a subclass needs its internals    |
 | `baseFS.mapFileSystemError`              | Wrap backend failures into `FileSystemError`               |
 | `baseFS.inferFileSystemErrorCode`        | Infer a code from HTTP status / message tokens             |
 | `posixPath`                              | POSIX root/join/normalize helpers for namespace paths      |

@@ -84,7 +84,11 @@ async function handleAuthRoute(
   }
   if (path === `${prefix}/request` && request.method === "POST") {
     const parsed = authRequestSchema.safeParse(json.parseRecord(await readBody(request)));
-    sendJson(response, 200, parsed.success ? await gate.request(parsed.data.email, ip) : { ok: true });
+    sendJson(
+      response,
+      200,
+      parsed.success ? await gate.request(parsed.data.email, ip) : { ok: true },
+    );
     return true;
   }
   if (path === `${prefix}/verify` && request.method === "POST") {

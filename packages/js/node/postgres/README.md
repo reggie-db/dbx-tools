@@ -24,6 +24,12 @@ them without a second database client or connection pool.
 - Rejects a payload that would not survive a JSON round trip unchanged, at the
   call site rather than on the wire.
 - Reconnects a dropped listener with bounded backoff while subscribers remain.
+- Optionally PERSISTS every published message to a package-owned table, so a
+  subscriber that was not listening can replay history by cursor, with a default
+  TTL and cleanup on insert.
+- Two payload styles: the whole envelope in the notification, or a pointer the
+  listener reads back — which lifts the 8000-byte `NOTIFY` limit and keeps the
+  contents behind a table grant.
 
 ## Advisory Locks
 
@@ -89,7 +95,8 @@ await bus.close();
 Every process listening on the channel receives every message; there are no
 competing consumers. That makes the bus right for live fan-out — an SSE stream per
 browser tab, a cache invalidation, a presence ping — and wrong for work
-distribution. Use a table or a queue when a subscriber needs acks or replay.
+distribution. Delivery is live-only by default; turn on `persist` (below) when a
+subscriber needs replay, and use a real queue when it needs acks.
 
 ### The Envelope
 
@@ -173,6 +180,74 @@ One channel carries many topics, so adding a topic costs nothing; give a genuine
 high-volume unrelated stream its own channel instead, since every listening
 session decodes every message on the channel.
 
+### Replay With `persist`
+
+`NOTIFY` has no replay: a process that was not listening never learns what it
+missed. Set `persist` and each published message is INSERTed in the same
+transaction as its notification, so history becomes readable by cursor.
+
+```ts
+const bus = new PostgresTopicBus(pool, { persist: true });
+
+await bus.broadcast("orders", { type: "order.updated", body: { id: 7 } });
+
+let cursor: string | undefined;
+do {
+  const page = await bus.history("orders", { after: cursor, limit: 100 });
+  for (const { message, expiresAt } of page.messages) handle(message, expiresAt);
+  cursor = page.nextCursor;
+} while (cursor);
+```
+
+The row and the notification COMMIT together, which is the property the whole
+design rests on: `NOTIFY` is delivered at commit rather than at statement time, so
+a listener can never be told about a row it cannot yet read.
+
+| Option             | Default           | Behavior                                                       |
+| ------------------ | ----------------- | -------------------------------------------------------------- |
+| `schema`           | `dbx_message_bus` | Schema the package owns.                                       |
+| `scope`            | `open`            | Which tier's table publishes and history read by default.      |
+| `tables`           | `*_messages`      | Override a tier's table name for a managed installation.       |
+| `ttl`              | `24 hours`        | Per-message expiry. `false` keeps messages until deleted.      |
+| `payload`          | `envelope`        | `pointer` notifies with routing only. See below.               |
+| `cleanupBatchSize` | `1000`            | Expired rows deleted per persisted publish.                    |
+| `provision`        | `true`            | Create the schema, tables, and indexes on first persisted use. |
+
+Messages EXPIRE by default. A 24-hour TTL is the default precisely because an
+unbounded message table is the failure this feature would otherwise introduce;
+expired rows are deleted in bounded batches on each persisted publish, and
+`cleanupExpired()` runs the same sweep on demand. `ttl: false` opts one bus (or
+`{ ttl: false }` on a single `broadcast`) out of expiry — it is available, but it
+is not the default.
+
+Two tiers, `open` and `restricted`, exist so one channel can carry messages with
+different read audiences: they are separate tables, so a role granted the open
+table cannot read restricted history. `messageBusGrantStatements(roles, scope,
+options)` emits exactly the grants a tier needs, and a `history` cursor is bound
+to the tier it came from — resuming an open page against the restricted table
+throws rather than silently returning someone else's rows. Publish to a tier
+per-message with `broadcast(topic, { scope: "restricted", ... })`.
+
+Set `provision: false` when a migration owns the schema; the statements are
+otherwise applied once, under an advisory transaction lock, so concurrent
+instances installing at boot do not race.
+
+### Envelope Or Pointer
+
+`payload: "envelope"` (the default) puts the whole message in the notification.
+One round trip, no read amplification, bounded by PostgreSQL's payload limit.
+
+`payload: "pointer"` notifies with routing and identity only — `{ v, scope, topic,
+id, sequence }` — and the listener reads the envelope back. That lifts the size
+limit entirely (a body larger than 7900 bytes is only publishable this way) and
+means a subscriber without the tier's table grant learns that something happened
+without learning what. The cost is one read per notification. Listeners receive
+the same `TopicMessage` either way; the difference is invisible above `listen`.
+
+A pointer whose row is already gone (TTL cleanup won the race) or unreadable
+delivers nothing rather than raising — expected on the restricted tier. Use
+`decodePointer` if a non-bus consumer needs to read the raw notification.
+
 ### Naming A Channel
 
 `channel` takes whatever identifies the channel, not a pre-sanitized identifier —
@@ -218,11 +293,11 @@ native surface to prefer here.
 
 ## Module Map
 
-| Module         | Purpose                                                            |
-| -------------- | ------------------------------------------------------------------ |
-| `advisoryLock` | Stable lock IDs plus session- and transaction-scoped lock helpers. |
-| `topicBus`     | Topic bus, message contracts, and deterministic `channelName`.     |
-| `topicBus`     | Structured topic broadcast/listen over PostgreSQL `NOTIFY`.        |
+| Module         | Purpose                                                                |
+| -------------- | ---------------------------------------------------------------------- |
+| `advisoryLock` | Stable lock IDs plus session- and transaction-scoped lock helpers.     |
+| `topicBus`     | Topic bus, message contracts, and deterministic `channelName`.         |
+| `persistence`  | Stored-message schema, grants, TTL cleanup, history, and pointer wire. |
 
 Both modules are also flattened onto the package root, so
 `import { withAdvisoryLock, PostgresTopicBus } from "@dbx-tools/postgres"` works

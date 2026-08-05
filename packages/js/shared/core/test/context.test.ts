@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { chdir, cwd } from "node:process";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { chdir, cwd } from "node:process";
 import { afterEach, describe, it } from "node:test";
 
 import { context } from "../index.ts";
@@ -50,7 +50,7 @@ describe("context.cached", () => {
     assert.equal(load(), 2);
   });
 
-  it("treats \".\" and null as the current context", () => {
+  it('treats "." and null as the current context', () => {
     let calls = 0;
     const load = (value?: string | null) =>
       context.cached(["test", "current"], () => ++calls, value);
