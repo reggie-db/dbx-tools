@@ -25,7 +25,7 @@
  */
 
 import { hostname } from "node:os";
-import { async as asyncUtil, error, hash, json, object, string } from "@dbx-tools/shared-core";
+import { async as sharedAsync, error, hash, json, object, string } from "@dbx-tools/shared-core";
 import type { Notification, PoolClient } from "pg";
 
 import type { PgPoolLike, PgQueryable } from "./advisory-lock.ts";
@@ -728,7 +728,7 @@ export class PostgresTopicBus {
     while (!this.closed && this.listeners.size > 0) {
       if (delay > 0) {
         try {
-          await asyncUtil.sleep(delay, this.reconnectAbort.signal);
+          await sharedAsync.sleep(delay, this.reconnectAbort.signal);
         } catch {
           return;
         }

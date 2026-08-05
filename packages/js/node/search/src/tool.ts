@@ -14,7 +14,7 @@
  * @module
  */
 
-import { search as searchContract, type UpsertResult } from "@dbx-tools/shared-search";
+import { search as sharedSearch, type UpsertResult } from "@dbx-tools/shared-search";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { toCreateIndexOptions } from "./index-tools.ts";
@@ -102,16 +102,16 @@ export function universalSearchTool(options: SearchToolOptions = {}) {
  * Only install it when the plugin's write surface is enabled.
  */
 export function addDocumentsTool(options: SearchToolOptions = {}) {
-  const inputSchema = searchContract.searchDocumentSchema
+  const inputSchema = sharedSearch.searchDocumentSchema
     .array()
     .describe("Documents to add or update. Each must include the index primary key.");
   return createTool({
     id: options.id ?? "add_documents",
     description: ADD_DOCUMENTS_TOOL_DESCRIPTION,
-    inputSchema: searchContract.searchRequestSchema
+    inputSchema: sharedSearch.searchRequestSchema
       .pick({ index: true })
       .extend({ documents: inputSchema }),
-    outputSchema: searchContract.upsertResultSchema,
+    outputSchema: sharedSearch.upsertResultSchema,
     execute: async (input, context): Promise<UpsertResult> => {
       const { client, config } = getSearchRuntime();
       const record = input as { index?: string; documents: unknown };

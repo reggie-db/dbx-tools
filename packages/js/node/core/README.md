@@ -107,17 +107,11 @@ targets, resources, and paths, so reading one as a process setting resolves name
 the deployed App never sees. Reference a variable from `config.env` to make it
 one.
 
-Because validation is a process spawn, it is gated on this being an AppKit
-project at all, in three steps. `@databricks/appkit` must be RESOLVABLE - it is
-an optional peer, the probe resolves the path without evaluating the module, and
-a consumer that never installed it never spawns the CLI. The bundle must then
-describe exactly ONE app carrying `config.env`, since nothing in this package
-says which of several apps a process is. Finally AppKit's execution context
-confirms the process really is that app; that context does not exist until AppKit
-boots, so only the affirmative is remembered and a lookup during boot still
-resolves from the bundle instead of being permanently denied. Setting
-`DBX_TOOLS_CONFIG_BUNDLE=true` skips this gate for a tool that wants the bundle
-without being the App.
+Bundle lookup is not coupled to AppKit installation or execution context. If
+earlier sources miss during local development, the configured working directory
+contains a bundle, and bundle reads are enabled, validation runs. This keeps
+pre-boot callers such as `@dbx-tools/appkit` auto-configuration on the same
+deterministic path as CLIs and ordinary Node consumers.
 
 Deployed Apps skip dotenv and bundle lookup after `isDatabricksAppEnv()`
 recognizes the required App name, HTTP(S) host, and valid port. Set
@@ -132,9 +126,10 @@ the default: read files outside an App and skip them inside one. Bundle reads
 also default off when `NODE_ENV=production`; set
 `DBX_TOOLS_CONFIG_BUNDLE=true` to opt into bundle validation there.
 
-Use `config.string()`, `boolean()`, `positiveNumber()`, `positiveInt()`, and
-`list()` to normalize typed options and text-based configuration through one
-rule. `config.ENV_ONLY` disables file fallbacks for exact environment reads.
+Use `config.string()`, `boolean()`, `positiveNumber()`, `positiveInt()`,
+`port()`, and `list()` to normalize typed options and text-based configuration
+through one rule. `config.port()` accepts only TCP ports from 1 through 65535;
+`config.ENV_ONLY` disables file fallbacks for exact environment reads.
 
 ## Run Commands
 

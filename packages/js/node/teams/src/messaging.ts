@@ -25,7 +25,7 @@
  */
 
 import { error, log } from "@dbx-tools/shared-core";
-import { activity as activityContract } from "@dbx-tools/shared-teams";
+import { activity as sharedActivity } from "@dbx-tools/shared-teams";
 import { connectorToken, isAllowedServiceUrl } from "./auth.ts";
 import { sendActivity, sendTyping } from "./connector.ts";
 import { runCardTurn, type CardAgentLike, type CardContextFactory } from "./conversation.ts";
@@ -56,7 +56,7 @@ export interface DeliverTurnOptions {
   /** The agent that composes the card. */
   agent: CardAgentLike;
   /** The validated inbound activity. */
-  activity: activityContract.Activity;
+  activity: sharedActivity.Activity;
   /** Bot credentials used to fetch the outbound Connector token. */
   credentials: BotCredentials;
   /**
@@ -82,7 +82,7 @@ export interface DeliverTurnOptions {
  * authenticated is sent there.
  */
 export const resolveServiceUrl = (
-  activity: activityContract.Activity,
+  activity: sharedActivity.Activity,
   tokenServiceUrl?: string,
 ): string | null => {
   const raw = (activity as { serviceUrl?: unknown }).serviceUrl;

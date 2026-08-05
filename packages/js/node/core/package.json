@@ -18,13 +18,9 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@databricks/appkit": "catalog:",
     "@types/bun": "^1.3.14",
     "@types/node": "catalog:",
     "typescript": "^5.9.3"
-  },
-  "peerDependencies": {
-    "@databricks/appkit": "catalog:"
   },
   "dependencies": {
     "@dbx-tools/shared-core": "workspace:*",
@@ -59,11 +55,6 @@
     "src",
     "lib"
   ],
-  "peerDependenciesMeta": {
-    "@databricks/appkit": {
-      "optional": true
-    }
-  },
   "dbxToolsConfig": {
     "tags": [
       "node"

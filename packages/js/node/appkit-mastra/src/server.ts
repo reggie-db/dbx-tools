@@ -15,7 +15,7 @@ import {
   MASTRA_THREAD_ID_KEY,
   RequestContext,
 } from "@mastra/core/request-context";
-import { MastraServer as MastraServerExpress } from "@mastra/express";
+import { MastraServer as ExpressMastraServer } from "@mastra/express";
 import { trace } from "@opentelemetry/api";
 import type express from "express";
 
@@ -152,7 +152,7 @@ export async function createRequestContext(
  * AppKit user, resource id, and a thread id backed by an HTTP-only
  * session cookie (`appkit_<plugin-name>_session_id`).
  */
-export class MastraServer extends MastraServerExpress {
+export class MastraServer extends ExpressMastraServer {
   private log: log.Logger;
   /**
    * Whether to stamp the MLflow trace-id header on responses. Shares the
@@ -162,7 +162,7 @@ export class MastraServer extends MastraServerExpress {
 
   constructor(
     private config: MastraPluginConfig,
-    ...args: ConstructorParameters<typeof MastraServerExpress>
+    ...args: ConstructorParameters<typeof ExpressMastraServer>
   ) {
     super(...args);
     this.log = log.logger(config);

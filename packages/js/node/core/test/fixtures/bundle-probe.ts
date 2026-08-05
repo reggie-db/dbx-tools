@@ -11,7 +11,7 @@ import { bundleFile, text } from "../../src/config.ts";
 
 const root = process.argv[2]!;
 const keys = process.argv.slice(3);
-const options = { cwd: root, scope: [] as const, sources: "bundle" as const };
+const options = { cwd: root, scope: [] as const };
 process.stdout.write(
   `${JSON.stringify({
     file: bundleFile(root) !== undefined,

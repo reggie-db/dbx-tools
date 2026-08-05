@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { context, json, net, string } from "@dbx-tools/shared-core";
-import { statSync as stat } from "./file.ts";
+import { statSync as fileStatSync } from "./file.ts";
 
 const ROOT_MARKERS = [
   ".projenrc.ts",
@@ -18,7 +18,7 @@ export interface ProjectContext {
   readonly output: string;
   /** `output` when it names something on disk. */
   readonly path?: string;
-  /** `fs.stat` of {@link path}, when it exists. */
+  /** `file.statSync` of {@link path}, when it exists. */
   readonly pathStats?: Stats;
   /**
    * `output` parsed into a chainable {@link net.UrlBuilder}, when it is a real
@@ -40,7 +40,7 @@ function projectContextCommandOutput(command: string, args: string[], cwd: strin
   const result = spawnSync(command, args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
   const output = result?.stdout?.toString()?.trim();
   if (result.status === 0 && output) {
-    const pathStats = stat(output);
+    const pathStats = fileStatSync(output);
     // Only an EXPLICIT `scheme://...` counts as a URL. `urlBuilder` otherwise
     // synthesizes one (a bare `example.com` -> `https://…`, an absolute path ->
     // `http://localhost/…`), which would mislabel directory outputs and bare
@@ -83,7 +83,7 @@ function gitRoot(cwd?: string): string | undefined {
 export function root(cwd: string = process.cwd()): string | undefined {
   let current = resolve(cwd);
 
-  if (!stat(current)?.isDirectory()) {
+  if (!fileStatSync(current)?.isDirectory()) {
     current = dirname(current);
   }
   const boundaries = new Set(
@@ -95,7 +95,7 @@ export function root(cwd: string = process.cwd()): string | undefined {
   let best: { dir: string; priority: number } | undefined;
   while (true) {
     for (const [priority, marker] of ROOT_MARKERS.entries()) {
-      if (stat(join(current, marker))?.isFile()) {
+      if (fileStatSync(join(current, marker))?.isFile()) {
         if (
           best === undefined ||
           priority < best.priority ||
@@ -160,7 +160,7 @@ export function* resolveProjectRoots(cwd: string = process.cwd()): Generator<str
     const dir = resolve(candidate);
     if (seen.has(dir)) continue;
     seen.add(dir);
-    if (stat(dir)?.isDirectory()) yield dir;
+    if (fileStatSync(dir)?.isDirectory()) yield dir;
   }
   if (!seen.has(base)) yield base;
 }
@@ -169,7 +169,7 @@ export function* resolveProjectRoots(cwd: string = process.cwd()): Generator<str
 function workspaceRoot(cwd: string = process.cwd()): string {
   let last: string | undefined;
   for (const dir of resolveProjectRoots(cwd)) {
-    if (stat(resolve(dir, "package.json"))?.isFile()) return dir;
+    if (fileStatSync(resolve(dir, "package.json"))?.isFile()) return dir;
     last = dir;
   }
   return last ?? resolve(cwd);
@@ -311,7 +311,7 @@ export function npmRegistry(
 }
 
 function readPackageName(pkgPath: string): string | undefined {
-  if (!stat(pkgPath)?.isFile()) return undefined;
+  if (!fileStatSync(pkgPath)?.isFile()) return undefined;
   return string.trimToNull(json.parseRecord(readFileSync(pkgPath, "utf8"))?.name) ?? undefined;
 }
 

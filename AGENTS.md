@@ -32,6 +32,12 @@ When you update docs, README positioning, or agent instructions:
 - Do not hand-maintain a second docs tree. The GitHub Pages site is generated
   from root/package READMEs by `docs/scripts/sync-readmes.mjs`, with generated
   TypeScript API pages from `docs/scripts/generate-api-docs.mjs`.
+- Qualify aliased named imports by their SOURCE package or module, not by the
+  role they happen to play in one consumer. For example, write
+  `import { config as coreConfig } from "@dbx-tools/core"`, not
+  `config as runtimeConfig` or `config as configModule`. Preserve conventional
+  compatibility aliases and aliases that disambiguate two same-named symbols;
+  when an alias is needed, a reader should be able to infer where it came from.
 
 ## What this repo is
 
@@ -801,7 +807,7 @@ whether the sentence is about the code as it stands or about the act of changing
   `project.synth()` yourself. A normal consuming `.projenrc.ts` is two lines:
   `const project = new DBXToolsNodeProject(); project.synth();`. The barrel
   exposes the class BOTH flat and under its module namespace
-  (`projectApi.DBXToolsNodeProject`), so either import works; the namespace form
+  (`projenProject.DBXToolsNodeProject`), so either import works; the namespace form
   is what in-repo code and `projen/README.md` use, and is the only one older
   published engines understand. Both classes
   share `DBXToolsCommonOptions` (`scope`, `packageRoots`,
@@ -1291,7 +1297,7 @@ Barrels re-export every exporting file under `src/` except names starting with
 Each module gets an `export * as <ns>` line, and on top of that every name that
 is UNIQUE across the package is HOISTED flat as well - `export { ... }` for
 non-function values (classes, consts, enums, …), `export type { ... }` for
-types - so `DBXToolsNodeProject` and `projectApi.DBXToolsNodeProject` both
+types - so `DBXToolsNodeProject` and `projenProject.DBXToolsNodeProject` both
 resolve. `export function` names are never hoisted; they stay reachable only
 through their namespace (`posixPath.toPosix`). Uniqueness is counted over
 hoistable values and types together, and a name colliding with a namespace or

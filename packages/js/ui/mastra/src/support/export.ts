@@ -24,7 +24,7 @@
  */
 
 import { string } from "@dbx-tools/shared-core";
-import { marker as markers, type Chart, type StatementData } from "@dbx-tools/shared-mastra";
+import { marker as sharedMarkers, type Chart, type StatementData } from "@dbx-tools/shared-mastra";
 import type { UIMessage } from "ai";
 import type { EChartsCoreOption } from "echarts";
 import { normalizeChartOption } from "./chart-option.ts";
@@ -197,11 +197,11 @@ type Segment =
 function splitSegments(text: string): Segment[] {
   const segments: Segment[] = [];
   let last = 0;
-  for (const marker of markers.parseMarkers(text)) {
+  for (const marker of sharedMarkers.parseMarkers(text)) {
     if (marker.start > last) {
       segments.push({ kind: "text", text: text.slice(last, marker.start) });
     }
-    if (markers.isUuid(marker.id) && (marker.type === "chart" || marker.type === "data")) {
+    if (sharedMarkers.isUuid(marker.id) && (marker.type === "chart" || marker.type === "data")) {
       segments.push({ kind: marker.type, id: marker.id });
     }
     last = marker.end;

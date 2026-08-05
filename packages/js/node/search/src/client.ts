@@ -32,7 +32,7 @@ import { ExecutionError, getExecutionContext } from "@databricks/appkit";
 import { Context } from "@databricks/sdk-experimental";
 import { appkit, databricks } from "@dbx-tools/appkit";
 import { invoke, resolve as modelResolve, serving } from "@dbx-tools/model";
-import { async as asyncUtil, json, log, string } from "@dbx-tools/shared-core";
+import { async as sharedAsync, json, log, string } from "@dbx-tools/shared-core";
 import { ModelClass } from "@dbx-tools/shared-model";
 import type {
   SearchDocument,
@@ -734,7 +734,7 @@ export class SearchClient {
           context: { operation: "provision" },
         });
       }
-      await asyncUtil.sleep(5000, signal);
+      await sharedAsync.sleep(5000, signal);
       info = await this.getIndex(name, signal);
     }
     return info;

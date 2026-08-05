@@ -23,7 +23,7 @@ import {
   type IAppRouter,
   type PluginManifest,
 } from "@databricks/appkit";
-import { plugin as pluginLookup } from "@dbx-tools/appkit";
+import { plugin as appkitPlugin } from "@dbx-tools/appkit";
 import { net as databricksNet } from "@dbx-tools/databricks";
 import { PostgresTopicBus, type TopicMessage, type TopicMetadata } from "@dbx-tools/postgres";
 import { error, log, object } from "@dbx-tools/shared-core";
@@ -102,7 +102,7 @@ class BusDemoPlugin extends Plugin {
 
   override async setup(): Promise<void> {
     this.context?.onLifecycle("setup:complete", async () => {
-      const lake = pluginLookup.require(this.context, lakebase, "bus-demo");
+      const lake = appkitPlugin.require(this.context, lakebase, "bus-demo");
       this.bus = new PostgresTopicBus(lake.exports().pool, {
         metadata: resolveEnvironmentMetadata,
         onError: (cause) =>

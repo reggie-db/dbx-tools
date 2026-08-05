@@ -57,7 +57,7 @@ import {
   type ResourceRequirement,
 } from "@databricks/appkit";
 import { plugin } from "@dbx-tools/appkit";
-import { serving as nodeServing } from "@dbx-tools/model";
+import { serving as modelServing } from "@dbx-tools/model";
 import { async, error, log, object, string } from "@dbx-tools/shared-core";
 import {
   feedback,
@@ -411,7 +411,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
        * Returns the underlying `CacheManager.delete`/`clear` promise.
        */
       clearModelsCache: (host?: string): Promise<void> =>
-        nodeServing.clearServingEndpointsCache(host),
+        modelServing.clearServingEndpointsCache(host),
     };
   }
 
@@ -976,7 +976,7 @@ export class MastraPlugin extends Plugin<MastraPluginConfig> {
       const client = getExecutionContext().client;
       const host = (await client.config.getHost()).toString();
       const serving = resolveServingConfig(this.config);
-      return nodeServing.listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
+      return modelServing.listServingEndpoints(client, host, { ttlMs: serving.ttlMs });
     }, modelCatalogueDefaults);
   }
 

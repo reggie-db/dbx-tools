@@ -4,18 +4,17 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
+import { port } from "../src/config.ts";
 
 /**
- * The AppKit gate is the ONE part of bundle resolution that cannot live in the
- * polyglot fixtures: it keys off a Node-only optional peer Python has no analogue
- * for, and every shared fixture case sets `DBX_TOOLS_CONFIG_BUNDLE=true` to
- * bypass it on purpose. The app-shape rules the gate enforces are pinned here.
+ * Default bundle fallback is Node-only because it shells out to the Databricks
+ * CLI. The app-shape rules used to flatten `config.env` are pinned here.
  *
  * Each case runs in a CHILD process, because a stub `databricks` CLI is only
  * reachable through the `env` handed to a spawn - mutating `process.env.PATH` in
  * this process would leave `bundleFile` running the real CLI.
  */
-describe("bundleFile app gate", () => {
+describe("default bundle source", () => {
   it("reads the single app's config.env", () => {
     const result = probe(
       { resources: { apps: { demo: { config: { env: [{ name: "SAMPLE", value: "app" }] } } } } },
@@ -49,12 +48,13 @@ describe("bundleFile app gate", () => {
       ["SAMPLE"],
     );
     assert.deepEqual(result.values, [null]);
-    assert.equal(result.file, false);
+    assert.equal(result.file, true);
   });
 
-  it("suppresses a bundle whose single app carries no config.env", () => {
+  it("yields nothing when the single app carries no config.env", () => {
     const result = probe({ resources: { apps: { demo: { source_code_path: "." } } } }, ["SAMPLE"]);
-    assert.equal(result.file, false);
+    assert.equal(result.file, true);
+    assert.deepEqual(result.values, [null]);
   });
 
   it("spawns validation once per context", () => {
@@ -76,9 +76,8 @@ interface ProbeResult {
 
 /**
  * Resolve `keys` from a bundle whose `databricks bundle validate` prints
- * `payload`. `DBX_TOOLS_CONFIG_BUNDLE` is unset in the child so the real gate
- * runs; `@databricks/appkit` is a dev dependency here, so the resolve probe
- * passes and the app-shape rules are what is under test.
+ * `payload`. Earlier default sources are empty, so lookup reaches the bundle
+ * without any AppKit context or package dependency.
  */
 function probe(payload: Record<string, unknown>, keys: string[]): ProbeResult {
   const root = mkdtempSync(join(tmpdir(), "dbx-tools-config-"));
@@ -112,6 +111,16 @@ function probe(payload: Record<string, unknown>, keys: string[]): ProbeResult {
     rmSync(root, { force: true, recursive: true });
   }
 }
+
+describe("port", () => {
+  it("accepts only bounded TCP ports", () => {
+    assert.equal(port("443", "UNUSED", 8000), 443);
+    assert.equal(port(65_535, "UNUSED", 8000), 65_535);
+    assert.equal(port(0, "UNUSED", 8000), 8000);
+    assert.equal(port(65_536, "UNUSED", 8000), 8000);
+    assert.equal(port("not-a-port", "UNUSED", 0), 0);
+  });
+});
 
 function quote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;

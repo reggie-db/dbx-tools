@@ -15,14 +15,14 @@
  * `dbx-tools` root task first (see below); a normal consumer constructs,
  * `applyToProjects`es, synths.
  */
-import { project, project as projectApi } from "@dbx-tools/projen";
+import { project, project as projenProject } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
 
 // ---------------------------------------------------------------------------
 // Root construction
 // ---------------------------------------------------------------------------
-const root = new projectApi.DBXToolsNodeProject({
+const root = new projenProject.DBXToolsNodeProject({
   name: `@${SCOPE}/root`,
   scope: SCOPE,
   // `packages/js` is the JavaScript product tree; `packages/example` holds the runnable demo app
@@ -225,18 +225,8 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // for `config.ts`, which validates `databricks bundle validate` output.
 // (shared-core is added by the blanket base-dep mixin above, so this package
 // needs no rule of its own.)
-//
-// `@databricks/appkit` is an OPTIONAL peer used ONLY as a signal: `config.ts`
-// resolves it (without evaluating it) to decide whether this is an AppKit
-// project worth spawning `databricks bundle validate` for, then lazy-imports it
-// to confirm the execution context. A consumer that never installs it simply
-// never reads a bundle, so this must not become a hard dependency of what is
-// otherwise a dependency-light Node foundation.
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml", "zod@catalog:");
-  p.addPeerDeps("@databricks/appkit@catalog:");
-  p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
-  p.addDevDeps("@databricks/appkit@catalog:");
 });
 
 // node-appkit: the base for Node-side AppKit + experimental-SDK helpers.
@@ -682,7 +672,7 @@ project.applyToProjects(root, { identifierName: "ui-appkit", tags: "ui" }, (p) =
 // and React bindings over shared-core's BrandContext. The root branding folder
 // is canonical; pre-compile regenerates the package copies and data URLs.
 project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p) => {
-  projectApi.addExports(p, {
+  projenProject.addExports(p, {
     "./browser": "./src/browser.ts",
     // The brand->AppKit token bridge stylesheet. `ui-appkit/styles.css`
     // `@import`s it so it travels with every feature UI package; scoped to
@@ -870,9 +860,9 @@ const pythonRepository = {
   url: "https://github.com/reggie-db/dbx-tools.git",
   ref: "main",
   root: "packages/py",
-} as const satisfies projectApi.PythonRepositoryOptions;
+} as const satisfies projenProject.PythonRepositoryOptions;
 
-const pythonPackages: projectApi.PythonPackageOptions[] = [
+const pythonPackages: projenProject.PythonPackageOptions[] = [
   {
     directory: "core",
     name: "dbx-tools-core",
@@ -890,7 +880,7 @@ const pythonPackages: projectApi.PythonPackageOptions[] = [
       "asyncpg>=0.30,<1",
       "databricks-sdk>=0.63.0,<1",
       "greenlet>=3.2,<4",
-      projectApi.pythonGitDependency(pythonRepository, "dbx-tools-core", "core"),
+      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-core", "core"),
       "psycopg[binary]>=3.2.9,<4",
       "sqlalchemy>=2.0.41,<3",
     ],
@@ -904,7 +894,7 @@ const pythonPackages: projectApi.PythonPackageOptions[] = [
   },
 ];
 
-new projectApi.DBXToolsPythonWorkspace(root, {
+new projenProject.DBXToolsPythonWorkspace(root, {
   repository: pythonRepository,
   packages: pythonPackages,
   requiresPython: ">=3.10",

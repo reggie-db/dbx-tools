@@ -21,7 +21,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { Socket } from "node:net";
 import { http, json, log } from "@dbx-tools/shared-core";
 import { authRequestSchema, authVerifySchema, SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
-import { gate as gateModule, headers as headersModule, type AuthGateApi } from "@dbx-tools/tunnel";
+import { gate as tunnelGate, headers as tunnelHeaders, type AuthGateApi } from "@dbx-tools/tunnel";
 import ProxyModule from "http-proxy-3";
 
 const logger = log.logger("tunnel:proxy");
@@ -75,8 +75,8 @@ async function handleAuthRoute(
   path: string,
   gate: AuthGateApi,
 ): Promise<boolean> {
-  const prefix = gateModule.AUTH_PREFIX;
-  const ip = gateModule.clientIp(request);
+  const prefix = tunnelGate.AUTH_PREFIX;
+  const ip = tunnelGate.clientIp(request);
 
   if (path === `${prefix}/status`) {
     sendJson(response, 200, await gate.status(sessionCookieValue(request)));
@@ -100,7 +100,7 @@ async function handleAuthRoute(
     const result = await gate.verify(parsed.data.email, parsed.data.code, ip);
     const cookie =
       result.ok && result.token
-        ? gateModule.sessionSetCookie(result.token, gate.sessionTtlSeconds)
+        ? tunnelGate.sessionSetCookie(result.token, gate.sessionTtlSeconds)
         : undefined;
     sendJson(
       response,
@@ -111,7 +111,7 @@ async function handleAuthRoute(
     return true;
   }
   if (path === `${prefix}/logout` && request.method === "POST") {
-    sendJson(response, 200, { ok: true }, gateModule.LOGOUT_SET_COOKIE);
+    sendJson(response, 200, { ok: true }, tunnelGate.LOGOUT_SET_COOKIE);
     return true;
   }
   return false;
@@ -132,24 +132,24 @@ export function startProxy(options: ProxyOptions): Promise<void> {
     ws: true,
     xfwd: true,
   });
-  const headerPolicy = headersModule.toHeaderPolicy(options.forwardHeaders);
+  const headerPolicy = tunnelHeaders.toHeaderPolicy(options.forwardHeaders);
   const gate = options.gate;
 
-  const decide = (request: IncomingMessage): Promise<gateModule.GateAction> =>
+  const decide = (request: IncomingMessage): Promise<tunnelGate.GateAction> =>
     gate
-      ? gateModule.gateRequest(request, {
+      ? tunnelGate.gateRequest(request, {
           gate,
           publicDomain: (request.headers.host ?? "").split(":")[0] || "localhost",
           headerPolicy,
         })
-      : Promise.resolve<gateModule.GateAction>("pass");
+      : Promise.resolve<tunnelGate.GateAction>("pass");
 
   const server = createServer((request, response) => {
     void (async () => {
       const path = (request.url ?? "/").split("?")[0] ?? "/";
       if (gate && (await handleAuthRoute(request, response, path, gate))) return;
       if ((await decide(request)) === "deny") {
-        sendJson(response, 401, gateModule.UNAUTHORIZED_BODY);
+        sendJson(response, 401, tunnelGate.UNAUTHORIZED_BODY);
         return;
       }
       proxy.web(request, response);

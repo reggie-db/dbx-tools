@@ -17,7 +17,7 @@
  */
 
 import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
-import { config as configModule } from "@dbx-tools/core";
+import { config as coreConfig } from "@dbx-tools/core";
 import { brand, log, object, string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-email";
 import type { RequestHandler } from "express";
@@ -211,19 +211,19 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     // first source that yields anything.
     allow: [
       ...string.parseList(config.allow),
-      ...string.parseList(configModule.text(["AUTH_ALLOW", "EMAIL_AUTH_ALLOW"], TUNNEL_CONFIG)),
+      ...string.parseList(coreConfig.text(["AUTH_ALLOW", "EMAIL_AUTH_ALLOW"], TUNNEL_CONFIG)),
     ],
-    subject: configModule.string(config.subject, "AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
+    subject: coreConfig.string(config.subject, "AUTH_SUBJECT", TUNNEL_CONFIG) ?? DEFAULTS.subject,
     brandName:
-      configModule.string(config.brandName, "AUTH_BRAND_NAME", TUNNEL_CONFIG) ?? DEFAULTS.brandName,
-    message: configModule.string(config.message, "AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
-    sessionTtlSeconds: configModule.positiveInt(
+      coreConfig.string(config.brandName, "AUTH_BRAND_NAME", TUNNEL_CONFIG) ?? DEFAULTS.brandName,
+    message: coreConfig.string(config.message, "AUTH_MESSAGE", TUNNEL_CONFIG) ?? DEFAULTS.message,
+    sessionTtlSeconds: coreConfig.positiveInt(
       config.sessionTtlSeconds,
       "AUTH_SESSION_TTL",
       DEFAULTS.sessionTtlSeconds,
       TUNNEL_CONFIG,
     ),
-    codeTtlSeconds: configModule.positiveInt(
+    codeTtlSeconds: coreConfig.positiveInt(
       config.codeTtlSeconds,
       "AUTH_CODE_TTL",
       DEFAULTS.codeTtlSeconds,
@@ -231,12 +231,12 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     ),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
     sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
-    publicDomain: configModule.string(config.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG),
+    publicDomain: coreConfig.string(config.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG),
     forwardHeaders: [
       ...string.parseList(config.forwardHeaders),
-      ...string.parseList(configModule.text("FORWARD_HEADERS", TUNNEL_CONFIG)),
+      ...string.parseList(coreConfig.text("FORWARD_HEADERS", TUNNEL_CONFIG)),
     ],
-    insecure: configModule.boolean(config.insecure, "INSECURE", TUNNEL_CONFIG) ?? false,
+    insecure: coreConfig.boolean(config.insecure, "INSECURE", TUNNEL_CONFIG) ?? false,
   };
 }
 

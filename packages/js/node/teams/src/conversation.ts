@@ -38,7 +38,7 @@
  */
 
 import { error, hash, json, log, object, string } from "@dbx-tools/shared-core";
-import { activity as activityContract, card } from "@dbx-tools/shared-teams";
+import { activity as sharedActivity, card } from "@dbx-tools/shared-teams";
 import { buildAdaptiveCard } from "./builder.ts";
 
 const logger = log.logger("teams:conversation");
@@ -125,7 +125,7 @@ const toolCardSpec = (result: AgentResult): card.CardSpec | null => {
 const JSON_PROMPT_INJECTION = "system" as const;
 
 /** The bot's identity on outbound activities when the caller names none. */
-export const BOT_ACCOUNT: activityContract.ChannelAccount = {
+export const BOT_ACCOUNT: sharedActivity.ChannelAccount = {
   id: "dbx-tools-teams-bot",
   name: "Databricks Agent",
 };
@@ -269,7 +269,7 @@ export interface CardTurnOptions {
   /** Cancels the agent call with the request. */
   signal?: AbortSignal;
   /** Overrides the bot identity stamped on the reply. */
-  bot?: activityContract.ChannelAccount;
+  bot?: sharedActivity.ChannelAccount;
   /**
    * Builds the Mastra `RequestContext` for the turn, from
    * {@link resolveCardContextFactory}. Omitted, the turn still answers, but
@@ -311,7 +311,7 @@ export const resolveCardContextFactory = (
  * payload is only an attachment). Those are not errors - they simply produce no
  * reply - so this returns `null` rather than throwing.
  */
-export const promptOf = (inbound: activityContract.Activity): string | null =>
+export const promptOf = (inbound: sharedActivity.Activity): string | null =>
   inbound.type === "message" ? string.trimToNull(inbound.text ?? "") : null;
 
 /**
@@ -322,10 +322,10 @@ export const promptOf = (inbound: activityContract.Activity): string | null =>
  * asserting the envelope, both need the same construction the turn uses.
  */
 export const toReplyActivity = (
-  inbound: activityContract.Activity,
+  inbound: sharedActivity.Activity,
   cards: card.AdaptiveCard[],
-  options: { bot?: activityContract.ChannelAccount; text?: string } = {},
-): activityContract.Activity => ({
+  options: { bot?: sharedActivity.ChannelAccount; text?: string } = {},
+): sharedActivity.Activity => ({
   type: "message",
   id: hash.id(),
   timestamp: new Date().toISOString(),
@@ -333,7 +333,7 @@ export const toReplyActivity = (
   ...(inbound.from ? { recipient: inbound.from } : {}),
   ...(inbound.conversation ? { conversation: inbound.conversation } : {}),
   ...(options.text ? { text: options.text } : {}),
-  attachments: cards.map((document) => activityContract.toCardAttachment(document)),
+  attachments: cards.map((document) => sharedActivity.toCardAttachment(document)),
 });
 
 /**
@@ -594,9 +594,9 @@ const formatAsCard = async (
  */
 export const runCardTurn = async (
   agent: CardAgentLike,
-  inbound: activityContract.Activity,
+  inbound: sharedActivity.Activity,
   options: CardTurnOptions = {},
-): Promise<activityContract.Activity[]> => {
+): Promise<sharedActivity.Activity[]> => {
   const prompt = promptOf(inbound);
   if (!prompt) return [];
 

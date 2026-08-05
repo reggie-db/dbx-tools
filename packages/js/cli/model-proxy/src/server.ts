@@ -33,7 +33,7 @@
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { config } from "@dbx-tools/core";
-import { async as asyncUtil, error, json, log, object, string } from "@dbx-tools/shared-core";
+import { async as sharedAsync, error, json, log, object, string } from "@dbx-tools/shared-core";
 import {
   classify,
   openaiChat,
@@ -271,7 +271,7 @@ async function upstreamFetchRetrying(
       ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
     });
     try {
-      await asyncUtil.sleep(delayMs, signal);
+      await sharedAsync.sleep(delayMs, signal);
     } catch {
       // Client hung up mid-wait: return the last 429 rather than issue a
       // request no one is listening for.

@@ -74,12 +74,12 @@ operations this package does not wrap.
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
-import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
+import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
 import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
 
 const support = agents.createAgent({
   instructions: "Answer from the docs; use `search` to find them.",
-  tools: () => ({ search: searchToolModule.searchTool() }),
+  tools: () => ({ search: searchToolApi.searchTool() }),
 });
 
 await createApp({

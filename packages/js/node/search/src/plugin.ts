@@ -39,9 +39,9 @@ import {
   type ToolProvider,
   type ToolRegistry,
 } from "@databricks/appkit/beta";
-import { plugin as pluginLookup } from "@dbx-tools/appkit";
-import { error as errorUtil, log, string } from "@dbx-tools/shared-core";
-import { search as searchContract, type SearchClientConfig } from "@dbx-tools/shared-search";
+import { plugin as appkitPlugin } from "@dbx-tools/appkit";
+import { error as sharedError, log, string } from "@dbx-tools/shared-core";
+import { search as sharedSearch, type SearchClientConfig } from "@dbx-tools/shared-search";
 import {
   SEARCH_CONFIG_SCHEMA,
   DATABRICKS_INDEX_ENV,
@@ -178,14 +178,14 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
     const registry: ToolRegistry = {
       search: defineTool({
         description: SEARCH_TOOL_DESCRIPTION,
-        schema: searchContract.searchRequestSchema,
+        schema: sharedSearch.searchRequestSchema,
         annotations: { effect: "read", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runSearch(args, signal),
       }),
       universal_search: defineTool({
         description: UNIVERSAL_SEARCH_TOOL_DESCRIPTION,
-        schema: searchContract.universalSearchRequestSchema,
+        schema: sharedSearch.universalSearchRequestSchema,
         annotations: { effect: "read", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runUniversalSearch(args, signal),
@@ -194,23 +194,23 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
     if (config.allowWrite) {
       registry.add_documents = defineTool({
         description: ADD_DOCUMENTS_TOOL_DESCRIPTION,
-        schema: searchContract.searchRequestSchema
+        schema: sharedSearch.searchRequestSchema
           .pick({ index: true })
-          .extend({ documents: searchContract.searchDocumentSchema.array() }),
+          .extend({ documents: sharedSearch.searchDocumentSchema.array() }),
         annotations: { effect: "write", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runAddDocuments(args, signal),
       });
       registry.create_index = defineTool({
         description: CREATE_INDEX_TOOL_DESCRIPTION,
-        schema: searchContract.createIndexRequestSchema,
+        schema: sharedSearch.createIndexRequestSchema,
         annotations: { effect: "write", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runCreateIndex(args, signal),
       });
       registry.sync_index = defineTool({
         description: SYNC_INDEX_TOOL_DESCRIPTION,
-        schema: searchContract.syncIndexRequestSchema,
+        schema: sharedSearch.syncIndexRequestSchema,
         annotations: { effect: "write", requiresUserContext: true },
         autoInheritable: false,
         execute: async (args, signal) => this.runSyncIndex(args, signal),
@@ -266,7 +266,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       string.trimToNull(process.env[ENDPOINT_ENV]) !== null ||
       string.trimToNull(process.env.DATABRICKS_VECTOR_SEARCH_ENDPOINT) !== null;
     if (hasEndpoint) return undefined;
-    const lake = pluginLookup.instance(this.context, lakebase);
+    const lake = appkitPlugin.instance(this.context, lakebase);
     if (!lake) return undefined;
     logger.info("backend-lakebase", {
       reason: "no Vector Search endpoint configured; using the Lakebase full-text fallback",
@@ -320,7 +320,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
         rowCount: info.rowCount ?? 0,
       });
     } catch (cause) {
-      logger.warn("ensure-failed", { index, message: errorUtil.errorMessage(cause) });
+      logger.warn("ensure-failed", { index, message: sharedError.errorMessage(cause) });
     }
   }
 
@@ -368,7 +368,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       path: SEARCH_ROUTE,
       handler: async (req, res) => {
         await this.respond(res, "search", () => {
-          const request = searchContract.searchRequestSchema.parse(req.body ?? {});
+          const request = sharedSearch.searchRequestSchema.parse(req.body ?? {});
           return this.asUser(req).runSearch(request);
         });
       },
@@ -379,7 +379,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       path: UNIVERSAL_ROUTE,
       handler: async (req, res) => {
         await this.respond(res, "universalSearch", () => {
-          const request = searchContract.universalSearchRequestSchema.parse(req.body ?? {});
+          const request = sharedSearch.universalSearchRequestSchema.parse(req.body ?? {});
           return this.asUser(req).runUniversalSearch(request);
         });
       },
@@ -454,7 +454,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
     try {
       res.json(await run());
     } catch (cause) {
-      const message = errorUtil.errorMessage(cause);
+      const message = sharedError.errorMessage(cause);
       logger.warn("route-failed", { operation, message });
       res.status(500).json({ error: message });
     }
@@ -491,25 +491,25 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
   override exports() {
     return {
       /** Search one index (default when omitted). Runs as the current context user. */
-      search: (request: searchContract.SearchRequest, signal?: AbortSignal) =>
+      search: (request: sharedSearch.SearchRequest, signal?: AbortSignal) =>
         this.runSearch(request, signal),
       /** Search across every configured index and merge the hits. */
-      universalSearch: (request: searchContract.UniversalSearchRequest, signal?: AbortSignal) =>
+      universalSearch: (request: sharedSearch.UniversalSearchRequest, signal?: AbortSignal) =>
         this.runUniversalSearch(request, signal),
       /** Add or update documents in a direct-access index (throws when writes are disabled). */
       addDocuments: (request: { index?: string; documents: unknown }, signal?: AbortSignal) =>
         this.runAddDocuments(request, signal),
       /** Create a Vector Search index (throws when writes are disabled). */
-      createIndex: (request: searchContract.CreateIndexRequest, signal?: AbortSignal) =>
+      createIndex: (request: sharedSearch.CreateIndexRequest, signal?: AbortSignal) =>
         this.runCreateIndex(request, signal),
       /** Sync a Delta Sync index from its source table (throws when writes are disabled). */
-      syncIndex: (request: searchContract.SyncIndexRequest, signal?: AbortSignal) =>
+      syncIndex: (request: sharedSearch.SyncIndexRequest, signal?: AbortSignal) =>
         this.runSyncIndex(request, signal),
     };
   }
 
   private async runSearch(args: unknown, signal?: AbortSignal) {
-    const request = searchContract.searchRequestSchema.parse(args);
+    const request = sharedSearch.searchRequestSchema.parse(args);
     const { client } = getSearchRuntime();
     return client.search(request.query, {
       ...(request.index ? { index: request.index } : {}),
@@ -523,7 +523,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
   }
 
   private async runUniversalSearch(args: unknown, signal?: AbortSignal) {
-    const request = searchContract.universalSearchRequestSchema.parse(args);
+    const request = sharedSearch.universalSearchRequestSchema.parse(args);
     const { client } = getSearchRuntime();
     return client.universalSearch(request.query, {
       ...(request.indexes ? { indexes: request.indexes } : {}),
@@ -542,13 +542,13 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
   }
 
   private async runCreateIndex(args: unknown, signal?: AbortSignal) {
-    const request = searchContract.createIndexRequestSchema.parse(args);
+    const request = sharedSearch.createIndexRequestSchema.parse(args);
     const { client } = getSearchRuntime();
     return client.createIndex(request.name, toCreateIndexOptions(request, signal));
   }
 
   private async runSyncIndex(args: unknown, signal?: AbortSignal) {
-    const request = searchContract.syncIndexRequestSchema.parse(args);
+    const request = sharedSearch.syncIndexRequestSchema.parse(args);
     const { client, config } = getSearchRuntime();
     const index = request.index ?? config.defaultIndex ?? "";
     await client.syncIndex(index, signal);
@@ -562,12 +562,12 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
- * import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
+ * import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
  * import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
  *
  * const support = agents.createAgent({
  *   instructions: "Answer from the docs; use `search` to find them.",
- *   tools: () => ({ search: searchToolModule.searchTool() }),
+ *   tools: () => ({ search: searchToolApi.searchTool() }),
  * });
  *
  * await createApp({

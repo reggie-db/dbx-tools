@@ -47,7 +47,7 @@ import {
 } from "@databricks/appkit/beta";
 import { log, string, token } from "@dbx-tools/shared-core";
 import {
-  email as emailWire,
+  email as sharedEmail,
   type EmailMessage,
   type EmailResult,
   type EmailSenders,
@@ -122,11 +122,11 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
   private readonly tools: ToolRegistry = {
     [SEND_TOOL]: defineTool({
       description: SEND_EMAIL_DESCRIPTION,
-      schema: emailWire.emailMessageSchema,
+      schema: sharedEmail.emailMessageSchema,
       annotations: { effect: "write", requiresUserContext: true },
       autoInheritable: false,
       execute: async (args, signal) =>
-        this.send(emailWire.emailMessageSchema.parse(args), undefined, signal),
+        this.send(sharedEmail.emailMessageSchema.parse(args), undefined, signal),
     }),
   };
 

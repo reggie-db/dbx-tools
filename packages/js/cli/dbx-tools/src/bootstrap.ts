@@ -93,9 +93,9 @@ export function ensureEngineCurrent(root: string): void {
 // flat, but every engine ever published exports the namespace, and this template
 // is resolved against `@latest` - a flat import dies on an older one with
 // "does not provide an export named 'DBXToolsNodeProject'".
-const PROJENRC_TEMPLATE = `import { project as projectApi } from "@dbx-tools/projen";
+const PROJENRC_TEMPLATE = `import { project as projenProject } from "@dbx-tools/projen";
 
-const project = new projectApi.DBXToolsNodeProject();
+const project = new projenProject.DBXToolsNodeProject();
 project.synth();
 `;
 

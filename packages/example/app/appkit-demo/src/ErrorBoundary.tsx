@@ -1,4 +1,4 @@
-import { error as errorUtil, log } from "@dbx-tools/shared-core";
+import { error as sharedError, log } from "@dbx-tools/shared-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@dbx-tools/ui-appkit/react";
 import type { ReactNode } from "react";
 import React, { Component } from "react";
@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <div>
                   <h3 className="font-semibold mb-2">Error Message:</h3>
                   <pre className="bg-muted p-3 rounded text-sm overflow-auto">
-                    {errorUtil.errorMessage(this.state.error)}
+                    {sharedError.errorMessage(this.state.error)}
                   </pre>
                 </div>
                 {this.state.errorInfo && (

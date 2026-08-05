@@ -1,4 +1,4 @@
-import { error as errorUtil } from "@dbx-tools/shared-core";
+import { error as sharedError } from "@dbx-tools/shared-core";
 import {
   Alert,
   AlertDescription,
@@ -724,7 +724,7 @@ export const ChatView = ({
                         <AlertTitle>Something went wrong</AlertTitle>
                         <AlertDescription>
                           {error
-                            ? errorUtil.errorMessage(error)
+                            ? sharedError.errorMessage(error)
                             : "The assistant ran into an error. Please try again."}
                         </AlertDescription>
                       </Alert>

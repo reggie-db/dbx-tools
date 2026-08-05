@@ -11,7 +11,7 @@
  * @module
  */
 
-import { serving as nodeServing } from "@dbx-tools/model";
+import { serving as modelServing } from "@dbx-tools/model";
 import { string } from "@dbx-tools/shared-core";
 import { override } from "@dbx-tools/shared-mastra";
 
@@ -90,8 +90,8 @@ export function resolveServingConfig(config: MastraPluginConfig): {
   fallbacks: readonly string[];
 } {
   return {
-    ttlMs: config.modelCacheTtlMs ?? nodeServing.DEFAULT_MODEL_CACHE_TTL_MS,
-    threshold: config.modelFuzzyThreshold ?? nodeServing.DEFAULT_FUZZY_THRESHOLD,
+    ttlMs: config.modelCacheTtlMs ?? modelServing.DEFAULT_MODEL_CACHE_TTL_MS,
+    threshold: config.modelFuzzyThreshold ?? modelServing.DEFAULT_FUZZY_THRESHOLD,
     fuzzy: config.modelFuzzyMatch !== false,
     allowOverride: config.modelOverride !== false,
     fallbacks: config.defaultModelFallbacks ?? [],

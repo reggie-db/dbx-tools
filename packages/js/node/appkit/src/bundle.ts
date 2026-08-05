@@ -25,7 +25,7 @@ import { resolve } from "node:path";
 import { ValidationError } from "@databricks/appkit";
 import { config as coreConfig, file, project } from "@dbx-tools/core";
 import { context, object, log, string } from "@dbx-tools/shared-core";
-import { parse as parseYamlText } from "yaml";
+import { parse as yamlParse } from "yaml";
 import { z } from "zod";
 
 const logger = log.logger("config");
@@ -34,7 +34,10 @@ const logger = log.logger("config");
 export type BundleValidateJson = Record<string, unknown>;
 
 /** A config file discovered on disk with its parsed contents. */
-export type ConfigFile = coreConfig.ConfigFile;
+export interface ConfigFile {
+  path: string;
+  data: Record<string, unknown>;
+}
 
 /** Supported configuration sources, consulted in array order. */
 export type ConfigSource = "explicit" | "cli" | "env" | "bundle";
@@ -44,13 +47,13 @@ const defaultConfigSources: ConfigSource[] = ["explicit", "env", "bundle"];
 const APP_YAML_NAMES = ["app.yaml", "app.yml"] as const;
 
 export const bundleAppResourceSchema = coreConfig.bundleResourceSchema.extend({
-  sql_warehouse: z.object({ id: coreConfig.bundleValue.optional() }).optional(),
-  genie_space: z.object({ space_id: coreConfig.bundleValue.optional() }).optional(),
+  sql_warehouse: z.object({ id: coreConfig.valueSchema.optional() }).optional(),
+  genie_space: z.object({ space_id: coreConfig.valueSchema.optional() }).optional(),
   postgres: z
     .object({
-      database: coreConfig.bundleValue.optional(),
-      branch: coreConfig.bundleValue.optional(),
-      endpoint: coreConfig.bundleValue.optional(),
+      database: coreConfig.valueSchema.optional(),
+      branch: coreConfig.valueSchema.optional(),
+      endpoint: coreConfig.valueSchema.optional(),
     })
     .optional(),
 });
@@ -64,20 +67,20 @@ const bundleValidateAppsSchema = z.object({
 });
 
 const appYamlEnvEntrySchema = coreConfig.bundleEnvEntrySchema.omit({ value_from: true }).extend({
-  name: coreConfig.bundleValue,
-  valueFrom: coreConfig.bundleValue.optional(),
+  name: coreConfig.valueSchema,
+  valueFrom: coreConfig.valueSchema.optional(),
 });
 
 const appYamlResourceSchema = coreConfig.bundleResourceSchema
   .extend({
-    name: coreConfig.bundleValue,
-    sql_warehouse: z.object({ id: coreConfig.bundleValue.optional() }).optional(),
-    genie_space: z.object({ space_id: coreConfig.bundleValue.optional() }).optional(),
+    name: coreConfig.valueSchema,
+    sql_warehouse: z.object({ id: coreConfig.valueSchema.optional() }).optional(),
+    genie_space: z.object({ space_id: coreConfig.valueSchema.optional() }).optional(),
     postgres: z
       .object({
-        database: coreConfig.bundleValue.optional(),
-        branch: coreConfig.bundleValue.optional(),
-        endpoint: coreConfig.bundleValue.optional(),
+        database: coreConfig.valueSchema.optional(),
+        branch: coreConfig.valueSchema.optional(),
+        endpoint: coreConfig.valueSchema.optional(),
       })
       .optional(),
   })
@@ -169,7 +172,7 @@ function readAppEnv(keys: Iterable<string>, envMap: Record<string, string>): str
 }
 
 function parseYaml(text: string): unknown {
-  return parseYamlText(text);
+  return yamlParse(text);
 }
 
 function pickAppResourceId(apps: Record<string, BundleApp>): string | undefined {
@@ -212,7 +215,7 @@ export function flattenAppYamlEnv(data: unknown): Record<string, string> {
 
   const out: Record<string, string> = {};
   for (const entry of parsed.data.env) {
-    const value = coreConfig.bundleValue.safeParse(entry.value);
+    const value = coreConfig.valueSchema.safeParse(entry.value);
     if (value.success) {
       out[entry.name] = value.data;
       continue;
@@ -250,7 +253,7 @@ export function flattenAppEnv(data: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   for (const entry of app.config.env) {
     if (!entry.name) continue;
-    const value = coreConfig.bundleValue.safeParse(entry.value);
+    const value = coreConfig.valueSchema.safeParse(entry.value);
     if (value.success) {
       out[entry.name] = value.data;
       continue;

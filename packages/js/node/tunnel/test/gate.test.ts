@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
-import { async as asyncModule, brand } from "@dbx-tools/shared-core";
+import { async as sharedAsync, brand } from "@dbx-tools/shared-core";
 import { looksLikeEmail, matchesAllowlist } from "../src/allowlist.ts";
 import {
   codeEmailHtmlBody,
@@ -197,7 +197,7 @@ describe("session force-clear cutoff", () => {
     const token = await signSession("cutoff@b.com", 3600);
     assert.equal(await verifySession(token), "cutoff@b.com");
 
-    await asyncModule.sleep(1100);
+    await sharedAsync.sleep(1100);
     process.env.TUNNEL_AUTH_SESSION_CUTOFF = String(Date.now());
     resetSigningKey();
     assert.equal(await verifySession(token), undefined, "a pre-cutoff cookie is dead");

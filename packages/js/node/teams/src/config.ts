@@ -29,7 +29,7 @@
  */
 
 import { ValidationError, type BasePluginConfig } from "@databricks/appkit";
-import { config as runtimeConfig } from "@dbx-tools/core";
+import { config as coreConfig } from "@dbx-tools/core";
 import { object } from "@dbx-tools/shared-core";
 import { card } from "@dbx-tools/shared-teams";
 import type { JSONSchema7 } from "json-schema";
@@ -199,12 +199,12 @@ export const TEAMS_CONFIG_SCHEMA: JSONSchema7 = {
  */
 export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeamsConfig {
   const cardVersion =
-    runtimeConfig.string(overrides?.cardVersion, CARD_VERSION_ENV, runtimeConfig.ENV_ONLY) ??
+    coreConfig.string(overrides?.cardVersion, CARD_VERSION_ENV, coreConfig.ENV_ONLY) ??
     card.ADAPTIVE_CARD_VERSION;
-  const webhookUrl = runtimeConfig.string(
+  const webhookUrl = coreConfig.string(
     overrides?.webhookUrl,
     WEBHOOK_URL_ENV,
-    runtimeConfig.ENV_ONLY,
+    coreConfig.ENV_ONLY,
   );
   if (webhookUrl !== undefined && !isHttpsUrl(webhookUrl)) {
     throw ValidationError.invalidValue(
@@ -214,15 +214,15 @@ export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeams
     );
   }
   const agentPlugin =
-    runtimeConfig.string(overrides?.agentPlugin, AGENT_PLUGIN_ENV, runtimeConfig.ENV_ONLY) ??
+    coreConfig.string(overrides?.agentPlugin, AGENT_PLUGIN_ENV, coreConfig.ENV_ONLY) ??
     DEFAULT_AGENT_PLUGIN;
   // Two independent conditions must BOTH hold: the operator asked for it, and
   // this is a development build. Gating on `NODE_ENV` as well means a stray
   // variable in a production environment cannot silently expose the endpoint.
-  const requested = runtimeConfig.boolean(
+  const requested = coreConfig.boolean(
     overrides?.allowUnauthenticated,
     ALLOW_UNAUTHENTICATED_ENV,
-    runtimeConfig.ENV_ONLY,
+    coreConfig.ENV_ONLY,
   );
   const allowUnauthenticated = requested === true && process.env.NODE_ENV === "development";
   return {
@@ -232,15 +232,15 @@ export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeams
     ...object.optional("webhookUrl", webhookUrl),
     ...object.optional(
       "appId",
-      runtimeConfig.string(overrides?.appId, APP_ID_ENVS, runtimeConfig.ENV_ONLY),
+      coreConfig.string(overrides?.appId, APP_ID_ENVS, coreConfig.ENV_ONLY),
     ),
     ...object.optional(
       "appPassword",
-      runtimeConfig.string(overrides?.appPassword, APP_PASSWORD_ENVS, runtimeConfig.ENV_ONLY),
+      coreConfig.string(overrides?.appPassword, APP_PASSWORD_ENVS, coreConfig.ENV_ONLY),
     ),
     ...object.optional(
       "appTenantId",
-      runtimeConfig.string(overrides?.appTenantId, APP_TENANT_ENVS, runtimeConfig.ENV_ONLY),
+      coreConfig.string(overrides?.appTenantId, APP_TENANT_ENVS, coreConfig.ENV_ONLY),
     ),
   };
 }

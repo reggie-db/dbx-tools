@@ -1,4 +1,4 @@
-import { error as errorUtil, hash, log } from "@dbx-tools/shared-core";
+import { error as sharedError, hash, log } from "@dbx-tools/shared-core";
 import { feedback, type MastraThread } from "@dbx-tools/shared-mastra";
 import { useBrand } from "@dbx-tools/ui-branding/react";
 import type { UIMessage } from "ai";
@@ -764,11 +764,11 @@ export const useMastraChat = (
       } catch (caught) {
         if (getSession(threadId).runToken !== token) return;
         logger.error("stream error", {
-          error: errorUtil.errorMessage(caught),
+          error: sharedError.errorMessage(caught),
         });
         updateSession(threadId, (session) => ({
           ...session,
-          error: errorUtil.toError(caught),
+          error: sharedError.toError(caught),
           status: "error",
           abortController: session.abortController === controller ? null : session.abortController,
           runId: runIdRef.current,
@@ -1022,7 +1022,7 @@ export const useMastraChat = (
       logger.info("history cleared", { cleared: result.cleared });
     } catch (error) {
       logger.error("history clear error", {
-        error: errorUtil.errorMessage(error),
+        error: sharedError.errorMessage(error),
       });
     }
     const session = getSession(threadId);
@@ -1077,7 +1077,7 @@ export const useMastraChat = (
       } catch (error) {
         logger.error("thread delete error", {
           threadId,
-          error: errorUtil.errorMessage(error),
+          error: sharedError.errorMessage(error),
         });
       }
       const session = sessionsRef.current.get(threadId);
@@ -1126,7 +1126,7 @@ export const useMastraChat = (
       } catch (error) {
         logger.error("thread rename error", {
           threadId,
-          error: errorUtil.errorMessage(error),
+          error: sharedError.errorMessage(error),
         });
         setRenamedThreads((prev) => {
           if (!(threadId in prev)) return prev;
@@ -1204,7 +1204,7 @@ export const useMastraChat = (
       .catch((error: unknown) => {
         if (cancelled || (error as { name?: string }).name === "AbortError") return;
         logger.error("history load error", {
-          error: errorUtil.errorMessage(error),
+          error: sharedError.errorMessage(error),
         });
         updateSession(threadId, (current) => ({
           ...current,
@@ -1246,7 +1246,7 @@ export const useMastraChat = (
       .catch((error: unknown) => {
         logger.error("history load-more error", {
           page,
-          error: errorUtil.errorMessage(error),
+          error: sharedError.errorMessage(error),
         });
         updateSession(threadId, (current) => ({
           ...current,
@@ -1316,7 +1316,7 @@ export const useMastraChat = (
       } catch (error) {
         logger.error("conversation export error", {
           format,
-          error: errorUtil.errorMessage(error),
+          error: sharedError.errorMessage(error),
         });
       }
     },
@@ -1338,7 +1338,7 @@ export const useMastraChat = (
       } catch (error) {
         logger.error("message export error", {
           format,
-          error: errorUtil.errorMessage(error),
+          error: sharedError.errorMessage(error),
         });
       }
     },
@@ -1379,7 +1379,7 @@ export const useMastraChat = (
       } catch (error) {
         logger.error("feedback error", {
           traceId,
-          error: errorUtil.errorMessage(error),
+          error: sharedError.errorMessage(error),
         });
       }
     },

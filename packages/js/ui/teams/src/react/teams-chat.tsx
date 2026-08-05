@@ -5,7 +5,7 @@
 // looks like a Teams channel where the agent always answers in cards.
 
 import { hash, json, string } from "@dbx-tools/shared-core";
-import { activity as activityContract, type Activity } from "@dbx-tools/shared-teams";
+import { activity as sharedActivity, type Activity } from "@dbx-tools/shared-teams";
 import { Avatar, AvatarFallback, Button, Input, Spinner, cn } from "@dbx-tools/ui-appkit/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdaptiveCardView } from "./adaptive-card.tsx";
@@ -122,7 +122,7 @@ export const TeamsChat = ({
             string.trimToNull(String(body?.error ?? "")) ?? `Request failed (${response.status})`,
           );
         }
-        const parsed = activityContract.activityResponseSchema.safeParse(body);
+        const parsed = sharedActivity.activityResponseSchema.safeParse(body);
         if (!parsed.success) throw new Error("The server returned an unexpected reply.");
         setTranscript((current) => [...current, ...parsed.data.activities]);
       } catch (err) {
@@ -212,7 +212,7 @@ export const TeamsChat = ({
  */
 const ActivityBubble = ({ activity, userName }: { activity: Activity; userName: string }) => {
   const fromUser = isFromUser(activity);
-  const cards = activityContract.cardsOf(activity);
+  const cards = sharedActivity.cardsOf(activity);
   const label = fromUser ? userName : (activity.from?.name ?? "Agent");
 
   return (

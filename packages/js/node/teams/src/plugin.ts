@@ -50,7 +50,7 @@ import {
   type ToolRegistry,
 } from "@databricks/appkit/beta";
 import { error, log, object, string } from "@dbx-tools/shared-core";
-import { activity as activityContract, card } from "@dbx-tools/shared-teams";
+import { activity as sharedActivity, card } from "@dbx-tools/shared-teams";
 import { verifyBotToken } from "./auth.ts";
 import { TEAMS_CONFIG_SCHEMA, type TeamsPluginConfig } from "./config.ts";
 import {
@@ -357,7 +357,7 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
       return;
     }
 
-    const parsed = activityContract.activitySchema.safeParse(req.body);
+    const parsed = sharedActivity.activitySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
@@ -426,8 +426,8 @@ export class TeamsPlugin extends Plugin<TeamsPluginConfig> implements ToolProvid
    */
   private async executeTurn(
     body: unknown,
-  ): Promise<ExecutionResult<activityContract.ActivityResponse>> {
-    const parsed = activityContract.activityRequestSchema.safeParse(body);
+  ): Promise<ExecutionResult<sharedActivity.ActivityResponse>> {
+    const parsed = sharedActivity.activityRequestSchema.safeParse(body);
     if (!parsed.success) {
       return { ok: false, status: 400, message: parsed.error.message };
     }

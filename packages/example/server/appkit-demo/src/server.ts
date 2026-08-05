@@ -4,25 +4,25 @@ import { genie, lakebase, server } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import {
   agents,
-  genie as mastraGenie,
-  plugin as mastraPlugin,
+  genie as appkitMastraGenie,
+  plugin as appkitMastraPlugin,
   type MastraAgentDefinition,
   type MastraTools,
 } from "@dbx-tools/appkit-mastra";
 import {
-  plugin as webSearchPlugin,
-  tool as webSearchToolModule,
+  plugin as appkitWebSearchPlugin,
+  tool as appkitWebSearchToolApi,
 } from "@dbx-tools/appkit-web-search";
 import {
   brand as emailBrand,
   plugin as emailPlugin,
-  tool as emailToolModule,
+  tool as emailToolApi,
 } from "@dbx-tools/email";
 import { config } from "@dbx-tools/core";
-import { plugin as searchPlugin, tool as searchToolModule } from "@dbx-tools/search";
+import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
-import { plugin as teamsPlugin, tool as teamsToolModule } from "@dbx-tools/teams";
-import { interceptor as tunnelInterceptorModule, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
+import { plugin as teamsPlugin, tool as teamsToolApi } from "@dbx-tools/teams";
+import { interceptor as tunnelInterceptorApi, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
 import { z } from "zod";
 
 import { configureStaticDelivery } from "./_static-delivery.ts";
@@ -34,21 +34,21 @@ const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";
 
 const { email } = emailPlugin;
 const { defaultEmailBrand } = emailBrand;
-const { emailTool } = emailToolModule;
+const { emailTool } = emailToolApi;
 const { createAgent, tool } = agents;
-const { GENIE_INSTRUCTIONS } = mastraGenie;
-const { mastra } = mastraPlugin;
-const { webSearch } = webSearchPlugin;
-const { webSearchTool, webFetchTool } = webSearchToolModule;
+const { GENIE_INSTRUCTIONS } = appkitMastraGenie;
+const { mastra } = appkitMastraPlugin;
+const { webSearch } = appkitWebSearchPlugin;
+const { webSearchTool, webFetchTool } = appkitWebSearchToolApi;
 const { teams } = teamsPlugin;
-const { teamsCardTool } = teamsToolModule;
+const { teamsCardTool } = teamsToolApi;
 const { search } = searchPlugin;
 const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, syncIndexTool } =
-  searchToolModule;
+  searchToolApi;
 const { defaultBrandContext } = sharedBrand;
 const mastraStorage = config.boolean(undefined, "MASTRA_STORAGE", config.ENV_ONLY) ?? true;
 const mastraMemory = config.boolean(undefined, "MASTRA_MEMORY", config.ENV_ONLY) ?? true;
-const { tunnelInterceptor } = tunnelInterceptorModule;
+const { tunnelInterceptor } = tunnelInterceptorApi;
 const { authGate } = tunnelPlugin;
 
 // The browser bundle built by the sibling `@dbx-tools/demo-appkit-app` package.

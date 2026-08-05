@@ -14,6 +14,10 @@ interface ConfigOptions {
   sources?: ConfigSource | readonly ConfigSource[];
 }
 
+const CONFIG_BUNDLE_KEY = "DBX_TOOLS_CONFIG_BUNDLE";
+const CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV";
+const DATABRICKS_APP_ENV_KEY = "DBX_TOOLS_DATABRICKS_APP_ENV";
+
 export function configName(input: ConfigKey, options: ConfigOptions = {}): string {
   return config.name(input, options);
 }
@@ -143,9 +147,9 @@ export function bundleValues(
 
 function fileSourceEnvironment(): Record<string, null> {
   return {
-    [config.CONFIG_BUNDLE_KEY]: null,
-    [config.CONFIG_DOTENV_KEY]: null,
-    [config.DATABRICKS_APP_ENV_KEY]: null,
+    [CONFIG_BUNDLE_KEY]: null,
+    [CONFIG_DOTENV_KEY]: null,
+    [DATABRICKS_APP_ENV_KEY]: null,
     DATABRICKS_APP_NAME: null,
     DATABRICKS_APP_PORT: null,
     DATABRICKS_HOST: null,

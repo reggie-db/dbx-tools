@@ -16,7 +16,7 @@
  * recompute it. {@link watchFiles} owns the chokidar wiring; this is thin glue.
  */
 import { isAbsolute, resolve } from "node:path";
-import { watch as fileScan } from "@dbx-tools/path";
+import { watch as pathWatch } from "@dbx-tools/path";
 import { async, log } from "@dbx-tools/shared-core";
 import { isGeneratedFile, recordedRoots, repoRoot } from "./packages.ts";
 
@@ -49,7 +49,7 @@ const FATAL_WATCH_ERROR_CODES = new Set(["EMFILE", "ENFILE", "ENOSPC"]);
 
 /** node-path's built-in ignore-group toggles (`{ dot, temp, test, lock, defaults }`). */
 export type IgnoreGroupOptions = NonNullable<
-  Parameters<typeof fileScan.watchFiles>[1]
+  Parameters<typeof pathWatch.watchFiles>[1]
 >["ignoreOptions"];
 
 /** The package roots (absolute), where every watchable source file lives. */
@@ -115,7 +115,7 @@ export function watchLoop(
     }
   }
 
-  const watcher = fileScan.watchFiles(paths, {
+  const watcher = pathWatch.watchFiles(paths, {
     cwd: repoRoot,
     ignoreInitial: true,
     ignore: (path) => ignoredPath(path),

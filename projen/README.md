@@ -23,9 +23,9 @@ Key features:
 ## Define A Workspace Root
 
 ```ts
-import { project as projectApi } from "@dbx-tools/projen";
+import { project as projenProject } from "@dbx-tools/projen";
 
-const project = new projectApi.DBXToolsNodeProject({
+const project = new projenProject.DBXToolsNodeProject({
   name: "my-apps",
   scope: "my-apps",
   packageRoots: ["packages", "examples"],
@@ -88,11 +88,11 @@ owner.
 ## Customize Packages With Mixins
 
 ```ts
-import { project as projectApi } from "@dbx-tools/projen";
+import { project as projenProject } from "@dbx-tools/projen";
 
-const project = new projectApi.DBXToolsNodeProject();
+const project = new projenProject.DBXToolsNodeProject();
 
-projectApi.applyToProjects(project, { tags: "shared" }, (pkg) => {
+projenProject.applyToProjects(project, { tags: "shared" }, (pkg) => {
   pkg.addDeps("zod@catalog:");
 });
 

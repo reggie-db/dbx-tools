@@ -1,4 +1,4 @@
-import { marker as markers, type ParsedMarker } from "@dbx-tools/shared-mastra";
+import { marker as sharedMarkers, type ParsedMarker } from "@dbx-tools/shared-mastra";
 import { Spinner } from "@dbx-tools/ui-appkit/react";
 import { ClockIcon } from "lucide-react";
 import { lazy, Suspense, useMemo, useRef } from "react";
@@ -189,7 +189,7 @@ type RenderSegment =
  * resolves to a slot.
  */
 const markerSegment = (marker: ParsedMarker): RenderSegment => {
-  if (!markers.isUuid(marker.id)) return { kind: "text", text: "" };
+  if (!sharedMarkers.isUuid(marker.id)) return { kind: "text", text: "" };
   switch (marker.type) {
     case "chart":
       return { kind: "chart", chartId: marker.id };
@@ -206,7 +206,7 @@ const splitTextWithEmbeds = (text: string): RenderSegment[] => {
   // `parseMarkers` yields hits in source order with no overlaps (one
   // regex pass), so the spans splice in directly - no sort or
   // overlap guard needed.
-  for (const marker of markers.parseMarkers(text)) {
+  for (const marker of sharedMarkers.parseMarkers(text)) {
     if (marker.start > lastIdx) {
       segments.push({ kind: "text", text: text.slice(lastIdx, marker.start) });
     }
@@ -250,7 +250,7 @@ export const MarkdownWithEmbeds = ({
   text: string;
   streaming?: boolean;
 }) => {
-  const segments = splitTextWithEmbeds(markers.stripIncompleteMarkerTail(text));
+  const segments = splitTextWithEmbeds(sharedMarkers.stripIncompleteMarkerTail(text));
   return (
     <>
       {segments.map((seg, i) => {
