@@ -52,11 +52,12 @@ for full setup and env.
 
 This package's `@dbx-tools/*` deps are `workspace:*` and its third-party deps are
 `catalog:`, neither of which resolves when the Databricks Apps platform installs
-the uploaded source. So the deploy is staged against a PUBLISHED version:
+the uploaded source. Both example manifests link their version to the root
+workspace release, and staging converts `@dbx-tools/*` to that published version:
 
 ```bash
 bun run --filter '@dbx-tools/demo-appkit-app' compile   # client build the server serves
-bun stage-deploy.ts <version>                           # e.g. 0.6.48, already on npm
+bun stage-deploy.ts                                     # reads the linked example version
 cd "$(dirname "$(mktemp -u)")/dbx-tools-deploy-app"     # printed by stage-deploy
 databricks bundle validate
 databricks bundle deploy

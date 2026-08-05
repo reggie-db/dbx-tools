@@ -11,7 +11,7 @@
  * `bundle deploy` warned "There are no files to sync" and shipped an app with no
  * source. The staged tree holds:
  *
- *   - `@dbx-tools/*` -> the just-published npm version (arg 1, e.g. 0.6.41);
+ *   - `@dbx-tools/*` -> the example manifest's root-linked release version;
  *   - `catalog:`     -> the concrete version from the root `pnpm-workspace.yaml`;
  *   - `bun`          -> added as a dependency so the platform's pnpm install
  *                       fetches the runtime (research: pnpm installs, bun runs);
@@ -21,7 +21,7 @@
  *     `databricks.yml` under the app resource's `config`;
  *   - the client `dist/` copied in and the server `src/` + support files.
  *
- * Run: `bun stage-deploy.ts <version>` from the server package dir.
+ * Run: `bun stage-deploy.ts` from the server package dir.
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,16 +29,18 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse, stringify } from "yaml";
 
-const version = process.argv[2];
-if (!version) {
-  console.error("usage: bun stage-deploy.ts <version>");
-  process.exit(1);
-}
-
 const serverDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(serverDir, "../../../..");
 const clientDist = resolve(serverDir, "../../app/appkit-demo/dist");
 const outDir = join(tmpdir(), "dbx-tools-deploy-app");
+const pkg = JSON.parse(readFileSync(join(serverDir, "package.json"), "utf8")) as Record<
+  string,
+  unknown
+>;
+const version = pkg.version;
+if (typeof version !== "string" || !version || version === "0.0.0") {
+  throw new Error("example package version is not linked to a released workspace version");
+}
 
 // The root catalog: `catalog:` specifiers resolve to these concrete versions.
 const rootWorkspace = parse(readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8")) as {
@@ -65,10 +67,6 @@ function resolveDeps(deps: Record<string, string> | undefined): Record<string, s
   return out;
 }
 
-const pkg = JSON.parse(readFileSync(join(serverDir, "package.json"), "utf8")) as Record<
-  string,
-  unknown
->;
 const deployPkg = {
   name: "dbx-tools-demo-app",
   version,

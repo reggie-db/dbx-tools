@@ -15,6 +15,7 @@
  * `dbx-tools` root task first (see below); a normal consumer constructs,
  * `applyToProjects`es, synths.
  */
+import { readFileSync } from "node:fs";
 import { project, project as projenProject } from "@dbx-tools/projen";
 
 const SCOPE = "dbx-tools";
@@ -69,6 +70,15 @@ const root = new projenProject.DBXToolsNodeProject({
     "zod@catalog:",
   ],
 });
+const workspaceVersion = (
+  JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
+    version?: string;
+  }
+).version;
+if (typeof workspaceVersion !== "string" || workspaceVersion === "0.0.0") {
+  throw new Error("root package version must be a released workspace version");
+}
+root.package.addField("version", workspaceVersion);
 
 // `projen/` is an extra workspace member rather than an attached subproject, so
 // the engine cannot discover its generated barrel for the root formatter.
@@ -789,6 +799,7 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 // express + the `bun --watch`/`bun` dev/start tasks.
 project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "server" }, (p) => {
   p.package.addField("name", "@dbx-tools/demo-appkit-server");
+  p.package.addField("version", workspaceVersion);
   // A private runnable app, not an importable library: entry is `src/server.ts`.
   p.package.addField("private", true);
   p.package.addField("main", "src/server.ts");
@@ -832,6 +843,7 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
 // the bun dev server / `bun build` (Tailwind via bun-plugin-tailwind).
 project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }, (p) => {
   p.package.addField("name", "@dbx-tools/demo-appkit-app");
+  p.package.addField("version", workspaceVersion);
   p.package.addField("private", true);
   p.addDeps(
     "@dbx-tools/shared-core@workspace:*",
