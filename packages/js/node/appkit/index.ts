@@ -3,6 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export * as appkit from "./src/appkit.ts";
+export * as bundle from "./src/bundle.ts";
 export * as databricks from "./src/databricks.ts";
 export * as identity from "./src/identity.ts";
 export * as interceptor from "./src/interceptor.ts";
@@ -11,6 +12,8 @@ export * as pgaddress from "./src/pgaddress.ts";
 export * as plugin from "./src/plugin.ts";
 export * as provision from "./src/provision.ts";
 export type { AutoConfigureMode, CreateAppConfig, ExecutionContextLike, WorkspaceClientLike } from "./src/appkit.ts";
+export { bundleAppResourceSchema, flattenAppYamlEnv, flattenAppEnv, getBundlePath } from "./src/bundle.ts";
+export type { BundleValidateJson, ConfigFile, ConfigMapValue, ConfigSource, ResolveConfigValueOptions } from "./src/bundle.ts";
 export type { ContextLike } from "./src/databricks.ts";
 export { ACCESS_TOKEN_HEADER, USER_ID_HEADER, USER_EMAIL_HEADER, IDENTITY_MODES, DEFAULT_IDENTITY_MODE } from "./src/identity.ts";
 export type { IdentityMode, HeaderBearing } from "./src/identity.ts";

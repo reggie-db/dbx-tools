@@ -902,6 +902,21 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     description: "Databricks Model Serving invocation, classification, and endpoint resolution",
     dependencies: ["databricks-sdk>=0.63.0,<1", "pydantic>=2.9,<3"],
   },
+  {
+    directory: "litellm",
+    name: "dbx-tools-litellm",
+    module: "dbx_tools.litellm",
+    description:
+      "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution",
+    dependencies: [
+      "databricks-sdk>=0.63.0,<1",
+      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-model", "model"),
+      "litellm[proxy]>=1.83.14,<2",
+    ],
+    scripts: {
+      "dbx-litellm": "dbx_tools.litellm.cli:main",
+    },
+  },
 ];
 
 new projenProject.DBXToolsPythonWorkspace(root, {

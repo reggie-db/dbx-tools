@@ -163,7 +163,7 @@ export function App() {
 | AppKit-hosted agents           | [`@dbx-tools/appkit-mastra`](packages/js/node/appkit-mastra), [`@dbx-tools/shared-mastra`](packages/js/shared/mastra)                                                                                                       |
 | Genie streaming and schemas    | [`@dbx-tools/genie`](packages/js/node/genie), [`@dbx-tools/shared-genie`](packages/js/shared/genie)                                                                                                                         |
 | Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model)                                                                                                                         |
-| Local model proxy              | [`@dbx-tools/cli-model-proxy`](packages/js/cli/model-proxy)                                                                                                                                                                 |
+| Local model proxy              | [`@dbx-tools/cli-model-proxy`](packages/js/cli/model-proxy), [`dbx-tools-litellm`](packages/py/litellm)                                                                                                                     |
 | Public tunnel + access gate    | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
 | Configuration and local locks  | [`@dbx-tools/core`](packages/js/node/core), [`dbx-tools-core`](packages/py/core)                                                                                                                                            |
 | Email workflows                | [`@dbx-tools/email`](packages/js/node/email), [`@dbx-tools/shared-email-template`](packages/js/shared/email-template), [`@dbx-tools/shared-email`](packages/js/shared/email), [`@dbx-tools/ui-email`](packages/js/ui/email) |
@@ -187,7 +187,7 @@ runtime behavior, module maps, and links to adjacent packages.
 Install the published Python packages by distribution name:
 
 ```bash
-pip install dbx-tools-core dbx-tools-postgres dbx-tools-model
+uv add dbx-tools-core dbx-tools-postgres dbx-tools-model dbx-tools-litellm
 ```
 
 The root uv workspace contains these Python counterparts:
@@ -197,6 +197,7 @@ The root uv workspace contains these Python counterparts:
 | [`dbx-tools-core`](packages/py/core)         | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free stable-key, FNV hash, and identifier helpers.                                              |
 | [`dbx-tools-postgres`](packages/py/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
 | [`dbx-tools-model`](packages/py/model)       | Lists and classifies Databricks Model Serving endpoints, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies.                                         |
+| [`dbx-tools-litellm`](packages/py/litellm)   | Adds explicit-profile Databricks endpoint discovery and fuzzy, tool-aware model routing to LiteLLM while leaving request conversion, transport, streaming, retries, embeddings, and Responses bridging to LiteLLM's built-in Databricks provider.                                    |
 
 ### Load One Brand File
 

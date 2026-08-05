@@ -4,6 +4,7 @@
 
 export * as bin from "./src/bin.ts";
 export * as brand from "./src/brand.ts";
+export * as bundle from "./src/bundle.ts";
 export * as config from "./src/config.ts";
 export * as exec from "./src/exec.ts";
 export * as file from "./src/file.ts";

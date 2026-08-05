@@ -15,6 +15,8 @@ Key features:
   arrays.
 - Workspace/project root discovery from package-manager files, git metadata, and
   the current working directory.
+- Asynchronous Databricks bundle App-resource streaming with native filesystem
+  traversal and CLI-resolved configuration.
 - Safe filesystem stat and project naming helpers for CLIs and projen synth.
 - Layered config from process env, environment-specific `.env` files, and the
   Databricks bundle's App `config.env`.
@@ -155,6 +157,29 @@ through one rule. `config.port()` accepts only TCP ports from 1 through 65535;
 `config.flattenBundleEnv()`, `flattenAppEnv()`, and `getBundlePath()` expose the
 same parsing logic for callers that already have parsed configuration data.
 
+## Discover Bundle App Resources
+
+```ts
+import { bundle } from "@dbx-tools/core";
+
+for await (const resource of bundle.appResources(projectRoot, cwd)) {
+  consume(resource);
+}
+```
+
+`appResources()` returns an async generator. It checks bundle files in the
+optional working directory's ancestor chain first, then traverses the project
+boundary with Node's asynchronous native filesystem APIs. It yields each `resources.apps` entry from
+`databricks bundle validate --output json`, so includes, targets, variables,
+and relative source paths are resolved by the Databricks CLI. It does not
+require `app.yml` or `app.yaml`. Each resource includes its App `config` and the
+complete resolved bundle `data`.
+
+A failed validation that still returns partial App resources attaches
+`bundleFailure` to those resources. Failed bundles with no App resources yield
+nothing. Missing, invalid, or out-of-bound project paths also yield nothing.
+Malformed successful CLI output throws while the generator is consumed.
+
 ## Run Commands
 
 ```ts
@@ -294,6 +319,7 @@ cached too.
 - `exec` - async/sync process spawning, stdio handling, abort wiring, and shlex.
 - `bin` - executable download, optional archive extraction, selection, and
   atomic installation.
+- `bundle` - asynchronous streaming of CLI-resolved Databricks bundle App resources.
 - `project` - cwd normalization, root discovery, project naming, and git-remote
   parsing.
 - `file` - best-effort stat and parsed-record caching by caller-defined source key.

@@ -28,6 +28,7 @@
 /packages/js/**/index.ts linguist-generated
 /packages/js/openapi/** linguist-generated
 /packages/py/core/pyproject.toml linguist-generated
+/packages/py/litellm/pyproject.toml linguist-generated
 /packages/py/model/pyproject.toml linguist-generated
 /packages/py/postgres/pyproject.toml linguist-generated
 /packages/test/**/index.ts linguist-generated

@@ -41,3 +41,6 @@ workspace = true
 
 [tool.uv.sources.dbx-tools-model]
 workspace = true
+
+[tool.uv.sources.dbx-tools-litellm]
+workspace = true

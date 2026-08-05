@@ -1,0 +1,13 @@
+model_list:
+  - model_name: "*"
+    litellm_params:
+      model: "dbx/*"
+      allowed_openai_params:
+        - reasoning_effort
+        - thinking
+
+litellm_settings:
+  custom_provider_map:
+    - provider: dbx
+      custom_handler: config_provider.dbx_provider
+  num_retries: 5

@@ -19,6 +19,7 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly module: string;
   readonly description: string;
   readonly dependencies?: readonly string[];
+  readonly scripts?: Readonly<Record<string, string>>;
 }
 
 /** Options for one projen-native Python workspace member. */
@@ -140,6 +141,9 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     this.uv = this.packagingManager;
     this.uv.file.addDeletionOverride("project.authors");
     this.uv.file.addDeletionOverride("dependency-groups");
+    if (pkg.scripts) {
+      this.uv.file.addOverride("project.scripts", pkg.scripts);
+    }
     this.uv.file.readonly = true;
 
     for (const path of [".gitattributes", ".gitignore"]) {

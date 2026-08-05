@@ -41,6 +41,7 @@ projen/index.ts
 packages/py/core/pyproject.toml
 packages/py/postgres/pyproject.toml
 packages/py/model/pyproject.toml
+packages/py/litellm/pyproject.toml
 .eslintrc.json
 .gitattributes
 .github/pull_request_template.md

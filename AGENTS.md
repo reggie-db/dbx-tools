@@ -174,6 +174,13 @@ Primary package areas:
   mirrors the reusable `shared/model` + `node/model` contract without AppKit
   cache or Mastra dependencies; deterministic behavior belongs in the shared
   model polyglot fixtures.
+- `packages/py/litellm` — thin LiteLLM integration for Databricks Model
+  Serving. It adds explicit profile selection, live endpoint discovery, fuzzy
+  model resolution, and tool-capability filtering, then delegates the unchanged
+  request to LiteLLM's built-in Databricks provider. Keep authentication,
+  transport, parameter mapping, streaming, retries, embeddings, and
+  Chat↔Responses conversion in LiteLLM; do not add provider-specific content
+  rewriting here.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
@@ -1227,9 +1234,10 @@ is read-only and is not treated as a publish target.
 
 A Databricks notebook or job is a different network with its own package index.
 Documentation and notebooks install the published distributions by name
-(`dbx-tools-core`, `dbx-tools-postgres`, and `dbx-tools-model`). Each Python
-package README also documents the Git `#subdirectory=` form as an alternative
-for testing unreleased `main` branch changes.
+(`dbx-tools-core`, `dbx-tools-postgres`, `dbx-tools-model`, and
+`dbx-tools-litellm`). Each Python package README also documents the Git
+`#subdirectory=` form as an alternative for testing unreleased `main` branch
+changes.
 
 ## The `dbx` CLI
 
