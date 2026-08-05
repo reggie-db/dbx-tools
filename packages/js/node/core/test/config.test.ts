@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import { port } from "../src/config.ts";
+import { environmentKeys, port, resolveValue, text } from "../src/config.ts";
 
 /**
  * Default bundle fallback is Node-only because it shells out to the Databricks
@@ -57,13 +57,12 @@ describe("default bundle source", () => {
     assert.deepEqual(result.values, [null]);
   });
 
-  it("spawns validation once per context", () => {
+  it("caches parsed bundle validation by path", () => {
     const result = probe(
       { resources: { apps: { demo: { config: { env: [{ name: "SAMPLE", value: "app" }] } } } } },
       ["SAMPLE", "SAMPLE"],
     );
     assert.deepEqual(result.values, ["app", "app"]);
-    // One `bundleFile()` plus two `text()` lookups, all inside one context.
     assert.equal(result.calls, 1);
   });
 });
@@ -119,6 +118,119 @@ describe("port", () => {
     assert.equal(port(0, "UNUSED", 8000), 8000);
     assert.equal(port(65_536, "UNUSED", 8000), 8000);
     assert.equal(port("not-a-port", "UNUSED", 0), 0);
+  });
+});
+
+describe("constant config source", () => {
+  it("is first by default", () => {
+    const key = `CONFIG_${crypto.randomUUID().replaceAll("-", "_")}`;
+    process.env[key] = "environment";
+    try {
+      assert.equal(text(key, { data: { [key]: "configured" }, scope: [] }), "configured");
+    } finally {
+      delete process.env[key];
+    }
+  });
+
+  it("is appended last when custom sources omit it", () => {
+    const key = `CONFIG_${crypto.randomUUID().replaceAll("-", "_")}`;
+    process.env[key] = "environment";
+    try {
+      assert.equal(
+        text(key, {
+          data: { [key]: "configured" },
+          scope: [],
+          sources: ["app", "env"],
+        }),
+        "environment",
+      );
+      delete process.env[key];
+      assert.equal(
+        text(key, {
+          data: { [key]: ["", "configured"] },
+          scope: [],
+          sources: ["app", "env"],
+        }),
+        "configured",
+      );
+    } finally {
+      delete process.env[key];
+    }
+  });
+});
+
+describe("resolved config values", () => {
+  it("normalizes human-friendly environment names", () => {
+    assert.deepEqual(environmentKeys("lakebaseEndpoint"), [
+      "lakebaseEndpoint",
+      "LAKEBASEENDPOINT",
+      "LAKEBASE_ENDPOINT",
+    ]);
+  });
+
+  it("prefers bundle data before app data", () => {
+    assert.equal(
+      resolveValue("SAMPLE", {
+        appData: { env: [{ name: "SAMPLE", value: "from-app" }] },
+        bundleData: {
+          resources: {
+            apps: {
+              demo: { config: { env: [{ name: "SAMPLE", value: "from-bundle" }] } },
+            },
+          },
+        },
+        scope: [],
+        sources: ["bundle", "app"],
+      }),
+      "from-bundle",
+    );
+  });
+
+  it("resolves bundle and app resource references", () => {
+    assert.equal(
+      resolveValue("WAREHOUSE", {
+        appData: {
+          env: [{ name: "WAREHOUSE", valueFrom: "warehouse" }],
+          resources: [{ name: "warehouse", sql_warehouse: { id: "abc123" } }],
+        },
+        scope: [],
+        sources: "app",
+      }),
+      "abc123",
+    );
+    assert.equal(
+      resolveValue("DATABASE", {
+        bundleData: {
+          resources: {
+            apps: {
+              demo: {
+                config: { env: [{ name: "DATABASE", value_from: "postgres" }] },
+                resources: [{ name: "postgres", postgres: { database: "appdb" } }],
+              },
+            },
+          },
+        },
+        scope: [],
+        sources: "bundle",
+      }),
+      "appdb",
+    );
+  });
+});
+
+describe("config file discovery", () => {
+  it("caches a missing dotenv file", () => {
+    const root = mkdtempSync(join(tmpdir(), "dbx-tools-config-missing-"));
+    try {
+      writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
+      const key = `MISSING_${crypto.randomUUID().replaceAll("-", "_")}`;
+      const options = { cwd: root, scope: [] as const, sources: "dotenv" as const };
+      assert.equal(text(key, options), undefined);
+      writeFileSync(join(root, ".env"), `${key}=late\n`);
+      assert.equal(text(key, options), undefined);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 });
 

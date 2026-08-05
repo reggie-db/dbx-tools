@@ -11,10 +11,18 @@ import { bundleFile, text } from "../../src/config.ts";
 
 const root = process.argv[2]!;
 const keys = process.argv.slice(3);
-const options = { cwd: root, scope: [] as const };
-process.stdout.write(
-  `${JSON.stringify({
-    file: bundleFile(root) !== undefined,
-    values: keys.map((key) => text(key, options) ?? null),
-  })}\n`,
-);
+const originalCwd = process.cwd();
+process.chdir(root);
+try {
+  process.stdout.write(
+    `${JSON.stringify({
+      file: bundleFile(null) !== undefined,
+      values: keys.map(
+        (key, index) =>
+          text(key, { cwd: index % 2 === 0 ? "" : process.cwd(), scope: [] as const }) ?? null,
+      ),
+    })}\n`,
+  );
+} finally {
+  process.chdir(originalCwd);
+}

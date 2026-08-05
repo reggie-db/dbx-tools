@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { Stats, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { context, json, net, string } from "@dbx-tools/shared-core";
+import { json, net, string } from "@dbx-tools/shared-core";
 import { statSync as fileStatSync } from "./file.ts";
 
 const ROOT_MARKERS = [
@@ -12,9 +12,13 @@ const ROOT_MARKERS = [
   "package.json",
 ] as const;
 
+/** Resolve a blank, null, omitted, relative, or absolute cwd to an absolute path. */
+export function resolveWorkingDirectory(cwd?: string | null): string {
+  return resolve(string.trimToNull(cwd) ?? process.cwd());
+}
+
 /** A command's stdout, classified as a filesystem path and/or a URL. */
 export interface ProjectContext {
-  readonly cwd: string;
   readonly output: string;
   /** `output` when it names something on disk. */
   readonly path?: string;
@@ -46,48 +50,50 @@ function projectContextCommandOutput(command: string, args: string[], cwd: strin
     // `http://localhost/…`), which would mislabel directory outputs and bare
     // tokens - so gate on the raw output already carrying a scheme + authority.
     const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(output) ? net.urlBuilder(output) : undefined;
-    return { cwd, output, path: pathStats ? output : undefined, pathStats, url };
+    return { output, path: pathStats ? output : undefined, pathStats, url };
   }
-  return { cwd, output };
+  return { output };
 }
 
-/**
- * {@link projectContextCommandOutput} through the process-context cache.
- *
- * These commands (`npm prefix`, `git rev-parse`, `gh repo view`) are pure
- * functions of the directory they run in, so their output is worth keeping - but
- * only while the process is still IN that directory. {@link context.cached}
- * owns that rule: the slot remembers the `cwd` it was loaded under and misses
- * once the process moves, and a lookup for some OTHER directory runs the command
- * without caching, so it can't evict the hot entry. The slot name carries the
- * command and its arguments (order-sensitive), so two commands never share one.
- */
+const projectCommandCache = new Map<string, ProjectContext>();
+
 function projectContextCommand(command: string, args: string[], cwd?: string): ProjectContext {
-  return context.cached(
-    ["project", command, ...args],
-    (resolved) => projectContextCommandOutput(command, args, resolved ?? resolve(cwd ?? ".")),
-    cwd ? resolve(cwd) : undefined,
-  );
+  const resolved = resolveWorkingDirectory(cwd);
+  const key =
+    resolved === resolveWorkingDirectory() ? JSON.stringify([command, ...args]) : undefined;
+  if (key !== undefined) {
+    const cached = projectCommandCache.get(key);
+    if (cached !== undefined) return cached;
+  }
+  const value = projectContextCommandOutput(command, args, resolved);
+  if (key !== undefined) projectCommandCache.set(key, value);
+  return value;
+}
+
+function commandRoot(command: string, args: string[], cwd: string): string | undefined {
+  const parsed = projectContextCommand(command, args, cwd);
+  return parsed.pathStats?.isDirectory() ? parsed.path : undefined;
 }
 
 function npmRoot(cwd?: string): string | undefined {
-  const parsed = projectContextCommand("npm", ["prefix"], cwd);
-  return parsed.pathStats?.isDirectory() ? parsed.path : undefined;
+  const resolved = resolveWorkingDirectory(cwd);
+  return commandRoot("npm", ["prefix"], resolved);
 }
 
 function gitRoot(cwd?: string): string | undefined {
-  const parsed = projectContextCommand("git", ["rev-parse", "--show-toplevel"], cwd);
-  return parsed.pathStats?.isDirectory() ? parsed.path : undefined;
+  const resolved = resolveWorkingDirectory(cwd);
+  return commandRoot("git", ["rev-parse", "--show-toplevel"], resolved);
 }
 
-export function root(cwd: string = process.cwd()): string | undefined {
-  let current = resolve(cwd);
+export function root(cwd?: string): string | undefined {
+  const resolved = resolveWorkingDirectory(cwd);
+  let current = resolved;
 
   if (!fileStatSync(current)?.isDirectory()) {
     current = dirname(current);
   }
   const boundaries = new Set(
-    [npmRoot(cwd), gitRoot(cwd)]
+    [npmRoot(resolved), gitRoot(resolved)]
       .filter((path): path is string => path !== undefined)
       .map((path) => resolve(path)),
   );
@@ -152,8 +158,8 @@ function lastPathSegment(path: string): string {
  * `npm prefix`, the git top-level, then `cwd` itself. Duplicates are skipped;
  * only existing directories are yielded (except the final `cwd` fallback).
  */
-export function* resolveProjectRoots(cwd: string = process.cwd()): Generator<string> {
-  const base = resolve(cwd);
+export function* resolveProjectRoots(cwd?: string): Generator<string> {
+  const base = resolveWorkingDirectory(cwd);
   const seen = new Set<string>();
   for (const candidate of [npmRoot(base), gitRoot(base)]) {
     if (!candidate) continue;
@@ -166,13 +172,13 @@ export function* resolveProjectRoots(cwd: string = process.cwd()): Generator<str
 }
 
 /** The nearest ancestor of `cwd` (from {@link resolveProjectRoots}) with a `package.json`. */
-function workspaceRoot(cwd: string = process.cwd()): string {
+function workspaceRoot(cwd?: string): string {
   let last: string | undefined;
   for (const dir of resolveProjectRoots(cwd)) {
     if (fileStatSync(resolve(dir, "package.json"))?.isFile()) return dir;
     last = dir;
   }
-  return last ?? resolve(cwd);
+  return last ?? resolveWorkingDirectory(cwd);
 }
 
 /**
@@ -180,8 +186,9 @@ function workspaceRoot(cwd: string = process.cwd()): string {
  * `package.json` `name`, then the git remote's repo name, then the root
  * directory's basename.
  */
-export function name(cwd: string = process.cwd()): string {
-  const rootDir = workspaceRoot(cwd);
+export function name(cwd?: string): string {
+  const resolved = resolveWorkingDirectory(cwd);
+  const rootDir = workspaceRoot(resolved);
 
   const fromPackage = readPackageName(resolve(rootDir, "package.json"));
   if (fromPackage) return fromPackage;
@@ -252,19 +259,17 @@ function repositoryUrlFromGit(cwd?: string): string | undefined {
 /**
  * The repo's canonical remote URL, or `undefined` when there is no git remote.
  * Tries `gh repo view` first (host-accurate, no parsing), then normalizes
- * `git remote get-url origin`. Both underlying commands are cached per `cwd` via
- * {@link projectContextCommand}.
+ * `git remote get-url origin`. A blank, omitted, or explicitly current `cwd`
+ * reuses cached command probes; another resolved directory executes directly.
  *
  * @param cwd - directory to resolve from (defaults to `process.cwd()`).
  * @param format - `"https"` (default) yields `https://host/owner/repo`;
  *   `"npm"` yields npm's `git+https://host/owner/repo.git` form (for a
  *   `package.json` `repository.url` that passes npm provenance).
  */
-export function repositoryUrl(
-  cwd: string = process.cwd(),
-  format: "https" | "npm" = "https",
-): string | undefined {
-  const https = repositoryUrlFromGh(cwd) ?? repositoryUrlFromGit(cwd);
+export function repositoryUrl(cwd?: string, format: "https" | "npm" = "https"): string | undefined {
+  const resolved = resolveWorkingDirectory(cwd);
+  const https = repositoryUrlFromGh(resolved) ?? repositoryUrlFromGit(resolved);
   if (!https) return undefined;
   return format === "npm" ? `git+${https.replace(/\.git$/, "")}.git` : https;
 }
@@ -272,11 +277,21 @@ export function repositoryUrl(
 /**
  * The active npm registry (`npm config get registry`) as a chainable
  * {@link net.UrlBuilder}, or `undefined` when npm is absent or prints no URL.
- * Cached per `cwd` via {@link projectContextCommand}.
+ * A blank, null, omitted, or explicitly current `cwd` reuses the cached npm
+ * command; another resolved directory executes it directly. Environment options
+ * are evaluated on every call.
  */
 export function npmRegistry(
   cwd?: string | null,
   options?: { overrideOnly?: boolean; envVars?: boolean },
+): net.UrlBuilder | undefined {
+  const resolved = resolveWorkingDirectory(cwd);
+  return resolveNpmRegistry(resolved, options);
+}
+
+function resolveNpmRegistry(
+  cwd: string | null | undefined,
+  options: { overrideOnly?: boolean; envVars?: boolean } | undefined,
 ): net.UrlBuilder | undefined {
   const candidates = (function* () {
     yield projectContextCommand(
@@ -321,5 +336,5 @@ if (import.meta.main) {
   console.log("package root:", root());
   console.log("project name:", name());
   console.log("repository url:", repositoryUrl());
-  console.log("repository url (npm):", repositoryUrl(process.cwd(), "npm"));
+  console.log("repository url (npm):", repositoryUrl(undefined, "npm"));
 }

@@ -9,17 +9,21 @@ import subprocess
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, TypeVar, cast
 from urllib.parse import urlparse
 
 ConfigKey = str | Sequence[str]
-ConfigSource = Literal["env", "dotenv", "bundle"]
+ConfigData = Mapping[str, object]
+ConfigSource = Literal["config", "env", "dotenv", "bundle", "app"]
 
 
 class ConfigOptions(TypedDict, total=False):
     scope: str | Sequence[str]
     prefix: str | Sequence[str]
     cwd: str
+    data: ConfigData | Sequence[ConfigData]
+    bundleData: ConfigFile | Mapping[str, object]
+    appData: ConfigFile | Mapping[str, object]
     sources: ConfigSource | Sequence[ConfigSource]
 
 
@@ -37,8 +41,9 @@ class _ConfigValue:
 
 
 DEFAULT_SCOPE = "DBX_TOOLS"
-DEFAULT_SOURCES: tuple[ConfigSource, ...] = ("env", "dotenv", "bundle")
+DEFAULT_SOURCES: tuple[ConfigSource, ...] = ("config", "env", "dotenv", "bundle", "app")
 BUNDLE_FILE_NAMES = ("databricks.yml", "databricks.yaml")
+APP_FILE_NAMES = ("app.yaml", "app.yml")
 DOTENV_FILE_NAME = ".env"
 NODE_ENV_ALTERNATIVES = {
     "production": ("prod",),
@@ -55,19 +60,22 @@ MAX_TCP_PORT = 65_535
 DATABRICKS_APP_ENV_KEY = "DBX_TOOLS_DATABRICKS_APP_ENV"
 CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV"
 CONFIG_BUNDLE_KEY = "DBX_TOOLS_CONFIG_BUNDLE"
+CONFIG_APP_KEY = "DBX_TOOLS_CONFIG_APP"
 ENV_ONLY: ConfigOptions = {"scope": (), "sources": "env"}
 
-_CACHE: dict[tuple[str, ...], object] = {}
+_RecordT = TypeVar("_RecordT", bound=Mapping[str, object])
+_FILE_DATA_CACHE: dict[str, Mapping[str, object] | None] = {}
+_CONFIG_FILE_CACHE: dict[str, str | None] = {}
 _NUMBER_PATTERN = re.compile(
     r"^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(%)?$",
     re.IGNORECASE,
 )
 _INTERPOLATION_PATTERN = re.compile(r"\$\{[^}]+\}")
 _ENV_NAME_PATTERN = re.compile(r"[A-Za-z0-9_.-]+")
-
-
-def clear_cache() -> None:
-    _CACHE.clear()
+_YAML_NUMBER_PATTERN = re.compile(
+    r"^[+-]?(?:0|[1-9][0-9_]*)(?:\.[0-9_]*)?(?:e[+-]?[0-9]+)?$",
+    re.IGNORECASE,
+)
 
 
 def is_databricks_app_env(source: Mapping[str, str | None] | None = None) -> bool:
@@ -91,6 +99,37 @@ def is_databricks_app_env(source: Mapping[str, str | None] | None = None) -> boo
 
 def text(input: ConfigKey, options: ConfigOptions | None = None) -> str | None:
     return next((_value.value for _value in _values(input, options or {})), None)
+
+
+def environment_keys(name: str) -> list[str]:
+    trimmed = name.strip()
+    if not trimmed:
+        return []
+    tokenized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", trimmed)
+    tokenized = re.sub(r"[^A-Za-z0-9]+", "_", tokenized).strip("_").upper()
+    return _distinct([trimmed, trimmed.upper(), tokenized])
+
+
+def resolve_value(name: str, options: ConfigOptions | None = None) -> str | None:
+    return text(environment_keys(name), options)
+
+
+def get_bundle_path(data: Mapping[str, object], path: str) -> str | None:
+    parts = [part for part in path.split(".") if part]
+    if not parts:
+        return None
+    current: object = data
+    for index, part in enumerate(parts):
+        if not isinstance(current, Mapping):
+            return None
+        value = current.get(part)
+        if index == len(parts) - 1:
+            direct = _resolved_string(value)
+            if direct is not None:
+                return direct
+            return _resolved_string(value.get("value")) if isinstance(value, Mapping) else None
+        current = value
+    return None
 
 
 def name(input: ConfigKey, options: ConfigOptions | None = None) -> str:
@@ -148,7 +187,16 @@ def bundle_file(cwd: str | None = None) -> ConfigFile | None:
     default_enabled = (production or "").lower() != "production" and not is_databricks_app_env()
     if not _file_source_enabled(CONFIG_BUNDLE_KEY, default_enabled):
         return None
-    return _cached(("config", "bundle"), _load_bundle_file, cwd)
+    return _load_bundle_file(
+        _resolve_working_directory(cwd),
+        _trim_to_none(os.environ.get("DATABRICKS_CONFIG_PROFILE")),
+    )
+
+
+def app_file(cwd: str | None = None) -> ConfigFile | None:
+    if not _file_source_enabled(CONFIG_APP_KEY):
+        return None
+    return _load_app_file(_resolve_working_directory(cwd))
 
 
 def _keys(input: ConfigKey, options: ConfigOptions) -> builtins.list[str]:
@@ -170,38 +218,85 @@ def _keys(input: ConfigKey, options: ConfigOptions) -> builtins.list[str]:
 
 def _values(input: ConfigKey, options: ConfigOptions) -> Iterator[_ConfigValue]:
     candidates = _keys(input, options)
-    sources = _sequence(options.get("sources", DEFAULT_SOURCES))
-    cwd = options.get("cwd")
+    sources = _config_sources(options)
     for source in sources:
         if source not in DEFAULT_SOURCES:
             continue
-        for values in _read(source, cwd):
+        for values in _read(source, options):
             for key in candidates:
-                value = _trim_to_none(values.get(key))
+                value = _config_value(values.get(key))
                 if value is not None:
                     yield _ConfigValue(key=key, source=source, value=value)
 
 
-def _read(source: ConfigSource, cwd: str | None) -> Iterator[Mapping[str, object]]:
-    if source == "env":
+def _config_sources(options: ConfigOptions) -> list[ConfigSource]:
+    sources = _distinct(_sequence(options.get("sources", DEFAULT_SOURCES)))
+    if "data" in options and "sources" in options and "config" not in sources:
+        sources.append("config")
+    return cast(builtins.list[ConfigSource], sources)
+
+
+def _config_value(value: object) -> str | None:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        for entry in value:
+            resolved = _trim_to_none(entry)
+            if resolved is not None:
+                return resolved
+        return None
+    return _trim_to_none(value)
+
+
+def _read(source: ConfigSource, options: ConfigOptions) -> Iterator[Mapping[str, object]]:
+    if source == "config":
+        for data in _sequence(options.get("data")):
+            if isinstance(data, Mapping):
+                yield data
+    elif source == "env":
         yield os.environ
     elif source == "dotenv":
-        yield _dotenv(cwd)
+        yield _dotenv(options.get("cwd"))
+    elif source == "bundle":
+        data = _source_data(options.get("bundleData"))
+        if data is None:
+            data = bundle_file(options.get("cwd"))
+            data = data.data if data is not None else None
+        if data is not None:
+            yield flatten_bundle_env(data)
     else:
-        bundle = bundle_file(cwd)
-        if bundle is not None:
-            yield _bundle_app(bundle.data)
+        data = _source_data(options.get("appData"))
+        if data is None:
+            data = app_file(options.get("cwd"))
+            data = data.data if data is not None else None
+        if data is not None:
+            yield flatten_app_env(data)
+
+
+def _source_data(source: object) -> Mapping[str, object] | None:
+    if isinstance(source, ConfigFile):
+        return source.data
+    return source if isinstance(source, Mapping) else None
 
 
 def _dotenv(cwd: str | None) -> dict[str, str]:
     if not _file_source_enabled(CONFIG_DOTENV_KEY):
         return {}
-    environments = _node_env_names(os.environ.get("NODE_ENV"))
-    return _cached(
-        ("config", "dotenv", *environments),
-        lambda resolved: _load_dotenv(resolved, environments),
-        cwd,
+    return _load_dotenv(
+        _resolve_working_directory(cwd),
+        _node_env_names(os.environ.get("NODE_ENV")),
     )
+
+
+def _resolve_working_directory(cwd: str | None = None) -> str:
+    value = cwd.strip() if isinstance(cwd, str) else ""
+    return str(Path(value or Path.cwd()).resolve())
+
+
+def _cached_record(key: str, loader: Callable[[], _RecordT | None]) -> _RecordT | None:
+    if key in _FILE_DATA_CACHE:
+        return cast(_RecordT | None, _FILE_DATA_CACHE[key])
+    value = loader()
+    _FILE_DATA_CACHE[key] = value
+    return value
 
 
 def _node_env_names(node_env: object) -> builtins.list[str]:
@@ -219,6 +314,9 @@ def _node_env_names(node_env: object) -> builtins.list[str]:
 
 def _find_config_file(cwd: str, names: Sequence[str]) -> str | None:
     start = Path(cwd).resolve()
+    key = json.dumps([str(start), *names])
+    if key in _CONFIG_FILE_CACHE:
+        return _CONFIG_FILE_CACHE[key]
     root = _project_root(start)
     boundary = root if root is not None and _is_relative_to(start, root) else None
     directory = start
@@ -227,10 +325,13 @@ def _find_config_file(cwd: str, names: Sequence[str]) -> str | None:
             candidate = directory / file_name
             try:
                 if candidate.is_file():
-                    return str(candidate)
+                    path = str(candidate)
+                    _CONFIG_FILE_CACHE[key] = path
+                    return path
             except OSError:
                 pass
         if boundary is None or directory == boundary:
+            _CONFIG_FILE_CACHE[key] = None
             return None
         directory = directory.parent
 
@@ -250,19 +351,58 @@ def _load_dotenv(cwd: str | None, environments: Sequence[str]) -> dict[str, str]
     path = _find_config_file(cwd or ".", names)
     if path is None:
         return {}
+    return (
+        _cached_record(
+            json.dumps(["dotenv", path]),
+            lambda: _read_dotenv_file(path),
+        )
+        or {}
+    )
+
+
+def _read_dotenv_file(path: str) -> dict[str, str]:
     try:
         return _parse_env(Path(path).read_text(encoding="utf-8"))
     except (OSError, UnicodeError):
         return {}
 
 
-def _load_bundle_file(cwd: str | None) -> ConfigFile | None:
+def _load_bundle_file(cwd: str | None, profile: str | None) -> ConfigFile | None:
     path = _find_config_file(cwd or ".", BUNDLE_FILE_NAMES)
     if path is None:
         return None
+    data = _cached_record(
+        json.dumps(["bundle", path, profile]),
+        lambda: _validate_bundle(path, profile),
+    )
+    return None if data is None else ConfigFile(path=path, data=dict(data))
+
+
+def _load_app_file(cwd: str | None) -> ConfigFile | None:
+    path = _find_config_file(cwd or ".", APP_FILE_NAMES)
+    if path is None:
+        return None
+    data = _cached_record(
+        json.dumps(["app", path]),
+        lambda: _read_app_file(path),
+    )
+    return None if data is None else ConfigFile(path=path, data=dict(data))
+
+
+def _read_app_file(path: str) -> dict[str, object] | None:
+    try:
+        return _parse_app_yaml(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError):
+        return None
+
+
+def _validate_bundle(path: str, profile: str | None) -> dict[str, object] | None:
+    arguments = ["databricks", "bundle", "validate", "--output", "json"]
+    if profile is not None:
+        arguments.extend(["--profile", profile])
     try:
         result = subprocess.run(
-            ["databricks", "bundle", "validate", "--output", "json"],
+            arguments,
             cwd=str(Path(path).parent),
             check=False,
             capture_output=True,
@@ -279,10 +419,131 @@ def _load_bundle_file(cwd: str | None) -> ConfigFile | None:
         return None
     if not isinstance(data, dict):
         return None
-    return ConfigFile(path=path, data=data)
+    return data
 
 
-def _bundle_app(input: object) -> dict[str, str]:
+def flatten_app_env(input: object) -> dict[str, str]:
+    if not isinstance(input, Mapping):
+        return {}
+    entries = input.get("env")
+    if not isinstance(entries, builtins.list):
+        return {}
+    result: dict[str, str] = {}
+    resources = _named_resources(input.get("resources"))
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        name = _resolved_string(entry.get("name"))
+        value = _resolved_string(entry.get("value"))
+        if name is None:
+            continue
+        if value is not None:
+            result[name] = value
+            continue
+        reference = _resolved_string(entry.get("valueFrom"))
+        resolved = _resource_value(resources.get(reference)) if reference else None
+        if resolved is not None:
+            result[name] = resolved
+    return result
+
+
+def _parse_app_yaml(source: str) -> dict[str, object] | None:
+    lines = source.splitlines()
+    env = _parse_yaml_record_list(lines, "env")
+    resources = _parse_yaml_record_list(lines, "resources")
+    if env is None and resources is None:
+        return None
+    result: dict[str, object] = {}
+    if env is not None:
+        result["env"] = env
+    if resources is not None:
+        result["resources"] = resources
+    return result
+
+
+def _parse_yaml_record_list(
+    lines: Sequence[str],
+    section: str,
+) -> builtins.list[dict[str, object]] | None:
+    entries: builtins.list[dict[str, object]] = []
+    current: dict[str, object] | None = None
+    section_indent: int | None = None
+    item_indent: int | None = None
+    nested_key: str | None = None
+    nested_indent: int | None = None
+    for raw_line in lines:
+        line = raw_line.rstrip()
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if section_indent is None:
+            if indent == 0 and re.fullmatch(rf"{re.escape(section)}:\s*(?:#.*)?", stripped):
+                section_indent = indent
+            continue
+        if indent <= section_indent:
+            break
+        item = stripped
+        if item.startswith("-"):
+            if current is not None:
+                entries.append(current)
+            current = {}
+            item_indent = indent
+            nested_key = None
+            nested_indent = None
+            item = item[1:].strip()
+            if not item:
+                continue
+        if current is None or ":" not in item:
+            continue
+        key, raw_value = item.split(":", 1)
+        key = key.strip()
+        if not key:
+            continue
+        value = _parse_yaml_string(raw_value)
+        if value is not None:
+            if nested_key is not None and nested_indent is not None and indent > nested_indent:
+                nested = current.get(nested_key)
+                if isinstance(nested, dict):
+                    nested[key] = value
+            else:
+                nested_key = None
+                nested_indent = None
+                current[key] = value
+        elif not raw_value.strip() and item_indent is not None and indent > item_indent:
+            current[key] = {}
+            nested_key = key
+            nested_indent = indent
+    if current is not None:
+        entries.append(current)
+    return entries if section_indent is not None else None
+
+
+def _parse_yaml_string(raw: str) -> str | None:
+    value = raw.strip()
+    if not value:
+        return None
+    if value.startswith('"'):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, str) else None
+    if value.startswith("'"):
+        if len(value) < 2 or not value.endswith("'"):
+            return None
+        return value[1:-1].replace("''", "'")
+    value = value.split(" #", 1)[0].strip()
+    if not value or value[0] in "[{|>" or value[-1] in "]}":
+        return None
+    if value.lower() in {"null", "~", "true", "false", "yes", "no", "on", "off"}:
+        return None
+    if _YAML_NUMBER_PATTERN.fullmatch(value):
+        return None
+    return value
+
+
+def flatten_bundle_env(input: object) -> dict[str, str]:
     if not isinstance(input, Mapping):
         return {}
     resources = input.get("resources")
@@ -303,14 +564,52 @@ def _bundle_app(input: object) -> dict[str, str]:
     if not isinstance(entries, builtins.list):
         return {}
     result: dict[str, str] = {}
+    resource_map = _named_resources(app.get("resources"))
     for entry in entries:
         if not isinstance(entry, Mapping):
             continue
         key = _resolved_string(entry.get("name"))
         value = _resolved_string(entry.get("value"))
-        if key is not None and value is not None:
+        if key is None:
+            continue
+        if value is not None:
             result[key] = value
+            continue
+        reference = _resolved_string(entry.get("value_from"))
+        resolved = _resource_value(resource_map.get(reference)) if reference else None
+        if resolved is not None:
+            result[key] = resolved
     return result
+
+
+def _named_resources(input: object) -> dict[str, Mapping[object, object]]:
+    if not isinstance(input, builtins.list):
+        return {}
+    result: dict[str, Mapping[object, object]] = {}
+    for resource in input:
+        if not isinstance(resource, Mapping):
+            continue
+        name = _resolved_string(resource.get("name"))
+        if name is not None:
+            result[name] = resource
+    return result
+
+
+def _resource_value(resource: Mapping[object, object] | None) -> str | None:
+    for path in (
+        ("sql_warehouse", "id"),
+        ("genie_space", "space_id"),
+        ("postgres", "endpoint"),
+        ("postgres", "database"),
+        ("postgres", "branch"),
+    ):
+        value: object = resource
+        for part in path:
+            value = value.get(part) if isinstance(value, Mapping) else None
+        resolved = _resolved_string(value)
+        if resolved is not None:
+            return resolved
+    return None
 
 
 def _valid_bundle_app(app: object) -> bool:
@@ -482,26 +781,6 @@ def _next_line(source: str, index: int) -> int:
     return index
 
 
-def _cached(
-    slot: tuple[str, ...],
-    loader: Callable[[str | None], object],
-    context: str | None,
-):
-    active = str(Path.cwd().resolve())
-    resolved = str(Path(_context(context) or active).resolve())
-    key = (*slot, active, resolved)
-    if key in _CACHE:
-        return _CACHE[key]
-    value = loader(resolved)
-    _CACHE[key] = value
-    return value
-
-
-def _context(value: object) -> str | None:
-    resolved = _trim_to_none(value)
-    return None if resolved == "." else resolved
-
-
 def _sequence(value: object) -> builtins.list:
     if value is None:
         return []
@@ -593,23 +872,37 @@ def _is_relative_to(path: Path, root: Path) -> bool:
 
 
 bundleFile = bundle_file
-clearCache = clear_cache
+appFile = app_file
+environmentKeys = environment_keys
+flattenAppEnv = flatten_app_env
+flattenBundleEnv = flatten_bundle_env
+getBundlePath = get_bundle_path
 isDatabricksAppEnv = is_databricks_app_env
 positiveInt = positive_int
 positiveNumber = positive_number
+resolveValue = resolve_value
 
 __all__ = [
     "ENV_ONLY",
     "MAX_TCP_PORT",
+    "ConfigData",
     "ConfigFile",
     "ConfigKey",
     "ConfigOptions",
     "ConfigSource",
+    "appFile",
+    "app_file",
     "boolean",
     "bundleFile",
     "bundle_file",
-    "clearCache",
-    "clear_cache",
+    "environmentKeys",
+    "environment_keys",
+    "flattenAppEnv",
+    "flattenBundleEnv",
+    "flatten_app_env",
+    "flatten_bundle_env",
+    "getBundlePath",
+    "get_bundle_path",
     "isDatabricksAppEnv",
     "is_databricks_app_env",
     "list",
@@ -618,6 +911,8 @@ __all__ = [
     "positiveNumber",
     "positive_int",
     "positive_number",
+    "resolveValue",
+    "resolve_value",
     "string",
     "text",
 ]

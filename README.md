@@ -45,12 +45,12 @@ app:
 
 ## What This Adds
 
-- **AppKit app defaults** — auto-configure Lakebase/Postgres env, resolve config
-  from local files and bundles, access AppKit execution context safely, and look
-  up sibling plugins with typed helpers.
-- **Core configuration and locking** — resolve scoped settings lazily from the
-  environment, project `.env` files, or validated bundles with explicit runtime
-  and source overrides; install binaries atomically; and serialize critical
+- **AppKit app defaults** — auto-configure Lakebase/Postgres env through core
+  config sources, access AppKit execution context safely, and look up sibling
+  plugins with typed helpers.
+- **Core configuration and locking** — resolve scoped settings lazily from
+  constant data, the environment, project `.env` files, validated bundles, or
+  App YAML with explicit runtime and source overrides; install binaries atomically; and serialize critical
   sections across threads, local processes, or replicas with process, file, and
   Postgres advisory locks.
 - **Mastra inside AppKit** — register one or more Mastra agents as an AppKit
@@ -194,7 +194,7 @@ The root uv workspace contains these Python counterparts:
 
 | Package                                      | Purpose                                                                                                                                                                                                                                                                            |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dbx-tools-core`](packages/py/core)         | Loads scoped configuration from the environment, project `.env` files, and validated Databricks bundles with the same precedence as Node, plus dependency-free stable-key, FNV hash, and identifier helpers.                                                                       |
+| [`dbx-tools-core`](packages/py/core)         | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free stable-key, FNV hash, and identifier helpers.                                              |
 | [`dbx-tools-postgres`](packages/py/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
 | [`dbx-tools-model`](packages/py/model)       | Lists and classifies Databricks Model Serving endpoints, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies.                                         |
 

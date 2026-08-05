@@ -4,7 +4,6 @@
 
 export * as async from "./src/async.ts";
 export * as brand from "./src/brand.ts";
-export * as context from "./src/context.ts";
 export * as error from "./src/error.ts";
 export * as execution from "./src/execution.ts";
 export * as functionModule from "./src/function.ts";
@@ -21,7 +20,6 @@ export * as token from "./src/token.ts";
 export type { PollContext, PollProducer, PollOptions } from "./src/async.ts";
 export { DEFAULT_BRAND_ASSETS, BrandAssetSetSchema, BrandColorsSchema, BrandVoiceSchema, BrandContextSchema, defaultBrandContext } from "./src/brand.ts";
 export type { BrandContext, BrandContextInput, BrandAssetSet } from "./src/brand.ts";
-export type { ContextLoader } from "./src/context.ts";
 export type { ErrorContext } from "./src/error.ts";
 export type { ExecutionResult, Executor, ExecutionFailure, RunOptions } from "./src/execution.ts";
 export type { MemoizeOptions } from "./src/function.ts";

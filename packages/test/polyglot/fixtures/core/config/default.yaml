@@ -31,6 +31,10 @@ functions:
     path:
       typescript: configList
       python: config_list
+  configDataValues:
+    path:
+      typescript: configDataValues
+      python: config_data_values
   isDatabricksAppEnv:
     path:
       typescript: isDatabricksAppEnv
@@ -43,6 +47,14 @@ functions:
     path:
       typescript: dotenvCachedValue
       python: dotenv_cached_value
+  appValues:
+    path:
+      typescript: appValues
+      python: app_values
+  appCachedValue:
+    path:
+      typescript: appCachedValue
+      python: app_cached_value
   bundleValues:
     path:
       typescript: bundleValues

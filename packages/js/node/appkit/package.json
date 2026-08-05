@@ -29,9 +29,7 @@
   "dependencies": {
     "@databricks/sdk-experimental": "catalog:",
     "@dbx-tools/core": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*",
-    "yaml": "^2.9.0",
-    "zod": "catalog:"
+    "@dbx-tools/shared-core": "workspace:*"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

@@ -613,9 +613,12 @@ second package, put it in shared-core rather than duplicating it.
   `match.toPathMatcher` instead.
 - `async` - `sleep`, `tieAbortSignal`, `poll`. Do not import
   `node:timers/promises` for a delay.
-- `@dbx-tools/core` `config` - Node configuration through process env,
-  environment-specific `.env` files, and Databricks bundle App config or root
-  variables. `scope` and `prefix` compose names in that order; `text` /
+- `@dbx-tools/core` `config` - Node configuration through constant data,
+  process env, environment-specific `.env` files, the single Databricks bundle
+  App's `config.env`, then `app.yaml` / `app.yml` env values. Root bundle
+  variables are authoring inputs, not a config source. Core resolves bundle
+  `value_from` and App YAML `valueFrom` references from named resources.
+  `scope` and `prefix` compose names in that order; `text` /
   `string` / `boolean` / `positiveInt` / `list` share one coercion and
   precedence policy. Keep configuration out of browser-safe shared-core.
 - `error` (`toError` / `errorMessage` / `errorContext`), `log.logger`,
@@ -624,6 +627,15 @@ second package, put it in shared-core rather than duplicating it.
 - `functionModule.memoize` caches ONE value and shares an in-flight promise
   between callers in the same runtime. To serialize whole callbacks across
   worker threads, use `@dbx-tools/core`'s `processLock.withProcessLock`.
+- Do not add a global cwd/origin-aware `context` cache. Parsed config records use
+  `file.cachedRecord` with a key containing every source input (dotenv path;
+  bundle path + profile; app YAML path); every result caches, including empty records and
+  `undefined`. Config-file discovery likewise caches both found paths and misses,
+  so each source key is attempted once. Separately, `project.ts` subprocess probes
+  share one LOCAL map keyed by command + arguments and store the complete
+  `ProjectContext`, including unsuccessful/empty results.
+  Blank, null, omitted, and an explicit path equal to `process.cwd()` may hit or
+  populate that command map; another directory executes without populating it.
 - `token` also owns the front-door header NAMES - `ACCESS_TOKEN_HEADER`,
   `USER_ID_HEADER`, `USER_EMAIL_HEADER`. Never spell `"x-forwarded-access-token"`
   in a package: several places branch on it (`@dbx-tools/appkit`'s `identity`

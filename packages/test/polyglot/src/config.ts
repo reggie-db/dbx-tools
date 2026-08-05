@@ -2,19 +2,20 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { config } from "@dbx-tools/core";
-import { context } from "@dbx-tools/shared-core";
 
 type ConfigKey = string | readonly string[];
-type ConfigSource = "env" | "dotenv" | "bundle";
+type ConfigSource = "config" | "env" | "dotenv" | "bundle" | "app";
 
 interface ConfigOptions {
   scope?: string | readonly string[];
   prefix?: string | readonly string[];
   cwd?: string;
+  data?: Record<string, string | readonly string[] | null | undefined>;
   sources?: ConfigSource | readonly ConfigSource[];
 }
 
 const CONFIG_BUNDLE_KEY = "DBX_TOOLS_CONFIG_BUNDLE";
+const CONFIG_APP_KEY = "DBX_TOOLS_CONFIG_APP";
 const CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV";
 const DATABRICKS_APP_ENV_KEY = "DBX_TOOLS_DATABRICKS_APP_ENV";
 
@@ -61,6 +62,18 @@ export function configList(configured: string | readonly string[] | null): strin
   return config.list(configured, "POLYGLOT_UNUSED", undefined, config.ENV_ONLY);
 }
 
+export function configDataValues(
+  data: Record<string, string | readonly string[] | null>,
+  environment: Record<string, string>,
+  input: ConfigKey,
+  sources?: ConfigSource[],
+): string | null {
+  return withEnvironment(
+    environment,
+    () => config.text(input, { data, scope: [], sources }) ?? null,
+  );
+}
+
 export function isDatabricksAppEnv(source: Record<string, string | undefined>): boolean {
   return config.isDatabricksAppEnv(source);
 }
@@ -81,14 +94,10 @@ export function dotenvValues(
     }
     const workingDirectory = join(root, cwd);
     mkdirSync(workingDirectory, { recursive: true });
-    return withEnvironment(
-      { ...fileSourceEnvironment(), NODE_ENV: nodeEnv, ...environment },
-      () => {
-        context.clear();
-        return inputs.map((input) =>
-          config.text(input, { ...options, cwd: workingDirectory, sources: "dotenv" }),
-        );
-      },
+    return withEnvironment({ ...fileSourceEnvironment(), NODE_ENV: nodeEnv, ...environment }, () =>
+      inputs.map((input) =>
+        config.text(input, { ...options, cwd: workingDirectory, sources: "dotenv" }),
+      ),
     );
   });
 }
@@ -99,10 +108,38 @@ export function dotenvCachedValue(initial: string, updated: string): (string | u
     const path = join(root, ".env");
     writeFileSync(path, `SAMPLE=${initial}\n`);
     return withEnvironment(fileSourceEnvironment(), () => {
-      context.clear();
       const first = config.text("SAMPLE", { cwd: root, scope: [], sources: "dotenv" });
       writeFileSync(path, `SAMPLE=${updated}\n`);
       const second = config.text("SAMPLE", { cwd: root, scope: [], sources: "dotenv" });
+      return [first, second];
+    });
+  });
+}
+
+export function appValues(
+  contents: string,
+  inputs: ConfigKey[],
+  options: ConfigOptions = {},
+  environment: Record<string, string> = {},
+): (string | undefined)[] {
+  return withProject((root) => {
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
+    writeFileSync(join(root, "app.yaml"), contents);
+    return withEnvironment({ ...fileSourceEnvironment(), ...environment }, () =>
+      inputs.map((input) => config.text(input, { ...options, cwd: root, sources: "app" })),
+    );
+  });
+}
+
+export function appCachedValue(initial: string, updated: string): (string | undefined)[] {
+  return withProject((root) => {
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
+    const path = join(root, "app.yaml");
+    writeFileSync(path, `env:\n  - name: SAMPLE\n    value: ${initial}\n`);
+    return withEnvironment(fileSourceEnvironment(), () => {
+      const first = config.text("SAMPLE", { cwd: root, scope: [], sources: "app" });
+      writeFileSync(path, `env:\n  - name: SAMPLE\n    value: ${updated}\n`);
+      const second = config.text("SAMPLE", { cwd: root, scope: [], sources: "app" });
       return [first, second];
     });
   });
@@ -132,13 +169,11 @@ export function bundleValues(
         const originalCwd = process.cwd();
         if (currentWorkingDirectory) process.chdir(root);
         try {
-          context.clear();
-          const cwd = currentWorkingDirectory ? undefined : root;
+          const cwd = currentWorkingDirectory ? process.cwd() : root;
           const values = inputs.map((input) => config.text(input, { ...options, cwd }));
           return { values, calls: lineCount(counter) };
         } finally {
           process.chdir(originalCwd);
-          context.clear();
         }
       },
     );
@@ -148,6 +183,7 @@ export function bundleValues(
 function fileSourceEnvironment(): Record<string, null> {
   return {
     [CONFIG_BUNDLE_KEY]: null,
+    [CONFIG_APP_KEY]: null,
     [CONFIG_DOTENV_KEY]: null,
     [DATABRICKS_APP_ENV_KEY]: null,
     DATABRICKS_APP_NAME: null,

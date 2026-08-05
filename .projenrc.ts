@@ -224,7 +224,8 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // needing child_process / fs / process depends on node-core instead. zod is here
 // for `config.ts`, which validates `databricks bundle validate` output.
 // (shared-core is added by the blanket base-dep mixin above, so this package
-// needs no rule of its own.)
+// needs no rule of its own.) YAML belongs here because `config.ts` owns both
+// bundle and app.yaml config-source parsing.
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml", "zod@catalog:");
 });
@@ -234,14 +235,11 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
 // stays SDK-free. The Databricks SDK is a runtime dep here; `@databricks/appkit`
 // (used by `plugin.ts` for the execution-context + plugin-lookup helpers) is an
 // OPTIONAL peer so browser/test consumers that only touch `databricks.ts` needn't
-// install it. `config.ts` (app.yaml / bundle env resolution) needs zod + yaml
-// and depends on node-core for project-root discovery.
+// install it. Generic configuration resolution lives in node-core.
 project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/core@workspace:*",
     "@databricks/sdk-experimental@catalog:",
-    "zod@catalog:",
-    "yaml",
   );
   p.addPeerDeps("@databricks/appkit@catalog:");
   p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });

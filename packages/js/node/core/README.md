@@ -90,18 +90,39 @@ const timeoutMs = config.positiveInt(undefined, "TIMEOUT_MS", 30_000, {
 });
 ```
 
-Resolution is lazy and follows process env, `.env`, then Databricks bundle
-configuration. The default `DBX_TOOLS` scope and an optional capability prefix
-produce names such as `DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN`, then
+Resolution is lazy and follows constant `data`, process env, `.env`, Databricks
+bundle configuration, then `app.yaml` / `app.yml` env values. The default
+`DBX_TOOLS` scope and an optional capability prefix produce names such as
+`DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN`, then
 `TUNNEL_PUBLIC_DOMAIN`, then `PUBLIC_DOMAIN`. `.env.production` and `.env.prod`
 are checked before `.env` when `NODE_ENV=production`; development uses
 `.env.development` and `.env.dev`.
 
+Pass one config map or an array of maps through `data`; the first matching value
+wins before environment lookup by default. When a custom `sources` order omits
+`config`, passed data is still read and is appended last. This lets a caller put
+env first without accidentally discarding its fallback config:
+
+```ts
+const endpoint = config.resolveValue("lakebaseEndpoint", {
+  data: { LAKEBASE_ENDPOINT: flags.endpoint },
+  sources: ["env", "dotenv", "bundle", "app"],
+});
+```
+
+`resolveValue()` tries the exact, uppercase, and tokenized-uppercase forms from
+`environmentKeys()` before applying normal scope and prefix expansion.
+
 Bundle lookup runs `databricks bundle validate --output json` only after earlier
 sources miss. It reads literal values from the single App's `config.env`, accepts
-usable partial JSON from a failed validation, and caches each dotenv file or
-validated bundle once per resolved working-directory context. Bundle cache
-entries also include the Databricks profile. Root bundle `variables` are NOT a
+usable partial JSON from a failed validation, and honors the active Databricks
+profile. Parsed dotenv records are cached by file path; parsed bundle output is
+cached by bundle path plus profile. App YAML lookup runs only if the bundle did
+not resolve the key and reads `env[].value` entries. Bundle `value_from` and App
+YAML `valueFrom` references resolve supported fields from their named
+`sql_warehouse`, `genie_space`, or `postgres` resource. Config-file discovery and parsed results
+are single-attempt per source key: found paths, missing files, empty records,
+invalid records, and `undefined` results all cache. Root bundle `variables` are NOT a
 config source: they are authoring inputs interpolated into the bundle's own
 targets, resources, and paths, so reading one as a process setting resolves names
 the deployed App never sees. Reference a variable from `config.env` to make it
@@ -113,13 +134,14 @@ contains a bundle, and bundle reads are enabled, validation runs. This keeps
 pre-boot callers such as `@dbx-tools/appkit` auto-configuration on the same
 deterministic path as CLIs and ordinary Node consumers.
 
-Deployed Apps skip dotenv and bundle lookup after `isDatabricksAppEnv()`
+Deployed Apps skip dotenv, bundle, and app YAML lookup after `isDatabricksAppEnv()`
 recognizes the required App name, HTTP(S) host, and valid port. Set
 `DBX_TOOLS_DATABRICKS_APP_ENV=true` or `false` to force that result; unrecognized
 values leave automatic detection in place.
 
-`DBX_TOOLS_CONFIG_DOTENV` and `DBX_TOOLS_CONFIG_BUNDLE` independently force
-those file sources on or off. A recognized boolean takes precedence over App
+`DBX_TOOLS_CONFIG_DOTENV`, `DBX_TOOLS_CONFIG_BUNDLE`, and
+`DBX_TOOLS_CONFIG_APP` independently force those file sources on or off. A
+recognized boolean takes precedence over App
 runtime detection, so `true` can enable a local source inside an App and `false`
 can suppress it during local development. Absent or unrecognized values keep
 the default: read files outside an App and skip them inside one. Bundle reads
@@ -130,6 +152,8 @@ Use `config.string()`, `boolean()`, `positiveNumber()`, `positiveInt()`,
 `port()`, and `list()` to normalize typed options and text-based configuration
 through one rule. `config.port()` accepts only TCP ports from 1 through 65535;
 `config.ENV_ONLY` disables file fallbacks for exact environment reads.
+`config.flattenBundleEnv()`, `flattenAppEnv()`, and `getBundlePath()` expose the
+same parsing logic for callers that already have parsed configuration data.
 
 ## Run Commands
 
@@ -254,19 +278,25 @@ import { project } from "@dbx-tools/core";
 const root = project.root();
 const name = project.name();
 const origins = [...project.resolveProjectRoots(process.cwd())];
+const cwd = project.resolveWorkingDirectory("");
 ```
 
 `project.root()` checks npm/pnpm workspace roots, git top-level, and cwd.
 `project.name()` prefers package metadata, then git remote name, then directory
-basename. `project.stat()` returns `undefined` instead of throwing.
+basename. `project.resolveWorkingDirectory()` normalizes blank, null, omitted,
+relative, and absolute cwd values for cache decisions. Project subprocess probes
+share a command/argument result cache only when that resolved path is the live
+process cwd; another directory executes directly. Empty command results are
+cached too.
 
 ## Modules
 
 - `exec` - async/sync process spawning, stdio handling, abort wiring, and shlex.
 - `bin` - executable download, optional archive extraction, selection, and
   atomic installation.
-- `project` - root discovery, project naming, git-remote parsing, and safe
-  filesystem stat.
+- `project` - cwd normalization, root discovery, project naming, and git-remote
+  parsing.
+- `file` - best-effort stat and parsed-record caching by caller-defined source key.
 - `brand` - YAML/JSON discovery, parsing, validation, and asset path resolution.
 - `config` - scoped environment, dotenv, and validated Databricks bundle lookup,
   including runtime detection and typed coercion helpers.

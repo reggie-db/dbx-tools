@@ -56,6 +56,18 @@ def config_list(configured: str | Sequence[str] | None) -> list[str]:
     return config.list(configured, "POLYGLOT_UNUSED", options=config.ENV_ONLY)
 
 
+def config_data_values(
+    data: Mapping[str, object],
+    environment: Mapping[str, str],
+    input: ConfigKey,
+    sources: Sequence[config.ConfigSource] | None = None,
+) -> str | None:
+    options: config.ConfigOptions = {"data": data, "scope": ()}
+    if sources is not None:
+        options["sources"] = sources
+    return _with_environment(environment, lambda: config.text(input, options))
+
+
 def is_databricks_app_env(source: Mapping[str, str | None]) -> bool:
     return config.is_databricks_app_env(source)
 
@@ -93,10 +105,50 @@ def dotenv_cached_value(initial: str, updated: str) -> list[str | None]:
         path.write_text(f"SAMPLE={initial}\n", encoding="utf-8")
 
         def read_values() -> list[str | None]:
-            config.clear_cache()
             first = config.text("SAMPLE", {"cwd": str(root), "scope": (), "sources": "dotenv"})
             path.write_text(f"SAMPLE={updated}\n", encoding="utf-8")
             second = config.text("SAMPLE", {"cwd": str(root), "scope": (), "sources": "dotenv"})
+            return [first, second]
+
+        return _with_environment(_file_source_environment(), read_values)
+
+
+def app_values(
+    contents: str,
+    inputs: Sequence[ConfigKey],
+    options: config.ConfigOptions | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> list[str | None]:
+    with tempfile.TemporaryDirectory(prefix="dbx-tools-config-polyglot-") as directory:
+        root = Path(directory)
+        (root / "package.json").write_text('{"name":"fixture"}\n', encoding="utf-8")
+        (root / "app.yaml").write_text(contents, encoding="utf-8")
+        return _with_environment(
+            {**_file_source_environment(), **(environment or {})},
+            lambda: [
+                config.text(
+                    input,
+                    {**(options or {}), "cwd": str(root), "sources": "app"},
+                )
+                for input in inputs
+            ],
+        )
+
+
+def app_cached_value(initial: str, updated: str) -> list[str | None]:
+    with tempfile.TemporaryDirectory(prefix="dbx-tools-config-polyglot-") as directory:
+        root = Path(directory)
+        (root / "package.json").write_text('{"name":"fixture"}\n', encoding="utf-8")
+        path = root / "app.yaml"
+        path.write_text(f"env:\n  - name: SAMPLE\n    value: {initial}\n", encoding="utf-8")
+
+        def read_values() -> list[str | None]:
+            first = config.text("SAMPLE", {"cwd": str(root), "scope": (), "sources": "app"})
+            path.write_text(
+                f"env:\n  - name: SAMPLE\n    value: {updated}\n",
+                encoding="utf-8",
+            )
+            second = config.text("SAMPLE", {"cwd": str(root), "scope": (), "sources": "app"})
             return [first, second]
 
         return _with_environment(_file_source_environment(), read_values)
@@ -133,7 +185,6 @@ def _dotenv_results(
     inputs: Sequence[ConfigKey],
     options: config.ConfigOptions | None,
 ) -> list[str | None]:
-    config.clear_cache()
     return [
         config.text(input, {**(options or {}), "cwd": str(cwd), "sources": "dotenv"})
         for input in inputs
@@ -151,14 +202,12 @@ def _bundle_results(
     if current_working_directory:
         os.chdir(root)
     try:
-        config.clear_cache()
-        cwd = None if current_working_directory else str(root)
+        cwd = str(Path.cwd()) if current_working_directory else str(root)
         values = [config.text(input, {**(options or {}), "cwd": cwd}) for input in inputs]
         calls = len(counter.read_text(encoding="utf-8").splitlines()) if counter.exists() else 0
         return {"values": values, "calls": calls}
     finally:
         os.chdir(original_cwd)
-        config.clear_cache()
 
 
 def _with_environment(changes: Mapping[str, str | None], callback: Callable[[], T]) -> T:
@@ -181,6 +230,7 @@ def _with_environment(changes: Mapping[str, str | None], callback: Callable[[], 
 def _file_source_environment() -> dict[str, None]:
     return {
         config.CONFIG_BUNDLE_KEY: None,
+        config.CONFIG_APP_KEY: None,
         config.CONFIG_DOTENV_KEY: None,
         config.DATABRICKS_APP_ENV_KEY: None,
         "DATABRICKS_APP_NAME": None,

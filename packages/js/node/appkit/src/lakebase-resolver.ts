@@ -45,7 +45,6 @@ import {
 import { config as coreConfig, project } from "@dbx-tools/core";
 import { async, log, object, string } from "@dbx-tools/shared-core";
 import { z } from "zod";
-import { resolveConfigValue } from "./bundle.ts";
 
 import { toContext } from "./databricks.ts";
 import {
@@ -255,8 +254,8 @@ export function pollDelay(attempt: number, baseMs: number, signal?: AbortSignal)
  * Pull resolver inputs from `process.env`, parse the address blob, and
  * layer explicit config on top with this precedence:
  *
- *   `config.<field>` > `bundle.resolveConfigValue` (`env`, then bundle
- *   validate JSON) > whatever {@link parseAddress} recovered from the
+ *   `config.<field>` > `coreConfig.resolveValue` (shared config sources) >
+ *   whatever {@link parseAddress} recovered from the
  *   `endpoint` / `LAKEBASE_ENDPOINT` blob.
  *
  * Set `config.endpoint` (or `LAKEBASE_ENDPOINT`) to any input
@@ -266,10 +265,10 @@ export function pollDelay(attempt: number, baseMs: number, signal?: AbortSignal)
 export async function readLakebaseInputs(
   config?: LakebaseResolverInputs,
 ): Promise<LakebaseResolverInputs> {
-  const rawAddress = config?.endpoint ?? (await resolveConfigValue("LAKEBASE_ENDPOINT"));
+  const rawAddress = config?.endpoint ?? coreConfig.resolveValue("LAKEBASE_ENDPOINT");
   const parsed = parseAddress(rawAddress);
-  const portEnv = parsePort(await resolveConfigValue("PGPORT"));
-  const sslModeEnv = parseSslMode(await resolveConfigValue("PGSSLMODE"));
+  const portEnv = parsePort(coreConfig.resolveValue("PGPORT"));
+  const sslModeEnv = parseSslMode(coreConfig.resolveValue("PGSSLMODE"));
   return {
     project: config?.project ?? parsed.project,
     branch: config?.branch ?? parsed.branch,
@@ -277,8 +276,8 @@ export async function readLakebaseInputs(
     // bare hostnames set `host` instead and leave `endpoint` undefined
     // until the REST resolver fills it in.
     endpoint: parsed.endpoint,
-    database: config?.database ?? (await resolveConfigValue("PGDATABASE")) ?? parsed.database,
-    host: config?.host ?? (await resolveConfigValue("PGHOST")) ?? parsed.host,
+    database: config?.database ?? coreConfig.resolveValue("PGDATABASE") ?? parsed.database,
+    host: config?.host ?? coreConfig.resolveValue("PGHOST") ?? parsed.host,
     port: config?.port ?? portEnv ?? parsed.port,
     sslMode: config?.sslMode ?? sslModeEnv ?? parsed.sslMode,
     autoCreate: config?.autoCreate,

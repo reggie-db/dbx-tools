@@ -3,8 +3,8 @@
 Node-side helpers for Databricks AppKit apps.
 
 Import this package when backend code needs AppKit execution context, typed
-plugin lookup, Databricks SDK cancellation, layered config resolution, or
-Lakebase auto-configuration without taking on a heavier feature package.
+plugin lookup, Databricks SDK cancellation, or Lakebase auto-configuration
+without taking on a heavier feature package.
 
 **Key features:**
 
@@ -14,8 +14,8 @@ Lakebase auto-configuration without taking on a heavier feature package.
   from a CLI, or from a background script.
 - Typed plugin lookup helpers for AppKit plugins that depend on exports from
   sibling plugins.
-- Config resolution across explicit options, CLI flags, env vars, Databricks
-  Asset Bundle outputs, and `app.yaml`.
+- Lakebase resolution through the shared `@dbx-tools/core` configuration path,
+  including local env, bundle, and `app.yaml` sources.
 - SDK cancellation bridging from web `AbortSignal` values into Databricks SDK
   `Context` values.
 - Lakebase cache-schema provisioning for deployments where the app identity must
@@ -42,8 +42,8 @@ Use this package when the friction is around bootstrapping and reuse:
 - AppKit plugin instances are generic; the lookup helpers keep sibling-plugin
   access typed and errors actionable.
 - AppKit does not own your local CLI flags, bundle validation output, or
-  `app.yaml`; `bundle.resolveConfigValue()` gives setup scripts one resolution
-  path across those sources.
+  `app.yaml`; `@dbx-tools/core` centralizes those sources for this package and
+  other Node callers.
 - AppKit's `asUser(req)` throws outside `NODE_ENV=development` when a request
   carries no OBO token; `identity` makes falling back to the service principal a
   configured, per-request decision instead of a `NODE_ENV` side effect.
@@ -158,23 +158,22 @@ await; `lakebaseResolver.applyLakebaseEnv()` resolves and applies the full set.
 
 ## Resolve Local And Bundle Config
 
-`bundle.resolveConfigValue()` checks explicit options, CLI overrides, env vars,
-Databricks Asset Bundle validation output, and `app.yaml` env entries, in AppKit's
-precedence order: explicit config, then environment variable, then the app or
-bundle definition.
+Configuration is owned by `@dbx-tools/core`, not re-exported by this package.
+Its default precedence is constant config, process env, `.env`, bundle
+`config.env`, then `app.yaml` / `app.yml`.
 
 ```ts
-import { bundle } from "@dbx-tools/appkit";
+import { config } from "@dbx-tools/core";
 
-const warehouseId = await bundle.resolveConfigValue("DATABRICKS_WAREHOUSE_ID", {
-  cli: { DATABRICKS_WAREHOUSE_ID: flags.warehouse },
-  sources: bundle.withCliSources(),
+const warehouseId = config.resolveValue("DATABRICKS_WAREHOUSE_ID", {
+  data: { DATABRICKS_WAREHOUSE_ID: flags.warehouse },
 });
 ```
 
 Use this in CLIs and setup scripts that should behave the same locally and in a
-Databricks App deployment. `bundle.bundle()` and `bundle.appYaml()` expose the
-parsed files when you need to diagnose which source won.
+Databricks App deployment. `config.bundleFile()` exposes validated bundle
+output, while `config.appFile()` exposes parsed App YAML. Both cache successful,
+missing, and invalid results for the process lifetime.
 
 ## Parse Lakebase Addresses
 

@@ -2,7 +2,9 @@
 
 Date: 2026-08-04
 
-Status: proposed.
+Status: **mostly implemented and archived August 5, 2026.** The lazy `dbx
+tunnel` command, optional dependency boundaries, and scoped `DBX_TOOLS_`
+configuration are in the repository; this document remains as design history.
 
 ## Purpose
 

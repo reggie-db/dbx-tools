@@ -2,7 +2,8 @@
 
 Date: 2026-08-04
 
-Status: resolved in the project language split and `DBXToolsPythonWorkspace` extraction.
+Status: resolved in the project language split and `DBXToolsPythonWorkspace`
+extraction; archived August 5, 2026.
 
 ## Purpose
 

@@ -1,6 +1,6 @@
 {
   "$schema": "../../../schema.json",
-  "description": "Config key precedence, coercion, dotenv discovery, and the Databricks bundle's single-app config.env fallback stay identical across runtimes.",
+  "description": "Config key precedence, coercion, dotenv discovery, Databricks bundle config.env, and app YAML literal env fallback stay identical across runtimes.",
   "functions": {
     "configName": {
       "tests": [
@@ -165,6 +165,49 @@
           "name": "typed list preserves first occurrence",
           "args": [[" first ", "second", " first "]],
           "expected": ["first", "second"]
+        }
+      ]
+    },
+    "configDataValues": {
+      "tests": [
+        {
+          "name": "constant config is first by default",
+          "args": [
+            {
+              "SAMPLE": "configured"
+            },
+            {
+              "SAMPLE": "environment"
+            },
+            "SAMPLE"
+          ],
+          "expected": "configured"
+        },
+        {
+          "name": "constant config is appended after custom sources",
+          "args": [
+            {
+              "SAMPLE": "configured"
+            },
+            {
+              "SAMPLE": "environment"
+            },
+            "SAMPLE",
+            ["app", "env"]
+          ],
+          "expected": "environment"
+        },
+        {
+          "name": "appended constant config still resolves after misses",
+          "args": [
+            {
+              "SAMPLE": ["", "configured"]
+            },
+            {},
+            "SAMPLE",
+            ["app", "env"]
+          ],
+          "expected": "configured"
         }
       ]
     },
@@ -376,7 +419,62 @@
     "dotenvCachedValue": {
       "tests": [
         {
-          "name": "dotenv is read once per context",
+          "name": "parsed dotenv record is cached by path",
+          "args": ["first", "second"],
+          "expected": ["first", "first"]
+        }
+      ]
+    },
+    "appValues": {
+      "tests": [
+        {
+          "name": "app yaml resolves literal and resource env values",
+          "args": [
+            "env:\n  - name: SAMPLE\n    value: from-app\n  - name: RESOURCE\n    valueFrom: postgres\nresources:\n  - name: postgres\n    postgres:\n      database: from-resource\n",
+            ["SAMPLE", "RESOURCE"],
+            {
+              "scope": []
+            }
+          ],
+          "expected": ["from-app", "from-resource"]
+        },
+        {
+          "name": "app override disables reads",
+          "args": [
+            "env:\n  - name: SAMPLE\n    value: hidden\n",
+            ["SAMPLE"],
+            {
+              "scope": []
+            },
+            {
+              "DBX_TOOLS_CONFIG_APP": "false"
+            }
+          ],
+          "expected": [null]
+        },
+        {
+          "name": "app override enables reads inside an App",
+          "args": [
+            "env:\n  - name: SAMPLE\n    value: forced\n",
+            ["SAMPLE"],
+            {
+              "scope": []
+            },
+            {
+              "DBX_TOOLS_CONFIG_APP": "true",
+              "DATABRICKS_APP_NAME": "demo",
+              "DATABRICKS_HOST": "https://workspace.example.com",
+              "DATABRICKS_APP_PORT": "8000"
+            }
+          ],
+          "expected": ["forced"]
+        }
+      ]
+    },
+    "appCachedValue": {
+      "tests": [
+        {
+          "name": "parsed app yaml record is cached by path",
           "args": ["first", "second"],
           "expected": ["first", "first"]
         }
@@ -546,7 +644,7 @@
           }
         },
         {
-          "name": "explicit working directory bundle is cached",
+          "name": "parsed bundle record is cached by path",
           "args": [
             {
               "resources": {
