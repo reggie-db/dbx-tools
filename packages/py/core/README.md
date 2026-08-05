@@ -18,7 +18,11 @@ pip install "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@mai
 ## Key features
 
 - `config.text()` resolves scoped keys from the process environment, then the
-  nearest project `.env` file, then validated Databricks bundle JSON.
+  nearest project `.env` file, then the single App's `config.env` in validated
+  Databricks bundle JSON. Root bundle `variables` are not a config source: they
+  are authoring inputs interpolated into the bundle's own targets, resources, and
+  paths, so reading one as a process setting resolves names the deployed App
+  never sees. Reference a variable from `config.env` to make it one.
 - `.env.<NODE_ENV>` wins over `.env`, with `production`/`prod` and
   `development`/`dev` treated as aliases.
 - Bundle validation stays lazy: the Databricks CLI runs only after environment

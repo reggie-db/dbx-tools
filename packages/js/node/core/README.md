@@ -16,8 +16,8 @@ Key features:
 - Workspace/project root discovery from package-manager files, git metadata, and
   the current working directory.
 - Safe filesystem stat and project naming helpers for CLIs and projen synth.
-- Layered config from process env, environment-specific `.env` files, and
-  Databricks bundle App config or variables.
+- Layered config from process env, environment-specific `.env` files, and the
+  Databricks bundle's App `config.env`.
 - YAML/JSON brand-context discovery and loading with shared Zod validation.
 - Idempotent executable downloads with zip/tar extraction and atomic installs.
 - Cross-process file locks with a Bun `flock(2)` fast path and a portable,
@@ -98,10 +98,27 @@ are checked before `.env` when `NODE_ENV=production`; development uses
 `.env.development` and `.env.dev`.
 
 Bundle lookup runs `databricks bundle validate --output json` only after earlier
-sources miss. It reads literal values from the single App's `config.env` first,
-then root bundle variables, accepts usable partial JSON from a failed validation,
-and caches each dotenv file or validated bundle once per resolved working-
-directory context. Bundle cache entries also include the Databricks profile.
+sources miss. It reads literal values from the single App's `config.env`, accepts
+usable partial JSON from a failed validation, and caches each dotenv file or
+validated bundle once per resolved working-directory context. Bundle cache
+entries also include the Databricks profile. Root bundle `variables` are NOT a
+config source: they are authoring inputs interpolated into the bundle's own
+targets, resources, and paths, so reading one as a process setting resolves names
+the deployed App never sees. Reference a variable from `config.env` to make it
+one.
+
+Because validation is a process spawn, it is gated on this being an AppKit
+project at all, in three steps. `@databricks/appkit` must be RESOLVABLE - it is
+an optional peer, the probe resolves the path without evaluating the module, and
+a consumer that never installed it never spawns the CLI. The bundle must then
+describe exactly ONE app carrying `config.env`, since nothing in this package
+says which of several apps a process is. Finally AppKit's execution context
+confirms the process really is that app; that context does not exist until AppKit
+boots, so only the affirmative is remembered and a lookup during boot still
+resolves from the bundle instead of being permanently denied. Setting
+`DBX_TOOLS_CONFIG_BUNDLE=true` skips this gate for a tool that wants the bundle
+without being the App.
+
 Deployed Apps skip dotenv and bundle lookup after `isDatabricksAppEnv()`
 recognizes the required App name, HTTP(S) host, and valid port. Set
 `DBX_TOOLS_DATABRICKS_APP_ENV=true` or `false` to force that result; unrecognized

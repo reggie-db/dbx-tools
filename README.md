@@ -154,7 +154,7 @@ export function App() {
 | Genie streaming and schemas   | [`@dbx-tools/genie`](packages/js/node/genie), [`@dbx-tools/shared-genie`](packages/js/shared/genie)                                                                                                                         |
 | Model Serving selection       | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model)                                                                                                                         |
 | Local model proxy             | [`@dbx-tools/cli-model-proxy`](packages/js/cli/model-proxy)                                                                                                                                                                 |
-| Public tunnel + access gate   | [`@dbx-tools/tunnel`](packages/js/node/tunnel)                                                                                                                                                                              |
+| Public tunnel + access gate   | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
 | Configuration and local locks | [`@dbx-tools/core`](packages/js/node/core), [`dbx-tools-core`](packages/py/core)                                                                                                                                            |
 | Email workflows               | [`@dbx-tools/email`](packages/js/node/email), [`@dbx-tools/shared-email-template`](packages/js/shared/email-template), [`@dbx-tools/shared-email`](packages/js/shared/email), [`@dbx-tools/ui-email`](packages/js/ui/email) |
 | Web search and fetch          | [`@dbx-tools/appkit-web-search`](packages/js/node/appkit-web-search)                                                                                                                                                        |
@@ -166,7 +166,7 @@ export function App() {
 | Databricks infrastructure     | [`@dbx-tools/databricks`](packages/js/node/databricks), [`@dbx-tools/databricks-zerobus`](packages/js/node/databricks-zerobus)                                                                                              |
 | Portable filesystems          | [`@dbx-tools/shared-fs`](packages/js/shared/fs), [`@dbx-tools/fs`](packages/js/node/fs)                                                                                                                                     |
 | Shared utilities              | [`@dbx-tools/shared-core`](packages/js/shared/core), [`@dbx-tools/core`](packages/js/node/core), [`@dbx-tools/path`](packages/js/node/path)                                                                                 |
-| Workspace generator CLI       | [`@dbx-tools/cli`](packages/js/cli/dbx-tools)                                                                                                                                                                               |
+| The `dbx` CLI                 | [`@dbx-tools/cli`](packages/js/cli/dbx-tools), [`@dbx-tools/cli-appkit-env`](packages/js/cli/appkit-env), [`@dbx-tools/cli-model-proxy`](packages/js/cli/model-proxy), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)    |
 
 Read the package README for each feature area. They are written as the
 package-level source of truth: key features, import examples, configuration or
@@ -267,6 +267,25 @@ await createApp({
   plugins: [server(), lakebase(), emailPlugin.email(), mastraPlugin.mastra({ agents: agent })],
 });
 ```
+
+### Put A Gated Public URL In Front Of A Command
+
+Use [`@dbx-tools/tunnel`](packages/js/node/tunnel) inside an AppKit app, where the
+portr tunnel and the email one-time-code gate run in-process through
+`tunnelInterceptor()` and the `authGate` plugin.
+
+Use [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel) when the process is not an
+AppKit app - a Python service, a static server, a third-party binary - and should
+still be reachable only by approved email addresses.
+
+```sh
+dbx tunnel --allow databricks.com -- bun src/server.ts
+dbx tunnel status --allow databricks.com
+```
+
+The wrapper claims the public port, moves the wrapped command to a private one,
+and gates traffic in between. `status` prints the resolved configuration without
+starting anything.
 
 ## Development
 

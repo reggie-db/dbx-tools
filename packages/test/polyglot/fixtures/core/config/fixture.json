@@ -1,17 +1,28 @@
 {
   "$schema": "../../../schema.json",
-  "description": "Config key precedence, coercion, dotenv discovery, and Databricks bundle fallback stay identical across runtimes.",
+  "description": "Config key precedence, coercion, dotenv discovery, and the Databricks bundle's single-app config.env fallback stay identical across runtimes.",
   "functions": {
     "configName": {
       "tests": [
         {
           "name": "primary scoped name",
-          "args": ["AUTH_SUBJECT", { "scope": "DBX_TOOLS", "prefix": "TUNNEL" }],
+          "args": [
+            "AUTH_SUBJECT",
+            {
+              "scope": "DBX_TOOLS",
+              "prefix": "TUNNEL"
+            }
+          ],
           "expected": "DBX_TOOLS_TUNNEL_AUTH_SUBJECT"
         },
         {
           "name": "first input name wins",
-          "args": [["PUBLIC_DOMAIN", "DOMAIN"], { "prefix": "TUNNEL" }],
+          "args": [
+            ["PUBLIC_DOMAIN", "DOMAIN"],
+            {
+              "prefix": "TUNNEL"
+            }
+          ],
           "expected": "DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN"
         }
       ]
@@ -27,25 +38,39 @@
               "AUTH_SUBJECT": "bare"
             },
             "AUTH_SUBJECT",
-            { "scope": "DBX_TOOLS", "prefix": "TUNNEL" }
+            {
+              "scope": "DBX_TOOLS",
+              "prefix": "TUNNEL"
+            }
           ],
           "expected": "scoped"
         },
         {
           "name": "prefixed environment fallback",
           "args": [
-            { "TUNNEL_AUTH_SUBJECT": "prefixed", "AUTH_SUBJECT": "bare" },
+            {
+              "TUNNEL_AUTH_SUBJECT": "prefixed",
+              "AUTH_SUBJECT": "bare"
+            },
             "AUTH_SUBJECT",
-            { "scope": "DBX_TOOLS", "prefix": "TUNNEL" }
+            {
+              "scope": "DBX_TOOLS",
+              "prefix": "TUNNEL"
+            }
           ],
           "expected": "prefixed"
         },
         {
           "name": "bare environment fallback",
           "args": [
-            { "AUTH_SUBJECT": "bare" },
+            {
+              "AUTH_SUBJECT": "bare"
+            },
             "AUTH_SUBJECT",
-            { "scope": "DBX_TOOLS", "prefix": "TUNNEL" }
+            {
+              "scope": "DBX_TOOLS",
+              "prefix": "TUNNEL"
+            }
           ],
           "expected": "bare"
         }
@@ -55,34 +80,78 @@
       "tests": [
         {
           "name": "configured string wins",
-          "args": [" configured ", { "DBX_TOOLS_SAMPLE": "environment" }, "SAMPLE"],
+          "args": [
+            " configured ",
+            {
+              "DBX_TOOLS_SAMPLE": "environment"
+            },
+            "SAMPLE"
+          ],
           "expected": "configured"
         },
         {
           "name": "blank configured string falls back",
-          "args": ["  ", { "DBX_TOOLS_SAMPLE": " environment " }, "SAMPLE"],
+          "args": [
+            "  ",
+            {
+              "DBX_TOOLS_SAMPLE": " environment "
+            },
+            "SAMPLE"
+          ],
           "expected": "environment"
         }
       ]
     },
     "configBoolean": {
       "tests": [
-        { "name": "boolean yes", "args": [" yes "], "expected": true },
-        { "name": "boolean off", "args": ["OFF"], "expected": false },
-        { "name": "boolean unknown", "args": ["sometimes"], "expected": null }
+        {
+          "name": "boolean yes",
+          "args": [" yes "],
+          "expected": true
+        },
+        {
+          "name": "boolean off",
+          "args": ["OFF"],
+          "expected": false
+        },
+        {
+          "name": "boolean unknown",
+          "args": ["sometimes"],
+          "expected": null
+        }
       ]
     },
     "configPositiveNumber": {
       "tests": [
-        { "name": "positive percentage", "args": ["25%", 2], "expected": 0.25 },
-        { "name": "positive grouped number", "args": ["1,000.5", 2], "expected": 1000.5 },
-        { "name": "non-positive number falls back", "args": [0, 2], "expected": 2 }
+        {
+          "name": "positive percentage",
+          "args": ["25%", 2],
+          "expected": 0.25
+        },
+        {
+          "name": "positive grouped number",
+          "args": ["1,000.5", 2],
+          "expected": 1000.5
+        },
+        {
+          "name": "non-positive number falls back",
+          "args": [0, 2],
+          "expected": 2
+        }
       ]
     },
     "configPositiveInt": {
       "tests": [
-        { "name": "positive integer floors", "args": ["10.9", 2], "expected": 10 },
-        { "name": "invalid integer falls back", "args": ["many", 2], "expected": 2 }
+        {
+          "name": "positive integer floors",
+          "args": ["10.9", 2],
+          "expected": 10
+        },
+        {
+          "name": "invalid integer falls back",
+          "args": ["many", 2],
+          "expected": 2
+        }
       ]
     },
     "configList": {
@@ -180,7 +249,9 @@
             null,
             ".",
             ["QUOTED", "PLAIN", "A.B", "A-B", "1KEY", "OPEN", "NEXT", "MISSING"],
-            { "scope": [] }
+            {
+              "scope": []
+            }
           ],
           "expected": [
             "kept",
@@ -196,22 +267,31 @@
         {
           "name": "nearest dotenv wins through project root",
           "args": [
-            { ".env": "SAMPLE=from-root\n", "packages/.env": "SAMPLE=from-parent\n" },
+            {
+              ".env": "SAMPLE=from-root\n",
+              "packages/.env": "SAMPLE=from-parent\n"
+            },
             null,
             "packages/app",
             ["SAMPLE"],
-            { "scope": [] }
+            {
+              "scope": []
+            }
           ],
           "expected": ["from-parent"]
         },
         {
           "name": "dotenv does not traverse without project root",
           "args": [
-            { ".env": "SAMPLE=from-parent\n" },
+            {
+              ".env": "SAMPLE=from-parent\n"
+            },
             null,
             "nested",
             ["SAMPLE"],
-            { "scope": [] },
+            {
+              "scope": []
+            },
             false
           ],
           "expected": [null]
@@ -227,7 +307,9 @@
             "production",
             ".",
             ["SAMPLE"],
-            { "scope": [] }
+            {
+              "scope": []
+            }
           ],
           "expected": ["from-production"]
         },
@@ -242,31 +324,43 @@
             "prod",
             ".",
             ["SAMPLE"],
-            { "scope": [] }
+            {
+              "scope": []
+            }
           ],
           "expected": ["from-prod"]
         },
         {
           "name": "dotenv override disables reads",
           "args": [
-            { ".env": "SAMPLE=hidden\n" },
+            {
+              ".env": "SAMPLE=hidden\n"
+            },
             null,
             ".",
             ["SAMPLE"],
-            { "scope": [] },
+            {
+              "scope": []
+            },
             true,
-            { "DBX_TOOLS_CONFIG_DOTENV": "false" }
+            {
+              "DBX_TOOLS_CONFIG_DOTENV": "false"
+            }
           ],
           "expected": [null]
         },
         {
           "name": "dotenv override enables reads inside an App",
           "args": [
-            { ".env": "SAMPLE=forced\n" },
+            {
+              ".env": "SAMPLE=forced\n"
+            },
             null,
             ".",
             ["SAMPLE"],
-            { "scope": [] },
+            {
+              "scope": []
+            },
             true,
             {
               "DBX_TOOLS_CONFIG_DOTENV": "true",
@@ -291,7 +385,7 @@
     "bundleValues": {
       "tests": [
         {
-          "name": "bundle app precedes variables and partial JSON is usable",
+          "name": "single app config.env is the only bundle source",
           "args": [
             {
               "resources": {
@@ -299,108 +393,320 @@
                   "demo": {
                     "config": {
                       "env": [
-                        { "name": "SAMPLE", "value": "from-app" },
-                        { "name": "IGNORED", "value_from": "warehouse" },
-                        { "name": "INTERPOLATED", "value": "${var.value}" }
+                        {
+                          "name": "SAMPLE",
+                          "value": "from-app"
+                        },
+                        {
+                          "name": "IGNORED",
+                          "value_from": "warehouse"
+                        },
+                        {
+                          "name": "INTERPOLATED",
+                          "value": "${var.value}"
+                        }
                       ]
                     }
                   }
                 }
               },
               "variables": {
-                "sample": { "value": "from-variable" },
-                "fallback_name": { "default": "from-default" }
+                "root_only": {
+                  "value": "from-variable"
+                }
               }
             },
             1,
-            ["SAMPLE", "FALLBACK_NAME", "IGNORED", "INTERPOLATED"],
-            { "scope": [], "sources": "bundle" }
+            ["SAMPLE", "ROOT_ONLY", "IGNORED", "INTERPOLATED"],
+            {
+              "scope": [],
+              "sources": "bundle"
+            },
+            {
+              "DBX_TOOLS_CONFIG_BUNDLE": "true"
+            }
           ],
           "expected": {
-            "values": ["from-app", "from-default", null, null],
+            "values": ["from-app", null, null, null],
             "calls": 1
           }
         },
         {
-          "name": "malformed bundle variable rejects variables block",
+          "name": "malformed app entry rejects the whole app block",
           "args": [
             {
-              "variables": {
-                "sample": { "value": "valid" },
-                "malformed": { "value": 123 }
+              "resources": {
+                "apps": {
+                  "demo": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "valid"
+                        },
+                        {
+                          "name": "MALFORMED",
+                          "value": 123
+                        }
+                      ]
+                    }
+                  }
+                }
               }
             },
             0,
             ["SAMPLE"],
-            { "scope": [], "sources": "bundle" }
+            {
+              "scope": [],
+              "sources": "bundle"
+            },
+            {
+              "DBX_TOOLS_CONFIG_BUNDLE": "true"
+            }
           ],
-          "expected": { "values": [null], "calls": 1 }
+          "expected": {
+            "values": [null],
+            "calls": 1
+          }
+        },
+        {
+          "name": "more than one app is ambiguous and yields nothing",
+          "args": [
+            {
+              "resources": {
+                "apps": {
+                  "one": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "first"
+                        }
+                      ]
+                    }
+                  },
+                  "two": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "second"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            0,
+            ["SAMPLE"],
+            {
+              "scope": [],
+              "sources": "bundle"
+            },
+            {
+              "DBX_TOOLS_CONFIG_BUNDLE": "true"
+            }
+          ],
+          "expected": {
+            "values": [null],
+            "calls": 1
+          }
         },
         {
           "name": "environment answer keeps bundle lazy",
           "args": [
-            { "variables": { "sample": { "value": "bundle" } } },
+            {
+              "resources": {
+                "apps": {
+                  "demo": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "bundle"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
             0,
             ["SAMPLE"],
             {},
-            { "DBX_TOOLS_SAMPLE": "environment" }
+            {
+              "DBX_TOOLS_SAMPLE": "environment",
+              "DBX_TOOLS_CONFIG_BUNDLE": "true"
+            }
           ],
-          "expected": { "values": ["environment"], "calls": 0 }
+          "expected": {
+            "values": ["environment"],
+            "calls": 0
+          }
         },
         {
           "name": "explicit working directory bundle is cached",
           "args": [
-            { "variables": { "sample": { "value": "cached" } } },
+            {
+              "resources": {
+                "apps": {
+                  "demo": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "cached"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
             0,
             ["SAMPLE", "SAMPLE"],
-            { "scope": [], "sources": "bundle" },
-            {}
+            {
+              "scope": [],
+              "sources": "bundle"
+            },
+            {
+              "DBX_TOOLS_CONFIG_BUNDLE": "true"
+            }
           ],
-          "expected": { "values": ["cached", "cached"], "calls": 1 }
+          "expected": {
+            "values": ["cached", "cached"],
+            "calls": 1
+          }
         },
         {
           "name": "bundle override disables reads",
           "args": [
-            { "variables": { "sample": { "value": "hidden" } } },
+            {
+              "resources": {
+                "apps": {
+                  "demo": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "hidden"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
             0,
             ["SAMPLE"],
-            { "scope": [], "sources": "bundle" },
-            { "DBX_TOOLS_CONFIG_BUNDLE": "false" }
+            {
+              "scope": [],
+              "sources": "bundle"
+            },
+            {
+              "DBX_TOOLS_CONFIG_BUNDLE": "false"
+            }
           ],
-          "expected": { "values": [null], "calls": 0 }
+          "expected": {
+            "values": [null],
+            "calls": 0
+          }
         },
         {
           "name": "production disables bundle reads by default",
           "args": [
-            { "variables": { "sample": { "value": "hidden" } } },
+            {
+              "resources": {
+                "apps": {
+                  "demo": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "hidden"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
             0,
             ["SAMPLE"],
-            { "scope": [], "sources": "bundle" },
-            { "NODE_ENV": "production" }
+            {
+              "scope": [],
+              "sources": "bundle"
+            },
+            {
+              "NODE_ENV": "production"
+            }
           ],
-          "expected": { "values": [null], "calls": 0 }
+          "expected": {
+            "values": [null],
+            "calls": 0
+          }
         },
         {
           "name": "bundle override enables reads in production",
           "args": [
-            { "variables": { "sample": { "value": "forced" } } },
+            {
+              "resources": {
+                "apps": {
+                  "demo": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "forced"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
             0,
             ["SAMPLE"],
-            { "scope": [], "sources": "bundle" },
+            {
+              "scope": [],
+              "sources": "bundle"
+            },
             {
               "NODE_ENV": "production",
               "DBX_TOOLS_CONFIG_BUNDLE": "true"
             }
           ],
-          "expected": { "values": ["forced"], "calls": 1 }
+          "expected": {
+            "values": ["forced"],
+            "calls": 1
+          }
         },
         {
           "name": "bundle override enables reads inside an App",
           "args": [
-            { "variables": { "sample": { "value": "forced" } } },
+            {
+              "resources": {
+                "apps": {
+                  "demo": {
+                    "config": {
+                      "env": [
+                        {
+                          "name": "SAMPLE",
+                          "value": "forced"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            },
             0,
             ["SAMPLE"],
-            { "scope": [], "sources": "bundle" },
+            {
+              "scope": [],
+              "sources": "bundle"
+            },
             {
               "DBX_TOOLS_CONFIG_BUNDLE": "true",
               "DATABRICKS_APP_NAME": "demo",
@@ -408,7 +714,10 @@
               "DATABRICKS_APP_PORT": "8000"
             }
           ],
-          "expected": { "values": ["forced"], "calls": 1 }
+          "expected": {
+            "values": ["forced"],
+            "calls": 1
+          }
         }
       ]
     }

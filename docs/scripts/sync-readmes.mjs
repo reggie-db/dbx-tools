@@ -50,8 +50,13 @@ function packageSlug(name) {
     .replace(/\//g, "-");
 }
 
+/**
+ * The `<group>` of a repo-relative `packages/js/<group>/<pkg>` path - the tier
+ * (`node`, `shared`, `cli`, `ui`) the sidebar groups by, NOT the `js` language
+ * segment that precedes it.
+ */
 function packageGroup(pkgPath) {
-  const [, group] = posix(pkgPath).split("/");
+  const [, , group] = posix(pkgPath).split("/");
   return group ?? "other";
 }
 
@@ -65,6 +70,8 @@ function groupTitle(group) {
       return "CLI Tools";
     case "ui":
       return "React UI";
+    case "python":
+      return "Python";
     default:
       return group.charAt(0).toUpperCase() + group.slice(1);
   }
@@ -110,6 +117,48 @@ function discoverPackages() {
       };
     })
     .sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
+}
+
+/**
+ * Every package under `packages/py/`, as site pages alongside the JavaScript
+ * ones.
+ *
+ * They are published to GitHub rather than npm and installed by Git URL, so the
+ * distribution name comes out of `pyproject.toml` instead of a `package.json`.
+ * The layout is flat (`packages/py/<name>`, no tier segment), which is why they
+ * all share one `python` group rather than reusing {@link packageGroup}.
+ */
+function discoverPythonPackages() {
+  const dir = path.join(root, "packages/py");
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((ent) => ent.isDirectory())
+    .map((ent) => path.join(dir, ent.name))
+    .filter((pkgDir) => fs.existsSync(path.join(pkgDir, "pyproject.toml")))
+    .map((pkgDir) => {
+      const readme = path.join(pkgDir, "README.md");
+      const relDir = posix(path.relative(root, pkgDir));
+      if (!fs.existsSync(readme)) {
+        throw new Error(`Missing README for ${relDir}`);
+      }
+      const name = pythonDistribution(path.join(pkgDir, "pyproject.toml")) ?? path.basename(pkgDir);
+      return {
+        name,
+        dir: pkgDir,
+        readme,
+        relDir,
+        group: "python",
+        slug: `py-${path.basename(pkgDir)}`,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The `[project] name` of a `pyproject.toml`, read without a TOML parser. */
+function pythonDistribution(pyproject) {
+  const match = read(pyproject).match(/^\s*name\s*=\s*["']([^"']+)["']/m);
+  return match?.[1];
 }
 
 /**
@@ -484,7 +533,7 @@ export const collections = {
 }
 
 function main() {
-  const packages = discoverPackages();
+  const packages = [...discoverPackages(), ...discoverPythonPackages()];
   const guides = discoverGuides();
   const mappings = { byDir: new Map(), byFile: new Map() };
   for (const pkg of packages) {

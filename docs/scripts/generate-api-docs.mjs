@@ -82,7 +82,7 @@ function discoverPackages() {
       const entry = path.join(dir, "index.ts");
       const readme = path.join(dir, "README.md");
       // `packages/js/<group>/<pkg>` -> the `<group>` segment, for the area column.
-      const group = posix(path.relative(root, dir)).split("/")[1] ?? "other";
+      const group = posix(path.relative(root, dir)).split("/")[2] ?? "other";
       return {
         name: pkg.name,
         slug: packageSlug(pkg.name),

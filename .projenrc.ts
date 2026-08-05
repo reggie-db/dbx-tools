@@ -225,8 +225,18 @@ project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" },
 // for `config.ts`, which validates `databricks bundle validate` output.
 // (shared-core is added by the blanket base-dep mixin above, so this package
 // needs no rule of its own.)
+//
+// `@databricks/appkit` is an OPTIONAL peer used ONLY as a signal: `config.ts`
+// resolves it (without evaluating it) to decide whether this is an AppKit
+// project worth spawning `databricks bundle validate` for, then lazy-imports it
+// to confirm the execution context. A consumer that never installs it simply
+// never reads a bundle, so this must not become a hard dependency of what is
+// otherwise a dependency-light Node foundation.
 project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml", "zod@catalog:");
+  p.addPeerDeps("@databricks/appkit@catalog:");
+  p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
+  p.addDevDeps("@databricks/appkit@catalog:");
 });
 
 // node-appkit: the base for Node-side AppKit + experimental-SDK helpers.

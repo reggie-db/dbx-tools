@@ -12,8 +12,6 @@ from pathlib import Path
 from typing import Literal, TypedDict
 from urllib.parse import urlparse
 
-from .string import to_identifier
-
 ConfigKey = str | Sequence[str]
 ConfigSource = Literal["env", "dotenv", "bundle"]
 
@@ -193,7 +191,6 @@ def _read(source: ConfigSource, cwd: str | None) -> Iterator[Mapping[str, object
         bundle = bundle_file(cwd)
         if bundle is not None:
             yield _bundle_app(bundle.data)
-            yield _bundle_variables(bundle.data)
 
 
 def _dotenv(cwd: str | None) -> dict[str, str]:
@@ -312,30 +309,6 @@ def _bundle_app(input: object) -> dict[str, str]:
         key = _resolved_string(entry.get("name"))
         value = _resolved_string(entry.get("value"))
         if key is not None and value is not None:
-            result[key] = value
-    return result
-
-
-def _bundle_variables(input: object) -> dict[str, str]:
-    if not isinstance(input, Mapping):
-        return {}
-    variables = input.get("variables")
-    if not isinstance(variables, Mapping):
-        return {}
-    if not all(
-        isinstance(variable, Mapping)
-        and _optional_string(variable, "default")
-        and _optional_string(variable, "value")
-        for variable in variables.values()
-    ):
-        return {}
-    result: dict[str, str] = {}
-    for variable_name, variable in variables.items():
-        if not isinstance(variable_name, str) or not isinstance(variable, Mapping):
-            continue
-        key = to_identifier(variable_name, delimiter="_").upper()
-        value = _resolved_string(variable.get("value")) or _resolved_string(variable.get("default"))
-        if key and value is not None:
             result[key] = value
     return result
 

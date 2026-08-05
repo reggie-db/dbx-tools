@@ -20,6 +20,29 @@
  * CLI is not on the image. Boolean environment overrides can force either file
  * source on or off when a tool needs different behavior.
  *
+ * The bundle is gated on this being an AppKit project at all. `databricks bundle
+ * validate` is a process spawn measured in seconds, and a plain library or CLI
+ * consumer has no bundle to find, so the gate runs in three steps before the
+ * spawn is allowed - see {@link bundleFile}:
+ *
+ *   1. `@databricks/appkit` is resolved WITHOUT evaluating it. It is an optional
+ *      peer, so a consumer that never installed it is not an AppKit project and
+ *      the bundle is never loaded. The probe is cached, so this costs one
+ *      resolution for the life of the process.
+ *   2. The bundle is read (once per context) and must describe EXACTLY ONE app
+ *      with `config.env`. Nothing here says which of several apps this process
+ *      is, so an ambiguous bundle contributes nothing rather than a guess.
+ *   3. AppKit's execution context confirms this process really is that app. The
+ *      context does not exist until AppKit boots and `getExecutionContext()`
+ *      THROWS until then, so the probe is caught and only the affirmative is
+ *      remembered - a lookup before boot still resolves, and re-confirms later
+ *      once the context is available.
+ *
+ * Only the single app's `config.env` is consulted. Root bundle `variables` are
+ * not: they are authoring inputs for the bundle itself (interpolated into
+ * targets, resources, and paths), so treating one as a process setting resolves
+ * names the deployed app never sees.
+ *
  * Node-only (`child_process`, `fs`, `process`).
  *
  * @module
@@ -27,9 +50,17 @@
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseEnv } from "node:util";
-import { context, json, log, object, string as stringModule } from "@dbx-tools/shared-core";
+import {
+  context,
+  functionModule,
+  json,
+  log,
+  object,
+  string as stringModule,
+} from "@dbx-tools/shared-core";
 import { z } from "zod";
 import { statSync } from "./file.ts";
 import { root as resolveProjectRoot } from "./project.ts";
@@ -88,6 +119,32 @@ export const CONFIG_DOTENV_KEY = "DBX_TOOLS_CONFIG_DOTENV";
 /** Boolean environment override for Databricks bundle reads. */
 export const CONFIG_BUNDLE_KEY = "DBX_TOOLS_CONFIG_BUNDLE";
 
+/**
+ * The OPTIONAL AppKit peer whose presence marks this as a Databricks App
+ * project. Held as a constant so the resolve probe and the lazy import name it
+ * once, and so neither site carries a literal a bundler would try to follow.
+ */
+const APPKIT_MODULE = "@databricks/appkit";
+
+/**
+ * The one thing this module needs from AppKit: whether a real execution context
+ * is active. Typed structurally so an OPTIONAL peer never becomes a type
+ * dependency, and `client` is `unknown` because its presence is all that is read.
+ */
+type AppKitModule = {
+  getExecutionContext(): { client?: unknown } | undefined;
+};
+
+/**
+ * Whether AppKit's execution context has EVER been observed. Latching is the
+ * point: a context confirms this process is the bundle's app, and that fact does
+ * not stop being true when a later lookup happens outside a request scope.
+ */
+let appKitContext = false;
+
+/** Flattened App `config.env` per parsed bundle - see {@link bundleApp}. */
+const BUNDLE_APP_CACHE = new WeakMap<object, Record<string, string>>();
+
 /** Exact process-environment lookup for callers that do not read local config files. */
 export const ENV_ONLY = { scope: [] as const, sources: "env" as const };
 
@@ -114,11 +171,6 @@ export const bundleEnvEntrySchema = z.object({
   value_from: bundleValue.optional(),
 });
 
-const bundleVariableSchema = z.object({
-  default: z.string().optional(),
-  value: z.string().optional(),
-});
-
 export const bundleAppSchema = z.object({
   name: bundleValue.optional(),
   source_code_path: z.string().optional(),
@@ -128,10 +180,6 @@ export const bundleAppSchema = z.object({
 
 const bundleAppsSchema = z.object({
   resources: z.object({ apps: z.record(z.string(), bundleAppSchema).optional() }).optional(),
-});
-
-const bundleVariablesSchema = z.object({
-  variables: z.record(z.string(), bundleVariableSchema).optional(),
 });
 
 /**
@@ -338,9 +386,17 @@ function toPositiveNumber(value: unknown): number | undefined {
 /**
  * The Databricks bundle output for `cwd` - `databricks bundle validate --output
  * json` run from the directory holding `databricks.yml`, with the config file's
- * path. A non-zero validation may still return partial JSON with usable
- * variables. `undefined` when bundle reads are disabled, there is no bundle, or
- * the CLI produces no JSON.
+ * path. A non-zero validation may still return partial JSON with usable App
+ * config. `undefined` when bundle reads are disabled, this is not an AppKit
+ * project, the bundle does not describe exactly one app with `config.env`, there
+ * is no bundle, or the CLI produces no JSON.
+ *
+ * The spawn is guarded because it is expensive and usually pointless. In order:
+ * `@databricks/appkit` must be RESOLVABLE (no AppKit, no bundle - and the probe
+ * never evaluates the module); the bundle must describe exactly ONE app carrying
+ * `config.env`; and AppKit's execution context must confirm this process is that
+ * app. Only the confirmation is remembered, so a lookup during boot - before any
+ * context exists - still resolves from the bundle and re-confirms later.
  *
  * Cached once per resolved working-directory context and
  * `DATABRICKS_CONFIG_PROFILE` through {@link context.cached}, so repeated
@@ -349,11 +405,29 @@ function toPositiveNumber(value: unknown): number | undefined {
  */
 export function bundleFile(cwd?: string | null): ConfigFile | undefined {
   const production = process.env.NODE_ENV?.trim().toLowerCase() === "production";
-  if (!fileSourceEnabled(CONFIG_BUNDLE_KEY, !production && !isDatabricksAppEnv())) return undefined;
+  const override = object.toBoolean(process.env[CONFIG_BUNDLE_KEY]);
+  if (override === false) return undefined;
+  // An explicit `true` is the escape hatch for a tool that wants the bundle
+  // without being the app (`dbx` commands, tests), so it skips the AppKit gate
+  // entirely - but not the App/production defaults, which it also overrides.
+  if (override === undefined) {
+    if (production || isDatabricksAppEnv()) return undefined;
+    if (!appKitInstalled()) return undefined;
+  }
   const profile = stringModule.trimToNull(process.env.DATABRICKS_CONFIG_PROFILE);
-  return cachedConfig(["bundle", profile ?? ""], cwd, (resolved) =>
+  const file = cachedConfig(["bundle", profile ?? ""], cwd, (resolved) =>
     loadBundleFile(resolved, profile),
   );
+  if (override !== undefined || file === undefined) return file;
+  // Already confirmed: this process is the app, and that does not stop being
+  // true, so skip re-deriving the gate on every lookup.
+  if (appKitContext) return file;
+  // The app must be unambiguous. `bundleApp` is what decides "exactly one app
+  // with `config.env`", so an empty map IS the ambiguous or app-less bundle and
+  // needs no separate check.
+  if (Object.keys(bundleApp(file.data)).length === 0) return undefined;
+  confirmAppKitContext();
+  return file;
 }
 
 /**
@@ -365,8 +439,23 @@ export function bundleFile(cwd?: string | null): ConfigFile | undefined {
  * {@link bundleResourceSchema}. An `apps` block with more than one app is
  * ambiguous (nothing here says which app this process is), so it yields nothing
  * rather than a guess.
+ *
+ * Memoized against the parsed bundle it came from, because both the gate in
+ * {@link bundleFile} and the lookup in {@link read} ask the same question of the
+ * same cached object - validating that payload twice per lookup would be pure
+ * waste. A `WeakMap` keeps the entry alive exactly as long as the bundle is.
  */
 function bundleApp(input: unknown): Record<string, string> {
+  if (!object.isRecord(input)) return bundleAppEntries(input);
+  const cached = BUNDLE_APP_CACHE.get(input);
+  if (cached) return cached;
+  const result = bundleAppEntries(input);
+  BUNDLE_APP_CACHE.set(input, result);
+  return result;
+}
+
+/** {@link bundleApp} without the memoization, so the cache has one filler. */
+function bundleAppEntries(input: unknown): Record<string, string> {
   const parsed = bundleAppsSchema.safeParse(input);
   if (!parsed.success) return {};
   const apps = parsed.data.resources?.apps;
@@ -384,23 +473,69 @@ function bundleApp(input: unknown): Record<string, string> {
 }
 
 /**
- * Root bundle variables flattened to environment-style `NAME -> value` entries.
+ * Whether `@databricks/appkit` can be RESOLVED from this process, cached for its
+ * lifetime.
  *
- * `databricks bundle validate` resolves each variable to `value`; `default` is
- * retained as a fallback for parsed bundle data that has not been fully
- * resolved. Names are normalized so a bundle variable such as
- * `tunnel_public_domain` answers a lookup for `TUNNEL_PUBLIC_DOMAIN`.
+ * Resolution, not import: this answers "is this an AppKit project" without
+ * evaluating the module, so the cheap negative (a plain library or CLI consumer
+ * that never installed the optional peer) costs one path lookup and never boots
+ * AppKit as a side effect of reading config. A runtime with no `createRequire`
+ * (a browser bundle that reached this Node-only module anyway) reports absent.
  */
-function bundleVariables(input: unknown): Record<string, string> {
-  const parsed = bundleVariablesSchema.safeParse(input);
-  if (!parsed.success) return {};
-  const result: Record<string, string> = {};
-  for (const [name, variable] of Object.entries(parsed.data.variables ?? {})) {
-    const key = [...stringModule.tokenize(name)].join("_").toUpperCase();
-    const value = resolvedString(variable.value) ?? resolvedString(variable.default);
-    if (key && value !== null) result[key] = value;
+const appKitInstalled = functionModule.memoize((): boolean => {
+  try {
+    // Indirect specifier: a bundler must not try to follow an OPTIONAL peer that
+    // a browser build has no way to resolve.
+    const specifier = APPKIT_MODULE;
+    createRequire(import.meta.url).resolve(specifier);
+    return true;
+  } catch {
+    return false;
   }
-  return result;
+});
+
+/**
+ * AppKit's execution context once it exists, or `undefined`.
+ *
+ * Lazily imported (and `@vite-ignore`d) because `@databricks/appkit` is an
+ * OPTIONAL peer this module must never make required. The import is only
+ * attempted once {@link appKitInstalled} says there is something to import, and a
+ * failure resolves to `undefined` rather than rejecting - a missing peer is the
+ * expected path, not an error.
+ *
+ * `getExecutionContext()` THROWS until AppKit has booted, so the call is caught
+ * and only a real context is reported. The module handle is memoized; the
+ * context lookup is not, so a call before boot answers "not yet" and a later one
+ * still sees the context.
+ */
+const appKitModule = functionModule.memoize(async (): Promise<AppKitModule | undefined> => {
+  if (!appKitInstalled()) return undefined;
+  const specifier = APPKIT_MODULE;
+  return (await import(/* @vite-ignore */ specifier).catch(() => undefined)) as
+    AppKitModule | undefined;
+});
+
+/**
+ * Latch {@link appKitContext} once AppKit's execution context exists.
+ *
+ * Fire-and-forget, because the caller is a SYNCHRONOUS lookup and the check
+ * needs a lazy import. The affirmative is all that is stored: AppKit's context
+ * does not exist until it boots, and `getExecutionContext()` throws until then,
+ * so remembering a negative would permanently disable the bundle for a process
+ * that is seconds away from having one. Every call before the latch closes
+ * re-attempts, which is what makes "not available yet" retry rather than stick.
+ */
+function confirmAppKitContext(): void {
+  void appKitModule()
+    .then((appkit) => {
+      if (!appkit) return;
+      try {
+        if (appkit.getExecutionContext()?.client) appKitContext = true;
+      } catch {
+        // AppKit has not booted yet; a later call re-checks.
+      }
+    })
+    .catch(() => undefined);
 }
 
 /** A non-empty bundle value with every `${...}` interpolation resolved. */
@@ -449,10 +584,7 @@ function read(
           break;
         case "bundle": {
           const bundle = bundleFile(cwd);
-          if (bundle) {
-            yield bundleApp(bundle.data);
-            yield bundleVariables(bundle.data);
-          }
+          if (bundle) yield bundleApp(bundle.data);
           break;
         }
       }
