@@ -1,4 +1,7 @@
 model_list:
+  - model_name: "databricks/*"
+    litellm_params:
+      model: "databricks/*"
   - model_name: "*"
     litellm_params:
       model: "dbx/*"
@@ -7,6 +10,8 @@ model_list:
         - thinking
 
 litellm_settings:
+  callbacks:
+    - config_provider.dbx_responses_router
   custom_provider_map:
     - provider: dbx
       custom_handler: config_provider.dbx_provider

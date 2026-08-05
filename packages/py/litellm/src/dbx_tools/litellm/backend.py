@@ -23,7 +23,8 @@ def require_profile(profile: str | None = None) -> str:
     selected = profile or os.getenv(PROFILE_ENV) or os.getenv(DATABRICKS_PROFILE_ENV)
     if not selected:
         raise RuntimeError(
-            f"A Databricks profile is required. Pass --profile <name> or set {PROFILE_ENV}."
+            "A Databricks profile is required. Pass --profile <name> or set "
+            f"{PROFILE_ENV} or {DATABRICKS_PROFILE_ENV}."
         )
     return selected
 
@@ -52,7 +53,6 @@ class DatabricksLiteLLMBackend:
         os.environ[DATABRICKS_PROFILE_ENV] = self.profile
 
         self.client = WorkspaceClient(profile=self.profile)
-        self.host = str(self.client.config.host)
         self._models: list[ServingEndpointSummary] | None = None
         self._lock = RLock()
 

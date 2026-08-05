@@ -27,6 +27,8 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
 - restricts tool-bearing requests to endpoints classified as tool-capable;
 - routes Responses-only models through LiteLLM's
   `databricks/responses/...` bridge;
+- resolves Responses-only proxy calls before provider selection so LiteLLM's
+  native Databricks Responses implementation receives the original body;
 - supports LiteLLM chat, embedding, synchronous/asynchronous, and streaming
   entrypoints without custom request-content rewriting.
 
@@ -35,6 +37,9 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
 ```bash
 uv run dbx-litellm --profile my-workspace --port 4000
 ```
+
+The launcher listens on `127.0.0.1` by default. Pass an explicit LiteLLM
+`--host` value to expose it on another interface.
 
 The equivalent module invocation is:
 
@@ -70,12 +75,16 @@ existing LiteLLM config, add `config_provider.py` next to the YAML:
 
 ```python
 from dbx_tools.litellm.provider import dbx_provider
+from dbx_tools.litellm.routing import dbx_responses_router
 ```
 
 Then register that adjacent shim under `dbx`:
 
 ```yaml
 model_list:
+  - model_name: "databricks/*"
+    litellm_params:
+      model: "databricks/*"
   - model_name: "*"
     litellm_params:
       model: "dbx/*"
@@ -84,6 +93,8 @@ model_list:
         - thinking
 
 litellm_settings:
+  callbacks:
+    - config_provider.dbx_responses_router
   custom_provider_map:
     - provider: dbx
       custom_handler: config_provider.dbx_provider
@@ -100,10 +111,11 @@ before the unresolved endpoint id is delegated to Databricks. `/v1/models`
 remains LiteLLM's configured model list; it is not replaced with the live
 Databricks endpoint catalogue.
 
-LiteLLM's `CustomLLM` interface has no native Responses hook. Requests to
-`/v1/responses` therefore use LiteLLM's own Responses-to-Chat fallback before
-this provider resolves the model; the provider itself does not convert the
-request content.
+LiteLLM's `CustomLLM` interface has no native Responses hook. For a
+Responses-only endpoint, the packaged proxy's pre-call hook changes only the
+model identifier to `databricks/<resolved-endpoint>`; LiteLLM's native
+Databricks Responses implementation receives the original body. Other model
+families use LiteLLM's own Responses-to-Chat fallback.
 
 ## Modules
 
@@ -111,6 +123,7 @@ request content.
   resolution;
 - `provider` — LiteLLM `CustomLLM` adapter and exported `dbx_provider`
   singleton;
+- `routing` — model-only proxy hook for native Responses-only calls;
 - `cli` — profile-pinned launcher for the packaged LiteLLM proxy config.
 
 For standalone Python endpoint resolution and invocation helpers, use

@@ -7,8 +7,6 @@ from collections.abc import AsyncIterator, Iterator, Mapping
 from threading import RLock
 from typing import Any, cast
 
-from dbx_tools.model import is_responses_only
-
 import litellm
 from litellm import CustomLLM
 from litellm.types.utils import (
@@ -19,6 +17,7 @@ from litellm.types.utils import (
 )
 
 from .backend import DatabricksLiteLLMBackend
+from .models import requires_responses_api
 
 
 class DbxCustomLLM(CustomLLM):
@@ -145,7 +144,7 @@ class DbxCustomLLM(CustomLLM):
 def _delegate_chat_model(resolved: str) -> str:
     # LiteLLM's own Responses bridge owns Chat<->Responses conversion for
     # Responses-only Databricks models such as Codex.
-    infix = "responses/" if is_responses_only(resolved) else ""
+    infix = "responses/" if requires_responses_api(resolved) else ""
     return f"databricks/{infix}{resolved}"
 
 

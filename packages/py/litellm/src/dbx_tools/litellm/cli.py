@@ -29,6 +29,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     profile = require_profile(parsed.profile)
     os.environ[PROFILE_ENV] = profile
     os.environ[DATABRICKS_PROFILE_ENV] = profile
+    if not _has_option(proxy_args, "--host"):
+        proxy_args.extend(["--host", "127.0.0.1"])
 
     if _has_config_argument(proxy_args):
         _run_proxy(proxy_args)
@@ -40,8 +42,13 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 
 def _has_config_argument(arguments: Sequence[str]) -> bool:
+    return _has_option(arguments, "--config", "-c")
+
+
+def _has_option(arguments: Sequence[str], *names: str) -> bool:
     return any(
-        argument in {"--config", "-c"} or argument.startswith("--config=") for argument in arguments
+        argument in names or any(argument.startswith(f"{name}=") for name in names)
+        for argument in arguments
     )
 
 
