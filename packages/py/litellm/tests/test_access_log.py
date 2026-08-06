@@ -4,7 +4,12 @@ import logging
 from typing import Any
 
 import pytest
-from dbx_tools.litellm.access_log import LOGGER_NAME, DbxAccessLogger, _format
+from dbx_tools.litellm.access_log import (
+    LOGGER_NAME,
+    DbxAccessLogger,
+    _format,
+    record_reasoning_log_state,
+)
 
 
 def payload(**overrides: Any) -> dict[str, Any]:
@@ -38,6 +43,36 @@ def test_reports_latency_tokens_and_cache() -> None:
     assert "cached=900(90%)" in line
     assert "reasoning=20" in line
     assert "tok/s=5.0" in line
+
+
+def test_reports_explicit_requested_thinking_level() -> None:
+    record_reasoning_log_state("explicit-call", requested="high")
+
+    line = _format({**payload(), "litellm_call_id": "explicit-call"}, status="ok")
+
+    assert "thinking_requested=high" in line
+    assert "thinking_selected" not in line
+
+
+def test_reports_auto_requested_and_selected_thinking_levels() -> None:
+    record_reasoning_log_state("auto-call", requested="auto")
+    record_reasoning_log_state("auto-call", requested="auto", selected="medium")
+
+    line = _format({**payload(), "litellm_call_id": "auto-call"}, status="ok")
+
+    assert "thinking_requested=auto" in line
+    assert "thinking_selected=medium" in line
+
+
+def test_reads_call_id_from_litellm_params() -> None:
+    record_reasoning_log_state("nested-call", requested="low")
+
+    line = _format(
+        {**payload(), "litellm_params": {"litellm_call_id": "nested-call"}},
+        status="ok",
+    )
+
+    assert "thinking_requested=low" in line
 
 
 def test_real_stream_is_not_flagged_as_emulated() -> None:

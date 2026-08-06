@@ -163,6 +163,12 @@ Configuration:
 For Claude targets, LiteLLM's Databricks transformer maps the selected
 `reasoning_effort` to the backend's native extended-thinking token budget.
 
+The one-line `dbx-access` record includes `thinking_requested=<level>` for every
+request. Automatic requests also include `thinking_selected=<level>` after the
+classifier maps the score through the resolved model's capabilities. The
+existing `reasoning=<tokens>` field remains the number of reasoning tokens
+reported by the provider, not the selected effort level.
+
 ## Runtime behavior
 
 Endpoint discovery is lazy. The first request lists serving endpoints, later

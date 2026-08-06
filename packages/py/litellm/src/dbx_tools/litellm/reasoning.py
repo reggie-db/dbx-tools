@@ -18,6 +18,7 @@ from diskcache import Cache
 import litellm
 from litellm.integrations.custom_logger import CustomLogger
 
+from .access_log import record_reasoning_log_state
 from .provider import dbx_provider
 
 Turn = dict[str, str]
@@ -110,6 +111,9 @@ class DbxAutoReasoning(CustomLogger):
         call_type: str,
         **_: Any,
     ) -> dict[str, Any]:
+        call_id = _call_id(data)
+        requested_effort = _requested_effort(data)
+        record_reasoning_log_state(call_id, requested=requested_effort)
         if call_type not in _CALL_TYPES or not _auto_requested(data):
             return data
 
@@ -137,6 +141,11 @@ class DbxAutoReasoning(CustomLogger):
                 return routed
             await asyncio.to_thread(self.cache.set_score, sample, score)
         effort = _effort_for_score(score, efforts)
+        record_reasoning_log_state(
+            call_id,
+            requested=requested_effort,
+            selected=effort.value,
+        )
 
         if call_type in _RESPONSES_CALL_TYPES:
             reasoning = routed.get("reasoning")
@@ -243,6 +252,26 @@ def _auto_requested(data: Mapping[str, Any]) -> bool:
         return True
     reasoning = data.get("reasoning")
     return isinstance(reasoning, Mapping) and reasoning.get("effort") == "auto"
+
+
+def _requested_effort(data: Mapping[str, Any]) -> str:
+    thinking = data.get("thinking")
+    if isinstance(thinking, Mapping):
+        thinking_type = thinking.get("type")
+        budget = thinking.get("budget_tokens")
+        if isinstance(thinking_type, str) and isinstance(budget, int):
+            return f"{thinking_type}:{budget}"
+        if isinstance(thinking_type, str) and thinking_type:
+            return thinking_type
+    effort = data.get("reasoning_effort")
+    if isinstance(effort, str) and effort:
+        return effort
+    reasoning = data.get("reasoning")
+    if isinstance(reasoning, Mapping):
+        effort = reasoning.get("effort")
+        if isinstance(effort, str) and effort:
+            return effort
+    return "default"
 
 
 def _remove_auto_request(data: Mapping[str, Any]) -> dict[str, Any]:

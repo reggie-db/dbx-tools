@@ -11,6 +11,9 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from collections import OrderedDict
+from dataclasses import dataclass
+from threading import Lock
 from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
@@ -22,6 +25,44 @@ LEVEL_ENV = "DBX_LITELLM_ACCESS_LOG_LEVEL"
 # its first token lands with the final one. Real streams separate the two by the
 # generation time, far above any plausible scheduling jitter.
 FAKE_STREAM_EPSILON = 0.01
+MAX_REASONING_LOG_ENTRIES = 4096
+
+
+@dataclass(frozen=True)
+class ReasoningLogState:
+    requested: str
+    selected: str | None = None
+
+
+_reasoning_log_state: OrderedDict[str, ReasoningLogState] = OrderedDict()
+_reasoning_log_lock = Lock()
+
+
+def record_reasoning_log_state(
+    call_id: str | None,
+    *,
+    requested: str,
+    selected: str | None = None,
+) -> None:
+    if not call_id:
+        return
+    with _reasoning_log_lock:
+        current = _reasoning_log_state.get(call_id)
+        _reasoning_log_state[call_id] = ReasoningLogState(
+            requested=requested,
+            selected=selected if selected is not None else current.selected if current else None,
+        )
+        _reasoning_log_state.move_to_end(call_id)
+        while len(_reasoning_log_state) > MAX_REASONING_LOG_ENTRIES:
+            _reasoning_log_state.popitem(last=False)
+
+
+def reasoning_log_state(kwargs: dict[str, Any]) -> ReasoningLogState | None:
+    call_id = _call_id(kwargs)
+    if call_id is None:
+        return None
+    with _reasoning_log_lock:
+        return _reasoning_log_state.get(call_id)
 
 
 def _build_logger() -> logging.Logger:
@@ -74,6 +115,12 @@ def _format(kwargs: dict[str, Any], *, status: str, response_obj: Any = None) ->
         f"model={payload.get('model') or kwargs.get('model')}",
         f"call={payload.get('call_type') or kwargs.get('call_type')}",
     ]
+
+    thinking = reasoning_log_state(kwargs)
+    if thinking is not None:
+        fields.append(f"thinking_requested={thinking.requested}")
+        if thinking.requested == "auto" and thinking.selected is not None:
+            fields.append(f"thinking_selected={thinking.selected}")
 
     started = payload.get("startTime")
     completed = payload.get("completionStartTime")
@@ -164,6 +211,18 @@ def _nested(usage: dict[str, Any], group: str, field: str) -> int | None:
         return None
     value = details.get(field)
     return value if isinstance(value, int) else None
+
+
+def _call_id(kwargs: dict[str, Any]) -> str | None:
+    value = kwargs.get("litellm_call_id")
+    if isinstance(value, str) and value:
+        return value
+    litellm_params = kwargs.get("litellm_params")
+    if isinstance(litellm_params, dict):
+        value = litellm_params.get("litellm_call_id")
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 dbx_access_logger = DbxAccessLogger()

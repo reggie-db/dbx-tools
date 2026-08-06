@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 import pytest
+from dbx_tools.litellm.access_log import reasoning_log_state
 from dbx_tools.litellm.reasoning import DbxAutoReasoning, ReasoningCache
 from dbx_tools.litellm.reasoning import _effort_for_score as effort_for_score
 from dbx_tools.litellm.reasoning import _parse_score as parse_score
@@ -42,6 +43,56 @@ async def test_chat_auto_effort_is_classified(cache: ReasoningCache) -> None:
 
     assert routed["reasoning_effort"] == "medium"
     assert reasoner.samples == ["USER: Refactor this parser"]
+
+
+async def test_auto_effort_records_requested_and_selected_levels(cache: ReasoningCache) -> None:
+    reasoner = StubAutoReasoning(cache, [0.5])
+    data = {
+        "model": "databricks/databricks-gpt-5-2",
+        "messages": [{"role": "user", "content": "Compare these designs"}],
+        "reasoning_effort": "auto",
+        "litellm_call_id": "auto-log-call",
+    }
+
+    await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+
+    state = reasoning_log_state({"litellm_call_id": "auto-log-call"})
+    assert state is not None
+    assert state.requested == "auto"
+    assert state.selected == "medium"
+
+
+async def test_explicit_effort_records_only_requested_level(cache: ReasoningCache) -> None:
+    reasoner = StubAutoReasoning(cache, [])
+    data = {
+        "model": "databricks/databricks-gpt-5-2",
+        "messages": [{"role": "user", "content": "Compare these designs"}],
+        "reasoning_effort": "high",
+        "litellm_call_id": "explicit-log-call",
+    }
+
+    await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+
+    state = reasoning_log_state({"litellm_call_id": "explicit-log-call"})
+    assert state is not None
+    assert state.requested == "high"
+    assert state.selected is None
+
+
+async def test_default_effort_is_recorded(cache: ReasoningCache) -> None:
+    reasoner = StubAutoReasoning(cache, [])
+    data = {
+        "model": "databricks/databricks-gpt-5-2",
+        "messages": [{"role": "user", "content": "Say hello"}],
+        "litellm_call_id": "default-log-call",
+    }
+
+    await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+
+    state = reasoning_log_state({"litellm_call_id": "default-log-call"})
+    assert state is not None
+    assert state.requested == "default"
+    assert state.selected is None
 
 
 async def test_responses_auto_effort_uses_responses_shape(cache: ReasoningCache) -> None:
