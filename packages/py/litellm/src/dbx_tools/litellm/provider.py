@@ -48,7 +48,7 @@ class DbxCustomLLM(CustomLLM):
             model=_delegate_chat_model(resolved),
             messages=messages,
             stream=False,
-            **_delegated_params(optional_params, timeout=timeout),
+            **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
 
     async def acompletion(
@@ -68,7 +68,7 @@ class DbxCustomLLM(CustomLLM):
             model=_delegate_chat_model(resolved),
             messages=messages,
             stream=False,
-            **_delegated_params(optional_params, timeout=timeout),
+            **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
 
     def streaming(
@@ -84,7 +84,7 @@ class DbxCustomLLM(CustomLLM):
             model=_delegate_chat_model(resolved),
             messages=messages,
             stream=True,
-            **_delegated_params(optional_params, timeout=timeout),
+            **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
         return _generic_stream(stream)
 
@@ -105,7 +105,7 @@ class DbxCustomLLM(CustomLLM):
             model=_delegate_chat_model(resolved),
             messages=messages,
             stream=True,
-            **_delegated_params(optional_params, timeout=timeout),
+            **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
         async for chunk in stream:
             yield from_chunk(chunk)
@@ -122,7 +122,7 @@ class DbxCustomLLM(CustomLLM):
         return litellm.embedding(
             model=f"databricks/{resolved}",
             input=input,
-            **_delegated_params(optional_params, timeout=timeout),
+            **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
 
     async def aembedding(
@@ -137,7 +137,7 @@ class DbxCustomLLM(CustomLLM):
         return await litellm.aembedding(
             model=f"databricks/{resolved}",
             input=input,
-            **_delegated_params(optional_params, timeout=timeout),
+            **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
 
 
@@ -153,7 +153,12 @@ def _requires_tools(optional_params: Mapping[str, Any]) -> bool:
     return isinstance(tools, list) and bool(tools)
 
 
-def _delegated_params(optional_params: Mapping[str, Any], *, timeout: Any = None) -> dict[str, Any]:
+def _delegated_params(
+    optional_params: Mapping[str, Any],
+    backend: DatabricksLiteLLMBackend,
+    *,
+    timeout: Any = None,
+) -> dict[str, Any]:
     # These values are supplied explicitly to the nested LiteLLM call. Everything
     # else, including messages, tools, reasoning, and provider options, is left to
     # LiteLLM's built-in Databricks transformations.
@@ -162,6 +167,12 @@ def _delegated_params(optional_params: Mapping[str, Any], *, timeout: Any = None
         params.pop(key, None)
     if timeout is not None:
         params.setdefault("timeout", timeout)
+    # A cached token keeps the nested call off LiteLLM's per-request SDK auth,
+    # which would otherwise construct a WorkspaceClient and mint a fresh token.
+    if not params.get("api_key") and not params.get("api_base"):
+        credentials = backend.credentials()
+        params["api_key"] = credentials.token
+        params["api_base"] = credentials.api_base
     return params
 
 

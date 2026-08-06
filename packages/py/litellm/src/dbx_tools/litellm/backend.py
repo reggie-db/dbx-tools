@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from threading import RLock
 
-from databricks.sdk import WorkspaceClient
 from dbx_tools.model import (
     DEFAULT_FUZZY_THRESHOLD,
     ServingEndpointSummary,
@@ -13,6 +12,8 @@ from dbx_tools.model import (
     list_serving_endpoints,
     rank_model_id,
 )
+
+from .credentials import Credentials, DatabricksCredentials
 
 PROFILE_ENV = "DBX_LITELLM_PROFILE"
 DATABRICKS_PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
@@ -49,12 +50,17 @@ class DatabricksLiteLLMBackend:
             )
         # LiteLLM's built-in Databricks provider constructs WorkspaceClient()
         # itself. Pin its unified-auth lookup to the same explicit profile used
-        # by this resolver.
+        # by this resolver, for any path that still falls back to SDK auth.
         os.environ[DATABRICKS_PROFILE_ENV] = self.profile
 
-        self.client = WorkspaceClient(profile=self.profile)
+        self._credentials = DatabricksCredentials(profile=self.profile)
+        self.client = self._credentials.client
         self._models: list[ServingEndpointSummary] | None = None
         self._lock = RLock()
+
+    def credentials(self) -> Credentials:
+        """Return the cached bearer token and serving base URL for this profile."""
+        return self._credentials.current()
 
     def models(self, *, force: bool = False) -> list[ServingEndpointSummary]:
         """List once per process, with an explicit refresh path for misses."""
