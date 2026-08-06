@@ -16,11 +16,28 @@ def test_untouched_when_json_object_not_requested() -> None:
     assert _ensure_json_mentioned(messages, {}) is messages
 
 
-def test_untouched_when_a_message_already_mentions_json() -> None:
-    # OpenAI's rule is satisfied by any casing, anywhere in the messages.
-    messages = [{"role": "system", "content": "Reply as JSON."}, {"role": "user", "content": "hi"}]
+def test_untouched_when_a_non_system_message_already_mentions_json() -> None:
+    # Any casing counts, as long as it is not a system message.
+    messages = [{"role": "system", "content": "Extract."}, {"role": "user", "content": "as JSON"}]
 
     assert _ensure_json_mentioned(messages, JSON_OBJECT) is messages
+
+
+def test_json_in_a_system_message_does_not_count() -> None:
+    # This is the Mem0 case. Its extraction system prompt says "Return ONLY valid
+    # JSON parsable by json.loads()", but the chat->Responses bridge hoists system
+    # content into `instructions`, which Databricks does not scan — so a system
+    # mention must NOT be treated as satisfying the rule.
+    messages = [
+        {"role": "system", "content": "Return ONLY valid JSON parsable by json.loads()."},
+        {"role": "user", "content": "my name is Reggie"},
+    ]
+
+    patched = _ensure_json_mentioned(messages, JSON_OBJECT)
+
+    assert patched is not messages
+    assert "json" in patched[1]["content"].lower()
+    assert patched[0]["content"] == "Return ONLY valid JSON parsable by json.loads()."
 
 
 def test_nudge_lands_on_the_user_turn_not_the_system_message() -> None:

@@ -192,18 +192,26 @@ def _ensure_json_mentioned(messages: list[Any], optional_params: Mapping[str, An
     Returns `messages` unchanged unless the nudge is actually required, so a
     well-formed request is never rewritten.
 
-    The nudge is appended to the last NON-system message. A system message would
-    look like the natural home, but it does not work on the Responses path:
-    LiteLLM's chat->Responses bridge hoists system messages into the top-level
-    `instructions` field, and Databricks only scans `input` for the word — a
-    request whose only mention of JSON sits in `instructions` is still rejected
-    (verified against /serving-endpoints/responses). Putting it on a user/assistant
-    turn keeps it inside `input` on that path and inside `messages` on the chat
-    path, so one rewrite satisfies both.
+    System messages are ignored on BOTH sides of this — when deciding whether the
+    word is already present, and when choosing where to put it. LiteLLM's
+    chat->Responses bridge hoists system content into the top-level `instructions`
+    field, and Databricks only scans `input`, so a mention that lives in a system
+    message does not count and a nudge placed there would not be seen either
+    (verified against /serving-endpoints/responses).
+
+    This is exactly how Mem0 trips it: its extraction system prompt says "Return
+    ONLY valid JSON parsable by json.loads()", so treating a system mention as
+    sufficient skipped the nudge while the request still failed upstream. Only a
+    user/assistant turn survives into `input` on the Responses path and stays in
+    `messages` on the chat path, so one rewrite satisfies both.
     """
     if not _needs_json_nudge(optional_params):
         return messages
-    if any("json" in _message_text(message).lower() for message in messages):
+    if any(
+        "json" in _message_text(message).lower()
+        for message in messages
+        if not (isinstance(message, Mapping) and message.get("role") == "system")
+    ):
         return messages
 
     patched = [dict(m) if isinstance(m, Mapping) else m for m in messages]
