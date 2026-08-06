@@ -153,6 +153,22 @@ def _requires_tools(optional_params: Mapping[str, Any]) -> bool:
     return isinstance(tools, list) and bool(tools)
 
 
+# Params the Chat Completions surface (/serving-endpoints/<name>/invocations)
+# refuses with "<name>: Extra inputs are not permitted", failing the whole turn.
+# LiteLLM's `drop_params` does not cover these: it only removes params its own
+# Databricks allowlist knows about, so an unrecognized key is forwarded verbatim
+# and rejected upstream. We are the last hop before that call, so drop them here.
+#
+# Scoped to the CHAT delegation path on purpose — support is per-surface, and the
+# native Responses surfaces accept some of these (open-responses takes
+# `client_metadata` and honours `parallel_tool_calls`), so nothing is stripped
+# from requests that route natively.
+_REJECTED_CHAT_PARAMS = (
+    # Codex sends this on every turn; Databricks chat rejects it outright.
+    "client_metadata",
+)
+
+
 def _delegated_params(
     optional_params: Mapping[str, Any],
     backend: DatabricksLiteLLMBackend,
@@ -164,6 +180,8 @@ def _delegated_params(
     # LiteLLM's built-in Databricks transformations.
     params = dict(optional_params)
     for key in ("model", "messages", "input", "stream"):
+        params.pop(key, None)
+    for key in _REJECTED_CHAT_PARAMS:
         params.pop(key, None)
     if timeout is not None:
         params.setdefault("timeout", timeout)
