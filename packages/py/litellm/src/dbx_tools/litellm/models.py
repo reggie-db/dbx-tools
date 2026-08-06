@@ -5,8 +5,9 @@ from __future__ import annotations
 import re
 import threading
 
-import litellm
 from dbx_tools.model import is_responses_only
+
+import litellm
 
 _registered: set[str] = set()
 _registry_lock = threading.RLock()
