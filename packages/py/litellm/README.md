@@ -174,8 +174,10 @@ reported by the provider, not the selected effort level.
 Endpoint discovery is lazy. The first request lists serving endpoints, later
 requests reuse that catalogue, and an unresolved name triggers one refresh
 before the unresolved endpoint id is delegated to Databricks. `/v1/models`
-remains LiteLLM's configured model list; it is not replaced with the live
-Databricks endpoint catalogue.
+preserves every model LiteLLM returns, including exact endpoints such as
+`databricks-gpt-5-6-sol`, then appends one basic alias for each recognized
+deployed family, such as `databricks-gpt` or `databricks-claude`. The aliases
+flow through the same fuzzy resolver and do not replace or filter exact models.
 
 LiteLLM's `CustomLLM` interface has no native Responses hook. For a
 Responses-only endpoint, the packaged proxy's pre-call hook changes only the

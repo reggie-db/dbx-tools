@@ -1,8 +1,9 @@
-"""Compatibility envelope for Codex model discovery."""
+"""Model discovery compatibility and resolvable family aliases."""
 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -16,6 +17,7 @@ _EFFORT_DESCRIPTIONS = {
     "high": "Deeper reasoning for complex tasks",
     "xhigh": "Maximum reasoning for the hardest tasks",
 }
+_BASIC_FAMILIES = ("gpt", "claude", "gemini", "llama", "qwen", "glm", "gemma")
 
 
 def augment_models_payload(payload: Any) -> Any:
@@ -24,7 +26,8 @@ def augment_models_payload(payload: Any) -> Any:
     data = payload.get("data")
     if not isinstance(data, Sequence) or isinstance(data, (str, bytes, bytearray)):
         return payload
-    return {**payload, "models": _codex_models(data)}
+    augmented_data = _append_family_models(data)
+    return {**payload, "data": augmented_data, "models": _codex_models(augmented_data)}
 
 
 def install_models_compatibility_middleware() -> None:
@@ -72,6 +75,50 @@ def _codex_models(data: Sequence[Any]) -> list[dict[str, Any]]:
         seen.add(slug)
         models.append(_codex_model(slug, item, priority=10_000 - len(models)))
     return models
+
+
+def _append_family_models(data: Sequence[Any]) -> list[Any]:
+    """Append one resolvable alias for each deployed basic model family."""
+    result = list(data)
+    existing = {
+        model_id.removeprefix("databricks/")
+        for item in data
+        if isinstance(item, Mapping) and isinstance((model_id := item.get("id")), str)
+    }
+    representatives: dict[str, Mapping[str, Any]] = {}
+    for item in data:
+        if not isinstance(item, Mapping):
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str):
+            continue
+        slug = model_id.removeprefix("databricks/")
+        if slug in {"*", "databricks/*"}:
+            continue
+        family = _basic_family(slug)
+        if family is not None:
+            representatives.setdefault(family, item)
+
+    for family, representative in representatives.items():
+        alias = f"databricks-{family}"
+        if alias in existing:
+            continue
+        result.append({**representative, "id": alias})
+        existing.add(alias)
+    return result
+
+
+def _basic_family(model: str) -> str | None:
+    normalized = model.lower()
+    if not normalized.startswith(("databricks-", "system.ai.")):
+        return None
+    tokens = set(re.findall(r"[a-z0-9]+", normalized))
+    if "gpt" in tokens and "oss" in tokens:
+        return "gpt-oss"
+    return next(
+        (family for family in _BASIC_FAMILIES if any(token.startswith(family) for token in tokens)),
+        None,
+    )
 
 
 def _codex_model(slug: str, item: Mapping[str, Any], *, priority: int) -> dict[str, Any]:
