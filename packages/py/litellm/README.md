@@ -131,17 +131,23 @@ On Responses, use the native reasoning shape:
 }
 ```
 
-The callback asks `databricks-meta-llama-3-1-8b-instruct` for a strict
-`low | medium | high` classification, then replaces `auto` before LiteLLM calls
-the target endpoint. Explicit `low`, `medium`, `high`, or `thinking` values are
-never overridden. Unsupported targets have `auto` removed and use their normal
+The callback asks `databricks-meta-llama-3-1-8b-instruct` for a score from
+`0.01` through `1.00`, then maps that score through the resolved Databricks
+endpoint's inferred reasoning levels. Scores below `0.34` use `low`, scores below
+`0.67` use `medium`, and higher scores use `high`. An exact `1.00` uses the
+GPT-5.6 ultra tier, whose LiteLLM wire value is `xhigh`; models without that
+level remain at `high`. Integer classifier output is treated as a percentage
+(`73` becomes `0.73`), except `1`, which remains the maximum score.
+
+Explicit `low`, `medium`, `high`, `xhigh`, or `thinking` values are never
+overridden. Unsupported targets have `auto` removed and use their normal
 provider default.
 
 The classifier sees at most eight recent non-system turns and 6,000 characters.
 Full Chat transcripts are sampled directly. Short follow-ups can recover prior
 turns from `metadata.thread_id`, `metadata.conversation_id`, or
 `metadata.session_id`; Responses chains are linked through
-`previous_response_id`. Context and classification results use `diskcache` with
+`previous_response_id`. Context and classification scores use `diskcache` with
 a TTL, so retries and follow-ups avoid repeated classifier calls without
 retaining an unbounded transcript.
 

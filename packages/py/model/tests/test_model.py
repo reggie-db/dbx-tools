@@ -7,10 +7,12 @@ from urllib.request import Request
 import pytest
 from dbx_tools.model import (
     ModelClass,
+    ReasoningEffort,
     extract_embedding,
     invocations_url,
     list_serving_endpoints,
     post_json,
+    reasoning_efforts_by_family,
     resolve_model,
 )
 from typing_extensions import Self
@@ -28,8 +30,12 @@ class FakeServingEndpoints:
                 config=SimpleNamespace(
                     served_entities=[
                         SimpleNamespace(
+                            entity_name="system.ai.claude-sonnet-4-6",
                             foundation_model=SimpleNamespace(
-                                ai_gateway_model_profile=SimpleNamespace(quality=5, speed=4, cost=3)
+                                name="system.ai.claude-sonnet-4-6",
+                                ai_gateway_model_profile=SimpleNamespace(
+                                    quality=5, speed=4, cost=3
+                                ),
                             ),
                             external_model=None,
                         )
@@ -43,6 +49,22 @@ class FakeServingEndpoints:
                 description=None,
                 tags=[],
                 config=SimpleNamespace(served_entities=[]),
+            ),
+            SimpleNamespace(
+                name="reasoning-primary",
+                task="llm/v1/chat",
+                state=None,
+                description=None,
+                tags=[],
+                config=SimpleNamespace(
+                    served_entities=[
+                        SimpleNamespace(
+                            entity_name="system.ai.gpt-5-6-sol",
+                            foundation_model=None,
+                            external_model=None,
+                        )
+                    ]
+                ),
             ),
         ]
 
@@ -72,7 +94,34 @@ def test_list_serving_endpoints_returns_stable_models() -> None:
     assert endpoints[0].profile is not None
     assert endpoints[0].profile.quality == 5
     assert endpoints[0].model_class == ModelClass.CHAT_THINKING
+    assert endpoints[0].reasoning_efforts == (
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+    )
     assert endpoints[1].model_class == ModelClass.CHAT_FAST
+    custom = next(endpoint for endpoint in endpoints if endpoint.name == "reasoning-primary")
+    assert custom.reasoning_efforts[-1] == ReasoningEffort.XHIGH
+
+
+def test_reasoning_efforts_are_inferred_from_family_and_served_entity() -> None:
+    assert reasoning_efforts_by_family("databricks-gpt-5-5") == (
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+    )
+    assert reasoning_efforts_by_family("system.ai.gpt-5-6-sol") == (
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+        ReasoningEffort.XHIGH,
+    )
+    assert reasoning_efforts_by_family("databricks-gpt-6") == (
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+    )
+    assert reasoning_efforts_by_family("databricks-meta-llama-3-1-8b-instruct") == ()
 
 
 def test_post_json_authenticates_each_request() -> None:

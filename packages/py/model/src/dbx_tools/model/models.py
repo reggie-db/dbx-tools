@@ -12,6 +12,13 @@ class ModelClass(str, Enum):
     EMBEDDING = "embedding"
 
 
+class ReasoningEffort(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    XHIGH = "xhigh"
+
+
 class WireModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -35,6 +42,7 @@ class ServingEndpointSummary(WireModel):
     profile: ModelProfile | None = None
     model_class: ModelClass | None = Field(default=None, alias="class")
     dimension: int | None = None
+    reasoning_efforts: tuple[ReasoningEffort, ...] = Field(default=(), alias="reasoningEfforts")
 
 
 class ModelQuery(WireModel):
@@ -66,3 +74,4 @@ class EndpointCapabilities(WireModel):
     chat: bool
     embedding: bool
     tools: bool
+    reasoning_efforts: tuple[ReasoningEffort, ...] = Field(default=(), alias="reasoningEfforts")

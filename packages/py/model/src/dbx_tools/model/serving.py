@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from .classes import MODEL_CLASS_ORDER
 from .classify import classified_summaries, supports_tools_by_family
 from .models import ModelProfile, ServingEndpointSummary
+from .reasoning import reasoning_efforts_for_names
 
 
 class ServingEndpointsApi(Protocol):
@@ -46,6 +47,7 @@ def list_serving_endpoints_uncached(client: WorkspaceClientLike) -> list[Serving
                 description=_string(_value(endpoint, "description")),
                 supportsTools=supports_tools_by_family(name),
                 profile=_extract_profile(endpoint),
+                reasoningEfforts=reasoning_efforts_for_names(_model_identities(endpoint, name)),
             )
         )
     return summaries
@@ -114,6 +116,20 @@ def _provided_display_name(endpoint: object) -> str | None:
         if value and value.strip():
             return value.strip()
     return None
+
+
+def _model_identities(endpoint: object, endpoint_name: str) -> list[str]:
+    identities = [endpoint_name]
+    config = _value(endpoint, "config")
+    for entity in _value(config, "served_entities") or []:
+        for value in (
+            _value(entity, "entity_name"),
+            _value(_value(entity, "foundation_model"), "name"),
+            _value(_value(entity, "external_model"), "name"),
+        ):
+            if isinstance(value, str) and value:
+                identities.append(value)
+    return identities
 
 
 def _value(value: object, key: str) -> Any:

@@ -5,6 +5,7 @@ import re
 from collections.abc import Iterable
 
 from .models import EndpointCapabilities, ModelClass, ServingEndpointSummary
+from .reasoning import reasoning_efforts_by_family
 
 CHAT_TASK = "llm/v1/chat"
 EMBEDDING_TASK = "llm/v1/embeddings"
@@ -28,7 +29,13 @@ def endpoint_capabilities(
         if summary.supports_tools is not None
         else supports_tools_by_family(summary.name)
     )
-    return EndpointCapabilities(chat=chat, embedding=embedding, tools=tools)
+    reasoning_efforts = summary.reasoning_efforts or reasoning_efforts_by_family(summary.name)
+    return EndpointCapabilities(
+        chat=chat,
+        embedding=embedding,
+        tools=tools,
+        reasoningEfforts=reasoning_efforts,
+    )
 
 
 def version_tuple(name: str) -> list[int]:

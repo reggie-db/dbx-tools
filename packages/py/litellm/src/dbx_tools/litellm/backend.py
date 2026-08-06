@@ -7,10 +7,12 @@ from threading import RLock
 
 from dbx_tools.model import (
     DEFAULT_FUZZY_THRESHOLD,
+    ReasoningEffort,
     ServingEndpointSummary,
     endpoint_capabilities,
     list_serving_endpoints,
     rank_model_id,
+    reasoning_efforts_by_family,
 )
 
 from .credentials import Credentials, DatabricksCredentials
@@ -97,6 +99,15 @@ class DatabricksLiteLLMBackend:
                 raise ValueError(f'Model "{model_id}" does not support function tools')
         register_streaming_support(model_id)
         return model_id
+
+    def reasoning_efforts(self, model_id: str) -> tuple[ReasoningEffort, ...]:
+        """Return Databricks-derived effort levels, with family fallback."""
+        endpoint = next(
+            (candidate for candidate in self.models() if candidate.name == model_id), None
+        )
+        if endpoint is not None and endpoint.reasoning_efforts:
+            return endpoint.reasoning_efforts
+        return reasoning_efforts_by_family(model_id)
 
 
 def _strip_provider_prefix(model: str) -> str:

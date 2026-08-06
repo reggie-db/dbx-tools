@@ -21,6 +21,8 @@ Key features:
 - stable Pydantic endpoint, profile, query, and ranked-result models;
 - live endpoint listing through a structural `WorkspaceClient` protocol;
 - score-driven model classification with family fallbacks;
+- reasoning-effort levels inferred from Databricks served-entity identity, with
+  endpoint-family fallback for summaries that omit it;
 - exact and fuzzy endpoint resolution with deterministic class ordering;
 - Databricks invocation URL and per-request authentication helpers;
 - OpenAI chat request sanitization and content extraction;
@@ -33,6 +35,11 @@ from dbx_tools.model import ModelClass, list_serving_endpoints, resolve_model
 endpoints = list_serving_endpoints(WorkspaceClient())
 selection = resolve_model(endpoints, model_class=ModelClass.CHAT_BALANCED)
 print(selection.model_id)
+print(
+    next(
+        endpoint.reasoning_efforts for endpoint in endpoints if endpoint.name == selection.model_id
+    )
+)
 ```
 
 The Python port intentionally omits AppKit `CacheManager` integration,
@@ -49,6 +56,7 @@ and embedding normalization is the repetitive part.
 ## Module map
 
 - `models` — Pydantic wire contracts;
+- `reasoning` — model-family and served-entity reasoning-level inference;
 - `classify`, `classes`, `fallback` — model taxonomy and ordering;
 - `resolve` — exact/fuzzy ranking and single-model selection;
 - `serving` — structural `WorkspaceClient` endpoint listing;
