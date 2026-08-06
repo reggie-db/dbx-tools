@@ -29,6 +29,8 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
   `databricks/responses/...` bridge;
 - resolves Responses-only proxy calls before provider selection so LiteLLM's
   native Databricks Responses implementation receives the original body;
+- optionally classifies an `auto` reasoning effort as `low`, `medium`, or
+  `high` for reasoning-capable OpenAI and Claude endpoints;
 - supports LiteLLM chat, embedding, synchronous/asynchronous, and streaming
   entrypoints without custom request-content rewriting.
 
@@ -67,14 +69,16 @@ conversion.
 
 This package supplies only the workspace-specific layer LiteLLM does not have:
 explicit profile selection, live endpoint discovery, fuzzy names, and
-capability-aware routing. Request messages, content blocks, tools, reasoning
-fields, and provider options are not rewritten here.
+capability-aware routing. Request messages, content blocks, tools, and provider
+options are not rewritten except when the caller explicitly requests automatic
+reasoning selection.
 
 LiteLLM 1.83 loads custom handlers from a Python file beside the config. For an
 existing LiteLLM config, add `config_provider.py` next to the YAML:
 
 ```python
 from dbx_tools.litellm.provider import dbx_provider
+from dbx_tools.litellm.reasoning import dbx_auto_reasoning
 from dbx_tools.litellm.routing import dbx_responses_router
 ```
 
@@ -94,6 +98,7 @@ model_list:
 
 litellm_settings:
   callbacks:
+    - config_provider.dbx_auto_reasoning
     - config_provider.dbx_responses_router
   custom_provider_map:
     - provider: dbx
@@ -102,6 +107,55 @@ litellm_settings:
 
 Set `DBX_LITELLM_PROFILE` or `DATABRICKS_CONFIG_PROFILE` before starting
 LiteLLM. If both are set, they must name the same profile.
+
+## Automatic reasoning effort
+
+Automatic effort is opt-in. On Chat Completions, send
+`"reasoning_effort": "auto"`:
+
+```json
+{
+  "model": "claude sonnet",
+  "messages": [{"role": "user", "content": "Debug this distributed deadlock"}],
+  "reasoning_effort": "auto"
+}
+```
+
+On Responses, use the native reasoning shape:
+
+```json
+{
+  "model": "gpt 5 codex",
+  "input": "Debug this distributed deadlock",
+  "reasoning": {"effort": "auto"}
+}
+```
+
+The callback asks `databricks-meta-llama-3-1-8b-instruct` for a strict
+`low | medium | high` classification, then replaces `auto` before LiteLLM calls
+the target endpoint. Explicit `low`, `medium`, `high`, or `thinking` values are
+never overridden. Unsupported targets have `auto` removed and use their normal
+provider default.
+
+The classifier sees at most eight recent non-system turns and 6,000 characters.
+Full Chat transcripts are sampled directly. Short follow-ups can recover prior
+turns from `metadata.thread_id`, `metadata.conversation_id`, or
+`metadata.session_id`; Responses chains are linked through
+`previous_response_id`. Context and classification results use `diskcache` with
+a TTL, so retries and follow-ups avoid repeated classifier calls without
+retaining an unbounded transcript.
+
+Configuration:
+
+- `DBX_TOOLS_LITELLM_REASONING_MODEL` overrides the classifier endpoint;
+- `DBX_TOOLS_LITELLM_REASONING_CACHE_DIR` changes the disk-cache directory;
+- `DBX_TOOLS_LITELLM_REASONING_CACHE_TTL_SECONDS` sets the context and result
+  TTL (default: 86,400 seconds);
+- `DBX_TOOLS_LITELLM_REASONING_TIMEOUT_SECONDS` sets the classifier timeout
+  (default: 5 seconds).
+
+For Claude targets, LiteLLM's Databricks transformer maps the selected
+`reasoning_effort` to the backend's native extended-thinking token budget.
 
 ## Runtime behavior
 
@@ -124,6 +178,7 @@ families use LiteLLM's own Responses-to-Chat fallback.
 - `models` — Responses-only endpoint routing policy;
 - `provider` — LiteLLM `CustomLLM` adapter and exported `dbx_provider`
   singleton;
+- `reasoning` — opt-in effort classification and TTL-backed follow-up context;
 - `routing` — model-only proxy hook for native Responses-only calls;
 - `cli` — profile-pinned launcher for the packaged LiteLLM proxy config.
 

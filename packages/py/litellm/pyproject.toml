@@ -9,6 +9,7 @@ requires-python = ">=3.10"
 dependencies = [
   "databricks-sdk>=0.63.0,<1",
   "dbx-tools-model @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/model",
+  "diskcache>=5.6,<6",
   "litellm[proxy]>=1.83.14,<2"
 ]
 

@@ -911,6 +911,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     dependencies: [
       "databricks-sdk>=0.63.0,<1",
       projenProject.pythonGitDependency(pythonRepository, "dbx-tools-model", "model"),
+      "diskcache>=5.6,<6",
       "litellm[proxy]>=1.83.14,<2",
     ],
     scripts: {
@@ -933,6 +934,7 @@ new projenProject.DBXToolsPythonWorkspace(root, {
     "packages/example/notebooks",
   ],
   ruffPerFileIgnores: {
+    "packages/py/litellm/src/dbx_tools/litellm/reasoning.py": ["BLE001"],
     "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py": ["BLE001"],
     "packages/test/polyglot/python/run.py": ["BLE001"],
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
