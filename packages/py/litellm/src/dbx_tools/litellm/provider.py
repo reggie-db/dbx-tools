@@ -46,7 +46,7 @@ class DbxCustomLLM(CustomLLM):
         resolved = self.backend.resolve(model, requires_tools=_requires_tools(optional_params))
         return litellm.completion(
             model=_delegate_chat_model(resolved),
-            messages=messages,
+            messages=_ensure_json_mentioned(messages, optional_params),
             stream=False,
             **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
@@ -66,7 +66,7 @@ class DbxCustomLLM(CustomLLM):
         )
         return await litellm.acompletion(
             model=_delegate_chat_model(resolved),
-            messages=messages,
+            messages=_ensure_json_mentioned(messages, optional_params),
             stream=False,
             **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
@@ -82,7 +82,7 @@ class DbxCustomLLM(CustomLLM):
         resolved = self.backend.resolve(model, requires_tools=_requires_tools(optional_params))
         stream = litellm.completion(
             model=_delegate_chat_model(resolved),
-            messages=messages,
+            messages=_ensure_json_mentioned(messages, optional_params),
             stream=True,
             **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
@@ -103,7 +103,7 @@ class DbxCustomLLM(CustomLLM):
         )
         stream = await litellm.acompletion(
             model=_delegate_chat_model(resolved),
-            messages=messages,
+            messages=_ensure_json_mentioned(messages, optional_params),
             stream=True,
             **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
@@ -151,6 +151,78 @@ def _delegate_chat_model(resolved: str) -> str:
 def _requires_tools(optional_params: Mapping[str, Any]) -> bool:
     tools = optional_params.get("tools")
     return isinstance(tools, list) and bool(tools)
+
+
+# OpenAI-family endpoints refuse `response_format: {"type": "json_object"}` unless
+# the prompt itself mentions JSON: "'messages' must contain the word 'json' in some
+# form, to use 'response_format' of type 'json_object'" (the Responses surface says
+# the same about `text.format`). It is a prompt-content rule, not a param rule, so
+# no amount of param filtering satisfies it.
+#
+# Real callers trip this: Mem0's memory extraction (mem0/memory/main.py) always
+# sets json_object while its prompt never says "json", so every memory write fails
+# and cross-session memory silently degrades. Mem0 is a vendored dependency we
+# can't patch, and we are the last hop before the endpoint, so the nudge goes here
+# and fixes every client at once.
+_JSON_NUDGE = " Respond with a JSON object."
+
+
+def _needs_json_nudge(optional_params: Mapping[str, Any]) -> bool:
+    response_format = optional_params.get("response_format")
+    if not isinstance(response_format, Mapping):
+        return False
+    return response_format.get("type") == "json_object"
+
+
+def _message_text(message: Any) -> str:
+    """Flatten one message's content, including multi-part content blocks."""
+    if not isinstance(message, Mapping):
+        return ""
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(
+            part.get("text", "") for part in content if isinstance(part, Mapping)
+        )
+    return ""
+
+
+def _ensure_json_mentioned(messages: list[Any], optional_params: Mapping[str, Any]) -> list[Any]:
+    """Append a JSON instruction when json_object is requested but unmentioned.
+
+    Returns `messages` unchanged unless the nudge is actually required, so a
+    well-formed request is never rewritten.
+
+    The nudge is appended to the last NON-system message. A system message would
+    look like the natural home, but it does not work on the Responses path:
+    LiteLLM's chat->Responses bridge hoists system messages into the top-level
+    `instructions` field, and Databricks only scans `input` for the word — a
+    request whose only mention of JSON sits in `instructions` is still rejected
+    (verified against /serving-endpoints/responses). Putting it on a user/assistant
+    turn keeps it inside `input` on that path and inside `messages` on the chat
+    path, so one rewrite satisfies both.
+    """
+    if not _needs_json_nudge(optional_params):
+        return messages
+    if any("json" in _message_text(message).lower() for message in messages):
+        return messages
+
+    patched = [dict(m) if isinstance(m, Mapping) else m for m in messages]
+    for message in reversed(patched):
+        if not isinstance(message, dict) or message.get("role") == "system":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            message["content"] = f"{content}{_JSON_NUDGE}"
+            return patched
+        if isinstance(content, list):
+            # Multi-part content: append a text part rather than rewriting parts.
+            message["content"] = [*content, {"type": "text", "text": _JSON_NUDGE.strip()}]
+            return patched
+    # No usable non-system turn (e.g. a system-only request): add a user turn, the
+    # one role that is guaranteed to survive into `input`.
+    return [*patched, {"role": "user", "content": _JSON_NUDGE.strip()}]
 
 
 # Params the Chat Completions surface (/serving-endpoints/<name>/invocations)

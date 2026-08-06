@@ -19,6 +19,21 @@ def _clear_registry() -> None:
         ("codex-mini", True),
         ("databricks-claude-sonnet-4-5", False),
         ("databricks-gpt-5-mini", False),
+        # GPT >=5.4 refuses function tools on Chat Completions and must route
+        # natively. Expectations verified against the live endpoints.
+        ("databricks-gpt-5-6-sol", True),
+        ("databricks-gpt-5-4-mini", True),
+        ("databricks-gpt-6", True),
+        ("databricks-gpt-5", False),
+        ("databricks-gpt-5-1", False),
+        ("databricks-gpt-5-nano", False),
+        # gpt-oss is a separate family whose version parses as a parameter count
+        # (120b -> 120); it must not trip the GPT version threshold.
+        ("databricks-gpt-oss-120b", False),
+        ("databricks-gpt-oss-20b", False),
+        # A caller-qualified name resolves the same way.
+        ("databricks/databricks-gpt-5-6-sol", True),
+        ("databricks-meta-llama-3-1-8b-instruct", False),
     ],
 )
 def test_requires_responses_api(model: str, expected: bool) -> None:
