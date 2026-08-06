@@ -13,10 +13,13 @@ class ModelClass(str, Enum):
 
 
 class ReasoningEffort(str, Enum):
+    NONE = "none"
+    MINIMAL = "minimal"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     XHIGH = "xhigh"
+    MAX = "max"
 
 
 class WireModel(BaseModel):

@@ -50,7 +50,6 @@ from .models import (
 )
 from .reasoning import (
     GPT_5_6_REASONING_EFFORTS,
-    GPT_5_5_PRO_REASONING_EFFORTS,
     STANDARD_REASONING_EFFORTS,
     reasoning_efforts_by_family,
     reasoning_efforts_for_names,
@@ -75,7 +74,6 @@ __all__ = [
     "EMBEDDING_TASK",
     "FALLBACK_MODEL_IDS",
     "GPT_5_6_REASONING_EFFORTS",
-    "GPT_5_5_PRO_REASONING_EFFORTS",
     "INVOCATIONS_SUFFIX",
     "MODEL_CLASS_ORDER",
     "OPEN_RESPONSES_PATH",

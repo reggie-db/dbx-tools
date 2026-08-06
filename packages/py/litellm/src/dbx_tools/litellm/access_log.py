@@ -119,7 +119,7 @@ def _format(kwargs: dict[str, Any], *, status: str, response_obj: Any = None) ->
     thinking = reasoning_log_state(kwargs)
     if thinking is not None:
         fields.append(f"thinking_requested={thinking.requested}")
-        if thinking.requested == "auto" and thinking.selected is not None:
+        if thinking.selected is not None:
             fields.append(f"thinking_selected={thinking.selected}")
 
     started = payload.get("startTime")

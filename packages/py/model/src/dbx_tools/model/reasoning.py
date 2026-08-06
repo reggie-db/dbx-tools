@@ -10,11 +10,27 @@ STANDARD_REASONING_EFFORTS = (
     ReasoningEffort.MEDIUM,
     ReasoningEffort.HIGH,
 )
-GPT_5_6_REASONING_EFFORTS = (*STANDARD_REASONING_EFFORTS, ReasoningEffort.XHIGH)
-GPT_5_5_PRO_REASONING_EFFORTS = (
+GPT_5_6_REASONING_EFFORTS = (
+    ReasoningEffort.NONE,
+    *STANDARD_REASONING_EFFORTS,
+    ReasoningEffort.XHIGH,
+    ReasoningEffort.MAX,
+)
+_GPT_5_5_PRO_REASONING_EFFORTS = (
     ReasoningEffort.MEDIUM,
     ReasoningEffort.HIGH,
     ReasoningEffort.XHIGH,
+)
+_CLAUDE_REASONING_EFFORTS = (
+    ReasoningEffort.NONE,
+    ReasoningEffort.MINIMAL,
+    *STANDARD_REASONING_EFFORTS,
+    ReasoningEffort.XHIGH,
+    ReasoningEffort.MAX,
+)
+_GEMINI_REASONING_EFFORTS = (
+    ReasoningEffort.MINIMAL,
+    *STANDARD_REASONING_EFFORTS,
 )
 
 _GPT_VERSION = re.compile(r"gpt[-_.](\d+)(?:[-_.](\d+))?", flags=re.IGNORECASE)
@@ -31,7 +47,7 @@ def reasoning_efforts_by_family(name: str) -> tuple[ReasoningEffort, ...]:
     gpt_version = _version(_GPT_VERSION, normalized)
     if gpt_version is not None and gpt_version >= (5, 0):
         if gpt_version == (5, 5) and re.search(r"(?:^|[-_.])pro(?:[-_.]|$)", normalized):
-            return GPT_5_5_PRO_REASONING_EFFORTS
+            return _GPT_5_5_PRO_REASONING_EFFORTS
         return GPT_5_6_REASONING_EFFORTS if gpt_version == (5, 6) else STANDARD_REASONING_EFFORTS
     if "gpt-oss" in normalized or "gpt_oss" in normalized or "codex" in normalized:
         return STANDARD_REASONING_EFFORTS
@@ -40,7 +56,9 @@ def reasoning_efforts_by_family(name: str) -> tuple[ReasoningEffort, ...]:
 
     claude_version = _version(_CLAUDE_VERSION, normalized)
     if claude_version is not None and claude_version >= (3, 7):
-        return STANDARD_REASONING_EFFORTS
+        return _CLAUDE_REASONING_EFFORTS
+    if "gemini" in normalized:
+        return _GEMINI_REASONING_EFFORTS
     return ()
 
 
