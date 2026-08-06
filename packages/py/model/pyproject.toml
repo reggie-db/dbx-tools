@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-model"
-version = "0.0.0"
+version = "0.6.90+gh52492b4"
 description = "Databricks Model Serving invocation, classification, and endpoint resolution"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -22,11 +22,24 @@ interface PythonProjectFile {
   readonly source: string;
 }
 
+export interface StampPythonProjectsOptions {
+  readonly rewriteDependencies?: boolean;
+}
+
+export interface RestorePythonProjects {
+  (): void;
+  readonly paths: readonly string[];
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function stampPythonProjects(root: string, version: string): () => void {
+export function stampPythonProjects(
+  root: string,
+  version: string,
+  options: StampPythonProjectsOptions = {},
+): RestorePythonProjects {
   const packageFiles = readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => resolve(root, entry.name, "pyproject.toml"))
@@ -52,17 +65,20 @@ export function stampPythonProjects(root: string, version: string): () => void {
       if (stamped === project.source) {
         throw new Error(`Expected one project version in ${project.path}`);
       }
-      for (const sibling of projects) {
-        stamped = stamped.replace(
-          new RegExp(
-            `${escapeRegExp(sibling.name)} @ git\\+[^" ]+#subdirectory=[^" ]+/${escapeRegExp(sibling.directory)}`,
-            "g",
-          ),
-          `${sibling.name}==${version}`,
-        );
+      if (options.rewriteDependencies ?? true) {
+        for (const sibling of projects) {
+          stamped = stamped.replace(
+            new RegExp(
+              `${escapeRegExp(sibling.name)} @ git\\+[^" ]+#subdirectory=[^" ]+/${escapeRegExp(sibling.directory)}`,
+              "g",
+            ),
+            `${sibling.name}==${version}`,
+          );
+        }
       }
       chmodSync(project.path, project.mode | 0o200);
       writeFileSync(project.path, stamped);
+      chmodSync(project.path, project.mode);
     }
   } catch (error) {
     for (const project of projects) {
@@ -73,13 +89,17 @@ export function stampPythonProjects(root: string, version: string): () => void {
     throw error;
   }
 
-  return () => {
+  const restore = () => {
     for (const project of projects) {
       chmodSync(project.path, project.mode | 0o200);
       writeFileSync(project.path, project.source);
       chmodSync(project.path, project.mode);
     }
   };
+  Object.defineProperty(restore, "paths", {
+    value: projects.map((project) => project.path),
+  });
+  return restore as RestorePythonProjects;
 }
 
 export function publishPythonProjects(options: {
@@ -91,7 +111,7 @@ export function publishPythonProjects(options: {
 }): void {
   const root = resolve(options.root);
   const output = mkdtempSync(join(tmpdir(), "dbx-tools-python-publish-"));
-  const restore = stampPythonProjects(root, options.version);
+  const stamp = stampPythonProjects(root, options.version);
   try {
     exec.spawnSync("uv", ["build", "--all-packages", "--out-dir", output], {
       cwd: process.cwd(),
@@ -123,7 +143,7 @@ export function publishPythonProjects(options: {
       },
     );
   } finally {
-    restore();
+    stamp();
     rmSync(output, { recursive: true, force: true });
   }
 }

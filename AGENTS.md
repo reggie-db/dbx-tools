@@ -1237,6 +1237,17 @@ Documentation and notebooks install the published distributions by name
 `#subdirectory=` form as an alternative for testing unreleased `main` branch
 changes.
 
+Every normal commit stamps each `packages/py/*/pyproject.toml` with a PEP 440
+local version based on the root release and a short Git hash, for example
+`0.6.90+gh1a2b3c4`. The pre-commit hook uses a hash of the staged patch because
+the new commit hash does not exist yet. It excludes the generated pyproject
+files from that hash, stages their version changes, and leaves internal Git
+dependencies unchanged. `bun run bump` and the Python publishing tasks still
+stamp the plain release version such as `0.6.91` into built artifacts. The hook
+source is `projen/tasks/python-commit-version.ts`; `bunx projen` installs the
+repo-local `.git/hooks/pre-commit` dispatcher used by the managed Databricks
+hook chain.
+
 ## The `dbx` CLI
 
 `@dbx-tools/cli` ships the repo's ONLY bin, `dbx` (aliased `dbx-tools`), with

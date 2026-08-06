@@ -15,11 +15,37 @@
  * `dbx-tools` root task first (see below); a normal consumer constructs,
  * `applyToProjects`es, synths.
  */
-import { readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
-import { DependencyType } from "projen";
+import { Component, DependencyType } from "projen";
 
 const SCOPE = "dbx-tools";
+const PYTHON_VERSION_HOOK_MARKER = "# GENERATED: dbx-tools Python commit versions";
+
+class PythonVersionHookInstaller extends Component {
+  postSynthesize(): void {
+    const gitDirectory = resolve(this.project.outdir, ".git");
+    if (!existsSync(gitDirectory)) return;
+
+    const hook = resolve(gitDirectory, "hooks/pre-commit");
+    const content = [
+      "#!/bin/sh",
+      PYTHON_VERSION_HOOK_MARKER,
+      'ROOT="$(git rev-parse --show-toplevel)"',
+      'exec bun "$ROOT/projen/tasks/python-commit-version.ts"',
+      "",
+    ].join("\n");
+    if (existsSync(hook)) {
+      const current = readFileSync(hook, "utf8");
+      if (!current.includes(PYTHON_VERSION_HOOK_MARKER)) return;
+      if (current === content) return;
+    }
+    mkdirSync(resolve(gitDirectory, "hooks"), { recursive: true });
+    writeFileSync(hook, content);
+    chmodSync(hook, 0o755);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Root construction
@@ -71,6 +97,7 @@ const root = new projenProject.DBXToolsNodeProject({
     "zod@catalog:",
   ],
 });
+new PythonVersionHookInstaller(root);
 const workspaceVersion = (
   JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
     version?: string;
