@@ -13,7 +13,7 @@ from litellm.llms.databricks.chat.transformation import DatabricksConfig
 
 
 class StubAutoReasoning(DbxAutoReasoning):
-    def __init__(self, cache: ReasoningCache, scores: list[float]) -> None:
+    def __init__(self, cache: ReasoningCache, scores: list[float | None]) -> None:
         super().__init__(cache)
         self.scores = scores
         self.samples: list[str] = []
@@ -120,6 +120,83 @@ async def test_responses_auto_preserves_reasoning_summary(cache: ReasoningCache)
     routed = await reasoner.async_pre_call_hook(data=data, call_type="aresponses")
 
     assert routed["reasoning"] == {"effort": "medium", "summary": "concise"}
+
+
+@pytest.mark.parametrize("selector", [0.5, "0.5", 50, "50", "50%"])
+async def test_chat_numeric_selector_uses_shared_score_mapping(
+    cache: ReasoningCache, selector: object
+) -> None:
+    reasoner = StubAutoReasoning(cache, [])
+    data = {
+        "model": "databricks/databricks-gpt-5-6-sol",
+        "messages": [{"role": "user", "content": "Compare these designs"}],
+        "reasoning_effort": selector,
+        "litellm_call_id": "numeric-chat-call",
+    }
+
+    routed = await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+
+    assert routed["reasoning_effort"] == "medium"
+    assert reasoner.samples == []
+    state = reasoning_log_state({"litellm_call_id": "numeric-chat-call"})
+    assert state is not None
+    assert state.requested == "0.5"
+    assert state.selected == "medium"
+
+
+async def test_responses_numeric_selector_preserves_reasoning_fields(cache: ReasoningCache) -> None:
+    reasoner = StubAutoReasoning(cache, [])
+    data = {
+        "model": "databricks/databricks-gpt-5-6-sol",
+        "input": "Solve this",
+        "reasoning": {"effort": 1, "summary": "concise"},
+    }
+
+    routed = await reasoner.async_pre_call_hook(data=data, call_type="aresponses")
+
+    assert routed["reasoning"] == {"effort": "max", "summary": "concise"}
+
+
+async def test_chat_gpt_5_6_caps_max_at_xhigh(cache: ReasoningCache) -> None:
+    reasoner = StubAutoReasoning(cache, [])
+    data = {
+        "model": "databricks/databricks-gpt-5-6-sol",
+        "messages": [{"role": "user", "content": "Solve this"}],
+        "reasoning_effort": 1,
+    }
+
+    routed = await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+
+    assert routed["reasoning_effort"] == "xhigh"
+
+
+async def test_responses_shape_is_not_interpreted_on_chat_completions(
+    cache: ReasoningCache,
+) -> None:
+    reasoner = StubAutoReasoning(cache, [])
+    data = {
+        "model": "databricks/databricks-gpt-5-6-sol",
+        "messages": [{"role": "user", "content": "Solve this"}],
+        "reasoning": {"effort": "auto"},
+    }
+
+    routed = await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+
+    assert routed is data
+    assert reasoner.samples == []
+
+
+async def test_classifier_failure_uses_half_score_mapping(cache: ReasoningCache) -> None:
+    reasoner = StubAutoReasoning(cache, [None])
+    data = {
+        "model": "databricks/databricks-gemini-3-5-flash",
+        "messages": [{"role": "user", "content": "Compare these designs"}],
+        "reasoning_effort": "auto",
+    }
+
+    routed = await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+
+    assert routed["reasoning_effort"] == "medium"
 
 
 async def test_claude_backend_uses_litellm_reasoning_mapping(cache: ReasoningCache) -> None:
@@ -317,10 +394,23 @@ def test_score_parser_corrects_integer_percentages(raw: str, expected: float | N
 
 def test_score_one_uses_ultra_tier_only_when_supported() -> None:
     gpt_5_6 = reasoning_efforts_by_family("databricks-gpt-5-6-sol")
-    gpt_5_5 = reasoning_efforts_by_family("databricks-gpt-5-5")
+    gpt_5_5_pro = reasoning_efforts_by_family("databricks-gpt-5-5-pro")
+    gemini = reasoning_efforts_by_family("databricks-gemini-3-5-flash")
 
-    assert effort_for_score(1.0, gpt_5_6) == ReasoningEffort.XHIGH
-    assert effort_for_score(1.0, gpt_5_5) == ReasoningEffort.HIGH
+    assert effort_for_score(1.0, gpt_5_6) == ReasoningEffort.MAX
+    assert effort_for_score(1.0, gpt_5_5_pro) == ReasoningEffort.XHIGH
+    assert effort_for_score(1.0, gemini) == ReasoningEffort.HIGH
+
+
+def test_provider_specific_score_extremes() -> None:
+    claude = reasoning_efforts_by_family("databricks-claude-sonnet-5")
+    gemini = reasoning_efforts_by_family("databricks-gemini-3-5-flash")
+
+    assert effort_for_score(0.01, claude) == ReasoningEffort.MINIMAL
+    assert effort_for_score(0.9, claude) == ReasoningEffort.XHIGH
+    assert effort_for_score(1.0, claude) == ReasoningEffort.MAX
+    assert effort_for_score(0.01, gemini) == ReasoningEffort.MINIMAL
+    assert effort_for_score(0.5, gemini) == ReasoningEffort.MEDIUM
 
 
 @pytest.mark.parametrize(

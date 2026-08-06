@@ -112,12 +112,15 @@ class DbxAutoReasoning(CustomLogger):
         **_: Any,
     ) -> dict[str, Any]:
         call_id = _call_id(data)
-        requested_effort = _requested_effort(data)
+        selector = _reasoning_selector(data, call_type)
+        requested_effort = _requested_effort(selector, data.get("thinking"))
         record_reasoning_log_state(call_id, requested=requested_effort)
-        if call_type not in _CALL_TYPES or not _auto_requested(data):
+        score = _selector_score(selector)
+        automatic = selector == "auto"
+        if call_type not in _CALL_TYPES or (not automatic and score is None):
             return data
 
-        routed = _remove_auto_request(data)
+        routed = _remove_reasoning_selector(data, call_type)
         if data.get("thinking") is not None:
             return routed
 
@@ -126,20 +129,25 @@ class DbxAutoReasoning(CustomLogger):
             return routed
         resolved = await _resolve_model(requested, data)
         efforts = await self._reasoning_efforts(resolved)
+        if call_type not in _RESPONSES_CALL_TYPES and _is_gpt_5_6(resolved):
+            efforts = tuple(effort for effort in efforts if effort != ReasoningEffort.MAX)
         if not efforts:
             return routed
 
-        turns = await asyncio.to_thread(self._context_turns, data, call_type)
-        sample = _sample(turns)
-        if not sample:
-            return routed
-
-        score = await asyncio.to_thread(self.cache.get_score, sample)
-        if score is None:
-            score = await self._classify_score(sample)
-            if score is None:
-                return routed
-            await asyncio.to_thread(self.cache.set_score, sample, score)
+        if automatic:
+            turns = await asyncio.to_thread(self._context_turns, data, call_type)
+            sample = _sample(turns)
+            if not sample:
+                score = 0.5
+            else:
+                score = await asyncio.to_thread(self.cache.get_score, sample)
+                if score is None:
+                    score = await self._classify_score(sample)
+                if score is None:
+                    score = 0.5
+                else:
+                    await asyncio.to_thread(self.cache.set_score, sample, score)
+        assert score is not None
         effort = _effort_for_score(score, efforts)
         record_reasoning_log_state(
             call_id,
@@ -236,26 +244,30 @@ def _effort_for_score(
     efforts: Sequence[ReasoningEffort],
 ) -> ReasoningEffort:
     available = set(efforts)
+    if score <= 0.05 and ReasoningEffort.MINIMAL in available:
+        return ReasoningEffort.MINIMAL
     if score < 0.34 and ReasoningEffort.LOW in available:
         return ReasoningEffort.LOW
     if score < 0.67 and ReasoningEffort.MEDIUM in available:
         return ReasoningEffort.MEDIUM
-    if score >= 1 and ReasoningEffort.XHIGH in available:
+    if score >= 1 and ReasoningEffort.MAX in available:
+        return ReasoningEffort.MAX
+    if score >= 0.85 and ReasoningEffort.XHIGH in available:
         return ReasoningEffort.XHIGH
     if ReasoningEffort.HIGH in available:
         return ReasoningEffort.HIGH
-    return efforts[-1]
+    selectable = [effort for effort in efforts if effort != ReasoningEffort.NONE]
+    return selectable[-1] if selectable else efforts[-1]
 
 
-def _auto_requested(data: Mapping[str, Any]) -> bool:
-    if data.get("reasoning_effort") == "auto":
-        return True
-    reasoning = data.get("reasoning")
-    return isinstance(reasoning, Mapping) and reasoning.get("effort") == "auto"
+def _reasoning_selector(data: Mapping[str, Any], call_type: str) -> Any:
+    if call_type in _RESPONSES_CALL_TYPES:
+        reasoning = data.get("reasoning")
+        return reasoning.get("effort") if isinstance(reasoning, Mapping) else None
+    return data.get("reasoning_effort")
 
 
-def _requested_effort(data: Mapping[str, Any]) -> str:
-    thinking = data.get("thinking")
+def _requested_effort(selector: Any, thinking: Any = None) -> str:
     if isinstance(thinking, Mapping):
         thinking_type = thinking.get("type")
         budget = thinking.get("budget_tokens")
@@ -263,29 +275,55 @@ def _requested_effort(data: Mapping[str, Any]) -> str:
             return f"{thinking_type}:{budget}"
         if isinstance(thinking_type, str) and thinking_type:
             return thinking_type
-    effort = data.get("reasoning_effort")
-    if isinstance(effort, str) and effort:
-        return effort
-    reasoning = data.get("reasoning")
-    if isinstance(reasoning, Mapping):
-        effort = reasoning.get("effort")
-        if isinstance(effort, str) and effort:
-            return effort
+    score = _selector_score(selector)
+    if score is not None:
+        return f"{score:.2f}".rstrip("0").rstrip(".")
+    if isinstance(selector, str) and selector:
+        return selector
     return "default"
 
 
-def _remove_auto_request(data: Mapping[str, Any]) -> dict[str, Any]:
+def _remove_reasoning_selector(data: Mapping[str, Any], call_type: str) -> dict[str, Any]:
     routed = dict(data)
-    if routed.get("reasoning_effort") == "auto":
+    if call_type not in _RESPONSES_CALL_TYPES:
         routed.pop("reasoning_effort")
+        return routed
     reasoning = routed.get("reasoning")
-    if isinstance(reasoning, Mapping) and reasoning.get("effort") == "auto":
+    if isinstance(reasoning, Mapping):
         remaining = {key: value for key, value in reasoning.items() if key != "effort"}
         if remaining:
             routed["reasoning"] = remaining
         else:
             routed.pop("reasoning")
     return routed
+
+
+def _selector_score(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return _normalize_score(float(value), percentage=value > 1)
+    if not isinstance(value, str) or value == "auto":
+        return None
+    match = _SCORE_PATTERN.fullmatch(value.strip())
+    if match is None:
+        return None
+    score = float(match.group(1))
+    return _normalize_score(score, percentage=bool(match.group(2)) or score > 1)
+
+
+def _normalize_score(score: float, *, percentage: bool) -> float | None:
+    if percentage:
+        if score > 100:
+            return None
+        score /= 100
+    if score < 0:
+        return None
+    return min(1.0, max(0.01, score))
+
+
+def _is_gpt_5_6(model: str) -> bool:
+    return bool(re.search(r"(?:^|[-_./])gpt[-_.]5[-_.]6(?:[-_./]|$)", model, re.I))
 
 
 def _request_turns(data: Mapping[str, Any], call_type: str) -> list[Turn]:
@@ -389,11 +427,7 @@ def _parse_score(value: str) -> float | None:
     if match is None:
         return None
     score = float(match.group(1))
-    if match.group(2) or score > 1:
-        if score > 100:
-            return None
-        score /= 100
-    return min(1.0, max(0.01, score))
+    return _normalize_score(score, percentage=bool(match.group(2)) or score > 1)
 
 
 def _sample_key(sample: str) -> str:

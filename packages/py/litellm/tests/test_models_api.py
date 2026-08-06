@@ -34,10 +34,12 @@ def test_adds_codex_models_alongside_openai_data() -> None:
     assert gpt["context_window"] == 272_000
     assert gpt["default_reasoning_level"] == "medium"
     assert [level["effort"] for level in gpt["supported_reasoning_levels"]] == [
+        "none",
         "low",
         "medium",
         "high",
         "xhigh",
+        "max",
     ]
     assert gpt["supports_reasoning_summary_parameter"] is True
     assert claude["supports_reasoning_summary_parameter"] is False

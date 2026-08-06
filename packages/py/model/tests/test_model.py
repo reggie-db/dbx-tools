@@ -95,13 +95,17 @@ def test_list_serving_endpoints_returns_stable_models() -> None:
     assert endpoints[0].profile.quality == 5
     assert endpoints[0].model_class == ModelClass.CHAT_THINKING
     assert endpoints[0].reasoning_efforts == (
+        ReasoningEffort.NONE,
+        ReasoningEffort.MINIMAL,
         ReasoningEffort.LOW,
         ReasoningEffort.MEDIUM,
         ReasoningEffort.HIGH,
+        ReasoningEffort.XHIGH,
+        ReasoningEffort.MAX,
     )
     assert endpoints[1].model_class == ModelClass.CHAT_FAST
     custom = next(endpoint for endpoint in endpoints if endpoint.name == "reasoning-primary")
-    assert custom.reasoning_efforts[-1] == ReasoningEffort.XHIGH
+    assert custom.reasoning_efforts[-1] == ReasoningEffort.MAX
 
 
 def test_reasoning_efforts_are_inferred_from_family_and_served_entity() -> None:
@@ -111,10 +115,32 @@ def test_reasoning_efforts_are_inferred_from_family_and_served_entity() -> None:
         ReasoningEffort.HIGH,
     )
     assert reasoning_efforts_by_family("system.ai.gpt-5-6-sol") == (
+        ReasoningEffort.NONE,
         ReasoningEffort.LOW,
         ReasoningEffort.MEDIUM,
         ReasoningEffort.HIGH,
         ReasoningEffort.XHIGH,
+        ReasoningEffort.MAX,
+    )
+    assert reasoning_efforts_by_family("databricks-gpt-5-5-pro") == (
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+        ReasoningEffort.XHIGH,
+    )
+    assert reasoning_efforts_by_family("databricks-claude-sonnet-5") == (
+        ReasoningEffort.NONE,
+        ReasoningEffort.MINIMAL,
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+        ReasoningEffort.XHIGH,
+        ReasoningEffort.MAX,
+    )
+    assert reasoning_efforts_by_family("databricks-gemini-3-5-flash") == (
+        ReasoningEffort.MINIMAL,
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
     )
     assert reasoning_efforts_by_family("databricks-gpt-6") == (
         ReasoningEffort.LOW,

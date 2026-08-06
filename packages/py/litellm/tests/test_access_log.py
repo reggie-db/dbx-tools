@@ -64,6 +64,15 @@ def test_reports_auto_requested_and_selected_thinking_levels() -> None:
     assert "thinking_selected=medium" in line
 
 
+def test_reports_numeric_requested_and_selected_thinking_levels() -> None:
+    record_reasoning_log_state("numeric-call", requested="0.5", selected="medium")
+
+    line = _format({**payload(), "litellm_call_id": "numeric-call"}, status="ok")
+
+    assert "thinking_requested=0.5" in line
+    assert "thinking_selected=medium" in line
+
+
 def test_reads_call_id_from_litellm_params() -> None:
     record_reasoning_log_state("nested-call", requested="low")
 
