@@ -1,11 +1,17 @@
 model_list:
   # Passthrough route: a caller-qualified `databricks/<endpoint>` goes to
-  # /serving-endpoints/<endpoint>/invocations. That surface does NOT accept
-  # `parallel_tool_calls` ("Extra inputs are not permitted"), so it is
-  # deliberately NOT allowlisted here — drop_params strips it instead.
+  # /serving-endpoints/<endpoint>/invocations. Param support is per-SURFACE, and
+  # unlike the Responses surfaces below, /invocations rejects
+  # `parallel_tool_calls` ("Extra inputs are not permitted"). Global drop_params
+  # doesn't cover it — LiteLLM's Databricks allowlist omits the param, so it
+  # raises UnsupportedParamsError before any drop can apply. Naming it here drops
+  # it for this route only, so a client that sends it still gets a completion.
   - model_name: "databricks/*"
     litellm_params:
       model: "databricks/*"
+      drop_params: true
+      additional_drop_params:
+        - parallel_tool_calls
   - model_name: "*"
     litellm_params:
       model: "dbx/*"
