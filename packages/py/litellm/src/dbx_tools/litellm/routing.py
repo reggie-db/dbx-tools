@@ -7,7 +7,7 @@ from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
 
-from .models import requires_responses_api
+from .models import register_streaming_support, requires_responses_api
 from .provider import dbx_provider
 
 _RESPONSES_CALL_TYPES = frozenset({"aresponses", "responses"})
@@ -28,7 +28,11 @@ class DbxResponsesRouter(CustomLogger):
             return data
 
         routed = dict(data)
-        if not model.startswith("databricks/"):
+        if model.startswith("databricks/"):
+            # An already-qualified model skips resolution, so declare its
+            # streaming support here instead.
+            register_streaming_support(model)
+        else:
             tools = data.get("tools")
             resolved = await asyncio.to_thread(
                 dbx_provider.backend.resolve,

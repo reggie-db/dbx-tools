@@ -59,7 +59,7 @@ class DatabricksCredentials:
         self._api_base = f"{self._client.config.host.rstrip('/')}/serving-endpoints"
         self._lock = threading.RLock()
         self._cached: Credentials | None = None
-        self._renew_at = dt.datetime.min
+        self._renew_at = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
 
     @property
     def client(self) -> WorkspaceClient:
@@ -73,7 +73,7 @@ class DatabricksCredentials:
     def current(self) -> Credentials:
         """Return cached credentials, minting a new token only once stale."""
         with self._lock:
-            if self._cached is None or dt.datetime.now() >= self._renew_at:
+            if self._cached is None or _utcnow() >= self._renew_at:
                 self._cached = self._mint()
             return self._cached
 
@@ -81,7 +81,7 @@ class DatabricksCredentials:
         """Drop the cached token so the next read re-authenticates."""
         with self._lock:
             self._cached = None
-            self._renew_at = dt.datetime.min
+            self._renew_at = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
 
     def _mint(self) -> Credentials:
         headers = self._client.config.authenticate()
@@ -99,7 +99,7 @@ class DatabricksCredentials:
 
     def _next_renewal(self) -> dt.datetime:
         """Choose when to re-mint, preferring the token's own expiry."""
-        now = dt.datetime.now()
+        now = _utcnow()
         expiry = self._expiry()
         if expiry is None:
             return now + DEFAULT_LIFETIME
@@ -111,12 +111,17 @@ class DatabricksCredentials:
         """Read the OAuth expiry when one is cheaply available."""
         try:
             expiry = self._client.config.oauth_token().expiry
-        except Exception:
-            # Any non-OAuth or unresolved strategy: fall back to a fixed
-            # lifetime rather than guessing at the auth type.
+        except Exception:  # noqa: BLE001
+            # PAT and metadata-backed strategies raise here rather than
+            # exposing an expiry; fall back to a fixed lifetime instead of
+            # branching on auth type.
             return None
         if expiry is None:
             return None
-        # The SDK reports a naive expiry in LOCAL time; comparing it against a
-        # UTC clock would make every token look long expired.
-        return expiry.replace(tzinfo=None) if expiry.tzinfo is None else expiry.astimezone().replace(tzinfo=None)
+        # The SDK reports a naive expiry in LOCAL time. Attaching UTC to it
+        # directly would shift it by the local offset and look long expired.
+        return expiry.astimezone(dt.timezone.utc) if expiry.tzinfo else expiry.astimezone()
+
+
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(tz=dt.timezone.utc)

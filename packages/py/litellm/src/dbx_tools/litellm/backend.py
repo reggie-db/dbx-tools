@@ -14,6 +14,7 @@ from dbx_tools.model import (
 )
 
 from .credentials import Credentials, DatabricksCredentials
+from .models import register_streaming_support
 
 PROFILE_ENV = "DBX_LITELLM_PROFILE"
 DATABRICKS_PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
@@ -94,6 +95,7 @@ class DatabricksLiteLLMBackend:
             )
             if endpoint is None or not endpoint_capabilities(endpoint).tools:
                 raise ValueError(f'Model "{model_id}" does not support function tools')
+        register_streaming_support(model_id)
         return model_id
 
 
