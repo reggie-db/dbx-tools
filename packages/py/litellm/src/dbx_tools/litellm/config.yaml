@@ -1,15 +1,37 @@
 model_list:
+  # Passthrough route: a caller-qualified `databricks/<endpoint>` goes to
+  # /serving-endpoints/<endpoint>/invocations. That surface does NOT accept
+  # `parallel_tool_calls` ("Extra inputs are not permitted"), so it is
+  # deliberately NOT allowlisted here — drop_params strips it instead.
   - model_name: "databricks/*"
     litellm_params:
       model: "databricks/*"
   - model_name: "*"
     litellm_params:
       model: "dbx/*"
+      # LiteLLM's Databricks provider hardcodes a supported-param allowlist
+      # (get_supported_openai_params) and raises UnsupportedParamsError for
+      # anything else, even when the endpoint would accept it. Listing a param
+      # here forces it through.
+      #
+      # `parallel_tool_calls` is real tool-calling behaviour, not bookkeeping, so
+      # it must be forwarded rather than dropped: this route reaches the Responses
+      # surfaces, and both /serving-endpoints/responses and .../open-responses
+      # echo it back and honour it. Codex sends it on every tool-carrying turn.
       allowed_openai_params:
         - reasoning_effort
         - thinking
+        - parallel_tool_calls
 
 litellm_settings:
+  # Silently drop client params the endpoints genuinely reject instead of failing
+  # the turn. Codex also sends `web_search_options`, which both surfaces refuse
+  # ("Extra inputs are not permitted" / "Unknown parameter"), and OpenAI-platform
+  # bookkeeping (store/metadata/service_tier/prompt_cache_key/safety_identifier)
+  # that has no bearing on the completion. Without this the request 400s and the
+  # client can do nothing about it. Params listed in allowed_openai_params above
+  # are still forwarded — drop_params only removes what the provider rejects.
+  drop_params: true
   callbacks:
     - config_provider.dbx_responses_router
     - config_provider.dbx_access_logger
