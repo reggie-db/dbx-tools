@@ -1,5 +1,9 @@
 """LiteLLM config-file import shim for the packaged provider."""
 
+from dbx_tools.litellm.compat import install_litellm_compatibility
+
+install_litellm_compatibility()
+
 from dbx_tools.litellm.access_log import dbx_access_logger
 from dbx_tools.litellm.provider import dbx_provider
 from dbx_tools.litellm.reasoning import dbx_auto_reasoning

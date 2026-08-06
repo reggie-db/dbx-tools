@@ -140,6 +140,7 @@ export function rankModels(
   const search = query.search?.trim();
   let ranked: RankedModel[];
   if (search) {
+    const gptFamilySearch = search.toLowerCase() === "gpt";
     const scores = new Map<string, number>();
     for (const match of searchServingEndpoints(
       search,
@@ -152,10 +153,19 @@ export function rankModels(
     // keep their best-first within-class order.
     ranked = candidates
       .filter((c) => scores.has(c.endpoint.name))
+      .filter((c) => !gptFamilySearch || !/(?:^|[-_.])gpt[-_.]?oss(?:[-_.]|$)/i.test(c.endpoint.name))
       .map((c) => ({ ...c, score: scores.get(c.endpoint.name) }))
       .sort((a, b) => {
         const byMatch = matchBucket(a.score) - matchBucket(b.score);
         if (byMatch !== 0) return byMatch;
+        if (gptFamilySearch) {
+          const aVersion = classify.versionTuple(a.endpoint.name);
+          const bVersion = classify.versionTuple(b.endpoint.name);
+          for (let index = 0; index < 3; index++) {
+            const byVersion = (bVersion[index] ?? 0) - (aVersion[index] ?? 0);
+            if (byVersion !== 0) return byVersion;
+          }
+        }
         return MODEL_CLASS_ORDER.indexOf(a.modelClass) - MODEL_CLASS_ORDER.indexOf(b.modelClass);
       });
   } else {

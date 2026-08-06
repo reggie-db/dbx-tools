@@ -3,7 +3,10 @@ from __future__ import annotations
 import litellm
 import pytest
 from dbx_tools.litellm import models
-from dbx_tools.litellm.models import register_streaming_support, requires_responses_api
+from dbx_tools.litellm.models import (
+    register_streaming_support,
+    requires_responses_api,
+)
 from litellm.llms.databricks.responses.transformation import DatabricksResponsesAPIConfig
 
 

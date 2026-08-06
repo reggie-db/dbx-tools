@@ -5,7 +5,7 @@ from collections.abc import Iterable, Sequence
 from difflib import SequenceMatcher
 
 from .classes import CHAT_CLASS_ORDER, MODEL_CLASS_ORDER, classes_at_or_below
-from .classify import classified_summaries, endpoint_capabilities
+from .classify import classified_summaries, endpoint_capabilities, version_tuple
 from .fallback import FALLBACK_MODEL_IDS, models_for_class
 from .models import (
     ModelClass,
@@ -83,6 +83,7 @@ def rank_models(
 
     search = request.search.strip() if request.search else ""
     if search:
+        gpt_family_search = search.lower() == "gpt"
         scores = {
             str(match["endpoint"]["name"]): float(match["score"])
             for match in search_serving_endpoints(
@@ -92,11 +93,22 @@ def rank_models(
             )
         }
         candidates = [candidate for candidate in candidates if candidate.endpoint.name in scores]
+        if gpt_family_search:
+            candidates = [
+                candidate
+                for candidate in candidates
+                if not re.search(r"(?:^|[-_.])gpt[-_.]?oss(?:[-_.]|$)", candidate.endpoint.name, re.I)
+            ]
         for candidate in candidates:
             candidate.score = scores[candidate.endpoint.name]
         candidates.sort(
             key=lambda candidate: (
                 round((candidate.score or 0) * 1000),
+                *(
+                    [-part for part in version_tuple(candidate.endpoint.name)]
+                    if gpt_family_search
+                    else []
+                ),
                 MODEL_CLASS_ORDER.index(candidate.model_class),
             )
         )
