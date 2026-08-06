@@ -55,7 +55,7 @@ class DbxAccessLogger(CustomLogger):
         start_time: Any,
         end_time: Any,
     ) -> None:
-        logger.info(_format(kwargs, status="ok"))
+        logger.info(_format(kwargs, status="ok", response_obj=response_obj))
 
     async def async_log_failure_event(
         self,
@@ -64,10 +64,10 @@ class DbxAccessLogger(CustomLogger):
         start_time: Any,
         end_time: Any,
     ) -> None:
-        logger.warning(_format(kwargs, status="error"))
+        logger.warning(_format(kwargs, status="error", response_obj=response_obj))
 
 
-def _format(kwargs: dict[str, Any], *, status: str) -> str:
+def _format(kwargs: dict[str, Any], *, status: str, response_obj: Any = None) -> str:
     payload = kwargs.get("standard_logging_object") or {}
     fields: list[str] = [
         f"status={status}",
@@ -103,7 +103,7 @@ def _format(kwargs: dict[str, Any], *, status: str) -> str:
     if completion_tokens is not None:
         fields.append(f"out={completion_tokens}")
 
-    usage = _usage(kwargs, payload)
+    usage = _usage(kwargs, payload, response_obj)
     cached = _nested(usage, "prompt_tokens_details", "cached_tokens")
     if cached is not None and prompt_tokens:
         fields.append(f"cached={cached}({100 * cached // prompt_tokens}%)")
@@ -127,14 +127,33 @@ def _elapsed(start: Any, end: Any) -> float | None:
     return max(0.0, float(end) - float(start))
 
 
-def _usage(kwargs: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+def _usage(
+    kwargs: dict[str, Any], payload: dict[str, Any], response_obj: Any = None
+) -> dict[str, Any]:
+    """Find the usage block, which moves around by call type and stream mode.
+
+    On the streaming Responses path hidden_params carries no usage_object, so the
+    response object (or the aggregated streaming response) is the only place the
+    cache counters appear.
+    """
     hidden = payload.get("hidden_params") or {}
-    usage = hidden.get("usage_object") or kwargs.get("usage")
-    if usage is None:
-        return {}
-    if hasattr(usage, "model_dump"):
-        usage = usage.model_dump()
-    return usage if isinstance(usage, dict) else {}
+    response = payload.get("response")
+    candidates = (
+        hidden.get("usage_object"),
+        getattr(response_obj, "usage", None),
+        getattr(kwargs.get("async_complete_streaming_response"), "usage", None),
+        getattr(kwargs.get("complete_streaming_response"), "usage", None),
+        response.get("usage") if isinstance(response, dict) else None,
+        kwargs.get("usage"),
+    )
+    for usage in candidates:
+        if usage is None:
+            continue
+        if hasattr(usage, "model_dump"):
+            usage = usage.model_dump()
+        if isinstance(usage, dict) and usage:
+            return usage
+    return {}
 
 
 def _nested(usage: dict[str, Any], group: str, field: str) -> int | None:

@@ -67,6 +67,25 @@ def test_zero_cache_hits_are_reported_rather_than_hidden() -> None:
     assert "cached=0(0%)" in line
 
 
+def test_cache_counters_are_read_from_the_response_when_absent_from_hidden_params() -> None:
+    # On the streaming Responses path hidden_params carries no usage_object, so
+    # reading only that source silently drops cached/reasoning from every line.
+    class Usage:
+        def model_dump(self) -> dict[str, Any]:
+            return {
+                "prompt_tokens_details": {"cached_tokens": 800},
+                "completion_tokens_details": {"reasoning_tokens": 12},
+            }
+
+    class Response:
+        usage = Usage()
+
+    line = _format(payload(hidden_params={}), status="ok", response_obj=Response())
+
+    assert "cached=800(80%)" in line
+    assert "reasoning=12" in line
+
+
 def test_missing_timings_degrade_without_raising() -> None:
     line = _format({}, status="ok")
 

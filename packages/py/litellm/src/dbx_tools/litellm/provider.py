@@ -182,9 +182,7 @@ def _message_text(message: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return " ".join(
-            part.get("text", "") for part in content if isinstance(part, Mapping)
-        )
+        return " ".join(part.get("text", "") for part in content if isinstance(part, Mapping))
     return ""
 
 
