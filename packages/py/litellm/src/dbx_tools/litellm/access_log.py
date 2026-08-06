@@ -1,0 +1,150 @@
+"""One-line-per-request access log with streaming and cache diagnostics.
+
+LiteLLM's own debug output renders whole request payloads, which buries the few
+numbers that explain a slow turn. This logger emits a single line per call
+carrying time to first token, total time, token counts, prompt-cache hits, and
+whether the stream was real or replayed from a buffered response.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+from typing import Any
+
+from litellm.integrations.custom_logger import CustomLogger
+
+LOGGER_NAME = "dbx_tools.litellm.access"
+LEVEL_ENV = "DBX_LITELLM_ACCESS_LOG_LEVEL"
+
+# A faked stream emits nothing until the upstream response is fully buffered, so
+# its first token lands with the final one. Real streams separate the two by the
+# generation time, far above any plausible scheduling jitter.
+FAKE_STREAM_EPSILON = 0.01
+
+
+def _build_logger() -> logging.Logger:
+    """Attach a dedicated handler so access lines survive LiteLLM's log setup.
+
+    The proxy leaves the root logger at WARNING, which would drop these records
+    entirely. Owning the handler also keeps one request on one line regardless of
+    the surrounding debug formatting.
+    """
+    logger = logging.getLogger(LOGGER_NAME)
+    logger.setLevel(os.getenv(LEVEL_ENV, "INFO").upper())
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(asctime)s dbx-access %(message)s", "%H:%M:%S"))
+        logger.addHandler(handler)
+    # Keep these lines out of the root handler to avoid duplicate output.
+    logger.propagate = False
+    return logger
+
+
+logger = _build_logger()
+
+
+class DbxAccessLogger(CustomLogger):
+    """Log per-request latency, token, and streaming-mode diagnostics."""
+
+    async def async_log_success_event(
+        self,
+        kwargs: dict[str, Any],
+        response_obj: Any,
+        start_time: Any,
+        end_time: Any,
+    ) -> None:
+        logger.info(_format(kwargs, status="ok"))
+
+    async def async_log_failure_event(
+        self,
+        kwargs: dict[str, Any],
+        response_obj: Any,
+        start_time: Any,
+        end_time: Any,
+    ) -> None:
+        logger.warning(_format(kwargs, status="error"))
+
+
+def _format(kwargs: dict[str, Any], *, status: str) -> str:
+    payload = kwargs.get("standard_logging_object") or {}
+    fields: list[str] = [
+        f"status={status}",
+        f"model={payload.get('model') or kwargs.get('model')}",
+        f"call={payload.get('call_type') or kwargs.get('call_type')}",
+    ]
+
+    started = payload.get("startTime")
+    completed = payload.get("completionStartTime")
+    ended = payload.get("endTime")
+    total = _elapsed(started, ended)
+    ttft = _elapsed(started, completed)
+
+    if ttft is not None:
+        fields.append(f"ttft={ttft:.2f}s")
+    if total is not None:
+        fields.append(f"total={total:.2f}s")
+
+    streaming = bool(payload.get("stream") or kwargs.get("stream"))
+    fields.append(f"stream={streaming}")
+    if streaming:
+        # completionStartTime defaults to the end of the call, so a faked stream
+        # reports the two as equal; a real one reports a genuine first-token time.
+        emulated = (
+            ttft is not None and total is not None and abs(total - ttft) < FAKE_STREAM_EPSILON
+        )
+        fields.append(f"emulated={emulated}")
+
+    prompt_tokens = payload.get("prompt_tokens")
+    completion_tokens = payload.get("completion_tokens")
+    if prompt_tokens is not None:
+        fields.append(f"in={prompt_tokens}")
+    if completion_tokens is not None:
+        fields.append(f"out={completion_tokens}")
+
+    usage = _usage(kwargs, payload)
+    cached = _nested(usage, "prompt_tokens_details", "cached_tokens")
+    if cached is not None and prompt_tokens:
+        fields.append(f"cached={cached}({100 * cached // prompt_tokens}%)")
+    reasoning = _nested(usage, "completion_tokens_details", "reasoning_tokens")
+    if reasoning:
+        fields.append(f"reasoning={reasoning}")
+
+    if completion_tokens and total and total > 0:
+        fields.append(f"tok/s={completion_tokens / total:.1f}")
+
+    error = payload.get("error_str") or kwargs.get("exception")
+    if error:
+        fields.append(f"error={str(error)[:200]!r}")
+
+    return " ".join(fields)
+
+
+def _elapsed(start: Any, end: Any) -> float | None:
+    if not isinstance(start, (int, float)) or not isinstance(end, (int, float)):
+        return None
+    return max(0.0, float(end) - float(start))
+
+
+def _usage(kwargs: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    hidden = payload.get("hidden_params") or {}
+    usage = hidden.get("usage_object") or kwargs.get("usage")
+    if usage is None:
+        return {}
+    if hasattr(usage, "model_dump"):
+        usage = usage.model_dump()
+    return usage if isinstance(usage, dict) else {}
+
+
+def _nested(usage: dict[str, Any], group: str, field: str) -> int | None:
+    details = usage.get(group)
+    if hasattr(details, "model_dump"):
+        details = details.model_dump()
+    if not isinstance(details, dict):
+        return None
+    value = details.get(field)
+    return value if isinstance(value, int) else None
+
+
+dbx_access_logger = DbxAccessLogger()

@@ -12,6 +12,7 @@ model_list:
 litellm_settings:
   callbacks:
     - config_provider.dbx_responses_router
+    - config_provider.dbx_access_logger
   custom_provider_map:
     - provider: dbx
       custom_handler: config_provider.dbx_provider
