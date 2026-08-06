@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/postgres";
 export * as advisoryLock from "./src/advisory-lock.ts";
 export * as persistence from "./src/persistence.ts";
 export * as topicBus from "./src/topic-bus.ts";

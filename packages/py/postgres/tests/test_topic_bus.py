@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
-from dbx_tools.postgres import PostgresTopicBus, TopicPublishInput, channel_name
+from dbx_tools.postgres import PostgresTopicBus, TopicPublishInput
 
 
 class FakeSqlConnection:
@@ -67,15 +67,6 @@ class FakeEngine:
 
     async def raw_connection(self) -> FakeRawConnection:
         return self.raw_connections.pop(0)
-
-
-def test_channel_names_match_the_node_implementation() -> None:
-    assert channel_name() == "dbx_tools_topic_bus_3kj9bt"
-    assert channel_name("billing") == "billing_1m8m64"
-    assert channel_name(["billing", "prod"]) == "billing_prod_091p2g"
-    assert channel_name("billing_prod") == "billing_prod_3er7fp"
-    assert channel_name({"a": 1}) == "bus_0xnqsa"
-    assert channel_name("my-app") != channel_name("my_app")
 
 
 @pytest.mark.asyncio

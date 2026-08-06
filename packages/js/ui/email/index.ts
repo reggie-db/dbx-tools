@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-email";
 export * as reactAuthGate from "./src/react/auth-gate.tsx";
 export * as reactEmailApprovalCard from "./src/react/email-approval-card.tsx";
 export * as reactEmailBody from "./src/react/email-body.tsx";

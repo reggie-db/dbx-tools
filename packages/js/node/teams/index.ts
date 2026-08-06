@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/teams";
 export * as auth from "./src/auth.ts";
 export * as builder from "./src/builder.ts";
 export * as config from "./src/config.ts";

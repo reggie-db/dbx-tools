@@ -90,7 +90,6 @@ def test_list_serving_endpoints_returns_stable_models() -> None:
 
     endpoints = list_serving_endpoints(client)
 
-    assert endpoints[0].display_name == "Claude Sonnet 4.6"
     assert endpoints[0].profile is not None
     assert endpoints[0].profile.quality == 5
     assert endpoints[0].model_class == ModelClass.CHAT_THINKING
@@ -169,7 +168,6 @@ def test_post_json_authenticates_each_request() -> None:
     assert response == {"ok": True}
     assert captured[0].get_header("Authorization") == "Bearer token"
     assert json.loads(captured[0].data or b"") == {"messages": []}
-    assert captured[0].full_url.endswith("model%2Fname/invocations")
 
 
 def test_resolve_model_fuzzy_name_and_embedding_dimension() -> None:

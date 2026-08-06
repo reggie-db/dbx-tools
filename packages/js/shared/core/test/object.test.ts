@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { object } from "../index.ts";
+import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
+import { PACKAGE_IDENTIFIER, object } from "../index.ts";
 
 describe("object.sequence", () => {
   it("treats a bare string as one scalar value", () => {
@@ -258,6 +259,66 @@ describe("object.isSerializableValue", () => {
     assert.equal(object.isSerializableValue([shared, shared]), true);
   });
 });
+
+await polygotTest(
+  () => import("../index.ts"),
+  "object",
+  (implementation, language) => {
+    describe(`object.toStableKey (${language})`, () => {
+      it("preserves scalar type and UTF-16 identity", () => {
+        assert.equal(implementation.toStableKey(null), "null");
+        assert.equal(implementation.toStableKey("😀"), "string:2:😀");
+        assert.equal(implementation.toStableKey("1"), "string:1:1");
+        assert.equal(implementation.toStableKey(1), "number:1");
+        assert.equal(implementation.toStableKey(-0), "number:-0");
+      });
+
+      it("preserves array boundaries and ordering", () => {
+        assert.equal(implementation.toStableKey(["a", "bc"]), "array:[string:1:a,string:2:bc]");
+        assert.equal(implementation.toStableKey([2, 1]), "array:[number:2,number:1]");
+      });
+
+      it("canonicalizes JSON-compatible structures", () => {
+        assert.equal(
+          implementation.toStableKey({ b: 2, a: 1 }),
+          "object:{string:1:a=number:1,string:1:b=number:2}",
+        );
+      });
+
+      it("sorts set values", () => {
+        assert.equal(implementation.toStableKey(new Set([2, 1])), "set:[number:1,number:2]");
+      });
+
+      it("rejects non-finite numbers", () => {
+        assert.throws(() => implementation.toStableKey(Number.NaN));
+      });
+    });
+  },
+);
+
+await polygotTest(
+  async () => ({
+    PACKAGE_IDENTIFIER,
+    stableKeyCycle: {
+      throwsOnCycle(): void {
+        const value: Record<string, unknown> = {};
+        value.self = value;
+        object.toStableKey(value);
+      },
+    },
+  }),
+  "stableKeyCycle",
+  (implementation, language) => {
+    it(`object.toStableKey rejects cycles (${language})`, () => {
+      assert.throws(() => implementation.throwsOnCycle());
+    });
+  },
+  {
+    identifiers: {
+      [Language.Python]: new URL("./stable-key-cycle.py", import.meta.url).href,
+    },
+  },
+);
 
 describe("object.toStableKey", () => {
   it("keeps TypeScript-only values distinct", () => {

@@ -152,7 +152,7 @@ Primary package areas:
   here rather than fanning out into a Python package per module. Keep its
   accepted address shapes aligned with
   `packages/js/node/appkit/src/pgaddress.ts`, and keep advisory-lock ids aligned
-  with `packages/js/node/postgres/src/advisory-lock.ts` through polyglot fixtures.
+  with `packages/js/node/postgres/src/advisory-lock.ts` through colocated polyglot tests.
   Its `topic_bus` module's public lifecycle and wire envelope mirror
   `packages/js/node/postgres`'s `PostgresTopicBus` so Node and Python services
   can share a channel. Two Databricks-runtime facts, verified
@@ -172,8 +172,8 @@ Primary package areas:
 - `packages/py/model` — Python Model Serving invocation, endpoint listing,
   classification, resolution, chat sanitization, and embedding helpers. It
   mirrors the reusable `shared/model` + `node/model` contract without AppKit
-  cache or Mastra dependencies; deterministic behavior belongs in the shared
-  model polyglot fixtures.
+  cache or Mastra dependencies; deterministic behavior belongs in the colocated
+  model polyglot tests.
 - `packages/py/litellm` — thin LiteLLM integration for Databricks Model
   Serving. It adds explicit profile selection, live endpoint discovery, fuzzy
   model resolution, and tool-capability filtering, then delegates the unchanged
@@ -239,8 +239,11 @@ Primary package areas:
   machine-readable pass/fail per stage rather than something a human has to read
   out of cell output.
 - **`packages/test/`** — private cross-package and cross-runtime test harnesses.
-  Shared polyglot fixtures and separate runtime emitters belong under
-  `packages/test/polyglot`, not inside one language package's unit-test tree.
+  `packages/test/polyglot` owns the Bun-native `polygotTest` / embedded-Python
+  helpers plus the subprocess fixture harness. Pure deterministic contracts run
+  beside the TypeScript source-of-truth package through one shared test callback;
+  fixtures stay here only when process isolation, cyclic values, or private
+  source constants make in-process calls unsuitable.
 
 > Local dir is `dbx-tools/`; the GitHub repo is `reggie-db/dbx-tools`
 > (default branch **`main`**).
@@ -517,21 +520,23 @@ and a Spark executor pass something that never had Databricks auth.
 **Keep both spellings of a public name.** Python callers expect
 `channel_name`; a reader porting Node code expects `channelName`. Export both
 (the snake_case function plus a camelCase alias) and list both in a sorted
-`__all__`, exactly as `dbx_tools.postgres` and `dbx_tools.core` already do. This
-is also what lets one polyglot fixture name one function per runtime.
+`__all__`, exactly as `dbx_tools.postgres` and `dbx_tools.core` already do. The
+embedded-Python adapter also maps snake_case exports onto the TypeScript spelling.
 
-**Pin deterministic behavior in `packages/test/polyglot`, not twice.** Any rule
-both runtimes must agree on — a lock id, a channel name, a parsed address, a
-classification — belongs in a shared fixture under
-`packages/test/polyglot/fixtures/<contract>/`, with the per-runtime export path in
-the directory's `default.json`. Language-specific tests stay for
-language-specific concerns (async lifecycle, context-manager cleanup). A drifted
-port then fails as a parity mismatch instead of passing two agreeing-with-itself
-suites. Treat the existing TypeScript implementation and its tests as the source
-of truth: port the TypeScript cases into the shared fixture first, then make
-Python satisfy that contract. Avoid changing TypeScript production code or
-expected behavior to accommodate the port; if Python cannot match it cleanly,
-stop and ask before introducing a cross-runtime divergence.
+**Pin deterministic behavior once through `@dbx-tools/test-polyglot`.** A pure
+rule both runtimes implement, such as a lock id, channel name, parsed address, or
+model classification, belongs in the TypeScript source-of-truth package's
+native test suite, wrapped in `polygotTest` so the SAME callback executes against
+TypeScript and embedded Python. Keep language-specific tests only for
+language-specific concerns (async lifecycle, context-manager cleanup,
+SDK/client transport).
+Use subprocess fixtures under `packages/test/polyglot/fixtures` only when the
+contract needs process-isolated environment/cwd/module caches, constructs cyclic
+values that cannot cross FFI, or reads private source constants. A drifted port
+then fails beside the source implementation instead of passing two
+agreeing-with-itself suites. Avoid changing TypeScript production behavior to
+accommodate a port; if Python cannot match cleanly, stop before introducing a
+cross-runtime divergence.
 
 **Prove it installs the way a consumer installs it.** Every Python package must
 stay `pip install`-able by Git `#subdirectory` on its own, so internal
@@ -695,28 +700,19 @@ Python package, check these first:
 Only port the helper subset needed by multiple Python packages; do not mirror
 all of shared-core speculatively. When moving duplicated Python helper code into
 `packages/py/core`, move its unit tests into `packages/py/core/tests` in the same
-change. When a contract must remain identical across languages, put shared JSON
-or YAML fixtures in `packages/test/polyglot`, then compare each generic runtime
-runner to the expected output and to the other runtime. Once common cases move
-there, remove their duplicate assertions from the TypeScript and Python package
-suites; retain only inputs or behavior that truly exist in one runtime. Organize
-fixtures by the TypeScript source-of-truth package, then by contract: for
-example, topic-bus cases belong under `fixtures/postgres/bus`, and address-parser
-cases under `fixtures/appkit/pgaddress` even when the Python port is exported by
-`dbx_tools.postgres`. Put shared TypeScript/Python module names and export-path
-mappings in that package or contract directory's `default.json` /
-`default.yaml`; parent defaults inherit into child directories. Group cases
-under logical function names, and use a test-level `module` / `path` override only for an
-exceptional target. Give every fixture suite a concise `description`, and use
-function/test descriptions when the intent is not clear from the name. Include
-constant parity cases when both runtimes independently encode protocol limits,
-wire names, retry bounds, or other compatibility-sensitive values. The generic
-runners recursively discover every JSON/YAML document except `default.*`, so
-fixtures and directory defaults must be the only contract-specific content. A
-small test-only adapter is acceptable when it is the only way to read a private
-TypeScript source-of-truth constant without exporting it from production code;
-do not add a per-contract runtime emitter when the generic harness can address
-the production export directly.
+change. When a contract must remain identical across languages, add one
+`polygotTest` callback to the owning TypeScript package and delete equivalent
+Python assertions. The private `@dbx-tools/test-polyglot` package owns the
+embedded-Python adapter and is added only as a TEST dependency. Retain
+JSON/YAML fixtures under `packages/test/polyglot/fixtures` for process-isolated
+configuration, cyclic values, and private constants; organize those fixtures by
+the TypeScript source-of-truth package and contract. Include constant parity
+cases when both runtimes independently encode protocol limits, wire names,
+retry bounds, or other compatibility-sensitive values. The generic runners
+recursively discover every JSON/YAML document except `default.*`, so fixtures
+and directory defaults must be the only contract-specific content. A small
+test-only adapter is acceptable when it is the only way to read a private
+TypeScript source-of-truth constant without exporting it from production code.
 
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:

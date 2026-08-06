@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-model-proxy";
 export * as backend from "./src/backend.ts";
 export * as cli from "./src/cli.ts";
 export * as defaults from "./src/defaults.ts";

@@ -16,7 +16,8 @@
  * `applyToProjects`es, synths.
  */
 import { readFileSync } from "node:fs";
-import { project, project as projenProject } from "@dbx-tools/projen";
+import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
+import { DependencyType } from "projen";
 
 const SCOPE = "dbx-tools";
 
@@ -200,14 +201,34 @@ project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
     "description",
     "Cross-runtime parity tests for dbx-tools JavaScript and Python packages",
   );
-  p.addDeps(
-    "@dbx-tools/appkit@workspace:*",
-    "@dbx-tools/core@workspace:*",
-    "@dbx-tools/postgres@workspace:*",
-    "@dbx-tools/shared-core@workspace:*",
-  );
+  p.addDeps("bun_python@github:codehz/bun_python#3fae2f3e72fa1bbcb998894ad61e72cfd809671b");
+  p.deps.addDependency("@dbx-tools/core@workspace:*", DependencyType.TEST);
+  p.package.addField("exports", {
+    ".": "./index.ts",
+    "./polyglot": {
+      types: "./src/polygot-test.d.ts",
+      default: "./src/polygot-test.ts",
+    },
+    "./python": "./src/python-test.ts",
+    "./package.json": "./package.json",
+  });
+  projectJs.applyCompilerOptions(p, {
+    types: ["node", "bun"],
+    noFallthroughCasesInSwitch: false,
+    noUnusedLocals: false,
+    noUnusedParameters: false,
+  });
   p.tsconfig?.addInclude("bin/**/*.ts");
 });
+
+for (const identifierName of ["shared-core", "appkit", "postgres", "shared-model", "model"]) {
+  project.applyToProjects(root, { identifierName }, (p) => {
+    p.deps.addDependency(
+      "@dbx-tools/test-polyglot@workspace:*",
+      DependencyType.TEST,
+    );
+  });
+}
 
 // shared-core is the light, browser-safe base: EVERY package (except
 // shared-core itself) gets it automatically, regardless of tag. When in doubt,

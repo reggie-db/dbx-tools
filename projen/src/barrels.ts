@@ -27,6 +27,10 @@
  * `export { ... }`. The module namespaces stay either way, so a namespaced call
  * site keeps working.
  *
+ * Every generated barrel also exports `PACKAGE_IDENTIFIER` from the package's own
+ * `package.json`. Runtime helpers can retain the package specifier without
+ * trying to recover it from an ESM namespace object or loader function.
+ *
  * Uniqueness is tallied over types and values TOGETHER: a name carried by two
  * modules is ambiguous whichever kind it is, and hoisting one module's value
  * beside another's same-named type would emit two conflicting re-exports. Such a
@@ -47,7 +51,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { find } from "@dbx-tools/path";
-import { string } from "@dbx-tools/shared-core";
+import { json, string } from "@dbx-tools/shared-core";
 import isIdentifier from "is-identifier";
 import { header, isGenerated, makeReadonly, makeWritable, type HeaderOpts } from "./generated.ts";
 import { moduleExports, moduleStatements, type ModuleExport } from "./module-exports.ts";
@@ -100,6 +104,11 @@ const BARREL_HEADER: HeaderOpts = {
   tool: "projen watch",
   source: "the exporting modules in ./src",
 };
+
+/** Generated package identity export, reserved against source-module hoisting. */
+const PACKAGE_IDENTIFIER_EXPORT = "PACKAGE_IDENTIFIER";
+const PACKAGE_IDENTIFIER_LINE = `export const ${PACKAGE_IDENTIFIER_EXPORT} = "";`;
+const PACKAGE_IDENTIFIER_LINE_RE = /^export const PACKAGE_IDENTIFIER = .*;$/m;
 
 /** `pnpm-workspace` -> `pnpmWorkspace`; `local-fs` -> `localFS` (`fs` -> `FS`). */
 function kebabToCamel(segment: string): string {
@@ -262,6 +271,31 @@ function mergeCustomExports(content: string, pkgDir: string): string {
   return `${kept.join("\n").replace(/\n+$/, "")}\nexport * from "./exports.ts";\n`;
 }
 
+/** Read the authoritative npm package name emitted by the package project. */
+function packageIdentifier(pkgDir: string): string {
+  const manifestPath = join(pkgDir, "package.json");
+  const name = existsSync(manifestPath)
+    ? json.parseRecord(readFileSync(manifestPath, "utf8"))?.name
+    : undefined;
+  if (typeof name !== "string" || !name.trim()) {
+    throw new Error(`Cannot generate barrel without package.json name: ${manifestPath}`);
+  }
+  return name;
+}
+
+/** Normalize package identity so structural barrel comparisons need no manifest read. */
+function withoutPackageIdentifier(content: string): string {
+  return content.replace(PACKAGE_IDENTIFIER_LINE_RE, PACKAGE_IDENTIFIER_LINE);
+}
+
+/** Resolve and insert package identity only when a barrel is about to be written. */
+function withPackageIdentifier(content: string, pkgDir: string): string {
+  const line = `export const ${PACKAGE_IDENTIFIER_EXPORT} = ${JSON.stringify(
+    packageIdentifier(pkgDir),
+  )};`;
+  return content.replace(PACKAGE_IDENTIFIER_LINE_RE, () => line);
+}
+
 /**
  * Rebuild one package's root barrel. Returns 1 only if the barrel's contents
  * actually changed - a module was added, removed, renamed, or toggled its
@@ -317,30 +351,35 @@ function generateForPackage(pkgDir: string): number {
   // extension is written because `tsc` rewrites it on emit
   // (`rewriteRelativeImportExtensions`) - an extensionless specifier would be
   // copied through verbatim and Node's ESM resolver cannot probe for it.
-  let content = modulePaths
+  const namespaceExports = modulePaths
     .map((stem) => {
       const modulePath = `./src/${byModulePath.get(stem)!}`;
       return `export * as ${modulePathToNamespace(modulePath)} from "${modulePath}";`;
     })
     .join("\n");
+  let content = `${PACKAGE_IDENTIFIER_LINE}\n${namespaceExports}`;
   // Hoist package-unique named exports to the top level. Names a hand-authored
   // `exports.ts` declares are suppressed so that file stays authoritative.
   const customPath = join(pkgDir, CUSTOM_EXPORTS_FILE);
   const suppress = existsSync(customPath) ? customExportNames(customPath) : new Set<string>();
+  suppress.add(PACKAGE_IDENTIFIER_EXPORT);
   content = hoistUniqueExports(content, pkgDir, suppress);
   // A sibling `exports.ts` overrides/extends the generated barrel and wins on conflict.
   content = mergeCustomExports(content, pkgDir);
 
-  // The barrel only *changes* when its set of exporting modules does. If the
-  // stamped result matches what's already on disk, leave the file - and its
+  // The barrel only *changes* when its export structure does. Package identity is
+  // blanked on both sides of this comparison, so a no-op cycle never reads
+  // package.json merely to reconstruct a value the existing barrel already has.
+  // If the structural result matches what's on disk, leave the file - and its
   // read-only bit - completely untouched and report no change (0). This keeps the
   // watcher quiet on ordinary in-file edits (which leave the export * as … list
   // identical), and it is also what keeps a no-op cycle off the read-only bit
   // entirely: see {@link writeBarrel} for why unlocking a barrel we are not about
   // to rewrite is what produced spurious EACCES failures.
   content = `${content.replace(/\n+$/, "")}\n`;
-  const next = `${header(BARREL_HEADER)}\n${content}`;
-  if (before === next) return 0;
+  const template = `${header(BARREL_HEADER)}\n${content}`;
+  if (before !== undefined && withoutPackageIdentifier(before) === template) return 0;
+  const next = withPackageIdentifier(template, pkgDir);
 
   // Written whole (header included) rather than via `stampGenerated`, which would
   // re-read and rewrite the file to prepend the same header - a second write, and

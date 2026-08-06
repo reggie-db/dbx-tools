@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-appkit-env";
 export * as cli from "./src/cli.ts";
 export * as envExport from "./src/env-export.ts";
 export { CommanderError } from "./src/cli.ts";

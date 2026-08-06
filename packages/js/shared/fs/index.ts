@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-fs";
 export * as baseFS from "./src/base-fs.ts";
 export * as fs from "./src/fs.ts";
 export * as memoryFS from "./src/memory-fs.ts";

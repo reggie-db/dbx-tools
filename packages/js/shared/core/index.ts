@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-core";
 export * as async from "./src/async.ts";
 export * as brand from "./src/brand.ts";
 export * as error from "./src/error.ts";

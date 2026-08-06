@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/genie";
 export * as chat from "./src/chat.ts";
 export * as space from "./src/space.ts";
 export type { GenieChatOptions } from "./src/chat.ts";

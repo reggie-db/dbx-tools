@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { describe, it } from "node:test";
+import { polygotTest } from "@dbx-tools/test-polyglot/polyglot";
 import type { Notification, QueryResult } from "pg";
 
+import { PACKAGE_IDENTIFIER } from "../index.ts";
 import { PostgresTopicBus } from "../src/topic-bus.ts";
+import { topicBusConstants } from "./support/topic-bus-source.ts";
 
 class FakeClient extends EventEmitter {
   readonly queries: Array<{ text: string; values?: unknown[] }> = [];
@@ -33,6 +36,69 @@ function fixture() {
   };
   return { client, pool, queries };
 }
+
+await polygotTest(
+  () => import("../index.ts"),
+  "topicBus",
+  (implementation, language) => {
+    describe(`channelName (${language})`, () => {
+      it("keeps default, scalar, parts, and structured identities compatible", () => {
+        assert.equal(
+          implementation.channelName("dbx_tools_topic_bus"),
+          "dbx_tools_topic_bus_3kj9bt",
+        );
+        assert.equal(implementation.channelName("billing"), "billing_1m8m64");
+        assert.equal(implementation.channelName(["billing", "prod"]), "billing_prod_091p2g");
+        assert.equal(implementation.channelName("billing_prod"), "billing_prod_3er7fp");
+        assert.equal(implementation.channelName({ a: 1 }), "bus_0xnqsa");
+      });
+
+      it("keeps collapsed spellings and part structure distinct", () => {
+        const collapsed = new Set(
+          ["my-app", "my_app", "myApp"].map((value) => implementation.channelName(value)),
+        );
+        assert.equal(collapsed.size, 3);
+        assert.notEqual(
+          implementation.channelName(["billing", "prod"]),
+          implementation.channelName("billing_prod"),
+        );
+      });
+
+      it("always emits a legal Postgres identifier", () => {
+        for (const value of ["!!!", "", 42, null, "a".repeat(200)]) {
+          const name = implementation.channelName(value);
+          assert.match(name, /^[A-Za-z_][A-Za-z0-9_]*$/, `not an identifier: ${name}`);
+          assert.ok(name.length <= 63, `too long: ${name}`);
+        }
+      });
+    });
+  },
+);
+
+await polygotTest(
+  async () => ({ PACKAGE_IDENTIFIER, topicBusConstants }),
+  "topicBusConstants",
+  (implementation, language) => {
+    describe(`topic-bus protocol constants (${language})`, () => {
+      it("keeps channel and notification limits wire-compatible", () => {
+        assert.deepEqual(implementation, {
+          defaultChannel: "dbx_tools_topic_bus",
+          maxChannelLength: 63,
+          channelHashLength: 6,
+          channelFallback: "bus",
+          maxNotifyBytes: 7_900,
+          minReconnectDelay: 0.25,
+          maxReconnectDelay: 5,
+        });
+      });
+    });
+  },
+  {
+    identifiers: {
+      python: new URL("./support/topic_bus_constants.py", import.meta.url).href,
+    },
+  },
+);
 
 describe("PostgresTopicBus", () => {
   it("broadcasts an envelope through pg_notify", async () => {
@@ -111,35 +177,6 @@ describe("PostgresTopicBus", () => {
     await bus.close();
     assert.equal(client.queries.at(-1)?.text, `UNLISTEN "${channel}"`);
     assert.equal(client.released, true);
-  });
-
-  it("derives a legal channel name from arbitrary parts", () => {
-    const { pool } = fixture();
-    const channel = (value?: unknown) =>
-      new PostgresTopicBus(pool, ...(value === undefined ? [] : [{ channel: value }])).channelName;
-
-    // Every derived name is a legal, non-truncated Postgres identifier.
-    for (const value of ["my-app", "!!!", "", 42, null, { a: 1 }, "a".repeat(200)]) {
-      const name = channel(value);
-      assert.match(name, /^[A-Za-z_][A-Za-z0-9_]*$/, `not an identifier: ${name}`);
-      assert.ok(name.length <= 63, `too long: ${name}`);
-    }
-
-    // Deterministic, so two processes given the same parts agree.
-    assert.equal(channel("billing"), channel("billing"));
-    assert.equal(channel({ env: "prod", app: "x" }), channel({ app: "x", env: "prod" }));
-
-    // The hash suffix keeps spellings the tokenizer would collapse apart, and
-    // separates part STRUCTURE from an equivalent single string.
-    const collapsed = new Set(["my-app", "my_app", "myApp"].map(channel));
-    assert.equal(collapsed.size, 3);
-    assert.notEqual(channel(["billing", "prod"]), channel("billing_prod"));
-
-    // The readable half survives, and an object contributes identity without
-    // spelling `object_object`.
-    assert.match(channel("my-app"), /^my_app_/);
-    assert.match(channel(["billing", "prod"]), /^billing_prod_/);
-    assert.match(channel({ a: 1 }), /^bus_/);
   });
 
   it("rejects oversized and unserializable notifications", async () => {

@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as config from "./src/config.ts";

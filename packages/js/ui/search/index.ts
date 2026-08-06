@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-search";
 export * as reactSearchBox from "./src/react/search-box.tsx";
 export * as reactSearchResults from "./src/react/search-results.tsx";
 export * as reactUseSearch from "./src/react/use-search.ts";

@@ -1,6 +1,22 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { string } from "../index.ts";
+import { Language, polygotTest } from "@dbx-tools/test-polyglot/polyglot";
+import { PACKAGE_IDENTIFIER, string } from "../index.ts";
+
+const identifierContract = {
+  toIdentifier(...input: unknown[]): string {
+    const values = [...input];
+    const last = values.at(-1);
+    const options =
+      last !== null &&
+      typeof last === "object" &&
+      !Array.isArray(last) &&
+      typeof (last as { delimiter?: unknown }).delimiter === "string"
+        ? (values.pop() as { delimiter: string })
+        : {};
+    return string.toIdentifierWithOptions(options, ...values);
+  },
+};
 
 describe("string.trimToEmpty", () => {
   it("trims a string", () => {
@@ -41,6 +57,32 @@ describe("string.parseList", () => {
     );
   });
 });
+
+await polygotTest(
+  async () => ({ PACKAGE_IDENTIFIER, string: identifierContract }),
+  "string",
+  (implementation, language) => {
+    describe(`string.toIdentifier (${language})`, () => {
+      it("joins multiple values", () => {
+        assert.equal(implementation.toIdentifier("billing", "Prod"), "billing-prod");
+      });
+
+      it("splits camel case", () => {
+        assert.equal(implementation.toIdentifier("myApp"), "my-app");
+      });
+
+      it("tokenizes an acronym boundary", () => {
+        assert.equal(implementation.toIdentifier("XMLHttpRequest"), "xml-http-request");
+      });
+
+      it("normalizes punctuation", () => {
+        assert.equal(implementation.toIdentifier("already_snake"), "already-snake");
+        assert.equal(implementation.toIdentifier("fixtureOverride"), "fixture-override");
+      });
+    });
+  },
+  { identifiers: { [Language.Python]: "dbx_tools.core.string" } },
+);
 
 describe("string tokenize capitalize overrides", () => {
   it("uppercases ai and fs when capitalizing", () => {

@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-branding";
 export * as browser from "./src/browser.ts";
 export * as generatedAssets from "./src/generated/assets.ts";
 export * as reactBrand from "./src/react/brand.tsx";

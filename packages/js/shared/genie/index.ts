@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-genie";
 export * as dashboards from "./src/dashboards.ts";
 export * as event from "./src/event.ts";
 export * as genieModel from "./src/genie-model.ts";

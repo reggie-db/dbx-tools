@@ -17,7 +17,16 @@ import { resolveWorkingDirectory } from "./project.ts";
 import { project } from "../index.ts";
 
 const BUNDLE_FILE_NAMES = new Set(["databricks.yml", "databricks.yaml"]);
-const IGNORED_DIRECTORIES = [/.\.*/, "node_modules", "dist", "build", "out", "target", "tmp", "vendor"] as const;
+const IGNORED_DIRECTORIES = [
+  /^\..*/,
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "target",
+  "tmp",
+  "vendor",
+] as const;
 
 type AppResource = {
   /** Absolute path to the bundle's root configuration file. */
@@ -127,12 +136,11 @@ async function* descendBundlePaths(
   directory: string,
   seen: Set<string>,
 ): AsyncGenerator<string, void, void> {
-  console.log("descending", directory);
   const entries = await opendir(directory);
   for await (const entry of entries) {
     const candidate = join(directory, entry.name);
     if (entry.isDirectory()) {
-      const ignored = IGNORED_DIRECTORIES.some(ignore => {
+      const ignored = IGNORED_DIRECTORIES.some((ignore) => {
         if (ignore instanceof RegExp) return ignore.test(entry.name);
         return ignore === entry.name;
       });
@@ -163,9 +171,10 @@ async function validateBundle(
     result.exitCode === 0
       ? undefined
       : new Error(
-        `databricks bundle validate failed for ${bundlePath} (exit ${result.exitCode})${detail ? `: ${detail}` : ""
-        }`,
-      );
+          `databricks bundle validate failed for ${bundlePath} (exit ${result.exitCode})${
+            detail ? `: ${detail}` : ""
+          }`,
+        );
 
   const parsed = json.parseRecord(result.stdout);
   if (!parsed) {

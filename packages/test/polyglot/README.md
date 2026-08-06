@@ -1,23 +1,51 @@
 # Polyglot parity tests
 
 Private workspace package for contracts implemented in more than one dbx-tools
-runtime. Shared JSON or YAML fixtures are executed by generic TypeScript and
-Python runners, then compared both to their expected output and to each other.
+runtime. Pure deterministic contracts run in their owning TypeScript package
+through the Bun-native `./polyglot` helper, which invokes the Python equivalent
+through embedded CPython. Process-isolated JSON/YAML fixtures remain here for
+configuration behavior that mutates cwd, environment, files, subprocesses, and
+module caches.
 
 ```bash
 bun run --filter @dbx-tools/test-polyglot test
 ```
 
+## In-process package tests
+
+Published packages take `@dbx-tools/test-polyglot` only as a test dependency:
+
+```ts
+import { polygotTest } from "@dbx-tools/test-polyglot/polyglot";
+
+await polygotTest(
+  () => import("../index.ts"),
+  "object",
+  (implementation, language) => {
+    describe(`object.toStableKey (${language})`, () => {
+      it("canonicalizes values", () => {
+        assert.equal(implementation.toStableKey({ a: 1 }), "object:{string:1:a=number:1}");
+      });
+    });
+  },
+);
+```
+
+The generated package barrel supplies `PACKAGE_IDENTIFIER`; the helper uses it
+with the selected export name to find the Python module. Pass
+`options.identifiers.python` only when the Python module does not follow that
+mapping.
+
 ## Fixture layout
 
 The test recursively discovers every `.json`, `.yaml`, and `.yml` document below
 `fixtures/` except directory defaults named `default.*`. Use descriptive names
-such as `classification.json`.
+such as `fixture.json` inside a contract-specific directory.
 
 Top-level fixture directories follow the TypeScript source-of-truth package,
-with contracts nested beneath them where needed. For example, topic-bus fixtures
-live in `fixtures/postgres/bus`, while the Python target is still free to map to
-`dbx_tools.postgres` through inherited defaults.
+with contracts nested beneath them where needed. The retained configuration
+suite lives under `fixtures/core/config` and maps test adapters for both
+runtimes through its directory default.
 
 Each directory may contain one `default.json`, `default.yaml`, or `default.yml`.
 Defaults inherit from the `fixtures/` root toward the fixture and are merged in

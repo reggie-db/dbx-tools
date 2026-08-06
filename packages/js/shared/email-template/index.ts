@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-email-template";
 export * as template from "./src/template.tsx";
 export { emailBrandFromContext, defaultEmailBrand, resolveEmailBrand, normalizeEmailMarkdown, EmailBody, EmailCard, EmailDocument } from "./src/template.tsx";
 export type { EmailBrand, ResolvedEmailBrand, EmailBodyProps, EmailDocumentProps } from "./src/template.tsx";

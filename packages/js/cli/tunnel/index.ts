@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-tunnel";
 export * as app from "./src/app.ts";
 export * as cli from "./src/cli.ts";
 export * as options from "./src/options.ts";

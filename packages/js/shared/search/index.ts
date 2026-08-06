@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-search";
 export * as search from "./src/search.ts";
 export { searchModeSchema, searchRequestSchema, searchHitSchema, searchResultSchema, universalSearchRequestSchema, searchDocumentSchema, upsertResultSchema, searchIndexInfoSchema, searchClientConfigSchema, createIndexRequestSchema, syncIndexRequestSchema, indexInfoSchema } from "./src/search.ts";
 export type { SearchMode, SearchRequest, SearchHit, SearchResult, UniversalSearchRequest, SearchDocument, UpsertResult, SearchIndexInfo, SearchClientConfig, CreateIndexRequest, SyncIndexRequest, IndexInfo } from "./src/search.ts";

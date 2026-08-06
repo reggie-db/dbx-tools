@@ -2,5 +2,6 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/demo-appkit-server";
 export * as busDemo from "./src/bus-demo.ts";
 export * as dependencies from "./src/dependencies.ts";

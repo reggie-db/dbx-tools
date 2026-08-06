@@ -1,9 +1,0 @@
-{
-  "description": "Shared advisory-lock identifier targets for TypeScript and Python.",
-  "functions": {
-    "advisoryLockId": {
-      "path": { "typescript": "advisoryLock.advisoryLockId", "python": "advisory_lock_id" },
-      "result": { "typescript": "string", "python": "string" }
-    }
-  }
-}

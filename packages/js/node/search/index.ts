@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/search";
 export * as client from "./src/client.ts";
 export * as config from "./src/config.ts";
 export * as indexTools from "./src/index-tools.ts";

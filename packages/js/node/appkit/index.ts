@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit";
 export * as appkit from "./src/appkit.ts";
 export * as bundle from "./src/bundle.ts";
 export * as databricks from "./src/databricks.ts";

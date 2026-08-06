@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CacheManager } from "@databricks/appkit";
-
 import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
+import { polygotTest } from "@dbx-tools/test-polyglot/polyglot";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
 import { rankModels, resolveModel, selectModel } from "../src/resolve.ts";
@@ -95,6 +95,42 @@ describe("listServingEndpointsUncached tool capability", () => {
     );
   });
 });
+
+await polygotTest(
+  () => import("../index.ts"),
+  "resolve",
+  (implementation, language) => {
+    const rankModels = (...args: Parameters<typeof implementation.rankModels>) =>
+      implementation.rankModels(...args).map(({ endpoint, ...ranked }) => ({
+        ...ranked,
+        endpoint: { name: endpoint.name, task: endpoint.task },
+      }));
+
+    describe(`rankModels parity (${language})`, () => {
+      it("ranks by a class ceiling without search", () => {
+        assert.deepEqual(
+          rankModels([chat(OPUS_8), chat(SONNET), chat(HAIKU_5), embedding(BGE)], {
+            modelClass: ModelClass.ChatBalanced,
+          }),
+          [
+            { endpoint: chat(SONNET), modelClass: ModelClass.ChatBalanced },
+            { endpoint: chat(HAIKU_5), modelClass: ModelClass.ChatFast },
+          ],
+        );
+      });
+
+      it("returns an exact search with score zero", () => {
+        assert.deepEqual(
+          rankModels([chat(OPUS_8), chat(SONNET)], {
+            search: SONNET,
+            limit: 1,
+          }),
+          [{ endpoint: chat(SONNET), modelClass: ModelClass.ChatBalanced, score: 0 }],
+        );
+      });
+    });
+  },
+);
 
 describe("rankModels", () => {
   it("ranks a search match-then-class, version breaking the tie", () => {

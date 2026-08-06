@@ -177,10 +177,11 @@ function readRecordedMembers(projectRoot: string = repoRoot): string[] {
   return doc?.packages ?? [];
 }
 
-/** A member path `<root>/<...rel>` (>= 2 segments) as a {@link DiscoveredPackage}. */
+/** A workspace member path as a {@link DiscoveredPackage}, including root-level members. */
 function packageOfMember(projectRoot: string, member: string): DiscoveredPackage | undefined {
   const segs = toPosix(member).split("/").filter(Boolean);
-  if (segs.length < 2) return undefined;
+  if (segs.length === 0) return undefined;
+  if (segs.length === 1) return new DiscoveredPackage(projectRoot, segs[0]!, []);
   return new DiscoveredPackage(projectRoot, segs[0]!, segs.slice(1));
 }
 

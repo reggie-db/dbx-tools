@@ -56,9 +56,7 @@ class FakeEngine:
         yield self.connection
 
 
-def test_advisory_lock_id_matches_node_contract() -> None:
-    assert advisory_lock_id(["schema-install", "v2"]) == -6627415645816226415
-    assert advisory_lock_id({"b": 2, "a": 1}) == 8289569017560903448
+def test_explicit_advisory_lock_id_wraps_to_signed_int64() -> None:
     assert advisory_lock_id(explicit_advisory_lock_id(2**64 - 1)) == -1
 
 

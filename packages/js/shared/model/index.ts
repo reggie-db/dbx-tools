@@ -2,6 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
+export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-model";
 export * as classify from "./src/classify.ts";
 export * as display from "./src/display.ts";
 export * as model from "./src/model.ts";
