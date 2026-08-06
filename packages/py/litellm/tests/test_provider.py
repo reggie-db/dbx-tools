@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import pytest
-from dbx_tools.litellm.provider import _ensure_json_mentioned
+from dbx_tools.litellm.provider import (
+    _ensure_json_mentioned,
+    _prepare_messages,
+    _repair_trailing_assistant,
+)
 
 JSON_OBJECT = {"response_format": {"type": "json_object"}}
 
@@ -101,3 +105,80 @@ def test_other_response_formats_are_left_alone(response_format: object) -> None:
     messages = [{"role": "user", "content": "hi"}]
 
     assert _ensure_json_mentioned(messages, {"response_format": response_format}) is messages
+
+
+class TestRepairTrailingAssistant:
+    """Databricks rejects a transcript ending in an assistant message with "This
+    model does not support assistant message prefill". Codex hits it on retry."""
+
+    def test_untouched_when_ending_with_a_user_message(self) -> None:
+        messages = [{"role": "assistant", "content": "hi"}, {"role": "user", "content": "go"}]
+
+        assert _repair_trailing_assistant(messages) is messages
+
+    def test_trailing_assistant_message_is_dropped(self) -> None:
+        messages = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "Hello"}]
+
+        assert _repair_trailing_assistant(messages) == [{"role": "user", "content": "hi"}]
+
+    def test_several_trailing_assistant_messages_are_dropped(self) -> None:
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "one"},
+            {"role": "assistant", "content": "two"},
+        ]
+
+        assert _repair_trailing_assistant(messages) == [{"role": "user", "content": "hi"}]
+
+    def test_trailing_tool_call_is_left_alone(self) -> None:
+        # Dropping this would discard a tool call the client is about to answer;
+        # an unanswered tool_use is rejected on a different rule, not prefill.
+        tool_turn = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{"id": "1", "type": "function", "function": {"name": "t"}}],
+        }
+        messages = [{"role": "user", "content": "hi"}, tool_turn]
+
+        assert _repair_trailing_assistant(messages) is messages
+
+    def test_all_assistant_transcript_is_not_emptied(self) -> None:
+        # Not rescuable here; leave it for the provider to reject on its own terms
+        # rather than sending an empty request.
+        messages = [{"role": "assistant", "content": "one"}]
+
+        assert _repair_trailing_assistant(messages) is messages
+
+    def test_empty_messages_are_untouched(self) -> None:
+        messages: list[dict] = []
+
+        assert _repair_trailing_assistant(messages) is messages
+
+    def test_the_caller_list_is_not_mutated(self) -> None:
+        messages = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "Hello"}]
+
+        _repair_trailing_assistant(messages)
+
+        assert len(messages) == 2
+
+
+class TestPrepareMessages:
+    def test_repair_runs_before_the_json_nudge(self) -> None:
+        # Order matters: nudging first would append to the assistant turn that the
+        # repair then drops, losing the nudge and re-failing the json rule.
+        messages = [
+            {"role": "system", "content": "Return ONLY valid JSON."},
+            {"role": "user", "content": "extract"},
+            {"role": "assistant", "content": "partial answer"},
+        ]
+
+        prepared = _prepare_messages(messages, JSON_OBJECT)
+
+        assert prepared[-1]["role"] == "user"
+        assert "json" in prepared[-1]["content"].lower()
+        assert prepared[-1]["content"].startswith("extract")
+
+    def test_no_op_request_is_passed_through(self) -> None:
+        messages = [{"role": "user", "content": "hi"}]
+
+        assert _prepare_messages(messages, {}) is messages

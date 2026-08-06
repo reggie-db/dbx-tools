@@ -46,7 +46,7 @@ class DbxCustomLLM(CustomLLM):
         resolved = self.backend.resolve(model, requires_tools=_requires_tools(optional_params))
         return litellm.completion(
             model=_delegate_chat_model(resolved),
-            messages=_ensure_json_mentioned(messages, optional_params),
+            messages=_prepare_messages(messages, optional_params),
             stream=False,
             **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
@@ -66,7 +66,7 @@ class DbxCustomLLM(CustomLLM):
         )
         return await litellm.acompletion(
             model=_delegate_chat_model(resolved),
-            messages=_ensure_json_mentioned(messages, optional_params),
+            messages=_prepare_messages(messages, optional_params),
             stream=False,
             **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
@@ -82,7 +82,7 @@ class DbxCustomLLM(CustomLLM):
         resolved = self.backend.resolve(model, requires_tools=_requires_tools(optional_params))
         stream = litellm.completion(
             model=_delegate_chat_model(resolved),
-            messages=_ensure_json_mentioned(messages, optional_params),
+            messages=_prepare_messages(messages, optional_params),
             stream=True,
             **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
@@ -103,7 +103,7 @@ class DbxCustomLLM(CustomLLM):
         )
         stream = await litellm.acompletion(
             model=_delegate_chat_model(resolved),
-            messages=_ensure_json_mentioned(messages, optional_params),
+            messages=_prepare_messages(messages, optional_params),
             stream=True,
             **_delegated_params(optional_params, self.backend, timeout=timeout),
         )
@@ -151,6 +151,47 @@ def _delegate_chat_model(resolved: str) -> str:
 def _requires_tools(optional_params: Mapping[str, Any]) -> bool:
     tools = optional_params.get("tools")
     return isinstance(tools, list) and bool(tools)
+
+
+def _is_assistant_message(message: Any) -> bool:
+    """Whether a message is an assistant MESSAGE — the prefill trigger.
+
+    Deliberately narrow: a trailing assistant turn carrying `tool_calls` is left
+    alone. Anthropic rejects an unanswered `tool_use` on a different rule, and
+    dropping it would silently discard a tool call the client is about to answer.
+    """
+    if not isinstance(message, Mapping) or message.get("role") != "assistant":
+        return False
+    return not message.get("tool_calls")
+
+
+def _repair_trailing_assistant(messages: list[Any]) -> list[Any]:
+    """Drop trailing assistant turns so the transcript ends where Anthropic can continue.
+
+    Databricks rejects a conversation whose last message is an assistant message:
+    "This model does not support assistant message prefill. The conversation must
+    end with a user message." (the upstream Bedrock route disallows prefill). The
+    Codex CLI hits this on RETRY — a stream that disconnects mid-turn is resumed
+    with the partial answer already replayed as the last message, so every
+    reconnect fails and the chat dies instead of recovering.
+
+    Dropping is the honest repair, not a lossy one: a trailing assistant turn is
+    text the model itself just produced, so it is not context the provider needs
+    repeated in order to continue. Appending a synthetic "Continue." user turn
+    would also satisfy the provider, but it puts words in the user's mouth that
+    then show up in the model's context.
+
+    Loops rather than checking once, since several assistant turns can be trailing.
+    Never empties the list: an all-assistant transcript is not something this can
+    rescue, so it is left for the provider to reject with its own message rather
+    than inventing a request.
+    """
+    if not messages or not _is_assistant_message(messages[-1]):
+        return messages
+    trimmed = list(messages)
+    while trimmed and _is_assistant_message(trimmed[-1]):
+        trimmed.pop()
+    return trimmed or messages
 
 
 # OpenAI-family endpoints refuse `response_format: {"type": "json_object"}` unless
@@ -229,6 +270,17 @@ def _ensure_json_mentioned(messages: list[Any], optional_params: Mapping[str, An
     # No usable non-system turn (e.g. a system-only request): add a user turn, the
     # one role that is guaranteed to survive into `input`.
     return [*patched, {"role": "user", "content": _JSON_NUDGE.strip()}]
+
+
+def _prepare_messages(messages: list[Any], optional_params: Mapping[str, Any]) -> list[Any]:
+    """Apply the request repairs Databricks needs, in order.
+
+    The trailing-assistant repair runs FIRST: it can change which message is last,
+    and the json nudge appends to the last non-system turn. Running the nudge first
+    would let it append to an assistant turn that is then dropped, silently losing
+    the nudge and re-failing the json rule.
+    """
+    return _ensure_json_mentioned(_repair_trailing_assistant(messages), optional_params)
 
 
 # Params the Chat Completions surface (/serving-endpoints/<name>/invocations)
