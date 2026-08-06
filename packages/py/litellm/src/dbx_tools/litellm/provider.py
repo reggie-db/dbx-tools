@@ -182,15 +182,8 @@ def _as_dict(message: Any) -> Any:
 
 
 def _is_assistant_message(message: Any) -> bool:
-    """Whether a message is an assistant MESSAGE — the prefill trigger.
-
-    Deliberately narrow: a trailing assistant turn carrying `tool_calls` is left
-    alone. Anthropic rejects an unanswered `tool_use` on a different rule, and
-    dropping it would silently discard a tool call the client is about to answer.
-    """
-    if _field(message, "role") != "assistant":
-        return False
-    return not _field(message, "tool_calls")
+    """Whether a message is an assistant message — the prefill trigger."""
+    return _field(message, "role") == "assistant"
 
 
 def _repair_trailing_assistant(messages: list[Any]) -> list[Any]:
@@ -204,10 +197,13 @@ def _repair_trailing_assistant(messages: list[Any]) -> list[Any]:
     reconnect fails and the chat dies instead of recovering.
 
     Dropping is the honest repair, not a lossy one: a trailing assistant turn is
-    text the model itself just produced, so it is not context the provider needs
-    repeated in order to continue. Appending a synthetic "Continue." user turn
-    would also satisfy the provider, but it puts words in the user's mouth that
-    then show up in the model's context.
+    output the model itself just produced, so it is not context the provider needs
+    repeated in order to continue. This includes an unanswered tool call. A client
+    that has a tool result sends that result as the terminal tool/user turn; when
+    no result follows, replaying the assistant tool call is still an unsupported
+    prefill and LiteLLM may separately drop its Responses-only tool definition.
+    Appending a synthetic "Continue." user turn would also satisfy the provider,
+    but it puts words in the user's mouth that then show up in model context.
 
     Loops rather than checking once, since several assistant turns can be trailing.
     Never empties the list: an all-assistant transcript is not something this can

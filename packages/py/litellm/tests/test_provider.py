@@ -130,9 +130,10 @@ class TestRepairTrailingAssistant:
 
         assert _repair_trailing_assistant(messages) == [{"role": "user", "content": "hi"}]
 
-    def test_trailing_tool_call_is_left_alone(self) -> None:
-        # Dropping this would discard a tool call the client is about to answer;
-        # an unanswered tool_use is rejected on a different rule, not prefill.
+    def test_trailing_tool_call_is_dropped(self) -> None:
+        # LiteLLM may drop a Responses-only tool definition while leaving its
+        # replayed assistant tool-call message behind. Claude then rejects that
+        # terminal assistant turn as unsupported prefill.
         tool_turn = {
             "role": "assistant",
             "content": "",
@@ -140,7 +141,7 @@ class TestRepairTrailingAssistant:
         }
         messages = [{"role": "user", "content": "hi"}, tool_turn]
 
-        assert _repair_trailing_assistant(messages) is messages
+        assert _repair_trailing_assistant(messages) == [{"role": "user", "content": "hi"}]
 
     def test_all_assistant_transcript_is_not_emptied(self) -> None:
         # Not rescuable here; leave it for the provider to reject on its own terms
@@ -207,7 +208,7 @@ class TestPydanticMessageObjects:
 
         assert _repair_trailing_assistant(messages) == [{"role": "user", "content": "hi"}]
 
-    def test_trailing_message_object_with_tool_calls_is_kept(self) -> None:
+    def test_trailing_message_object_with_tool_calls_is_dropped(self) -> None:
         tool_turn = self._message(
             role="assistant",
             content="",
@@ -215,7 +216,7 @@ class TestPydanticMessageObjects:
         )
         messages = [{"role": "user", "content": "hi"}, tool_turn]
 
-        assert _repair_trailing_assistant(messages) is messages
+        assert _repair_trailing_assistant(messages) == [{"role": "user", "content": "hi"}]
 
     def test_json_in_a_message_object_counts_as_mentioned(self) -> None:
         messages = [self._message(role="user", content="reply in json")]
