@@ -182,3 +182,53 @@ class TestPrepareMessages:
         messages = [{"role": "user", "content": "hi"}]
 
         assert _prepare_messages(messages, {}) is messages
+
+
+class TestPydanticMessageObjects:
+    """LiteLLM's Responses->Chat bridge passes `litellm.types.utils.Message`, a
+    pydantic model that is NOT a Mapping. An isinstance(..., Mapping) guard skips
+    exactly these objects, which is the Codex path — so every repair must read
+    fields through _field instead."""
+
+    @staticmethod
+    def _message(**kwargs):
+        from litellm.types.utils import Message
+
+        return Message(**kwargs)
+
+    def test_message_object_is_not_a_mapping(self) -> None:
+        from collections.abc import Mapping
+
+        # Guards the assumption this whole class exists to protect.
+        assert not isinstance(self._message(role="assistant", content="x"), Mapping)
+
+    def test_trailing_assistant_message_object_is_dropped(self) -> None:
+        messages = [{"role": "user", "content": "hi"}, self._message(role="assistant", content="x")]
+
+        assert _repair_trailing_assistant(messages) == [{"role": "user", "content": "hi"}]
+
+    def test_trailing_message_object_with_tool_calls_is_kept(self) -> None:
+        tool_turn = self._message(
+            role="assistant",
+            content="",
+            tool_calls=[{"id": "1", "type": "function", "function": {"name": "t", "arguments": "{}"}}],
+        )
+        messages = [{"role": "user", "content": "hi"}, tool_turn]
+
+        assert _repair_trailing_assistant(messages) is messages
+
+    def test_json_in_a_message_object_counts_as_mentioned(self) -> None:
+        messages = [self._message(role="user", content="reply in json")]
+
+        assert _ensure_json_mentioned(messages, JSON_OBJECT) is messages
+
+    def test_nudge_applies_to_a_message_object(self) -> None:
+        messages = [
+            {"role": "system", "content": "Return ONLY valid JSON."},
+            self._message(role="user", content="extract"),
+        ]
+
+        prepared = _prepare_messages(messages, JSON_OBJECT)
+
+        assert prepared[-1]["role"] == "user"
+        assert "json" in str(prepared[-1]["content"]).lower()

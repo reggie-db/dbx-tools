@@ -153,6 +153,34 @@ def _requires_tools(optional_params: Mapping[str, Any]) -> bool:
     return isinstance(tools, list) and bool(tools)
 
 
+def _field(message: Any, name: str) -> Any:
+    """Read one field from a message, whichever shape it arrives in.
+
+    Messages are NOT always dicts. LiteLLM's Responses->Chat bridge builds
+    `litellm.types.utils.Message`, a pydantic model that supports `.get()` and
+    `[]` but is not a `Mapping`. An `isinstance(..., Mapping)` guard therefore
+    skips exactly the objects on the Codex path, which is why the earlier
+    trailing-assistant repair never fired for the failing requests.
+    """
+    if isinstance(message, Mapping):
+        return message.get(name)
+    return getattr(message, name, None)
+
+
+def _as_dict(message: Any) -> Any:
+    """Dict copy of a non-Mapping message, so it can be edited without mutating
+    the caller's object. LiteLLM accepts dict messages on every path.
+
+    Returns the original when it cannot be dumped, which keeps a message shape we
+    do not recognize passing through untouched rather than dropped.
+    """
+    dump = getattr(message, "model_dump", None)
+    if not callable(dump):
+        return message
+    dumped = dump(exclude_none=True)
+    return dumped if isinstance(dumped, dict) else message
+
+
 def _is_assistant_message(message: Any) -> bool:
     """Whether a message is an assistant MESSAGE — the prefill trigger.
 
@@ -160,9 +188,9 @@ def _is_assistant_message(message: Any) -> bool:
     alone. Anthropic rejects an unanswered `tool_use` on a different rule, and
     dropping it would silently discard a tool call the client is about to answer.
     """
-    if not isinstance(message, Mapping) or message.get("role") != "assistant":
+    if _field(message, "role") != "assistant":
         return False
-    return not message.get("tool_calls")
+    return not _field(message, "tool_calls")
 
 
 def _repair_trailing_assistant(messages: list[Any]) -> list[Any]:
@@ -216,14 +244,16 @@ def _needs_json_nudge(optional_params: Mapping[str, Any]) -> bool:
 
 
 def _message_text(message: Any) -> str:
-    """Flatten one message's content, including multi-part content blocks."""
-    if not isinstance(message, Mapping):
-        return ""
-    content = message.get("content")
+    """Flatten one message's content, including multi-part content blocks.
+
+    Reads through _field so pydantic Message objects are searched too, not just
+    plain dicts.
+    """
+    content = _field(message, "content")
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return " ".join(part.get("text", "") for part in content if isinstance(part, Mapping))
+        return " ".join(str(_field(part, "text") or "") for part in content)
     return ""
 
 
@@ -251,11 +281,13 @@ def _ensure_json_mentioned(messages: list[Any], optional_params: Mapping[str, An
     if any(
         "json" in _message_text(message).lower()
         for message in messages
-        if not (isinstance(message, Mapping) and message.get("role") == "system")
+        if _field(message, "role") != "system"
     ):
         return messages
 
-    patched = [dict(m) if isinstance(m, Mapping) else m for m in messages]
+    # Normalize to dicts so a pydantic Message can be edited without mutating the
+    # caller's object; LiteLLM accepts dict messages on every path.
+    patched = [dict(m) if isinstance(m, Mapping) else _as_dict(m) for m in messages]
     for message in reversed(patched):
         if not isinstance(message, dict) or message.get("role") == "system":
             continue
