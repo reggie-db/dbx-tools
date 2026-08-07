@@ -40,6 +40,11 @@
       "type": "runtime"
     },
     {
+      "name": "zod",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/test-polyglot",
       "version": "workspace:*",
       "type": "test"

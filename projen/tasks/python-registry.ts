@@ -43,7 +43,51 @@ export function parseUvIndexes(source: string): string[] {
   return primary ? [primary, ...extras] : extras;
 }
 
-/** Convert a devpi Simple API URL into its writable index URL. */
+/**
+ * Read every `[[index]]` block's `url` -> `publish-url` mapping from uv's TOML
+ * config. uv lets an index declare an explicit upload endpoint via `publish-url`
+ * (the writable index URL, distinct from the `+simple` read URL); this is the
+ * global setting that names the local deploy target, so auto-detection prefers
+ * it over deriving the publish URL from the `+simple` URL shape.
+ */
+export function parseUvPublishUrls(source: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const blocks = source.split(/(?=^\[\[index\]\]\s*$)/m);
+  for (const block of blocks) {
+    if (!/^\[\[index\]\]\s*$/m.test(block)) continue;
+    const url = /^\s*url\s*=\s*["']([^"']+)["']\s*$/m.exec(block)?.[1];
+    const publishUrl = /^\s*publish-url\s*=\s*["']([^"']+)["']\s*$/m.exec(block)?.[1];
+    if (url && publishUrl) map.set(url, publishUrl);
+  }
+  return map;
+}
+
+/**
+ * The explicit `publish-url` configured (in the global uv config or
+ * `UV_PUBLISH_URL`) for a given `+simple` index URL, or `undefined` when none is
+ * set. Lets auto-detection use the deploy endpoint the user declared globally
+ * rather than inferring it from the index URL.
+ */
+export function configuredPublishUrl(
+  indexUrl: string,
+  uvConfigPath: string = process.env.UV_CONFIG_FILE ?? resolve(homedir(), ".config/uv/uv.toml"),
+): string | undefined {
+  const fromEnv = process.env.UV_PUBLISH_URL?.trim();
+  if (fromEnv) return fromEnv;
+  if (!existsSync(uvConfigPath)) return undefined;
+  return parseUvPublishUrls(readFileSync(uvConfigPath, "utf8")).get(indexUrl);
+}
+
+/**
+ * Convert a devpi Simple API URL into a local publish target.
+ *
+ * The publish URL is taken from the GLOBAL uv config first — an explicit
+ * `publish-url` on the matching `[[index]]` (or `UV_PUBLISH_URL`), i.e. the
+ * deploy endpoint the user declared — and only DERIVED from the `+simple` URL
+ * shape when no such setting exists. Returns `undefined` for a non-loopback
+ * host or a URL that is neither a `+simple` index nor has a configured
+ * `publish-url`.
+ */
 export function devpiRegistry(index: string): LocalPythonRegistry | undefined {
   let url: URL;
   try {
@@ -52,6 +96,16 @@ export function devpiRegistry(index: string): LocalPythonRegistry | undefined {
     return undefined;
   }
   if (!net.isLoopbackHost(url)) return undefined;
+
+  // A globally-configured publish-url wins: it names the deploy target directly,
+  // so we honor it even if the index URL isn't the conventional `+simple` shape.
+  const configured = configuredPublishUrl(url.href);
+  if (configured) {
+    return {
+      indexUrl: url.href,
+      publishUrl: configured.endsWith("/") ? configured : `${configured}/`,
+    };
+  }
 
   const path = url.pathname.replace(/\/+$/, "");
   if (!path.endsWith("/+simple")) return undefined;

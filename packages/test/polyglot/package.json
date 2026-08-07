@@ -19,7 +19,6 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@dbx-tools/core": "workspace:*",
     "@types/bun": "^1.3.14",
     "@types/node": "catalog:",
     "typescript": "^5.9.3"
@@ -49,7 +48,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.90",
+  "version": "0.6.91",
   "types": "index.ts",
   "type": "module",
   "exports": {

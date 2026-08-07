@@ -91,7 +91,7 @@ production.
   such as the underscore-delimited Postgres bus channel.
 
 The identity functions exist so Python packages do not copy the TypeScript
-algorithms locally and silently drift. Their shared behavior is tested from
-`packages/test/polyglot/fixtures/core/fixture.json`. Configuration precedence,
-dotenv discovery/parsing, bundle fallback, laziness, and parsed-record caching
-are shared fixtures under `packages/test/polyglot/fixtures/core/config`.
+algorithms locally and silently drift. Their shared behavior is exercised by
+colocated `polygotTest` callbacks in the owning TypeScript packages.
+Configuration precedence, dotenv discovery/parsing, bundle fallback, laziness,
+and parsed-record caching are covered by each runtime's native config tests.

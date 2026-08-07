@@ -214,7 +214,6 @@ project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
     "Cross-runtime parity tests for dbx-tools JavaScript and Python packages",
   );
   p.addDeps("bun_python@github:codehz/bun_python#3fae2f3e72fa1bbcb998894ad61e72cfd809671b");
-  p.deps.addDependency("@dbx-tools/core@workspace:*", DependencyType.TEST);
   p.package.addField("exports", {
     ".": "./index.ts",
     "./polyglot": {
@@ -226,11 +225,12 @@ project.applyToProjects(root, { path: "packages/test/**" }, (p) => {
   });
   projectJs.applyCompilerOptions(p, {
     types: ["node", "bun"],
+    // bun_python ships TypeScript source with unused private fields and one
+    // intentional switch fallthrough, so the private harness cannot tighten
+    // these checks beyond its runtime dependency.
     noFallthroughCasesInSwitch: false,
     noUnusedLocals: false,
-    noUnusedParameters: false,
   });
-  p.tsconfig?.addInclude("bin/**/*.ts");
 });
 
 for (const identifierName of ["shared-core", "appkit", "postgres", "shared-model", "model"]) {
@@ -283,6 +283,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
   p.addDeps(
     "@dbx-tools/core@workspace:*",
     "@databricks/sdk-experimental@catalog:",
+    "zod@catalog:",
   );
   p.addPeerDeps("@databricks/appkit@catalog:");
   p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
@@ -986,16 +987,10 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   ruffTarget: "py310",
   workspaceName: "dbx-tools-python-workspace",
   testPaths: ["packages/py"],
-  lintPaths: [
-    "packages/py",
-    "packages/test",
-    "packages/example/python",
-    "packages/example/notebooks",
-  ],
+  lintPaths: ["packages/py", "packages/example/python", "packages/example/notebooks"],
   ruffPerFileIgnores: {
     "packages/py/litellm/src/dbx_tools/litellm/reasoning.py": ["BLE001"],
     "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py": ["BLE001"],
-    "packages/test/polyglot/python/run.py": ["BLE001"],
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
   },
   interpreterPath: "${workspaceFolder}/.venv/bin/python",

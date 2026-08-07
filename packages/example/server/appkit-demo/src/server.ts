@@ -13,8 +13,8 @@ import {
   plugin as appkitWebSearchPlugin,
   tool as appkitWebSearchToolApi,
 } from "@dbx-tools/appkit-web-search";
-import { brand as emailBrand, plugin as emailPlugin, tool as emailToolApi } from "@dbx-tools/email";
 import { config } from "@dbx-tools/core";
+import { brand as emailBrand, plugin as emailPlugin, tool as emailToolApi } from "@dbx-tools/email";
 import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import { plugin as teamsPlugin, tool as teamsToolApi } from "@dbx-tools/teams";

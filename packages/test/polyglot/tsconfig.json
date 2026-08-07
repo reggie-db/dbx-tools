@@ -19,7 +19,7 @@
     "noImplicitReturns": true,
     "noImplicitThis": true,
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    "noUnusedParameters": true,
     "resolveJsonModule": true,
     "strict": true,
     "strictNullChecks": true,
@@ -39,7 +39,6 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "bin/**/*.ts",
     "index.ts"
   ],
   "exclude": [

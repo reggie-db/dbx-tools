@@ -184,7 +184,7 @@ inspect or isolate custom/unrecognized endpoints.
 Add a pure classifier to `packages/js/shared/model/src/classify.ts`:
 
 ```ts
-export function modelFamily(name: string): ModelFamily
+export function modelFamily(name: string): ModelFamily;
 ```
 
 Detection order must prevent broad matches from swallowing specific families:

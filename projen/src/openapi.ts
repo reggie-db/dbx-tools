@@ -41,7 +41,6 @@ import { log } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";
 import { lazyRequire } from "./_lazy-require.ts";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated.ts";
-import { readWorkspaceVersion } from "./workspace-version.ts";
 import {
   type RecordedPackage,
   isModuleFile,
@@ -49,6 +48,7 @@ import {
   toPosix,
   recordedPackages,
 } from "./packages.ts";
+import { readWorkspaceVersion } from "./workspace-version.ts";
 
 const logger = log.logger("projen:openapi");
 

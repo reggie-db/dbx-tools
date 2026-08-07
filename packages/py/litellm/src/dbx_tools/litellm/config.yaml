@@ -1,15 +1,7 @@
 model_list:
-  # Passthrough route: a caller-qualified `databricks/<endpoint>` normally goes
-  # to /serving-endpoints/<endpoint>/invocations. The routing hook promotes
-  # Responses-required GPT families to `databricks/responses/<endpoint>` first,
-  # so tools plus reasoning work even when the caller qualified the model.
-  # Param support remains per-surface for every model left on Chat Completions,
-  # where /invocations rejects `parallel_tool_calls`.
-  - model_name: "databricks/*"
-    litellm_params:
-      model: "databricks/*"
-  - model_name: "*"
-    litellm_params:
+  - &dbx_route
+    model_name: "dbx/*"
+    litellm_params: &dbx_params
       model: "dbx/*"
       # LiteLLM's Databricks provider hardcodes a supported-param allowlist
       # (get_supported_openai_params) and raises UnsupportedParamsError for
@@ -24,6 +16,11 @@ model_list:
         - reasoning_effort
         - thinking
         - parallel_tool_calls
+  # Unqualified human-friendly names remain accepted for fuzzy resolution, but
+  # /v1/models advertises only the explicit dbx/* surface above.
+  - <<: *dbx_route
+    model_name: "*"
+    litellm_params: *dbx_params
 
 litellm_settings:
   # Silently drop client params the endpoints genuinely reject instead of failing

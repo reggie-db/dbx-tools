@@ -38,9 +38,12 @@
  *   - `auto` (default): publish only when `npm config get registry` is a
  *     loopback host, or when ANY active Python index — the primary
  *     `index-url` OR any `extra-index-url`, across uv and pip — is a loopback
- *     devpi `+simple` URL. Scanning the extras is what lets the corp proxy
- *     stay the primary index while a local devpi added as an extra is the
- *     detected publish target.
+ *     devpi URL. Scanning the extras is what lets the corp proxy stay the
+ *     primary index while a local devpi added as an extra is the detected
+ *     publish target. The deploy endpoint for that index is taken from the
+ *     GLOBAL uv config — an explicit `publish-url` on the matching `[[index]]`
+ *     (or `UV_PUBLISH_URL`) — falling back to deriving it from the `+simple`
+ *     URL shape when no such setting exists.
  *   - `false`: never publish locally.
  *   - a URL: always publish to that registry.
  */

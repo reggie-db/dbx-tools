@@ -30,7 +30,8 @@
   "dependencies": {
     "@databricks/sdk-experimental": "catalog:",
     "@dbx-tools/core": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*"
+    "@dbx-tools/shared-core": "workspace:*",
+    "zod": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -46,7 +47,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.90",
+  "version": "0.6.91",
   "types": "index.ts",
   "type": "module",
   "exports": {

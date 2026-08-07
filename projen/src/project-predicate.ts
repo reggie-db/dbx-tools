@@ -11,8 +11,8 @@ import { IConstruct } from "constructs";
 import { Project } from "projen";
 import { project } from "..";
 import { toPosix } from "./packages.ts";
-import type { DBXToolsProject } from "./project.ts";
 import type { DBXToolsJavaScriptProject } from "./project-js.ts";
+import type { DBXToolsProject } from "./project.ts";
 
 /**
  * Guard: the construct is a projen {@link Project} - the base every builder here

@@ -242,7 +242,7 @@
       "description": "Format Python workspace packages",
       "steps": [
         {
-          "exec": "uv run ruff format packages/py packages/test packages/example/python packages/example/notebooks"
+          "exec": "uv run ruff format packages/py packages/example/python packages/example/notebooks"
         }
       ]
     },
@@ -251,7 +251,7 @@
       "description": "Lint Python workspace packages",
       "steps": [
         {
-          "exec": "uv run ruff check packages/py packages/test packages/example/python packages/example/notebooks"
+          "exec": "uv run ruff check packages/py packages/example/python packages/example/notebooks"
         }
       ]
     },

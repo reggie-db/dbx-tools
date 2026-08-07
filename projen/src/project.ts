@@ -7,8 +7,8 @@ import { object, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
 import { Project, type ProjectOptions } from "projen";
 import * as mixin from "./mixin.ts";
-import * as projectPredicate from "./project-predicate.ts";
 import type { DBXToolsJavaScriptProject } from "./project-js.ts";
+import * as projectPredicate from "./project-predicate.ts";
 
 export * from "./project-js.ts";
 export * from "./project-py.ts";

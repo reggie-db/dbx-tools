@@ -268,12 +268,7 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
 
   // Ensure the default index is represented in the known set.
   if (defaultIndexRaw && !configured.some((i) => i.name === defaultIndexRaw)) {
-    const envColumns = coreConfig.list(
-      undefined,
-      "SEARCH_COLUMNS",
-      undefined,
-      coreConfig.ENV_ONLY,
-    );
+    const envColumns = coreConfig.list(undefined, "SEARCH_COLUMNS", undefined, coreConfig.ENV_ONLY);
     configured.unshift({
       name: defaultIndexRaw,
       alias: defaultAlias(defaultIndexRaw),
@@ -290,12 +285,7 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
   });
 
   const defaultIndex = defaultIndexRaw ?? indexes[0]?.name;
-  const columns = coreConfig.list(
-    config.columns,
-    "SEARCH_COLUMNS",
-    undefined,
-    coreConfig.ENV_ONLY,
-  );
+  const columns = coreConfig.list(config.columns, "SEARCH_COLUMNS", undefined, coreConfig.ENV_ONLY);
 
   return {
     ...object.optional("defaultIndex", defaultIndex),
@@ -323,8 +313,7 @@ export function resolveSearchConfig(config: SearchPluginConfig = {}): ResolvedSe
       DEFAULT_TIMEOUT_MS,
       coreConfig.ENV_ONLY,
     ),
-    allowWrite:
-      coreConfig.boolean(config.allowWrite, "SEARCH_WRITE", coreConfig.ENV_ONLY) ?? false,
+    allowWrite: coreConfig.boolean(config.allowWrite, "SEARCH_WRITE", coreConfig.ENV_ONLY) ?? false,
     ...(config.ensureOnSetup ? { ensureOnSetup: config.ensureOnSetup } : {}),
   };
 }

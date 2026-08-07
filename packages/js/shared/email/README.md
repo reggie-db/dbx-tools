@@ -59,8 +59,8 @@ the default sender, and whether the list is restricted by policy.
 - `email` - `emailAttachmentSchema`, `emailMessageSchema`,
   `emailResultSchema`, `emailSendersSchema`, and flat inferred types:
   `EmailAttachment`, `EmailMessage`, `EmailResult`, and `EmailSenders`.
-The schemas intentionally avoid array `.min()` constraints so they can be reused
-as model/tool JSON schemas for serving endpoints that reject `minItems`.
+  The schemas intentionally avoid array `.min()` constraints so they can be reused
+  as model/tool JSON schemas for serving endpoints that reject `minItems`.
 
 Passwordless authentication contracts live in
 [`@dbx-tools/shared-auth`](../auth).

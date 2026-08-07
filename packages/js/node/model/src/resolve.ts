@@ -153,7 +153,9 @@ export function rankModels(
     // keep their best-first within-class order.
     ranked = candidates
       .filter((c) => scores.has(c.endpoint.name))
-      .filter((c) => !gptFamilySearch || !/(?:^|[-_.])gpt[-_.]?oss(?:[-_.]|$)/i.test(c.endpoint.name))
+      .filter(
+        (c) => !gptFamilySearch || !/(?:^|[-_.])gpt[-_.]?oss(?:[-_.]|$)/i.test(c.endpoint.name),
+      )
       .map((c) => ({ ...c, score: scores.get(c.endpoint.name) }))
       .sort((a, b) => {
         const byMatch = matchBucket(a.score) - matchBucket(b.score);

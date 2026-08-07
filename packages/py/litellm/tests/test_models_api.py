@@ -9,7 +9,7 @@ def test_adds_codex_models_alongside_openai_data() -> None:
         "object": "list",
         "data": [
             {"id": "*", "object": "model"},
-            {"id": "databricks/*", "object": "model"},
+            {"id": "dbx/*", "object": "model"},
             {
                 "id": "databricks/databricks-gpt-5-6-sol",
                 "object": "model",
@@ -26,17 +26,17 @@ def test_adds_codex_models_alongside_openai_data() -> None:
 
     augmented = augment_models_payload(payload)
 
-    assert augmented["data"][: len(payload["data"])] == payload["data"]
-    assert [model["id"] for model in augmented["data"][-2:]] == [
-        "databricks-gpt",
-        "databricks-claude",
+    assert [model["id"] for model in augmented["data"]] == [
+        "dbx/databricks-gpt-5-6-sol",
+        "dbx/databricks-claude-opus-5",
+        "dbx/databricks-gpt",
+        "dbx/databricks-claude",
     ]
-    assert any(model["id"] == "databricks/databricks-gpt-5-6-sol" for model in augmented["data"])
     assert [model["slug"] for model in augmented["models"]] == [
-        "databricks-gpt-5-6-sol",
-        "databricks-claude-opus-5",
-        "databricks-gpt",
-        "databricks-claude",
+        "dbx/databricks-gpt-5-6-sol",
+        "dbx/databricks-claude-opus-5",
+        "dbx/databricks-gpt",
+        "dbx/databricks-claude",
     ]
     gpt, claude, gpt_family, claude_family = augmented["models"]
     assert gpt["context_window"] == 272_000
@@ -69,9 +69,10 @@ def test_family_aliases_are_unique_and_only_cover_recognized_models() -> None:
 
     augmented = augment_models_payload(payload)
 
-    assert [model["id"] for model in augmented["data"]].count("databricks-gpt") == 1
+    assert [model["id"] for model in augmented["data"]].count("dbx/databricks-gpt") == 1
     assert all(
-        model["id"] not in {"databricks-bge", "databricks-custom"} for model in augmented["data"]
+        model["id"] not in {"dbx/databricks-bge", "dbx/databricks-custom"}
+        for model in augmented["data"]
     )
 
 
@@ -91,14 +92,16 @@ def test_appends_each_recognized_basic_family_after_exact_models() -> None:
 
     augmented = augment_models_payload(payload)
 
-    assert [model["id"] for model in augmented["data"][: len(exact_ids)]] == exact_ids
+    assert [model["id"] for model in augmented["data"][: len(exact_ids)]] == [
+        f"dbx/{model_id}" for model_id in exact_ids
+    ]
     assert [model["id"] for model in augmented["data"][len(exact_ids) :]] == [
-        "databricks-gpt-oss",
-        "databricks-gemini",
-        "databricks-llama",
-        "databricks-qwen",
-        "databricks-glm",
-        "databricks-gemma",
+        "dbx/databricks-gpt-oss",
+        "dbx/databricks-gemini",
+        "dbx/databricks-llama",
+        "dbx/databricks-qwen",
+        "dbx/databricks-glm",
+        "dbx/databricks-gemma",
     ]
 
 
@@ -118,14 +121,14 @@ def test_merges_live_endpoints_missing_from_litellm_registry() -> None:
     augmented = augment_models_payload(payload, endpoints)
 
     assert [model["id"] for model in augmented["data"]] == [
-        "databricks/databricks-gpt-5-6-sol",
-        "databricks/databricks-gpt-5-6-terra",
-        "databricks-gpt",
+        "dbx/databricks-gpt-5-6-sol",
+        "dbx/databricks-gpt-5-6-terra",
+        "dbx/databricks-gpt",
     ]
     assert [model["slug"] for model in augmented["models"]] == [
-        "databricks-gpt-5-6-sol",
-        "databricks-gpt-5-6-terra",
-        "databricks-gpt",
+        "dbx/databricks-gpt-5-6-sol",
+        "dbx/databricks-gpt-5-6-terra",
+        "dbx/databricks-gpt",
     ]
 
 
@@ -142,12 +145,48 @@ def test_live_discovery_removes_stale_registry_models() -> None:
 
     augmented = augment_models_payload(payload, [])
 
-    assert [model["id"] for model in augmented["data"]] == [
-        "*",
-        "databricks/*",
-        "custom-route",
-    ]
+    assert [model["id"] for model in augmented["data"]] == ["custom-route"]
     assert [model["slug"] for model in augmented["models"]] == ["custom-route"]
+
+
+def test_explicit_native_route_opts_into_databricks_models() -> None:
+    payload = {
+        "object": "list",
+        "data": [
+            {"id": "databricks/*", "object": "model"},
+            {"id": "databricks/databricks-gpt-5-6-sol", "object": "model"},
+        ],
+    }
+
+    augmented = augment_models_payload(
+        payload,
+        [ServingEndpointSummary(name="databricks-gpt-5-6-sol")],
+    )
+
+    assert [model["id"] for model in augmented["data"]] == [
+        "dbx/databricks-gpt-5-6-sol",
+        "databricks/databricks-gpt-5-6-sol",
+        "dbx/databricks-gpt",
+    ]
+
+
+def test_keeps_already_qualified_dbx_models_without_native_duplicates() -> None:
+    payload = {
+        "object": "list",
+        "data": [
+            {"id": "dbx/databricks-gpt-5-6-sol", "object": "model"},
+            {"id": "databricks/databricks-gpt-5-6-sol", "object": "model"},
+            {"id": "databricks-gpt-5-6-sol", "object": "model"},
+        ],
+    }
+
+    augmented = augment_models_payload(payload)
+
+    assert [model["id"] for model in augmented["data"]] == [
+        "dbx/databricks-gpt-5-6-sol",
+        "dbx/databricks-gpt",
+    ]
+    assert all(model["id"].startswith("dbx/") for model in augmented["data"])
 
 
 def test_existing_codex_envelope_is_not_replaced() -> None:

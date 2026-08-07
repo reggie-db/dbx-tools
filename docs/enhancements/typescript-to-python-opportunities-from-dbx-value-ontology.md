@@ -65,12 +65,12 @@ Pydantic-AI adapter locally. Its summary and investigation stages depend on that
 - Mastra-specific adapters.
 - Browser-facing schemas that have no Python consumer.
 
-**Polyglot fixtures**
+**Colocated polyglot tests**
 
-- `packages/test/polyglot/fixtures/model/classification.json`
-- `packages/test/polyglot/fixtures/model/resolution.json`
-- `packages/test/polyglot/fixtures/model/invocation-urls.json`
-- `packages/test/polyglot/fixtures/model/chat-sanitization.json`
+- `packages/js/shared/model/test/classify.test.ts`
+- `packages/js/shared/model/test/openai-chat.test.ts`
+- `packages/js/node/model/test/invoke.test.ts`
+- `packages/js/node/model/test/resolve.test.ts`
 
 This is the highest-value port because it removes repeated endpoint quirks from every Python agent
 or collector that calls Databricks Model Serving.

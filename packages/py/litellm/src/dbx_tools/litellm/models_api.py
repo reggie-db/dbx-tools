@@ -21,6 +21,7 @@ _EFFORT_DESCRIPTIONS = {
     "xhigh": "Maximum reasoning for the hardest tasks",
 }
 _BASIC_FAMILIES = ("gpt", "claude", "gemini", "llama", "qwen", "glm", "gemma")
+_ROUTE_MODEL_IDS = frozenset({"*", "databricks/*", "dbx/*"})
 logger = logging.getLogger(__name__)
 
 
@@ -28,13 +29,16 @@ def augment_models_payload(
     payload: Any,
     endpoints: Sequence[ServingEndpointSummary] | None = None,
 ) -> Any:
-    """Prefer discovered endpoints, falling back to LiteLLM's bundled registry."""
+    """Advertise dbx-routed models from discovery or LiteLLM registry metadata."""
     if not isinstance(payload, Mapping) or "models" in payload:
         return payload
     data = payload.get("data")
     if not isinstance(data, Sequence) or isinstance(data, (str, bytes, bytearray)):
         return payload
-    augmented_data = _discovered_models(data, endpoints)
+    native_enabled = any(
+        isinstance(item, Mapping) and item.get("id") == "databricks/*" for item in data
+    )
+    augmented_data = _discovered_models(data, endpoints, native_enabled=native_enabled)
     augmented_data = _append_family_models(augmented_data)
     return {**payload, "data": augmented_data, "models": _codex_models(augmented_data)}
 
@@ -67,8 +71,9 @@ def install_models_compatibility_middleware() -> None:
         try:
             endpoints = await asyncio.to_thread(dbx_provider.backend.models, force=True)
         except (DatabricksError, OSError, RuntimeError, ValueError) as error:
-            logger.warning("Live model discovery failed; using LiteLLM registry: %s", error)
-            endpoints = None
+            endpoints = dbx_provider.backend.cached_models()
+            source = "cached endpoint catalogue" if endpoints else "LiteLLM registry"
+            logger.warning("Live model discovery failed; using %s: %s", source, error)
         payload = augment_models_payload(payload, endpoints)
         return JSONResponse(
             content=payload,
@@ -86,37 +91,34 @@ def _codex_models(data: Sequence[Any]) -> list[dict[str, Any]]:
         model_id = item.get("id")
         if not isinstance(model_id, str):
             continue
-        slug = model_id.removeprefix("databricks/")
-        if slug in {"*", "databricks/*"} or slug in seen:
+        if model_id in _ROUTE_MODEL_IDS or model_id in seen:
             continue
-        seen.add(slug)
-        models.append(_codex_model(slug, item, priority=10_000 - len(models)))
+        seen.add(model_id)
+        models.append(_codex_model(model_id, item, priority=10_000 - len(models)))
     return models
 
 
 def _discovered_models(
     data: Sequence[Any],
     endpoints: Sequence[ServingEndpointSummary] | None,
+    *,
+    native_enabled: bool,
 ) -> list[Any]:
-    """Use exact live endpoints and retain registry metadata only for matches."""
+    """Use exact live endpoints and expose every Databricks model through dbx."""
     if endpoints is None:
-        return list(data)
+        return _registry_models(data, native_enabled=native_enabled)
 
-    result: list[Any] = []
+    result = _custom_models(data)
     registry: dict[str, Mapping[str, Any]] = {}
     for item in data:
         if not isinstance(item, Mapping):
-            result.append(item)
             continue
         model_id = item.get("id")
         if not isinstance(model_id, str):
-            result.append(item)
             continue
-        slug = model_id.removeprefix("databricks/")
-        if slug in {"*", "databricks/*"} or not slug.startswith(("databricks-", "system.ai.")):
-            result.append(item)
-            continue
-        registry.setdefault(slug, item)
+        slug = _databricks_slug(model_id)
+        if slug is not None:
+            registry.setdefault(slug, item)
 
     seen: set[str] = set()
     for endpoint in endpoints:
@@ -126,20 +128,86 @@ def _discovered_models(
         result.append(
             {
                 **(dict(existing) if existing is not None else {}),
-                "id": f"databricks/{endpoint.name}",
+                "id": _dbx_model_id(endpoint.name),
                 "object": "model",
-                "owned_by": "databricks",
+                "owned_by": "dbx",
             }
         )
+        if native_enabled:
+            result.append(
+                {
+                    **(dict(existing) if existing is not None else {}),
+                    "id": f"databricks/{endpoint.name}",
+                    "object": "model",
+                    "owned_by": "databricks",
+                }
+            )
         seen.add(endpoint.name)
     return result
+
+
+def _registry_models(data: Sequence[Any], *, native_enabled: bool) -> list[Any]:
+    """Rewrite bundled Databricks entries through dbx when discovery is unavailable."""
+    result = _custom_models(data)
+    seen = {
+        item.get("id")
+        for item in result
+        if isinstance(item, Mapping) and isinstance(item.get("id"), str)
+    }
+    for item in data:
+        if not isinstance(item, Mapping):
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str):
+            continue
+        slug = _databricks_slug(model_id)
+        dbx_id = _dbx_model_id(slug) if slug is not None else None
+        if dbx_id is None or dbx_id in seen:
+            continue
+        result.append({**item, "id": dbx_id, "owned_by": "dbx"})
+        seen.add(dbx_id)
+        if native_enabled:
+            native_id = f"databricks/{slug}"
+            if native_id not in seen:
+                result.append({**item, "id": native_id, "owned_by": "databricks"})
+                seen.add(native_id)
+    return result
+
+
+def _custom_models(data: Sequence[Any]) -> list[Any]:
+    """Retain explicit non-Databricks models while dropping route placeholders."""
+    return [
+        item
+        for item in data
+        if not (
+            isinstance(item, Mapping)
+            and isinstance((model_id := item.get("id")), str)
+            and (
+                model_id in _ROUTE_MODEL_IDS
+                or (not model_id.startswith("dbx/") and _databricks_slug(model_id) is not None)
+            )
+        )
+    ]
+
+
+def _databricks_slug(model_id: str) -> str | None:
+    """Normalize a LiteLLM native or already-dbx Databricks model id."""
+    normalized = model_id.removeprefix("dbx/").removeprefix("databricks/")
+    if normalized.startswith(("databricks-", "system.ai.")):
+        return normalized
+    return None
+
+
+def _dbx_model_id(slug: str) -> str:
+    """Qualify one resolved model for this package's custom provider."""
+    return f"dbx/{slug.removeprefix('dbx/').removeprefix('databricks/')}"
 
 
 def _append_family_models(data: Sequence[Any]) -> list[Any]:
     """Append one resolvable alias for each deployed basic model family."""
     result = list(data)
     existing = {
-        model_id.removeprefix("databricks/")
+        model_id
         for item in data
         if isinstance(item, Mapping) and isinstance((model_id := item.get("id")), str)
     }
@@ -148,17 +216,15 @@ def _append_family_models(data: Sequence[Any]) -> list[Any]:
         if not isinstance(item, Mapping):
             continue
         model_id = item.get("id")
-        if not isinstance(model_id, str):
+        if not isinstance(model_id, str) or not model_id.startswith("dbx/"):
             continue
-        slug = model_id.removeprefix("databricks/")
-        if slug in {"*", "databricks/*"}:
-            continue
+        slug = model_id.removeprefix("dbx/")
         family = _basic_family(slug)
         if family is not None:
             representatives.setdefault(family, item)
 
     for family, representative in representatives.items():
-        alias = f"databricks-{family}"
+        alias = f"dbx/databricks-{family}"
         if alias in existing:
             continue
         result.append({**representative, "id": alias})

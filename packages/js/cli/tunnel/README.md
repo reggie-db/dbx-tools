@@ -112,8 +112,8 @@ Omitted values fall back to the environment, a `.env` file, then
 | `--session-ttl <seconds>`     | session lifetime                                           |
 | `--code-ttl <seconds>`        | one-time-code lifetime                                     |
 | `--session-cutoff <when>`     | invalidate every session issued before this                |
-| `--auth-storage <mode>`       | Better Auth database: `auto`, `lakebase`, or `sqlite`       |
-| `--auth-sqlite-path <path>`   | local Better Auth SQLite file                               |
+| `--auth-storage <mode>`       | Better Auth database: `auto`, `lakebase`, or `sqlite`      |
+| `--auth-sqlite-path <path>`   | local Better Auth SQLite file                              |
 | `--forward-headers <pats...>` | extra `x-` headers tunnel traffic may forward              |
 | `--insecure`                  | run open, with no gate                                     |
 

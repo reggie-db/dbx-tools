@@ -22,6 +22,8 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
   `DATABRICKS_CONFIG_PROFILE`, then the Databricks CLI's configured default;
 - discovers serving endpoints from the selected workspace and caches them per
   process;
+- advertises discovered endpoints and family aliases only under `dbx/*` by
+  default, keeping them distinct from LiteLLM's native `databricks/*` provider;
 - resolves exact or fuzzy model names with `dbx-tools-model`, refreshing the
   live catalogue once after a miss;
 - restricts tool-bearing requests to endpoints classified as tool-capable;
@@ -55,7 +57,7 @@ Then point an OpenAI-compatible client at `http://127.0.0.1:4000/v1`:
 ```bash
 curl http://127.0.0.1:4000/v1/chat/completions \
   -H 'content-type: application/json' \
-  -d '{"model":"claude sonnet","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"dbx/databricks-claude","messages":[{"role":"user","content":"hi"}]}'
 ```
 
 The resolved profile is written to `DATABRICKS_CONFIG_PROFILE`, so endpoint
@@ -88,10 +90,7 @@ Then register that adjacent shim under `dbx`:
 
 ```yaml
 model_list:
-  - model_name: "databricks/*"
-    litellm_params:
-      model: "databricks/*"
-  - model_name: "*"
+  - model_name: "dbx/*"
     litellm_params:
       model: "dbx/*"
       allowed_openai_params:
@@ -107,6 +106,16 @@ litellm_settings:
       custom_handler: config_provider.dbx_provider
 ```
 
+The packaged config advertises only `dbx/*`. A consumer config can opt into
+LiteLLM's native Databricks provider independently:
+
+```yaml
+model_list:
+  - model_name: "databricks/*"
+    litellm_params:
+      model: "databricks/*"
+```
+
 Set `DATABRICKS_CONFIG_PROFILE` before starting LiteLLM to override the
 Databricks CLI default when `--profile` is not available.
 
@@ -118,7 +127,7 @@ Automatic effort is opt-in. On Chat Completions, send
 ```json
 {
   "model": "claude sonnet",
-  "messages": [{"role": "user", "content": "Debug this distributed deadlock"}],
+  "messages": [{ "role": "user", "content": "Debug this distributed deadlock" }],
   "reasoning_effort": "auto"
 }
 ```
@@ -129,7 +138,7 @@ On Responses, use the native reasoning shape:
 {
   "model": "gpt 5 codex",
   "input": "Debug this distributed deadlock",
-  "reasoning": {"effort": "auto"}
+  "reasoning": { "effort": "auto" }
 }
 ```
 
@@ -181,9 +190,11 @@ refreshes the profile's live serving endpoints and uses that discovery as the
 exact model list, including endpoints such as `databricks-gpt-5-6-sol`.
 LiteLLM's bundled registry supplies metadata for matching live models and is
 used as a fallback only when live discovery fails. The response then appends one
-basic alias for each recognized deployed family, such as `databricks-gpt` or
-`databricks-claude`. The aliases flow through the same fuzzy resolver and do not
-replace exact models.
+basic alias for each recognized deployed family. Exact models and aliases are
+advertised as `dbx/databricks-gpt-5-6-sol`, `dbx/databricks-gpt`, and similar
+ids. The aliases flow through the same fuzzy resolver and do not replace exact
+models. A custom config that declares `databricks/*` opts into native model ids
+alongside the dbx ids.
 
 The proxy owns one process-wide SDK client and bearer cache. A fresh cache read
 returns without locking; a stale read acquires an `RLock`, checks again, and

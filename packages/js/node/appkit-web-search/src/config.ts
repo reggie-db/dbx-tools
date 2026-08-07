@@ -414,8 +414,7 @@ export function resolveWebSearchConfig(
     modelFallbacks: fallbacks.length > 0 ? fallbacks : DEFAULT_MODEL_FALLBACKS,
     webSearchTools: { ...parseToolsEnv(), ...(config.webSearchTools ?? {}) },
     fuzzy:
-      coreConfig.boolean(config.modelFuzzyMatch, "WEB_SEARCH_FUZZY", coreConfig.ENV_ONLY) ??
-      true,
+      coreConfig.boolean(config.modelFuzzyMatch, "WEB_SEARCH_FUZZY", coreConfig.ENV_ONLY) ?? true,
     fuzzyThreshold: coreConfig.positiveNumber(
       config.modelFuzzyThreshold,
       "WEB_SEARCH_FUZZY_THRESHOLD",

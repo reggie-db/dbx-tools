@@ -108,6 +108,11 @@ class DatabricksLiteLLMBackend:
                 self._models = list_serving_endpoints(self.client)
             return list(self._models)
 
+    def cached_models(self) -> list[ServingEndpointSummary]:
+        """Return the last successful catalogue without triggering discovery."""
+        with self._lock:
+            return list(self._models or ())
+
     def resolve(self, requested: str, *, requires_tools: bool = False) -> str:
         """Resolve a loose model name, refreshing the live catalogue on a miss."""
         query = _strip_provider_prefix(requested)

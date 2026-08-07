@@ -264,10 +264,10 @@ Primary package areas:
   out of cell output.
 - **`packages/test/`** — private cross-package and cross-runtime test harnesses.
   `packages/test/polyglot` owns the Bun-native `polygotTest` / embedded-Python
-  helpers plus the subprocess fixture harness. Pure deterministic contracts run
-  beside the TypeScript source-of-truth package through one shared test callback;
-  fixtures stay here only when process isolation, cyclic values, or private
-  source constants make in-process calls unsuitable.
+  helpers. Pure deterministic contracts run beside the TypeScript
+  source-of-truth package through one shared test callback. Runtime-specific or
+  process-isolated behavior stays in the owning Node or Python package's native
+  test suite.
 
 > Local dir is `dbx-tools/`; the GitHub repo is `reggie-db/dbx-tools`
 > (default branch **`main`**).
@@ -559,13 +559,12 @@ native test suite, wrapped in `polygotTest` so the SAME callback executes agains
 TypeScript and embedded Python. Keep language-specific tests only for
 language-specific concerns (async lifecycle, context-manager cleanup,
 SDK/client transport).
-Use subprocess fixtures under `packages/test/polyglot/fixtures` only when the
-contract needs process-isolated environment/cwd/module caches, constructs cyclic
-values that cannot cross FFI, or reads private source constants. A drifted port
-then fails beside the source implementation instead of passing two
-agreeing-with-itself suites. Avoid changing TypeScript production behavior to
-accommodate a port; if Python cannot match cleanly, stop before introducing a
-cross-runtime divergence.
+When a contract needs process-isolated environment/cwd/module caches, constructs
+cyclic values that cannot cross FFI, or reads private source constants, test it
+in the owning package's native suite. A drifted port then fails beside the source
+implementation instead of passing two agreeing-with-itself suites. Avoid
+changing TypeScript production behavior to accommodate a port; if Python cannot
+match cleanly, stop before introducing a cross-runtime divergence.
 
 **Prove it installs the way a consumer installs it.** Every Python package must
 stay `pip install`-able by Git `#subdirectory` on its own, so internal
@@ -740,16 +739,11 @@ all of shared-core speculatively. When moving duplicated Python helper code into
 change. When a contract must remain identical across languages, add one
 `polygotTest` callback to the owning TypeScript package and delete equivalent
 Python assertions. The private `@dbx-tools/test-polyglot` package owns the
-embedded-Python adapter and is added only as a TEST dependency. Retain
-JSON/YAML fixtures under `packages/test/polyglot/fixtures` for process-isolated
-configuration, cyclic values, and private constants; organize those fixtures by
-the TypeScript source-of-truth package and contract. Include constant parity
-cases when both runtimes independently encode protocol limits, wire names,
-retry bounds, or other compatibility-sensitive values. The generic runners
-recursively discover every JSON/YAML document except `default.*`, so fixtures
-and directory defaults must be the only contract-specific content. A small
-test-only adapter is acceptable when it is the only way to read a private
-TypeScript source-of-truth constant without exporting it from production code.
+embedded-Python adapter and is added only as a TEST dependency. Process-isolated
+configuration, cyclic values, and private constants belong in native tests under
+the owning package rather than a central fixture runner. Include parity cases
+when both runtimes independently encode protocol limits, wire names, retry
+bounds, or other compatibility-sensitive values.
 
 Package-local modules that exist so a helper is written once, listed here because
 each was previously duplicated across sibling files:
@@ -1523,9 +1517,9 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   in the published tarball.** In-repo, `workspace:*` resolves siblings from source.
   The committed manifest keeps `workspace:*` (baking a `^<version>` for a
   not-yet-published version would break the release workflow's initial `bun
-  install`); `projen-release` resolves them transiently at publish via
+install`); `projen-release` resolves them transiently at publish via
   `tasks/publish.ts --stamp-only` (set versions + refresh lockfile), then `bun
-  publish` in `projen/` strips `workspace:*` to those versions. Do not
+publish` in `projen/` strips `workspace:*` to those versions. Do not
   hand-maintain those ranges.
 - **A generator tool the WORKSPACE already provides is a devDep, not a dep.** Every
   engine dependency is installed by every consumer, including ones that never reach

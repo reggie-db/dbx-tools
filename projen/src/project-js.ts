@@ -36,13 +36,13 @@ import {
   toPosix,
 } from "./packages.ts";
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
+import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
 import { applyCompiledPublish } from "./publish.ts";
 import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
-import { readWorkspaceVersion } from "./workspace-version.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
-import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
+import { readWorkspaceVersion } from "./workspace-version.ts";
 
 /**
  * The dbx-tools project surface, backed by projen's Node toolchain. A single

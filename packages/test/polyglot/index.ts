@@ -3,10 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/test-polyglot";
-export * as config from "./src/config.ts";
-export * as harness from "./src/harness.ts";
 export * as polygotTest from "./src/polygot-test.ts";
 export * as pythonTest from "./src/python-test.ts";
-export type { Runtime, RuntimeValue, InvokeMode, ResultMode, TargetOverrides, FixtureCase, FunctionDefinition, FixtureSuite, FixtureResult } from "./src/harness.ts";
 export { Language } from "./src/polygot-test.ts";
 export type { PolyglotTarget, ModuleReference, PolyglotOptions } from "./src/polygot-test.ts";

@@ -212,7 +212,9 @@ class TestPydanticMessageObjects:
         tool_turn = self._message(
             role="assistant",
             content="",
-            tool_calls=[{"id": "1", "type": "function", "function": {"name": "t", "arguments": "{}"}}],
+            tool_calls=[
+                {"id": "1", "type": "function", "function": {"name": "t", "arguments": "{}"}}
+            ],
         )
         messages = [{"role": "user", "content": "hi"}, tool_turn]
 

@@ -272,15 +272,13 @@ export const EMAIL_CONFIG_SCHEMA: JSONSchema7 = {
 /** Parse the `SMTP_SECURE` env / config flag, defaulting by port. */
 function resolveSecure(flag: boolean | undefined, port: number): boolean {
   return (
-    coreConfig.boolean(flag, "SMTP_SECURE", coreConfig.ENV_ONLY) ??
-    port === IMPLICIT_TLS_SMTP_PORT
+    coreConfig.boolean(flag, "SMTP_SECURE", coreConfig.ENV_ONLY) ?? port === IMPLICIT_TLS_SMTP_PORT
   );
 }
 
 /** Parse the `EMAIL_SENDER_POLICY` env / config value, defaulting to deny-by-default. */
 function resolveSenderPolicy(policy: SenderPolicy | undefined): SenderPolicy {
-  const raw =
-    policy ?? coreConfig.text("EMAIL_SENDER_POLICY", coreConfig.ENV_ONLY)?.toLowerCase();
+  const raw = policy ?? coreConfig.text("EMAIL_SENDER_POLICY", coreConfig.ENV_ONLY)?.toLowerCase();
   if (raw === "unrestricted") return "unrestricted";
   if (raw === undefined || raw === "" || raw === "allowlist") return "allowlist";
   throw ValidationError.invalidValue("senderPolicy", raw, '"allowlist" or "unrestricted"');
@@ -354,11 +352,7 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
   const pass = coreConfig.string(smtp.password, "SMTP_PASSWORD", coreConfig.ENV_ONLY);
   const domain = coreConfig.string(config.domain, "EMAIL_DOMAIN", coreConfig.ENV_ONLY);
   const from = coreConfig.string(config.from, "EMAIL_FROM", coreConfig.ENV_ONLY);
-  const systemFrom = coreConfig.string(
-    config.systemFrom,
-    "EMAIL_SYSTEM_FROM",
-    coreConfig.ENV_ONLY,
-  );
+  const systemFrom = coreConfig.string(config.systemFrom, "EMAIL_SYSTEM_FROM", coreConfig.ENV_ONLY);
   const senderPolicy = resolveSenderPolicy(config.senderPolicy);
   const configuredSenders = parseAllowedSenders(
     config.allowedSenders ?? coreConfig.text("EMAIL_ALLOWED_SENDERS", coreConfig.ENV_ONLY),
@@ -390,12 +384,7 @@ export function resolveEmailConfig(config: EmailPluginConfig = {}): ResolvedEmai
         "Set EMAIL_DOMAIN to derive <user-local-part>@<domain> (and no-reply@<domain> for system mail), or EMAIL_FROM for a fixed address.",
       );
     }
-    const port = coreConfig.port(
-      smtp.port,
-      "SMTP_PORT",
-      DEFAULT_SMTP_PORT,
-      coreConfig.ENV_ONLY,
-    );
+    const port = coreConfig.port(smtp.port, "SMTP_PORT", DEFAULT_SMTP_PORT, coreConfig.ENV_ONLY);
     return {
       mode: "smtp",
       host: host!,

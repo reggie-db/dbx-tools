@@ -201,11 +201,7 @@ export function resolveTeamsConfig(overrides?: TeamsPluginConfig): ResolvedTeams
   const cardVersion =
     coreConfig.string(overrides?.cardVersion, CARD_VERSION_ENV, coreConfig.ENV_ONLY) ??
     card.ADAPTIVE_CARD_VERSION;
-  const webhookUrl = coreConfig.string(
-    overrides?.webhookUrl,
-    WEBHOOK_URL_ENV,
-    coreConfig.ENV_ONLY,
-  );
+  const webhookUrl = coreConfig.string(overrides?.webhookUrl, WEBHOOK_URL_ENV, coreConfig.ENV_ONLY);
   if (webhookUrl !== undefined && !isHttpsUrl(webhookUrl)) {
     throw ValidationError.invalidValue(
       WEBHOOK_URL_ENV,
