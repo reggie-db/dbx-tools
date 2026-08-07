@@ -7,11 +7,11 @@ import os
 from collections.abc import Sequence
 from importlib import resources
 
-from .backend import DATABRICKS_PROFILE_ENV, PROFILE_ENV, require_profile
+from .backend import DATABRICKS_PROFILE_ENV, require_profile
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Start LiteLLM with an explicit Databricks profile and default config."""
+    """Start LiteLLM with a resolved Databricks profile and default config."""
     parser = argparse.ArgumentParser(
         prog="dbx-litellm",
         description=(
@@ -21,13 +21,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     parser.add_argument(
         "--profile",
-        required=True,
-        help="Databricks CLI profile used for endpoint discovery and model requests",
+        help=(
+            "Databricks profile used for endpoint discovery and model requests; "
+            "defaults to DATABRICKS_CONFIG_PROFILE, then the Databricks CLI default"
+        ),
     )
     parsed, proxy_args = parser.parse_known_args(argv)
 
     profile = require_profile(parsed.profile)
-    os.environ[PROFILE_ENV] = profile
     os.environ[DATABRICKS_PROFILE_ENV] = profile
     if not os.getenv("HOST") and not _has_option(proxy_args, "--host"):
         proxy_args.extend(["--host", "127.0.0.1"])

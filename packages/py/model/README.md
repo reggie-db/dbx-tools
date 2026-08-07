@@ -24,7 +24,8 @@ Key features:
 - reasoning-effort levels inferred from Databricks served-entity identity, with
   endpoint-family fallback for summaries that omit it;
 - exact and fuzzy endpoint resolution with deterministic class ordering;
-- Databricks invocation URL and per-request authentication helpers;
+- Databricks invocation URL and process-serialized per-request authentication
+  helpers, so concurrent SDK refreshes converge;
 - OpenAI chat request sanitization and content extraction;
 - embedding vector extraction with optional dimension validation.
 
@@ -60,5 +61,6 @@ and embedding normalization is the repetitive part.
 - `classify`, `classes`, `fallback` — model taxonomy and ordering;
 - `resolve` — exact/fuzzy ranking and single-model selection;
 - `serving` — structural `WorkspaceClient` endpoint listing;
-- `invoke` — URLs, SDK authentication headers, and JSON POST helpers;
+- `invoke` - URLs, process-serialized SDK authentication headers, and JSON POST
+  helpers;
 - `chat`, `embedding` — request sanitization and response extraction.

@@ -105,8 +105,10 @@ await polygotTest(
         ...ranked,
         endpoint: { name: endpoint.name, task: endpoint.task },
       }));
+    const resolveModel = (...args: Parameters<typeof implementation.resolveModel>) =>
+      implementation.resolveModel(...args);
 
-    describe(`rankModels parity (${language})`, () => {
+    describe(`model resolution parity (${language})`, () => {
       it("ranks by a class ceiling without search", () => {
         assert.deepEqual(
           rankModels([chat(OPUS_8), chat(SONNET), chat(HAIKU_5), embedding(BGE)], {
@@ -127,6 +129,53 @@ await polygotTest(
           }),
           [{ endpoint: chat(SONNET), modelClass: ModelClass.ChatBalanced, score: 0 }],
         );
+      });
+
+      it("prefers the discovered catalogue over the static fallback floor", () => {
+        const discovered = "databricks-claude-opus-99";
+
+        assert.deepEqual(resolveModel([chat(discovered)], {}), {
+          modelId: discovered,
+          source: "fallback",
+        });
+      });
+
+      it("uses the static floor only when discovery returns no chat model", () => {
+        assert.deepEqual(resolveModel([], {}), {
+          modelId: FALLBACK_MODEL_IDS[0]!,
+          source: "fallback",
+        });
+      });
+
+      it("accepts only operator fallbacks present in discovery", () => {
+        const discovered = "databricks-approved-custom";
+
+        assert.deepEqual(resolveModel([chat(discovered)], { fallbacks: ["missing", discovered] }), {
+          modelId: discovered,
+          source: "fallback",
+        });
+      });
+    });
+  },
+);
+
+await polygotTest(
+  () => import("../index.ts"),
+  "fallback",
+  (implementation, language) => {
+    describe(`model fallback parity (${language})`, () => {
+      it("keeps the same last-resort model floor", () => {
+        assert.deepEqual(implementation.FALLBACK_MODEL_IDS, [
+          "databricks-gpt-5-5-pro",
+          "databricks-claude-opus-4-8",
+          "databricks-gemini-3-1-pro",
+          "databricks-gpt-5-5",
+          "databricks-claude-sonnet-4-6",
+          "databricks-meta-llama-3-3-70b-instruct",
+          "databricks-gpt-5-nano",
+          "databricks-claude-haiku-4-5",
+          "databricks-meta-llama-3-1-8b-instruct",
+        ]);
       });
     });
   },

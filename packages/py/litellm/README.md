@@ -18,8 +18,8 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
 
 ## Key features
 
-- requires an explicit Databricks CLI profile and never silently uses the SDK
-  default;
+- resolves a Databricks profile from `--profile`, then
+  `DATABRICKS_CONFIG_PROFILE`, then the Databricks CLI's configured default;
 - discovers serving endpoints from the selected workspace and caches them per
   process;
 - resolves exact or fuzzy model names with `dbx-tools-model`, refreshing the
@@ -37,16 +37,17 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
 ## Run the proxy
 
 ```bash
-uv run dbx-litellm --profile my-workspace --port 4000
+uv run dbx-litellm --port 4000
 ```
 
 The launcher listens on `127.0.0.1` by default. Pass an explicit LiteLLM
 `--host` value or set `HOST` to expose it on another interface.
+Pass `--profile my-workspace` to override both the environment and CLI default.
 
 The equivalent module invocation is:
 
 ```bash
-uv run python -m dbx_tools.litellm --profile my-workspace --port 4000
+uv run python -m dbx_tools.litellm --port 4000
 ```
 
 Then point an OpenAI-compatible client at `http://127.0.0.1:4000/v1`:
@@ -57,8 +58,9 @@ curl http://127.0.0.1:4000/v1/chat/completions \
   -d '{"model":"claude sonnet","messages":[{"role":"user","content":"hi"}]}'
 ```
 
-`--profile` also pins `DATABRICKS_CONFIG_PROFILE`, so endpoint discovery and
-LiteLLM's delegated Databricks request use the same workspace credentials.
+The resolved profile is written to `DATABRICKS_CONFIG_PROFILE`, so endpoint
+discovery and LiteLLM's delegated Databricks request use the same workspace
+credentials.
 
 ## Relationship to LiteLLM
 
@@ -68,7 +70,7 @@ mapping, streaming semantics, retries, embeddings, and Chat↔Responses
 conversion.
 
 This package supplies only the workspace-specific layer LiteLLM does not have:
-explicit profile selection, live endpoint discovery, fuzzy names, and
+deterministic profile selection, live endpoint discovery, fuzzy names, and
 capability-aware routing. Request messages, content blocks, tools, and provider
 options are not rewritten except when the caller explicitly requests automatic
 reasoning selection.
@@ -105,8 +107,8 @@ litellm_settings:
       custom_handler: config_provider.dbx_provider
 ```
 
-Set `DBX_LITELLM_PROFILE` or `DATABRICKS_CONFIG_PROFILE` before starting
-LiteLLM. If both are set, they must name the same profile.
+Set `DATABRICKS_CONFIG_PROFILE` before starting LiteLLM to override the
+Databricks CLI default when `--profile` is not available.
 
 ## Automatic reasoning effort
 
@@ -131,10 +133,11 @@ On Responses, use the native reasoning shape:
 }
 ```
 
-The callback asks `databricks-meta-llama-3-1-8b-instruct` for a score from
-`0.01` through `1.00`, then maps that score through the resolved Databricks
-endpoint's inferred reasoning levels. Scores below `0.34` use `low`, scores below
-`0.67` use `medium`, and higher scores use `high`. An exact `1.00` uses the
+The callback resolves `databricks-meta-llama-3-1-8b-instruct` against the live
+catalogue as its fallback classifier preference, asks the discovered endpoint
+for a score from `0.01` through `1.00`, then maps that score through the target
+Databricks endpoint's inferred reasoning levels. Scores below `0.34` use `low`,
+scores below `0.67` use `medium`, and higher scores use `high`. An exact `1.00` uses the
 GPT-5.6 ultra tier, whose LiteLLM wire value is `xhigh`; models without that
 level remain at `high`. Integer classifier output is treated as a percentage
 (`73` becomes `0.73`), except `1`, which remains the maximum score.
@@ -174,10 +177,18 @@ reported by the provider, not the selected effort level.
 Endpoint discovery is lazy. The first request lists serving endpoints, later
 requests reuse that catalogue, and an unresolved name triggers one refresh
 before the unresolved endpoint id is delegated to Databricks. `/v1/models`
-preserves every model LiteLLM returns, including exact endpoints such as
-`databricks-gpt-5-6-sol`, then appends one basic alias for each recognized
-deployed family, such as `databricks-gpt` or `databricks-claude`. The aliases
-flow through the same fuzzy resolver and do not replace or filter exact models.
+refreshes the profile's live serving endpoints and uses that discovery as the
+exact model list, including endpoints such as `databricks-gpt-5-6-sol`.
+LiteLLM's bundled registry supplies metadata for matching live models and is
+used as a fallback only when live discovery fails. The response then appends one
+basic alias for each recognized deployed family, such as `databricks-gpt` or
+`databricks-claude`. The aliases flow through the same fuzzy resolver and do not
+replace exact models.
+
+The proxy owns one process-wide SDK client and bearer cache. A fresh cache read
+returns without locking; a stale read acquires an `RLock`, checks again, and
+performs one synchronous SDK authentication load. SDK background refresh is
+disabled so parallel requests cannot start a second refresh path.
 
 LiteLLM's `CustomLLM` interface has no native Responses hook. For a
 Responses-only endpoint, the packaged proxy's pre-call hook changes only the
@@ -187,14 +198,14 @@ families use LiteLLM's own Responses-to-Chat fallback.
 
 ## Modules
 
-- `backend` — explicit-profile workspace client, endpoint cache, and model
+- `backend` - profile-resolved workspace client, endpoint cache, and model
   resolution;
 - `models` — Responses-only endpoint routing policy;
 - `provider` — LiteLLM `CustomLLM` adapter and exported `dbx_provider`
   singleton;
 - `reasoning` — opt-in effort classification and TTL-backed follow-up context;
 - `routing` — model-only proxy hook for native Responses-only calls;
-- `cli` — profile-pinned launcher for the packaged LiteLLM proxy config.
+- `cli` - profile-resolving launcher for the packaged LiteLLM proxy config.
 
 For standalone Python endpoint resolution and invocation helpers, use
 [`dbx-tools-model`](../model). For the TypeScript local proxy, use

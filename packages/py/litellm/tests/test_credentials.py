@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from dbx_tools.litellm.credentials import (
@@ -99,6 +100,36 @@ def test_stale_token_is_reminted() -> None:
 
     assert first != second
     assert config.authenticate_count == 2
+
+
+def test_concurrent_stale_reads_share_one_refresh() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    second_entered = threading.Event()
+
+    class SlowConfig(FakeConfig):
+        def authenticate(self) -> dict[str, str]:
+            started.set()
+            assert release.wait(timeout=5)
+            return super().authenticate()
+
+    config = SlowConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
+    credentials = build(config)
+
+    def second_read() -> str:
+        second_entered.set()
+        return credentials.current().token
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(lambda: credentials.current().token)
+        assert started.wait(timeout=5)
+        second = executor.submit(second_read)
+        assert second_entered.wait(timeout=5)
+        release.set()
+
+    assert first.result() == "token-1"
+    assert second.result() == "token-1"
+    assert config.authenticate_count == 1
 
 
 def test_expiry_inside_lead_window_still_renews_in_future() -> None:

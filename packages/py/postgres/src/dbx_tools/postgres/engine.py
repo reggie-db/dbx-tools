@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import datetime as dt
 import os
+import threading
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -13,9 +15,15 @@ from sqlalchemy.ext.asyncio import create_async_engine as sqlalchemy_create_asyn
 
 from .address import SSL_MODES, ParsedAddress, SslMode, parse_address, parse_resource_path
 
+"""Lakebase connection resolution and connect-time credential injection."""
+
 CredentialProvider = Callable[[], str]
+CredentialLoader = Callable[[], tuple[str, dt.datetime | None]]
 
 _API_BASE = "/api/2.0/postgres"
+_CREDENTIAL_REFRESH_LEAD = dt.timedelta(minutes=5)
+_DEFAULT_CREDENTIAL_LIFETIME = dt.timedelta(minutes=50)
+_MINIMUM_CREDENTIAL_LIFETIME = dt.timedelta(minutes=1)
 _DEFAULT_DATABASE = "databricks_postgres"
 _DEFAULT_PORT = 5432
 _DEFAULT_SSL_MODE: SslMode = "require"
@@ -72,6 +80,28 @@ class ResolvedPostgresConnection:
         )
 
 
+class _CachedCredentialProvider:
+    """Cache one credential and serialize refreshes within the Python process."""
+
+    def __init__(self, load: CredentialLoader) -> None:
+        self._load = load
+        self._lock = threading.RLock()
+        self._token: str | None = None
+        self._renew_at = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+
+    def __call__(self) -> str:
+        token = self._token
+        if token is not None and _utcnow() < self._renew_at:
+            return token
+        with self._lock:
+            if self._token is None or _utcnow() >= self._renew_at:
+                token, expiration = self._load()
+                self._token = token
+                self._renew_at = _credential_renewal(expiration)
+            assert self._token is not None
+            return self._token
+
+
 def workspace_credential_provider(
     workspace_client: WorkspaceClientLike,
     instance_name: str,
@@ -79,7 +109,7 @@ def workspace_credential_provider(
     if not instance_name.strip():
         raise ValueError("instance_name must not be empty")
 
-    def provide() -> str:
+    def load() -> tuple[str, dt.datetime | None]:
         credential = workspace_client.database.generate_database_credential(
             request_id=str(uuid.uuid4()),
             instance_names=[instance_name],
@@ -87,9 +117,9 @@ def workspace_credential_provider(
         token = getattr(credential, "token", None)
         if not isinstance(token, str) or not token:
             raise RuntimeError("WorkspaceClient returned no Lakebase database credential token")
-        return token
+        return token, _credential_expiration(getattr(credential, "expiration_time", None))
 
-    return provide
+    return _CachedCredentialProvider(load)
 
 
 def autoscaling_credential_provider(
@@ -99,7 +129,7 @@ def autoscaling_credential_provider(
     if not endpoint.strip():
         raise ValueError("endpoint must not be empty")
 
-    def provide() -> str:
+    def load() -> tuple[str, dt.datetime | None]:
         credential = workspace_client.api_client.do(
             "POST",
             f"{_API_BASE}/credentials",
@@ -109,9 +139,9 @@ def autoscaling_credential_provider(
         token = credential.get("token") if isinstance(credential, dict) else None
         if not isinstance(token, str) or not token:
             raise RuntimeError("WorkspaceClient returned no Lakebase database credential token")
-        return token
+        return token, _mapping_credential_expiration(credential)
 
-    return provide
+    return _CachedCredentialProvider(load)
 
 
 def install_credential_injection(engine: Engine, provider: CredentialProvider) -> None:
@@ -225,6 +255,47 @@ def resolve_postgres_connection(
         endpoint=endpoint,
         instance_name=instance_name,
     )
+
+
+def _credential_renewal(expiration: dt.datetime | None) -> dt.datetime:
+    now = _utcnow()
+    if expiration is None:
+        return now + _DEFAULT_CREDENTIAL_LIFETIME
+    normalized = (
+        expiration.astimezone(dt.timezone.utc)
+        if expiration.tzinfo is not None
+        else expiration.replace(tzinfo=dt.timezone.utc)
+    )
+    return max(normalized - _CREDENTIAL_REFRESH_LEAD, now + _MINIMUM_CREDENTIAL_LIFETIME)
+
+
+def _credential_expiration(value: object) -> dt.datetime | None:
+    if isinstance(value, dt.datetime):
+        return value
+    if isinstance(value, (int, float)):
+        try:
+            return dt.datetime.fromtimestamp(value, tz=dt.timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            return None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        return dt.datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def _mapping_credential_expiration(credential: Mapping[str, object]) -> dt.datetime | None:
+    for key in ("expiration_time", "expirationTime", "expires_at", "expiresAt"):
+        expiration = _credential_expiration(credential.get(key))
+        if expiration is not None:
+            return expiration
+    return None
+
+
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(tz=dt.timezone.utc)
 
 
 def _default_provider(

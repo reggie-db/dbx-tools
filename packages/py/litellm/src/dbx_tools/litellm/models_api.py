@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from dbx_tools.model import reasoning_efforts_by_family
+from databricks.sdk.errors import DatabricksError
+from dbx_tools.model import ServingEndpointSummary, reasoning_efforts_by_family
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
@@ -18,20 +21,28 @@ _EFFORT_DESCRIPTIONS = {
     "xhigh": "Maximum reasoning for the hardest tasks",
 }
 _BASIC_FAMILIES = ("gpt", "claude", "gemini", "llama", "qwen", "glm", "gemma")
+logger = logging.getLogger(__name__)
 
 
-def augment_models_payload(payload: Any) -> Any:
+def augment_models_payload(
+    payload: Any,
+    endpoints: Sequence[ServingEndpointSummary] | None = None,
+) -> Any:
+    """Prefer discovered endpoints, falling back to LiteLLM's bundled registry."""
     if not isinstance(payload, Mapping) or "models" in payload:
         return payload
     data = payload.get("data")
     if not isinstance(data, Sequence) or isinstance(data, (str, bytes, bytearray)):
         return payload
-    augmented_data = _append_family_models(data)
+    augmented_data = _discovered_models(data, endpoints)
+    augmented_data = _append_family_models(augmented_data)
     return {**payload, "data": augmented_data, "models": _codex_models(augmented_data)}
 
 
 def install_models_compatibility_middleware() -> None:
     from litellm.proxy.proxy_server import app
+
+    from .provider import dbx_provider
 
     if getattr(app.state, "dbx_models_compatibility", False):
         return
@@ -45,7 +56,7 @@ def install_models_compatibility_middleware() -> None:
 
         body = b"".join([chunk async for chunk in response.body_iterator])
         try:
-            payload = augment_models_payload(json.loads(body))
+            payload = json.loads(body)
         except (TypeError, ValueError):
             return Response(
                 content=body,
@@ -53,6 +64,12 @@ def install_models_compatibility_middleware() -> None:
                 headers=_response_headers(response),
                 media_type=response.media_type,
             )
+        try:
+            endpoints = await asyncio.to_thread(dbx_provider.backend.models, force=True)
+        except (DatabricksError, OSError, RuntimeError, ValueError) as error:
+            logger.warning("Live model discovery failed; using LiteLLM registry: %s", error)
+            endpoints = None
+        payload = augment_models_payload(payload, endpoints)
         return JSONResponse(
             content=payload,
             status_code=response.status_code,
@@ -75,6 +92,47 @@ def _codex_models(data: Sequence[Any]) -> list[dict[str, Any]]:
         seen.add(slug)
         models.append(_codex_model(slug, item, priority=10_000 - len(models)))
     return models
+
+
+def _discovered_models(
+    data: Sequence[Any],
+    endpoints: Sequence[ServingEndpointSummary] | None,
+) -> list[Any]:
+    """Use exact live endpoints and retain registry metadata only for matches."""
+    if endpoints is None:
+        return list(data)
+
+    result: list[Any] = []
+    registry: dict[str, Mapping[str, Any]] = {}
+    for item in data:
+        if not isinstance(item, Mapping):
+            result.append(item)
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str):
+            result.append(item)
+            continue
+        slug = model_id.removeprefix("databricks/")
+        if slug in {"*", "databricks/*"} or not slug.startswith(("databricks-", "system.ai.")):
+            result.append(item)
+            continue
+        registry.setdefault(slug, item)
+
+    seen: set[str] = set()
+    for endpoint in endpoints:
+        if endpoint.name in seen:
+            continue
+        existing = registry.get(endpoint.name)
+        result.append(
+            {
+                **(dict(existing) if existing is not None else {}),
+                "id": f"databricks/{endpoint.name}",
+                "object": "model",
+                "owned_by": "databricks",
+            }
+        )
+        seen.add(endpoint.name)
+    return result
 
 
 def _append_family_models(data: Sequence[Any]) -> list[Any]:

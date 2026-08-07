@@ -97,7 +97,11 @@ def rank_models(
             candidates = [
                 candidate
                 for candidate in candidates
-                if not re.search(r"(?:^|[-_.])gpt[-_.]?oss(?:[-_.]|$)", candidate.endpoint.name, re.I)
+                if not re.search(
+                    r"(?:^|[-_.])gpt[-_.]?oss(?:[-_.]|$)",
+                    candidate.endpoint.name,
+                    re.IGNORECASE,
+                )
             ]
         for candidate in candidates:
             candidate.score = scores[candidate.endpoint.name]

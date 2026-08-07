@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from urllib.request import Request
 
@@ -8,6 +10,7 @@ import pytest
 from dbx_tools.model import (
     ModelClass,
     ReasoningEffort,
+    auth_headers,
     extract_embedding,
     invocations_url,
     list_serving_endpoints,
@@ -168,6 +171,39 @@ def test_post_json_authenticates_each_request() -> None:
     assert response == {"ok": True}
     assert captured[0].get_header("Authorization") == "Bearer token"
     assert json.loads(captured[0].data or b"") == {"messages": []}
+
+
+def test_concurrent_auth_headers_share_one_sdk_authentication() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    second_entered = threading.Event()
+
+    class SlowConfig:
+        authenticate_count = 0
+
+        def authenticate(self) -> dict[str, str]:
+            self.authenticate_count += 1
+            started.set()
+            assert release.wait(timeout=5)
+            return {"Authorization": "Bearer token"}
+
+    config = SlowConfig()
+    client = SimpleNamespace(config=config)
+
+    def second_read() -> dict[str, str]:
+        second_entered.set()
+        return auth_headers(client)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(auth_headers, client)
+        assert started.wait(timeout=5)
+        second = executor.submit(second_read)
+        assert second_entered.wait(timeout=5)
+        release.set()
+
+    assert first.result() == {"Authorization": "Bearer token"}
+    assert second.result() == {"Authorization": "Bearer token"}
+    assert config.authenticate_count == 1
 
 
 def test_resolve_model_fuzzy_name_and_embedding_dimension() -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dbx_tools.litellm.models_api import augment_models_payload
+from dbx_tools.model import ServingEndpointSummary
 
 
 def test_adds_codex_models_alongside_openai_data() -> None:
@@ -99,6 +100,54 @@ def test_appends_each_recognized_basic_family_after_exact_models() -> None:
         "databricks-glm",
         "databricks-gemma",
     ]
+
+
+def test_merges_live_endpoints_missing_from_litellm_registry() -> None:
+    payload = {
+        "object": "list",
+        "data": [
+            {"id": "databricks/databricks-gpt-5", "object": "model"},
+            {"id": "databricks/databricks-gpt-5-6-sol", "object": "model"},
+        ],
+    }
+    endpoints = [
+        ServingEndpointSummary(name="databricks-gpt-5-6-sol"),
+        ServingEndpointSummary(name="databricks-gpt-5-6-terra"),
+    ]
+
+    augmented = augment_models_payload(payload, endpoints)
+
+    assert [model["id"] for model in augmented["data"]] == [
+        "databricks/databricks-gpt-5-6-sol",
+        "databricks/databricks-gpt-5-6-terra",
+        "databricks-gpt",
+    ]
+    assert [model["slug"] for model in augmented["models"]] == [
+        "databricks-gpt-5-6-sol",
+        "databricks-gpt-5-6-terra",
+        "databricks-gpt",
+    ]
+
+
+def test_live_discovery_removes_stale_registry_models() -> None:
+    payload = {
+        "object": "list",
+        "data": [
+            {"id": "*", "object": "model"},
+            {"id": "databricks/*", "object": "model"},
+            {"id": "custom-route", "object": "model"},
+            {"id": "databricks/databricks-gpt-5", "object": "model"},
+        ],
+    }
+
+    augmented = augment_models_payload(payload, [])
+
+    assert [model["id"] for model in augmented["data"]] == [
+        "*",
+        "databricks/*",
+        "custom-route",
+    ]
+    assert [model["slug"] for model in augmented["models"]] == ["custom-route"]
 
 
 def test_existing_codex_envelope_is_not_replaced() -> None:

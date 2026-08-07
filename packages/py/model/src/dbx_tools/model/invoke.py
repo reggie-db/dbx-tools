@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 from urllib.parse import quote, urljoin
 from urllib.request import Request, urlopen
+
+"""Model Serving URL, authentication, and JSON invocation helpers."""
 
 INVOCATIONS_SUFFIX = "invocations"
 RESPONSES_PATH = "serving-endpoints/responses"
@@ -19,6 +23,19 @@ class AuthenticatingConfig(Protocol):
 
 class AuthenticatingClientLike(Protocol):
     config: AuthenticatingConfig
+
+
+@dataclass
+class _AuthenticationState:
+    """Process-local state that lets concurrent SDK authentication calls converge."""
+
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    generation: int = 0
+    headers: dict[str, str] | None = None
+
+
+_AUTHENTICATION_STATES_LOCK = threading.RLock()
+_AUTHENTICATION_STATES: dict[int, tuple[AuthenticatingConfig, _AuthenticationState]] = {}
 
 
 def invocations_url(host: str, endpoint: str) -> str:
@@ -53,7 +70,27 @@ def responses_upstream_url(host: str, endpoint: str) -> str:
 
 
 def auth_headers(client: AuthenticatingClientLike) -> dict[str, str]:
-    return dict(client.config.authenticate())
+    """Authenticate once for each concurrent caller group sharing an SDK config."""
+    state = _authentication_state(client.config)
+    generation = state.generation
+    with state.lock:
+        if state.generation != generation and state.headers is not None:
+            return dict(state.headers)
+        headers = dict(client.config.authenticate())
+        state.headers = headers
+        state.generation += 1
+        return dict(headers)
+
+
+def _authentication_state(config: AuthenticatingConfig) -> _AuthenticationState:
+    key = id(config)
+    with _AUTHENTICATION_STATES_LOCK:
+        entry = _AUTHENTICATION_STATES.get(key)
+        if entry is not None and entry[0] is config:
+            return entry[1]
+        state = _AuthenticationState()
+        _AUTHENTICATION_STATES[key] = (config, state)
+        return state
 
 
 def post_json(

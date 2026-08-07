@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
+import dbx_tools.litellm.reasoning as reasoning_module
 import pytest
 from dbx_tools.litellm.access_log import reasoning_log_state
 from dbx_tools.litellm.reasoning import DbxAutoReasoning, ReasoningCache
@@ -24,6 +27,37 @@ class StubAutoReasoning(DbxAutoReasoning):
 
     async def _reasoning_efforts(self, model: str) -> tuple[ReasoningEffort, ...]:
         return reasoning_efforts_by_family(model)
+
+
+async def test_classifier_resolves_default_model_from_live_discovery(
+    cache: ReasoningCache,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Backend:
+        requested: str | None = None
+
+        def resolve(self, requested: str) -> str:
+            self.requested = requested
+            return "databricks-meta-llama-3-3-70b-instruct"
+
+        def credentials(self) -> SimpleNamespace:
+            return SimpleNamespace(token="token", api_base="https://workspace.example.com")
+
+    backend = Backend()
+    completion = AsyncMock(
+        return_value={"choices": [{"message": {"content": "0.5"}}]},
+    )
+    monkeypatch.delenv(reasoning_module.REASONING_MODEL_ENV, raising=False)
+    monkeypatch.setattr(reasoning_module.dbx_provider, "_backend", backend)
+    monkeypatch.setattr(reasoning_module.litellm, "acompletion", completion)
+
+    score = await DbxAutoReasoning(cache)._classify_score("USER: compare these designs")
+
+    assert score == 0.5
+    assert backend.requested == reasoning_module.DEFAULT_REASONING_MODEL
+    assert completion.await_args.kwargs["model"] == (
+        "databricks/databricks-meta-llama-3-3-70b-instruct"
+    )
 
 
 @pytest.fixture

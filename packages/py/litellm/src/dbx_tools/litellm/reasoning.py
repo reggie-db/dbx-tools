@@ -206,9 +206,10 @@ class DbxAutoReasoning(CustomLogger):
 
     async def _classify_score(self, sample: str) -> float | None:
         try:
+            model = await asyncio.to_thread(dbx_provider.backend.resolve, _reasoning_model())
             credentials = await asyncio.to_thread(dbx_provider.backend.credentials)
             response = await litellm.acompletion(
-                model=f"databricks/{_reasoning_model()}",
+                model=f"databricks/{model}",
                 messages=[
                     {"role": "system", "content": _CLASSIFIER_SYSTEM_PROMPT},
                     {"role": "user", "content": sample},
@@ -323,7 +324,7 @@ def _normalize_score(score: float, *, percentage: bool) -> float | None:
 
 
 def _is_gpt_5_6(model: str) -> bool:
-    return bool(re.search(r"(?:^|[-_./])gpt[-_.]5[-_.]6(?:[-_./]|$)", model, re.I))
+    return bool(re.search(r"(?:^|[-_./])gpt[-_.]5[-_.]6(?:[-_./]|$)", model, re.IGNORECASE))
 
 
 def _request_turns(data: Mapping[str, Any], call_type: str) -> list[Turn]:

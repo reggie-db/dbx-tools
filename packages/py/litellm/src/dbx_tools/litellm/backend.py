@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+from collections.abc import Mapping
 from threading import RLock
 
 from dbx_tools.model import (
@@ -18,19 +21,58 @@ from dbx_tools.model import (
 from .credentials import Credentials, DatabricksCredentials
 from .models import register_streaming_support
 
-PROFILE_ENV = "DBX_LITELLM_PROFILE"
 DATABRICKS_PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
 
 
-def require_profile(profile: str | None = None) -> str:
-    """Return an explicitly selected profile; never fall back to SDK defaults."""
-    selected = profile or os.getenv(PROFILE_ENV) or os.getenv(DATABRICKS_PROFILE_ENV)
-    if not selected:
-        raise RuntimeError(
-            "A Databricks profile is required. Pass --profile <name> or set "
-            f"{PROFILE_ENV} or {DATABRICKS_PROFILE_ENV}."
+def require_profile(
+    profile: str | None = None,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> str:
+    """Resolve the CLI argument, configured environment, or Databricks CLI default."""
+    env = os.environ if environ is None else environ
+    selected = _profile_name(profile) or _profile_name(env.get(DATABRICKS_PROFILE_ENV))
+    return selected or _default_cli_profile()
+
+
+def _default_cli_profile() -> str:
+    try:
+        result = subprocess.run(
+            ["databricks", "auth", "profiles", "-o", "json", "--skip-validate"],
+            check=True,
+            capture_output=True,
+            text=True,
         )
-    return selected
+    except FileNotFoundError as error:
+        raise RuntimeError(
+            "No Databricks profile was selected and the databricks CLI is not installed"
+        ) from error
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or "").strip()
+        suffix = f": {detail}" if detail else ""
+        raise RuntimeError(f"Could not read the Databricks CLI default profile{suffix}") from error
+
+    try:
+        payload = json.loads(result.stdout)
+    except (TypeError, json.JSONDecodeError) as error:
+        raise RuntimeError("Databricks CLI returned invalid profile JSON") from error
+    profiles = payload.get("profiles") if isinstance(payload, dict) else None
+    defaults = [
+        name
+        for item in profiles or []
+        if isinstance(item, dict)
+        and item.get("default") is True
+        and (name := _profile_name(item.get("name"))) is not None
+    ]
+    if len(defaults) != 1:
+        raise RuntimeError(
+            "No Databricks profile was selected and the CLI has no configured default profile"
+        )
+    return defaults[0]
+
+
+def _profile_name(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 class DatabricksLiteLLMBackend:
@@ -45,14 +87,8 @@ class DatabricksLiteLLMBackend:
         self.profile = require_profile(profile)
         self.threshold = threshold
 
-        configured = os.getenv(DATABRICKS_PROFILE_ENV)
-        if configured and configured != self.profile:
-            raise RuntimeError(
-                f"{DATABRICKS_PROFILE_ENV} selects {configured!r}, but the provider was "
-                f"configured for {self.profile!r}."
-            )
         # LiteLLM's built-in Databricks provider constructs WorkspaceClient()
-        # itself. Pin its unified-auth lookup to the same explicit profile used
+        # itself. Pin its unified-auth lookup to the same resolved profile used
         # by this resolver, for any path that still falls back to SDK auth.
         os.environ[DATABRICKS_PROFILE_ENV] = self.profile
 

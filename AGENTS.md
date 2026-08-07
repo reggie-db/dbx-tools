@@ -168,21 +168,29 @@ Primary package areas:
   mints a token, the UDF closes over it, and
   `install_credential_injection(engine.sync_engine, lambda: token)` supplies it
   without a `WorkspaceClient` on the executor. Do not `listen` from a UDF — the
-  invocation is short-lived and the connection is not.
+  invocation is short-lived and the connection is not. The built-in
+  provisioned and Autoscaling credential providers cache until the credential's
+  renewal time and use process-local check-lock-check refresh, so a SQLAlchemy
+  pool connect storm mints once. A caller-supplied `credential_provider` owns
+  its own caching and refresh policy.
 - `packages/py/model` — Python Model Serving invocation, endpoint listing,
   classification, resolution, chat sanitization, and embedding helpers. It
   mirrors the reusable `shared/model` + `node/model` contract without AppKit
   cache or Mastra dependencies; deterministic behavior belongs in the colocated
   model polyglot tests.
 - `packages/py/litellm` — thin LiteLLM integration for Databricks Model
-  Serving. It adds explicit profile selection, live endpoint discovery, fuzzy
-  model resolution, and tool-capability filtering, then delegates the unchanged
-  request to LiteLLM's built-in Databricks provider. Keep authentication,
+  Serving. It resolves the profile from the CLI argument,
+  `DATABRICKS_CONFIG_PROFILE`, then the Databricks CLI's configured default;
+  adds live endpoint discovery, fuzzy model resolution, and tool-capability
+  filtering; then delegates the unchanged request to LiteLLM's built-in
+  Databricks provider. Keep authentication,
   transport, parameter mapping, streaming, retries, embeddings, and
   Chat↔Responses conversion in LiteLLM; do not add provider-specific content
   rewriting here. The Responses pre-call hook may change only the resolved
   model identifier so Responses-only endpoints reach LiteLLM's native
-  Databricks Responses provider.
+  Databricks Responses provider. Its process-wide credential cache is the sole
+  refresh owner: SDK background refresh stays disabled and `current()` uses a
+  check-lock-check load so parallel requests cannot pile up token mints.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
@@ -655,6 +663,14 @@ second package, put it in shared-core rather than duplicating it.
   in a package: several places branch on it (`@dbx-tools/appkit`'s `identity`
   decides whether OBO is possible by its presence, `@dbx-tools/tunnel` must
   strip inbound copies), and a stale second spelling is a silent auth bug.
+- Every token or credential refresh THIS repo owns must use
+  check-lock-check-load: read a still-fresh cached value before locking, acquire
+  a process-local lock, re-check because another caller may have refreshed, then
+  perform the slow load once. Use a file or distributed lock only when the
+  refreshed value also lives in state every process can re-read; a file lock
+  around a memory-only token merely serializes duplicate refreshes. Keep
+  TypeScript `@dbx-tools/model` authentication caller-owned: `authHeaders()`
+  delegates directly to the SDK, and its caller owns any broader refresh gate.
 
 Node-only equivalents live in `@dbx-tools/core` (`bin.ensure` for idempotent
 executable downloads, archive selection, version validation, and atomic install;

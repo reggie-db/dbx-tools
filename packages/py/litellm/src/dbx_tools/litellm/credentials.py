@@ -50,11 +50,11 @@ class DatabricksCredentials:
     def __init__(self, *, profile: str) -> None:
         self.profile = profile
         # disable_async_token_refresh must be passed on Config; WorkspaceClient
-        # does not accept it, and its env var is parsed as a string (so any
-        # value, including "false", is truthy). With it off, the SDK also
-        # refreshes in the background once a token goes stale.
+        # does not accept it, and its env var is parsed as a string. Keep SDK
+        # background refresh off so every mint runs through the guarded
+        # check-lock-check path below.
         self._client = WorkspaceClient(
-            config=Config(profile=profile, disable_async_token_refresh=False)
+            config=Config(profile=profile, disable_async_token_refresh=True)
         )
         self._api_base = f"{self._client.config.host.rstrip('/')}/serving-endpoints"
         self._lock = threading.RLock()
@@ -72,6 +72,9 @@ class DatabricksCredentials:
 
     def current(self) -> Credentials:
         """Return cached credentials, minting a new token only once stale."""
+        cached = self._cached
+        if cached is not None and _utcnow() < self._renew_at:
+            return cached
         with self._lock:
             if self._cached is None or _utcnow() >= self._renew_at:
                 self._cached = self._mint()

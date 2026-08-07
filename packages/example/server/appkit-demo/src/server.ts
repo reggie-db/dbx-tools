@@ -287,7 +287,6 @@ await appkit.createApp({
       ...(process.env.SEARCH_ENDPOINT ? { endpoint: process.env.SEARCH_ENDPOINT } : {}),
       columns: ["title", "text", "url"],
       ensureOnSetup: {
-        embeddingModel: "databricks-gte-large-en",
         documents: [
           {
             id: "1",
