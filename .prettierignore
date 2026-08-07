@@ -76,6 +76,7 @@ packages/js/cli/tunnel/index.ts
 packages/js/node/appkit/index.ts
 packages/js/node/appkit-mastra/index.ts
 packages/js/node/appkit-web-search/index.ts
+packages/js/node/auth/index.ts
 packages/js/node/core/index.ts
 packages/js/node/databricks/index.ts
 packages/js/node/databricks-zerobus/index.ts
@@ -88,6 +89,7 @@ packages/js/node/postgres/index.ts
 packages/js/node/search/index.ts
 packages/js/node/teams/index.ts
 packages/js/node/tunnel/index.ts
+packages/js/shared/auth/index.ts
 packages/js/shared/core/index.ts
 packages/js/shared/email/index.ts
 packages/js/shared/email-template/index.ts
@@ -99,6 +101,7 @@ packages/js/shared/model/index.ts
 packages/js/shared/search/index.ts
 packages/js/shared/teams/index.ts
 packages/js/ui/appkit/index.ts
+packages/js/ui/auth/index.ts
 packages/js/ui/branding/index.ts
 packages/js/ui/email/index.ts
 packages/js/ui/mastra/index.ts

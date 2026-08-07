@@ -23,7 +23,9 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
+    "@dbx-tools/auth": "workspace:*",
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/email": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",

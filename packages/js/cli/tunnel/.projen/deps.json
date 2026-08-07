@@ -15,7 +15,17 @@
       "type": "build"
     },
     {
+      "name": "@databricks/appkit",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/appkit",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
+      "name": "@dbx-tools/auth",
       "version": "workspace:*",
       "type": "runtime"
     },

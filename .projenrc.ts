@@ -195,6 +195,9 @@ root.pnpmWorkspace?.addCatalog("undici", "^7.17.0");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
 // pulls it, but the pin belongs with the other add-on runtime deps.
 root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
+root.pnpmWorkspace?.addCatalog("better-auth", "^1.6.25");
+root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "^1.6.25");
+root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
 // v4 + the Mastra chat-UI deps). These only load in ui/app-tagged (browser)
@@ -540,7 +543,7 @@ project.applyToProjects(root, { identifierName: "shared-model", tags: "shared" }
 // + result + sender options). Pure zod, shared by the server sender, Mastra
 // tool, and React approval UI.
 project.applyToProjects(root, { identifierName: "shared-email", tags: "shared" }, (p) => {
-  p.addDeps("zod@catalog:");
+  p.addDeps("@dbx-tools/shared-auth@workspace:*", "zod@catalog:");
 });
 
 // shared-email-template: universal React Email presentation shared by the
@@ -640,12 +643,27 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
 // neither at runtime.
 project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p) => {
   p.addDeps(
+    "@databricks/appkit@catalog:",
+    "@dbx-tools/auth@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/email@workspace:*",
     "@dbx-tools/tunnel@workspace:*",
     "@dbx-tools/shared-email@workspace:*",
     "http-proxy-3@catalog:",
+  );
+});
+
+// node-auth: Better Auth runtime with email OTP, passkeys, caller-provided
+// authorization/delivery, and Lakebase or SQLite persistence.
+project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
+  p.addDeps(
+    "@better-auth/passkey@catalog:",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/postgres@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
+    "better-auth@catalog:",
+    "env-paths@catalog:",
   );
 });
 
@@ -687,14 +705,11 @@ project.applyToProjects(
 // tunnel is the process.
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/auth@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
-    // Browser-safe login wire schemas + the session cookie name - imported
-    // statically by the gate, so a regular dep.
-    "@dbx-tools/shared-email@workspace:*",
+    "@dbx-tools/shared-auth@workspace:*",
     "@databricks/appkit@catalog:",
-    // Session JWT signing/verification (runtime-agnostic HS256), same as node-teams.
-    "jose@^6.2.3",
   );
   // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
   // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
@@ -751,7 +766,6 @@ project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p)
 project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) => {
   p.package.addField("exports", {
     "./react": "./src/react/index.ts",
-    "./react/auth-gate": "./src/react/auth-gate.tsx",
     "./styles.css": "./src/styles.css",
     "./package.json": "./package.json",
   });
@@ -767,6 +781,26 @@ project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) =>
   );
   // exports: `./react` + `./styles.css` + `./package.json` come from the `ui`
   // tag's component-library default.
+});
+
+// shared-auth: browser-safe compatibility and status schemas for passwordless auth.
+project.applyToProjects(root, { identifierName: "shared-auth", tags: "shared" }, (p) => {
+  p.addDeps("zod@catalog:");
+});
+
+// ui-auth: Better Auth React client, passkey-first gate, and credential manager.
+project.applyToProjects(root, { identifierName: "ui-auth", tags: "ui" }, (p) => {
+  p.package.addField("exports", {
+    "./react": "./src/react/index.ts",
+    "./package.json": "./package.json",
+  });
+  p.addDeps(
+    "@better-auth/passkey@catalog:",
+    "@dbx-tools/shared-auth@workspace:*",
+    "@dbx-tools/ui-appkit@workspace:*",
+    "@dbx-tools/ui-branding@workspace:*",
+    "better-auth@catalog:",
+  );
 });
 
 // ui-teams: the React surface for the Teams add-on - an `AdaptiveCardView` that
@@ -900,8 +934,8 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
     "@dbx-tools/ui-mastra@workspace:*",
     "@dbx-tools/ui-teams@workspace:*",
     "@dbx-tools/ui-search@workspace:*",
-    // The `AuthGate` email-OTP login screen fronting the app (the server's
-    // email plugin has `auth` enabled for the public tunnel).
+    "@dbx-tools/ui-auth@workspace:*",
+    // Email preview remains a separate feature package from authentication.
     "@dbx-tools/ui-email@workspace:*",
     "react-router-dom@catalog:",
     // `src/index.css` `@import`s these directly, so the app declares them.
@@ -935,12 +969,12 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     description:
       "WorkspaceClient-backed Lakebase Postgres resolution, SQLAlchemy engines, advisory locks, and LISTEN/NOTIFY topic bus",
     dependencies: [
-      "asyncpg>=0.30,<1",
-      "databricks-sdk>=0.63.0,<1",
-      "greenlet>=3.2,<4",
+      "asyncpg>=0.30",
+      "databricks-sdk>=0.63.0",
+      "greenlet>=3.2",
       projenProject.pythonGitDependency(pythonRepository, "dbx-tools-core", "core"),
-      "psycopg[binary]>=3.2.9,<4",
-      "sqlalchemy>=2.0.41,<3",
+      "psycopg[binary]>=3.2.9",
+      "sqlalchemy>=2.0.41",
     ],
   },
   {
@@ -948,7 +982,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     name: "dbx-tools-model",
     module: "dbx_tools.model",
     description: "Databricks Model Serving invocation, classification, and endpoint resolution",
-    dependencies: ["databricks-sdk>=0.63.0,<1", "pydantic>=2.9,<3"],
+    dependencies: ["databricks-sdk>=0.63.0", "pydantic>=2.9"],
   },
   {
     directory: "litellm",
@@ -957,10 +991,10 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     description:
       "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution",
     dependencies: [
-      "databricks-sdk>=0.63.0,<1",
+      "databricks-sdk>=0.63.0",
       projenProject.pythonGitDependency(pythonRepository, "dbx-tools-model", "model"),
-      "diskcache>=5.6,<6",
-      "litellm[proxy]>=1.83.14,<2",
+      "diskcache>=5.6",
+      "litellm[proxy]>=1.83.14",
     ],
     scripts: {
       "dbx-litellm": "dbx_tools.litellm.cli:main",

@@ -74,6 +74,18 @@ Primary package areas:
   schemas, and matching React approval/compose surfaces. Outbound HTML and
   browser previews share the same React Email components, with the repository
   brand applied unless a consumer supplies its own `EmailBrand`.
+- `packages/js/node/tunnel`, `packages/js/cli/tunnel`, and the
+  `ui-email` auth gate - one Better Auth passwordless gate shared by AppKit
+  plugin mode and the `dbx tunnel` reverse-proxy mode. Better Auth owns users,
+  email OTP lifecycle, sessions, built-in rate limits, and passkeys. The
+  dbx-tools layer owns authorization policy, tunnel Host detection, protected
+  header stripping, branded email delivery, and identity-header injection.
+  Both modes construct the same `authGate` plugin through
+  `@dbx-tools/appkit`'s `createApp` lifecycle. Storage is native AppKit Lakebase
+  when configured, otherwise a Better Auth SQLite database in the platform data
+  directory. Programmatic Better Auth migrations run under a Postgres advisory
+  lock or local file lock. Never derive WebAuthn RP ID or expected origin from a
+  request header; use the configured public tunnel domain.
 - `packages/js/node/appkit-web-search` — web-search add-on: `web_search` (the
   Databricks Model Serving NATIVE web-search tool — the model searches the web
   server-side and returns answer + citations; resolves its OWN web-capable model

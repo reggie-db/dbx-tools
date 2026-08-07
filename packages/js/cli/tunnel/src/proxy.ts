@@ -19,8 +19,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
-import { http, json, log } from "@dbx-tools/shared-core";
-import { authRequestSchema, authVerifySchema, SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
+import { log } from "@dbx-tools/shared-core";
 import { gate as tunnelGate, headers as tunnelHeaders, type AuthGateApi } from "@dbx-tools/tunnel";
 import ProxyModule from "http-proxy-3";
 
@@ -37,16 +36,6 @@ export interface ProxyOptions {
   forwardHeaders?: readonly string[];
 }
 
-/** Read a request body as text; a transport error yields whatever arrived. */
-function readBody(request: IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
-    let body = "";
-    request.on("data", (chunk) => (body += chunk));
-    request.on("end", () => resolve(body));
-    request.on("error", () => resolve(body));
-  });
-}
-
 function sendJson(
   response: ServerResponse,
   status: number,
@@ -60,14 +49,8 @@ function sendJson(
   response.end(JSON.stringify(body));
 }
 
-function sessionCookieValue(request: IncomingMessage): string | undefined {
-  return http.parseCookies(request.headers.cookie ?? null)[SESSION_COOKIE_NAME];
-}
-
 /**
- * Answer one of the four login routes, or return `false` when the request is not
- * one of them. Mirrors the plugin's route handlers: `request` always reports
- * success (anti-enumeration) and `verify` sets the session cookie on success.
+ * Hand every Better Auth and compatibility route to the shared gate runtime.
  */
 async function handleAuthRoute(
   request: IncomingMessage,
@@ -76,45 +59,17 @@ async function handleAuthRoute(
   gate: AuthGateApi,
 ): Promise<boolean> {
   const prefix = tunnelGate.AUTH_PREFIX;
-  const ip = tunnelGate.clientIp(request);
-
-  if (path === `${prefix}/status`) {
-    sendJson(response, 200, await gate.status(sessionCookieValue(request)));
-    return true;
+  if (!path.startsWith(prefix)) return false;
+  const result = await gate.handler(await tunnelGate.webRequest(request));
+  const headers: Record<string, string | string[]> = {};
+  for (const [name, value] of result.headers.entries()) {
+    if (name.toLowerCase() !== "set-cookie") headers[name] = value;
   }
-  if (path === `${prefix}/request` && request.method === "POST") {
-    const parsed = authRequestSchema.safeParse(json.parseRecord(await readBody(request)));
-    sendJson(
-      response,
-      200,
-      parsed.success ? await gate.request(parsed.data.email, ip) : { ok: true },
-    );
-    return true;
-  }
-  if (path === `${prefix}/verify` && request.method === "POST") {
-    const parsed = authVerifySchema.safeParse(json.parseRecord(await readBody(request)));
-    if (!parsed.success) {
-      sendJson(response, 200, { ok: false });
-      return true;
-    }
-    const result = await gate.verify(parsed.data.email, parsed.data.code, ip);
-    const cookie =
-      result.ok && result.token
-        ? tunnelGate.sessionSetCookie(result.token, gate.sessionTtlSeconds)
-        : undefined;
-    sendJson(
-      response,
-      200,
-      { ok: result.ok, ...(result.retryAfter ? { retryAfter: result.retryAfter } : {}) },
-      cookie,
-    );
-    return true;
-  }
-  if (path === `${prefix}/logout` && request.method === "POST") {
-    sendJson(response, 200, { ok: true }, tunnelGate.LOGOUT_SET_COOKIE);
-    return true;
-  }
-  return false;
+  const cookies = result.headers.getSetCookie();
+  if (cookies.length) headers["set-cookie"] = cookies;
+  response.writeHead(result.status, headers);
+  response.end(Buffer.from(await result.arrayBuffer()));
+  return true;
 }
 
 /**

@@ -23,15 +23,18 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import { http, json, log, token } from "@dbx-tools/shared-core";
-import { authRequestSchema, authVerifySchema, SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
-import type { Request, RequestHandler, Response } from "express";
+import { log, token } from "@dbx-tools/shared-core";
+import type { RequestHandler, Response } from "express";
 import { toHeaderPolicy, type HeaderPolicy } from "./headers.ts";
 import type { AuthGateApi } from "./plugin.ts";
 
 const logger = log.logger("tunnel:gate");
 
-/** Route prefix the login flow lives under (open, answered in-process). */
+type WebRequestInput = IncomingMessage & {
+  body?: unknown;
+  originalUrl?: string;
+};
+
 export const AUTH_PREFIX = "/api/email/auth";
 
 /** Options for {@link mountGate}. */
@@ -63,22 +66,6 @@ export function isTunnelHost(req: IncomingMessage, publicDomain: string | undefi
   return host === publicDomain.toLowerCase().split(":")[0];
 }
 
-/** The session cookie for a verified email, as a Set-Cookie string. */
-function sessionCookie(value: string, maxAgeSeconds: number): string {
-  return [
-    `${SESSION_COOKIE_NAME}=${value}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${maxAgeSeconds}`,
-    // Real enforcement in production: the session cookie must be Secure so it is
-    // never sent over plaintext. Local dev (http) omits it so the cookie works.
-    process.env.NODE_ENV === "production" ? "Secure" : "",
-  ]
-    .filter(Boolean)
-    .join("; ");
-}
-
 /**
  * Client IP for rate-limiting: the RIGHTMOST `x-forwarded-for` entry (the value
  * the nearest trusted hop - portr - wrote), else the socket address. Reading the
@@ -105,7 +92,7 @@ function stripSessionCookie(req: IncomingMessage): void {
   const kept = raw
     .split(";")
     .map((c) => c.trim())
-    .filter((c) => c && !c.startsWith(`${SESSION_COOKIE_NAME}=`));
+    .filter((c) => c && !c.startsWith("dbx-tools-auth=") && !c.startsWith("dbx-tools-passkey="));
   if (kept.length) req.headers.cookie = kept.join("; ");
   else delete req.headers.cookie;
 }
@@ -126,14 +113,9 @@ function injectIdentity(req: IncomingMessage, email: string): void {
   req.headers[token.USER_EMAIL_HEADER] = email;
 }
 
-function sendJson(res: Response, status: number, body: unknown, setCookie?: string): void {
-  if (setCookie) res.setHeader("set-cookie", setCookie);
-  res.status(status).json(body);
-}
-
 /** Read the raw request body as text (AppKit parses JSON, but the gate routes
  * are mounted before that runs for tunnel traffic, so read defensively). */
-function readBody(req: Request): Promise<string> {
+function readBody(req: WebRequestInput): Promise<string> {
   // AppKit's json body-parser may have already populated req.body; prefer it.
   if (req.body !== undefined && req.body !== null) {
     return Promise.resolve(typeof req.body === "string" ? req.body : JSON.stringify(req.body));
@@ -144,6 +126,41 @@ function readBody(req: Request): Promise<string> {
     req.on("end", () => resolve(data));
     req.on("error", () => resolve(data));
   });
+}
+
+export function webHeaders(req: IncomingMessage): Headers {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(name, item);
+    } else if (value !== undefined) {
+      headers.set(name, value);
+    }
+  }
+  return headers;
+}
+
+export async function webRequest(req: WebRequestInput): Promise<globalThis.Request> {
+  const host = req.headers.host ?? "localhost";
+  const hostname = host.split(":")[0]?.toLowerCase();
+  const protocol = hostname === "localhost" || hostname === "127.0.0.1" ? "http" : "https";
+  const method = (req.method ?? "GET").toUpperCase();
+  const body = method === "GET" || method === "HEAD" ? undefined : await readBody(req);
+  return new globalThis.Request(`${protocol}://${host}${req.originalUrl || req.url}`, {
+    method,
+    headers: webHeaders(req),
+    ...(body ? { body } : {}),
+  });
+}
+
+export async function sendWebResponse(res: Response, response: globalThis.Response): Promise<void> {
+  for (const [name, value] of response.headers.entries()) {
+    if (name.toLowerCase() !== "set-cookie") res.setHeader(name, value);
+  }
+  const cookies = response.headers.getSetCookie();
+  if (cookies.length) res.setHeader("set-cookie", cookies);
+  const body = Buffer.from(await response.arrayBuffer());
+  res.status(response.status).send(body);
 }
 
 /**
@@ -197,9 +214,8 @@ export async function gateRequest(
     return "pass";
   }
 
-  // Every other /api/* needs a valid OTP session.
-  const cookie = http.parseCookies(req.headers.cookie ?? null)[SESSION_COOKIE_NAME];
-  const email = await gate.session(cookie);
+  // Every other /api/* needs a valid Better Auth session.
+  const email = await gate.session(webHeaders(req));
   if (!email) return "deny";
   injectIdentity(req, email);
   stripSessionCookie(req);
@@ -212,14 +228,6 @@ export const UNAUTHORIZED_BODY = {
   loginPath: AUTH_PREFIX,
 } as const;
 
-/** The `Set-Cookie` value that issues a verified session. */
-export function sessionSetCookie(sessionToken: string, maxAgeSeconds: number): string {
-  return sessionCookie(sessionToken, maxAgeSeconds);
-}
-
-/** The `Set-Cookie` value that clears the session. */
-export const LOGOUT_SET_COOKIE = `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0`;
-
 /**
  * Register the login routes and the gating middleware on the app's Express
  * instance. Called from {@link AuthGatePlugin} with the router AppKit hands
@@ -231,74 +239,34 @@ export const LOGOUT_SET_COOKIE = `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Max
  */
 export function mountGate(
   opts: GateOptions,
-  addRoute: (method: "get" | "post", path: string, handler: RequestHandler) => void,
+  _addRoute: (method: "get" | "post", path: string, handler: RequestHandler) => void,
   addMiddleware: (path: string, handler: RequestHandler) => void,
 ): void {
   const { gate, publicDomain, forwardHeaders } = opts;
   const headerPolicy = toHeaderPolicy(forwardHeaders);
   logger.debug("gate mounted", { publicDomain, forward: headerPolicy.patterns });
 
-  // --- Login routes (open on tunnel traffic; answered in-process) ---
-
-  const statusHandler = (async (req, res) => {
-    // A local or front-door caller is never gated, so the honest answer is that
-    // the gate does not apply - not the session state of a cookie it would never
-    // check. Without this, a browser on `localhost` renders the OTP login screen
-    // for a request that would have passed through untouched.
+  // Better Auth and the compatibility routes share one fetch-compatible
+  // handler in both hosting modes.
+  const authHandler = (async (req, res) => {
     if (!isTunnelHost(req, publicDomain)) {
-      sendJson(res, 200, { authenticated: false, enabled: false });
+      const path = (req.url ?? "/").split("?")[0] ?? "/";
+      if (path.endsWith("/status")) {
+        res.status(200).json({ authenticated: false, enabled: false, passkeysEnabled: false });
+      } else {
+        res.status(404).json({ error: "not found" });
+      }
       return;
     }
-    const cookie = http.parseCookies(req.headers.cookie ?? null)[SESSION_COOKIE_NAME];
-    sendJson(res, 200, await gate.status(cookie));
+    await sendWebResponse(res, await gate.handler(await webRequest(req)));
   }) as RequestHandler;
-
-  const requestHandler = (async (req, res) => {
-    if (!isTunnelHost(req, publicDomain)) {
-      sendJson(res, 404, { error: "not found" });
-      return;
-    }
-    const parsed = authRequestSchema.safeParse(json.parseRecord(await readBody(req)));
-    if (!parsed.success) return sendJson(res, 200, { ok: true }); // anti-enumeration
-    sendJson(res, 200, await gate.request(parsed.data.email, clientIp(req)));
-  }) as RequestHandler;
-
-  const verifyHandler = (async (req, res) => {
-    if (!isTunnelHost(req, publicDomain)) {
-      sendJson(res, 404, { error: "not found" });
-      return;
-    }
-    const parsed = authVerifySchema.safeParse(json.parseRecord(await readBody(req)));
-    if (!parsed.success) return sendJson(res, 200, { ok: false });
-    const result = await gate.verify(parsed.data.email, parsed.data.code, clientIp(req));
-    const cookie =
-      result.ok && result.token ? sessionCookie(result.token, gate.sessionTtlSeconds) : undefined;
-    sendJson(
-      res,
-      200,
-      { ok: result.ok, ...(result.retryAfter ? { retryAfter: result.retryAfter } : {}) },
-      cookie,
-    );
-  }) as RequestHandler;
-
-  const logoutHandler = ((req, res) => {
-    if (!isTunnelHost(req, publicDomain)) {
-      sendJson(res, 404, { error: "not found" });
-      return;
-    }
-    sendJson(res, 200, { ok: true }, LOGOUT_SET_COOKIE);
-  }) as RequestHandler;
-
-  addRoute("get", `${AUTH_PREFIX}/status`, statusHandler);
-  addRoute("post", `${AUTH_PREFIX}/request`, requestHandler);
-  addRoute("post", `${AUTH_PREFIX}/verify`, verifyHandler);
-  addRoute("post", `${AUTH_PREFIX}/logout`, logoutHandler);
+  addMiddleware(AUTH_PREFIX, authHandler);
 
   // --- The gate middleware (runs before static + the app's /api handlers) ---
 
   const gateMiddleware = (async (req, res, next) => {
     const action = await gateRequest(req, { gate, publicDomain, headerPolicy });
-    if (action === "deny") sendJson(res, 401, UNAUTHORIZED_BODY);
+    if (action === "deny") res.status(401).json(UNAUTHORIZED_BODY);
     else next();
   }) as RequestHandler;
 

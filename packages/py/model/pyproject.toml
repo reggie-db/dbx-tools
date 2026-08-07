@@ -2,11 +2,11 @@
 
 [project]
 name = "dbx-tools-model"
-version = "0.6.90+gh5096a2e"
+version = "0.6.90+ghba413b1"
 description = "Databricks Model Serving invocation, classification, and endpoint resolution"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [ "databricks-sdk>=0.63.0,<1", "pydantic>=2.9,<3" ]
+dependencies = [ "databricks-sdk>=0.63.0", "pydantic>=2.9" ]
 
   [project.urls]
   Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/model"

@@ -5,7 +5,5 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-email";
 export * as auth from "./src/auth.ts";
 export * as email from "./src/email.ts";
-export { SESSION_COOKIE_NAME, authRequestSchema, authRequestResultSchema, authVerifySchema, authVerifyResultSchema, authStatusSchema } from "./src/auth.ts";
-export type { AuthRequest, AuthRequestResult, AuthVerify, AuthVerifyResult, AuthStatus } from "./src/auth.ts";
 export { emailAttachmentSchema, emailMessageSchema, emailResultSchema, emailSendersSchema } from "./src/email.ts";
 export type { EmailAttachment, EmailMessage, EmailResult, EmailSenders } from "./src/email.ts";

@@ -29,10 +29,10 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
+    "@dbx-tools/auth": "workspace:*",
     "@dbx-tools/core": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*",
-    "@dbx-tools/shared-email": "workspace:*",
-    "jose": "^6.2.3"
+    "@dbx-tools/shared-auth": "workspace:*",
+    "@dbx-tools/shared-core": "workspace:*"
   },
   "main": "index.ts",
   "license": "UNLICENSED",

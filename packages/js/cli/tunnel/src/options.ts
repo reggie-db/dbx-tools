@@ -13,6 +13,7 @@
  */
 
 import { config } from "@dbx-tools/core";
+import type { AuthStorageMode } from "@dbx-tools/auth";
 import { object } from "@dbx-tools/shared-core";
 import { type AuthGateConfig, plugin, portr } from "@dbx-tools/tunnel";
 
@@ -29,6 +30,8 @@ export interface TunnelOptions {
   sessionTtl?: string | number;
   codeTtl?: string | number;
   sessionCutoff?: string;
+  authStorage?: AuthStorageMode;
+  authSqlitePath?: string;
   forwardHeaders?: string[];
   insecure?: boolean;
 }
@@ -66,6 +69,8 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
     sessionTtlSeconds: object.toNumber(options.sessionTtl),
     codeTtlSeconds: object.toNumber(options.codeTtl),
     sessionCutoff: options.sessionCutoff,
+    storage: options.authStorage,
+    sqlitePath: options.authSqlitePath,
     forwardHeaders: options.forwardHeaders,
     insecure: options.insecure,
     publicDomain: options.publicDomain,

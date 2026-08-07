@@ -10,14 +10,17 @@ const PUBLIC_DOMAIN = "demo.apps.dbx.tools";
 /** A gate API double: every session is valid iff a cookie value is present. */
 function fakeGate(overrides: Partial<AuthGateApi> = {}): AuthGateApi {
   return {
-    sessionTtlSeconds: 3600,
-    request: async () => ({ ok: true }),
-    verify: async () => ({ ok: true, token: "tok" }),
-    session: async (token) => (token ? "user@example.com" : undefined),
-    status: async (token) => ({
-      authenticated: Boolean(token),
-      email: token ? "user@example.com" : undefined,
+    passkeysEnabled: true,
+    handler: async () => new globalThis.Response("{}", { status: 200 }),
+    session: async (headers) =>
+      headers.get("cookie")?.includes(`${SESSION_COOKIE_NAME}=tok`)
+        ? "user@example.com"
+        : undefined,
+    status: async (headers) => ({
+      authenticated: Boolean(headers.get("cookie")),
+      email: headers.get("cookie") ? "user@example.com" : undefined,
       enabled: true,
+      passkeysEnabled: true,
     }),
     ...overrides,
   };
@@ -26,19 +29,23 @@ function fakeGate(overrides: Partial<AuthGateApi> = {}): AuthGateApi {
 /** Capture what `mountGate` registers so tests can drive handlers directly. */
 function mount(opts: Partial<GateOptions> = {}): {
   routes: Map<string, RequestHandler>;
+  authMiddleware: RequestHandler;
   middleware: RequestHandler;
 } {
   const routes = new Map<string, RequestHandler>();
+  let authMiddleware: RequestHandler | undefined;
   let middleware: RequestHandler | undefined;
   mountGate(
     { gate: fakeGate(), publicDomain: PUBLIC_DOMAIN, ...opts },
     (method, path, handler) => routes.set(`${method} ${path}`, handler),
-    (_path, handler) => {
-      middleware = handler;
+    (path, handler) => {
+      if (path === AUTH_PREFIX) authMiddleware = handler;
+      else middleware = handler;
     },
   );
+  assert.ok(authMiddleware, "auth middleware was registered");
   assert.ok(middleware, "gate middleware was registered");
-  return { routes, middleware };
+  return { routes, authMiddleware, middleware };
 }
 
 /** Minimal Express req/res doubles. */
@@ -156,41 +163,40 @@ describe("gate middleware", () => {
     assert.equal(nexted, true);
   });
 
-  it("registers the four login routes", () => {
-    const { routes } = mount();
-    assert.ok(routes.has(`get ${AUTH_PREFIX}/status`));
-    assert.ok(routes.has(`post ${AUTH_PREFIX}/request`));
-    assert.ok(routes.has(`post ${AUTH_PREFIX}/verify`));
-    assert.ok(routes.has(`post ${AUTH_PREFIX}/logout`));
+  it("registers one Better Auth middleware for every auth route", () => {
+    const { routes, authMiddleware } = mount();
+    assert.equal(routes.size, 0);
+    assert.ok(authMiddleware);
   });
 
   it("reports the gate disabled on non-tunnel hosts", async () => {
-    const { routes } = mount();
-    const handler = routes.get(`get ${AUTH_PREFIX}/status`);
-    assert.ok(handler);
+    const { authMiddleware } = mount();
     const res = makeRes();
-    await (handler as (req: Request, res: Response) => Promise<void>)(
+    await (authMiddleware as (req: Request, res: Response) => Promise<void>)(
       makeReq("127.0.0.1:6868", `${AUTH_PREFIX}/status`),
       res,
     );
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(res.jsonBody, { authenticated: false, enabled: false });
+    assert.deepEqual(res.jsonBody, {
+      authenticated: false,
+      enabled: false,
+      passkeysEnabled: false,
+    });
   });
 
-  it("does not expose request, verify, or logout on non-tunnel hosts", async () => {
-    const unavailable = async () => {
-      throw new Error("gate method should not be called");
-    };
-    const { routes } = mount({
-      gate: fakeGate({ request: unavailable, verify: unavailable }),
+  it("does not expose auth handlers on non-tunnel hosts", async () => {
+    const { authMiddleware } = mount({
+      gate: fakeGate({
+        handler: async () => {
+          throw new Error("gate method should not be called");
+        },
+      }),
     });
 
     for (const path of ["request", "verify", "logout"]) {
-      const handler = routes.get(`post ${AUTH_PREFIX}/${path}`);
-      assert.ok(handler);
       const res = makeRes();
       await Promise.resolve(
-        handler(makeReq("127.0.0.1:6868", `${AUTH_PREFIX}/${path}`), res, () => {}),
+        authMiddleware(makeReq("127.0.0.1:6868", `${AUTH_PREFIX}/${path}`), res, () => {}),
       );
       assert.equal(res.statusCode, 404);
     }
@@ -231,12 +237,6 @@ describe("gate context mounting", () => {
     );
 
     assert.equal(buffered, false);
-    assert.deepEqual(registrations, [
-      `get ${AUTH_PREFIX}/status`,
-      `post ${AUTH_PREFIX}/request`,
-      `post ${AUTH_PREFIX}/verify`,
-      `post ${AUTH_PREFIX}/logout`,
-      "use /",
-    ]);
+    assert.deepEqual(registrations, [`use ${AUTH_PREFIX}`, "use /"]);
   });
 });

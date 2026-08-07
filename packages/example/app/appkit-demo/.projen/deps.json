@@ -45,6 +45,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/ui-auth",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/ui-branding",
       "version": "workspace:*",
       "type": "runtime"

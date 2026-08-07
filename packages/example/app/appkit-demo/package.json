@@ -30,6 +30,7 @@
     "@databricks/appkit-ui": "catalog:",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/ui-appkit": "workspace:*",
+    "@dbx-tools/ui-auth": "workspace:*",
     "@dbx-tools/ui-branding": "workspace:*",
     "@dbx-tools/ui-email": "workspace:*",
     "@dbx-tools/ui-mastra": "workspace:*",

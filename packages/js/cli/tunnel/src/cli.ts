@@ -72,6 +72,8 @@ function addOptions(command: Command): Command {
     .option("--session-ttl <seconds>", "session lifetime")
     .option("--code-ttl <seconds>", "one-time-code lifetime")
     .option("--session-cutoff <when>", "invalidate every session issued before this")
+    .option("--auth-storage <mode>", "auth database: auto, lakebase, or sqlite")
+    .option("--auth-sqlite-path <path>", "local Better Auth SQLite file")
     .option("--forward-headers <patterns...>", "extra x- headers tunnel traffic may forward")
     .option("--insecure", "run open, with no gate");
 }

@@ -1,4 +1,4 @@
-import { AuthGate } from "@dbx-tools/ui-email/react/auth-gate";
+import { AuthGate } from "@dbx-tools/ui-auth/react";
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";

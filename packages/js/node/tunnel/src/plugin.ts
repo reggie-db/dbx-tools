@@ -16,18 +16,37 @@
  * @module
  */
 
-import { Plugin, toPlugin, type BasePluginConfig, type PluginManifest } from "@databricks/appkit";
+import {
+  lakebase,
+  Plugin,
+  toPlugin,
+  type BasePluginConfig,
+  type PluginManifest,
+  type ResourceRequirement,
+  ResourceType,
+} from "@databricks/appkit";
+import { plugin as appkitPlugin } from "@dbx-tools/appkit";
+import {
+  auth as passwordlessAuth,
+  storage as authStorage,
+  type AuthorizeIdentity,
+  type AuthStorageConfig,
+  type AuthStorageMode,
+  type PasswordlessAuthRuntime,
+} from "@dbx-tools/auth";
 import { config as coreConfig } from "@dbx-tools/core";
-import { brand, log, object, string } from "@dbx-tools/shared-core";
-import type { AuthStatus } from "@dbx-tools/shared-email";
+import { brand, log, string } from "@dbx-tools/shared-core";
+import type { AuthStatus } from "@dbx-tools/shared-auth";
 import type { RequestHandler } from "express";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
 import { mountGate, type GateOptions } from "./gate.ts";
-import { CodeStore, signSession, verifySession } from "./otp.ts";
-import { RateLimiter } from "./rate-limit.ts";
 import { ensureEmailAvailable, sendCode as defaultSendCode } from "./send-code.ts";
-import { KEY_TTL_SECONDS, resolveSessionCutoff, signingKey } from "./signing-key.ts";
+import {
+  KEY_TTL_SECONDS,
+  resolveSessionCutoff,
+  signingKey,
+} from "./signing-key.ts";
 
 const logger = log.logger("tunnel:auth");
 
@@ -73,7 +92,7 @@ export function mountGateOnContext(context: GateMountContext, options: GateOptio
 }
 
 /** Options for the {@link authGate} plugin (all resolvable from env - see below). */
-export interface AuthGateConfig extends BasePluginConfig {
+export interface AuthGateConfig extends BasePluginConfig, AuthStorageConfig {
   /** Allow-list patterns (domain / glob / `/regex/`). Empty = allow nobody. Env TUNNEL_AUTH_ALLOW. */
   allow?: string | string[];
   /**
@@ -134,6 +153,11 @@ export interface AuthGateConfig extends BasePluginConfig {
    */
   sendCode?: (email: string, code: string, opts: SendCodeOptions) => Promise<void>;
   /**
+   * Identity authorization independent of authentication. Defaults to the
+   * configured allow-list and is re-evaluated for every accepted session.
+   */
+  authorizeIdentity?: AuthorizeIdentity;
+  /**
    * The public `<subdomain>.<server>` that identifies portr traffic by its `Host`
    * header. Only requests whose `Host` matches this are gated; everything else
    * (the platform front door, other local callers) passes through. Env
@@ -185,6 +209,8 @@ export interface ResolvedAuthGateConfig {
   forwardHeaders: string[];
   /** Run OPEN with no gate. */
   insecure: boolean;
+  storage: AuthStorageMode;
+  sqlitePath?: string;
 }
 
 const DEFAULTS = {
@@ -204,6 +230,13 @@ const DEFAULTS = {
 
 /** Merge {@link AuthGateConfig} over env over defaults into a resolved config. */
 export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateConfig {
+  const storage = authStorage.resolveAuthStorageConfig({
+    storage:
+      config.storage ??
+      (coreConfig.text("AUTH_STORAGE", TUNNEL_CONFIG) as AuthStorageMode | undefined),
+    sqlitePath:
+      config.sqlitePath ?? coreConfig.text("AUTH_SQLITE_PATH", TUNNEL_CONFIG),
+  });
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
     // TUNNEL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
@@ -237,25 +270,21 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
       ...string.parseList(coreConfig.text("FORWARD_HEADERS", TUNNEL_CONFIG)),
     ],
     insecure: coreConfig.boolean(config.insecure, "INSECURE", TUNNEL_CONFIG) ?? false,
+    storage: storage.mode,
+    sqlitePath: storage.sqlitePath,
   };
 }
 
 /** The handlers the gate middleware calls in-process (returned by {@link AuthGatePlugin.exports}). */
 export interface AuthGateApi {
-  /** Handle a code request. Always resolves `{ ok: true }` (anti-enumeration). */
-  request(email: string, ip: string): Promise<{ ok: true; retryAfter?: number }>;
-  /** Handle a code verification. On success returns the session token to cookie. */
-  verify(
-    email: string,
-    code: string,
-    ip: string,
-  ): Promise<{ ok: boolean; token?: string; retryAfter?: number }>;
-  /** Resolve the authenticated email for a session token, or undefined. */
-  session(token: string | undefined): Promise<string | undefined>;
-  /** Session TTL in seconds (for the cookie Max-Age). */
-  readonly sessionTtlSeconds: number;
-  /** The gate status payload (`enabled` is always true when this plugin runs). */
-  status(token: string | undefined): Promise<AuthStatus>;
+  /** Better Auth and compatibility routes under `/api/email/auth/*`. */
+  handler(request: Request): Promise<Response>;
+  /** Resolve the authorized email for request headers, or undefined. */
+  session(headers: Headers): Promise<string | undefined>;
+  /** The gate status payload. */
+  status(headers: Headers): Promise<AuthStatus>;
+  /** Whether the runtime exposes passkey enrollment and authentication. */
+  readonly passkeysEnabled: boolean;
 }
 
 /**
@@ -269,29 +298,74 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   static manifest = {
     name: "authGate",
     displayName: "Auth Gate",
-    description: "Email one-time-password access gate for a public tunnel.",
+    description: "Better Auth email OTP and passkey access gate for a public tunnel.",
     stability: "beta",
-    resources: { required: [], optional: [] },
+    resources: {
+      required: [],
+      optional: [
+        {
+          type: ResourceType.POSTGRES,
+          alias: "auth",
+          resourceKey: "auth-database",
+          description: "Durable users, sessions, OTP records, and passkeys.",
+          permission: "CAN_CONNECT_AND_CREATE",
+          fields: {
+            instance_name: { env: "LAKEBASE_INSTANCE_NAME" },
+            database_name: { env: "PGDATABASE" },
+          },
+        },
+      ],
+    },
   } satisfies PluginManifest<"authGate">;
 
   private resolved!: ResolvedAuthGateConfig;
-  private codes!: CodeStore;
-  // Requesting a code is email-spam-prone; verifying is a brute-force surface.
-  // Per-email AND per-IP so neither axis alone is a bypass.
-  private readonly requestLimiter = new RateLimiter(5, 15 * 60 * 1000);
-  private readonly verifyLimiter = new RateLimiter(10, 15 * 60 * 1000);
+  private runtime?: PasswordlessAuthRuntime;
+
+  static getResourceRequirements(config: AuthGateConfig): ResourceRequirement[] {
+    if (authStorage.resolveAuthStorageConfig(config).mode !== "lakebase") return [];
+    return [
+      {
+        type: ResourceType.POSTGRES,
+        alias: "auth",
+        resourceKey: "auth-database",
+        description: "Durable users, sessions, OTP records, and passkeys.",
+        permission: "CAN_CONNECT_AND_CREATE",
+        fields: {
+          instance_name: { env: "LAKEBASE_INSTANCE_NAME" },
+          database_name: { env: "PGDATABASE" },
+        },
+        required: true,
+      },
+    ];
+  }
 
   override async setup(): Promise<void> {
     this.resolved = resolveAuthGateConfig(this.config);
-    this.codes = new CodeStore(this.resolved.codeTtlSeconds, this.resolved.maxAttempts);
-    // Resolve the signing key HERE rather than lazily on the first sign-in, so a
-    // cache that cannot hold it (and the resulting "sessions won't survive a
-    // restart" warning) shows up in the startup log, not hours later.
-    const { cutoffMs } = await signingKey(this.resolved.sessionCutoffMs);
 
     if (this.resolved.insecure) {
-      logger.warn("insecure mode - the tunnel runs OPEN with no email-OTP gate");
+      logger.warn("insecure mode - the tunnel runs OPEN with no auth gate");
     } else {
+      const lakebasePlugin = appkitPlugin.instance(this.context, lakebase);
+      const storage = await authStorage.createAuthStorage(
+        this.resolved,
+        lakebasePlugin?.exports().pool,
+      );
+      const { key } = await signingKey(this.resolved.sessionCutoffMs);
+      this.runtime = await passwordlessAuth.createPasswordlessAuth({
+        storage,
+        baseURL: authOrigin(this.resolved.publicDomain),
+        basePath: "/api/email/auth",
+        appName: this.resolved.brandName,
+        secret: Buffer.from(key).toString("base64url"),
+        sessionTtlSeconds: this.resolved.sessionTtlSeconds,
+        sessionCutoffMs: this.resolved.sessionCutoffMs,
+        codeTtlSeconds: this.resolved.codeTtlSeconds,
+        maxAttempts: this.resolved.maxAttempts,
+        authorizeIdentity: (email) => this.authorizeIdentity(email),
+        sendCode: (email, code, options) => this.sendCode(email, code, options),
+        subject: this.resolved.subject,
+        message: this.resolved.message,
+      });
       // `server()` is deferred, so it does not exist during this plugin's setup.
       // At `setup:complete` the Express app exists but has not injected plugin
       // routes or static handling yet, which is the one point the gate can mount
@@ -309,8 +383,16 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       sessionTtlSeconds: this.resolved.sessionTtlSeconds,
       publicDomain: this.resolved.publicDomain ?? null,
       insecure: this.resolved.insecure,
-      ...object.optional("sessionCutoff", cutoffMs > 0 ? new Date(cutoffMs).toISOString() : null),
+      storage: this.resolved.storage,
+      sessionCutoff:
+        this.resolved.sessionCutoffMs > 0
+          ? new Date(this.resolved.sessionCutoffMs).toISOString()
+          : null,
     });
+  }
+
+  async shutdown(): Promise<void> {
+    await this.runtime?.close();
   }
 
   /**
@@ -323,7 +405,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   private mountGateRoutes(): void {
     const context = this.context;
     if (!context) {
-      logger.warn("no plugin context - the OTP gate cannot mount its routes");
+      logger.warn("no plugin context - the auth gate cannot mount its routes");
       return;
     }
     mountGateOnContext(context, {
@@ -338,62 +420,33 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     return this.config.sendCode ?? defaultSendCode;
   }
 
+  private authorizeIdentity(email: string): boolean | Promise<boolean> {
+    if (this.config.authorizeIdentity) return this.config.authorizeIdentity(email);
+    return looksLikeEmail(email) && matchesAllowlist(email, this.resolved.allow);
+  }
+
   override exports(): AuthGateApi {
+    const runtime = this.runtime;
     return {
-      sessionTtlSeconds: this.resolved.sessionTtlSeconds,
-      request: (email, ip) => this.handleRequest(email, ip),
-      verify: (email, code, ip) => this.handleVerify(email, code, ip),
-      session: (token) => verifySession(token),
-      status: async (token) => ({
-        authenticated: Boolean(await verifySession(token)),
-        email: (await verifySession(token)) ?? undefined,
-        enabled: true,
-      }),
+      passkeysEnabled: runtime?.passkeysEnabled ?? false,
+      handler: (request) =>
+        runtime?.handler(request) ??
+        Promise.resolve(new Response("Not Found", { status: 404 })),
+      session: (headers) => runtime?.session(headers) ?? Promise.resolve(undefined),
+      status: (headers) =>
+        runtime?.status(headers) ??
+        Promise.resolve({ authenticated: false, enabled: false, passkeysEnabled: false }),
     };
   }
+}
 
-  private async handleRequest(
-    email: string,
-    ip: string,
-  ): Promise<{ ok: true; retryAfter?: number }> {
-    const address = email.trim().toLowerCase();
-    const byIp = this.requestLimiter.hit(`ip:${ip}`);
-    const byEmail = this.requestLimiter.hit(`email:${address}`);
-    if (!byIp.allowed || !byEmail.allowed) {
-      return { ok: true, retryAfter: byIp.retryAfter ?? byEmail.retryAfter };
-    }
-    if (looksLikeEmail(address) && matchesAllowlist(address, this.resolved.allow)) {
-      const code = await this.codes.issue(address);
-      try {
-        await this.sendCode(address, code, {
-          subject: this.resolved.subject,
-          brandName: this.resolved.brandName,
-          message: this.resolved.message,
-          codeTtlSeconds: this.resolved.codeTtlSeconds,
-        });
-      } catch (error) {
-        logger.warn("failed to send OTP email", { error });
-      }
-    }
-    return { ok: true };
-  }
-
-  private async handleVerify(
-    email: string,
-    code: string,
-    ip: string,
-  ): Promise<{ ok: boolean; token?: string; retryAfter?: number }> {
-    const address = email.trim().toLowerCase();
-    const byIp = this.verifyLimiter.hit(`ip:${ip}`);
-    const byEmail = this.verifyLimiter.hit(`email:${address}`);
-    if (!byIp.allowed || !byEmail.allowed) {
-      return { ok: false, retryAfter: byIp.retryAfter ?? byEmail.retryAfter };
-    }
-    if ((await this.codes.verify(address, code.trim())) !== "ok") return { ok: false };
-    this.requestLimiter.reset(`email:${address}`);
-    this.verifyLimiter.reset(`email:${address}`);
-    return { ok: true, token: await signSession(address, this.resolved.sessionTtlSeconds) };
-  }
+function authOrigin(publicDomain?: string): string {
+  const value = string.trimToNull(publicDomain);
+  if (!value) return "http://localhost";
+  if (/^https?:\/\//i.test(value)) return new URL(value).origin;
+  const host = value.split("/")[0]!;
+  const local = host === "localhost" || host.startsWith("localhost:");
+  return `${local ? "http" : "https"}://${host}`;
 }
 
 /** Factory: `authGate({ allow, subject, ... })` for an AppKit `plugins` array. */

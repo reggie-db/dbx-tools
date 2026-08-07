@@ -23,6 +23,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/shared-auth": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "zod": "catalog:"
   },
