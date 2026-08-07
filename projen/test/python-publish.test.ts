@@ -35,6 +35,15 @@ describe("local Python release stamping", () => {
     assert.equal(readFileSync(appPath, "utf8"), original);
   });
 
+  it("accepts projects already carrying the release version", () => {
+    const corePath = join(outdir, "core", "pyproject.toml");
+    const original = readFileSync(corePath, "utf8");
+    const restore = stampPythonProjects(outdir, "0.0.0");
+    assert.equal(readFileSync(corePath, "utf8"), original);
+    restore();
+    assert.equal(readFileSync(corePath, "utf8"), original);
+  });
+
   it("stamps versions without replacing standalone Git dependencies when asked", () => {
     const appPath = join(outdir, "app", "pyproject.toml");
     const original = readFileSync(appPath, "utf8");

@@ -61,10 +61,11 @@ export function stampPythonProjects(
 
   try {
     for (const project of projects) {
-      let stamped = project.source.replace(/^version = "[^"]+"$/m, `version = "${version}"`);
-      if (stamped === project.source) {
+      const versionPattern = /^version = "[^"]+"$/m;
+      if (!versionPattern.test(project.source)) {
         throw new Error(`Expected one project version in ${project.path}`);
       }
+      let stamped = project.source.replace(versionPattern, `version = "${version}"`);
       if (options.rewriteDependencies ?? true) {
         for (const sibling of projects) {
           stamped = stamped.replace(
