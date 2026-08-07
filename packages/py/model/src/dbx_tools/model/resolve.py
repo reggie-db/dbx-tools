@@ -17,6 +17,7 @@ from .models import (
 )
 
 DEFAULT_FUZZY_THRESHOLD = 0.4
+VERSIONED_FAMILY_SEARCHES = frozenset({"claude", "gemini", "gemma", "glm", "gpt", "llama", "qwen"})
 
 
 def search_serving_endpoints(
@@ -84,6 +85,7 @@ def rank_models(
     search = request.search.strip() if request.search else ""
     if search:
         gpt_family_search = search.lower() == "gpt"
+        versioned_family_search = search.lower() in VERSIONED_FAMILY_SEARCHES
         scores = {
             str(match["endpoint"]["name"]): float(match["score"])
             for match in search_serving_endpoints(
@@ -110,7 +112,7 @@ def rank_models(
                 round((candidate.score or 0) * 1000),
                 *(
                     [-part for part in version_tuple(candidate.endpoint.name)]
-                    if gpt_family_search
+                    if versioned_family_search
                     else []
                 ),
                 MODEL_CLASS_ORDER.index(candidate.model_class),

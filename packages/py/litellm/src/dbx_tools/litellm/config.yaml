@@ -38,4 +38,19 @@ litellm_settings:
   custom_provider_map:
     - provider: dbx
       custom_handler: config_provider.dbx_provider
-  num_retries: 5
+
+router_settings:
+  # LiteLLM applies exponential backoff with jitter and honors provider
+  # Retry-After headers. Two seconds grows to roughly one minute across the
+  # five rate-limit retries, enough to cross a workspace TPM window.
+  retry_after: 2
+  # Unclassified errors are not retried. The policy below opts in only the
+  # transient categories that can succeed without changing the request.
+  num_retries: 0
+  retry_policy:
+    BadRequestErrorRetries: 0
+    RateLimitErrorRetries: 5
+    TimeoutErrorRetries: 3
+    InternalServerErrorRetries: 3
+    AuthenticationErrorRetries: 0
+    ContentPolicyViolationErrorRetries: 0

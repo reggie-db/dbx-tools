@@ -6,7 +6,11 @@ from collections.abc import Sequence
 import dbx_tools.litellm.backend as backend_module
 import dbx_tools.litellm.cli as cli_module
 import pytest
-from dbx_tools.litellm.backend import DATABRICKS_PROFILE_ENV, require_profile
+from dbx_tools.litellm.backend import (
+    DATABRICKS_PROFILE_ENV,
+    _strip_provider_prefix,
+    require_profile,
+)
 
 
 def test_explicit_profile_wins_without_spawning_cli(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -84,3 +88,7 @@ def test_cli_profile_argument_is_optional(monkeypatch: pytest.MonkeyPatch) -> No
     assert proxy_arguments[:2] == ["--port", "4000"]
     assert "--config" in proxy_arguments
     assert backend_module.os.environ[DATABRICKS_PROFILE_ENV] == "environment"
+
+
+def test_repeated_provider_prefixes_are_normalized() -> None:
+    assert _strip_provider_prefix("dbx/databricks/databricks-gpt-5-5") == "databricks-gpt-5-5"

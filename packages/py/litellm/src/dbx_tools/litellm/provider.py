@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Iterator, Mapping
+import logging
+import random
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping
 from threading import RLock
-from typing import Any, cast
+from typing import Any, TypeVar, cast
+from uuid import uuid4
 
 import litellm
 from litellm import CustomLLM
+from litellm.exceptions import MidStreamFallbackError, RateLimitError
 from litellm.types.utils import (
     EmbeddingResponse,
     GenericStreamingChunk,
@@ -18,6 +23,13 @@ from litellm.types.utils import (
 
 from .backend import DatabricksLiteLLMBackend
 from .models import requires_responses_api
+
+logger = logging.getLogger(__name__)
+
+RATE_LIMIT_RETRIES = 5
+RETRY_BASE_SECONDS = 2.0
+RETRY_MAX_SECONDS = 30.0
+_ResponseT = TypeVar("_ResponseT")
 
 
 class DbxCustomLLM(CustomLLM):
@@ -44,11 +56,13 @@ class DbxCustomLLM(CustomLLM):
         **_: Any,
     ) -> ModelResponse:
         resolved = self.backend.resolve(model, requires_tools=_requires_tools(optional_params))
-        return litellm.completion(
-            model=_delegate_chat_model(resolved),
-            messages=_prepare_messages(messages, optional_params),
-            stream=False,
-            **_delegated_params(optional_params, self.backend, timeout=timeout),
+        return _ensure_response_id(
+            litellm.completion(
+                model=_delegate_chat_model(resolved),
+                messages=_prepare_messages(messages, optional_params),
+                stream=False,
+                **_delegated_params(optional_params, self.backend, timeout=timeout),
+            )
         )
 
     async def acompletion(
@@ -64,11 +78,13 @@ class DbxCustomLLM(CustomLLM):
             model,
             requires_tools=_requires_tools(optional_params),
         )
-        return await litellm.acompletion(
-            model=_delegate_chat_model(resolved),
-            messages=_prepare_messages(messages, optional_params),
-            stream=False,
-            **_delegated_params(optional_params, self.backend, timeout=timeout),
+        return _ensure_response_id(
+            await litellm.acompletion(
+                model=_delegate_chat_model(resolved),
+                messages=_prepare_messages(messages, optional_params),
+                stream=False,
+                **_delegated_params(optional_params, self.backend, timeout=timeout),
+            )
         )
 
     def streaming(
@@ -80,13 +96,15 @@ class DbxCustomLLM(CustomLLM):
         **_: Any,
     ) -> Iterator[GenericStreamingChunk]:
         resolved = self.backend.resolve(model, requires_tools=_requires_tools(optional_params))
-        stream = litellm.completion(
-            model=_delegate_chat_model(resolved),
-            messages=_prepare_messages(messages, optional_params),
-            stream=True,
-            **_delegated_params(optional_params, self.backend, timeout=timeout),
+        params = _delegated_params(optional_params, self.backend, timeout=timeout)
+        return _retrying_generic_stream(
+            lambda: litellm.completion(
+                model=_delegate_chat_model(resolved),
+                messages=_prepare_messages(messages, optional_params),
+                stream=True,
+                **params,
+            )
         )
-        return _generic_stream(stream)
 
     async def astreaming(
         self,
@@ -101,14 +119,18 @@ class DbxCustomLLM(CustomLLM):
             model,
             requires_tools=_requires_tools(optional_params),
         )
-        stream = await litellm.acompletion(
-            model=_delegate_chat_model(resolved),
-            messages=_prepare_messages(messages, optional_params),
-            stream=True,
-            **_delegated_params(optional_params, self.backend, timeout=timeout),
-        )
-        async for chunk in stream:
-            yield from_chunk(chunk)
+        params = _delegated_params(optional_params, self.backend, timeout=timeout)
+
+        async def create_stream() -> Any:
+            return await litellm.acompletion(
+                model=_delegate_chat_model(resolved),
+                messages=_prepare_messages(messages, optional_params),
+                stream=True,
+                **params,
+            )
+
+        async for chunk in _retrying_async_generic_stream(create_stream):
+            yield chunk
 
     def embedding(
         self,
@@ -151,6 +173,20 @@ def _delegate_chat_model(resolved: str) -> str:
 def _requires_tools(optional_params: Mapping[str, Any]) -> bool:
     tools = optional_params.get("tools")
     return isinstance(tools, list) and bool(tools)
+
+
+def _ensure_response_id(response: _ResponseT) -> _ResponseT:
+    response_id = (
+        response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
+    )
+    if isinstance(response_id, str) and response_id:
+        return response
+    generated = f"chatcmpl-{uuid4().hex}"
+    if isinstance(response, dict):
+        response["id"] = generated
+    else:
+        response.id = generated
+    return response
 
 
 def _field(message: Any, name: str) -> Any:
@@ -352,13 +388,80 @@ def _delegated_params(
     return params
 
 
-def _generic_stream(stream: Any) -> Iterator[GenericStreamingChunk]:
-    for chunk in stream:
-        yield from_chunk(chunk)
+def _retry_delay(error: Exception, attempt: int) -> float:
+    response = getattr(error, "response", None)
+    headers = getattr(response, "headers", None)
+    if isinstance(headers, Mapping):
+        for key in ("retry-after", "x-retry-after"):
+            value = headers.get(key)
+            try:
+                if value is not None and float(value) > 0:
+                    return min(float(value), RETRY_MAX_SECONDS)
+            except (TypeError, ValueError):
+                continue
+    ceiling = min(RETRY_BASE_SECONDS * (2**attempt), RETRY_MAX_SECONDS)
+    return random.uniform(ceiling / 2, ceiling)
+
+
+def _is_retryable_rate_limit(error: Exception) -> bool:
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, RateLimitError):
+            return True
+        current = getattr(current, "original_exception", None) or current.__cause__
+    return "REQUEST_LIMIT_EXCEEDED" in str(error)
+
+
+def _retrying_generic_stream(factory: Callable[[], Any]) -> Iterator[GenericStreamingChunk]:
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        emitted = False
+        try:
+            for chunk in factory():
+                emitted = True
+                yield from_chunk(chunk)
+            return
+        except (MidStreamFallbackError, RateLimitError) as error:
+            if emitted or attempt >= RATE_LIMIT_RETRIES or not _is_retryable_rate_limit(error):
+                raise
+            delay = _retry_delay(error, attempt)
+            logger.warning(
+                "Rate limited before streaming began; retrying in %.1fs (%d/%d)",
+                delay,
+                attempt + 1,
+                RATE_LIMIT_RETRIES,
+            )
+            time.sleep(delay)
+
+
+async def _retrying_async_generic_stream(
+    factory: Callable[[], Awaitable[Any]],
+) -> AsyncIterator[GenericStreamingChunk]:
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        emitted = False
+        try:
+            stream = await factory()
+            async for chunk in stream:
+                emitted = True
+                yield from_chunk(chunk)
+            return
+        except (MidStreamFallbackError, RateLimitError) as error:
+            if emitted or attempt >= RATE_LIMIT_RETRIES or not _is_retryable_rate_limit(error):
+                raise
+            delay = _retry_delay(error, attempt)
+            logger.warning(
+                "Rate limited before streaming began; retrying in %.1fs (%d/%d)",
+                delay,
+                attempt + 1,
+                RATE_LIMIT_RETRIES,
+            )
+            await asyncio.sleep(delay)
 
 
 def from_chunk(chunk: ModelResponseStream) -> GenericStreamingChunk:
     """Adapt a normalized LiteLLM chunk without rebuilding its delta content."""
+    _ensure_response_id(chunk)
     choice = chunk.choices[0] if chunk.choices else None
     delta = choice.delta if choice is not None else None
     content = getattr(delta, "content", None)

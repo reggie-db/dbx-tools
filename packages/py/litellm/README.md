@@ -181,6 +181,18 @@ classifier maps the score through the resolved model's capabilities. The
 existing `reasoning=<tokens>` field remains the number of reasoning tokens
 reported by the provider, not the selected effort level.
 
+## Rate-limit retries
+
+The packaged router retries rate limits five times with exponential backoff,
+starting at two seconds and honoring provider `Retry-After` headers. Timeouts
+and internal server errors get three retries. Authentication, bad requests, and
+content-policy failures are not retried.
+
+Streaming dbx requests apply the same bounded retry protection when a rate
+limit arrives before the first response chunk. A failure after content has
+already streamed is returned immediately because restarting would duplicate
+partial output in the client.
+
 ## Runtime behavior
 
 Endpoint discovery is lazy. The first request lists serving endpoints, later

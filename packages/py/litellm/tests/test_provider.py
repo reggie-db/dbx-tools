@@ -1,17 +1,40 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Iterator
+from types import SimpleNamespace
+
+import dbx_tools.litellm.provider as provider_module
 import pytest
 from dbx_tools.litellm.provider import (
     _ensure_json_mentioned,
+    _ensure_response_id,
     _prepare_messages,
     _repair_trailing_assistant,
+    _retrying_async_generic_stream,
+    _retrying_generic_stream,
 )
+from litellm.exceptions import MidStreamFallbackError, RateLimitError
 
 JSON_OBJECT = {"response_format": {"type": "json_object"}}
 
 
 def _texts(messages: list[dict]) -> str:
     return " ".join(str(m.get("content", "")) for m in messages)
+
+
+def test_missing_response_id_is_repaired_for_responses_conversion() -> None:
+    response = SimpleNamespace(id=None)
+
+    assert _ensure_response_id(response) is response
+    assert response.id.startswith("chatcmpl-")
+
+
+def test_existing_response_id_is_preserved() -> None:
+    response = SimpleNamespace(id="provider-id")
+
+    _ensure_response_id(response)
+
+    assert response.id == "provider-id"
 
 
 def test_untouched_when_json_object_not_requested() -> None:
@@ -235,3 +258,95 @@ class TestPydanticMessageObjects:
 
         assert prepared[-1]["role"] == "user"
         assert "json" in str(prepared[-1]["content"]).lower()
+
+
+def _rate_limit() -> RateLimitError:
+    return RateLimitError(
+        "REQUEST_LIMIT_EXCEEDED",
+        llm_provider="databricks",
+        model="databricks-gpt-5-5",
+    )
+
+
+def test_stream_retries_rate_limits_with_exponential_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+    delays: list[float] = []
+
+    def factory() -> Iterator[str]:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise _rate_limit()
+        return iter(("ready",))
+
+    monkeypatch.setattr(provider_module, "from_chunk", lambda chunk: chunk)
+    monkeypatch.setattr(provider_module.random, "uniform", lambda _floor, ceiling: ceiling)
+    monkeypatch.setattr(provider_module.time, "sleep", delays.append)
+
+    assert list(_retrying_generic_stream(factory)) == ["ready"]
+    assert attempts == 3
+    assert delays == [2.0, 4.0]
+
+
+def test_stream_does_not_retry_after_emitting_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = 0
+    delays: list[float] = []
+
+    def factory() -> Iterator[str]:
+        nonlocal attempts
+        attempts += 1
+
+        def stream() -> Iterator[str]:
+            yield "partial"
+            raise _rate_limit()
+
+        return stream()
+
+    monkeypatch.setattr(provider_module, "from_chunk", lambda chunk: chunk)
+    monkeypatch.setattr(provider_module.time, "sleep", delays.append)
+    stream = _retrying_generic_stream(factory)
+
+    assert next(stream) == "partial"
+    with pytest.raises(RateLimitError):
+        next(stream)
+    assert attempts == 1
+    assert delays == []
+
+
+async def test_async_stream_retries_wrapped_pre_stream_rate_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+    delays: list[float] = []
+
+    async def factory() -> AsyncIterator[str]:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 2:
+            raise MidStreamFallbackError(
+                "rate limited",
+                model="databricks-gpt-5-5",
+                llm_provider="databricks",
+                original_exception=_rate_limit(),
+                is_pre_first_chunk=True,
+            )
+
+        async def stream() -> AsyncIterator[str]:
+            yield "ready"
+
+        return stream()
+
+    async def sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr(provider_module, "from_chunk", lambda chunk: chunk)
+    monkeypatch.setattr(provider_module.random, "uniform", lambda _floor, ceiling: ceiling)
+    monkeypatch.setattr(provider_module.asyncio, "sleep", sleep)
+
+    result = [chunk async for chunk in _retrying_async_generic_stream(factory)]
+
+    assert result == ["ready"]
+    assert attempts == 2
+    assert delays == [2.0]

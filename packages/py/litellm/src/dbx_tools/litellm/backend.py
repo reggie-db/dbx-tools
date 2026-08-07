@@ -152,7 +152,11 @@ class DatabricksLiteLLMBackend:
 
 
 def _strip_provider_prefix(model: str) -> str:
-    for prefix in ("dbx/", "databricks/"):
-        if model.startswith(prefix):
-            return model[len(prefix) :]
-    return model
+    stripped = model
+    while True:
+        for prefix in ("dbx/", "databricks/"):
+            if stripped.startswith(prefix):
+                stripped = stripped[len(prefix) :]
+                break
+        else:
+            return stripped

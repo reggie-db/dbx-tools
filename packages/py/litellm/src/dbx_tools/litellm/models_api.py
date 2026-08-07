@@ -126,21 +126,21 @@ def _discovered_models(
             continue
         existing = registry.get(endpoint.name)
         result.append(
-            {
-                **(dict(existing) if existing is not None else {}),
-                "id": _dbx_model_id(endpoint.name),
-                "object": "model",
-                "owned_by": "dbx",
-            }
+            _model_entry(
+                _dbx_model_id(endpoint.name),
+                existing,
+                owned_by="dbx",
+                endpoint=endpoint,
+            )
         )
         if native_enabled:
             result.append(
-                {
-                    **(dict(existing) if existing is not None else {}),
-                    "id": f"databricks/{endpoint.name}",
-                    "object": "model",
-                    "owned_by": "databricks",
-                }
+                _model_entry(
+                    f"databricks/{endpoint.name}",
+                    existing,
+                    owned_by="databricks",
+                    endpoint=endpoint,
+                )
             )
         seen.add(endpoint.name)
     return result
@@ -164,14 +164,40 @@ def _registry_models(data: Sequence[Any], *, native_enabled: bool) -> list[Any]:
         dbx_id = _dbx_model_id(slug) if slug is not None else None
         if dbx_id is None or dbx_id in seen:
             continue
-        result.append({**item, "id": dbx_id, "owned_by": "dbx"})
+        result.append(_model_entry(dbx_id, item, owned_by="dbx"))
         seen.add(dbx_id)
         if native_enabled:
             native_id = f"databricks/{slug}"
             if native_id not in seen:
-                result.append({**item, "id": native_id, "owned_by": "databricks"})
+                result.append(_model_entry(native_id, item, owned_by="databricks"))
                 seen.add(native_id)
     return result
+
+
+def _model_entry(
+    model_id: str,
+    existing: Mapping[str, Any] | None,
+    *,
+    owned_by: str,
+    endpoint: ServingEndpointSummary | None = None,
+) -> dict[str, Any]:
+    """Build an OpenAI model entry with portable reasoning capability metadata."""
+    entry = {
+        **(dict(existing) if existing is not None else {}),
+        "id": model_id,
+        "object": "model",
+        "owned_by": owned_by,
+    }
+    efforts = endpoint.reasoning_efforts if endpoint is not None else reasoning_efforts_by_family(model_id)
+    if efforts:
+        levels = [effort.value for effort in efforts]
+        entry["supports_reasoning"] = True
+        entry["reasoning_efforts"] = levels
+        entry["supported_reasoning_levels"] = levels
+        entry["default_reasoning_effort"] = "medium" if "medium" in levels else levels[0]
+    else:
+        entry["supports_reasoning"] = False
+    return entry
 
 
 def _custom_models(data: Sequence[Any]) -> list[Any]:
@@ -227,7 +253,7 @@ def _append_family_models(data: Sequence[Any]) -> list[Any]:
         alias = f"dbx/databricks-{family}"
         if alias in existing:
             continue
-        result.append({**representative, "id": alias})
+        result.append(_model_entry(alias, representative, owned_by="dbx"))
         existing.add(alias)
     return result
 

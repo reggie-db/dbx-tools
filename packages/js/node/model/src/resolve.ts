@@ -41,6 +41,16 @@ import {
 
 type ModelClass = model.ModelClass;
 
+const VERSIONED_FAMILY_SEARCHES = new Set([
+  "claude",
+  "gemini",
+  "gemma",
+  "glm",
+  "gpt",
+  "llama",
+  "qwen",
+]);
+
 /** Caller intent passed to {@link resolveModel}. */
 export interface ResolveModelInput {
   /**
@@ -141,6 +151,7 @@ export function rankModels(
   let ranked: RankedModel[];
   if (search) {
     const gptFamilySearch = search.toLowerCase() === "gpt";
+    const versionedFamilySearch = VERSIONED_FAMILY_SEARCHES.has(search.toLowerCase());
     const scores = new Map<string, number>();
     for (const match of searchServingEndpoints(
       search,
@@ -160,7 +171,7 @@ export function rankModels(
       .sort((a, b) => {
         const byMatch = matchBucket(a.score) - matchBucket(b.score);
         if (byMatch !== 0) return byMatch;
-        if (gptFamilySearch) {
+        if (versionedFamilySearch) {
           const aVersion = classify.versionTuple(a.endpoint.name);
           const bVersion = classify.versionTuple(b.endpoint.name);
           for (let index = 0; index < 3; index++) {

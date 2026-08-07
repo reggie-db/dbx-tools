@@ -58,6 +58,7 @@ async def test_classifier_resolves_default_model_from_live_discovery(
     assert completion.await_args.kwargs["model"] == (
         "databricks/databricks-meta-llama-3-3-70b-instruct"
     )
+    assert completion.await_args.kwargs["reasoning_effort"] == "none"
 
 
 @pytest.fixture

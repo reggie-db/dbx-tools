@@ -51,6 +51,10 @@ def test_adds_codex_models_alongside_openai_data() -> None:
     ]
     assert gpt["supports_reasoning_summary_parameter"] is True
     assert claude["supports_reasoning_summary_parameter"] is False
+    gpt_data = augmented["data"][0]
+    assert gpt_data["supports_reasoning"] is True
+    assert gpt_data["reasoning_efforts"] == ["none", "low", "medium", "high", "xhigh", "max"]
+    assert gpt_data["default_reasoning_effort"] == "medium"
     assert gpt_family["context_window"] == 272_000
     assert claude_family["supports_reasoning_summary_parameter"] is False
 
@@ -187,6 +191,15 @@ def test_keeps_already_qualified_dbx_models_without_native_duplicates() -> None:
         "dbx/databricks-gpt",
     ]
     assert all(model["id"].startswith("dbx/") for model in augmented["data"])
+
+
+def test_non_reasoning_model_is_explicitly_advertised() -> None:
+    payload = {"object": "list", "data": [{"id": "databricks-bge-large-en", "object": "model"}]}
+
+    augmented = augment_models_payload(payload)
+
+    assert augmented["data"][0]["supports_reasoning"] is False
+    assert "reasoning_efforts" not in augmented["data"][0]
 
 
 def test_existing_codex_envelope_is_not_replaced() -> None:

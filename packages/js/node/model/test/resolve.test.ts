@@ -131,6 +131,18 @@ await polygotTest(
         );
       });
 
+      it("prefers the newest deployed version for a family alias", () => {
+        const [selected] = rankModels(
+          [
+            chat("databricks-gemini-2-5-pro"),
+            chat("databricks-gemini-3-5-flash"),
+            chat("databricks-gemini-3-1-pro"),
+          ],
+          { search: "gemini", limit: 1 },
+        );
+        assert.equal(selected?.endpoint.name, "databricks-gemini-3-5-flash");
+      });
+
       it("prefers the discovered catalogue over the static fallback floor", () => {
         const discovered = "databricks-claude-opus-99";
 

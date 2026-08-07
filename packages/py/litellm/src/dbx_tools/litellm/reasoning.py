@@ -218,6 +218,10 @@ class DbxAutoReasoning(CustomLogger):
                 api_base=credentials.api_base,
                 max_tokens=4,
                 temperature=0,
+                # The classifier must be tiny and deterministic. Explicitly
+                # disable reasoning so a reasoning-capable task model cannot
+                # burn thousands of hidden tokens to produce one score.
+                reasoning_effort="none",
                 timeout=_positive_float_env(REASONING_TIMEOUT_ENV, DEFAULT_TIMEOUT_SECONDS),
             )
         except Exception as error:
