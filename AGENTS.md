@@ -74,18 +74,22 @@ Primary package areas:
   schemas, and matching React approval/compose surfaces. Outbound HTML and
   browser previews share the same React Email components, with the repository
   brand applied unless a consumer supplies its own `EmailBrand`.
-- `packages/js/node/tunnel`, `packages/js/cli/tunnel`, and the
-  `ui-email` auth gate - one Better Auth passwordless gate shared by AppKit
-  plugin mode and the `dbx tunnel` reverse-proxy mode. Better Auth owns users,
-  email OTP lifecycle, sessions, built-in rate limits, and passkeys. The
-  dbx-tools layer owns authorization policy, tunnel Host detection, protected
-  header stripping, branded email delivery, and identity-header injection.
-  Both modes construct the same `authGate` plugin through
-  `@dbx-tools/appkit`'s `createApp` lifecycle. Storage is native AppKit Lakebase
-  when configured, otherwise a Better Auth SQLite database in the platform data
-  directory. Programmatic Better Auth migrations run under a Postgres advisory
-  lock or local file lock. Never derive WebAuthn RP ID or expected origin from a
-  request header; use the configured public tunnel domain.
+- `packages/js/node/auth`, `packages/js/shared/auth`, and
+  `packages/js/ui/auth` - Better Auth passwordless runtime, browser-safe status
+  contracts, and passkey-first React UI. Better Auth owns users, email OTP
+  lifecycle, sessions, built-in rate limits, and passkeys. Callers supply
+  authorization policy, delivery, secret, origin, and a Lakebase pool or SQLite
+  config. Storage defaults to SQLite in the platform data directory, while a
+  native AppKit Lakebase pool provides shared persistence. Programmatic Better
+  Auth migrations run under a Postgres advisory lock or local file lock. Never
+  derive WebAuthn RP ID or expected origin from a request header.
+- `packages/js/node/tunnel` and `packages/js/cli/tunnel` - tunnel Host
+  detection, protected-header stripping, branded email delivery, identity
+  injection, and AppKit/CLI transport adapters over `@dbx-tools/auth`. Both
+  modes construct the same `authGate` plugin through `@dbx-tools/appkit`'s
+  `createApp` lifecycle; CLI mode needs no `server()` plugin and can still add
+  native `lakebase()`. Authentication UI imports directly from
+  `@dbx-tools/ui-auth`; email packages do not re-export auth.
 - `packages/js/node/appkit-web-search` — web-search add-on: `web_search` (the
   Databricks Model Serving NATIVE web-search tool — the model searches the web
   server-side and returns answer + citations; resolves its OWN web-capable model
@@ -428,6 +432,11 @@ why to use this package anyway:
   Both `channel` and the advisory-lock key take one value OR an array of parts, and
   neither needs to be identifier-shaped - the package sanitizes and hashes. Do not
   add a caller-side slugifier for either.
+- `@dbx-tools/auth`: use the Databricks Apps front door and AppKit identity
+  context when requests arrive through the platform. Use this package when a
+  public tunnel or another route bypasses that identity-aware proxy and needs
+  Better Auth email OTP recovery plus passkeys. The resulting session proves
+  the configured identity only and never invents a Databricks OBO token.
 - `@dbx-tools/teams`: AppKit has no Teams / Adaptive Card surface, so use this
   whenever a Microsoft Teams channel should be able to chat with the app's
   agents, or an agent should emit a Teams card. Two things it buys: a real Bot
@@ -1265,16 +1274,44 @@ Documentation and notebooks install the published distributions by name
 `#subdirectory=` form as an alternative for testing unreleased `main` branch
 changes.
 
-Every normal commit stamps each `packages/py/*/pyproject.toml` with a PEP 440
-local version based on the root release and a short Git hash, for example
-`0.6.90+gh1a2b3c4`. The pre-commit hook uses a hash of the staged patch because
-the new commit hash does not exist yet. It excludes the generated pyproject
-files from that hash, stages their version changes, and leaves internal Git
-dependencies unchanged. `bun run bump` and the Python publishing tasks still
-stamp the plain release version such as `0.6.91` into built artifacts. The hook
-source is `projen/tasks/python-commit-version.ts`; `bunx projen` installs the
-repo-local `.git/hooks/pre-commit` dispatcher used by the managed Databricks
-hook chain.
+The root `VERSION` file is the single source of truth for the version, and every
+generated `packages/py/*/pyproject.toml` carries exactly that `x.y.z` value,
+copied at synth alongside its JS siblings. There is no per-commit PEP 440 local
+stamp: a commit does not change any version, so the pyproject files stay at the
+committed `VERSION` and only `bun run bump` moves the number. See "Versioning"
+below for how the number is chosen and propagated.
+
+## Versioning
+
+There is ONE version for the whole repo, and it lives in the root `VERSION` file
+(a plain `x.y.z` string; a fresh tree with no file defaults to `0.0.1`). Synth
+COPIES that value into every manifest - the root and `projen/` `package.json`,
+every JS member, every `packages/py/*/pyproject.toml`, the generated openapi
+packages, and the example apps - so the TypeScript packages, the Python packages,
+the engine, and the examples always share one number. `projen/src/workspace-version.ts`
+owns reading/writing it.
+
+Hard rules, because independent version drift and `0.0.0` resets were a recurring
+error source:
+
+- **Synth only copies.** An ordinary `bunx projen` / `bun run sync` reads
+  `VERSION` and writes that exact value; it never invents, resets to `0.0.0`,
+  upgrades, or downgrades a version. A `VERSION` file that exists but is not valid
+  `x.y.z` fails loudly rather than being silently rewritten.
+- **`bump` is the only mutator.** Only `bun run bump` changes the number:
+  `projen/tasks/bump.ts` computes the next version, writes `VERSION`, then synths
+  so every manifest copies it. Nothing else (no publish restore, no lifecycle
+  hook, no commit hook) moves a package version.
+- **Remote is consulted only on bump and one-time bootstrap.** `bump` runs a
+  single `git fetch --tags` and takes the highest tag across `v*` and every
+  sibling prefix (e.g. `projen-v*`) as its base, so a release cut elsewhere wins.
+  When the remote is unreachable or has no matching tag it falls back to the local
+  `VERSION` file. A local file that is ahead does NOT override an existing remote
+  tag. Creating a missing `VERSION` file uses the same remote-or-`0.0.1` rule.
+- **Publish never regresses the worktree.** `tasks/publish.ts` re-affirms the
+  release version and folds in `publishConfig` entry points, then restores each
+  manifest to its committed content - which already equals `VERSION` - so a local
+  `bun run bump` leaves no stray version changes behind.
 
 ## The `dbx` CLI
 
@@ -1433,14 +1470,15 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   the Databricks packages.
   What links them is the root's bump task, generated as `--prefix v --exclude
 projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
-  the base version from the highest tag across EVERY listed prefix, stamps each
-  manifest, and pushes all the tags together, so both release at one version.
-  The `--exclude projen` keeps it out of the packages publish pass, and the
-  separate projen release workflow publishes it on its own tag.
-  Before that, each namespace only consulted its own tags and the engine went
-  stale in silence - it sat at 0.1.24 while the packages reached 0.3.41, so a
-  consumer's `@dbx-tools/projen@latest` was months behind the CLI that installed
-  it.
+  the base version from the highest tag across EVERY listed prefix (falling back
+  to the shared root `VERSION` file), writes the next version to `VERSION`, synths
+  so every manifest copies it, and pushes all the tags together, so both release
+  at one version. The `--exclude projen` keeps it out of the packages publish
+  pass, and the separate projen release workflow publishes it on its own tag.
+  Consulting every prefix at once is what keeps them lockstep: when each namespace
+  only consulted its own tags the engine went stale in silence - it sat at 0.1.24
+  while the packages reached 0.3.41, so a consumer's `@dbx-tools/projen@latest`
+  was months behind the CLI that installed it.
   Releasing the engine alone is still `cd projen && bun run bump`; nothing about
   the version numbers being equal means a package change implies an engine change.
 - **Publishing leans on NATIVE bun - do not re-hand-roll what bun already does.**
@@ -1455,11 +1493,9 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   `bun install` before publishing. `bun publish` resolves each `workspace:*` from
   the LOCKFILE, not the live manifest, and a plain `bun install` (even `--force`)
   does not re-resolve after only a version-field change - so without the lockfile
-  refresh every sibling dep publishes as the stale `0.0.0`. The standalone
-  `projen/` release is the exception that DOES pre-rewrite its `@dbx-tools/*` deps
-  to `^<version>` (in `bump.ts`'s `writeManifestVersion`), because it publishes in
-  isolation where those siblings are never stamped, so bun would otherwise resolve
-  them to `0.0.0`.
+  refresh a sibling dep can publish against a stale resolved version. The disk
+  manifests carry the shared `VERSION` (synth copies it), so the stamp confirms
+  rather than introduces the release version.
 - **Release workflows are testable without touching npm.** Both `release` and
   `projen-release` also trigger on `workflow_dispatch` with a `dry_run` boolean
   input (default true). A manual run has no tag, so it uses a throwaway
@@ -1482,12 +1518,15 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   gained it yet. `ensureEngineCurrent` (`bootstrap.ts`, called from `cli.ts`) now
   re-adds the engine when the installed one is BEHIND this CLI. It compares
   versions and only moves forward, so an older CLI cannot downgrade a workspace,
-  and an in-repo `0.0.0` build is a no-op.
+  and an in-repo build (CLI and engine at the same shared `VERSION`) is a no-op.
 - **The engine's `@dbx-tools/*` deps are resolved from workspace in-repo and pinned
   in the published tarball.** In-repo, `workspace:*` resolves siblings from source.
-  The root bump rewrites every same-scope dependency to `^<release>` whenever it
-  stamps the engine's manifest for release, so the tarball ships real published
-  ranges. Do not hand-maintain those ranges - the bump does it.
+  The committed manifest keeps `workspace:*` (baking a `^<version>` for a
+  not-yet-published version would break the release workflow's initial `bun
+  install`); `projen-release` resolves them transiently at publish via
+  `tasks/publish.ts --stamp-only` (set versions + refresh lockfile), then `bun
+  publish` in `projen/` strips `workspace:*` to those versions. Do not
+  hand-maintain those ranges.
 - **A generator tool the WORKSPACE already provides is a devDep, not a dep.** Every
   engine dependency is installed by every consumer, including ones that never reach
   the code path needing it, so the heavy generator toolchains are loaded lazily

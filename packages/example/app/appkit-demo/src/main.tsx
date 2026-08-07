@@ -6,8 +6,8 @@ import { ErrorBoundary } from "./ErrorBoundary.tsx";
 
 const App = lazy(() => import("./App.tsx"));
 
-// `AuthGate` fronts the app with the email-OTP login when the server's email
-// plugin has `auth` enabled (this demo is exposed through a public portr tunnel).
+// `AuthGate` fronts the app with passkey-first Better Auth and email OTP recovery
+// when the server's tunnel authGate is active.
 // It checks `/api/email/auth/status` on mount: if the gate is off or a session
 // already exists it renders the lazy app, so unauthenticated visitors do not
 // download the feature UI and its chart/card/search dependencies.

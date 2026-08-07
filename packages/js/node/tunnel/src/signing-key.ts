@@ -1,5 +1,5 @@
 /**
- * The gate's HS256 session-signing key, persisted in AppKit's cache.
+ * The gate's Better Auth secret, persisted in AppKit's cache.
  *
  * The key decides whether a session COOKIE still verifies, so it must OUTLIVE the
  * process: a per-process `randomBytes(32)` would invalidate every outstanding cookie
@@ -62,7 +62,7 @@ export const KEY_TTL_SECONDS = 30 * 24 * 60 * 60;
 /** Cache-key prefix for the signing key, namespaced away from other cache use. */
 const KEY_PREFIX = "tunnel:auth:signing-key:";
 
-/** Bytes of entropy in a generated key (256-bit, matching HS256's hash width). */
+/** Bytes of entropy in a generated Better Auth secret. */
 const KEY_BYTES = 32;
 
 /** What the cache stores: the key plus when it was minted, for observability. */
@@ -176,7 +176,7 @@ let pending: Promise<SigningKey> | undefined;
  * plugin's `setup()` passes its resolved value there, before any request can
  * reach the lazy path.
  *
- * `TUNNEL_AUTH_JWT_SECRET` when set, else the cache-backed key. A cache that is
+ * `TUNNEL_AUTH_JWT_SECRET` when set, else the cache-backed secret. A cache that is
  * unavailable degrades to an ephemeral per-process key (the previous behaviour)
  * rather than refusing to sign: the key only validates an ALREADY-issued session,
  * so losing it costs sessions, never admission - a caller still needs a code

@@ -1,12 +1,11 @@
 /**
- * `authGate()` - the AppKit plugin behind the tunnel's email-OTP gate.
+ * `authGate()` - the AppKit adapter around `@dbx-tools/auth`.
  *
  * It has NO routes of its own: the tunnel PROXY (not an HTTP server) calls the
  * handlers this plugin exposes via {@link AuthGatePlugin.exports}. The plugin
- * owns the allow-list, the per-email/per-IP rate limiters, the CacheManager-backed
- * one-time-code store, and the session JWT. `createApp` (with no `server()`) is
- * used only to auto-init `CacheManager` + prime the sibling `email` transport;
- * this plugin is where the gate logic lives.
+ * owns tunnel authorization, AppKit Lakebase discovery, email delivery, and
+ * transport mounting. Better Auth owns users, OTPs, sessions, rate limits, and
+ * passkeys. `createApp` can run this plugin with or without `server()`.
  *
  * Options come from CLI flags OR env, with sensible defaults - see
  * {@link resolveAuthGateConfig}. The one runtime dependency the plugin can't
@@ -35,18 +34,14 @@ import {
   type PasswordlessAuthRuntime,
 } from "@dbx-tools/auth";
 import { config as coreConfig } from "@dbx-tools/core";
-import { brand, log, string } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-auth";
+import { brand, log, string } from "@dbx-tools/shared-core";
 import type { RequestHandler } from "express";
 import { TUNNEL_CONFIG } from "./_config.ts";
 import { looksLikeEmail, matchesAllowlist } from "./allowlist.ts";
 import { mountGate, type GateOptions } from "./gate.ts";
 import { ensureEmailAvailable, sendCode as defaultSendCode } from "./send-code.ts";
-import {
-  KEY_TTL_SECONDS,
-  resolveSessionCutoff,
-  signingKey,
-} from "./signing-key.ts";
+import { KEY_TTL_SECONDS, resolveSessionCutoff, signingKey } from "./signing-key.ts";
 
 const logger = log.logger("tunnel:auth");
 
@@ -234,8 +229,7 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     storage:
       config.storage ??
       (coreConfig.text("AUTH_STORAGE", TUNNEL_CONFIG) as AuthStorageMode | undefined),
-    sqlitePath:
-      config.sqlitePath ?? coreConfig.text("AUTH_SQLITE_PATH", TUNNEL_CONFIG),
+    sqlitePath: config.sqlitePath ?? coreConfig.text("AUTH_SQLITE_PATH", TUNNEL_CONFIG),
   });
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
@@ -285,10 +279,12 @@ export interface AuthGateApi {
   status(headers: Headers): Promise<AuthStatus>;
   /** Whether the runtime exposes passkey enrollment and authentication. */
   readonly passkeysEnabled: boolean;
+  /** Close auth storage owned by this runtime. */
+  close(): Promise<void>;
 }
 
 /**
- * AppKit plugin owning the email-OTP gate. On `setup()` it registers the login
+ * AppKit plugin adapting `@dbx-tools/auth` to tunnel traffic. On `setup()` it registers the login
  * routes (`/api/email/auth/*`) and a gating middleware on the app's OWN Express
  * server via `this.context`, so a public portr caller must prove an email before
  * reaching the app's `/api/*` - see `./gate`. Front-door (platform) traffic and
@@ -374,7 +370,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
         this.mountGateRoutes();
         // Fail fast once the sibling email plugin has primed its transport: a
         // gate that cannot email a code lets nobody in.
-        await ensureEmailAvailable();
+        if (!this.config.sendCode) await ensureEmailAvailable();
       });
     }
 
@@ -430,12 +426,12 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     return {
       passkeysEnabled: runtime?.passkeysEnabled ?? false,
       handler: (request) =>
-        runtime?.handler(request) ??
-        Promise.resolve(new Response("Not Found", { status: 404 })),
+        runtime?.handler(request) ?? Promise.resolve(new Response("Not Found", { status: 404 })),
       session: (headers) => runtime?.session(headers) ?? Promise.resolve(undefined),
       status: (headers) =>
         runtime?.status(headers) ??
         Promise.resolve({ authenticated: false, enabled: false, passkeysEnabled: false }),
+      close: () => runtime?.close() ?? Promise.resolve(),
     };
   }
 }

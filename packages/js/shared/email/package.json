@@ -23,7 +23,6 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/shared-auth": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "zod": "catalog:"
   },
@@ -41,7 +40,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.0.0",
+  "version": "0.6.90",
   "types": "index.ts",
   "type": "module",
   "exports": {

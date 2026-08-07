@@ -1,7 +1,7 @@
 # @dbx-tools/cli-tunnel
 
 Wrap any command in a public [portr](https://github.com/amalshaji/portr) tunnel
-fronted by an email one-time-code gate.
+fronted by [`@dbx-tools/auth`](../../node/auth) email OTP and passkeys.
 
 Run `dbx tunnel -- <command>` when a local or self-hosted process needs a public
 URL that only approved email addresses can reach. The wrapper claims the public
@@ -11,13 +11,16 @@ about.
 
 Key features:
 
-- Public portr tunnel + email-OTP gate around a command the wrapper does not
-  have to modify, import, or even be written in the same language as.
+- Public portr tunnel + Better Auth passwordless gate around a command the
+  wrapper does not have to modify, import, or even be written in the same
+  language as.
 - A reverse proxy that answers the login routes itself and forwards only
   verified traffic to the wrapped process.
 - Flag → environment → `databricks.yml` resolution for every gate and portr
   setting, delegated to [`@dbx-tools/tunnel`](../../node/tunnel) so the CLI
   cannot drift from the in-process plugin.
+- The same server-less `appkit.createApp` lifecycle as plugin mode. It can
+  register native `lakebase()` without `server()`, or use local SQLite.
 - `status` to print exactly what would happen without starting anything.
 - Two-way process supervision: a crashed child takes the tunnel down instead of
   leaving portr serving a dead port.
@@ -109,6 +112,8 @@ Omitted values fall back to the environment, a `.env` file, then
 | `--session-ttl <seconds>`     | session lifetime                                           |
 | `--code-ttl <seconds>`        | one-time-code lifetime                                     |
 | `--session-cutoff <when>`     | invalidate every session issued before this                |
+| `--auth-storage <mode>`       | Better Auth database: `auto`, `lakebase`, or `sqlite`       |
+| `--auth-sqlite-path <path>`   | local Better Auth SQLite file                               |
 | `--forward-headers <pats...>` | extra `x-` headers tunnel traffic may forward              |
 | `--insecure`                  | run open, with no gate                                     |
 

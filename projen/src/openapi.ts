@@ -41,6 +41,7 @@ import { log } from "@dbx-tools/shared-core";
 import type * as ts from "typescript";
 import { lazyRequire } from "./_lazy-require.ts";
 import { makeReadonly, makeWritable, stampGenerated } from "./generated.ts";
+import { readWorkspaceVersion } from "./workspace-version.ts";
 import {
   type RecordedPackage,
   isModuleFile,
@@ -173,6 +174,7 @@ export async function generateOpenapi(): Promise<string[]> {
     skipLibCheck: true,
   };
 
+  const specVersion = readWorkspaceVersion(repoRoot);
   const written: string[] = [];
   for (const p of pkgs) {
     // The generated package's folder is the source's leaf folder name (`api`), not
@@ -197,7 +199,7 @@ export async function generateOpenapi(): Promise<string[]> {
           specFileBaseName: "openapi",
           specVersion: 3,
           name: `${p.relPath} API`,
-          version: "0.0.0",
+          version: specVersion,
         },
         compilerOptions,
       );

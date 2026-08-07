@@ -38,6 +38,7 @@ import {
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
 import { applyCompiledPublish } from "./publish.ts";
 import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
+import { readWorkspaceVersion } from "./workspace-version.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
@@ -584,6 +585,9 @@ export class DBXToolsNodeProject
     // component, but the file is still required by the Databricks Apps platform
     // (its build phase installs with pnpm and reads catalog + `allowBuilds`).
     pnpmWorkspace.attachWorkspaceFile(this);
+    // Copy the single workspace version onto the root manifest. The `VERSION` file
+    // at the workspace root is the source of truth; synth only reads it.
+    this.package.addField("version", readWorkspaceVersion(this.outdir));
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
     this.rootInstallOnly = options.rootInstallOnly !== false;
@@ -678,6 +682,10 @@ export class DBXToolsTypeScriptProject
       ".": "./index.ts",
       "./package.json": "./package.json",
     });
+    // Every package carries the single workspace version, copied from the root
+    // `VERSION` file (the source of truth). `this.root` is the workspace root for a
+    // discovered member and this project itself for a standalone compiling root.
+    this.package.addField("version", readWorkspaceVersion(this.root.outdir));
     addPackageFiles(this, "index.ts", "src");
     // `bun test` intercepts `node:test` (the suites keep using node:test) and
     // runs it with bun's own fast runner. Args are FILTERS, not globs; a bare

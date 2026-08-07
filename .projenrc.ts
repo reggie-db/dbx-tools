@@ -15,7 +15,7 @@
  * `dbx-tools` root task first (see below); a normal consumer constructs,
  * `applyToProjects`es, synths.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
 import { Component, DependencyType } from "projen";
@@ -23,27 +23,17 @@ import { Component, DependencyType } from "projen";
 const SCOPE = "dbx-tools";
 const PYTHON_VERSION_HOOK_MARKER = "# GENERATED: dbx-tools Python commit versions";
 
-class PythonVersionHookInstaller extends Component {
-  postSynthesize(): void {
-    const gitDirectory = resolve(this.project.outdir, ".git");
-    if (!existsSync(gitDirectory)) return;
-
-    const hook = resolve(gitDirectory, "hooks/pre-commit");
-    const content = [
-      "#!/bin/sh",
-      PYTHON_VERSION_HOOK_MARKER,
-      'ROOT="$(git rev-parse --show-toplevel)"',
-      'exec bun "$ROOT/projen/tasks/python-commit-version.ts"',
-      "",
-    ].join("\n");
-    if (existsSync(hook)) {
-      const current = readFileSync(hook, "utf8");
-      if (!current.includes(PYTHON_VERSION_HOOK_MARKER)) return;
-      if (current === content) return;
-    }
-    mkdirSync(resolve(gitDirectory, "hooks"), { recursive: true });
-    writeFileSync(hook, content);
-    chmodSync(hook, 0o755);
+/**
+ * Ensures no Python commit-version `pre-commit` hook is installed. Python package
+ * versions are the single workspace `VERSION`, copied at synth, so there is no
+ * per-commit version stamp. A pre-commit hook this repo previously generated is
+ * removed here so an established checkout does not keep running a missing task.
+ */
+class PythonVersionHookCleanup extends Component {
+  override postSynthesize(): void {
+    const hook = resolve(this.project.outdir, ".git/hooks/pre-commit");
+    if (!existsSync(hook)) return;
+    if (readFileSync(hook, "utf8").includes(PYTHON_VERSION_HOOK_MARKER)) rmSync(hook);
   }
 }
 
@@ -97,16 +87,7 @@ const root = new projenProject.DBXToolsNodeProject({
     "zod@catalog:",
   ],
 });
-new PythonVersionHookInstaller(root);
-const workspaceVersion = (
-  JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
-    version?: string;
-  }
-).version;
-if (typeof workspaceVersion !== "string" || workspaceVersion === "0.0.0") {
-  throw new Error("root package version must be a released workspace version");
-}
-root.package.addField("version", workspaceVersion);
+new PythonVersionHookCleanup(root);
 
 // `projen/` is an extra workspace member rather than an attached subproject, so
 // the engine cannot discover its generated barrel for the root formatter.
@@ -543,7 +524,7 @@ project.applyToProjects(root, { identifierName: "shared-model", tags: "shared" }
 // + result + sender options). Pure zod, shared by the server sender, Mastra
 // tool, and React approval UI.
 project.applyToProjects(root, { identifierName: "shared-email", tags: "shared" }, (p) => {
-  p.addDeps("@dbx-tools/shared-auth@workspace:*", "zod@catalog:");
+  p.addDeps("zod@catalog:");
 });
 
 // shared-email-template: universal React Email presentation shared by the
@@ -693,16 +674,13 @@ project.applyToProjects(
 );
 
 // node-tunnel (`@dbx-tools/tunnel`): fronts a Databricks App with a public portr
-// tunnel + email-OTP access gate, consumed IN-PROCESS through `@dbx-tools/appkit`'s
-// `createApp` interceptor context - `createApp({ interceptor: tunnelInterceptor() })`.
+// tunnel + @dbx-tools/auth passwordless gate, consumed IN-PROCESS through
+// `@dbx-tools/appkit`'s `createApp` interceptor context.
 // `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs portr pointed at the app's
 // public port, and `bindProcess`es it so the app and portr live/die as one
-// (concurrently-style). The email OTP gate (allow-list + rate limit +
-// CacheManager-stored codes + jose session) ships as the `authGate` AppKit plugin,
-// which registers the login routes + a gating MIDDLEWARE on the app's OWN Express
-// server (no separate proxy process; it keys on the `Host` header to gate only
-// portr traffic). A `node`-tier library, not a CLI: no bin - the app that owns the
-// tunnel is the process.
+// (concurrently-style). The authGate AppKit plugin composes Better Auth with the
+// email transport and native Lakebase or SQLite storage, then registers one
+// handler + gating middleware on the app's OWN Express server.
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/auth@workspace:*",
@@ -881,7 +859,6 @@ project.applyToProjects(root, { identifierName: "ui-mastra", tags: "ui" }, (p) =
 // express + the `bun --watch`/`bun` dev/start tasks.
 project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "server" }, (p) => {
   p.package.addField("name", "@dbx-tools/demo-appkit-server");
-  p.package.addField("version", workspaceVersion);
   // A private runnable app, not an importable library: entry is `src/server.ts`.
   p.package.addField("private", true);
   p.package.addField("main", "src/server.ts");
@@ -898,7 +875,7 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
     "@dbx-tools/search@workspace:*",
     "@dbx-tools/shared-core@workspace:*",
     // The tunnel library: the server registers `tunnelInterceptor()` on its own
-    // `createApp` (public portr tunnel + email-OTP gate), so the deployed app.yaml
+    // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
     // runs the server directly rather than through a wrapper bin.
     "@dbx-tools/tunnel@workspace:*",
     "@databricks/appkit@catalog:",
@@ -925,7 +902,6 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
 // the bun dev server / `bun build` (Tailwind via bun-plugin-tailwind).
 project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }, (p) => {
   p.package.addField("name", "@dbx-tools/demo-appkit-app");
-  p.package.addField("version", workspaceVersion);
   p.package.addField("private", true);
   p.addDeps(
     "@dbx-tools/shared-core@workspace:*",

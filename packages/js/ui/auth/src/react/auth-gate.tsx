@@ -1,5 +1,5 @@
-import { net } from "@dbx-tools/shared-core";
 import type { AuthStatus } from "@dbx-tools/shared-auth";
+import { net } from "@dbx-tools/shared-core";
 import { Button, Input } from "@dbx-tools/ui-appkit/react";
 import { BrandIcon, useBrand } from "@dbx-tools/ui-branding/react";
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
@@ -49,6 +49,25 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      !passkeysEnabled ||
+      phase !== "email" ||
+      typeof PublicKeyCredential === "undefined" ||
+      typeof PublicKeyCredential.isConditionalMediationAvailable !== "function"
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void PublicKeyCredential.isConditionalMediationAvailable().then(async (available) => {
+      if (!available || cancelled) return;
+      if ((await signInPasskey(true)) && !cancelled) setPhase("authed");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [passkeysEnabled, phase]);
 
   const requestCode = useCallback(
     async (event: FormEvent) => {
@@ -183,7 +202,12 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
             <Button type="button" disabled={busy} className="w-full" onClick={enroll}>
               Create a passkey
             </Button>
-            <Button type="button" variant="ghost" className="w-full" onClick={() => setPhase("authed")}>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={() => setPhase("authed")}
+            >
               Not now
             </Button>
           </div>

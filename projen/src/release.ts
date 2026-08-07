@@ -269,9 +269,9 @@ export class DBXToolsRelease extends Component {
    *
    * `directory` (e.g. `projen/`) is a WORKSPACE MEMBER whose `@dbx-tools/*` deps
    * are `workspace:*`. `bun publish` resolves those to whatever version its
-   * SIBLINGS carry (via the lockfile), so before publishing we set the version on
-   * the package AND its in-scope siblings, then refresh the lockfile - otherwise
-   * the published engine would depend on the siblings' on-disk `0.0.0`. The
+   * SIBLINGS carry (via the lockfile), so before publishing we re-affirm the
+   * version on the package AND its in-scope siblings, then refresh the lockfile -
+   * otherwise a stale resolved version could reach the published engine. The
    * `Install` step already ran `bun install` from the repo root (the member
    * subdir walks up to it), so the workspace is linked. The manifests are
    * projen-readonly, hence the `chmod`. A manual `workflow_dispatch` run has no

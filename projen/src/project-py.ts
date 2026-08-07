@@ -4,6 +4,7 @@ import { Component, type Project, javascript, python, vscode } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
+import { readWorkspaceVersion } from "./workspace-version.ts";
 
 /** Git location used by direct `#subdirectory=` package dependencies. */
 export interface PythonRepositoryOptions {
@@ -28,6 +29,8 @@ export interface DBXToolsPythonProjectOptions extends DBXToolsProjectOptions {
   readonly package: PythonPackageOptions;
   readonly repository: Required<PythonRepositoryOptions>;
   readonly requiresPython: string;
+  /** Workspace version copied onto this package's `pyproject.toml`. */
+  readonly version: string;
 }
 
 /** Python release workflow configuration. */
@@ -95,7 +98,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
       moduleName: pkg.module,
       authorName: "",
       authorEmail: "",
-      version: "0.0.0",
+      version: options.version,
       description: pkg.description,
       github: false,
       sample: false,
@@ -112,7 +115,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
       uvOptions: {
         project: {
           name: pkg.name,
-          version: "0.0.0",
+          version: options.version,
           description: pkg.description,
           readme: "README.md",
           requiresPython: options.requiresPython,
@@ -163,6 +166,7 @@ export class DBXToolsPythonWorkspace extends Component {
   readonly packages: readonly DBXToolsPythonProject[];
   readonly repository: Required<PythonRepositoryOptions>;
   readonly requiresPython: string;
+  readonly version: string;
   readonly file: python.PyprojectTomlFile;
 
   constructor(project: javascript.NodeProject, options: DBXToolsPythonWorkspaceOptions) {
@@ -173,6 +177,9 @@ export class DBXToolsPythonWorkspace extends Component {
       root: options.repository.root ?? "packages/py",
     };
     this.requiresPython = options.requiresPython ?? ">=3.10";
+    // The single workspace version, copied from the root `VERSION` file so Python
+    // members carry the same number as their JS siblings.
+    this.version = readWorkspaceVersion(project.outdir);
     this.file = this.emitWorkspace(project, options);
     this.packages = options.packages.map(
       (pkg) =>
@@ -181,6 +188,7 @@ export class DBXToolsPythonWorkspace extends Component {
           package: pkg,
           repository: this.repository,
           requiresPython: this.requiresPython,
+          version: this.version,
         }),
     );
     for (const pkg of this.packages) {
@@ -220,7 +228,7 @@ export class DBXToolsPythonWorkspace extends Component {
     const file = new python.PyprojectTomlFile(project, {
       project: {
         name: options.workspaceName ?? `${string.toSlug(project.name)}-python-workspace`,
-        version: "0.0.0",
+        version: this.version,
         requiresPython: this.requiresPython,
         dependencies: [],
       },

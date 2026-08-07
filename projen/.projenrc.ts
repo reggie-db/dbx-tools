@@ -12,9 +12,10 @@
  * (`shared-core`, `node-core`, `node-path`). As workspace siblings they are
  * declared `workspace:*` and bun links them from local source.
  */
-import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { javascript, typescript } from "projen";
 import { NodePackageManager } from "projen/lib/javascript";
+import { readWorkspaceVersion } from "./src/workspace-version.ts";
 
 /**
  * Tag prefix for this package's releases. The repo root tags its own releases
@@ -23,10 +24,10 @@ import { NodePackageManager } from "projen/lib/javascript";
  * trigger + version-lookup key for the release workflow below.
  */
 const RELEASE_TAG_PREFIX = "projen-v";
-const PACKAGE_VERSION =
-  (JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
-    version?: string;
-  }).version ?? "0.0.0";
+// The engine ships at the SAME number as the packages, so it reads the one
+// workspace `VERSION` file at the repo root (this project lives one directory
+// below it) rather than keeping a second source of truth.
+const PACKAGE_VERSION = readWorkspaceVersion(fileURLToPath(new URL("..", import.meta.url)));
 
 const project = new typescript.TypeScriptProject({
   name: "@dbx-tools/projen",

@@ -5,10 +5,7 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
 import { createPasswordlessAuth } from "../src/auth.ts";
-import {
-  createAuthStorage,
-  resolveAuthStorageConfig,
-} from "../src/storage.ts";
+import { createAuthStorage, resolveAuthStorageConfig } from "../src/storage.ts";
 
 describe("auth storage", () => {
   it("uses a platform data path unless explicitly configured", () => {
@@ -19,6 +16,18 @@ describe("auth storage", () => {
       resolveAuthStorageConfig({ storage: "sqlite", sqlitePath: "/tmp/auth.sqlite" }),
       { mode: "sqlite", sqlitePath: "/tmp/auth.sqlite" },
     );
+  });
+
+  it("prefers a supplied Lakebase pool in auto mode", async () => {
+    const pool = {
+      connect: async () => {
+        throw new Error("not used");
+      },
+      query: async () => ({ rows: [], rowCount: 0 }),
+    };
+    const storage = await createAuthStorage({ storage: "auto" }, pool);
+    assert.equal(storage.kind, "lakebase");
+    assert.equal(storage.database, pool);
   });
 });
 
@@ -58,9 +67,7 @@ describe("Better Auth runtime", () => {
       },
     });
 
-    const request = await runtime.handler(
-      jsonRequest("/request", { email: "Ada@Example.com" }),
-    );
+    const request = await runtime.handler(jsonRequest("/request", { email: "Ada@Example.com" }));
     assert.deepEqual(await request.json(), { ok: true });
     await sent;
     assert.match(sentCode, /^\d{6}$/);
@@ -80,9 +87,7 @@ describe("Better Auth runtime", () => {
       passkeysEnabled: true,
     });
 
-    const passkeys = await runtime.handler(
-      authRequest("/passkey/list-user-passkeys", { cookie }),
-    );
+    const passkeys = await runtime.handler(authRequest("/passkey/list-user-passkeys", { cookie }));
     assert.equal(passkeys.status, 200);
     await runtime.close();
   });
@@ -113,6 +118,31 @@ describe("Better Auth runtime", () => {
     assert.deepEqual(await response.json(), { ok: true });
     assert.equal(sends, 0);
     await runtime.close();
+  });
+
+  it("serializes concurrent startup migrations for one SQLite file", async () => {
+    const path = join(directory, "concurrent.sqlite");
+    const options = (storage: Awaited<ReturnType<typeof createAuthStorage>>) => ({
+      storage,
+      baseURL: "http://localhost",
+      appName: "Test app",
+      secret: "test-secret-at-least-thirty-two-characters",
+      sessionTtlSeconds: 3600,
+      codeTtlSeconds: 600,
+      maxAttempts: 5,
+      authorizeIdentity: () => true,
+      sendCode: async () => undefined,
+    });
+    const firstStorage = await createAuthStorage({ storage: "sqlite", sqlitePath: path });
+    const secondStorage = await createAuthStorage({ storage: "sqlite", sqlitePath: path });
+
+    const [first, second] = await Promise.all([
+      createPasswordlessAuth(options(firstStorage)),
+      createPasswordlessAuth(options(secondStorage)),
+    ]);
+
+    await first.close();
+    await second.close();
   });
 });
 

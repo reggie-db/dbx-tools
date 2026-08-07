@@ -23,9 +23,7 @@ export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
   const refresh = useCallback(async () => {
     const values = await listPasskeys();
     setPasskeys(values);
-    setNames(
-      Object.fromEntries(values.map((passkey) => [passkey.id, passkey.name ?? "Passkey"])),
-    );
+    setNames(Object.fromEntries(values.map((passkey) => [passkey.id, passkey.name ?? "Passkey"])));
   }, []);
 
   useEffect(() => {
@@ -100,10 +98,20 @@ export function PasskeyManager({ className }: PasskeyManagerProps): ReactNode {
                 setNames((current) => ({ ...current, [passkey.id]: event.target.value }))
               }
             />
-            <Button type="button" variant="outline" disabled={busy} onClick={() => rename(passkey.id)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => rename(passkey.id)}
+            >
               Save
             </Button>
-            <Button type="button" variant="ghost" disabled={busy} onClick={() => remove(passkey.id)}>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => remove(passkey.id)}
+            >
               Remove
             </Button>
           </div>

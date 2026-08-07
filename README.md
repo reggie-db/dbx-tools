@@ -165,13 +165,14 @@ export function App() {
 | Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model)                                                                                                                         |
 | Local model proxy              | [`@dbx-tools/cli-model-proxy`](packages/js/cli/model-proxy), [`dbx-tools-litellm`](packages/py/litellm)                                                                                                                     |
 | Public tunnel + access gate    | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
+| Passwordless authentication    | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/shared-auth`](packages/js/shared/auth), [`@dbx-tools/ui-auth`](packages/js/ui/auth)                                                                              |
 | Configuration and local locks  | [`@dbx-tools/core`](packages/js/node/core), [`dbx-tools-core`](packages/py/core)                                                                                                                                            |
 | Email workflows                | [`@dbx-tools/email`](packages/js/node/email), [`@dbx-tools/shared-email-template`](packages/js/shared/email-template), [`@dbx-tools/shared-email`](packages/js/shared/email), [`@dbx-tools/ui-email`](packages/js/ui/email) |
 | Web search and fetch           | [`@dbx-tools/appkit-web-search`](packages/js/node/appkit-web-search)                                                                                                                                                        |
 | Postgres locks and message bus | [`@dbx-tools/postgres`](packages/js/node/postgres), [`dbx-tools-postgres`](packages/py/postgres)                                                                                                                            |
 | AI Search (Vector Search)      | [`@dbx-tools/search`](packages/js/node/search), [`@dbx-tools/shared-search`](packages/js/shared/search), [`@dbx-tools/ui-search`](packages/js/ui/search)                                                                    |
 | Teams chat and cards           | [`@dbx-tools/teams`](packages/js/node/teams), [`@dbx-tools/shared-teams`](packages/js/shared/teams), [`@dbx-tools/ui-teams`](packages/js/ui/teams)                                                                          |
-| React/AppKit UI                | [`@dbx-tools/ui-appkit`](packages/js/ui/appkit), [`@dbx-tools/ui-mastra`](packages/js/ui/mastra), [`@dbx-tools/ui-email`](packages/js/ui/email)                                                                             |
+| React/AppKit UI                | [`@dbx-tools/ui-appkit`](packages/js/ui/appkit), [`@dbx-tools/ui-mastra`](packages/js/ui/mastra), [`@dbx-tools/ui-auth`](packages/js/ui/auth), [`@dbx-tools/ui-email`](packages/js/ui/email)                               |
 | Brand context and assets       | [`@dbx-tools/shared-core`](packages/js/shared/core), [`@dbx-tools/core`](packages/js/node/core), [`@dbx-tools/ui-branding`](packages/js/ui/branding)                                                                        |
 | Databricks infrastructure      | [`@dbx-tools/databricks`](packages/js/node/databricks), [`@dbx-tools/databricks-zerobus`](packages/js/node/databricks-zerobus)                                                                                              |
 | Portable filesystems           | [`@dbx-tools/shared-fs`](packages/js/shared/fs), [`@dbx-tools/fs`](packages/js/node/fs)                                                                                                                                     |
@@ -282,8 +283,10 @@ await createApp({
 ### Put A Gated Public URL In Front Of A Command
 
 Use [`@dbx-tools/tunnel`](packages/js/node/tunnel) inside an AppKit app, where the
-portr tunnel and the email one-time-code gate run in-process through
-`tunnelInterceptor()` and the `authGate` plugin.
+portr tunnel and the [`@dbx-tools/auth`](packages/js/node/auth) passwordless gate
+run in-process through `tunnelInterceptor()` and the `authGate` plugin. The gate
+supports Better Auth email OTP recovery and passkeys with Lakebase or SQLite
+persistence.
 
 Use [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel) when the process is not an
 AppKit app - a Python service, a static server, a third-party binary - and should

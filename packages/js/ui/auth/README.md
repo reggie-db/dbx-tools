@@ -10,6 +10,12 @@ Key features:
 - HttpOnly Better Auth sessions with no browser token storage;
 - AppKit and dbx-tools branding primitives.
 
+## Relationship To Native AppKit
+
+The native AppKit UI is sufficient when the Databricks Apps front door owns
+identity. Use this package with `@dbx-tools/auth` when a public tunnel bypasses
+that front door and needs passkey-first login plus email OTP recovery.
+
 ```tsx
 import { AuthGate } from "@dbx-tools/ui-auth/react";
 

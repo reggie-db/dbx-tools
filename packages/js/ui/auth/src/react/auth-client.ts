@@ -1,6 +1,6 @@
 import { passkeyClient } from "@better-auth/passkey/client";
-import { createAuthClient } from "better-auth/react";
 import { emailOTPClient } from "better-auth/client/plugins";
+import { createAuthClient } from "better-auth/react";
 
 export const AUTH_BASE = "/api/email/auth";
 
@@ -24,17 +24,13 @@ export async function requestEmailOtp(email: string): Promise<boolean> {
   return result.error === null;
 }
 
-export async function verifyEmailOtp(
-  email: string,
-  otp: string,
-  name: string,
-): Promise<boolean> {
+export async function verifyEmailOtp(email: string, otp: string, name: string): Promise<boolean> {
   const result = await client.signIn.emailOtp({ email, otp, name });
   return result.error === null;
 }
 
-export async function signInPasskey(): Promise<boolean> {
-  const result = await client.signIn.passkey();
+export async function signInPasskey(autoFill = false): Promise<boolean> {
+  const result = await client.signIn.passkey({ autoFill });
   return result.error === null;
 }
 

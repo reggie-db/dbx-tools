@@ -12,8 +12,8 @@
  * @module
  */
 
-import { config } from "@dbx-tools/core";
 import type { AuthStorageMode } from "@dbx-tools/auth";
+import { config } from "@dbx-tools/core";
 import { object } from "@dbx-tools/shared-core";
 import { type AuthGateConfig, plugin, portr } from "@dbx-tools/tunnel";
 

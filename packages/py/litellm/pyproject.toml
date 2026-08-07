@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-litellm"
-version = "0.6.90+ghba413b1"
+version = "0.6.90"
 description = "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution"
 readme = "README.md"
 requires-python = ">=3.10"

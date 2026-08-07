@@ -17,8 +17,6 @@ Key features:
 - dbx-tools branding by default, with consumer brand overrides available.
 - Recipient parsing, address display, and attachment-label helpers that mirror
   server expectations.
-- `AuthGate` sign-in screen for the email one-time-code auth plugin, branded from
-  the shared brand context and shaped for platform autofill.
 - Styles wired to the AppKit UI/Tailwind foundation so host apps do not need a
   separate email component theme.
 
@@ -116,49 +114,15 @@ const files = attachmentNames(message.attachments);
 The helpers keep free-text recipient parsing and attachment labels consistent
 across approval, compose, and custom UI surfaces.
 
-## Gate An App Behind An Email Code
-
-```tsx
-import { AuthGate } from "@dbx-tools/ui-email/react/auth-gate";
-
-<AuthGate>
-  <App />
-</AuthGate>;
-```
-
-`AuthGate` is the sign-in screen for an app fronted by the `@dbx-tools/email`
-auth plugin - typically one published through
-[`@dbx-tools/tunnel`](../../node/tunnel), where the hosting platform's own
-identity-aware proxy is not in the request path. It calls the plugin's
-`/api/email/auth/*` routes: on mount it checks `status`, renders `children`
-straight through when the gate is off or a session already exists, and otherwise
-runs the email -> code flow, revealing `children` once a verified code sets the
-session cookie.
-
-It holds no token: the session lives in an HttpOnly cookie the browser sends
-automatically. `title` and `description` override the default copy, which
-otherwise names the app from the brand context.
-
-Before requesting a code, the email field requires exactly one address parsed
-and validated by `@dbx-tools/shared-core`'s `net.parseEmails` + `net.isEmail`.
-Malformed or multi-address input stays in the browser and never reaches the auth
-endpoint.
-
-The code field carries `autocomplete="one-time-code"`, which is what lets iOS,
-Android, and Safari offer the code straight from the notification. That only pays
-off while the email keeps the conventional `Your verification code is: / <code>`
-shape the gate sends, so change one and check the other.
-
 ## Modules
 
 - `./react` - `EmailPreview`, `EmailApprovalCard`, `EmailComposeView`,
-  `EmailBody`, `AuthGate`, address/attachment helpers, shared email message
-  types, and prop types.
-- `./react/auth-gate` - focused `AuthGate` entry that keeps email rendering and
-  compose dependencies out of a public login bundle.
+  `EmailBody`, address/attachment helpers, shared email message types, and prop
+  types.
 - `./styles.css` - Tailwind/AppKit style entrypoint for the email components.
 
 Pair this package with [`@dbx-tools/email`](../../node/email) for SMTP or
 outbox delivery, [`@dbx-tools/shared-email-template`](../../shared/email-template)
 for the universal presentation, and [`@dbx-tools/shared-email`](../../shared/email)
-for schema validation in client/server boundaries.
+for schema validation in client/server boundaries. Passwordless login and
+passkey management live in [`@dbx-tools/ui-auth`](../auth).

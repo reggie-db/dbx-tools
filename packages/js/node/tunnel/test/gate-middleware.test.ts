@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { SESSION_COOKIE_NAME } from "@dbx-tools/shared-email";
+import { SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
 import type { Request, RequestHandler, Response } from "express";
-import { AUTH_PREFIX, isTunnelHost, mountGate, type GateOptions } from "../src/gate.ts";
+import { AUTH_PREFIX, isTunnelHost, mountGate, webHeaders, type GateOptions } from "../src/gate.ts";
 import { mountGateOnContext, type AuthGateApi } from "../src/plugin.ts";
 
 const PUBLIC_DOMAIN = "demo.apps.dbx.tools";
@@ -22,6 +22,7 @@ function fakeGate(overrides: Partial<AuthGateApi> = {}): AuthGateApi {
       enabled: true,
       passkeysEnabled: true,
     }),
+    close: async () => undefined,
     ...overrides,
   };
 }
@@ -86,6 +87,14 @@ describe("isTunnelHost", () => {
   });
   it("matches nothing when no public domain is configured", () => {
     assert.equal(isTunnelHost(makeReq("demo.apps.dbx.tools", "/"), undefined), false);
+  });
+});
+
+describe("Better Auth request headers", () => {
+  it("supplies the nearest trusted client IP instead of an inbound claim", () => {
+    const request = makeReq(PUBLIC_DOMAIN, "/");
+    request.headers["x-forwarded-for"] = "spoofed, 203.0.113.8";
+    assert.equal(webHeaders(request).get("x-real-ip"), "203.0.113.8");
   });
 });
 

@@ -1,7 +1,7 @@
 # @dbx-tools/tunnel
 
-Front an app with a public tunnel and an email one-time-code access gate,
-in-process.
+Front an app with a public tunnel and the passwordless
+[`@dbx-tools/auth`](../auth) gate, in-process.
 
 Built on the [SSE-enabled Portr fork](https://github.com/reggie-db/portr/releases/tag/v1.0.15-sse.2),
 based on [upstream Portr](https://github.com/amalshaji/portr). Use this library
@@ -18,9 +18,9 @@ context: `createApp({ interceptor: tunnelInterceptor() })` applies the computed
 so the app and portr live and die as one (concurrently-style - signals pass
 through, either death tears the pair down). The app is the process; the tunnel
 rides along inside it. Access is granted per email address against an allow-list,
-verified by a code sent over [`@dbx-tools/email`](../../node/email); the gate
-itself is the `authGate` AppKit plugin, which registers the login routes and a
-gating middleware on the app's OWN Express server (no separate proxy process).
+authenticated by Better Auth email OTP or a passkey; the gate itself is the
+`authGate` AppKit plugin, which registers the login routes and a gating
+middleware on the app's OWN Express server (no separate proxy process).
 
 **Key features:**
 
@@ -56,27 +56,19 @@ gating middleware on the app's OWN Express server (no separate proxy process).
   `EMAIL_SYSTEM_FROM`), never a person's address, since a reply to a
   machine-generated code reaches nobody. `EMAIL_FROM` is not required - see
   [`@dbx-tools/email`](../../node/email#sender-addresses).
-- Email one-time-code gate: a 6-digit code stored as a SHA-256 hash with an
-  attempt counter, verified in constant time, in AppKit's `CacheManager` (Lakebase
-  when a database is bound to the deployment, else memory) so TTL expiry and
-  eviction are the cache's job.
-- The gate resolves Lakebase for itself, so its cache is actually persistent. The
-  gate is its own tiny AppKit app with no `lakebase()` plugin (it has no server to
-  mount routes on), and AppKit only chooses Lakebase for the cache when a pool can
-  be built from `LAKEBASE_ENDPOINT` **and** `PGHOST` **and** `PGDATABASE` - while a
-  Databricks App `postgres` binding supplies only the first. The gate fills in the
-  rest at boot, and skips entirely when nothing is bound rather than creating
-  infrastructure on someone else's behalf.
-- HS256 session JWT (via `jose`) carrying only the email, signed with a key that
-  is PERSISTED in AppKit's cache for 30 days - so a signed-in browser stays signed
-  in across the restarts a tunnel sees whenever the app it wraps reloads. An
-  operator-held `TUNNEL_AUTH_JWT_SECRET` still wins. `TUNNEL_AUTH_SESSION_CUTOFF`
-  is the log-everyone-out switch, and takes a relative duration (`-30d`) as
-  readily as a date.
+- Better Auth owns users, hashed OTP verification records, sessions, rate
+  limits, and passkey credentials. `@dbx-tools/tunnel` supplies only its
+  authorization policy, branded email delivery, and transport boundary.
+- Storage is the native AppKit `lakebase()` pool when registered, or SQLite in
+  the operating system's application-data directory. Both adapters run Better
+  Auth's own migrations under a Postgres advisory lock or file lock.
+- Email OTP remains bootstrap and recovery. Returning users can authenticate
+  with discoverable passkeys, enroll multiple devices, and name or remove them
+  through [`@dbx-tools/ui-auth`](../../ui/auth).
 - Allow-list patterns in three shapes, matched in order: a domain shortcut
   (`example.com`, `@example.com`), a shell-style glob (`*@example.com`), or a
   regex literal (`/^ops-.*@example\.com$/`). An empty list allows nobody.
-- Per-email and per-IP fixed-window rate limiting, plus anti-enumeration: a code
+- Better Auth rate limiting plus anti-enumeration: the compatibility code
   request always answers `{ ok: true }`, whether or not the address is allowed.
 - Inbound `x-` headers are stripped by default and re-allowed by pattern, so a
   public caller cannot spoof the headers the app trusts - above all
@@ -373,16 +365,15 @@ the selected release and executable path, then removes the temporary directory.
 
 - `interceptor` - `tunnelInterceptor()`, the `createApp` interceptor that applies
   `DATABRICKS_HOST`, launches portr, and binds it to the app.
-- `plugin` - `authGate()`, its config/env resolution, the `AuthGateApi` handlers,
-  and the `setup()` that mounts the gate on the app's server.
+- `plugin` - `authGate()`, authorization/delivery config, Better Auth
+  composition, and AppKit Lakebase discovery.
 - `gate` - the login routes + gating middleware (`mountGate`, `isTunnelHost`):
   `Host`-based tunnel classification, session enforcement, and identity injection.
 - `send-code` - the default OTP delivery through the shared email transport
   (lazily imported) and the SMTP fail-fast.
 - `code-email` - pure builders for the code email's subject/preheader/bodies.
-- `otp` - the `CacheManager`-backed code store and the session JWT.
-- `signingKey` - the cache-persisted HS256 session key (30-day TTL, get/generate/
-  re-read convergence) and the `TUNNEL_AUTH_SESSION_CUTOFF` force-clear cutoff.
+- `signingKey` - the cache-persisted Better Auth secret and
+  `TUNNEL_AUTH_SESSION_CUTOFF` force-clear cutoff.
 - `allowlist` - email domain / glob / regex matching and `looksLikeEmail`.
 - `headers` - the inbound-header allow-list: `toHeaderPolicy()`,
   `DEFAULT_FORWARD_HEADERS`, and the `PROTECTED_HEADERS` no pattern can forward.
@@ -391,6 +382,6 @@ the selected release and executable path, then removes the temporary directory.
 - `portr` - portr install, config rendering, and child launch.
 - `env` - the environment-variable names, each with its deprecated aliases.
 
-Browser-safe login wire schemas (the request/verify payloads and the session
-cookie name) live in [`@dbx-tools/shared-email`](../../shared/email); the React
-login surface is in [`@dbx-tools/ui-email`](../../ui/email).
+Browser-safe gate contracts live in
+[`@dbx-tools/shared-auth`](../../shared/auth); the passkey-first React login and
+credential manager live in [`@dbx-tools/ui-auth`](../../ui/auth).

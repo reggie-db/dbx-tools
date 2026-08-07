@@ -6,8 +6,8 @@
  * nothing to forward to. It either short-circuits (401, or answers the open login
  * routes) or calls `next()` to let the app's real handlers run. It is the
  * "stands in for AppKit auth" path:
- * a portr caller proves an email via OTP, and on success the gate injects the
- * identity headers AppKit reads, so a gated request runs like a front-door one.
+ * a portr caller authenticates with Better Auth OTP or a passkey, and on
+ * success the gate injects the identity headers AppKit reads.
  *
  * WHICH TRAFFIC IS GATED - the `Host` header, not the socket. portr's client
  * forwards with Go's `httputil.NewSingleHostReverseProxy` and a `Director` that
@@ -98,12 +98,12 @@ function stripSessionCookie(req: IncomingMessage): void {
 }
 
 /**
- * Present an OTP-authenticated caller to the app the SAME way a platform front
+ * Present a passwordless-authenticated caller to the app the SAME way a platform front
  * door does: set the front-door identity headers to the verified address (AppKit
  * reads {@link token.USER_ID_HEADER} for the OBO user id), so the app needs no
  * gate-specific code path.
  *
- * What the gate CANNOT set is {@link token.ACCESS_TOKEN_HEADER}: an OTP session
+ * What the gate CANNOT set is {@link token.ACCESS_TOKEN_HEADER}: an auth session
  * proves an email, not possession of a Databricks credential. Its absence is what
  * `@dbx-tools/appkit`'s `identity: "auto"` detects, so a gated request runs as the
  * app service principal instead of throwing.
@@ -137,6 +137,7 @@ export function webHeaders(req: IncomingMessage): Headers {
       headers.set(name, value);
     }
   }
+  headers.set("x-real-ip", clientIp(req));
   return headers;
 }
 

@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { stampPythonProjects } from "../tasks/publish-python.ts";
-import { pythonCommitVersion } from "../tasks/python-commit-version.ts";
 
 let outdir: string;
 
@@ -36,14 +35,14 @@ describe("local Python release stamping", () => {
     assert.equal(readFileSync(appPath, "utf8"), original);
   });
 
-  it("stamps commit versions without replacing standalone Git dependencies", () => {
+  it("stamps versions without replacing standalone Git dependencies when asked", () => {
     const appPath = join(outdir, "app", "pyproject.toml");
     const original = readFileSync(appPath, "utf8");
-    const restore = stampPythonProjects(outdir, "1.2.3+ghabcdef0", {
+    const restore = stampPythonProjects(outdir, "1.2.3", {
       rewriteDependencies: false,
     });
     const stamped = readFileSync(appPath, "utf8");
-    assert.match(stamped, /version = "1\.2\.3\+ghabcdef0"/);
+    assert.match(stamped, /version = "1\.2\.3"/);
     assert.match(stamped, /fixture-core @ git\+https:/);
     assert.deepEqual([...restore.paths].sort(), [
       join(outdir, "app", "pyproject.toml"),
@@ -51,16 +50,5 @@ describe("local Python release stamping", () => {
     ]);
     restore();
     assert.equal(readFileSync(appPath, "utf8"), original);
-  });
-});
-
-describe("Python commit version", () => {
-  it("uses a PEP 440 local segment with a short Git hash", () => {
-    assert.equal(pythonCommitVersion("1.2.3", "ABCDEF012345"), "1.2.3+ghabcdef0");
-  });
-
-  it("rejects non-release bases and non-hex hashes", () => {
-    assert.throws(() => pythonCommitVersion("1.2", "abcdef0"), /x\.y\.z/);
-    assert.throws(() => pythonCommitVersion("1.2.3", "not-a-hash"), /hexadecimal/);
   });
 });

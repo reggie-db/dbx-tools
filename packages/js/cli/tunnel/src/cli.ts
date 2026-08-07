@@ -1,5 +1,5 @@
 /**
- * `dbx tunnel` - front a command with a public portr tunnel and an email-OTP gate.
+ * `dbx tunnel` - front a command with a public portr tunnel and passwordless gate.
  *
  * This is the WRAPPER path, and it exists for one case: a project that does not
  * use `@dbx-tools/appkit`'s `createApp`, and therefore cannot register
@@ -125,7 +125,12 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
   // an `--insecure` run never loads either.
   const gate = resolved.gate.insecure
     ? undefined
-    : await (await import("./app.ts")).startGateApp(resolved.gateConfig);
+    : await (
+        await import("./app.ts")
+      ).startGateApp({
+        ...resolved.gateConfig,
+        publicDomain: resolved.gate.publicDomain ?? `localhost:${resolved.publicPort}`,
+      });
   if (!gate) logger.warn("running OPEN - no gate is in front of this tunnel");
 
   await startProxy({
@@ -152,7 +157,7 @@ export function buildProgram(name = "dbx tunnel"): Command {
   const program = addOptions(
     new Command()
       .name(name)
-      .description("Front a command with a portr tunnel and an email-OTP gate"),
+      .description("Front a command with a portr tunnel and passwordless auth"),
   );
 
   // `run` is the DEFAULT action as well as a named subcommand, preserving the old

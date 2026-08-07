@@ -13,6 +13,14 @@ Key features:
 - native AppKit Lakebase pool or local SQLite storage;
 - programmatic Better Auth migrations under advisory or file locks.
 
+## Relationship To Native AppKit
+
+Use the Databricks Apps front door and AppKit execution context when traffic
+arrives through the platform. Use this package for a public tunnel or another
+route that bypasses that identity-aware proxy and therefore needs its own
+passwordless session. A passkey session proves the configured identity only; it
+does not mint a Databricks OBO access token.
+
 ```ts
 import { auth, storage } from "@dbx-tools/auth";
 

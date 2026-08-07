@@ -15,4 +15,3 @@ export { EmailBody, type EmailBodyProps } from "./email-body.tsx";
 export { EmailComposeView, type EmailComposeProps } from "./email-compose.tsx";
 export { attachmentNames, joinAddresses, parseAddresses } from "./fields.ts";
 export type { EmailDraft } from "./fields.ts";
-export { PasskeyManager, type PasskeyManagerProps } from "./passkey-manager.tsx";

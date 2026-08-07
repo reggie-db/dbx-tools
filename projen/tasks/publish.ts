@@ -17,7 +17,8 @@
  *     packed manifest shows `"@scope/x": "<version>"` and the real catalog range,
  *     while the on-disk manifest keeps the protocols.) Setting each member's
  *     version first is the only prerequisite, so a sibling resolves the release
- *     version rather than the disk default of `0.0.0`;
+ *     version; the disk manifest already carries the workspace `VERSION`, and
+ *     this makes doubly sure it matches the value being published;
  *   - **`publishConfig` substitution** (compiled `lib/` entry points) is done
  *     HERE, by {@link applyPublishConfig}, NOT by bun: unlike pnpm/npm, `bun
  *     publish`/`bun pm pack` do NOT fold `publishConfig`'s `main`/`types`/`bin`/
@@ -42,10 +43,13 @@
  * since its whole job is to stamp the workspace for a `bun publish` that runs
  * afterwards from another directory.
  *
- * The disk manifests normally carry `version: 0.0.0` (projen owns them, read-only);
- * this unlocks each only long enough to set the version + publish, then RESTORES
- * every one it touched byte-for-byte (and re-locks the mode) on the way out - see
- * {@link restoreManifests}. The release version lives in the git tag, not on disk.
+ * The disk manifests carry the workspace `VERSION` (projen owns them, read-only);
+ * this unlocks each only long enough to fold in the `publishConfig` entry points
+ * (and re-affirm the version) + publish, then RESTORES every one it touched
+ * byte-for-byte (and re-locks the mode) on the way out - see
+ * {@link restoreManifests}. Restore returns each manifest to its committed
+ * content, which already equals the release version, so the worktree is never
+ * left regressed.
  */
 import { chmodSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -215,8 +219,9 @@ const members = workspaceMembers(root)
   .filter((dir) => !excluded.has(resolve(root, dir).replace(`${resolve(root)}/`, "")));
 
 // Set the version on EVERY member first (native `bun pm pkg set`), so a sibling
-// published later has its `workspace:*` dep resolved to the release version - not
-// the disk default of 0.0.0 - by `bun publish`'s own protocol rewriting.
+// published later has its `workspace:*` dep resolved to the release version by
+// `bun publish`'s own protocol rewriting. The disk manifests already carry the
+// workspace `VERSION`; this re-affirms it against the value being published.
 logger.info(`setting ${version} across ${members.length} members`);
 for (const dir of members) {
   unlockManifest(join(dir, "package.json"));
@@ -227,7 +232,8 @@ for (const dir of members) {
 // just set. `bun publish`/`pm pack` reads the workspace version from the LOCKFILE,
 // not the live manifest, and a plain `bun install` (even `--force`) does NOT
 // re-resolve it after only a version-field change - deleting the lockfile first
-// does. Without this every `workspace:*` dep would publish as the stale `0.0.0`.
+// does. Without this a `workspace:*` dep could publish against a stale resolved
+// version instead of the one just set.
 const lockfile = join(root, "bun.lock");
 if (existsSync(lockfile)) rmSync(lockfile);
 logger.info("refreshing lockfile so workspace deps resolve to the release version");

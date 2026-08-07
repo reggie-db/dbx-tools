@@ -9,7 +9,7 @@
  * app's public port, binds the child process to the app, and stops portr during an
  * orderly AppKit shutdown.
  *
- * The email-OTP GATE is a separate concern: it is the `authGate` AppKit plugin,
+ * The passwordless GATE is a separate concern: it is the `authGate` AppKit plugin,
  * which registers the login routes + a gating middleware on the app's own server.
  * Register it in the app's `plugins` for gated traffic. This interceptor is only
  * the portr half - "update the host, bind portr" - the smallest useful unit.

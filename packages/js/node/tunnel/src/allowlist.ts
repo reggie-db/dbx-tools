@@ -1,5 +1,5 @@
 /**
- * Unified access allow-list matching for the email-OTP gate.
+ * Unified identity authorization matching for the passwordless gate.
  *
  * Each pattern in the configured list is one of three shapes:
  *

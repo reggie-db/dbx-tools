@@ -293,6 +293,22 @@ invokes, so there is no second place to run the same thing:
 
 Do NOT run `projen default` (or `bunx projen`) from inside a member. Synth is a
 whole-tree operation driven by the ROOT `.projenrc.ts`, so a member-level run
-re-synths the entire workspace from the member's directory and rewrites the
-root `package.json` `version` back to `0.0.0`. Run `bun run sync` from the root
-instead.
+re-synths the entire workspace from the member's directory. Run `bun run sync`
+from the root instead.
+
+## Versioning
+
+The whole repo shares ONE version, stored in the root `VERSION` file (a plain
+`x.y.z` string; a fresh tree with no file defaults to `0.0.1`). Synth COPIES that
+value into every generated manifest - the root and `projen/` `package.json`, every
+JS member, every Python `pyproject.toml`, the generated openapi packages, and the
+example apps - so the packages, the engine, and the examples always match.
+`src/workspace-version.ts` owns reading and writing it. Synth only ever reads it;
+it never resets, upgrades, or downgrades a version on its own.
+
+`bun run bump` is the only command that changes the number: it fetches the remote
+tags once, takes the highest tag across `v*` and every sibling prefix as the base
+(falling back to the local `VERSION` file when the remote is unreachable or has no
+tag), increments by `--level`, writes `VERSION`, then synths so every manifest
+copies it. The remote is consulted only on `bump` and on one-time creation of a
+missing `VERSION` file - never on an ordinary synth.

@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-postgres"
-version = "0.6.90+ghba413b1"
+version = "0.6.90"
 description = "WorkspaceClient-backed Lakebase Postgres resolution, SQLAlchemy engines, advisory locks, and LISTEN/NOTIFY topic bus"
 readme = "README.md"
 requires-python = ">=3.10"

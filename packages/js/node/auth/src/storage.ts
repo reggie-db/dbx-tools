@@ -48,10 +48,7 @@ interface SqliteDatabase {
 }
 
 interface BunSqliteModule {
-  Database: new (
-    path: string,
-    options?: { create?: boolean; strict?: boolean },
-  ) => SqliteDatabase;
+  Database: new (path: string, options?: { create?: boolean; strict?: boolean }) => SqliteDatabase;
 }
 
 const MIGRATION_LOCK = ["auth", "better-auth", "migrations"] as const;
@@ -106,10 +103,7 @@ export async function createAuthStorage(
   };
 }
 
-export async function migrateAuth(
-  options: BetterAuthOptions,
-  storage: AuthStorage,
-): Promise<void> {
+export async function migrateAuth(options: BetterAuthOptions, storage: AuthStorage): Promise<void> {
   const run = async (): Promise<void> => {
     const module = (await import(migrationModuleUrl())) as MigrationModule;
     const migrations = await module.getMigrations(options);

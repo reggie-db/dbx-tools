@@ -9,13 +9,13 @@
  */
 
 import { passkey } from "@better-auth/passkey";
-import { log } from "@dbx-tools/shared-core";
 import {
   authRequestSchema,
   authVerifySchema,
   type AuthStatus,
   SESSION_COOKIE_NAME,
 } from "@dbx-tools/shared-auth";
+import { log } from "@dbx-tools/shared-core";
 import { APIError, betterAuth, type BetterAuthOptions } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
 
@@ -98,6 +98,10 @@ export async function createPasswordlessAuth(
     },
     advanced: {
       useSecureCookies: origin.startsWith("https://"),
+      ipAddress: {
+        ipAddressHeaders: ["x-real-ip"],
+        disableIpTracking: false,
+      },
       cookies: {
         session_token: {
           name: config.sessionCookieName ?? SESSION_COOKIE_NAME,
@@ -217,8 +221,7 @@ export async function createPasswordlessAuth(
   return {
     basePath,
     passkeysEnabled: true,
-    handler: async (request) =>
-      (await handleCompatibilityRoute(request)) ?? auth.handler(request),
+    handler: async (request) => (await handleCompatibilityRoute(request)) ?? auth.handler(request),
     session,
     status: async (headers) => {
       const email = await session(headers);

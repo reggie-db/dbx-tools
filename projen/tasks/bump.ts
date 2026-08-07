@@ -1,28 +1,30 @@
 #!/usr/bin/env -S bun
 /**
- * `projen bump` - synth, compute the next release version, then (by default)
- * commit, tag, and push it. Pushing the tag is what triggers the release
- * workflow.
+ * `projen bump` - compute the next release version, write it to the workspace
+ * `VERSION` file, synth so every manifest copies it, then (by default) commit,
+ * tag, and push. Pushing the tag is what triggers the release workflow.
  *
- * The next version is derived from the HIGHEST of:
- *   - the latest published git tag matching `<prefix><semver>` (fetched from
- *     the remote so a release made elsewhere is respected),
- *   - the same for every `--sibling` prefix, and
- *   - the local `package.json` version,
- * then incremented by `--level` (patch | minor | major; default patch).
+ * The base version is the HIGHEST published git tag across `<prefix>` and every
+ * `--sibling` prefix (fetched from the remote so a release cut elsewhere wins),
+ * falling back to the local `VERSION` file when the remote is unreachable or has
+ * no matching tag. A local file that is ahead does NOT override an existing
+ * remote tag. The base is then incremented by `--level` (patch | minor | major;
+ * default patch). The remote is consulted only here and on VERSION bootstrap,
+ * never on an ordinary synth.
  *
  * `--sibling <dir>:<tagPrefix>` (repeatable) releases an in-repo project that
  * publishes on its OWN tag namespace (e.g. `projen/`, tagged `projen-v*`) at the
- * SAME version as the root, in the same run: its manifest version is stamped, its
- * `<tagPrefix><version>` tag is cut and pushed (triggering its own workflow), and
- * it is included in the local-registry publish. Taking the base version from
- * every prefix at once is what keeps the two in lockstep: the engine sat at
- * 0.1.24 while the packages reached 0.3.41 precisely because each namespace only
- * ever looked at its own tags.
+ * SAME version as the root, in the same run: its `<tagPrefix><version>` tag is
+ * cut and pushed (triggering its own workflow), and it is included in the
+ * local-registry publish. Taking the base version from every prefix at once is
+ * what keeps the two in lockstep: the engine sat at 0.1.24 while the packages
+ * reached 0.3.41 precisely because each namespace only ever looked at its own
+ * tags. Both draw the fallback from the one root `VERSION` file, so the engine
+ * and the packages share a single source of truth.
  *
  * Flags (all default ON; negate with the `--no-` form, per commander):
- *   --synth   / --no-synth     run `projen` (synth) first so the tree is current
- *   --version / --no-version   write the bumped version into package.json
+ *   --synth   / --no-synth     synth after writing VERSION so manifests copy it
+ *   --version / --no-version   write the bumped version into `VERSION`
  *   --commit  / --no-commit    commit the release (staged with `git add -A`)
  *   --tag     / --no-tag       create the `<prefix><version>` git tag
  *   --push    / --no-push      push the CURRENT branch + tag to origin
@@ -45,6 +47,14 @@ import { exec, project } from "@dbx-tools/core";
 import { log, net } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
 import { activePythonIndex, resolveLocalPypi } from "./python-registry.ts";
+import {
+  type Semver,
+  compareSemver,
+  latestTagVersion,
+  parseSemver,
+  resolveBaseVersion,
+  writeWorkspaceVersion,
+} from "../src/workspace-version.ts";
 
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;
@@ -70,17 +80,7 @@ function parseSibling(value: string, previous: Sibling[]): Sibling[] {
   return [...previous, { dir: value.slice(0, at), prefix: value.slice(at + 1) }];
 }
 
-/** Parse `x.y.z` (ignoring any leading `v`/prefix), returning a `[maj,min,pat]` tuple. */
-function parseSemver(raw: string): [number, number, number] | undefined {
-  const m = /(\d+)\.(\d+)\.(\d+)/.exec(raw.trim());
-  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : undefined;
-}
-
-function compareSemver(a: [number, number, number], b: [number, number, number]): number {
-  return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
-}
-
-function increment(v: [number, number, number], level: Level): [number, number, number] {
+function increment(v: Semver, level: Level): Semver {
   if (level === "major") return [v[0] + 1, 0, 0];
   if (level === "minor") return [v[0], v[1] + 1, 0];
   return [v[0], v[1], v[2] + 1];
@@ -95,29 +95,6 @@ function git(args: string[], capture = false): string {
     check: !capture,
   });
   return res.stdout?.trim() ?? "";
-}
-
-/** Highest tag matching `<prefix><semver>`, or undefined. Call {@link fetchTags} first. */
-function latestTagVersion(prefix: string): [number, number, number] | undefined {
-  const out = git(
-    ["-c", "versionsort.suffix=-", "tag", "--sort=-version:refname", "--list", `${prefix}*`],
-    true,
-  );
-  for (const tag of out.split("\n")) {
-    const v = parseSemver(tag.replace(prefix, ""));
-    if (v) return v;
-  }
-  return undefined;
-}
-
-/** Pull remote tags once, so a release made elsewhere is respected. */
-function fetchTags(): void {
-  git(["fetch", "--tags", "--quiet"], true);
-}
-
-function readPackageVersion(pkgPath: string): [number, number, number] {
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
-  return parseSemver(pkg.version ?? "") ?? [0, 0, 0];
 }
 
 /**
@@ -217,8 +194,46 @@ program
         if (!existsSync(s.pkgPath)) throw new Error(`--sibling ${s.dir}: no package.json there`);
       }
 
-      // Synth first so the release commit captures an up-to-date tree (generated
-      // manifests, workspace file, tasks, ...) rather than a stale one.
+      // The `VERSION` file is the workspace source of truth and lives at the repo
+      // root, even when this task runs from a subdirectory (`cd projen && bun run
+      // bump`), so the engine and packages always share one number.
+      const root = project.root() ?? process.cwd();
+
+      // Base = the highest published tag across EVERY namespace being released
+      // (fetched from the remote so a release cut elsewhere wins), falling back to
+      // the local `VERSION` file when the remote is unreachable or has no tag. A
+      // local file that happens to be ahead does NOT override an existing remote.
+      const prefixes = [opts.prefix, ...siblings.map((s) => s.prefix)];
+      const baseInfo = resolveBaseVersion(root, prefixes);
+      const base = parseSemver(baseInfo.version) ?? [0, 0, 1];
+      const next = increment(base, opts.level);
+      const version = next.join(".");
+      const tags = prefixes.map((prefix) => `${prefix}${version}`);
+      logger.info(
+        `bump ${base.join(".")} -> ${version} (${opts.level}); tags ${tags.join(", ")}` +
+          `${baseInfo.source === "remote" ? "" : " [no remote tag; used local VERSION]"}`,
+      );
+      // Note any tag namespace that trailed the base so a lockstep catch-up is visible.
+      for (const prefix of prefixes) {
+        const tagged = latestTagVersion(root, prefix);
+        if (tagged && compareSemver(tagged, base) < 0) {
+          logger.info(`${prefix}* was behind at ${tagged.join(".")}, catching it up`);
+        }
+      }
+
+      const push = opts.push && opts.publish;
+
+      // Write the source of truth first, then synth so every generated manifest
+      // COPIES it - synth never invents, resets, or drifts a version on its own.
+      if (opts.version) {
+        writeWorkspaceVersion(root, version);
+        // Keep the writable root/sibling manifests coherent even when synth is
+        // skipped (`--no-synth`); synth would otherwise set the same value.
+        writeManifestVersion(pkgPath, version);
+        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
+        logger.info(`wrote version ${version} to ${root}/VERSION`);
+      }
+
       if (opts.synth) {
         logger.info("synthesizing (projen)");
         exec.spawnSync("bun", [".projenrc.ts"], {
@@ -228,39 +243,6 @@ program
           stdin: "ignore",
           check: true,
         });
-      }
-
-      // Base = highest of the local package version and the latest tag in EVERY
-      // namespace being released, so one shared version stays ahead of them all.
-      fetchTags();
-      const prefixes = [opts.prefix, ...siblings.map((s) => s.prefix)];
-      const tagged = prefixes
-        .map((prefix) => ({ prefix, version: latestTagVersion(prefix) }))
-        .filter((t): t is { prefix: string; version: [number, number, number] } => !!t.version);
-      const base = tagged.reduce(
-        (highest, t) => (compareSemver(t.version, highest) > 0 ? t.version : highest),
-        readPackageVersion(pkgPath),
-      );
-      const next = increment(base, opts.level);
-      const version = next.join(".");
-      const tags = prefixes.map((prefix) => `${prefix}${version}`);
-      logger.info(
-        `bump ${base.join(".")} -> ${version} (${opts.level}); tags ${tags.join(", ")}` +
-          `${tagged.length ? "" : " [no remote tag]"}`,
-      );
-      for (const t of tagged) {
-        if (compareSemver(t.version, base) < 0) {
-          logger.info(`${t.prefix}* was behind at ${t.version.join(".")}, catching it up`);
-        }
-      }
-
-      const push = opts.push && opts.publish;
-
-      if (opts.version) {
-        writeManifestVersion(pkgPath, version);
-        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
-        const also = siblings.length ? ` (and ${siblings.map((s) => s.dir).join(", ")})` : "";
-        logger.info(`wrote version ${version} to package.json${also}`);
       }
 
       if (opts.commit) {
@@ -297,16 +279,15 @@ program
       }
       if (publishToLocalRegistry) {
         logger.info(`publishing ${version} to local registry ${localRegistry}`);
-        // Mirror the CI `release` workflow via the shared publish task: it sets
-        // the release version on every workspace member (`bun pm pkg set`; they
-        // keep `0.0.0` on disk, projen-owned, so it unlocks each briefly), then
-        // `bun publish`es each non-private one - and bun natively strips the
-        // `workspace:`/`catalog:` protocols in the packed tarball, resolving each
-        // to the version just set. `publish.ts` restores every manifest it touched
-        // at exit, so this leaves the worktree matching the release commit that was
-        // just pushed - the release version lives in the git tag, not on disk.
-        // Provenance is off for a local registry (no OIDC), so
-        // `NPM_CONFIG_PROVENANCE` is unset.
+        // Mirror the CI `release` workflow via the shared publish task: it
+        // re-affirms the release version on every workspace member (`bun pm pkg
+        // set`; the manifests already carry the shared `VERSION`, projen-owned, so
+        // it unlocks each briefly), then `bun publish`es each non-private one - and
+        // bun natively strips the `workspace:`/`catalog:` protocols in the packed
+        // tarball, resolving each to that version. `publish.ts` restores every
+        // manifest it touched at exit, so this leaves the worktree matching the
+        // release commit that was just pushed. Provenance is off for a local
+        // registry (no OIDC), so `NPM_CONFIG_PROVENANCE` is unset.
         // `publish.ts` is this task's SIBLING in the engine's `tasks/` dir; resolve
         // it off `import.meta.url` (works whether the engine is source-linked in-repo
         // or installed under node_modules) rather than a repo-relative `tasks/...`
@@ -359,16 +340,6 @@ program
           },
         );
         logger.success(`published Python ${version} to ${localPypi.publishUrl}`);
-      }
-
-      // Publishing can run package lifecycle hooks, including a standalone
-      // project's own projen synth, which rewrites its generated manifest back
-      // to 0.0.0. Re-assert the release version last so root and every sibling
-      // manifest finish the bump in lockstep.
-      if (opts.version) {
-        writeManifestVersion(pkgPath, version);
-        for (const s of siblings) writeManifestVersion(s.pkgPath, version);
-        logger.info(`synchronized release manifests at ${version}`);
       }
     },
   );
