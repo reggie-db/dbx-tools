@@ -41,6 +41,8 @@ type CacheStorage = NonNullable<CacheConfig["storage"]>;
 export type PersistentStorageBase = CacheStorage & {
   initialize(): Promise<void>;
   initialized: boolean;
+  schemaName?: string;
+  tableName?: string;
 };
 
 type PersistentStorageConstructor = new (
@@ -82,8 +84,38 @@ function loadPersistentStorage(): PersistentStorageConstructor | undefined {
   }
 }
 
-/** Soften `initialize()` so a migration failure is logged once, not thrown. */
-export function softenInitialize(storage: PersistentStorageBase): void {
+/**
+ * Whether an existing cache table belongs to another role.
+ *
+ * PostgreSQL allows granted reads/writes but reserves index DDL for the table
+ * owner. Skip AppKit migrations in that case; {@link probeStorage} still proves
+ * the existing table can serve the cache before it is accepted.
+ */
+async function tableOwnedByAnotherRole(
+  storage: PersistentStorageBase,
+  pool: LakebasePool,
+): Promise<boolean> {
+  if (!storage.schemaName || !storage.tableName) return false;
+  const result = await pool.query(
+    `SELECT pg_get_userbyid(c.relowner) = current_user AS owned
+     FROM pg_class c
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = $1 AND c.relname = $2 AND c.relkind IN ('r', 'p')`,
+    [storage.schemaName, storage.tableName],
+  );
+  if (result.rows[0]?.owned !== false) return false;
+  logger.warn("persistent cache migrations skipped (table owned by another role)", {
+    schema: storage.schemaName,
+    table: storage.tableName,
+  });
+  return true;
+}
+
+/** Soften `initialize()` so an ownership-only migration failure is not fatal. */
+export function softenInitialize(
+  storage: PersistentStorageBase,
+  skipMigrations?: () => Promise<boolean>,
+): void {
   const originalInitialize = storage.initialize.bind(storage);
   let softInitPromise: Promise<void> | undefined;
 
@@ -91,7 +123,7 @@ export function softenInitialize(storage: PersistentStorageBase): void {
     if (storage.initialized) return;
     softInitPromise ??= (async () => {
       try {
-        await originalInitialize();
+        if (!(await skipMigrations?.())) await originalInitialize();
       } catch (err) {
         if (!isOwnershipMigrationError(err)) throw err;
         const message = error.errorMessage(err);
@@ -144,9 +176,10 @@ export async function createSoftPersistentStorage(
 
   let pool: LakebasePool | undefined;
   try {
-    pool = createLakebasePool({ workspaceClient: getWorkspaceClient({}) });
-    const storage = new PersistentStorage(cache ?? {}, pool);
-    softenInitialize(storage);
+    const createdPool = createLakebasePool({ workspaceClient: getWorkspaceClient({}) });
+    pool = createdPool;
+    const storage = new PersistentStorage(cache ?? {}, createdPool);
+    softenInitialize(storage, () => tableOwnedByAnotherRole(storage, createdPool));
     if (!(await storage.healthCheck())) {
       await storage.close().catch(() => {});
       return undefined;

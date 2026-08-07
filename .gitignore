@@ -89,6 +89,7 @@ jspm_packages/
 .kanna/
 .polly/
 .home/
+**/.logs/
 .venv/
 .pytest_cache/
 .ruff_cache/

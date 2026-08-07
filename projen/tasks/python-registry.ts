@@ -22,6 +22,27 @@ export function parseUvDefaultIndex(source: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Read EVERY index URL from uv's TOML config — the default (primary) index
+ * first, then any extra `[[index]]` entries in file order. uv's `[[index]]`
+ * table with `default = true` is the primary index; every other `[[index]]`
+ * is an extra index also consulted at resolve time, so a local devpi added as
+ * a non-default block is discoverable here.
+ */
+export function parseUvIndexes(source: string): string[] {
+  const blocks = source.split(/(?=^\[\[index\]\]\s*$)/m);
+  let primary: string | undefined;
+  const extras: string[] = [];
+  for (const block of blocks) {
+    if (!/^\[\[index\]\]\s*$/m.test(block)) continue;
+    const url = /^\s*url\s*=\s*["']([^"']+)["']\s*$/m.exec(block)?.[1];
+    if (!url) continue;
+    if (/^\s*default\s*=\s*true\s*$/m.test(block)) primary = url;
+    else extras.push(url);
+  }
+  return primary ? [primary, ...extras] : extras;
+}
+
 /** Convert a devpi Simple API URL into its writable index URL. */
 export function devpiRegistry(index: string): LocalPythonRegistry | undefined {
   let url: URL;
@@ -43,38 +64,94 @@ export function devpiRegistry(index: string): LocalPythonRegistry | undefined {
   };
 }
 
-/** The active Python package index, preferring uv because Python builds use uv. */
-export function activePythonIndex(): string | undefined {
-  for (const value of [process.env.UV_DEFAULT_INDEX, process.env.UV_INDEX_URL]) {
-    if (value?.trim()) return value.trim();
-  }
+/** Split a whitespace-separated index list (the pip/uv env-var form). */
+function splitIndexList(value: string | undefined): string[] {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.split(/\s+/) : [];
+}
 
-  const uvConfig = process.env.UV_CONFIG_FILE ?? resolve(homedir(), ".config/uv/uv.toml");
-  if (existsSync(uvConfig)) {
-    const index = parseUvDefaultIndex(readFileSync(uvConfig, "utf8"));
-    if (index) return index;
-  }
-
-  if (process.env.PIP_INDEX_URL?.trim()) return process.env.PIP_INDEX_URL.trim();
-  const pip = exec.spawnSync("python", ["-m", "pip", "config", "get", "global.index-url"], {
+/** Read a `pip config get <key>`, treating pip's literal "undefined" as unset. */
+function pipConfig(key: string): string | undefined {
+  const res = exec.spawnSync("python", ["-m", "pip", "config", "get", key], {
     cwd: process.cwd(),
     stdout: "capture",
     stderr: "ignore",
     stdin: "ignore",
     check: false,
   });
-  return pip.stdout?.trim() || undefined;
+  const out = res.stdout?.trim();
+  return out && out !== "undefined" ? out : undefined;
 }
 
-/** Resolve `auto`, `false`, or an explicit devpi index/publish URL. */
+/**
+ * Every Python package index in effect — the primary index FIRST, then extra
+ * indexes — deduplicated, across uv (preferred, because Python builds use uv)
+ * and pip. Both the primary `index-url` and every `extra-index-url` are read so
+ * a local devpi configured as an *extra* index (leaving the corp proxy as the
+ * primary) is still detected.
+ */
+export function activePythonIndexes(): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (value: string | undefined): void => {
+    const url = value?.trim();
+    if (url && !seen.has(url)) {
+      seen.add(url);
+      out.push(url);
+    }
+  };
+
+  // uv: env vars first (primary, then extras), then uv.toml's index blocks.
+  add(process.env.UV_DEFAULT_INDEX);
+  add(process.env.UV_INDEX_URL);
+  for (const url of splitIndexList(process.env.UV_INDEX)) add(url);
+  for (const url of splitIndexList(process.env.UV_EXTRA_INDEX_URL)) add(url);
+  const uvConfig = process.env.UV_CONFIG_FILE ?? resolve(homedir(), ".config/uv/uv.toml");
+  if (existsSync(uvConfig)) {
+    for (const url of parseUvIndexes(readFileSync(uvConfig, "utf8"))) add(url);
+  }
+
+  // pip: env vars (primary + extras), then `pip config` (index-url + extra-index-url).
+  add(process.env.PIP_INDEX_URL);
+  for (const url of splitIndexList(process.env.PIP_EXTRA_INDEX_URL)) add(url);
+  add(pipConfig("global.index-url"));
+  for (const url of splitIndexList(pipConfig("global.extra-index-url"))) add(url);
+
+  return out;
+}
+
+/** The primary (first) active Python index, or `undefined` when none is set. */
+export function activePythonIndex(): string | undefined {
+  return activePythonIndexes()[0];
+}
+
+/**
+ * Resolve `auto`, `false`, or an explicit devpi index/publish URL.
+ *
+ * - `false` (or empty): skip local publishing.
+ * - a URL: publish there (derive the writable index from a `+simple` URL, else
+ *   treat the value itself as the writable index).
+ * - `auto`: scan every active index — primary `index-url` AND every
+ *   `extra-index-url`, across uv and pip — and publish to the FIRST that is a
+ *   loopback devpi `+simple` index. This is what lets the corp proxy stay the
+ *   primary index while a local devpi added as an extra is the publish target.
+ *
+ * `indexes` accepts an array (the normal case) or a single string (kept for the
+ * existing single-index callers/tests); it defaults to {@link activePythonIndexes}.
+ */
 export function resolveLocalPypi(
   value: string,
-  activeIndex: string | undefined = activePythonIndex(),
+  indexes: readonly string[] | string | undefined = activePythonIndexes(),
 ): LocalPythonRegistry | undefined {
   const trimmed = value.trim();
   if (!trimmed || trimmed.toLowerCase() === "false") return undefined;
   if (trimmed.toLowerCase() === "auto") {
-    return activeIndex ? devpiRegistry(activeIndex) : undefined;
+    const list = typeof indexes === "string" ? [indexes] : (indexes ?? []);
+    for (const index of list) {
+      const registry = devpiRegistry(index);
+      if (registry) return registry;
+    }
+    return undefined;
   }
 
   const derived = devpiRegistry(trimmed);

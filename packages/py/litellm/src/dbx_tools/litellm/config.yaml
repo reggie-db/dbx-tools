@@ -1,12 +1,10 @@
 model_list:
-  # Passthrough route: a caller-qualified `databricks/<endpoint>` goes to
-  # /serving-endpoints/<endpoint>/invocations. Param support is per-SURFACE, and
-  # unlike the Responses surfaces below, /invocations rejects
-  # `parallel_tool_calls` ("Extra inputs are not permitted"). A client that sends
-  # it on THIS route still fails; neither route-level `drop_params` nor
-  # `additional_drop_params` suppresses it (LiteLLM forwards it to the endpoint
-  # anyway), so nothing is claimed here. Callers who want that param should use an
-  # unqualified model name, which routes to the Responses surfaces below.
+  # Passthrough route: a caller-qualified `databricks/<endpoint>` normally goes
+  # to /serving-endpoints/<endpoint>/invocations. The routing hook promotes
+  # Responses-required GPT families to `databricks/responses/<endpoint>` first,
+  # so tools plus reasoning work even when the caller qualified the model.
+  # Param support remains per-surface for every model left on Chat Completions,
+  # where /invocations rejects `parallel_tool_calls`.
   - model_name: "databricks/*"
     litellm_params:
       model: "databricks/*"

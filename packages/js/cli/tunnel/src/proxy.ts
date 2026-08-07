@@ -25,6 +25,8 @@ import ProxyModule from "http-proxy-3";
 
 const logger = log.logger("tunnel:proxy");
 
+type UpgradeSocket = Socket & { destroySoon?: () => void };
+
 export interface ProxyOptions {
   /** The port this proxy listens on - the port portr and the platform route to. */
   publicPort: number;
@@ -119,12 +121,14 @@ export function startProxy(options: ProxyOptions): Promise<void> {
   // destroyed - the client sees the handshake fail, which is what a browser's
   // WebSocket error handler expects.
   server.on("upgrade", (request: IncomingMessage, socket: Socket, head: Buffer) => {
+    const upgradeSocket = socket as UpgradeSocket;
+    upgradeSocket.destroySoon ??= () => upgradeSocket.end();
     void decide(request)
       .then((action) => {
-        if (action === "deny") socket.destroy();
-        else proxy.ws(request, socket, head);
+        if (action === "deny") upgradeSocket.destroy();
+        else proxy.ws(request, upgradeSocket, head);
       })
-      .catch(() => socket.destroy());
+      .catch(() => upgradeSocket.destroy());
   });
 
   return new Promise((resolve) => {

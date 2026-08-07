@@ -1,6 +1,6 @@
 import { passkeyClient } from "@better-auth/passkey/client";
+import { createAuthClient } from "better-auth/client";
 import { emailOTPClient } from "better-auth/client/plugins";
-import { createAuthClient } from "better-auth/react";
 
 export const AUTH_BASE = "/api/email/auth";
 

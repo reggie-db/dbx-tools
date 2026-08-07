@@ -10,11 +10,13 @@ from litellm.integrations.custom_logger import CustomLogger
 from .models import register_streaming_support, requires_responses_api
 from .provider import dbx_provider
 
+_CHAT_CALL_TYPES = frozenset({"acompletion", "completion"})
 _RESPONSES_CALL_TYPES = frozenset({"aresponses", "responses"})
+_CALL_TYPES = _CHAT_CALL_TYPES | _RESPONSES_CALL_TYPES
 
 
 class DbxResponsesRouter(CustomLogger):
-    """Resolve Responses-only models before LiteLLM selects a provider."""
+    """Resolve and normalize Responses models before provider selection."""
 
     async def async_pre_call_hook(
         self,
@@ -24,10 +26,18 @@ class DbxResponsesRouter(CustomLogger):
         **_: Any,
     ) -> dict[str, Any]:
         model = data.get("model")
-        if call_type not in _RESPONSES_CALL_TYPES or not isinstance(model, str):
+        if call_type not in _CALL_TYPES or not isinstance(model, str):
             return data
 
         routed = dict(data)
+        if call_type in _CHAT_CALL_TYPES and model.startswith("databricks/"):
+            resolved = model.removeprefix("databricks/").removeprefix("responses/")
+            register_streaming_support(resolved)
+            if requires_responses_api(resolved):
+                routed["model"] = f"databricks/responses/{resolved}"
+                return await _with_credentials(routed)
+            return data
+
         if model.startswith("databricks/"):
             # An already-qualified model skips resolution, so declare its
             # streaming support here instead.

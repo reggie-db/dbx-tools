@@ -116,6 +116,7 @@ root.gitignore.addPatterns(
   ".kanna/",
   ".polly/",
   ".home/",
+  "**/.logs/",
   ".venv/",
   ".pytest_cache/",
   ".ruff_cache/",
@@ -1001,13 +1002,7 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   release: true,
 });
 root.addTask("demo:emitter", {
-  exec: `zsh -lc '
-    eval "$(
-      cd packages/example/server/appkit-demo
-      bun ../../../js/cli/dbx-tools/bin/dbx-tools.ts appkit env --quiet
-    )"
-    exec uv run python packages/example/python/bus-emitter.py
-  '`,
+  exec: "bun scripts/run-demo.ts --emitter-only",
   description: "Emit local Python hello-world messages onto the demo bus",
 });
 
@@ -1032,17 +1027,10 @@ for (const task of [SCOPE, "dbx"]) {
 root.addTask("demo", {
   env: {
     NODE_ENV: "development",
-    BUN_CONFIG_ELIDE_LINES: "0"
+    BUN_CONFIG_ELIDE_LINES: "0",
+    FORCE_COLOR: "1",
   },
-  exec: `
-  bunx concurrently \
-    --raw \
-    --kill-others \
-    --names server,client,emitter \
-    "bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-server dev" \
-    "bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-app dev" \
-    "bun --env-file=.env run demo:emitter"
-  `.trim(),
+  exec: "bun scripts/run-demo.ts",
   description: "Run the local demo server, client, and Python bus emitter",
 });
 

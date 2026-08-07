@@ -128,11 +128,12 @@
       "description": "Run the local demo server, client, and Python bus emitter",
       "env": {
         "NODE_ENV": "development",
-        "BUN_CONFIG_ELIDE_LINES": "0"
+        "BUN_CONFIG_ELIDE_LINES": "0",
+        "FORCE_COLOR": "1"
       },
       "steps": [
         {
-          "exec": "bunx concurrently     --raw     --kill-others     --names server,client,emitter     \"bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-server dev\"     \"bun --env-file=.env run --elide-lines=0 --filter @dbx-tools/demo-appkit-app dev\"     \"bun --env-file=.env run demo:emitter\""
+          "exec": "bun scripts/run-demo.ts"
         }
       ]
     },
@@ -141,7 +142,7 @@
       "description": "Emit local Python hello-world messages onto the demo bus",
       "steps": [
         {
-          "exec": "zsh -lc '\n    eval \"$(\n      cd packages/example/server/appkit-demo\n      bun ../../../js/cli/dbx-tools/bin/dbx-tools.ts appkit env --quiet\n    )\"\n    exec uv run python packages/example/python/bus-emitter.py\n  '"
+          "exec": "bun scripts/run-demo.ts --emitter-only"
         }
       ]
     },

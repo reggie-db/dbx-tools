@@ -20,7 +20,7 @@ export interface AuthGateProps {
   description?: string;
 }
 
-/** Passkey-first gate with email OTP bootstrap and recovery. */
+/** Email OTP gate with conditional passkey sign-in and first-login enrollment. */
 export function AuthGate({ children, title, description }: AuthGateProps): ReactNode {
   const { context: brand } = useBrand();
   const [phase, setPhase] = useState<Phase>("loading");
@@ -60,6 +60,9 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
       return;
     }
     let cancelled = false;
+    // Conditional mediation cannot reveal whether a credential exists. It lets
+    // the browser offer one immediately on the focused `webauthn` input without
+    // showing an empty modal to users who have no passkey.
     void PublicKeyCredential.isConditionalMediationAvailable().then(async (available) => {
       if (!available || cancelled) return;
       if ((await signInPasskey(true)) && !cancelled) setPhase("authed");
@@ -157,7 +160,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
               ? "Enter the 6-digit verification code sent to your email address."
               : phase === "enroll"
                 ? "Create a passkey for faster, phishing-resistant sign-in next time."
-                : "Use a passkey or enter your email address for a verification code.")}
+                : "Enter your email for a one-time code, or use a passkey.")}
         </p>
 
         {phase === "email" ? (
@@ -165,20 +168,27 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
             <Input
               type="email"
               autoComplete="email webauthn"
+              autoFocus
               aria-label="Email address"
               placeholder="you@example.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
             />
+            <Button type="submit" disabled={busy} className="w-full">
+              Sign in with email OTP
+            </Button>
             {passkeysEnabled ? (
-              <Button type="button" disabled={busy} className="w-full" onClick={usePasskey}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                className="w-full"
+                onClick={usePasskey}
+              >
                 Sign in with a passkey
               </Button>
             ) : null}
-            <Button type="submit" variant="outline" disabled={busy} className="w-full">
-              Send verification code
-            </Button>
           </form>
         ) : phase === "code" ? (
           <form onSubmit={verifyCode} className="space-y-3">

@@ -36,7 +36,11 @@
  * verdaccio) right after the tag push. `--local-pypi <value>` does the same for
  * Python packages through a writable devpi index. Values for both:
  *   - `auto` (default): publish only when `npm config get registry` is a
- *     loopback host, or uv's default index is a loopback devpi `+simple` URL.
+ *     loopback host, or when ANY active Python index — the primary
+ *     `index-url` OR any `extra-index-url`, across uv and pip — is a loopback
+ *     devpi `+simple` URL. Scanning the extras is what lets the corp proxy
+ *     stay the primary index while a local devpi added as an extra is the
+ *     detected publish target.
  *   - `false`: never publish locally.
  *   - a URL: always publish to that registry.
  */
@@ -46,7 +50,7 @@ import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
 import { log, net } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
-import { activePythonIndex, resolveLocalPypi } from "./python-registry.ts";
+import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
 import {
   type Semver,
   compareSemver,
@@ -167,7 +171,7 @@ program
   )
   .option(
     "--local-pypi <value>",
-    "publish Python packages locally: 'auto' (only a loopback devpi +simple index), 'false', or a devpi URL",
+    "publish Python packages locally: 'auto' (any active index-url or extra-index-url that is a loopback devpi +simple), 'false', or a devpi URL",
     "auto",
   )
   .option("--python-root <path>", "Python workspace package root", "packages/py")
@@ -303,16 +307,21 @@ program
         logger.success(`published ${version} to ${localRegistry}`);
       }
 
-      const activeIndex = activePythonIndex();
-      const localPypi = resolveLocalPypi(opts.localPypi, activeIndex);
+      // Scan EVERY active index (primary index-url + every extra-index-url,
+      // across uv and pip): auto-mode publishes to the first that is a loopback
+      // devpi +simple, so the corp proxy stays primary and a local devpi added
+      // as an extra index is the detected publish target.
+      const activeIndexes = activePythonIndexes();
+      const localPypi = resolveLocalPypi(opts.localPypi, activeIndexes);
       const pythonRoot = resolve(opts.pythonRoot);
       if (
         opts.localPypi.toLowerCase() === "auto" &&
-        activeIndex &&
-        net.isLoopbackHost(new URL(activeIndex)) &&
+        activeIndexes.some((index) => net.isLoopbackHost(index)) &&
         !localPypi
       ) {
-        logger.info(`skipped local Python publish: ${activeIndex} is not a devpi +simple index`);
+        logger.info(
+          `skipped local Python publish: no active index (${activeIndexes.join(", ")}) is a devpi +simple index`,
+        );
       }
       if (opts.version === false && localPypi) {
         logger.info("skipped local Python publish (--no-version left packages unstamped)");

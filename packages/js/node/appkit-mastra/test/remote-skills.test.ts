@@ -190,15 +190,27 @@ describe("remote skill caching", () => {
     assert.deepEqual(result.localSkillPaths, first.localSkillPaths);
   });
 
+  it("reuses a six-day-old provisioned tree under the default policy", async () => {
+    const root = first.localSkillPaths[0]!;
+    const metadata = metadataAt(root);
+    const aged = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+    for (const entry of Object.values(metadata.sources)) entry.downloadedAt = aged;
+    writeFileSync(join(root, ".metadata.json"), JSON.stringify(metadata, null, 2));
+
+    await provisionRemoteSkills({ sources: [source], client: undefined });
+
+    assert.equal(downloadedAt(root), aged, "six-day-old record remains fresh");
+  });
+
   it("downloads again once the recorded timestamp falls outside the window", async () => {
     const root = first.localSkillPaths[0]!;
     const metadata = metadataAt(root);
-    const aged = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    const aged = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
     for (const entry of Object.values(metadata.sources)) entry.downloadedAt = aged;
     writeFileSync(join(root, ".metadata.json"), JSON.stringify(metadata, null, 2));
 
     const result = await provisionRemoteSkills({ sources: [source], client: undefined });
-    assert.notEqual(downloadedAt(root), aged, "a day-old record is stale");
+    assert.notEqual(downloadedAt(root), aged, "eight-day-old record is stale");
     assert.deepEqual(result.skillNames, first.skillNames);
   });
 

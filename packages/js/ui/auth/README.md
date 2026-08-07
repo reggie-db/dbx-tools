@@ -4,7 +4,8 @@ React passwordless authentication surfaces for `@dbx-tools/auth`.
 
 Key features:
 
-- passkey-first sign-in with email OTP recovery;
+- email OTP sign-in with passkey actions presented underneath;
+- automatic conditional passkey mediation on supported browsers;
 - first-login passkey enrollment prompt;
 - authenticated passkey list, rename, add, and remove controls;
 - HttpOnly Better Auth sessions with no browser token storage;

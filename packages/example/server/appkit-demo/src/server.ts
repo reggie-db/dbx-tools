@@ -13,11 +13,7 @@ import {
   plugin as appkitWebSearchPlugin,
   tool as appkitWebSearchToolApi,
 } from "@dbx-tools/appkit-web-search";
-import {
-  brand as emailBrand,
-  plugin as emailPlugin,
-  tool as emailToolApi,
-} from "@dbx-tools/email";
+import { brand as emailBrand, plugin as emailPlugin, tool as emailToolApi } from "@dbx-tools/email";
 import { config } from "@dbx-tools/core";
 import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
@@ -27,7 +23,6 @@ import { z } from "zod";
 
 import { configureStaticDelivery } from "./_static-delivery.ts";
 import { busDemo } from "./bus-demo.ts";
-import { logDependencies } from "./dependencies.ts";
 
 /** Default search index used by both AppKit resource validation and the plugin. */
 const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";
@@ -210,11 +205,6 @@ const support = createAgent(supportDefinition);
 // LAN-bound interface, so anything else won't accept traffic).
 // Override with `HOST=...` if you need a different bind address.
 const host = process.env.HOST ?? (config.isDatabricksAppEnv() ? "0.0.0.0" : "127.0.0.1");
-
-// Report what actually resolved before serving anything: the demo can run its
-// `@dbx-tools/*` packages from source or from the registry, and only the
-// versions on disk say which one this process got.
-logDependencies();
 
 // The search plugin's explicit `index` promotes its optional AppKit resource to
 // required. Keep resource validation and runtime config on the same resolved

@@ -31,6 +31,19 @@ function storageWithInit(
 }
 
 describe("soft persistent cache initialization", () => {
+  it("skips migrations when a preflight detects a different table owner", async () => {
+    let attempts = 0;
+    const storage = storageWithInit(async () => {
+      attempts += 1;
+    });
+    softenInitialize(storage, async () => true);
+
+    await storage.initialize();
+
+    assert.equal(attempts, 0);
+    assert.equal(storage.initialized, true);
+  });
+
   it("coalesces and softens ownership-only migration failures", async () => {
     let attempts = 0;
     const storage = storageWithInit(async () => {

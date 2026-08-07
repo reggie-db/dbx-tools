@@ -28,7 +28,7 @@
  *
  * Every provisioned tree carries a {@link METADATA_FILE} recording when each
  * source was last downloaded, and a source is only re-downloaded once that
- * record is older than {@link DEFAULT_REFRESH_TTL_MS} (a day). This runs at app
+ * record is older than {@link DEFAULT_REFRESH_TTL_MS} (seven days). This runs at app
  * BOOT, so without it a container that restarts a dozen times an hour re-pulls
  * the whole AI Tools set a dozen times for content that changes rarely. The
  * record travels WITH the tree rather than in process memory, so the reuse
@@ -86,6 +86,9 @@ const SKILLS_CLI_LAYOUT = [".agents", "skills"] as const;
 /** Cap on a direct-fetch download body, matching the `skills` CLI default. */
 const DEFAULT_MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 
+/** Maximum time one remote file download may block startup. */
+const DEFAULT_DOWNLOAD_TIMEOUT_MS = 60_000;
+
 /** Stable temp directory holding one rebuilt skill tree per remote source. */
 const LOCAL_SKILLS_DIR = "mastra-local-skills";
 
@@ -100,7 +103,7 @@ const METADATA_FILE = ".metadata.json";
 const METADATA_VERSION = 1;
 
 /** How long a provisioned source is reused before being downloaded again. */
-const DEFAULT_REFRESH_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /* ------------------------------ AI Tools ------------------------------ */
 
@@ -206,8 +209,8 @@ export interface ProvisionRemoteSkillsOptions {
   maxDownloadBytes?: number;
   /**
    * How long a provisioned tree is reused before its source is downloaded
-   * again, in milliseconds. Defaults to a day; `0` re-downloads on every boot.
-   * A per-source `refreshTtlMs` wins over this.
+   * again, in milliseconds. Defaults to seven days; `0` re-downloads on every
+   * boot. A per-source `refreshTtlMs` wins over this.
    */
   refreshTtlMs?: number;
 }
@@ -331,7 +334,7 @@ function cacheKey(sourceOptions: NormalizedSource): string {
   );
 }
 
-/** The effective reuse window: per-source, then top-level, then a day. */
+/** The effective reuse window: per-source, then top-level, then seven days. */
 function resolveRefreshTtl(
   sourceOptions: NormalizedSource,
   options: ProvisionRemoteSkillsOptions,
@@ -737,7 +740,13 @@ function resolveMaxBytes(
 
 /** GET a URL, failing loudly on a non-2xx status or an oversized body. */
 async function download(url: string, maxBytes: number): Promise<Buffer> {
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS),
+  }).catch((err) => {
+    throw new Error(`download failed (${url}): ${error.errorMessage(err)}`, {
+      cause: error.toError(err),
+    });
+  });
   if (!response.ok) {
     throw new Error(`download failed: ${response.status} ${response.statusText} (${url})`);
   }
