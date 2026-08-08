@@ -973,6 +973,9 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
       projenProject.pythonGitDependency(pythonRepository, "dbx-tools-model", "model"),
       "diskcache>=5.6",
       "litellm[proxy]>=1.83.14",
+      // Pillow lets the payload guard downscale oversize base64 images so a
+      // request stays under Databricks' 32 MiB request-body limit.
+      "pillow>=10.0",
     ],
     scripts: {
       "dbx-litellm": "dbx_tools.litellm.cli:main",

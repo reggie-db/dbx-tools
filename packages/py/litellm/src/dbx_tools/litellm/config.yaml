@@ -32,6 +32,7 @@ litellm_settings:
   # are still forwarded — drop_params only removes what the provider rejects.
   drop_params: true
   callbacks:
+    - config_provider.dbx_payload_guard
     - config_provider.dbx_auto_reasoning
     - config_provider.dbx_responses_router
     - config_provider.dbx_access_logger
