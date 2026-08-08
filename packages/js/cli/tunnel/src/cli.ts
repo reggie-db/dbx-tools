@@ -75,6 +75,7 @@ function addOptions(command: Command): Command {
     .option("--auth-storage <mode>", "auth database: auto, lakebase, or sqlite")
     .option("--auth-sqlite-path <path>", "local Better Auth SQLite file")
     .option("--forward-headers <patterns...>", "extra x- headers tunnel traffic may forward")
+    .option("--bind <host...>", "interface IPs the gate listens on (default: 0.0.0.0)")
     .option("--insecure", "run open, with no gate");
 }
 
@@ -100,26 +101,39 @@ function supervise(children: readonly ChildProcess[]): void {
 
 async function run(raw: TunnelOptions, command: readonly string[]): Promise<void> {
   const [executable, ...args] = command;
-  if (!executable) {
-    throw new CommanderError(1, "tunnel.no-command", "no command given - pass it after `--`");
-  }
   const resolved = resolveTunnelOptions(raw);
+  const children: ChildProcess[] = [];
 
-  // The wrapped app must not be reachable from outside: it binds loopback on a
-  // private port, and the wrapper is the only thing that talks to it. An
-  // unresolved `--app-port` becomes a free ephemeral port rather than a fixed
-  // guess, so two tunnels can run side by side.
-  const appPort = resolved.appPort ?? (await freePort());
-  const app = spawn(executable, args, {
-    env: {
-      ...process.env,
-      DATABRICKS_APP_PORT: String(appPort),
-      PORT: String(appPort),
-      HOST: "127.0.0.1",
-    },
-    stdio: "inherit",
-  });
-  const children: ChildProcess[] = [app];
+  // Two upstream modes:
+  //   - WRAP: a command after `--`. The wrapper spawns it on a private loopback
+  //     port and is the only thing that talks to it.
+  //   - ATTACH: no command, but `--app-port` names an already-running upstream
+  //     (e.g. a local reverse proxy). The gate fronts it without spawning a
+  //     child. This is what lets the gate sit on an interface in front of a
+  //     separately-supervised stack.
+  let appPort: number;
+  if (executable) {
+    appPort = resolved.appPort ?? (await freePort());
+    const app = spawn(executable, args, {
+      env: {
+        ...process.env,
+        DATABRICKS_APP_PORT: String(appPort),
+        PORT: String(appPort),
+        HOST: "127.0.0.1",
+      },
+      stdio: "inherit",
+    });
+    children.push(app);
+  } else if (resolved.appPort) {
+    appPort = resolved.appPort;
+    logger.info("attaching gate to existing upstream", { appPort });
+  } else {
+    throw new CommanderError(
+      1,
+      "tunnel.no-upstream",
+      "no command given (pass it after `--`) and no --app-port to attach to",
+    );
+  }
 
   // Dynamic import: the gate is the only thing here that needs AppKit + SMTP, so
   // an `--insecure` run never loads either.
@@ -138,6 +152,7 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
     appPort,
     gate,
     forwardHeaders: resolved.gate.forwardHeaders,
+    bindHosts: resolved.bindHosts,
   });
 
   if (resolved.portr) {

@@ -33,6 +33,7 @@ export interface TunnelOptions {
   authStorage?: AuthStorageMode;
   authSqlitePath?: string;
   forwardHeaders?: string[];
+  bind?: string[];
   insecure?: boolean;
 }
 
@@ -41,6 +42,8 @@ export interface ResolvedTunnelOptions {
   publicPort: number;
   /** The private port the wrapped app is told to bind. Unset means "pick one". */
   appPort?: number;
+  /** Interface IPs the gate listens on. Empty means the default (0.0.0.0). */
+  bindHosts: string[];
   /**
    * The gate config as the `authGate` PLUGIN takes it - flags only, nothing
    * resolved. Passed straight to the plugin so it applies its own fallbacks
@@ -79,6 +82,7 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
   return {
     publicPort,
     ...(appPort > 0 ? { appPort } : {}),
+    bindHosts: options.bind ?? [],
     gateConfig,
     gate,
     portr: portr.resolvePortrConfig({

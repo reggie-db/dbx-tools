@@ -36,6 +36,13 @@ export interface ProxyOptions {
   gate?: AuthGateApi;
   /** Extra `x-` headers tunnel traffic may forward. */
   forwardHeaders?: readonly string[];
+  /**
+   * Addresses to listen on. Defaults to a single `0.0.0.0` (every interface),
+   * the portr/platform case. Pass specific interface IPs to expose the gate on
+   * only those - e.g. an overlay/LAN address while loopback reaches the upstream
+   * directly and ungated.
+   */
+  bindHosts?: readonly string[];
 }
 
 function sendJson(
@@ -83,7 +90,7 @@ async function handleAuthRoute(
  * to tell them apart by `Host`. Passing the request's own host keeps the shared
  * decision function's contract satisfied without weakening it.
  */
-export function startProxy(options: ProxyOptions): Promise<void> {
+export async function startProxy(options: ProxyOptions): Promise<void> {
   const proxy = ProxyModule.createProxyServer({
     target: `http://127.0.0.1:${options.appPort}`,
     ws: true,
@@ -101,7 +108,7 @@ export function startProxy(options: ProxyOptions): Promise<void> {
         })
       : Promise.resolve<tunnelGate.GateAction>("pass");
 
-  const server = createServer((request, response) => {
+  const onRequest = (request: IncomingMessage, response: ServerResponse): void => {
     void (async () => {
       const path = (request.url ?? "/").split("?")[0] ?? "/";
       if (gate && (await handleAuthRoute(request, response, path, gate))) return;
@@ -115,12 +122,12 @@ export function startProxy(options: ProxyOptions): Promise<void> {
       if (!response.headersSent) sendJson(response, 502, { error: "bad gateway" });
       else response.end();
     });
-  });
+  };
 
   // A websocket upgrade cannot be answered with a 401 body, so a denied one is
   // destroyed - the client sees the handshake fail, which is what a browser's
   // WebSocket error handler expects.
-  server.on("upgrade", (request: IncomingMessage, socket: Socket, head: Buffer) => {
+  const onUpgrade = (request: IncomingMessage, socket: Socket, head: Buffer): void => {
     const upgradeSocket = socket as UpgradeSocket;
     upgradeSocket.destroySoon ??= () => upgradeSocket.end();
     void decide(request)
@@ -129,12 +136,28 @@ export function startProxy(options: ProxyOptions): Promise<void> {
         else proxy.ws(request, upgradeSocket, head);
       })
       .catch(() => upgradeSocket.destroy());
-  });
+  };
 
-  return new Promise((resolve) => {
-    server.listen(options.publicPort, "0.0.0.0", () => {
-      logger.info("proxy listening", { publicPort: options.publicPort, appPort: options.appPort });
-      resolve();
-    });
-  });
+  // One net.Server binds one address, so listen each host on its own server that
+  // shares the same handlers. Binding specific interface IPs (rather than the
+  // default 0.0.0.0) is what lets the gate front an overlay/LAN address while
+  // loopback reaches the upstream ungated.
+  const hosts = options.bindHosts?.length ? options.bindHosts : ["0.0.0.0"];
+  await Promise.all(
+    hosts.map(
+      (host) =>
+        new Promise<void>((resolve) => {
+          const server = createServer(onRequest);
+          server.on("upgrade", onUpgrade);
+          server.listen(options.publicPort, host, () => {
+            logger.info("proxy listening", {
+              host,
+              publicPort: options.publicPort,
+              appPort: options.appPort,
+            });
+            resolve();
+          });
+        }),
+    ),
+  );
 }

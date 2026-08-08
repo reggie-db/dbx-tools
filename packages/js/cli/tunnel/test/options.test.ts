@@ -135,4 +135,15 @@ describe("resolveTunnelOptions", () => {
     process.env.PORTR_TOKEN = "portr_test_token";
     assert.equal(resolveTunnelOptions({ publicDomain: "localhost" }).portr, undefined);
   });
+
+  it("passes the --bind interface list through, defaulting to empty (0.0.0.0)", () => {
+    // Empty means the proxy applies its own 0.0.0.0 default; a list binds the
+    // gate to exactly those interface IPs (loopback then reaches the upstream
+    // ungated).
+    assert.deepEqual(resolveTunnelOptions({}).bindHosts, []);
+    assert.deepEqual(resolveTunnelOptions({ bind: ["10.147.0.5", "192.168.1.20"] }).bindHosts, [
+      "10.147.0.5",
+      "192.168.1.20",
+    ]);
+  });
 });
