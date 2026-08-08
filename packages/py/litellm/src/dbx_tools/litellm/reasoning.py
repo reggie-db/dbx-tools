@@ -113,12 +113,18 @@ class DbxAutoReasoning(CustomLogger):
     ) -> dict[str, Any]:
         call_id = _call_id(data)
         selector = _reasoning_selector(data, call_type)
-        requested_effort = _requested_effort(selector, data.get("thinking"))
-        record_reasoning_log_state(call_id, requested=requested_effort)
         score = _selector_score(selector)
         automatic = selector == "auto"
+        # An omitted/default selector is a true pass-through: Databricks chooses
+        # its own default. Named and numeric selectors are normalized against the
+        # target model's supported range, but only explicit `auto` invokes the
+        # classifier or records dbx auto-thinking metrics.
         if call_type not in _CALL_TYPES or (not automatic and score is None):
             return data
+
+        requested_effort = _requested_effort(selector, data.get("thinking"))
+        if automatic:
+            record_reasoning_log_state(call_id, requested=requested_effort)
 
         routed = _remove_reasoning_selector(data, call_type)
         if data.get("thinking") is not None:
@@ -149,11 +155,12 @@ class DbxAutoReasoning(CustomLogger):
                     await asyncio.to_thread(self.cache.set_score, sample, score)
         assert score is not None
         effort = _effort_for_score(score, efforts)
-        record_reasoning_log_state(
-            call_id,
-            requested=requested_effort,
-            selected=effort.value,
-        )
+        if automatic:
+            record_reasoning_log_state(
+                call_id,
+                requested=requested_effort,
+                selected=effort.value,
+            )
 
         if call_type in _RESPONSES_CALL_TYPES:
             reasoning = routed.get("reasoning")
@@ -303,14 +310,32 @@ def _remove_reasoning_selector(data: Mapping[str, Any], call_type: str) -> dict[
     return routed
 
 
+_NAMED_SELECTOR_SCORES = {
+    "none": 0.0,
+    "minimal": 0.05,
+    "low": 0.2,
+    "medium": 0.5,
+    "high": 0.75,
+    "xhigh": 0.9,
+    "extra-high": 0.9,
+    "extra_high": 0.9,
+    "max": 1.0,
+}
+
+
 def _selector_score(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
         return _normalize_score(float(value), percentage=value > 1)
-    if not isinstance(value, str) or value == "auto":
+    if not isinstance(value, str):
         return None
-    match = _SCORE_PATTERN.fullmatch(value.strip())
+    normalized = value.strip().lower()
+    if normalized in {"", "auto", "default"}:
+        return None
+    if normalized in _NAMED_SELECTOR_SCORES:
+        return _NAMED_SELECTOR_SCORES[normalized]
+    match = _SCORE_PATTERN.fullmatch(normalized)
     if match is None:
         return None
     score = float(match.group(1))

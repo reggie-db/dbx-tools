@@ -52,9 +52,12 @@ def test_adds_codex_models_alongside_openai_data() -> None:
     assert gpt["supports_reasoning_summary_parameter"] is True
     assert claude["supports_reasoning_summary_parameter"] is False
     gpt_data = augmented["data"][0]
-    assert gpt_data["supports_reasoning"] is True
-    assert gpt_data["reasoning_efforts"] == ["none", "low", "medium", "high", "xhigh", "max"]
-    assert gpt_data["default_reasoning_effort"] == "medium"
+    assert gpt_data["name"] == "GPT 5 6 Sol"
+    assert gpt_data["context_window"] == 272_000
+    assert "supports_reasoning" not in gpt_data
+    assert "reasoning_efforts" not in gpt_data
+    assert "supported_reasoning_levels" not in gpt_data
+    assert "default_reasoning_effort" not in gpt_data
     assert gpt_family["context_window"] == 272_000
     assert claude_family["supports_reasoning_summary_parameter"] is False
 
@@ -129,6 +132,11 @@ def test_merges_live_endpoints_missing_from_litellm_registry() -> None:
         "dbx/databricks-gpt-5-6-terra",
         "dbx/databricks-gpt",
     ]
+    assert [model["name"] for model in augmented["data"]] == [
+        "GPT 5 6 Sol",
+        "GPT 5 6 Terra",
+        "GPT",
+    ]
     assert [model["slug"] for model in augmented["models"]] == [
         "dbx/databricks-gpt-5-6-sol",
         "dbx/databricks-gpt-5-6-terra",
@@ -198,7 +206,7 @@ def test_non_reasoning_model_is_explicitly_advertised() -> None:
 
     augmented = augment_models_payload(payload)
 
-    assert augmented["data"][0]["supports_reasoning"] is False
+    assert "supports_reasoning" not in augmented["data"][0]
     assert "reasoning_efforts" not in augmented["data"][0]
 
 

@@ -14,6 +14,8 @@ from dbx_tools.model import ServingEndpointSummary, reasoning_efforts_by_family
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
+from litellm import model_cost
+
 _EFFORT_DESCRIPTIONS = {
     "low": "Faster responses with lighter reasoning",
     "medium": "Balanced reasoning for general tasks",
@@ -174,6 +176,29 @@ def _registry_models(data: Sequence[Any], *, native_enabled: bool) -> list[Any]:
     return result
 
 
+def _portable_display_name(model_id: str, endpoint: ServingEndpointSummary | None) -> str:
+    """Return a concise UI label without changing the routable model id."""
+    if endpoint is not None and endpoint.display_name:
+        return endpoint.display_name
+    slug = model_id.removeprefix("dbx/").removeprefix("databricks/")
+    slug = slug.removeprefix("databricks-").removeprefix("system.ai.")
+    return " ".join(part.upper() if part in {"gpt", "glm"} else part.capitalize() for part in slug.split("-"))
+
+
+def _context_window(model_id: str, existing: Mapping[str, Any] | None) -> int | None:
+    """Resolve input context metadata from the registry entry or LiteLLM catalogue."""
+    candidates = [
+        existing.get("context_window") if existing else None,
+        existing.get("max_input_tokens") if existing else None,
+    ]
+    slug = model_id.removeprefix("dbx/").removeprefix("databricks/")
+    for candidate in (slug, f"databricks/{slug}"):
+        model_info = model_cost.get(candidate)
+        if isinstance(model_info, Mapping):
+            candidates.append(model_info.get("max_input_tokens"))
+    return next((value for value in candidates if isinstance(value, int) and value > 0), None)
+
+
 def _model_entry(
     model_id: str,
     existing: Mapping[str, Any] | None,
@@ -181,22 +206,25 @@ def _model_entry(
     owned_by: str,
     endpoint: ServingEndpointSummary | None = None,
 ) -> dict[str, Any]:
-    """Build an OpenAI model entry with portable reasoning capability metadata."""
+    """Build a concise OpenAI model entry without reasoning metadata."""
     entry = {
         **(dict(existing) if existing is not None else {}),
         "id": model_id,
         "object": "model",
         "owned_by": owned_by,
     }
-    efforts = endpoint.reasoning_efforts if endpoint is not None else reasoning_efforts_by_family(model_id)
-    if efforts:
-        levels = [effort.value for effort in efforts]
-        entry["supports_reasoning"] = True
-        entry["reasoning_efforts"] = levels
-        entry["supported_reasoning_levels"] = levels
-        entry["default_reasoning_effort"] = "medium" if "medium" in levels else levels[0]
-    else:
-        entry["supports_reasoning"] = False
+    entry["name"] = _portable_display_name(model_id, endpoint)
+    context_window = _context_window(model_id, existing)
+    if context_window is not None:
+        entry["context_window"] = context_window
+        entry["max_input_tokens"] = context_window
+    for key in (
+        "supports_reasoning",
+        "reasoning_efforts",
+        "supported_reasoning_levels",
+        "default_reasoning_effort",
+    ):
+        entry.pop(key, None)
     return entry
 
 
@@ -274,12 +302,10 @@ def _basic_family(model: str) -> str | None:
 def _codex_model(slug: str, item: Mapping[str, Any], *, priority: int) -> dict[str, Any]:
     efforts = [effort.value for effort in reasoning_efforts_by_family(slug)]
     default_effort = "medium" if "medium" in efforts else efforts[0] if efforts else None
-    context_window = item.get("max_input_tokens")
-    if not isinstance(context_window, int) or context_window <= 0:
-        context_window = None
+    context_window = _context_window(slug, item)
     return {
         "slug": slug,
-        "display_name": slug,
+        "display_name": str(item.get("name") or _portable_display_name(slug, None)),
         "description": "Databricks Model Serving endpoint",
         "default_reasoning_level": default_effort,
         "supported_reasoning_levels": [

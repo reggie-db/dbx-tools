@@ -97,7 +97,7 @@ async def test_auto_effort_records_requested_and_selected_levels(cache: Reasonin
     assert state.selected == "medium"
 
 
-async def test_explicit_effort_records_only_requested_level(cache: ReasoningCache) -> None:
+async def test_explicit_effort_maps_without_auto_metrics(cache: ReasoningCache) -> None:
     reasoner = StubAutoReasoning(cache, [])
     data = {
         "model": "databricks/databricks-gpt-5-2",
@@ -106,15 +106,15 @@ async def test_explicit_effort_records_only_requested_level(cache: ReasoningCach
         "litellm_call_id": "explicit-log-call",
     }
 
-    await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+    routed = await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
 
-    state = reasoning_log_state({"litellm_call_id": "explicit-log-call"})
-    assert state is not None
-    assert state.requested == "high"
-    assert state.selected is None
+    assert routed is not data
+    assert routed["reasoning_effort"] == "high"
+    assert reasoner.samples == []
+    assert reasoning_log_state({"litellm_call_id": "explicit-log-call"}) is None
 
 
-async def test_default_effort_is_recorded(cache: ReasoningCache) -> None:
+async def test_default_effort_is_not_invoked_or_measured(cache: ReasoningCache) -> None:
     reasoner = StubAutoReasoning(cache, [])
     data = {
         "model": "databricks/databricks-gpt-5-2",
@@ -122,12 +122,11 @@ async def test_default_effort_is_recorded(cache: ReasoningCache) -> None:
         "litellm_call_id": "default-log-call",
     }
 
-    await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
+    routed = await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
 
-    state = reasoning_log_state({"litellm_call_id": "default-log-call"})
-    assert state is not None
-    assert state.requested == "default"
-    assert state.selected is None
+    assert routed is data
+    assert reasoner.samples == []
+    assert reasoning_log_state({"litellm_call_id": "default-log-call"}) is None
 
 
 async def test_responses_auto_effort_uses_responses_shape(cache: ReasoningCache) -> None:
@@ -173,10 +172,7 @@ async def test_chat_numeric_selector_uses_shared_score_mapping(
 
     assert routed["reasoning_effort"] == "medium"
     assert reasoner.samples == []
-    state = reasoning_log_state({"litellm_call_id": "numeric-chat-call"})
-    assert state is not None
-    assert state.requested == "0.5"
-    assert state.selected == "medium"
+    assert reasoning_log_state({"litellm_call_id": "numeric-chat-call"}) is None
 
 
 async def test_responses_numeric_selector_preserves_reasoning_fields(cache: ReasoningCache) -> None:
@@ -258,6 +254,31 @@ def test_litellm_maps_claude_effort_to_thinking_budget() -> None:
     assert mapped["thinking"] == {"type": "enabled", "budget_tokens": 1024}
 
 
+def test_patch_prevents_thinking_keyerror_for_non_claude_models() -> None:
+    """reasoning_effort on a non-Claude model must not raise KeyError: 'thinking'.
+
+    LiteLLM only converts reasoning_effort -> thinking for Claude, but reports
+    thinking "enabled" for any reasoning_effort, so the follow-up token-budget
+    lookup crashes for gpt-oss / gpt-5.x when no max_tokens is sent (the Open
+    WebUI request shape). apply_litellm_patches() makes the missing-thinking
+    case a no-op.
+    """
+    from dbx_tools.litellm import apply_litellm_patches
+
+    apply_litellm_patches()  # idempotent
+
+    mapped = DatabricksConfig().map_openai_params(
+        {"reasoning_effort": "high"},
+        {},
+        "databricks-gpt-oss-120b",
+        True,
+    )
+
+    # reasoning_effort is forwarded, no thinking block is invented, no crash.
+    assert "thinking" not in mapped
+    assert mapped.get("reasoning_effort") == "high"
+
+
 async def test_no_auto_tag_is_no_op(cache: ReasoningCache) -> None:
     reasoner = StubAutoReasoning(cache, [0.8])
     data = {
@@ -287,18 +308,21 @@ async def test_system_messages_are_not_sampled(cache: ReasoningCache) -> None:
     assert reasoner.samples == ["USER: Say hello"]
 
 
-async def test_explicit_effort_is_no_op(cache: ReasoningCache) -> None:
+async def test_explicit_named_effort_maps_without_auto_metrics(cache: ReasoningCache) -> None:
     reasoner = StubAutoReasoning(cache, [0.8])
     data = {
-        "model": "databricks/databricks-gpt-5-2",
+        "model": "databricks/databricks-claude-sonnet-4-5",
         "messages": [{"role": "user", "content": "Solve this"}],
-        "reasoning_effort": "low",
+        "reasoning_effort": "extra-high",
+        "litellm_call_id": "named-effort-call",
     }
 
     routed = await reasoner.async_pre_call_hook(data=data, call_type="acompletion")
 
-    assert routed is data
-    assert routed["reasoning_effort"] == "low"
+    assert routed is not data
+    assert routed["reasoning_effort"] == "xhigh"
+    assert reasoner.samples == []
+    assert reasoning_log_state({"litellm_call_id": "named-effort-call"}) is None
 
 
 async def test_explicit_thinking_wins_over_auto(cache: ReasoningCache) -> None:

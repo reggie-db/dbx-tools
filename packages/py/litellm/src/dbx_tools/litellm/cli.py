@@ -57,6 +57,8 @@ def _run_proxy(arguments: Sequence[str]) -> None:
     from litellm.proxy.proxy_cli import run_server
 
     from .models_api import install_models_compatibility_middleware
+    from .patches import apply_litellm_patches
 
+    apply_litellm_patches()
     install_models_compatibility_middleware()
     run_server.main(args=list(arguments), prog_name="dbx-litellm")
