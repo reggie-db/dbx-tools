@@ -75,6 +75,7 @@ function addOptions(command: Command): Command {
     .option("--auth-storage <mode>", "auth database: auto, lakebase, or sqlite")
     .option("--auth-sqlite-path <path>", "local Better Auth SQLite file")
     .option("--forward-headers <patterns...>", "extra x- headers tunnel traffic may forward")
+    .option("--gate-path <prefix...>", "path prefixes to gate beyond /api/ (e.g. /ws)")
     .option("--bind <host...>", "interface IPs the gate listens on (default: 0.0.0.0)")
     .option("--insecure", "run open, with no gate");
 }
@@ -152,6 +153,8 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
     appPort,
     gate,
     forwardHeaders: resolved.gate.forwardHeaders,
+    gatePaths: resolved.gate.gatePaths,
+    brandName: resolved.gate.brandName,
     bindHosts: resolved.bindHosts,
   });
 

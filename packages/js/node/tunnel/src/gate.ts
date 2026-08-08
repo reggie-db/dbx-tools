@@ -53,6 +53,14 @@ export interface GateOptions {
    * built-in allow-list). Every other `x-` header is stripped from tunnel traffic.
    */
   forwardHeaders?: readonly string[];
+  /**
+   * Path prefixes that require a valid session, beyond the built-in `/api/`.
+   * The default gating model assumes a self-protecting SPA: static loads freely
+   * so the app can render, and only `/api/*` is gated. An app whose privileged
+   * surface is NOT under `/api/` (e.g. a WebSocket at `/ws`) lists those prefixes
+   * here so they are gated too. Login routes (`AUTH_PREFIX`) are always open.
+   */
+  gatePaths?: readonly string[];
 }
 
 /**
@@ -209,13 +217,27 @@ export async function gateRequest(
   const removed = policy.apply(req.headers as Record<string, unknown>);
   if (removed.length) logger.debug("stripped inbound headers", { removed });
 
-  // Static (non-API) loads freely so the SPA can render; drop the gate cookie.
-  if (!path.startsWith("/api/")) {
+  const gatePaths = options.gatePaths ?? [];
+  // A path is gated if it is under `/api/` or any caller-supplied prefix (e.g.
+  // `/ws` for a WebSocket app).
+  const gated =
+    path.startsWith("/api/") ||
+    gatePaths.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+
+  // App-gating mode: when `gatePaths` is set the caller is fronting a whole app
+  // (not a self-protecting SPA), so an unauthenticated top-level browser
+  // navigation is denied too — the transport answers it with the hosted login
+  // page, putting sign-in in front of the app instead of loading its shell with
+  // a dead gated request. Non-navigation static (assets) still loads freely so
+  // the login page and app can render.
+  const appGating = gatePaths.length > 0;
+  const mustAuth = gated || (appGating && wantsLoginPage(req));
+  if (!mustAuth) {
     stripSessionCookie(req);
     return "pass";
   }
 
-  // Every other /api/* needs a valid Better Auth session.
+  // A gated request needs a valid Better Auth session.
   const email = await gate.session(webHeaders(req));
   if (!email) return "deny";
   injectIdentity(req, email);
@@ -228,6 +250,26 @@ export const UNAUTHORIZED_BODY = {
   error: "authentication required",
   loginPath: AUTH_PREFIX,
 } as const;
+
+/**
+ * Whether a denied request is a top-level BROWSER NAVIGATION that should be
+ * answered with the hosted login page rather than a 401.
+ *
+ * An app fronted by the gate (via `gatePaths`) may serve its own HTML from an
+ * ungated path while its privileged surface (`/ws`, `/api`) is gated. A browser
+ * navigating to it would otherwise load the app shell and only see the gated
+ * request fail, with no way to sign in. Serving the login page on the navigation
+ * itself puts sign-in in front of the app. Applies only to GET requests that
+ * accept HTML and are not asking for the login API or an asset.
+ */
+export function wantsLoginPage(req: IncomingMessage): boolean {
+  const method = (req.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") return false;
+  const path = (req.url ?? "/").split("?")[0] ?? "/";
+  if (path.startsWith(AUTH_PREFIX)) return false;
+  const accept = String(req.headers.accept ?? "");
+  return accept.includes("text/html");
+}
 
 /**
  * Register the login routes and the gating middleware on the app's Express
@@ -243,9 +285,9 @@ export function mountGate(
   _addRoute: (method: "get" | "post", path: string, handler: RequestHandler) => void,
   addMiddleware: (path: string, handler: RequestHandler) => void,
 ): void {
-  const { gate, publicDomain, forwardHeaders } = opts;
+  const { gate, publicDomain, forwardHeaders, gatePaths } = opts;
   const headerPolicy = toHeaderPolicy(forwardHeaders);
-  logger.debug("gate mounted", { publicDomain, forward: headerPolicy.patterns });
+  logger.debug("gate mounted", { publicDomain, forward: headerPolicy.patterns, gatePaths });
 
   // Better Auth and the compatibility routes share one fetch-compatible
   // handler in both hosting modes.
@@ -266,7 +308,7 @@ export function mountGate(
   // --- The gate middleware (runs before static + the app's /api handlers) ---
 
   const gateMiddleware = (async (req, res, next) => {
-    const action = await gateRequest(req, { gate, publicDomain, headerPolicy });
+    const action = await gateRequest(req, { gate, publicDomain, headerPolicy, gatePaths });
     if (action === "deny") res.status(401).json(UNAUTHORIZED_BODY);
     else next();
   }) as RequestHandler;

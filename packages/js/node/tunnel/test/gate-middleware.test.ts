@@ -172,6 +172,66 @@ describe("gate middleware", () => {
     assert.equal(nexted, true);
   });
 
+  it("gates a `gatePaths` prefix (e.g. /ws) without a session", async () => {
+    const { middleware } = mount({ gatePaths: ["/ws"] });
+    let nexted = false;
+    const res = makeRes();
+    await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
+      makeReq(PUBLIC_DOMAIN, "/ws"),
+      res,
+      () => {
+        nexted = true;
+      },
+    );
+    assert.equal(nexted, false);
+    assert.equal(res.statusCode, 401);
+  });
+
+  it("lets a `gatePaths` prefix through with a valid session", async () => {
+    const { middleware } = mount({ gatePaths: ["/ws"] });
+    let nexted = false;
+    await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
+      makeReq(PUBLIC_DOMAIN, "/ws", `${SESSION_COOKIE_NAME}=tok`),
+      makeRes(),
+      () => {
+        nexted = true;
+      },
+    );
+    assert.equal(nexted, true);
+  });
+
+  it("in app-gating mode, denies an unauthenticated browser navigation (for the login page)", async () => {
+    const { middleware } = mount({ gatePaths: ["/ws"] });
+    let nexted = false;
+    const res = makeRes();
+    const req = makeReq(PUBLIC_DOMAIN, "/");
+    req.headers.accept = "text/html";
+    await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
+      req,
+      res,
+      () => {
+        nexted = true;
+      },
+    );
+    assert.equal(nexted, false);
+    assert.equal(res.statusCode, 401);
+  });
+
+  it("without gatePaths, static still passes (self-protecting SPA model)", async () => {
+    const { middleware } = mount();
+    let nexted = false;
+    const req = makeReq(PUBLIC_DOMAIN, "/");
+    req.headers.accept = "text/html";
+    await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
+      req,
+      makeRes(),
+      () => {
+        nexted = true;
+      },
+    );
+    assert.equal(nexted, true);
+  });
+
   it("registers one Better Auth middleware for every auth route", () => {
     const { routes, authMiddleware } = mount();
     assert.equal(routes.size, 0);

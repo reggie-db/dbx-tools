@@ -172,6 +172,13 @@ export interface AuthGateConfig extends BasePluginConfig, AuthStorageConfig {
    */
   forwardHeaders?: string | string[];
   /**
+   * Path prefixes to gate beyond the built-in `/api/` (literal prefixes, comma-
+   * or space-separated as a string). For an app whose privileged surface is not
+   * under `/api/` — e.g. a WebSocket at `/ws` — list those prefixes so they
+   * require a session too. Env `TUNNEL_GATE_PATHS`.
+   */
+  gatePaths?: string | string[];
+  /**
    * Run OPEN with no gate (env `TUNNEL_INSECURE=true`). The login routes and gate
    * middleware are not mounted, and the SMTP fail-fast is skipped. Use only when
    * the tunnel is deliberately public.
@@ -210,6 +217,8 @@ export interface ResolvedAuthGateConfig {
   publicDomain?: string;
   /** Extra `x-` headers tunnel traffic may forward (unioned with the defaults). */
   forwardHeaders: string[];
+  /** Path prefixes to gate beyond `/api/` (e.g. `/ws`). */
+  gatePaths: string[];
   /** Run OPEN with no gate. */
   insecure: boolean;
   storage: AuthStorageMode;
@@ -275,6 +284,10 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     forwardHeaders: [
       ...string.parseList(config.forwardHeaders),
       ...string.parseList(coreConfig.text("FORWARD_HEADERS", TUNNEL_CONFIG)),
+    ],
+    gatePaths: [
+      ...string.parseList(config.gatePaths),
+      ...string.parseList(coreConfig.text("GATE_PATHS", TUNNEL_CONFIG)),
     ],
     insecure: coreConfig.boolean(config.insecure, "INSECURE", TUNNEL_CONFIG) ?? false,
     storage: storage.mode,
@@ -423,6 +436,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       gate: this.exports(),
       publicDomain: this.resolved.publicDomain,
       forwardHeaders: this.resolved.forwardHeaders,
+      gatePaths: this.resolved.gatePaths,
     });
   }
 

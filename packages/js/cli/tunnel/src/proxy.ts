@@ -20,7 +20,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
 import { log } from "@dbx-tools/shared-core";
-import { gate as tunnelGate, headers as tunnelHeaders, type AuthGateApi } from "@dbx-tools/tunnel";
+import {
+  gate as tunnelGate,
+  headers as tunnelHeaders,
+  loginPage as tunnelLoginPage,
+  type AuthGateApi,
+} from "@dbx-tools/tunnel";
 import ProxyModule from "http-proxy-3";
 
 const logger = log.logger("tunnel:proxy");
@@ -36,6 +41,10 @@ export interface ProxyOptions {
   gate?: AuthGateApi;
   /** Extra `x-` headers tunnel traffic may forward. */
   forwardHeaders?: readonly string[];
+  /** Path prefixes to gate beyond `/api/` (e.g. `/ws` for a WebSocket app). */
+  gatePaths?: readonly string[];
+  /** Brand name for the hosted login page shown on a denied browser navigation. */
+  brandName?: string;
   /**
    * Addresses to listen on. Defaults to a single `0.0.0.0` (every interface),
    * the portr/platform case. Pass specific interface IPs to expose the gate on
@@ -105,6 +114,7 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
           gate,
           publicDomain: (request.headers.host ?? "").split(":")[0] || "localhost",
           headerPolicy,
+          gatePaths: options.gatePaths,
         })
       : Promise.resolve<tunnelGate.GateAction>("pass");
 
@@ -113,7 +123,17 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
       const path = (request.url ?? "/").split("?")[0] ?? "/";
       if (gate && (await handleAuthRoute(request, response, path, gate))) return;
       if ((await decide(request)) === "deny") {
-        sendJson(response, 401, tunnelGate.UNAUTHORIZED_BODY);
+        // A denied browser navigation gets the hosted login page; anything else
+        // (an XHR, a /ws upgrade probe, a non-HTML fetch) gets the 401 JSON.
+        if (gate && tunnelGate.wantsLoginPage(request)) {
+          const html = tunnelLoginPage.loginPageHtml({
+            brandName: options.brandName ?? "this app",
+          });
+          response.writeHead(401, { "content-type": "text/html; charset=utf-8" });
+          response.end(html);
+        } else {
+          sendJson(response, 401, tunnelGate.UNAUTHORIZED_BODY);
+        }
         return;
       }
       proxy.web(request, response);

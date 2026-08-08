@@ -33,6 +33,7 @@ export interface TunnelOptions {
   authStorage?: AuthStorageMode;
   authSqlitePath?: string;
   forwardHeaders?: string[];
+  gatePath?: string[];
   bind?: string[];
   insecure?: boolean;
 }
@@ -75,6 +76,7 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
     storage: options.authStorage,
     sqlitePath: options.authSqlitePath,
     forwardHeaders: options.forwardHeaders,
+    gatePaths: options.gatePath,
     insecure: options.insecure,
     publicDomain: options.publicDomain,
   };
