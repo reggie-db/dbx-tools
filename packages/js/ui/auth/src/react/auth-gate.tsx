@@ -1,4 +1,3 @@
-import type { AuthStatus } from "@dbx-tools/shared-auth";
 import { net } from "@dbx-tools/shared-core";
 import { Button, Input } from "@dbx-tools/ui-appkit/react";
 import { BrandIcon, useBrand } from "@dbx-tools/ui-branding/react";
@@ -6,7 +5,7 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from
 
 import {
   addPasskey,
-  AUTH_BASE,
+  getAuthStatus,
   requestEmailOtp,
   signInPasskey,
   verifyEmailOtp,
@@ -32,11 +31,7 @@ export function AuthGate({ children, title, description }: AuthGateProps): React
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(`${AUTH_BASE}/status`, { credentials: "same-origin" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Authentication status failed (${response.status})`);
-        return (await response.json()) as AuthStatus;
-      })
+    void getAuthStatus()
       .then((status) => {
         if (cancelled) return;
         setPasskeysEnabled(status.passkeysEnabled === true);

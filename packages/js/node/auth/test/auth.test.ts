@@ -55,6 +55,7 @@ describe("Better Auth runtime", () => {
       }),
       baseURL: "http://localhost",
       basePath: "/api/email/auth",
+      logoutRedirectPath: "/login",
       appName: "Test app",
       secret: "test-secret-at-least-thirty-two-characters",
       sessionTtlSeconds: 3600,
@@ -89,6 +90,15 @@ describe("Better Auth runtime", () => {
 
     const passkeys = await runtime.handler(authRequest("/passkey/list-user-passkeys", { cookie }));
     assert.equal(passkeys.status, 200);
+
+    const logout = await runtime.handler(authRequest("/logout", { cookie }, "POST"));
+    assert.deepEqual(await logout.json(), { ok: true, redirectTo: "/login" });
+    const loggedOutStatus = await runtime.handler(authRequest("/status", { cookie }));
+    assert.deepEqual(await loggedOutStatus.json(), {
+      authenticated: false,
+      enabled: true,
+      passkeysEnabled: true,
+    });
     await runtime.close();
   });
 
@@ -146,8 +156,9 @@ describe("Better Auth runtime", () => {
   });
 });
 
-function authRequest(path: string, headers: Record<string, string> = {}): Request {
+function authRequest(path: string, headers: Record<string, string> = {}, method = "GET"): Request {
   return new Request(`http://localhost/api/email/auth${path}`, {
+    method,
     headers: { origin: "http://localhost", ...headers },
   });
 }

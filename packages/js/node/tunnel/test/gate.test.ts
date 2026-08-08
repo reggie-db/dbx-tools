@@ -51,6 +51,22 @@ describe("gate config and email copy", () => {
     assert.equal(resolved.subject, "Your verification code");
     assert.equal(resolved.message, "Your verification code is:");
     assert.equal(resolved.sessionTtlSeconds, KEY_TTL_SECONDS);
+    assert.equal(resolved.logoutRedirectPath, "/");
+  });
+
+  it("accepts only same-origin logout redirect paths", () => {
+    assert.equal(
+      resolveAuthGateConfig({ logoutRedirectPath: "/signed-out" }).logoutRedirectPath,
+      "/signed-out",
+    );
+    assert.equal(
+      resolveAuthGateConfig({ logoutRedirectPath: "https://example.com" }).logoutRedirectPath,
+      "/",
+    );
+    assert.equal(
+      resolveAuthGateConfig({ logoutRedirectPath: "//example.com" }).logoutRedirectPath,
+      "/",
+    );
   });
 
   it("keeps code copy recognizable and expiry accurate", () => {

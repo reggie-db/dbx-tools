@@ -141,18 +141,19 @@ The interceptor reads portr wiring from the environment; the gate (the `authGate
 plugin) reads its own settings the same way, so a deployment configures both
 without touching code.
 
-| Env                          | Default                      |
-| ---------------------------- | ---------------------------- |
-| `TUNNEL_AUTH_ALLOW`          | empty (allow nobody)         |
-| `TUNNEL_AUTH_SUBJECT`        | `Your verification code`     |
-| `TUNNEL_AUTH_BRAND_NAME`     | the brand context `name`     |
-| `TUNNEL_AUTH_MESSAGE`        | `Your verification code is:` |
-| `TUNNEL_AUTH_SESSION_TTL`    | `2592000` (30 days)          |
-| `TUNNEL_AUTH_CODE_TTL`       | `600` (10 minutes)           |
-| `TUNNEL_AUTH_SESSION_CUTOFF` | unset (no cutoff)            |
-| `TUNNEL_PUBLIC_DOMAIN`       | - (no tunnel when unset)     |
-| `TUNNEL_FORWARD_HEADERS`     | the built-in `x-` allow-list |
-| `TUNNEL_AUTH_JWT_SECRET`     | an ephemeral per-process key |
+| Env                           | Default                      |
+| ----------------------------- | ---------------------------- |
+| `TUNNEL_AUTH_ALLOW`           | empty (allow nobody)         |
+| `TUNNEL_AUTH_SUBJECT`         | `Your verification code`     |
+| `TUNNEL_AUTH_BRAND_NAME`      | the brand context `name`     |
+| `TUNNEL_AUTH_MESSAGE`         | `Your verification code is:` |
+| `TUNNEL_AUTH_SESSION_TTL`     | `2592000` (30 days)          |
+| `TUNNEL_AUTH_CODE_TTL`        | `600` (10 minutes)           |
+| `TUNNEL_AUTH_SESSION_CUTOFF`  | unset (no cutoff)            |
+| `TUNNEL_AUTH_LOGOUT_REDIRECT` | `/` (show login again)       |
+| `TUNNEL_PUBLIC_DOMAIN`        | - (no tunnel when unset)     |
+| `TUNNEL_FORWARD_HEADERS`      | the built-in `x-` allow-list |
+| `TUNNEL_AUTH_JWT_SECRET`      | an ephemeral per-process key |
 
 Every variable is `TUNNEL_`-prefixed because the tunnel shares one environment
 with the app it fronts, so a generic name is one the app may already be using.
@@ -347,6 +348,12 @@ login screen, and it answers per REQUEST, not per deployment: on a non-tunnel
 the cookie, because that request was never going to be gated. So the same running
 app shows the OTP screen to a portr visitor and no login at all to a browser on
 `localhost` or the platform front door.
+
+`POST /api/email/auth/logout` clears the current session and returns
+`{ ok, redirectTo }`. `GET` on the same path clears the session and answers with
+a `303` redirect. `logoutRedirectPath` or
+`TUNNEL_AUTH_LOGOUT_REDIRECT` controls the same-origin destination; `/` is the
+default because reloading the application root presents the login gate again.
 
 ## Verify The Live Portr Install
 

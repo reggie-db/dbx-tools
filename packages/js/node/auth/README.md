@@ -8,6 +8,7 @@ Key features:
 - Better Auth ownership of users, sessions, OTP lifecycle, rate limits, and
   passkey credentials;
 - session-required passkey enrollment and discoverable passkey login;
+- POST and browser-redirect logout routes with a same-origin destination;
 - caller-provided `authorizeIdentity`, email sender, secret, origin, and
   database;
 - native AppKit Lakebase pool or local SQLite storage;
@@ -30,6 +31,7 @@ const runtime = await auth.createPasswordlessAuth({
   baseURL: "http://localhost:8000",
   appName: "My app",
   secret: process.env.AUTH_SECRET!,
+  logoutRedirectPath: "/",
   sessionTtlSeconds: 2_592_000,
   codeTtlSeconds: 600,
   maxAttempts: 5,
@@ -37,6 +39,10 @@ const runtime = await auth.createPasswordlessAuth({
   sendCode: async (email, code) => sendEmail(email, code),
 });
 ```
+
+`POST <basePath>/logout` returns `{ ok, redirectTo }`; `GET` clears the same
+session and redirects with status `303`. The redirect defaults to `/` and is
+restricted to a same-origin path.
 
 ## Modules
 

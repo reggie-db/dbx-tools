@@ -182,7 +182,9 @@ def _portable_display_name(model_id: str, endpoint: ServingEndpointSummary | Non
         return endpoint.display_name
     slug = model_id.removeprefix("dbx/").removeprefix("databricks/")
     slug = slug.removeprefix("databricks-").removeprefix("system.ai.")
-    return " ".join(part.upper() if part in {"gpt", "glm"} else part.capitalize() for part in slug.split("-"))
+    return " ".join(
+        part.upper() if part in {"gpt", "glm"} else part.capitalize() for part in slug.split("-")
+    )
 
 
 def _context_window(model_id: str, existing: Mapping[str, Any] | None) -> int | None:

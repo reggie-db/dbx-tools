@@ -40,6 +40,8 @@ export interface PasswordlessAuthOptions {
   appName: string;
   secret: string;
   sessionCookieName?: string;
+  /** Same-origin path returned after logout. Defaults to `/`. */
+  logoutRedirectPath?: string;
   sessionTtlSeconds: number;
   sessionCutoffMs?: number;
   codeTtlSeconds: number;
@@ -65,6 +67,7 @@ export async function createPasswordlessAuth(
   const origin = new URL(config.baseURL).origin;
   const rpID = new URL(origin).hostname;
   const basePath = config.basePath ?? "/api/auth";
+  const logoutRedirectPath = normalizeLogoutRedirectPath(config.logoutRedirectPath);
   const emailOptions: AuthEmailOptions = {
     subject: config.subject ?? "Your verification code",
     brandName: config.appName,
@@ -213,7 +216,14 @@ export async function createPasswordlessAuth(
         headers: request.headers,
         asResponse: true,
       });
-      return compatibilityResponse(response, { ok: response.ok });
+      return compatibilityResponse(response, { ok: response.ok, redirectTo: logoutRedirectPath });
+    }
+    if (path === `${basePath}/logout` && request.method === "GET") {
+      const response = await auth.api.signOut({
+        headers: request.headers,
+        asResponse: true,
+      });
+      return redirectResponse(response, logoutRedirectPath);
     }
     return undefined;
   };
@@ -234,6 +244,12 @@ export async function createPasswordlessAuth(
     },
     close: () => config.storage.close(),
   };
+}
+
+/** Restrict logout redirects to one same-origin application path. */
+export function normalizeLogoutRedirectPath(value: string | undefined): string {
+  const path = value?.trim();
+  return path?.startsWith("/") && !path.startsWith("//") && !path.includes("\\") ? path : "/";
 }
 
 function normalizeEmail(email: string | undefined): string {
@@ -263,4 +279,10 @@ function compatibilityResponse(response: Response, body: unknown): Response {
   const headers = new Headers({ "content-type": "application/json" });
   for (const cookie of response.headers.getSetCookie()) headers.append("set-cookie", cookie);
   return new Response(JSON.stringify(body), { status: 200, headers });
+}
+
+function redirectResponse(response: Response, location: string): Response {
+  const headers = new Headers({ location });
+  for (const cookie of response.headers.getSetCookie()) headers.append("set-cookie", cookie);
+  return new Response(null, { status: 303, headers });
 }

@@ -142,6 +142,12 @@ export interface AuthGateConfig extends BasePluginConfig, AuthStorageConfig {
    */
   sessionCutoff?: string | number | Date;
   /**
+   * Same-origin path returned after a successful logout. Env
+   * `TUNNEL_AUTH_LOGOUT_REDIRECT`. Defaults to `/`, where the AuthGate presents
+   * login again.
+   */
+  logoutRedirectPath?: string;
+  /**
    * Deliver a code to an address. Defaults to sending through the host app's
    * shared `@dbx-tools/email` transport (see `./send-code`); override to wire a
    * different delivery path.
@@ -198,6 +204,8 @@ export interface ResolvedAuthGateConfig {
   maxAttempts: number;
   /** Force-clear cutoff in epoch ms; `0` when unset. */
   sessionCutoffMs: number;
+  /** Same-origin path returned after logout. */
+  logoutRedirectPath: string;
   /** Public domain that identifies portr traffic by `Host`; `undefined` = inert. */
   publicDomain?: string;
   /** Extra `x-` headers tunnel traffic may forward (unioned with the defaults). */
@@ -221,6 +229,7 @@ const DEFAULTS = {
   sessionTtlSeconds: KEY_TTL_SECONDS,
   codeTtlSeconds: 600,
   maxAttempts: 5,
+  logoutRedirectPath: "/",
 };
 
 /** Merge {@link AuthGateConfig} over env over defaults into a resolved config. */
@@ -258,6 +267,10 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     ),
     maxAttempts: config.maxAttempts ?? DEFAULTS.maxAttempts,
     sessionCutoffMs: resolveSessionCutoff(config.sessionCutoff),
+    logoutRedirectPath: passwordlessAuth.normalizeLogoutRedirectPath(
+      coreConfig.string(config.logoutRedirectPath, "AUTH_LOGOUT_REDIRECT", TUNNEL_CONFIG) ??
+        DEFAULTS.logoutRedirectPath,
+    ),
     publicDomain: coreConfig.string(config.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG),
     forwardHeaders: [
       ...string.parseList(config.forwardHeaders),
@@ -355,6 +368,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
         secret: Buffer.from(key).toString("base64url"),
         sessionTtlSeconds: this.resolved.sessionTtlSeconds,
         sessionCutoffMs: this.resolved.sessionCutoffMs,
+        logoutRedirectPath: this.resolved.logoutRedirectPath,
         codeTtlSeconds: this.resolved.codeTtlSeconds,
         maxAttempts: this.resolved.maxAttempts,
         authorizeIdentity: (email) => this.authorizeIdentity(email),
@@ -380,6 +394,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       publicDomain: this.resolved.publicDomain ?? null,
       insecure: this.resolved.insecure,
       storage: this.resolved.storage,
+      logoutRedirectPath: this.resolved.logoutRedirectPath,
       sessionCutoff:
         this.resolved.sessionCutoffMs > 0
           ? new Date(this.resolved.sessionCutoffMs).toISOString()

@@ -4,5 +4,5 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-auth";
 export * as auth from "./src/auth.ts";
-export { SESSION_COOKIE_NAME, authRequestSchema, authRequestResultSchema, authVerifySchema, authVerifyResultSchema, authStatusSchema } from "./src/auth.ts";
-export type { AuthRequest, AuthRequestResult, AuthVerify, AuthVerifyResult, AuthStatus } from "./src/auth.ts";
+export { SESSION_COOKIE_NAME, authRequestSchema, authRequestResultSchema, authVerifySchema, authVerifyResultSchema, authLogoutResultSchema, authStatusSchema } from "./src/auth.ts";
+export type { AuthRequest, AuthRequestResult, AuthVerify, AuthVerifyResult, AuthLogoutResult, AuthStatus } from "./src/auth.ts";

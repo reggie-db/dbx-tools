@@ -6,6 +6,7 @@ gate.
 Key features:
 
 - compatibility schemas for email OTP request and verification routes;
+- logout result and redirect contract;
 - gate status with optional passkey capability;
 - one shared session-cookie name for Node transports and browser clients.
 

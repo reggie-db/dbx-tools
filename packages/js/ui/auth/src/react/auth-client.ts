@@ -1,4 +1,5 @@
 import { passkeyClient } from "@better-auth/passkey/client";
+import { authLogoutResultSchema, authStatusSchema, type AuthStatus } from "@dbx-tools/shared-auth";
 import { createAuthClient } from "better-auth/client";
 import { emailOTPClient } from "better-auth/client/plugins";
 
@@ -17,6 +18,23 @@ export interface PasskeySummary {
   name?: string | null;
   createdAt?: Date | string | null;
   deviceType?: string | null;
+}
+
+export async function getAuthStatus(): Promise<AuthStatus> {
+  const response = await fetch(`${AUTH_BASE}/status`, { credentials: "include" });
+  if (!response.ok) throw new Error(`Auth status failed with ${response.status}`);
+  return authStatusSchema.parse(await response.json());
+}
+
+export async function logout(): Promise<boolean> {
+  const response = await fetch(`${AUTH_BASE}/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  const parsed = authLogoutResultSchema.safeParse(await response.json());
+  if (!response.ok || !parsed.success || !parsed.data.ok) return false;
+  if (typeof window !== "undefined") window.location.assign(parsed.data.redirectTo);
+  return true;
 }
 
 export async function requestEmailOtp(email: string): Promise<boolean> {

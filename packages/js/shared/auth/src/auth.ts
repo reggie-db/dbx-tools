@@ -35,6 +35,12 @@ export const authVerifyResultSchema = z.object({
 });
 export type AuthVerifyResult = z.infer<typeof authVerifyResultSchema>;
 
+export const authLogoutResultSchema = z.object({
+  ok: z.boolean(),
+  redirectTo: z.string(),
+});
+export type AuthLogoutResult = z.infer<typeof authLogoutResultSchema>;
+
 export const authStatusSchema = z.object({
   authenticated: z.boolean(),
   email: z.string().optional(),

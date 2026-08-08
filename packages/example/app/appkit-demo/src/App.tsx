@@ -1,7 +1,8 @@
 import { brand } from "@dbx-tools/shared-core";
 import { Button, Separator } from "@dbx-tools/ui-appkit/react";
+import { getAuthStatus, logout as logoutAuth } from "@dbx-tools/ui-auth/react";
 import { BrandIcon, BrandProvider, useBrand } from "@dbx-tools/ui-branding/react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 const Brand = lazy(() => import("@/pages/Brand"));
@@ -58,6 +59,33 @@ const BASE_ROUTES: RouteDef[] = [
 const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
   const { pathname } = useLocation();
   const { context } = useBrand();
+  const [logoutEnabled, setLogoutEnabled] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAuthStatus()
+      .then((status) => {
+        if (!cancelled) setLogoutEnabled(status.enabled && status.authenticated);
+      })
+      .catch(() => {
+        if (!cancelled) setLogoutEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const logout = useCallback(async () => {
+    if (!logoutEnabled || loggingOut) return;
+    setLoggingOut(true);
+    try {
+      if (!(await logoutAuth())) setLoggingOut(false);
+    } catch {
+      setLoggingOut(false);
+    }
+  }, [loggingOut, logoutEnabled]);
+
   return (
     <nav className="mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto px-4 py-2 md:px-6">
       <Link to="/brand" className="mr-1 flex shrink-0 items-center gap-2 text-sm font-semibold">
@@ -78,6 +106,17 @@ const Nav = ({ routes }: { routes: readonly RouteDef[] }) => {
           </Button>
         ))}
       </div>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="ml-auto shrink-0"
+        disabled={!logoutEnabled || loggingOut}
+        title={logoutEnabled ? "End the tunnel session" : "Available through tunnel login"}
+        onClick={logout}
+      >
+        Log out
+      </Button>
     </nav>
   );
 };

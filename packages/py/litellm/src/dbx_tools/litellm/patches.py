@@ -63,4 +63,6 @@ def _patch_thinking_tokens_keyerror() -> None:
     BaseConfig.update_optional_params_with_thinking_tokens = (  # type: ignore[method-assign]
         safe_update_optional_params_with_thinking_tokens
     )
-    logger.debug("Patched BaseConfig.update_optional_params_with_thinking_tokens (thinking KeyError)")
+    logger.debug(
+        "Patched BaseConfig.update_optional_params_with_thinking_tokens (thinking KeyError)"
+    )

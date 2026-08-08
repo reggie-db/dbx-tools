@@ -8,6 +8,7 @@ Key features:
 - automatic conditional passkey mediation on supported browsers;
 - first-login passkey enrollment prompt;
 - authenticated passkey list, rename, add, and remove controls;
+- status and logout helpers for tunnel-aware application controls;
 - HttpOnly Better Auth sessions with no browser token storage;
 - AppKit and dbx-tools branding primitives.
 
@@ -27,6 +28,11 @@ root.render(
 );
 ```
 
+`getAuthStatus()` reports whether the current request is behind the tunnel gate.
+`logout()` clears the session and navigates to the server-configured login
+destination.
+
 ## Public subpaths
 
-- `@dbx-tools/ui-auth/react` - `AuthGate` and `PasskeyManager`.
+- `@dbx-tools/ui-auth/react` - `AuthGate`, `PasskeyManager`, `getAuthStatus`,
+  and `logout`.
