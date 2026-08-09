@@ -200,9 +200,19 @@ function docsPathForPackage(pkg) {
   return `/packages/${pkg.slug}`;
 }
 
+function plainTitle(value) {
+  return value
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/[*_~]/g, "")
+    .replace(/\\([\\`*_{}\[\]()#+.!-])/g, "$1")
+    .trim();
+}
+
 function pageTitle(markdown, fallback) {
   const match = markdown.match(/^#\s+(.+?)\s*$/m);
-  return match?.[1]?.trim() || fallback;
+  return plainTitle(match?.[1] ?? fallback) || fallback;
 }
 
 function stripLeadingH1(markdown) {
@@ -214,6 +224,9 @@ function yamlString(value) {
 }
 
 function frontmatter({ title, description, sourcePath }) {
+  if (title !== plainTitle(title)) {
+    throw new Error(`Docs title must be plain text: ${title} (${sourcePath})`);
+  }
   return `${[
     "---",
     `title: ${yamlString(title)}`,
@@ -588,6 +601,14 @@ function main() {
   write(path.join(sourceRoot, "astro.config.mjs"), astroConfig());
   write(path.join(sourceRoot, "src", "content.config.ts"), contentConfig());
   syncBrandAssets();
+
+  const titleCheck = path.join(root, "docs", "scripts", "check-generated-titles.mjs");
+  const result = Bun.spawnSync([process.execPath, titleCheck], {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if (result.exitCode !== 0) process.exit(result.exitCode);
   write(path.join(publicRoot, "llms.txt"), llms(packages, guides));
   write(path.join(publicRoot, "llms-full.txt"), llmsFull(packages, guides, mappings));
   // Disable Jekyll on GitHub Pages so Astro's `_astro/` asset dir (underscore

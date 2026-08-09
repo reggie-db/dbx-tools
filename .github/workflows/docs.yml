@@ -35,6 +35,8 @@ jobs:
         run: bun install
       - name: Generate docs from READMEs
         run: bun docs/scripts/sync-readmes.mjs
+      - name: Check generated titles
+        run: bun docs/scripts/check-generated-titles.mjs
       - name: Install docs dependencies
         run: bun install --cwd .docs-build/site
       - name: Generate TypeScript API docs
