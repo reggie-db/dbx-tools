@@ -1,16 +1,17 @@
 #!/usr/bin/env -S bun
 /**
  * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run]`
- * - set a release version on every workspace member and publish each non-private
- * one with `bun publish`.
+ * - ensure every workspace member and the Bun lock carry the release version,
+ * then publish each non-private one with `bun publish`.
  *
  * Bun has no `pnpm -r publish`, so this loop is the recursive-publish stand-in.
  * It leans on native bun for everything bun already does:
  *
- *   - **version stamping** is `bun pm pkg set version=<version>` per member (bun's
- *     native package.json editor - idempotent, edits only that dir's manifest, no
- *     git side effects; `bun pm version` is for bumping and errors on an unchanged
- *     version, so `pkg set` is the right tool for an exact release value);
+ *   - **version stamping**, when needed, is `bun pm pkg set version=<version>`
+ *     per member (bun's native package.json editor - idempotent, edits only that
+ *     dir's manifest, no git side effects; `bun pm version` is for bumping and
+ *     errors on an unchanged version, so `pkg set` is the right tool for an exact
+ *     release value);
  *   - **`workspace:` / `catalog:` rewriting** is NOT done here - `bun publish`
  *     strips both protocols in the PACKED tarball, resolving `workspace:*` to the
  *     sibling's version and `catalog:` to the root catalog entry. (Verified: a
@@ -18,7 +19,9 @@
  *     while the on-disk manifest keeps the protocols.) Setting each member's
  *     version first is the only prerequisite, so a sibling resolves the release
  *     version; the disk manifest already carries the workspace `VERSION`, and
- *     this makes doubly sure it matches the value being published;
+ *     this makes doubly sure it matches the value being published. When every
+ *     manifest and Bun's workspace lock already carry the version, both this
+ *     stamp and the lockfile refresh are skipped;
  *   - **`publishConfig` substitution** (compiled `lib/` entry points) is done
  *     HERE, by {@link applyPublishConfig}, NOT by bun: unlike pnpm/npm, `bun
  *     publish`/`bun pm pack` do NOT fold `publishConfig`'s `main`/`types`/`bin`/
@@ -28,10 +31,13 @@
  *     its `#!/usr/bin/env node` shebang, node chokes on the `.ts`
  *     (ERR_UNKNOWN_FILE_EXTENSION). We merge `publishConfig` onto the top-level
  *     manifest before packing so the tarball advertises the compiled `lib/` tree;
- *   - the **`prepack` (compile) run** that emits that `lib/` tree is `bun
- *     publish`'s own pack behavior.
+ *   - **compiled output** is emitted once, before publishing, by one root-level
+ *     filtered `bun run` that fans out to every publishable member in parallel.
+ *     The later `bun publish --ignore-scripts` calls therefore pack the already
+ *     compiled `lib/` trees instead of serially repeating each member's
+ *     `prepack`. Packages retain their `prepack` task for standalone publishes.
  *
- * `--dry-run` forwards to `bun publish`: it packs + validates (running prepack)
+ * `--dry-run` forwards to `bun publish`: it packs + validates
  * but uploads nothing, so the `release` workflow is testable end-to-end via a
  * `workflow_dispatch` run without anything reaching npm. `--registry` targets a
  * non-default registry (a local verdaccio); `--exclude <dir>` (repeatable,
@@ -55,6 +61,7 @@ import { chmodSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { dirname, join, resolve } from "node:path";
 import { exec } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
+import ts from "typescript";
 import { parse } from "yaml";
 
 const logger = log.logger("dbx-tools:publish");
@@ -95,6 +102,42 @@ function workspaceMembers(root: string): string[] {
   return (doc?.packages ?? []).map((m) => resolve(root, m));
 }
 
+/** Whether every workspace member already carries the requested release version. */
+function manifestsMatchVersion(members: readonly string[], version: string): boolean {
+  return members.every((dir) => {
+    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+      version?: string;
+    };
+    return pkg.version === version;
+  });
+}
+
+/** Whether Bun's workspace lock records the requested version for every member. */
+function lockfileMatchesVersion(
+  root: string,
+  members: readonly string[],
+  version: string,
+): boolean {
+  const lockfile = join(root, "bun.lock");
+  if (!existsSync(lockfile)) return false;
+  try {
+    const parsed = ts.parseConfigFileTextToJson(lockfile, readFileSync(lockfile, "utf8"));
+    if (parsed.error) return false;
+    const lock = parsed.config as {
+      workspaces?: Record<string, { version?: string }>;
+    };
+    return members.every((dir) => {
+      const relative = dir
+        .slice(resolve(root).length + 1)
+        .split("\\")
+        .join("/");
+      return lock.workspaces?.[relative]?.version === version;
+    });
+  } catch {
+    return false;
+  }
+}
+
 /** Spawn `command` in `cwd` with `PATH` overridden, failing the task on non-zero. */
 function run(cwd: string, command: string, args: string[], path: string): void {
   exec.spawnSync(command, args, {
@@ -105,6 +148,37 @@ function run(cwd: string, command: string, args: string[], path: string): void {
     check: true,
     env: { ...process.env, PATH: path },
   });
+}
+
+/** Asynchronous counterpart used for bounded parallel stamping and publishing. */
+async function runAsync(cwd: string, command: string, args: string[], path: string): Promise<void> {
+  await exec.spawn(command, args, {
+    cwd,
+    stdout: "inherit",
+    stderr: "inherit",
+    stdin: "ignore",
+    check: true,
+    env: { ...process.env, PATH: path },
+  });
+}
+
+/** Run independent jobs with a small fixed worker pool. */
+async function runConcurrent<T>(
+  values: readonly T[],
+  concurrency: number,
+  worker: (value: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const results = await Promise.allSettled(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (next < values.length) {
+        const value = values[next++];
+        await worker(value);
+      }
+    }),
+  );
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
 }
 
 /**
@@ -173,12 +247,9 @@ function applyPublishConfig(pkgPath: string): void {
 }
 
 /**
- * PATH with the workspace-root `node_modules/.bin` prepended. `bun publish` runs
- * each package's `prepack` (compile) through projen's dax shell, which resolves
- * `tsc` off PATH - but under the hoisted linker `tsc` lives ONLY in the root
- * `.bin`, not a per-package one, so without this the compile fails with
- * `dax: tsc: command not found`. (In CI `bun install` already puts it there; this
- * makes the task self-sufficient when invoked directly too.)
+ * PATH with the workspace-root `node_modules/.bin` prepended. The root-level
+ * compile reaches each package's projen/dax task, which resolves `tsc` off PATH;
+ * under the hoisted linker `tsc` lives only in the root `.bin`.
  */
 function enrichedPath(root: string): string {
   const binDir = join(root, "node_modules", ".bin");
@@ -196,6 +267,12 @@ if (!version) {
 const registryIdx = rest.indexOf("--registry");
 const registry = registryIdx >= 0 ? rest[registryIdx + 1] : undefined;
 const dryRun = rest.includes("--dry-run");
+const concurrencyIdx = rest.indexOf("--concurrency");
+const parsedConcurrency = Number(concurrencyIdx >= 0 ? rest[concurrencyIdx + 1] : 4);
+if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
+  throw new Error(`--concurrency must be a positive integer, got ${String(parsedConcurrency)}`);
+}
+const concurrency = parsedConcurrency;
 // `--stamp-only`: set versions + refresh the lockfile, then STOP (no publish).
 // The standalone `projen-release` uses this to version-stamp the workspace so its
 // own `bun publish` (run separately, in `projen/`) resolves `workspace:*` siblings
@@ -218,26 +295,31 @@ const members = workspaceMembers(root)
   .filter((dir) => existsSync(join(dir, "package.json")))
   .filter((dir) => !excluded.has(resolve(root, dir).replace(`${resolve(root)}/`, "")));
 
-// Set the version on EVERY member first (native `bun pm pkg set`), so a sibling
-// published later has its `workspace:*` dep resolved to the release version by
-// `bun publish`'s own protocol rewriting. The disk manifests already carry the
-// workspace `VERSION`; this re-affirms it against the value being published.
-logger.info(`setting ${version} across ${members.length} members`);
-for (const dir of members) {
-  unlockManifest(join(dir, "package.json"));
-  run(dir, "bun", ["pm", "pkg", "set", `version=${version}`], path);
+// Ensure every member carries the release version before packing. A normal bump
+// already synthesized it everywhere; dry runs and standalone invocations may not
+// have, so retain the native `bun pm pkg set` fallback for those paths.
+if (manifestsMatchVersion(members, version)) {
+  logger.info(`all ${members.length} member manifests already carry ${version}`);
+} else {
+  logger.info(`setting ${version} across ${members.length} members`);
+  await runConcurrent(members, concurrency, async (dir) => {
+    unlockManifest(join(dir, "package.json"));
+    await runAsync(dir, "bun", ["pm", "pkg", "set", `version=${version}`], path);
+  });
 }
 
-// Refresh the lockfile so `bun publish` resolves each `workspace:*` to the version
-// just set. `bun publish`/`pm pack` reads the workspace version from the LOCKFILE,
-// not the live manifest, and a plain `bun install` (even `--force`) does NOT
-// re-resolve it after only a version-field change - deleting the lockfile first
-// does. Without this a `workspace:*` dep could publish against a stale resolved
-// version instead of the one just set.
+// Ensure the lockfile resolves each `workspace:*` to the release version.
+// `bun publish`/`pm pack` reads workspace versions from the LOCKFILE, not just
+// live manifests. A normal bump's synth/install already makes it current; after
+// fallback stamping, deleting it before install is what forces re-resolution.
 const lockfile = join(root, "bun.lock");
-if (existsSync(lockfile)) rmSync(lockfile);
-logger.info("refreshing lockfile so workspace deps resolve to the release version");
-run(root, "bun", ["install"], path);
+if (lockfileMatchesVersion(root, members, version)) {
+  logger.info(`workspace lock already resolves members at ${version}`);
+} else {
+  if (existsSync(lockfile)) rmSync(lockfile);
+  logger.info("refreshing lockfile so workspace deps resolve to the release version");
+  run(root, "bun", ["install"], path);
+}
 
 if (stampOnly) {
   logger.success(`stamped ${members.length} members @ ${version} (no publish)`);
@@ -247,14 +329,16 @@ if (stampOnly) {
 const publishArgs = [
   "--access",
   "public",
+  "--ignore-scripts",
   ...(registry ? ["--registry", registry] : []),
   ...(dryRun ? ["--dry-run"] : []),
 ];
-let published = 0;
+const publishable: Array<{ dir: string; name: string; compile: boolean }> = [];
 for (const dir of members) {
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
     name?: string;
     private?: boolean;
+    scripts?: Record<string, string>;
   };
   if (pkg.private) {
     logger.info(`skip private ${pkg.name ?? dirname(dir)}`);
@@ -265,8 +349,26 @@ for (const dir of members) {
   const manifestPath = join(dir, "package.json");
   unlockManifest(manifestPath);
   applyPublishConfig(manifestPath);
-  logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${pkg.name} @ ${version}`);
-  run(dir, "bun", ["publish", ...publishArgs], path);
-  published += 1;
+  publishable.push({
+    dir,
+    name: pkg.name ?? dirname(dir),
+    compile: Boolean(pkg.scripts && typeof pkg.scripts === "object" && "prepack" in pkg.scripts),
+  });
 }
-logger.success(`${dryRun ? "dry-run: packed" : "published"} ${published} packages @ ${version}`);
+
+const compiled = publishable.filter((pkg) => pkg.compile);
+if (compiled.length > 0) {
+  logger.info(`compiling ${compiled.length} publishable packages from the workspace root`);
+  run(root, "bun", ["run", ...compiled.flatMap((pkg) => ["--filter", pkg.name]), "compile"], path);
+}
+
+logger.info(
+  `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
+);
+await runConcurrent(publishable, concurrency, async ({ dir, name }) => {
+  logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${version}`);
+  await runAsync(dir, "bun", ["publish", ...publishArgs], path);
+});
+logger.success(
+  `${dryRun ? "dry-run: packed" : "published"} ${publishable.length} packages @ ${version}`,
+);

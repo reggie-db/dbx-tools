@@ -1,8 +1,8 @@
 # `dbx-tools-litellm`
 
 Thin LiteLLM integration for Databricks Model Serving. It adds live endpoint
-discovery and loose model-name resolution, then delegates the unchanged request
-to LiteLLM's built-in Databricks provider.
+discovery, loose model-name resolution, and a small set of documented serving
+compatibility guards, then delegates to LiteLLM's built-in Databricks provider.
 
 Install from PyPI:
 
@@ -69,6 +69,119 @@ The resolved profile is written to `DATABRICKS_CONFIG_PROFILE`, so endpoint
 discovery and LiteLLM's delegated Databricks request use the same workspace
 credentials.
 
+## How a request flows
+
+The package has two paths because LiteLLM's `CustomLLM` interface handles Chat
+Completions and embeddings, but does not expose a native Responses hook:
+
+1. **Select one workspace.** `dbx-litellm` resolves `--profile`, then
+   `DATABRICKS_CONFIG_PROFILE`, then the Databricks CLI's configured default. It
+   writes the result back to `DATABRICKS_CONFIG_PROFILE` before LiteLLM starts.
+2. **Discover and resolve the model.** The first model-dependent request lazily
+   calls the selected workspace's Serving Endpoints API. An exact endpoint name,
+   a family alias such as `dbx/databricks-claude`, or a loose name such as
+   `claude sonnet` is ranked against that live catalogue. A request containing
+   function tools can match only an endpoint classified as tool-capable.
+3. **Choose the serving surface.** Chat-compatible endpoints stay on Chat
+   Completions. Responses-only endpoints, including newer GPT endpoints that
+   reject tool calls on Chat Completions, are rewritten to
+   `databricks/responses/<endpoint>`. The Responses request body itself is not
+   converted or reconstructed by this package.
+4. **Apply opt-in reasoning.** An explicit numeric or named effort is normalized
+   to a level supported by the resolved endpoint. Only the literal value `auto`
+   invokes the classifier. An omitted effort is a pass-through and lets the
+   model use its own default.
+5. **Apply compatibility guards.** The payload hook downsizes oversized inline
+   images. Delegated Chat requests repair unsupported trailing assistant turns,
+   add the required JSON-mode prompt nudge when needed, and mark Claude prompt
+   cache breakpoints. Function tools are never rewritten.
+6. **Inject cached credentials.** The package supplies an explicit bearer token
+   and serving base URL from its process-wide credential cache. This keeps
+   LiteLLM from constructing a new `WorkspaceClient` and authenticating again
+   for every request.
+7. **Delegate to LiteLLM.** LiteLLM owns HTTP transport, OpenAI parameter
+   mapping, streaming, retries, embeddings, and Chat↔Responses conversion. The
+   response streams back in LiteLLM's normal OpenAI-compatible shape.
+
+In short, the package decides **which live Databricks endpoint and API surface**
+to use, performs a few documented serving compatibility fixes, and then gets
+out of LiteLLM's way.
+
+## Profiles and authentication
+
+Profile selection happens once, at proxy startup, in this order:
+
+1. `dbx-litellm --profile <name>`;
+2. `DATABRICKS_CONFIG_PROFILE`;
+3. the one profile marked as the Databricks CLI default.
+
+Startup fails rather than guessing when none of those produces exactly one
+profile. The same selected profile creates one process-wide `WorkspaceClient`
+used for both endpoint discovery and authentication, so model names cannot be
+pulled from one workspace while requests are sent to another.
+
+The package does not introduce another authentication scheme. The Databricks
+SDK resolves the selected profile's configured authentication, including OAuth
+machine-to-machine credentials, and `authenticate()` supplies its bearer token.
+That token and the workspace's `/serving-endpoints` base URL are passed directly
+to LiteLLM's built-in Databricks provider. SDK background token refresh is
+disabled because this package's guarded credential cache is the sole refresh
+owner.
+
+For an unambiguous launch, especially with multiple profiles, pass the profile
+explicitly:
+
+```bash
+uv run dbx-litellm --profile my-workspace --port 4000
+```
+
+## Model discovery and names
+
+Models are pulled from the selected workspace's live Serving Endpoints API, not
+from a static list in this package:
+
+- discovery is lazy on the first request that needs model resolution;
+- the successful endpoint catalogue is retained in memory for the process;
+- exact endpoint names and fuzzy family names are ranked by `dbx-tools-model`;
+- a miss forces one fresh endpoint listing and retries resolution once;
+- tool-bearing requests filter out endpoints not classified as tool-capable;
+- resolving a model also registers its native streaming capability with
+  LiteLLM, preventing unknown Databricks models from being buffered as fake
+  streams.
+
+`GET /v1/models` is intentionally a live refresh point. It requests a fresh
+endpoint listing, publishes each endpoint as `dbx/<endpoint>`, and adds one
+resolvable alias for each recognized deployed family, such as
+`dbx/databricks-gpt` or `dbx/databricks-claude`. Exact endpoint ids remain in the
+response; aliases supplement rather than replace them. If that refresh fails,
+the route falls back first to the last successful in-process catalogue and then
+to LiteLLM registry metadata. It never invents a workspace endpoint from the
+registry when live discovery succeeded.
+
+The packaged proxy advertises the `dbx/*` namespace so callers can distinguish
+this discovery-and-routing layer from LiteLLM's native `databricks/*` provider.
+Unqualified names remain accepted for fuzzy resolution, but are not advertised.
+A custom config can expose both namespaces.
+
+## What is cached
+
+There is no single "LiteLLM cache" in this integration. Four independent caches
+serve different purposes:
+
+| Cache                        | Storage and scope                                                                                 | Filled when                                                   | Refresh or expiry                                                                                                      | Purpose                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Endpoint catalogue           | Memory, one proxy process                                                                         | First resolution or `/v1/models`                              | Forced once after a resolution miss; `/v1/models` always refreshes                                                     | Avoid listing Serving Endpoints on every request                                                           |
+| Databricks bearer token      | Memory, one proxy process/profile                                                                 | First delegated request needing credentials                   | OAuth expiry minus 10 minutes; 30-minute fallback when no expiry is exposed; check-lock-check makes one caller refresh | Avoid a new SDK client and token mint per request                                                          |
+| Reasoning context and scores | `diskcache`, default `~/.cache/dbx-tools/litellm`, shared by local processes using that directory | Only for `reasoning_effort: auto` or `reasoning.effort: auto` | TTL, default 86,400 seconds; bounded to 64 MiB, eight turns, and 6,000 sampled characters                              | Reuse follow-up context and avoid classifying the same sample again                                        |
+| Provider prompt cache        | Databricks/model-provider managed                                                                 | Repeated prompt prefixes                                      | Provider-defined lifetime and eviction                                                                                 | Reduce billed/counted repeated input tokens; GPT is automatic, Claude uses explicit breakpoints added here |
+
+The endpoint and credential caches are not written to disk. Restarting the
+proxy clears both. The reasoning cache is the only package-owned persistent
+cache and can be moved or assigned a shorter TTL with the environment variables
+under [Automatic reasoning effort](#automatic-reasoning-effort). Prompt-cache
+contents remain provider-side; this package only supplies Claude's cache
+markers and reports the usage fields returned by the provider.
+
 ## Relationship to LiteLLM
 
 LiteLLM remains the proxy and provider implementation. It owns the
@@ -89,6 +202,8 @@ LiteLLM 1.83 loads custom handlers from a Python file beside the config. For an
 existing LiteLLM config, add `config_provider.py` next to the YAML:
 
 ```python
+from dbx_tools.litellm.access_log import dbx_access_logger
+from dbx_tools.litellm.payload_guard import dbx_payload_guard
 from dbx_tools.litellm.provider import dbx_provider
 from dbx_tools.litellm.reasoning import dbx_auto_reasoning
 from dbx_tools.litellm.routing import dbx_responses_router
@@ -104,11 +219,14 @@ model_list:
       allowed_openai_params:
         - reasoning_effort
         - thinking
+        - parallel_tool_calls
 
 litellm_settings:
   callbacks:
+    - config_provider.dbx_payload_guard
     - config_provider.dbx_auto_reasoning
     - config_provider.dbx_responses_router
+    - config_provider.dbx_access_logger
   custom_provider_map:
     - provider: dbx
       custom_handler: config_provider.dbx_provider
@@ -151,25 +269,32 @@ On Responses, use the native reasoning shape:
 ```
 
 The callback resolves `databricks-meta-llama-3-1-8b-instruct` against the live
-catalogue as its fallback classifier preference, asks the discovered endpoint
+catalogue as its default classifier preference, asks the discovered endpoint
 for a score from `0.01` through `1.00`, then maps that score through the target
-Databricks endpoint's inferred reasoning levels. Scores below `0.34` use `low`,
-scores below `0.67` use `medium`, and higher scores use `high`. An exact `1.00` uses the
-GPT-5.6 ultra tier, whose LiteLLM wire value is `xhigh`; models without that
-level remain at `high`. Integer classifier output is treated as a percentage
-(`73` becomes `0.73`), except `1`, which remains the maximum score.
+Databricks endpoint's inferred reasoning levels. The default mapping is
+`minimal` at or below `0.05` when available, `low` below `0.34`, `medium` below
+`0.67`, `xhigh` at or above `0.85` when available, and otherwise `high`. An
+exact `1.00` selects `max` when the endpoint exposes it. Chat Completions for
+GPT-5.6 excludes `max`; the native Responses path can use the endpoint's full
+set. Integer classifier output is treated as a percentage (`73` becomes
+`0.73`), except `1`, which remains the maximum score.
 
-Explicit `low`, `medium`, `high`, `xhigh`, or `thinking` values are never
-overridden. Unsupported targets have `auto` removed and use their normal
-provider default.
+Explicit named or numeric selectors do not invoke the classifier, but they are
+normalized through the resolved endpoint's supported levels. A native
+`thinking` object takes precedence and is passed through after removing the
+competing effort selector. An omitted or `default` selector is a true
+pass-through. Unsupported targets have `auto` removed and use their provider
+default.
 
 The classifier sees at most eight recent non-system turns and 6,000 characters.
 Full Chat transcripts are sampled directly. Short follow-ups can recover prior
 turns from `metadata.thread_id`, `metadata.conversation_id`, or
-`metadata.session_id`; Responses chains are linked through
-`previous_response_id`. Context and classification scores use `diskcache` with
-a TTL, so retries and follow-ups avoid repeated classifier calls without
-retaining an unbounded transcript.
+`metadata.session_id`; successful Responses calls index that bounded context by
+response id so a later `previous_response_id` can recover it. Scores are keyed
+by a SHA-256 hash of the complete bounded sample. Context and scores use
+`diskcache` with the same TTL, so retries and identical follow-ups avoid repeated
+classifier calls without retaining an unbounded transcript. A classifier
+timeout, malformed score, or empty sample falls back to `0.50`.
 
 Configuration:
 
@@ -286,31 +411,20 @@ limit arrives before the first response chunk. A failure after content has
 already streamed is returned immediately because restarting would duplicate
 partial output in the client.
 
-## Runtime behavior
+## Responses routing
 
-Endpoint discovery is lazy. The first request lists serving endpoints, later
-requests reuse that catalogue, and an unresolved name triggers one refresh
-before the unresolved endpoint id is delegated to Databricks. `/v1/models`
-refreshes the profile's live serving endpoints and uses that discovery as the
-exact model list, including endpoints such as `databricks-gpt-5-6-sol`.
-LiteLLM's bundled registry supplies metadata for matching live models and is
-used as a fallback only when live discovery fails. The response then appends one
-basic alias for each recognized deployed family. Exact models and aliases are
-advertised as `dbx/databricks-gpt-5-6-sol`, `dbx/databricks-gpt`, and similar
-ids. The aliases flow through the same fuzzy resolver and do not replace exact
-models. A custom config that declares `databricks/*` opts into native model ids
-alongside the dbx ids.
+LiteLLM's `CustomLLM` interface has no native Responses hook. The pre-call
+router therefore resolves the model before LiteLLM selects a provider. For a
+Responses-only endpoint it changes only the model identifier to the native
+Databricks Responses route and injects the cached `api_key` and `api_base`;
+LiteLLM's Databricks Responses implementation receives the original body.
+Chat-compatible families use LiteLLM's normal Responses-to-Chat fallback.
 
-The proxy owns one process-wide SDK client and bearer cache. A fresh cache read
-returns without locking; a stale read acquires an `RLock`, checks again, and
-performs one synchronous SDK authentication load. SDK background refresh is
-disabled so parallel requests cannot start a second refresh path.
-
-LiteLLM's `CustomLLM` interface has no native Responses hook. For a
-Responses-only endpoint, the packaged proxy's pre-call hook changes only the
-model identifier to `databricks/<resolved-endpoint>`; LiteLLM's native
-Databricks Responses implementation receives the original body. Other model
-families use LiteLLM's own Responses-to-Chat fallback.
+The same policy also protects Chat Completions callers: GPT family versions
+known to reject function tools on Chat Completions are delegated through
+LiteLLM's `databricks/responses/...` bridge. This keeps clients on one
+OpenAI-compatible proxy URL while selecting the Databricks surface that the
+resolved endpoint actually supports.
 
 ## Modules
 

@@ -99,8 +99,9 @@ describe("workspace validation tasks", () => {
 
   // projen wires `package` into `build`, and under a non-pnpm manager it renders
   // `npm pack`. Publishing here is `bun publish` driving each package's own
-  // `prepack`, so those tarballs were written into gitignored `dist/js` on every
-  // CI `projen build` and never read - including one for the PRIVATE root.
+  // the workspace publish driver, so those tarballs were written into gitignored
+  // `dist/js` on every CI `projen build` and never read - including one for the
+  // PRIVATE root.
   it("emits no pack step on the root or a member", () => {
     for (const manifest of [tasks.root, tasks.child]) {
       const steps = Object.values(manifest.tasks).flatMap((task) => task.steps ?? []);

@@ -262,12 +262,17 @@ a new package is covered without a re-synth. Work from the root:
 
 `bump` also mirrors a release into local registries when the active clients are
 pointed at loopback services. npm uses `npm config get registry` and publishes
-to a local Verdaccio automatically. Python prefers uv's default index and only
+to a local Verdaccio automatically. Publishable JavaScript members compile once
+from the root in parallel, then upload through a bounded pool without rerunning
+their `prepack` tasks. When synth already made the manifests and Bun workspace
+lock release-current, publishing also skips redundant version stamping and the
+lockfile reinstall. Python prefers uv's default index and only
 treats a loopback `.../+simple/` URL as writable devpi; a read-only cache such as
 proxpi (`.../index/`) is deliberately ignored. The task stamps every Python
 member and its sibling dependencies to the release version, builds the workspace
 with uv, then runs `devpi upload --from-dir` against the derived writable index.
-Devpi client authentication remains in its normal `~/.devpi` state.
+The npm and Python mirrors run concurrently because they touch disjoint package
+trees. Devpi client authentication remains in its normal `~/.devpi` state.
 
 Use `--local-registry false` or `--local-pypi false` to disable either local
 publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
@@ -282,8 +287,9 @@ Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:
 
 - `compile` / `test` - what the root's `--filter '*'` delegation calls.
-- `prepack` - what `bun publish` runs per package while packing a tarball
-  (27 of 33 members; a package with nothing to pack has none).
+- `prepack` - standalone-publish safety that compiles one package before packing
+  (27 of 33 members; the workspace release driver compiles them from the root
+  and publishes with lifecycle scripts disabled).
 - `watch` - a single-package `tsc --build -w`, for narrowing a long
   edit/compile loop to one package.
 - `build` / `install` / `install:ci` / `default` / `pre-compile` /

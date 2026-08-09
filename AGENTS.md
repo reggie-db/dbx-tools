@@ -1482,19 +1482,29 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   NOT rewrite `workspace:`/`catalog:` deps - `bun publish` STRIPS both protocols
   in the packed tarball (`workspace:*` -> the sibling's version, `catalog:` -> the
   root catalog range; verified against a packed manifest). It also does NOT pack
-  by hand - `bun publish` runs `prepack` (compile) and substitutes `publishConfig`
-  itself. THE ONE non-obvious step: after stamping versions, delete `bun.lock` and
-  `bun install` before publishing. `bun publish` resolves each `workspace:*` from
+  by hand. The workspace publish driver compiles every publishable member once
+  from the root with Bun's filtered workspace runner, then uses a bounded pool of
+  `bun publish --ignore-scripts` calls so uploads overlap without repeating each
+  package's `prepack`. Keep `prepack` on each package anyway: a standalone
+  `bun publish` still needs to build itself. The driver first checks whether the
+  manifests and Bun workspace lock already carry the release version. A normal
+  bump's synth/install makes both current, so it skips no-op version stamping and
+  another install. When either is stale (notably a workflow-dispatch dry version),
+  it stamps the manifests, deletes `bun.lock`, and runs `bun install` before
+  publishing. `bun publish` resolves each `workspace:*` from
   the LOCKFILE, not the live manifest, and a plain `bun install` (even `--force`)
   does not re-resolve after only a version-field change - so without the lockfile
   refresh a sibling dep can publish against a stale resolved version. The disk
   manifests carry the shared `VERSION` (synth copies it), so the stamp confirms
   rather than introduces the release version.
+  During a local root bump, the npm/Verdaccio and Python/devpi publishers run in
+  parallel because they mutate disjoint JS and Python package trees; each still
+  completes its own build before uploading.
 - **Release workflows are testable without touching npm.** Both `release` and
   `projen-release` also trigger on `workflow_dispatch` with a `dry_run` boolean
   input (default true). A manual run has no tag, so it uses a throwaway
-  `0.0.0-dry.<run>` version and FORCES `bun publish --dry-run` (pack + validate +
-  `prepack`, upload skipped). Run it from the Actions tab to exercise the whole
+  `0.0.0-dry.<run>` version and FORCES `bun publish --dry-run` (compile + pack +
+  validate, upload skipped). Run it from the Actions tab to exercise the whole
   pipeline - setup-bun, install, stamp, compile, pack - with nothing reaching npm.
 - **`bootstrap.ts` pins the engine version explicitly.** `bootstrap.ts` asks for
   `@dbx-tools/projen@^<this CLI's own version>` (see `defaultProjenSpecifier`)

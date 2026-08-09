@@ -43,6 +43,19 @@ describe("npm release workflow auth", () => {
   }
 });
 
+describe("npm release workflow performance", () => {
+  it("delegates workspace compilation and concurrent publishing to the shared driver", () => {
+    const workflow = readFileSync(join(outdir, ".github", "workflows", "release.yml"), "utf8");
+    assert.match(workflow, /tasks\/publish\.ts "\$VERSION"/);
+
+    const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
+    assert.match(driver, /"--ignore-scripts"/);
+    assert.match(driver, /compiled\.flatMap\(\(pkg\) => \["--filter", pkg\.name\]\)/);
+    assert.match(driver, /runConcurrent\(publishable, concurrency/);
+    assert.match(driver, /lockfileMatchesVersion/);
+  });
+});
+
 describe("generated engine task paths", () => {
   it("uses the stable package symlink rather than pnpm's physical store path", () => {
     const tasks = JSON.parse(readFileSync(join(outdir, ".projen", "tasks.json"), "utf8")) as {

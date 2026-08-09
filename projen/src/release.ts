@@ -18,12 +18,13 @@ const BUN_VERSION = "1.3.14";
  *
  * Bun has no `pnpm -r publish` equivalent, so this drives the engine's
  * `tasks/publish.ts` (shipped in the engine tarball, run via bun): it reads the
- * workspace members from the root `package.json`, stamps the tag version onto
- * every manifest (rewriting `@dbx-tools/*` `workspace:*` sibling deps to
- * `^<version>` so the tarballs resolve each other), then `bun publish`es each
- * non-`private` package. `bun publish` substitutes `publishConfig` (the compiled
- * `lib/` entry points) at pack time, runs `prepack` (compile) so `lib/` exists,
- * and honors `NPM_CONFIG_PROVENANCE`.
+ * workspace members from the root `package.json`, ensures manifests and the Bun
+ * lock carry the tag version so `workspace:*` siblings resolve to it, then
+ * `bun publish`es each non-`private` package. The driver compiles publishable members once from the
+ * root, then runs a bounded pool of `bun publish --ignore-scripts` calls so the
+ * already-built packages upload concurrently. It also folds `publishConfig`'s
+ * compiled `lib/` entry points into each packed manifest and honors
+ * `NPM_CONFIG_PROVENANCE`.
  *
  * Two ways in: a pushed `<prefix>*` tag (the real release - `GITHUB_REF_NAME` is
  * the version) and a manual `workflow_dispatch` (no tag, so a throwaway

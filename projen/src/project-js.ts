@@ -383,9 +383,10 @@ function defaultProjectOptions(
     // No `npm pack` step on any project. projen wires `package` into `build`, so
     // `bunx projen build` would tarball all 36 manifests (root included) into
     // gitignored `dist/js` on every CI run and never read them: publishing here
-    // is `bun publish` driving each package's own `prepack` (see
-    // {@link applyCompiledPublish} and the `publish` task), and `release: false`
-    // means no projen Publisher exists to consume the artifacts either.
+    // is the workspace publish task compiling packages once from the root before
+    // `bun publish --ignore-scripts` packs them (see {@link applyCompiledPublish}),
+    // and `release: false` means no projen Publisher exists to consume the
+    // artifacts either.
     package: false,
     jest: false,
     github: false,

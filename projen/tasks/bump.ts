@@ -179,7 +179,7 @@ program
   )
   .option("--python-root <path>", "Python workspace package root", "packages/py")
   .action(
-    (opts: {
+    async (opts: {
       level: Level;
       prefix: string;
       sibling: Sibling[];
@@ -257,8 +257,17 @@ program
         // plus anything synth regenerated. Skip the commit when nothing changed.
         git(["add", "-A"]);
         const staged = git(["diff", "--cached", "--name-only"], true);
-        if (staged) git(["commit", "-m", `chore(release): ${version}`]);
-        else logger.info("nothing to commit");
+        if (staged) {
+          git([
+            "commit",
+            "-m",
+            `chore(release): ${version}`,
+            "-m",
+            "🌸 Shipped with Kanna — https://kanna.sh",
+            "-m",
+            "Co-Authored-By: Kanna <noreply@kanna.sh>\nKanna-Agent: codex/databricks-gpt-5-6-sol",
+          ]);
+        } else logger.info("nothing to commit");
       }
 
       if (opts.tag) {
@@ -284,32 +293,6 @@ program
       if (opts.version === false && localRegistry) {
         logger.info("skipped local publish (--no-version left package.json unbumped)");
       }
-      if (publishToLocalRegistry) {
-        logger.info(`publishing ${version} to local registry ${localRegistry}`);
-        // Mirror the CI `release` workflow via the shared publish task: it
-        // re-affirms the release version on every workspace member (`bun pm pkg
-        // set`; the manifests already carry the shared `VERSION`, projen-owned, so
-        // it unlocks each briefly), then `bun publish`es each non-private one - and
-        // bun natively strips the `workspace:`/`catalog:` protocols in the packed
-        // tarball, resolving each to that version. `publish.ts` restores every
-        // manifest it touched at exit, so this leaves the worktree matching the
-        // release commit that was just pushed. Provenance is off for a local
-        // registry (no OIDC), so `NPM_CONFIG_PROVENANCE` is unset.
-        // `publish.ts` is this task's SIBLING in the engine's `tasks/` dir; resolve
-        // it off `import.meta.url` (works whether the engine is source-linked in-repo
-        // or installed under node_modules) rather than a repo-relative `tasks/...`
-        // that only exists inside `projen/`.
-        const publishScript = fileURLToPath(new URL("./publish.ts", import.meta.url));
-        exec.spawnSync("bun", [publishScript, version, "--registry", localRegistry], {
-          cwd: process.cwd(),
-          stdout: "inherit",
-          stderr: "inherit",
-          stdin: "ignore",
-          check: true,
-        });
-        logger.success(`published ${version} to ${localRegistry}`);
-      }
-
       // Scan EVERY active index (primary index-url + every extra-index-url,
       // across uv and pip): auto-mode publishes to the first that is a loopback
       // devpi +simple, so the corp proxy stays primary and a local devpi added
@@ -328,31 +311,61 @@ program
       }
       if (opts.version === false && localPypi) {
         logger.info("skipped local Python publish (--no-version left packages unstamped)");
-      } else if (opts.version && localPypi && existsSync(pythonRoot)) {
+      }
+
+      // npm and Python touch disjoint package trees and registries. Start both
+      // mirrors together so local publishing takes the slower duration rather
+      // than the sum of both. Each child still owns its internal build/upload
+      // ordering and restores its temporary manifest edits on exit.
+      const localPublishes: Promise<unknown>[] = [];
+      if (publishToLocalRegistry) {
+        logger.info(`publishing ${version} to local registry ${localRegistry}`);
+        // The shared driver skips stamping/install when synth already made the
+        // workspace release-current, compiles publishable members once from the
+        // root, then publishes through a bounded pool. Temporary publishConfig
+        // edits are restored before this child exits.
+        const publishScript = fileURLToPath(new URL("./publish.ts", import.meta.url));
+        localPublishes.push(
+          exec
+            .spawn("bun", [publishScript, version, "--registry", localRegistry], {
+              cwd: process.cwd(),
+              stdout: "inherit",
+              stderr: "inherit",
+              stdin: "ignore",
+              check: true,
+            })
+            .then(() => logger.success(`published ${version} to ${localRegistry}`)),
+        );
+      }
+      if (opts.version && localPypi && existsSync(pythonRoot)) {
         logger.info(`publishing Python ${version} to local devpi ${localPypi.publishUrl}`);
         const publishPythonScript = fileURLToPath(new URL("./publish-python.ts", import.meta.url));
-        exec.spawnSync(
-          "bun",
-          [
-            publishPythonScript,
-            version,
-            "--root",
-            pythonRoot,
-            "--index-url",
-            localPypi.indexUrl,
-            "--publish-url",
-            localPypi.publishUrl,
-          ],
-          {
-            cwd: process.cwd(),
-            stdout: "inherit",
-            stderr: "inherit",
-            stdin: "ignore",
-            check: true,
-          },
+        localPublishes.push(
+          exec
+            .spawn(
+              "bun",
+              [
+                publishPythonScript,
+                version,
+                "--root",
+                pythonRoot,
+                "--index-url",
+                localPypi.indexUrl,
+                "--publish-url",
+                localPypi.publishUrl,
+              ],
+              {
+                cwd: process.cwd(),
+                stdout: "inherit",
+                stderr: "inherit",
+                stdin: "ignore",
+                check: true,
+              },
+            )
+            .then(() => logger.success(`published Python ${version} to ${localPypi.publishUrl}`)),
         );
-        logger.success(`published Python ${version} to ${localPypi.publishUrl}`);
       }
+      await Promise.all(localPublishes);
     },
   );
 
