@@ -97,21 +97,19 @@ describe("workspace validation tasks", () => {
     );
   });
 
-  // projen wires `package` into `build`, and under a non-pnpm manager it renders
-  // `npm pack`. Publishing here is `bun publish` driving each package's own
-  // the workspace publish driver, so those tarballs were written into gitignored
-  // `dist/js` on every CI `projen build` and never read - including one for the
-  // PRIVATE root.
-  it("emits no pack step on the root or a member", () => {
-    for (const manifest of [tasks.root, tasks.child]) {
-      const steps = Object.values(manifest.tasks).flatMap((task) => task.steps ?? []);
-      const commands = steps.map((step) => step.exec ?? (step.execArgs ?? []).join(" "));
-      assert.equal(
-        commands.some((command) => /\b(npm|pnpm|bun) pack\b/.test(command)),
-        false,
-      );
-      assert.deepEqual(manifest.tasks.package?.steps ?? [], []);
-    }
+  // A root build is validation, not a release artifact fan-out. A child build is
+  // intentionally more flexible: run it directly and projen performs the full
+  // compile/test/pack lifecycle for that one package. Root bump remains separate
+  // and calls filtered compile + `bun publish --ignore-scripts` itself.
+  it("omits root packing but keeps per-package builds complete", () => {
+    assert.deepEqual(tasks.root.tasks.package?.steps ?? [], []);
+
+    const childPackageCommands = (tasks.child.tasks.package?.steps ?? []).map(
+      (step) => step.exec ?? (step.execArgs ?? []).join(" "),
+    );
+    const pack = childPackageCommands.find((command) => /\b(npm|pnpm|bun) pack\b/.test(command));
+    assert.ok(pack);
+    assert.match(pack, /--ignore-scripts/);
   });
 
   it("does not swallow package test failures", () => {

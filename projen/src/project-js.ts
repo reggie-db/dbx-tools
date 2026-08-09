@@ -380,14 +380,13 @@ function defaultProjectOptions(
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
     buildWorkflow: false,
     release: false,
-    // No `npm pack` step on any project. projen wires `package` into `build`, so
-    // `bunx projen build` would tarball all 36 manifests (root included) into
-    // gitignored `dist/js` on every CI run and never read them: publishing here
-    // is the workspace publish task compiling packages once from the root before
-    // `bun publish --ignore-scripts` packs them (see {@link applyCompiledPublish}),
-    // and `release: false` means no projen Publisher exists to consume the
-    // artifacts either.
-    package: false,
+    // The root build validates the whole workspace and must not also pack every
+    // member into unused `dist/js` tarballs. Child projects keep projen's package
+    // task so `bun run build` in ONE package remains a complete compile/test/pack
+    // operation. The root bump does not invoke child builds: its publish driver
+    // compiles once with filtered root tasks and packs via
+    // `bun publish --ignore-scripts` (see {@link applyCompiledPublish}).
+    ...(isRoot ? { package: false } : {}),
     jest: false,
     github: false,
     npmignoreEnabled: false,
@@ -970,6 +969,15 @@ function initProject(
 
   if (project.parent) {
     project.package.file.readonly = true;
+    // `build` already compiles before its `package` phase. Keep the package's
+    // `prepack` for standalone `bun publish`, but suppress lifecycle scripts in
+    // this generated pack step so a direct child build does not compile twice.
+    const packageStep = project.packageTask.steps.find(
+      (step) => step.execArgs?.[0] === "npm" && step.execArgs[1] === "pack",
+    );
+    if (packageStep?.execArgs && !packageStep.execArgs.includes("--ignore-scripts")) {
+      packageStep.execArgs.push("--ignore-scripts");
+    }
     // Stamp `repository` (with this package's `directory` subpath) so a published
     // package passes npm provenance validation.
     applyRepository(project, options.repository);

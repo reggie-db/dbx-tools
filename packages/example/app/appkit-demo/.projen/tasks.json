@@ -62,7 +62,25 @@
     },
     "package": {
       "name": "package",
-      "description": "Creates the distribution package"
+      "description": "Creates the distribution package",
+      "steps": [
+        {
+          "execArgs": [
+            "mkdir",
+            "-p",
+            "dist/js"
+          ]
+        },
+        {
+          "execArgs": [
+            "npm",
+            "pack",
+            "--pack-destination",
+            "dist/js",
+            "--ignore-scripts"
+          ]
+        }
+      ]
     },
     "post-compile": {
       "name": "post-compile",

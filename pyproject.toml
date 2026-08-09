@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-python-workspace"
-version = "0.6.102"
+version = "0.6.103"
 requires-python = ">=3.10"
 dependencies = [ ]
 

@@ -251,14 +251,14 @@ Every repo-wide task lives on the root, and the root's `compile` / `test`
 delegate with `bun run --filter '*'` rather than emitting a step per member - so
 a new package is covered without a re-synth. Work from the root:
 
-| Task              | What it does                                       |
-| ----------------- | -------------------------------------------------- |
-| `bun run build`   | `compile` + `test` + `package` across every member |
-| `bun run compile` | `tsc --build` in each member, in parallel          |
-| `bun run test`    | `eslint` once, then each member's tests            |
-| `bun run sync`    | re-synth (`--watch` to keep synthing)              |
-| `bun run barrels` | regenerate the read-only `index.ts` barrels        |
-| `bun run bump`    | version, tag, and publish                          |
+| Task              | What it does                                          |
+| ----------------- | ----------------------------------------------------- |
+| `bun run build`   | workspace `compile` + `test`; no root package fan-out |
+| `bun run compile` | `tsc --build` in each member, in parallel             |
+| `bun run test`    | `eslint` once, then each member's tests               |
+| `bun run sync`    | re-synth (`--watch` to keep synthing)                 |
+| `bun run barrels` | regenerate the read-only `index.ts` barrels           |
+| `bun run bump`    | version, tag, and publish                             |
 
 `bump` also mirrors a release into local registries when the active clients are
 pointed at loopback services. npm uses `npm config get registry` and publishes
@@ -292,10 +292,14 @@ invokes, so there is no second place to run the same thing:
   and publishes with lifecycle scripts disabled).
 - `watch` - a single-package `tsc --build -w`, for narrowing a long
   edit/compile loop to one package.
-- `build` / `install` / `install:ci` / `default` / `pre-compile` /
-  `post-compile` / `package` - projen's own lifecycle scaffolding, emitted for
-  every member because projen's task model expects them. Nothing in this repo's
-  workflow calls them per member.
+- `build` / `package` - a complete compile/test/pack lifecycle when invoked in
+  one package. Root bump deliberately bypasses these and uses filtered compile
+  plus concurrent `bun publish --ignore-scripts`. The package phase also packs
+  with `--ignore-scripts` because its build already compiled; `prepack` remains
+  available for a standalone publish that did not run `build` first.
+- `install` / `install:ci` / `default` / `pre-compile` / `post-compile` -
+  projen's lifecycle scaffolding, emitted for every member because its task model
+  expects them.
 
 Do NOT run `projen default` (or `bunx projen`) from inside a member. Synth is a
 whole-tree operation driven by the ROOT `.projenrc.ts`, so a member-level run

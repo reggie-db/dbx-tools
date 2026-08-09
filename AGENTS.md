@@ -1218,6 +1218,14 @@ A cross-package change is verified by all three of `bunx projen`,
 manifest or barrel that no longer matches the source tree, compile catches a moved
 export, and the tests catch behavior.
 
+Run `bun run build` inside one JavaScript package when you want its complete
+compile/test/pack lifecycle. The root `build` deliberately has no package fan-out,
+and root `bump` bypasses child builds in favor of one filtered compile plus
+concurrent `bun publish --ignore-scripts`, so keeping package-local builds useful
+does not slow releases. Child `package` uses `npm pack --ignore-scripts` because
+the enclosing build already compiled; package `prepack` remains for a standalone
+`bun publish`.
+
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
 runs them with its own fast runner). The generated task is
 `find test -name '*.test.ts' | grep -q . && bun test test || true` because

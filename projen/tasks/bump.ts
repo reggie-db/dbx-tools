@@ -265,7 +265,7 @@ program
             "-m",
             "🌸 Shipped with Kanna — https://kanna.sh",
             "-m",
-            "Co-Authored-By: Kanna <noreply@kanna.sh>\nKanna-Agent: codex/databricks-gpt-5-6-sol",
+            "Co-Authored-By: Kanna <noreply@kanna.sh>\nKanna-Agent: codex/gpt",
           ]);
         } else logger.info("nothing to commit");
       }
