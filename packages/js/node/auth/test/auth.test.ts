@@ -29,6 +29,23 @@ describe("auth storage", () => {
     assert.equal(storage.kind, "lakebase");
     assert.equal(storage.database, pool);
   });
+
+  it("falls back to the in-memory adapter in auto mode when sqlite cannot open", async () => {
+    // An unwritable sqlite path (a file where a directory is expected) makes the
+    // sqlite open fail; auto mode must degrade to memory rather than throw.
+    const storage = await createAuthStorage({
+      storage: "auto",
+      sqlitePath: "/dev/null/auth.sqlite",
+    });
+    assert.equal(storage.kind, "memory");
+    await storage.close();
+  });
+
+  it("still throws for explicit sqlite mode when sqlite cannot open", async () => {
+    await assert.rejects(
+      createAuthStorage({ storage: "sqlite", sqlitePath: "/dev/null/auth.sqlite" }),
+    );
+  });
 });
 
 describe("Better Auth runtime", () => {
@@ -146,6 +163,41 @@ describe("Better Auth runtime", () => {
     await runtime.close();
   });
 
+  it("accepts a send from a foreign origin (the tunnel binds arbitrary hosts)", async () => {
+    let sends = 0;
+    const runtime = await createPasswordlessAuth({
+      storage: await createAuthStorage({
+        storage: "sqlite",
+        sqlitePath: join(directory, "origin.sqlite"),
+      }),
+      baseURL: "http://localhost",
+      basePath: "/api/email/auth",
+      appName: "Test app",
+      secret: "test-secret-at-least-thirty-two-characters",
+      sessionTtlSeconds: 3600,
+      codeTtlSeconds: 600,
+      maxAttempts: 5,
+      authorizeIdentity: () => true,
+      sendCode: async () => {
+        sends++;
+      },
+    });
+
+    // A browser on the overlay sends Origin: http://<overlay-ip>:6969, which is
+    // not the configured baseURL. Before trusting the request's own origin this
+    // was rejected with 403 INVALID_ORIGIN and no code was ever sent.
+    const response = await runtime.handler(
+      jsonRequest(
+        "/email-otp/send-verification-otp",
+        { email: "user@example.com", type: "sign-in" },
+        "http://172.30.212.215:6969",
+      ),
+    );
+    assert.equal(response.status, 200);
+    assert.equal(sends, 1);
+    await runtime.close();
+  });
+
   it("serializes concurrent startup migrations for one SQLite file", async () => {
     const path = join(directory, "concurrent.sqlite");
     const options = (storage: Awaited<ReturnType<typeof createAuthStorage>>) => ({
@@ -179,10 +231,10 @@ function authRequest(path: string, headers: Record<string, string> = {}, method 
   });
 }
 
-function jsonRequest(path: string, body: unknown): Request {
+function jsonRequest(path: string, body: unknown, origin = "http://localhost"): Request {
   return new Request(`http://localhost/api/email/auth${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "http://localhost" },
+    headers: { "content-type": "application/json", origin },
     body: JSON.stringify(body),
   });
 }

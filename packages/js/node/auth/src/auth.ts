@@ -76,7 +76,17 @@ export async function createPasswordlessAuth(
     basePath,
     database: config.storage.database,
     secret: config.secret,
-    trustedOrigins: [origin],
+    // The gate fronts the app on whatever interface address the tunnel binds
+    // (an overlay/LAN IP, localhost, or a public domain) — not just `baseURL`.
+    // Better Auth's origin check would reject every other host with
+    // INVALID_ORIGIN and block sign-in. Trust the request's own origin here:
+    // this endpoint sits behind the OTP gate and the tunnel preserves the
+    // browser's Host, so the fixed-origin CSRF check adds nothing while breaking
+    // legitimate access. Same-origin requests (no Origin header) are allowed too.
+    trustedOrigins: (request?: Request) => {
+      const requestOrigin = request?.headers.get("origin");
+      return requestOrigin ? [requestOrigin, origin] : [origin];
+    },
     session: {
       expiresIn: config.sessionTtlSeconds,
       updateAge: Math.min(24 * 60 * 60, config.sessionTtlSeconds),
@@ -134,9 +144,11 @@ export async function createPasswordlessAuth(
           if (type !== "sign-in") return;
           const address = normalizeEmail(email);
           if (!(await config.authorizeIdentity(address))) {
-            // Not on the allow-list: no code is sent. Log it so a "requested a
-            // code but got nothing" case is visible rather than silent.
-            logger.warn("verification code not sent: identity not authorized", {
+            // Accept any address and fail SILENTLY for one not on the allow-list:
+            // the request still returns 200 (so the gate never reveals who is
+            // allowed), and no code is sent. Logged at debug for diagnostics, not
+            // as a warning — an unknown address hitting the login page is normal.
+            logger.debug("verification code suppressed: identity not authorized", {
               email: address,
             });
             return;

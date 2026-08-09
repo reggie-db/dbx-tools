@@ -11,8 +11,11 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileLock } from "@dbx-tools/core";
 import { advisoryLock, type PgPoolLike } from "@dbx-tools/postgres";
+import { log } from "@dbx-tools/shared-core";
 import type { BetterAuthOptions } from "better-auth";
 import envPaths from "env-paths";
+
+const logger = log.logger("auth:storage");
 
 export type AuthStorageMode = "auto" | "lakebase" | "sqlite";
 
@@ -29,7 +32,7 @@ export interface ResolvedAuthStorageConfig {
 export type AuthDatabase = NonNullable<BetterAuthOptions["database"]>;
 
 export interface AuthStorage {
-  kind: "lakebase" | "sqlite";
+  kind: "lakebase" | "sqlite" | "memory";
   database: AuthDatabase;
   pool?: PgPoolLike;
   path?: string;
@@ -91,19 +94,40 @@ export async function createAuthStorage(
     throw new Error("auth storage is lakebase but no Lakebase pool was supplied");
   }
 
-  mkdirSync(dirname(resolved.sqlitePath), { recursive: true });
-  const database = await openSqlite(resolved.sqlitePath);
-  return {
-    kind: "sqlite",
-    database,
-    path: resolved.sqlitePath,
-    close: async () => {
-      database.close();
-    },
-  };
+  // Prefer SQLite (durable, survives restarts) when a SQLite binding is present
+  // — bun:sqlite in Bun, node:sqlite in Node. Both are optional runtime
+  // features, so fall back to an in-memory adapter when neither can be opened
+  // rather than failing the whole gate. Memory loses sessions/OTPs on restart
+  // but keeps sign-in working; an explicit `--auth-storage sqlite` still errors
+  // if SQLite is genuinely unavailable, so the fallback is auto-mode only.
+  try {
+    mkdirSync(dirname(resolved.sqlitePath), { recursive: true });
+    const database = await openSqlite(resolved.sqlitePath);
+    return {
+      kind: "sqlite",
+      database,
+      path: resolved.sqlitePath,
+      close: async () => {
+        database.close();
+      },
+    };
+  } catch (error) {
+    if (resolved.mode === "sqlite") throw error;
+    logger.warn("sqlite unavailable for auth storage; using in-memory adapter", { error });
+    const { memoryAdapter } = await import("better-auth/adapters/memory");
+    return {
+      kind: "memory",
+      database: memoryAdapter({}) as unknown as AuthDatabase,
+      close: async () => undefined,
+    };
+  }
 }
 
 export async function migrateAuth(options: BetterAuthOptions, storage: AuthStorage): Promise<void> {
+  // The in-memory adapter builds its schema in memory on init — there is no
+  // database to migrate.
+  if (storage.kind === "memory") return;
+
   const run = async (): Promise<void> => {
     const module = (await import(migrationModuleUrl())) as MigrationModule;
     const migrations = await module.getMigrations(options);
