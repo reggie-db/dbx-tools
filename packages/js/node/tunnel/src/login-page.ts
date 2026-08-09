@@ -37,12 +37,12 @@ export function loginPageHtml(options: LoginPageOptions): string {
   :root {
     color-scheme: light dark;
     --bg: #ffffff; --fg: #1b1b1f; --muted: #6b7280; --border: #d9dce1;
-    --accent: #1a73e8; --accent-fg: #ffffff; --error: #c5221f; --field: #ffffff;
+    --accent: #FF3621; --accent-fg: #ffffff; --error: #c5221f; --field: #ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #16181d; --fg: #e8e6df; --muted: #9aa0aa; --border: #2c2f36;
-      --accent: #4c8dff; --accent-fg: #0b0f19; --error: #ff6b60; --field: #1e2128;
+      --accent: #FF5A46; --accent-fg: #0b0f19; --error: #ff6b60; --field: #1e2128;
     }
   }
   * { box-sizing: border-box; }
@@ -55,6 +55,7 @@ export function loginPageHtml(options: LoginPageOptions): string {
     width: 100%; max-width: 360px; border: 1px solid var(--border);
     border-radius: 14px; padding: 28px; background: var(--bg);
   }
+  .logo { width: 40px; height: 40px; display: block; margin: 0 0 14px; }
   h1 { font-size: 18px; margin: 0 0 4px; }
   p.sub { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
   label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
@@ -77,6 +78,12 @@ export function loginPageHtml(options: LoginPageOptions): string {
 </head>
 <body>
   <main class="card">
+    <!-- dbx.tools pixel-brick "stache" mark (Lava palette), matching the Kanna UI logo. -->
+    <svg class="logo" viewBox="0 0 64 64" role="img" aria-label="${brand}" shape-rendering="crispEdges">
+      <rect x="19" y="20" width="8" height="8" rx="1" fill="#FF3621"/><rect x="37" y="20" width="8" height="8" rx="1" fill="#FF3621"/>
+      <rect x="1" y="29" width="8" height="8" rx="1" fill="#D92D18"/><rect x="10" y="29" width="8" height="8" rx="1" fill="#FF3621"/><rect x="19" y="29" width="8" height="8" rx="1" fill="#FF5A46"/><rect x="28" y="29" width="8" height="8" rx="1" fill="#FF8974"/><rect x="37" y="29" width="8" height="8" rx="1" fill="#FF5A46"/><rect x="46" y="29" width="8" height="8" rx="1" fill="#FF3621"/><rect x="55" y="29" width="8" height="8" rx="1" fill="#D92D18"/>
+      <rect x="10" y="38" width="8" height="8" rx="1" fill="#FF3621"/><rect x="46" y="38" width="8" height="8" rx="1" fill="#FF3621"/>
+    </svg>
     <h1>Sign in to ${brand}</h1>
     <p class="sub">Enter your email to receive a one-time code.</p>
 
