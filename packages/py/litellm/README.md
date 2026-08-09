@@ -33,8 +33,13 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
   native Databricks Responses implementation receives the original body;
 - optionally classifies an `auto` reasoning effort as `low`, `medium`, or
   `high` for reasoning-capable OpenAI and Claude endpoints;
+- marks a stable prefix of Claude requests for Anthropic prompt caching, which
+  GPT endpoints get automatically on the native Responses surface;
+- floors rate-limit backoff to the token-per-minute window so a retry lands in a
+  fresh budget instead of amplifying the limit;
 - supports LiteLLM chat, embedding, synchronous/asynchronous, and streaming
-  entrypoints without custom request-content rewriting.
+  entrypoints, rewriting request content only for the Databricks serving
+  constraints described under [Request processing](#request-processing).
 
 ## Run the proxy
 
@@ -73,9 +78,12 @@ conversion.
 
 This package supplies only the workspace-specific layer LiteLLM does not have:
 deterministic profile selection, live endpoint discovery, fuzzy names, and
-capability-aware routing. Request messages, content blocks, tools, and provider
-options are not rewritten except when the caller explicitly requests automatic
-reasoning selection.
+capability-aware routing. Request messages and content blocks are rewritten only
+to satisfy concrete Databricks serving constraints — the ordered pipeline under
+[Request processing](#request-processing) (trailing-assistant repair, JSON
+nudge, Claude prompt-cache marking) and the image payload guard — or when the
+caller explicitly requests automatic reasoning selection. Tools are not
+rewritten.
 
 LiteLLM 1.83 loads custom handlers from a Python file beside the config. For an
 existing LiteLLM config, add `config_provider.py` next to the YAML:
@@ -181,12 +189,97 @@ classifier maps the score through the resolved model's capabilities. The
 existing `reasoning=<tokens>` field remains the number of reasoning tokens
 reported by the provider, not the selected effort level.
 
+## Request processing
+
+Every delegated Chat Completions request runs through a small, ordered pipeline
+(`provider._prepare_messages`) before it reaches Databricks. Each step exists to
+satisfy a concrete Databricks serving constraint that an OpenAI-style client
+does not know about. Order matters, because each step can change what the next
+one sees:
+
+1. **Trailing-assistant repair** (`_repair_trailing_assistant`). Databricks
+   rejects a transcript whose last message is an assistant turn with "This model
+   does not support assistant message prefill. The conversation must end with a
+   user message." Codex hits this on retry, when a stream that disconnected
+   mid-turn is resumed with its partial answer replayed as the final message.
+   The repair drops trailing assistant turns (including an unanswered tool call)
+   so the transcript ends where the model can continue. It never empties the
+   list.
+2. **JSON nudge** (`_ensure_json_mentioned`). OpenAI-family endpoints refuse
+   `response_format: {"type": "json_object"}` unless the prompt itself contains
+   the word "json". This is a prompt-content rule, so no parameter filtering
+   satisfies it. When json mode is requested but unmentioned, the nudge appends a
+   short instruction to the last non-system turn — the one role guaranteed to
+   survive into `input` on the Responses bridge. This is exactly how Mem0's
+   memory extraction trips the rule; the nudge fixes every client at once. Runs
+   after the repair so it never appends to a turn that is then dropped.
+3. **Prompt-cache marking** (`_apply_prompt_cache`, Claude only). See below.
+   Runs last so its breakpoints land on boundaries the earlier steps have
+   already settled.
+
+The image **payload guard** (`payload_guard.DbxPayloadGuard`) is a separate
+pre-call hook, not part of the message pipeline. Databricks rejects any request
+body over 32 MiB; chat clients inline uploaded images as base64 and resend them
+every turn, so a couple of photos push a long chat past the cap and every turn
+then fails with an opaque 400. The guard measures the serialized request and, if
+it is over target, downscales base64 images (largest first) with Pillow until it
+fits, raising a clear size-named error only if it still cannot.
+
+## Prompt caching
+
+Caching behaviour differs by model family because the two Databricks serving
+surfaces expose it differently. The proxy leaves the automatic case alone and
+fills the explicit case that OpenAI-style clients never trigger.
+
+- **GPT (native Responses):** GPT-5.4+ endpoints route through LiteLLM's
+  `databricks/responses/...` bridge to the native Responses surface, which
+  applies **automatic**, OpenAI-style prefix caching. No marking is needed;
+  a repeated prefix reads from cache and reports `cached_tokens`. Changing
+  `reasoning.effort` between turns does not evict the cache, because effort is a
+  top-level parameter and not part of the cached `input` prefix.
+- **Claude (emulated Responses / chat):** Databricks refuses the native
+  Responses passthrough for Claude ("Responses API passthrough is not supported
+  for model databricks-claude-..."), so these turns go through LiteLLM's
+  Responses-to-Chat emulation onto `chat/completions`. Anthropic caching on
+  Databricks is **explicit**: a request is cached only where a content block
+  carries `cache_control`. OpenAI-style clients (Codex, Open WebUI) never send
+  it and the emulation does not add it, so without intervention the whole
+  transcript is re-billed as fresh input every turn — which repeatedly trips the
+  workspace input-tokens-per-minute limit on long chats.
+
+`_apply_prompt_cache` closes that gap for Claude targets by stamping
+`cache_control: {"type": "ephemeral"}` on two rolling breakpoints: the first
+system message (stable for the life of the chat) and the last stable turn (the
+message before the volatile final turn, already present and cache-written on the
+previous turn). Anthropic matches the longest cached prefix at each breakpoint,
+so two breakpoints cache effectively the whole history except the newest turn.
+The final turn is left unmarked because it is new every request and would only
+ever write, never read. This is a no-op for non-Claude models and for
+single-turn requests, which have no stable prefix. LiteLLM's Databricks
+transformer preserves `cache_control` for Claude, so marking the blocks here is
+sufficient; the endpoint honours it and returns `cache_creation_input_tokens`
+and `cache_read_input_tokens`.
+
+Databricks disables the stateful Responses store (`store` / `previous_response_id`)
+workspace-wide by default, so the full transcript is re-sent every turn on both
+families. Caching is what keeps the re-sent prefix from being billed and
+rate-limited each time.
+
 ## Rate-limit retries
 
-The packaged router retries rate limits five times with exponential backoff,
-starting at two seconds and honoring provider `Retry-After` headers. Timeouts
-and internal server errors get three retries. Authentication, bad requests, and
-content-policy failures are not retried.
+The packaged router retries rate limits five times with exponential backoff and
+honors provider `Retry-After` headers. Timeouts and internal server errors get
+three retries. Authentication, bad requests, and content-policy failures are not
+retried.
+
+Databricks' `REQUEST_LIMIT_EXCEEDED` is a per-minute token budget, and a retry
+re-sends the whole request body. Retrying inside the same minute only adds more
+tokens to an already-exceeded window and cannot succeed — the amplification that
+turns one rate limit into a spiral of failed reconnects. So when the server does
+not send a `Retry-After`, rate-limit backoff is floored to the rate-limit window
+(`RATE_LIMIT_WINDOW_SECONDS`) so every retry lands in a fresh window rather than
+piling into the current one. A server `Retry-After`, when present, is
+authoritative and overrides the floor.
 
 Streaming dbx requests apply the same bounded retry protection when a rate
 limit arrives before the first response chunk. A failure after content has
@@ -225,9 +318,14 @@ families use LiteLLM's own Responses-to-Chat fallback.
   resolution;
 - `models` — Responses-only endpoint routing policy;
 - `provider` — LiteLLM `CustomLLM` adapter and exported `dbx_provider`
-  singleton;
+  singleton; owns the Chat Completions message pipeline (trailing-assistant
+  repair, JSON nudge, Claude prompt-cache marking) and the rate-limit-aware
+  streaming retry;
+- `payload_guard` — pre-call hook that downscales oversize base64 images to keep
+  requests under the 32 MiB serving limit;
 - `reasoning` — opt-in effort classification and TTL-backed follow-up context;
 - `routing` — model-only proxy hook for native Responses-only calls;
+- `access_log` — one-line per-request `dbx-access` telemetry;
 - `cli` - profile-resolving launcher for the packaged LiteLLM proxy config.
 
 For standalone Python endpoint resolution and invocation helpers, use

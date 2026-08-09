@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import dbx_tools.litellm.provider as provider_module
 import pytest
 from dbx_tools.litellm.provider import (
+    _apply_prompt_cache,
     _ensure_json_mentioned,
     _ensure_response_id,
     _prepare_messages,
@@ -16,6 +17,10 @@ from dbx_tools.litellm.provider import (
 from litellm.exceptions import MidStreamFallbackError, RateLimitError
 
 JSON_OBJECT = {"response_format": {"type": "json_object"}}
+# A non-Claude model so prompt-cache marking is a no-op for the message-repair
+# tests; the Claude path is exercised by TestPromptCache.
+GPT_MODEL = "databricks-gpt-5-5"
+CLAUDE_MODEL = "databricks-claude-opus-5"
 
 
 def _texts(messages: list[dict]) -> str:
@@ -196,7 +201,7 @@ class TestPrepareMessages:
             {"role": "assistant", "content": "partial answer"},
         ]
 
-        prepared = _prepare_messages(messages, JSON_OBJECT)
+        prepared = _prepare_messages(messages, JSON_OBJECT, GPT_MODEL)
 
         assert prepared[-1]["role"] == "user"
         assert "json" in prepared[-1]["content"].lower()
@@ -205,7 +210,119 @@ class TestPrepareMessages:
     def test_no_op_request_is_passed_through(self) -> None:
         messages = [{"role": "user", "content": "hi"}]
 
-        assert _prepare_messages(messages, {}) is messages
+        assert _prepare_messages(messages, {}, GPT_MODEL) is messages
+
+    def test_claude_request_is_marked_for_prompt_cache(self) -> None:
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "one"},
+            {"role": "user", "content": "two"},
+        ]
+
+        prepared = _prepare_messages(messages, {}, CLAUDE_MODEL)
+
+        # System block and the last stable turn (index -2) are marked; the
+        # volatile final turn is not.
+        assert prepared[0]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+        assert prepared[1]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+        assert prepared[2]["content"] == "two"
+
+
+class TestPromptCache:
+    """Claude on Databricks caches only where a block carries cache_control.
+    OpenAI-style clients never send it, so the provider marks a stable prefix."""
+
+    def test_non_claude_model_is_untouched(self) -> None:
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "a"},
+            {"role": "user", "content": "b"},
+        ]
+
+        assert _apply_prompt_cache(messages, GPT_MODEL) is messages
+
+    def test_single_turn_is_all_volatile_and_untouched(self) -> None:
+        # One turn has no stable prefix to cache; marking it would only ever write.
+        messages = [{"role": "user", "content": "hi"}]
+
+        assert _apply_prompt_cache(messages, CLAUDE_MODEL) is messages
+
+    def test_system_and_last_stable_turn_are_marked(self) -> None:
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "a"},
+            {"role": "assistant", "content": "b"},
+            {"role": "user", "content": "c"},
+        ]
+
+        marked = _apply_prompt_cache(messages, CLAUDE_MODEL)
+
+        assert marked[0]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+        # index -2 is the stable boundary before the volatile final turn.
+        assert marked[2]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+        assert marked[3]["content"] == "c"
+        # The caller's messages are not mutated in place.
+        assert messages[0]["content"] == "sys"
+
+    def test_string_content_is_promoted_to_a_block(self) -> None:
+        messages = [
+            {"role": "user", "content": "first"},
+            {"role": "user", "content": "second"},
+        ]
+
+        marked = _apply_prompt_cache(messages, CLAUDE_MODEL)
+
+        # No system message; index -2 is the first user turn.
+        assert marked[0]["content"] == [
+            {"type": "text", "text": "first", "cache_control": {"type": "ephemeral"}}
+        ]
+
+    def test_marking_lands_on_the_last_content_block(self) -> None:
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "a"},
+                    {"type": "text", "text": "b"},
+                ],
+            },
+            {"role": "user", "content": "tail"},
+        ]
+
+        marked = _apply_prompt_cache(messages, CLAUDE_MODEL)
+
+        blocks = marked[0]["content"]
+        assert "cache_control" not in blocks[0]
+        assert blocks[1]["cache_control"] == {"type": "ephemeral"}
+
+    def test_existing_cache_control_is_not_overwritten(self) -> None:
+        messages = [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": "sys", "cache_control": {"type": "ephemeral"}}
+                ],
+            },
+            {"role": "user", "content": "a"},
+            {"role": "user", "content": "b"},
+        ]
+
+        marked = _apply_prompt_cache(messages, CLAUDE_MODEL)
+
+        assert marked[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+    def test_marking_is_idempotent(self) -> None:
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "a"},
+            {"role": "user", "content": "b"},
+        ]
+
+        once = _apply_prompt_cache(messages, CLAUDE_MODEL)
+        twice = _apply_prompt_cache(once, CLAUDE_MODEL)
+
+        assert twice[0]["content"] == once[0]["content"]
+        assert twice[1]["content"] == once[1]["content"]
 
 
 class TestPydanticMessageObjects:
@@ -254,7 +371,7 @@ class TestPydanticMessageObjects:
             self._message(role="user", content="extract"),
         ]
 
-        prepared = _prepare_messages(messages, JSON_OBJECT)
+        prepared = _prepare_messages(messages, JSON_OBJECT, GPT_MODEL)
 
         assert prepared[-1]["role"] == "user"
         assert "json" in str(prepared[-1]["content"]).lower()
@@ -287,7 +404,13 @@ def test_stream_retries_rate_limits_with_exponential_backoff(
 
     assert list(_retrying_generic_stream(factory)) == ["ready"]
     assert attempts == 3
-    assert delays == [2.0, 4.0]
+    # Backoff ceilings are 10.0 then 20.0 (RETRY_BASE_SECONDS=5, doubling), but a
+    # token-per-minute limit is never retried faster than the rate-limit window,
+    # so both delays are floored to RATE_LIMIT_WINDOW_SECONDS.
+    assert delays == [
+        provider_module.RATE_LIMIT_WINDOW_SECONDS,
+        provider_module.RATE_LIMIT_WINDOW_SECONDS,
+    ]
 
 
 def test_stream_does_not_retry_after_emitting_content(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -349,4 +472,5 @@ async def test_async_stream_retries_wrapped_pre_stream_rate_limits(
 
     assert result == ["ready"]
     assert attempts == 2
-    assert delays == [2.0]
+    # Floored to the rate-limit window (see the sync backoff test).
+    assert delays == [provider_module.RATE_LIMIT_WINDOW_SECONDS]

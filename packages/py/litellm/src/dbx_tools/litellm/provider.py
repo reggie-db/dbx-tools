@@ -27,8 +27,16 @@ from .models import requires_responses_api
 logger = logging.getLogger(__name__)
 
 RATE_LIMIT_RETRIES = 5
-RETRY_BASE_SECONDS = 2.0
-RETRY_MAX_SECONDS = 30.0
+RETRY_BASE_SECONDS = 5.0
+RETRY_MAX_SECONDS = 60.0
+# Databricks' `REQUEST_LIMIT_EXCEEDED` is a per-minute token budget. A retry
+# re-sends the whole (large) request body, so retrying INSIDE the same minute
+# only adds more tokens to an already-exceeded window and cannot succeed — the
+# amplification that turns one rate limit into a death spiral. When the server
+# does not tell us how long to wait, floor the backoff so every rate-limit retry
+# lands in a FRESH window instead of piling into the current one. A server
+# `Retry-After` header, when present, is authoritative and overrides this floor.
+RATE_LIMIT_WINDOW_SECONDS = 30.0
 _ResponseT = TypeVar("_ResponseT")
 
 
@@ -59,7 +67,7 @@ class DbxCustomLLM(CustomLLM):
         return _ensure_response_id(
             litellm.completion(
                 model=_delegate_chat_model(resolved),
-                messages=_prepare_messages(messages, optional_params),
+                messages=_prepare_messages(messages, optional_params, resolved),
                 stream=False,
                 **_delegated_params(optional_params, self.backend, timeout=timeout),
             )
@@ -81,7 +89,7 @@ class DbxCustomLLM(CustomLLM):
         return _ensure_response_id(
             await litellm.acompletion(
                 model=_delegate_chat_model(resolved),
-                messages=_prepare_messages(messages, optional_params),
+                messages=_prepare_messages(messages, optional_params, resolved),
                 stream=False,
                 **_delegated_params(optional_params, self.backend, timeout=timeout),
             )
@@ -100,7 +108,7 @@ class DbxCustomLLM(CustomLLM):
         return _retrying_generic_stream(
             lambda: litellm.completion(
                 model=_delegate_chat_model(resolved),
-                messages=_prepare_messages(messages, optional_params),
+                messages=_prepare_messages(messages, optional_params, resolved),
                 stream=True,
                 **params,
             )
@@ -124,7 +132,7 @@ class DbxCustomLLM(CustomLLM):
         async def create_stream() -> Any:
             return await litellm.acompletion(
                 model=_delegate_chat_model(resolved),
-                messages=_prepare_messages(messages, optional_params),
+                messages=_prepare_messages(messages, optional_params, resolved),
                 stream=True,
                 **params,
             )
@@ -336,15 +344,106 @@ def _ensure_json_mentioned(messages: list[Any], optional_params: Mapping[str, An
     return [*patched, {"role": "user", "content": _JSON_NUDGE.strip()}]
 
 
-def _prepare_messages(messages: list[Any], optional_params: Mapping[str, Any]) -> list[Any]:
+def _prepare_messages(
+    messages: list[Any], optional_params: Mapping[str, Any], model: str
+) -> list[Any]:
     """Apply the request repairs Databricks needs, in order.
 
     The trailing-assistant repair runs FIRST: it can change which message is last,
     and the json nudge appends to the last non-system turn. Running the nudge first
     would let it append to an assistant turn that is then dropped, silently losing
     the nudge and re-failing the json rule.
+
+    Prompt-cache marking runs LAST: it stamps ``cache_control`` onto message
+    boundaries that the two earlier repairs have already settled, so a breakpoint
+    is never placed on a turn that is then dropped or a block that is then
+    appended to.
     """
-    return _ensure_json_mentioned(_repair_trailing_assistant(messages), optional_params)
+    repaired = _ensure_json_mentioned(_repair_trailing_assistant(messages), optional_params)
+    return _apply_prompt_cache(repaired, model)
+
+
+# Anthropic prompt caching on Databricks is EXPLICIT: a request is only cached
+# where a content block carries ``cache_control``. OpenAI-style clients (Codex,
+# Open WebUI) never send it, and LiteLLM's Responses->Chat bridge does not add
+# it, so a Claude turn that resends the whole transcript is billed as fresh input
+# every time — which repeatedly trips the workspace input-tokens-per-minute limit
+# on long chats. GPT endpoints do NOT need this: they route natively and get
+# Databricks' automatic OpenAI-style caching for free.
+#
+# LiteLLM's Databricks transformer preserves ``cache_control`` for Claude
+# (`remove_cache_control_flag_from_messages_and_tools` is overridden to keep it),
+# so marking the blocks here is enough; the endpoint honours it and returns
+# `cache_creation_input_tokens` / `cache_read_input_tokens`.
+_CACHE_CONTROL: dict[str, str] = {"type": "ephemeral"}
+
+
+def _is_claude_model(model: str) -> bool:
+    return "claude" in model.lower()
+
+
+def _apply_prompt_cache(messages: list[Any], model: str) -> list[Any]:
+    """Mark a stable prefix of a Claude request for Anthropic prompt caching.
+
+    Two breakpoints, the standard multi-turn pattern:
+
+    - the FIRST system message — the instructions and any tool preamble, stable
+      for the life of the chat;
+    - the LAST STABLE turn — the message before the volatile final turn. On turn
+      N+1 this content was already present (and cache-written) on turn N, so it
+      reads from cache instead of being re-billed. The final turn itself is left
+      unmarked: it is new every request and would only ever write, never read.
+
+    Anthropic allows up to four breakpoints and matches the longest cached prefix
+    at each, so two rolling breakpoints cache effectively the whole history minus
+    the newest turn. No-op for non-Claude models and for requests too short to
+    have a stable prefix (a single turn is all-volatile).
+    """
+    if not _is_claude_model(model) or len(messages) < 2:
+        return messages
+
+    prepared = list(messages)
+    system_index = next(
+        (i for i, message in enumerate(prepared) if _field(message, "role") == "system"),
+        None,
+    )
+    # The last turn is volatile; the one before it is the stable boundary. Guard
+    # against that boundary being the system block we already mark.
+    stable_index = len(prepared) - 2
+    targets = {index for index in (system_index, stable_index) if index is not None and index >= 0}
+    for index in targets:
+        prepared[index] = _mark_cache_control(prepared[index])
+    return prepared
+
+
+def _mark_cache_control(message: Any) -> Any:
+    """Attach ``cache_control`` to a message's final content block.
+
+    Normalizes to a dict copy first (messages can be pydantic ``Message`` objects
+    on the Responses-bridge path) and to a content-block list, since a bare string
+    has nowhere to hang the flag. Idempotent: a block that already carries
+    ``cache_control`` is left as is.
+    """
+    normalized = dict(message) if isinstance(message, Mapping) else _as_dict(message)
+    if not isinstance(normalized, dict):
+        return message
+
+    content = normalized.get("content")
+    if isinstance(content, str):
+        if not content:
+            return message
+        normalized["content"] = [
+            {"type": "text", "text": content, "cache_control": dict(_CACHE_CONTROL)}
+        ]
+        return normalized
+    if isinstance(content, list) and content:
+        blocks = [dict(block) if isinstance(block, Mapping) else block for block in content]
+        for block in reversed(blocks):
+            if isinstance(block, dict):
+                block.setdefault("cache_control", dict(_CACHE_CONTROL))
+                normalized["content"] = blocks
+                return normalized
+    return message
 
 
 # Params the Chat Completions surface (/serving-endpoints/<name>/invocations)
@@ -400,7 +499,10 @@ def _retry_delay(error: Exception, attempt: int) -> float:
             except (TypeError, ValueError):
                 continue
     ceiling = min(RETRY_BASE_SECONDS * (2**attempt), RETRY_MAX_SECONDS)
-    return random.uniform(ceiling / 2, ceiling)
+    delay = random.uniform(ceiling / 2, ceiling)
+    # Never retry a token-per-minute limit faster than the window it belongs to:
+    # a sooner retry just re-spends into the same exceeded budget.
+    return max(delay, RATE_LIMIT_WINDOW_SECONDS)
 
 
 def _is_retryable_rate_limit(error: Exception) -> bool:
