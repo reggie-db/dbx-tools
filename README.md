@@ -188,7 +188,7 @@ runtime behavior, module maps, and links to adjacent packages.
 Install the published Python packages by distribution name:
 
 ```bash
-uv add dbx-tools-core dbx-tools-postgres dbx-tools-model dbx-tools-litellm
+uv add dbx-tools-core dbx-tools-postgres dbx-tools-model dbx-tools-litellm dbx-tools-graphiti
 ```
 
 The root uv workspace contains these Python counterparts:
@@ -199,6 +199,7 @@ The root uv workspace contains these Python counterparts:
 | [`dbx-tools-postgres`](packages/py/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
 | [`dbx-tools-model`](packages/py/model)       | Lists and classifies Databricks Model Serving endpoints, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies.                                         |
 | [`dbx-tools-litellm`](packages/py/litellm)   | Adds explicit-profile Databricks endpoint discovery and fuzzy, tool-aware model routing to LiteLLM while leaving request conversion, transport, streaming, retries, embeddings, and Responses bridging to LiteLLM's built-in Databricks provider.                                  |
+| [`dbx-tools-graphiti`](packages/py/graphiti) | Launches upstream Graphiti's MCP server with a native Neo4j 5 backend, provisioning Java and uv through mise and caching versioned downloads, dependencies, credentials, graph data, and logs without containers.                                                                  |
 
 ### Load One Brand File
 

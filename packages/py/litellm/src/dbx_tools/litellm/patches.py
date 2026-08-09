@@ -22,6 +22,7 @@ def apply_litellm_patches() -> None:
         return
     _APPLIED = True
     _patch_thinking_tokens_keyerror()
+    _patch_responses_tools_namespace_drop()
 
 
 def _patch_thinking_tokens_keyerror() -> None:
@@ -65,4 +66,62 @@ def _patch_thinking_tokens_keyerror() -> None:
     )
     logger.debug(
         "Patched BaseConfig.update_optional_params_with_thinking_tokens (thinking KeyError)"
+    )
+
+
+def _flatten_namespace_tools(tools: Any) -> Any:
+    """Unwrap Codex `namespace` tool groups into their inner tools.
+
+    A Responses request from Codex carries its shell / apply-patch / unified-exec
+    tools grouped under a `{"type": "namespace", "name": ..., "tools": [...]}`
+    entry (Codex: "dynamic tool namespace must contain at least one tool"). The
+    inner entries are ordinary `function` tools. Returning the inner tools in
+    place of the wrapper lets the normal `function` conversion handle them.
+    """
+    if not isinstance(tools, list):
+        return tools
+    flattened: list[Any] = []
+    for tool in tools:
+        if isinstance(tool, dict) and tool.get("type") == "namespace":
+            inner = tool.get("tools")
+            if isinstance(inner, list):
+                flattened.extend(inner)
+                continue
+        flattened.append(tool)
+    return flattened
+
+
+def _patch_responses_tools_namespace_drop() -> None:
+    """Stop LiteLLM silently dropping Codex's `namespace` (shell) tools.
+
+    When a Responses-API request reaches a custom provider that only implements
+    chat `completion` (our `dbx` provider), LiteLLM converts the request to Chat
+    Completions via
+    `LiteLLMCompletionResponsesConfig.transform_responses_api_tools_to_chat_completion_tools`.
+    That converter DROPS every tool whose type is in
+    `("computer_use", "image_generation", "namespace", "shell")`, warning that it
+    "has no Chat Completions equivalent". Codex delivers its entire filesystem /
+    terminal toolset inside a `namespace` group, so the drop strips all of it and
+    Codex reports it has "no filesystem or terminal tools" and stalls.
+
+    A `namespace` is just a wrapper around ordinary `function` tools. We wrap the
+    converter to flatten namespaces into their inner functions BEFORE the original
+    runs, so those tools convert normally and survive to the Databricks endpoint
+    (which accepts function tools). Other dropped types are left untouched.
+    """
+    from litellm.responses.litellm_completion_transformation.transformation import (
+        LiteLLMCompletionResponsesConfig,
+    )
+
+    original = LiteLLMCompletionResponsesConfig.transform_responses_api_tools_to_chat_completion_tools
+
+    def unwrapped(tools: Any) -> Any:
+        return original(_flatten_namespace_tools(tools))
+
+    LiteLLMCompletionResponsesConfig.transform_responses_api_tools_to_chat_completion_tools = (  # type: ignore[method-assign]
+        staticmethod(unwrapped)
+    )
+    logger.debug(
+        "Patched transform_responses_api_tools_to_chat_completion_tools "
+        "(unwrap Codex namespace tools)"
     )

@@ -279,6 +279,47 @@ def test_patch_prevents_thinking_keyerror_for_non_claude_models() -> None:
     assert mapped.get("reasoning_effort") == "high"
 
 
+def test_patch_unwraps_codex_namespace_tools() -> None:
+    """A Codex `namespace` tool group must survive the Responses->Chat transform.
+
+    LiteLLM's converter drops tool types it can't map to Chat Completions,
+    including `namespace` — which is how Codex delivers its whole shell/apply-patch
+    toolset. Dropping it leaves Codex with "no filesystem or terminal tools". The
+    patch flattens the namespace into its inner function tools so they convert
+    normally instead of being dropped.
+    """
+    from dbx_tools.litellm import apply_litellm_patches
+    from litellm.responses.litellm_completion_transformation.transformation import (
+        LiteLLMCompletionResponsesConfig,
+    )
+
+    apply_litellm_patches()  # idempotent
+
+    tools = [
+        {
+            "type": "namespace",
+            "name": "shell",
+            "tools": [
+                {
+                    "type": "function",
+                    "name": "exec",
+                    "parameters": {"type": "object", "properties": {"cmd": {"type": "string"}}},
+                }
+            ],
+        }
+    ]
+
+    converted, _ = (
+        LiteLLMCompletionResponsesConfig.transform_responses_api_tools_to_chat_completion_tools(
+            tools
+        )
+    )
+
+    # The inner function survived instead of the whole namespace being dropped.
+    names = [t.get("function", {}).get("name") for t in converted if t.get("type") == "function"]
+    assert names == ["exec"]
+
+
 async def test_no_auto_tag_is_no_op(cache: ReasoningCache) -> None:
     reasoner = StubAutoReasoning(cache, [0.8])
     data = {

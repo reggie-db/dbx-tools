@@ -981,6 +981,16 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
       "dbx-litellm": "dbx_tools.litellm.cli:main",
     },
   },
+  {
+    directory: "graphiti",
+    name: "dbx-tools-graphiti",
+    module: "dbx_tools.graphiti",
+    description: "Native Graphiti MCP and Neo4j launcher with mise-managed prerequisites",
+    dependencies: [],
+    scripts: {
+      "dbx-graphiti": "dbx_tools.graphiti.cli:main",
+    },
+  },
 ];
 
 new projenProject.DBXToolsPythonWorkspace(root, {

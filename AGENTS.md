@@ -207,6 +207,11 @@ Primary package areas:
   Databricks Responses provider. Its process-wide credential cache is the sole
   refresh owner: SDK background refresh stays disabled and `current()` uses a
   check-lock-check load so parallel requests cannot pile up token mints.
+- `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
+  server with a Neo4j 5 backend. It must not use containers: provision Java and
+  uv through mise, cache pinned upstream distributions under the user's data
+  directory, and keep Graphiti behavior in upstream Graphiti rather than
+  vendoring its implementation here.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
@@ -1081,6 +1086,13 @@ packages/example/
 and a native `trustedDependencies` field. The single bun workspace has ONE
 `node_modules`, no `.pnpmfile.cjs`, and `workspace:*` sibling deps resolve from
 source with no linking hook.
+
+Keep `scripts/install.sh` as a small function-based bootstrap. It uses an
+existing Bun first; when Bun is absent it uses a working Node package manager,
+installing Node LTS through NVM only when neither Bun nor a usable Node
+environment exists, then prefers `pnpm add -g bun` and falls back to
+`npm install -g bun`. Let NVM's official installer own shell-profile setup; do
+not reproduce or prune its installation and do not depend on mise.
 
 The custom root applies `ROOT_INSTALL_ONLY_MIXIN` during every pre-synth by
 default (`rootInstallOnly: true`). It clears child `install` / `install:ci` task

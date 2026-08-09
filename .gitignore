@@ -101,6 +101,7 @@ packages/py/*/dist/
 !/packages/py/postgres/pyproject.toml
 !/packages/py/model/pyproject.toml
 !/packages/py/litellm/pyproject.toml
+!/packages/py/graphiti/pyproject.toml
 !/.github/workflows/python-release.yml
 !/.projenrc.ts
 !/.github/workflows/release.yml

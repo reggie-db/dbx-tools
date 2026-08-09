@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-python-workspace"
-version = "0.6.104"
+version = "0.6.105"
 requires-python = ">=3.10"
 dependencies = [ ]
 
@@ -43,4 +43,7 @@ workspace = true
 workspace = true
 
 [tool.uv.sources.dbx-tools-litellm]
+workspace = true
+
+[tool.uv.sources.dbx-tools-graphiti]
 workspace = true
