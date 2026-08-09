@@ -9,12 +9,7 @@
  */
 
 import { passkey } from "@better-auth/passkey";
-import {
-  authRequestSchema,
-  authVerifySchema,
-  type AuthStatus,
-  SESSION_COOKIE_NAME,
-} from "@dbx-tools/shared-auth";
+import { type AuthStatus, SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
 import { log } from "@dbx-tools/shared-core";
 import { APIError, betterAuth, type BetterAuthOptions } from "better-auth";
 import { emailOTP } from "better-auth/plugins";
@@ -138,7 +133,15 @@ export async function createPasswordlessAuth(
         async sendVerificationOTP({ email, otp, type }) {
           if (type !== "sign-in") return;
           const address = normalizeEmail(email);
-          if (!(await config.authorizeIdentity(address))) return;
+          if (!(await config.authorizeIdentity(address))) {
+            // Not on the allow-list: no code is sent. Log it so a "requested a
+            // code but got nothing" case is visible rather than silent.
+            logger.warn("verification code not sent: identity not authorized", {
+              email: address,
+            });
+            return;
+          }
+          logger.info("sending verification code", { email: address });
           void config.sendCode(address, otp, emailOptions).catch((error: unknown) => {
             logger.error("verification email failed", { email: address, error });
           });
@@ -181,36 +184,10 @@ export async function createPasswordlessAuth(
         passkeysEnabled: true,
       });
     }
-    if (path === `${basePath}/request` && request.method === "POST") {
-      const parsed = authRequestSchema.safeParse(await requestJson(request));
-      if (parsed.success) {
-        await auth.api
-          .sendVerificationOTP({
-            body: { email: normalizeEmail(parsed.data.email), type: "sign-in" },
-            headers: request.headers,
-          })
-          .catch(() => undefined);
-      }
-      return jsonResponse({ ok: true });
-    }
-    if (path === `${basePath}/verify` && request.method === "POST") {
-      const parsed = authVerifySchema.safeParse(await requestJson(request));
-      if (!parsed.success) return jsonResponse({ ok: false });
-      try {
-        const response = await auth.api.signInEmailOTP({
-          body: {
-            email: normalizeEmail(parsed.data.email),
-            otp: parsed.data.code,
-            name: displayName(parsed.data.email),
-          },
-          headers: request.headers,
-          asResponse: true,
-        });
-        return compatibilityResponse(response, { ok: response.ok });
-      } catch {
-        return jsonResponse({ ok: false });
-      }
-    }
+    // OTP send + verify go straight to better-auth's native emailOTP endpoints
+    // (`/email-otp/send-verification-otp`, `/sign-in/email-otp`); there is no
+    // compatibility wrapper for them. Failures there are logged by the plugin's
+    // sendVerificationOTP hook, not swallowed behind an always-ok response.
     if (path === `${basePath}/logout` && request.method === "POST") {
       const response = await auth.api.signOut({
         headers: request.headers,
@@ -254,18 +231,6 @@ export function normalizeLogoutRedirectPath(value: string | undefined): string {
 
 function normalizeEmail(email: string | undefined): string {
   return email?.trim().toLowerCase() ?? "";
-}
-
-function displayName(email: string): string {
-  return normalizeEmail(email).split("@")[0] || "User";
-}
-
-async function requestJson(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    return undefined;
-  }
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

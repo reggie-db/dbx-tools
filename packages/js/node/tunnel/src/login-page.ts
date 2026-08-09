@@ -124,6 +124,13 @@ export function loginPageHtml(options: LoginPageOptions): string {
     return { ok: res.ok, status: res.status, data: data };
   }
 
+  function errorText(data, fallback) {
+    // better-auth error shape: { message } or { error: { message } }.
+    if (data && data.error && data.error.message) return data.error.message;
+    if (data && data.message) return data.message;
+    return fallback;
+  }
+
   emailForm.addEventListener("submit", async function (e) {
     e.preventDefault();
     email = emailInput.value.trim();
@@ -132,14 +139,15 @@ export function loginPageHtml(options: LoginPageOptions): string {
     submit.disabled = true;
     say("Sending…");
     try {
-      var r = await post("/request", { email: email });
-      if (r.ok && r.data.ok) {
+      // better-auth emailOTP native endpoint.
+      var r = await post("/email-otp/send-verification-otp", { email: email, type: "sign-in" });
+      if (r.ok) {
         emailForm.classList.add("hidden");
         codeForm.classList.remove("hidden");
         codeInput.focus();
         say("We emailed a code to " + email + ".");
       } else {
-        say(r.data.error || "Could not send a code. Check the address and try again.", true);
+        say(errorText(r.data, "Could not send a code. Check the address and try again."), true);
       }
     } catch (_e) {
       say("Network error. Try again.", true);
@@ -156,14 +164,19 @@ export function loginPageHtml(options: LoginPageOptions): string {
     submit.disabled = true;
     say("Verifying…");
     try {
-      var r = await post("/verify", { email: email, code: code });
-      if (r.ok && r.data.ok) {
+      // better-auth sign-in with the OTP; sets the session cookie on success.
+      var r = await post("/sign-in/email-otp", {
+        email: email,
+        otp: code,
+        name: email.split("@")[0],
+      });
+      if (r.ok) {
         say("Signed in. Loading…");
         // The session cookie is set; reload so the now-authenticated request
         // reaches the app.
         window.location.reload();
       } else {
-        say(r.data.error || "That code was not accepted. Try again.", true);
+        say(errorText(r.data, "That code was not accepted. Try again."), true);
         submit.disabled = false;
       }
     } catch (_e) {

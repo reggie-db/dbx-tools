@@ -68,15 +68,26 @@ describe("Better Auth runtime", () => {
       },
     });
 
-    const request = await runtime.handler(jsonRequest("/request", { email: "Ada@Example.com" }));
-    assert.deepEqual(await request.json(), { ok: true });
+    // OTP send + verify go through better-auth's native emailOTP endpoints
+    // (there is no compatibility wrapper).
+    const request = await runtime.handler(
+      jsonRequest("/email-otp/send-verification-otp", {
+        email: "Ada@Example.com",
+        type: "sign-in",
+      }),
+    );
+    assert.equal(request.status, 200);
     await sent;
     assert.match(sentCode, /^\d{6}$/);
 
     const verify = await runtime.handler(
-      jsonRequest("/verify", { email: "ada@example.com", code: sentCode }),
+      jsonRequest("/sign-in/email-otp", {
+        email: "ada@example.com",
+        otp: sentCode,
+        name: "ada",
+      }),
     );
-    assert.deepEqual(await verify.json(), { ok: true });
+    assert.equal(verify.status, 200);
     const cookie = verify.headers.getSetCookie()[0]?.split(";")[0];
     assert.ok(cookie);
 
@@ -123,9 +134,14 @@ describe("Better Auth runtime", () => {
     });
 
     const response = await runtime.handler(
-      jsonRequest("/request", { email: "person@outside.example" }),
+      jsonRequest("/email-otp/send-verification-otp", {
+        email: "person@outside.example",
+        type: "sign-in",
+      }),
     );
-    assert.deepEqual(await response.json(), { ok: true });
+    // better-auth still answers 200 (it must not reveal whether an address is
+    // allowed), but the unauthorized identity means no code is sent.
+    assert.equal(response.status, 200);
     assert.equal(sends, 0);
     await runtime.close();
   });
