@@ -1,10 +1,11 @@
 # @dbx-tools/tunnel
 
-Front an app with a public tunnel and the passwordless
+Front an app with a public Portr and/or FRP tunnel and the passwordless
 [`@dbx-tools/auth`](../auth) gate, in-process.
 
-Built on the [SSE-enabled Portr fork](https://github.com/reggie-db/portr/releases/tag/v1.0.15-sse.2),
-based on [upstream Portr](https://github.com/amalshaji/portr). Use this library
+Supports the [SSE-enabled Portr fork](https://github.com/reggie-db/portr/releases/tag/v1.0.15-sse.2),
+based on [upstream Portr](https://github.com/amalshaji/portr), plus
+[FRP](https://github.com/fatedier/frp). Use this library
 when an app needs to be reachable from outside its network - a stakeholder demo,
 a webhook sender that has to reach a dev build, an OAuth redirect that cannot
 point at `localhost` - without publishing the app to anyone who learns the URL.
@@ -14,8 +15,8 @@ platform-neutral.
 
 The tunnel plugs into `@dbx-tools/appkit`'s `createApp` through its INTERCEPTOR
 context: `createApp({ interceptor: tunnelInterceptor() })` applies the computed
-`DATABRICKS_HOST`, launches portr pointed at the app's public port, and binds it
-so the app and portr live and die as one (concurrently-style - signals pass
+`DATABRICKS_HOST`, launches the selected client(s) pointed at the app's public
+port, and binds them so the app and tunnels live and die as one (signals pass
 through, either death tears the pair down). The app is the process; the tunnel
 rides along inside it. Access is granted per email address against an allow-list,
 authenticated by Better Auth email OTP or a passkey; the gate itself is the
@@ -26,7 +27,7 @@ middleware on the app's OWN Express server (no separate proxy process).
 
 - Consumed in-process via the `createApp` interceptor context - no wrapper CLI,
   no separate process: `createApp({ interceptor: tunnelInterceptor() })`. A no-op
-  when no `PORTR_TOKEN` / `TUNNEL_PUBLIC_DOMAIN` is set, so it is safe to register
+  when the selected clients are not configured, so it is safe to register
   unconditionally.
 - Uses the shared email-template brand for the code email's color, font, and
   logo. The displayed app name defaults to the dbx-tools brand and can be set
@@ -118,26 +119,24 @@ await appkit.createApp({
     // Delivers the OTP codes; the gate reuses this shared transport.
     email(),
     // The OTP gate: login routes + a gating middleware on THIS server. Gates only
-    // portr traffic (Host === TUNNEL_PUBLIC_DOMAIN); the platform front door passes
+    // public tunnel traffic; the platform front door passes
     // through. Inert when no tunnel domain is configured.
     authGate({}),
   ],
-  // Applies DATABRICKS_HOST, launches portr at the app's public port, and binds
-  // it to the app. No-op when no PORTR_TOKEN / TUNNEL_PUBLIC_DOMAIN is set.
-  interceptor: tunnelInterceptor(),
+  // Applies DATABRICKS_HOST and launches FRP. Use "both" to launch Portr too.
+  interceptor: tunnelInterceptor({ transport: "frp" }),
 });
 ```
 
-Two pieces, one process: `tunnelInterceptor()` runs portr (a child, bound to the
-app), and `authGate()` is the in-app gate. `tunnelInterceptor(opts)` takes optional
-`publicDomain` / `subdomain` / `port`, each falling back to env (and `port` to the
-`DATABRICKS_APP_PORT` contract); `authGate` reads `TUNNEL_AUTH_ALLOW` /
-`TUNNEL_PUBLIC_DOMAIN` from the environment, so a deployment usually passes nothing.
+Two pieces, one process: `tunnelInterceptor()` runs the selected tunnel clients
+(children bound to the app), and `authGate()` is the in-app gate. Portr remains
+the default. Set `transport: "frp"` or `DBX_TOOLS_TUNNEL_TRANSPORT=frp`; use `both` with
+separate `TUNNEL_PUBLIC_DOMAIN` and `TUNNEL_FRP_PUBLIC_DOMAIN` hosts.
 See [Use The Gate](#use-the-gate) for the gate on its own.
 
 ## Options
 
-The interceptor reads portr wiring from the environment; the gate (the `authGate`
+The interceptor reads tunnel wiring from the environment; the gate (the `authGate`
 plugin) reads its own settings the same way, so a deployment configures both
 without touching code.
 
@@ -152,6 +151,13 @@ without touching code.
 | `TUNNEL_AUTH_SESSION_CUTOFF`  | unset (no cutoff)            |
 | `TUNNEL_AUTH_LOGOUT_REDIRECT` | `/` (show login again)       |
 | `TUNNEL_PUBLIC_DOMAIN`        | - (no tunnel when unset)     |
+| `TUNNEL_FRP_PUBLIC_DOMAIN`    | - (no FRP tunnel when unset) |
+| `DBX_TOOLS_TUNNEL_TRANSPORT`  | `portr`                      |
+| `FRP_SERVER`                  | FRP public domain            |
+| `FRP_SERVER_PORT`             | `443`                        |
+| `FRP_PROTOCOL`                | `wss`                        |
+| `FRP_TOKEN`                   | unset (no frps auth)         |
+| `FRP_PROXY_NAME`              | public domain's first label  |
 | `TUNNEL_FORWARD_HEADERS`      | the built-in `x-` allow-list |
 | `TUNNEL_AUTH_JWT_SECRET`      | an ephemeral per-process key |
 
@@ -162,7 +168,7 @@ The earlier unprefixed spellings - `AUTH_SUBJECT`, `AUTH_BRAND_NAME`,
 `EMAIL_AUTH_ALLOW`, `PUBLIC_DOMAIN`, plus `TUNNEL_AUTH_SESSION_EPOCH` from before
 the cutoff rename - are still read as deprecated aliases, with the `TUNNEL_` name
 winning when both are set, so an existing deployment needs no coordinated rename.
-`PORTR_TOKEN` / `PORTR_SERVER` keep their names: that namespace belongs to portr
+`PORTR_*` and `FRP_*` keep their names: those namespaces belong to the clients
 itself, as does `DATABRICKS_APP_PORT`, which the platform sets and the tunnel
 honours.
 
@@ -367,11 +373,16 @@ RUN_LIVE_INSTALL_TEST=1 bun test packages/js/node/tunnel/test/portr-install.inte
 
 The test installs into an isolated temporary home, runs `portr --version`, logs
 the selected release and executable path, then removes the temporary directory.
+The same command also discovers `frp-install.integration.test.ts`; it downloads
+the pinned `frpc` release and verifies its exact version. On macOS the installer
+applies an ad-hoc signature before version detection because the unsigned
+upstream binary is otherwise terminated by the platform loader.
 
 ## Modules
 
 - `interceptor` - `tunnelInterceptor()`, the `createApp` interceptor that applies
-  `DATABRICKS_HOST`, launches portr, and binds it to the app.
+  `DATABRICKS_HOST`, launches Portr/FRP, and binds clients to the app.
+- `frp` - frpc config resolution, pinned install, TOML rendering, and child launch.
 - `plugin` - `authGate()`, authorization/delivery config, Better Auth
   composition, and AppKit Lakebase discovery.
 - `gate` - the login routes + gating middleware (`mountGate`, `isTunnelHost`):

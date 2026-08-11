@@ -1,7 +1,8 @@
 # @dbx-tools/cli-tunnel
 
-Wrap any command in a public [portr](https://github.com/amalshaji/portr) tunnel
-fronted by [`@dbx-tools/auth`](../../node/auth) email OTP and passkeys.
+Wrap any command in a public [Portr](https://github.com/amalshaji/portr),
+[FRP](https://github.com/fatedier/frp), or combined tunnel fronted by
+[`@dbx-tools/auth`](../../node/auth) email OTP and passkeys.
 
 Run `dbx tunnel -- <command>` when a local or self-hosted process needs a public
 URL that only approved email addresses can reach. The wrapper claims the public
@@ -11,12 +12,12 @@ about.
 
 Key features:
 
-- Public portr tunnel + Better Auth passwordless gate around a command the
+- Portr, FRP, or both tunnel clients + a Better Auth passwordless gate around a command the
   wrapper does not have to modify, import, or even be written in the same
   language as.
 - A reverse proxy that answers the login routes itself and forwards only
   verified traffic to the wrapped process.
-- Flag → environment → `databricks.yml` resolution for every gate and portr
+- Flag → environment → `databricks.yml` resolution for every gate and tunnel
   setting, delegated to [`@dbx-tools/tunnel`](../../node/tunnel) so the CLI
   cannot drift from the in-process plugin.
 - The same server-less `appkit.createApp` lifecycle as plugin mode. It can
@@ -75,16 +76,20 @@ subcommand, so `dbx tunnel -- cmd` and `dbx tunnel run -- cmd` are equivalent.
 dbx tunnel status --allow databricks.com
 ```
 
-The most common failure is a tunnel that silently does nothing because no portr
-token or public domain resolved. `status` prints the fully resolved ports, gate
-config, and portr config as JSON without starting a process.
+The most common failure is a tunnel that silently does nothing because its
+credentials or public domain did not resolve. `status` prints the fully resolved
+ports, gate config, and client configs as JSON without starting a process.
 
 ```sh
 dbx tunnel install
 ```
 
-`install` downloads the portr binary and exits, so a first run does not pay for
-the download.
+`install` defaults to Portr. Pass `frp` or `both` to preinstall those clients:
+
+```sh
+dbx tunnel install frp
+dbx tunnel install both
+```
 
 ## Commands And Flags
 
@@ -92,7 +97,7 @@ the download.
 dbx tunnel [options] -- <command...>    # wrap a command (default)
 dbx tunnel run [options] -- <command...>
 dbx tunnel status [options]
-dbx tunnel install
+dbx tunnel install [portr|frp|both]
 ```
 
 Every flag below is accepted on the root command and on `run` / `status`.
@@ -101,8 +106,15 @@ Omitted values fall back to the environment, a `.env` file, then
 
 | Flag                          | Meaning                                                    |
 | ----------------------------- | ---------------------------------------------------------- |
-| `--public-domain <host>`      | portr public domain (`<subdomain>.<server>`)               |
+| `--transport <mode>`         | `portr` (default), `frp`, or `both`                         |
+| `--public-domain <host>`      | Portr public domain (`<subdomain>.<server>`)                |
 | `--subdomain <name>`          | portr subdomain, else derived from the public domain       |
+| `--frp-public-domain <host>`  | FRP public HTTP domain                                     |
+| `--frp-server <host>`         | frps control host, else the FRP public domain              |
+| `--frp-server-port <port>`    | frps control port (default `443`)                          |
+| `--frp-protocol <protocol>`   | frpc transport protocol (default `wss`)                    |
+| `--frp-token <token>`         | optional frps auth token                                   |
+| `--frp-proxy-name <name>`     | frp proxy name, else the domain's first label              |
 | `--port <port>`               | public port the wrapper listens on (`DATABRICKS_APP_PORT`) |
 | `--app-port <port>`           | private port the wrapped app binds, else a free one        |
 | `--allow <patterns...>`       | email allow-list (domain, glob, or `/regex/`)              |
@@ -126,7 +138,7 @@ local debugging, not for anything reachable.
 
 ## How A Request Flows
 
-1. The wrapper binds the PUBLIC port - the one portr and the Databricks Apps
+1. The wrapper binds the PUBLIC port - the one tunnel clients and Databricks Apps
    runtime route to - and spawns the command on a private loopback port.
 2. A login route (`/auth/*`) is answered by the proxy itself, using the gate
    handlers from a server-less AppKit app that supplies the code store, signing
@@ -134,8 +146,8 @@ local debugging, not for anything reachable.
 3. Anything else goes through `gate.gateRequest`. A verified session is proxied
    to the child with caller-supplied `x-` headers stripped; an unverified
    request gets the login page or a `401`.
-4. portr publishes the public port once a token and domain resolve. Without
-   them the wrapper still serves locally and says so.
+4. The selected client(s) publish the public port. In `both` mode, configure
+   different Portr and FRP domains; the gate recognizes both hosts.
 
 ## Modules
 

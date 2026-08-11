@@ -675,11 +675,11 @@ project.applyToProjects(
   },
 );
 
-// node-tunnel (`@dbx-tools/tunnel`): fronts a Databricks App with a public portr
+// node-tunnel (`@dbx-tools/tunnel`): fronts a Databricks App with Portr and/or FRP
 // tunnel + @dbx-tools/auth passwordless gate, consumed IN-PROCESS through
 // `@dbx-tools/appkit`'s `createApp` interceptor context.
-// `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs portr pointed at the app's
-// public port, and `bindProcess`es it so the app and portr live/die as one
+// `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs selected clients pointed
+// at the app's public port, and `bindProcess`es them so app and tunnels live/die as one
 // (concurrently-style). The authGate AppKit plugin composes Better Auth with the
 // email transport and native Lakebase or SQLite storage, then registers one
 // handler + gating middleware on the app's OWN Express server.

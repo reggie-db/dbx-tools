@@ -25,7 +25,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { log } from "@dbx-tools/shared-core";
-import { portr } from "@dbx-tools/tunnel";
+import { frp, portr } from "@dbx-tools/tunnel";
 import { Command, CommanderError } from "commander";
 import { resolveTunnelOptions, type TunnelOptions } from "./options.ts";
 import { startProxy } from "./proxy.ts";
@@ -61,7 +61,8 @@ function freePort(): Promise<number> {
  */
 function addOptions(command: Command): Command {
   return command
-    .option("--public-domain <host>", "portr public domain (<subdomain>.<server>)")
+    .option("--transport <transport>", "public tunnel transport: portr, frp, or both")
+    .option("--public-domain <host>", "public tunnel domain")
     .option("--subdomain <name>", "portr subdomain (else derived from the public domain)")
     .option("--port <port>", "public port the wrapper listens on")
     .option("--app-port <port>", "private port the wrapped app is told to bind")
@@ -77,6 +78,12 @@ function addOptions(command: Command): Command {
     .option("--forward-headers <patterns...>", "extra x- headers tunnel traffic may forward")
     .option("--gate-path <prefix...>", "path prefixes to gate beyond /api/ (e.g. /ws)")
     .option("--bind <host...>", "interface IPs the gate listens on (default: 0.0.0.0)")
+    .option("--frp-server <host>", "frps control host (default: FRP public domain)")
+    .option("--frp-public-domain <host>", "FRP public HTTP domain")
+    .option("--frp-server-port <port>", "frps control port (default: 443)")
+    .option("--frp-protocol <protocol>", "frpc transport protocol (default: wss)")
+    .option("--frp-token <token>", "frps auth token")
+    .option("--frp-proxy-name <name>", "frp proxy registration name")
     .option("--insecure", "run open, with no gate");
 }
 
@@ -158,15 +165,21 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
     bindHosts: resolved.bindHosts,
   });
 
-  if (resolved.portr) {
+  if ((resolved.transport === "portr" || resolved.transport === "both") && resolved.portr) {
     const portrEnv = await portr.installPortr();
     await portr.writePortrConfig(resolved.portr, portrEnv);
     children.push(await portr.startPortr(resolved.portr, portrEnv));
-  } else {
-    logger.info("no PORTR_TOKEN / TUNNEL_PUBLIC_DOMAIN - serving locally only", {
-      publicPort: resolved.publicPort,
-    });
   }
+  if ((resolved.transport === "frp" || resolved.transport === "both") && resolved.frp) {
+    const frpEnv = await frp.installFrp();
+    const configPath = await frp.writeFrpConfig(resolved.frp, frpEnv);
+    children.push(frp.startFrp(resolved.frp, frpEnv, configPath));
+  }
+  const activeTunnelCount = children.length - (executable ? 1 : 0);
+  if (!activeTunnelCount) logger.info("no selected public tunnel is configured", {
+    transport: resolved.transport,
+    publicPort: resolved.publicPort,
+  });
   supervise(children);
 }
 
@@ -175,7 +188,7 @@ export function buildProgram(name = "dbx tunnel"): Command {
   const program = addOptions(
     new Command()
       .name(name)
-      .description("Front a command with a portr tunnel and passwordless auth"),
+      .description("Front a command with a public tunnel and passwordless auth"),
   );
 
   // `run` is the DEFAULT action as well as a named subcommand, preserving the old
@@ -205,9 +218,14 @@ export function buildProgram(name = "dbx tunnel"): Command {
 
   program
     .command("install")
-    .description("Install the portr binary and exit")
-    .action(async () => {
-      await portr.installPortr();
+    .argument("[transport]", "portr, frp, or both", "portr")
+    .description("Install public tunnel client binaries and exit")
+    .action(async (transport: string) => {
+      if (transport === "portr" || transport === "both") await portr.installPortr();
+      if (transport === "frp" || transport === "both") await frp.installFrp();
+      if (transport !== "portr" && transport !== "frp" && transport !== "both") {
+        throw new CommanderError(1, "tunnel.invalid-transport", `invalid transport: ${transport}`);
+      }
     });
 
   return program;

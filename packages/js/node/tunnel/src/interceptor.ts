@@ -1,6 +1,6 @@
 /**
  * `tunnelInterceptor()` - the {@link Interceptor} that fronts an app with a public
- * portr tunnel, consuming the {@link InterceptorContext} `@dbx-tools/appkit`'s
+ * portr and/or frp tunnel, consuming the {@link InterceptorContext} `@dbx-tools/appkit`'s
  * `createApp` hands it.
  *
  * The tunnel runs IN-PROCESS: the APP is the main process and hands this interceptor
@@ -17,15 +17,19 @@
  * @module
  */
 
+import type { ChildProcess } from "node:child_process";
 import type { Interceptor, InterceptorContext } from "@dbx-tools/appkit";
 import { log, object } from "@dbx-tools/shared-core";
+import { installFrp, resolveFrpConfig, startFrp, writeFrpConfig } from "./frp.ts";
 import { installPortr, resolvePortrConfig, startPortr, writePortrConfig } from "./portr.ts";
 
 const logger = log.logger("tunnel:interceptor");
 
 /** Options for {@link tunnelInterceptor} (each also resolvable from env). */
 export interface TunnelInterceptorOptions {
-  /** portr `<subdomain>.<server>` to serve on. Env `TUNNEL_PUBLIC_DOMAIN`. */
+  /** Tunnel clients to run. Env `DBX_TOOLS_TUNNEL_TRANSPORT`; defaults to `portr`. */
+  transport?: TunnelTransport;
+  /** Public host to serve on. Env `TUNNEL_PUBLIC_DOMAIN`. */
   publicDomain?: string;
   /** portr subdomain (else derived from {@link publicDomain}). */
   subdomain?: string;
@@ -35,6 +39,32 @@ export interface TunnelInterceptorOptions {
    * (then `8000`), which is the port the platform routes to.
    */
   port?: number;
+  /** frps control host; defaults to the FRP public domain. Env `FRP_SERVER`. */
+  frpServer?: string;
+  /** FRP public HTTP host. Env `TUNNEL_FRP_PUBLIC_DOMAIN`. */
+  frpPublicDomain?: string;
+  /** frps control port. Env `FRP_SERVER_PORT`; defaults to `443`. */
+  frpServerPort?: number;
+  /** frpc transport protocol. Env `FRP_PROTOCOL`; defaults to `wss`. */
+  frpProtocol?: string;
+  /** frps auth token. Env `FRP_TOKEN` (or `TUNNEL_TOKEN`). */
+  frpToken?: string;
+  /** frp proxy registration name. Env `FRP_PROXY_NAME`. */
+  frpProxyName?: string;
+}
+
+/** Public tunnel clients supported by the interceptor and CLI. */
+export type TunnelTransport = "portr" | "frp" | "both";
+
+/** Resolve and validate the tunnel transport selector. */
+export function resolveTunnelTransport(transport?: string): TunnelTransport {
+  const resolved =
+    transport ??
+    process.env.DBX_TOOLS_TUNNEL_TRANSPORT ??
+    process.env.TUNNEL_TRANSPORT ??
+    "portr";
+  if (resolved === "portr" || resolved === "frp" || resolved === "both") return resolved;
+  throw new TypeError(`invalid tunnel transport: ${resolved} (expected portr, frp, or both)`);
 }
 
 /** Resolve the public port portr should target: explicit, else the Apps contract. */
@@ -45,9 +75,8 @@ function resolvePublicPort(port?: number): number {
 /**
  * Build the tunnel {@link Interceptor}. Pass it to `createApp({ interceptor })`.
  *
- * A no-op (logs and returns) when no portr tunnel is configured - no `PORTR_TOKEN`
- * or no resolvable `<subdomain>.<server>` - so an app can register it
- * unconditionally and only actually tunnels where the deployment wired portr.
+ * A no-op (logs and returns) when none of the selected tunnel clients resolve
+ * usable configuration, so an app can register it unconditionally.
  *
  * @example
  * import { appkit } from "@dbx-tools/appkit";
@@ -65,25 +94,45 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
     }
 
     const port = resolvePublicPort(options.port);
-    const portrConfig = resolvePortrConfig({
-      publicDomain: options.publicDomain,
-      subdomain: options.subdomain,
-      port,
-    });
-    if (!portrConfig) {
-      logger.info("no PORTR_TOKEN/TUNNEL_PUBLIC_DOMAIN - the app runs without a public tunnel");
-      return;
+    const transport = resolveTunnelTransport(options.transport);
+    const children: ChildProcess[] = [];
+    if (transport === "portr" || transport === "both") {
+      const portrConfig = resolvePortrConfig({
+        publicDomain: options.publicDomain,
+        subdomain: options.subdomain,
+        port,
+      });
+      if (portrConfig) {
+        const portrEnv = await installPortr();
+        await writePortrConfig(portrConfig, portrEnv);
+        children.push(await startPortr(portrConfig, portrEnv));
+      } else {
+        logger.info("portr not configured (requires PORTR_TOKEN and TUNNEL_PUBLIC_DOMAIN)");
+      }
     }
-
-    const portrEnv = await installPortr();
-    await writePortrConfig(portrConfig, portrEnv);
-    const portr = await startPortr(portrConfig, portrEnv);
-    ctx.bindProcess(portr);
-
+    if (transport === "frp" || transport === "both") {
+      const frpConfig = resolveFrpConfig({
+        publicDomain: options.frpPublicDomain,
+        server: options.frpServer,
+        serverPort: options.frpServerPort,
+        protocol: options.frpProtocol,
+        token: options.frpToken,
+        proxyName: options.frpProxyName,
+        port,
+      });
+      if (frpConfig) {
+        const frpEnv = await installFrp();
+        const configPath = await writeFrpConfig(frpConfig, frpEnv);
+        children.push(startFrp(frpConfig, frpEnv, configPath));
+      } else {
+        logger.info("frp not configured (requires TUNNEL_PUBLIC_DOMAIN)");
+      }
+    }
+    if (!children.length) return;
+    for (const child of children) ctx.bindProcess(child);
     ctx.onLifecycle("shutdown", () => {
-      if (!portr.killed) portr.kill("SIGTERM");
+      for (const child of children) if (!child.killed) child.kill("SIGTERM");
     });
-
-    logger.info(`tunnel bound: portr -> :${port} (${portrConfig.subdomain}.${portrConfig.server})`);
+    logger.info(`tunnel bound: ${transport} -> :${port}`);
   };
 }

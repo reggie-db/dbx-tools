@@ -15,10 +15,11 @@
 import type { AuthStorageMode } from "@dbx-tools/auth";
 import { config } from "@dbx-tools/core";
 import { object } from "@dbx-tools/shared-core";
-import { type AuthGateConfig, plugin, portr } from "@dbx-tools/tunnel";
+import { type AuthGateConfig, frp, interceptor, plugin, portr } from "@dbx-tools/tunnel";
 
 /** Raw commander flag values (every numeric flag arrives as a string). */
 export interface TunnelOptions {
+  transport?: interceptor.TunnelTransport;
   publicDomain?: string;
   subdomain?: string;
   port?: string | number;
@@ -36,6 +37,12 @@ export interface TunnelOptions {
   gatePath?: string[];
   bind?: string[];
   insecure?: boolean;
+  frpServer?: string;
+  frpPublicDomain?: string;
+  frpServerPort?: string | number;
+  frpProtocol?: string;
+  frpToken?: string;
+  frpProxyName?: string;
 }
 
 export interface ResolvedTunnelOptions {
@@ -45,6 +52,7 @@ export interface ResolvedTunnelOptions {
   appPort?: number;
   /** Interface IPs the gate listens on. Empty means the default (0.0.0.0). */
   bindHosts: string[];
+  transport: interceptor.TunnelTransport;
   /**
    * The gate config as the `authGate` PLUGIN takes it - flags only, nothing
    * resolved. Passed straight to the plugin so it applies its own fallbacks
@@ -54,6 +62,7 @@ export interface ResolvedTunnelOptions {
   /** The same config after the plugin's resolution, for `status` and for routing. */
   gate: plugin.ResolvedAuthGateConfig;
   portr: ReturnType<typeof portr.resolvePortrConfig>;
+  frp: ReturnType<typeof frp.resolveFrpConfig>;
 }
 
 export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOptions {
@@ -79,17 +88,29 @@ export function resolveTunnelOptions(options: TunnelOptions): ResolvedTunnelOpti
     gatePaths: options.gatePath,
     insecure: options.insecure,
     publicDomain: options.publicDomain,
+    publicDomains: options.frpPublicDomain ? [options.frpPublicDomain] : undefined,
   };
   const gate = plugin.resolveAuthGateConfig(gateConfig);
+  const transport = interceptor.resolveTunnelTransport(options.transport);
   return {
     publicPort,
     ...(appPort > 0 ? { appPort } : {}),
     bindHosts: options.bind ?? [],
+    transport,
     gateConfig,
     gate,
     portr: portr.resolvePortrConfig({
       publicDomain: gate.publicDomain,
       subdomain: options.subdomain,
+      port: publicPort,
+    }),
+    frp: frp.resolveFrpConfig({
+      publicDomain: options.frpPublicDomain,
+      server: options.frpServer,
+      serverPort: options.frpServerPort,
+      protocol: options.frpProtocol,
+      token: options.frpToken,
+      proxyName: options.frpProxyName,
       port: publicPort,
     }),
   };

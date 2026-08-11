@@ -166,6 +166,8 @@ export interface AuthGateConfig extends BasePluginConfig, AuthStorageConfig {
    * traffic).
    */
   publicDomain?: string;
+  /** Additional public tunnel domains accepted by the gate. */
+  publicDomains?: string | string[];
   /**
    * Extra `x-` request headers tunnel traffic may forward (literal / glob /
    * `/regex/`), unioned with the built-in allow-list. Env `TUNNEL_FORWARD_HEADERS`.
@@ -213,8 +215,10 @@ export interface ResolvedAuthGateConfig {
   sessionCutoffMs: number;
   /** Same-origin path returned after logout. */
   logoutRedirectPath: string;
-  /** Public domain that identifies portr traffic by `Host`; `undefined` = inert. */
+  /** Primary public domain; `undefined` when Portr is not configured. */
   publicDomain?: string;
+  /** All public tunnel domains accepted by the gate. */
+  publicDomains: string[];
   /** Extra `x-` headers tunnel traffic may forward (unioned with the defaults). */
   forwardHeaders: string[];
   /** Path prefixes to gate beyond `/api/` (e.g. `/ws`). */
@@ -249,6 +253,8 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
       (coreConfig.text("AUTH_STORAGE", TUNNEL_CONFIG) as AuthStorageMode | undefined),
     sqlitePath: config.sqlitePath ?? coreConfig.text("AUTH_SQLITE_PATH", TUNNEL_CONFIG),
   });
+  const publicDomain = coreConfig.string(config.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG);
+  const frpPublicDomain = coreConfig.text("FRP_PUBLIC_DOMAIN", TUNNEL_CONFIG);
   return {
     // Both sources are unioned rather than one overriding: a deployment-wide
     // TUNNEL_AUTH_ALLOW and a per-invocation `--allow` should both grant access.
@@ -280,7 +286,16 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
       coreConfig.string(config.logoutRedirectPath, "AUTH_LOGOUT_REDIRECT", TUNNEL_CONFIG) ??
         DEFAULTS.logoutRedirectPath,
     ),
-    publicDomain: coreConfig.string(config.publicDomain, "PUBLIC_DOMAIN", TUNNEL_CONFIG),
+    publicDomain,
+    publicDomains: [
+      ...new Set(
+        [
+          publicDomain,
+          frpPublicDomain,
+          ...string.parseList(config.publicDomains),
+        ].filter((value): value is string => !!value),
+      ),
+    ],
     forwardHeaders: [
       ...string.parseList(config.forwardHeaders),
       ...string.parseList(coreConfig.text("FORWARD_HEADERS", TUNNEL_CONFIG)),
@@ -404,7 +419,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     logger.info("ready", {
       patterns: this.resolved.allow.length,
       sessionTtlSeconds: this.resolved.sessionTtlSeconds,
-      publicDomain: this.resolved.publicDomain ?? null,
+      publicDomains: this.resolved.publicDomains,
       insecure: this.resolved.insecure,
       storage: this.resolved.storage,
       logoutRedirectPath: this.resolved.logoutRedirectPath,
@@ -434,7 +449,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
     }
     mountGateOnContext(context, {
       gate: this.exports(),
-      publicDomain: this.resolved.publicDomain,
+      publicDomain: this.resolved.publicDomains,
       forwardHeaders: this.resolved.forwardHeaders,
       gatePaths: this.resolved.gatePaths,
     });

@@ -47,7 +47,7 @@ export interface GateOptions {
    * inert (everything passes through) - a tunnel with no public domain gates
    * nothing.
    */
-  publicDomain?: string;
+  publicDomain?: string | readonly string[];
   /**
    * Extra `x-` request headers tunnel traffic may forward (unioned with the
    * built-in allow-list). Every other `x-` header is stripped from tunnel traffic.
@@ -64,14 +64,18 @@ export interface GateOptions {
 }
 
 /**
- * True when the request's `Host` is the tunnel's public domain - i.e. it came in
- * over portr. Case-insensitive; the optional `:port` is ignored. When no public
- * domain is configured, nothing is tunnel traffic.
+ * True when the request's `Host` is one of the tunnel's public domains - i.e. it
+ * came in over Portr or FRP. Case-insensitive; the optional `:port` is ignored.
+ * When no public domain is configured, nothing is tunnel traffic.
  */
-export function isTunnelHost(req: IncomingMessage, publicDomain: string | undefined): boolean {
+export function isTunnelHost(
+  req: IncomingMessage,
+  publicDomain: string | readonly string[] | undefined,
+): boolean {
   if (!publicDomain) return false;
   const host = (req.headers.host ?? "").toLowerCase().split(":")[0];
-  return host === publicDomain.toLowerCase().split(":")[0];
+  const domains = typeof publicDomain === "string" ? [publicDomain] : publicDomain;
+  return domains.some((domain) => host === domain.toLowerCase().split(":")[0]);
 }
 
 /**

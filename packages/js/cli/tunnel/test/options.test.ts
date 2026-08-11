@@ -23,6 +23,14 @@ const KEYS = [
   "DATABRICKS_APP_PORT",
   "PORTR_TOKEN",
   "PORTR_SERVER",
+  "FRP_SERVER",
+  "FRP_SERVER_PORT",
+  "FRP_PROTOCOL",
+  "FRP_TOKEN",
+  "FRP_PROXY_NAME",
+  "TUNNEL_TOKEN",
+  "DBX_TOOLS_TUNNEL_TRANSPORT",
+  "DBX_TOOLS_TUNNEL_FRP_PUBLIC_DOMAIN",
   "DBX_TOOLS_TUNNEL_APP_PORT",
   "DBX_TOOLS_TUNNEL_PUBLIC_DOMAIN",
   "DBX_TOOLS_TUNNEL_AUTH_ALLOW",
@@ -134,6 +142,59 @@ describe("resolveTunnelOptions", () => {
   it("yields no portr config from a bare domain with no server to split off", () => {
     process.env.PORTR_TOKEN = "portr_test_token";
     assert.equal(resolveTunnelOptions({ publicDomain: "localhost" }).portr, undefined);
+  });
+
+  it("defaults to portr and resolves an FRP WSS tunnel without requiring a token", () => {
+    assert.equal(resolveTunnelOptions({}).transport, "portr");
+    const resolved = resolveTunnelOptions({
+      transport: "frp",
+      frpPublicDomain: "https://demo.example.com/path",
+      port: "8123",
+    });
+    assert.equal(resolved.transport, "frp");
+    assert.deepEqual(resolved.frp, {
+      publicDomain: "demo.example.com",
+      server: "demo.example.com",
+      serverPort: 443,
+      protocol: "wss",
+      proxyName: "demo",
+      port: 8123,
+    });
+  });
+
+  it("resolves separate FRP and Portr domains for combined mode", () => {
+    process.env.PORTR_TOKEN = "portr_test_token";
+    const resolved = resolveTunnelOptions({
+      transport: "both",
+      publicDomain: "demo.apps.example.com",
+      frpPublicDomain: "demo.frp.example.com",
+      frpServer: "control.example.com",
+      frpServerPort: "7443",
+      frpProtocol: "wss",
+      frpToken: "frp_test_token",
+      frpProxyName: "demo-frp",
+    });
+    assert.equal(resolved.portr?.subdomain, "demo");
+    assert.deepEqual(resolved.frp, {
+      publicDomain: "demo.frp.example.com",
+      server: "control.example.com",
+      serverPort: 7443,
+      protocol: "wss",
+      token: "frp_test_token",
+      proxyName: "demo-frp",
+      port: 8000,
+    });
+    assert.deepEqual(resolved.gate.publicDomains, [
+      "demo.apps.example.com",
+      "demo.frp.example.com",
+    ]);
+  });
+
+  it("rejects an unknown tunnel transport", () => {
+    assert.throws(
+      () => resolveTunnelOptions({ transport: "unknown" as "portr" }),
+      /invalid tunnel transport/,
+    );
   });
 
   it("passes the --bind interface list through, defaulting to empty (0.0.0.0)", () => {

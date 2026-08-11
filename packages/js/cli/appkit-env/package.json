@@ -50,7 +50,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.105",
+  "version": "0.6.106",
   "types": "index.ts",
   "type": "module",
   "exports": {

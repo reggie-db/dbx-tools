@@ -7,6 +7,17 @@ import { mountGateOnContext, type AuthGateApi } from "../src/plugin.ts";
 
 const PUBLIC_DOMAIN = "demo.apps.dbx.tools";
 
+describe("isTunnelHost", () => {
+  it("accepts any configured public tunnel domain", () => {
+    const request = makeReq("demo.frp.example.com:443", "/");
+    assert.equal(
+      isTunnelHost(request, ["demo.apps.dbx.tools", "demo.frp.example.com"]),
+      true,
+    );
+    assert.equal(isTunnelHost(request, ["demo.apps.dbx.tools"]), false);
+  });
+});
+
 /** A gate API double: every session is valid iff a cookie value is present. */
 function fakeGate(overrides: Partial<AuthGateApi> = {}): AuthGateApi {
   return {
