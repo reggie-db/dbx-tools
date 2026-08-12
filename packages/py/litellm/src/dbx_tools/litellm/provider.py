@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import litellm
 from litellm import CustomLLM
-from litellm.exceptions import MidStreamFallbackError, RateLimitError
+from litellm.exceptions import AuthenticationError, MidStreamFallbackError, RateLimitError
 from litellm.types.utils import (
     EmbeddingResponse,
     GenericStreamingChunk,
@@ -22,6 +22,7 @@ from litellm.types.utils import (
 )
 
 from .backend import DatabricksLiteLLMBackend
+from .credentials import Credentials
 from .models import requires_responses_api
 
 logger = logging.getLogger(__name__)
@@ -64,12 +65,16 @@ class DbxCustomLLM(CustomLLM):
         **_: Any,
     ) -> ModelResponse:
         resolved = self.backend.resolve(model, requires_tools=_requires_tools(optional_params))
+        credentials = _RequestCredentials(self.backend)
         return _ensure_response_id(
-            litellm.completion(
-                model=_delegate_chat_model(resolved),
-                messages=_prepare_messages(messages, optional_params, resolved),
-                stream=False,
-                **_delegated_params(optional_params, self.backend, timeout=timeout),
+            _with_auth_retry(
+                lambda: litellm.completion(
+                    model=_delegate_chat_model(resolved),
+                    messages=_prepare_messages(messages, optional_params, resolved),
+                    stream=False,
+                    **_delegated_params(optional_params, credentials.current, timeout=timeout),
+                ),
+                credentials.refresh,
             )
         )
 
@@ -86,14 +91,17 @@ class DbxCustomLLM(CustomLLM):
             model,
             requires_tools=_requires_tools(optional_params),
         )
-        return _ensure_response_id(
-            await litellm.acompletion(
+        credentials = _RequestCredentials(self.backend)
+
+        async def call() -> ModelResponse:
+            return await litellm.acompletion(
                 model=_delegate_chat_model(resolved),
                 messages=_prepare_messages(messages, optional_params, resolved),
                 stream=False,
-                **_delegated_params(optional_params, self.backend, timeout=timeout),
+                **_delegated_params(optional_params, credentials.current, timeout=timeout),
             )
-        )
+
+        return _ensure_response_id(await _with_auth_retry_async(call, credentials.refresh))
 
     def streaming(
         self,
@@ -104,14 +112,18 @@ class DbxCustomLLM(CustomLLM):
         **_: Any,
     ) -> Iterator[GenericStreamingChunk]:
         resolved = self.backend.resolve(model, requires_tools=_requires_tools(optional_params))
-        params = _delegated_params(optional_params, self.backend, timeout=timeout)
+        credentials = _RequestCredentials(self.backend)
+        # credentials.current is read INSIDE the factory (via _delegated_params) so
+        # an auth-error retry runs against the re-minted token, not the rejected
+        # one. It resolves to the same cached token on the rate-limit path.
         return _retrying_generic_stream(
             lambda: litellm.completion(
                 model=_delegate_chat_model(resolved),
                 messages=_prepare_messages(messages, optional_params, resolved),
                 stream=True,
-                **params,
-            )
+                **_delegated_params(optional_params, credentials.current, timeout=timeout),
+            ),
+            on_auth_refresh=credentials.refresh,
         )
 
     async def astreaming(
@@ -127,17 +139,22 @@ class DbxCustomLLM(CustomLLM):
             model,
             requires_tools=_requires_tools(optional_params),
         )
-        params = _delegated_params(optional_params, self.backend, timeout=timeout)
+        credentials = _RequestCredentials(self.backend)
 
+        # credentials.current is read INSIDE the factory (via _delegated_params) so
+        # an auth-error retry runs against the re-minted token, not the rejected
+        # one. It resolves to the same cached token on the rate-limit path.
         async def create_stream() -> Any:
             return await litellm.acompletion(
                 model=_delegate_chat_model(resolved),
                 messages=_prepare_messages(messages, optional_params, resolved),
                 stream=True,
-                **params,
+                **_delegated_params(optional_params, credentials.current, timeout=timeout),
             )
 
-        async for chunk in _retrying_async_generic_stream(create_stream):
+        async for chunk in _retrying_async_generic_stream(
+            create_stream, on_auth_refresh=credentials.refresh
+        ):
             yield chunk
 
     def embedding(
@@ -149,10 +166,14 @@ class DbxCustomLLM(CustomLLM):
         **_: Any,
     ) -> EmbeddingResponse:
         resolved = self.backend.resolve(model)
-        return litellm.embedding(
-            model=f"databricks/{resolved}",
-            input=input,
-            **_delegated_params(optional_params, self.backend, timeout=timeout),
+        credentials = _RequestCredentials(self.backend)
+        return _with_auth_retry(
+            lambda: litellm.embedding(
+                model=f"databricks/{resolved}",
+                input=input,
+                **_delegated_params(optional_params, credentials.current, timeout=timeout),
+            ),
+            credentials.refresh,
         )
 
     async def aembedding(
@@ -164,11 +185,16 @@ class DbxCustomLLM(CustomLLM):
         **_: Any,
     ) -> EmbeddingResponse:
         resolved = await asyncio.to_thread(self.backend.resolve, model)
-        return await litellm.aembedding(
-            model=f"databricks/{resolved}",
-            input=input,
-            **_delegated_params(optional_params, self.backend, timeout=timeout),
-        )
+        credentials = _RequestCredentials(self.backend)
+
+        async def call() -> EmbeddingResponse:
+            return await litellm.aembedding(
+                model=f"databricks/{resolved}",
+                input=input,
+                **_delegated_params(optional_params, credentials.current, timeout=timeout),
+            )
+
+        return await _with_auth_retry_async(call, credentials.refresh)
 
 
 def _delegate_chat_model(resolved: str) -> str:
@@ -464,7 +490,7 @@ _REJECTED_CHAT_PARAMS = (
 
 def _delegated_params(
     optional_params: Mapping[str, Any],
-    backend: DatabricksLiteLLMBackend,
+    credentials: Credentials,
     *,
     timeout: Any = None,
 ) -> dict[str, Any]:
@@ -478,10 +504,9 @@ def _delegated_params(
         params.pop(key, None)
     if timeout is not None:
         params.setdefault("timeout", timeout)
-    # A cached token keeps the nested call off LiteLLM's per-request SDK auth,
+    # An explicit token keeps the nested call off LiteLLM's per-request SDK auth,
     # which would otherwise construct a WorkspaceClient and mint a fresh token.
     if not params.get("api_key") and not params.get("api_base"):
-        credentials = backend.credentials()
         params["api_key"] = credentials.token
         params["api_base"] = credentials.api_base
     return params
@@ -516,7 +541,87 @@ def _is_retryable_rate_limit(error: Exception) -> bool:
     return "REQUEST_LIMIT_EXCEEDED" in str(error)
 
 
-def _retrying_generic_stream(factory: Callable[[], Any]) -> Iterator[GenericStreamingChunk]:
+def _is_auth_error(error: Exception) -> bool:
+    """Whether an exception (or anything it wraps) is an upstream 401/403.
+
+    Databricks rejects an expired, revoked, or rotated token with a 403 that
+    LiteLLM maps to AuthenticationError; the raw ``status_code`` is checked too
+    so a 401/403 wrapped in a different exception type is still recognized.
+    """
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, AuthenticationError):
+            return True
+        if getattr(current, "status_code", None) in (401, 403):
+            return True
+        current = getattr(current, "original_exception", None) or current.__cause__
+    return False
+
+
+# One rejection, one refresh, one retry: the rejected token is re-minted (once,
+# coalesced across concurrent callers) and the call reruns against the new one. A
+# second auth failure means the profile itself is broken (needs re-login), and
+# retrying further would only replay the same failure.
+_AUTH_REFRESH_LOG = "Databricks rejected the token; refreshing credentials and retrying once"
+
+
+class _RequestCredentials:
+    """The bearer credential for one request, re-minted once if it is rejected.
+
+    ``current`` is read fresh on every call attempt (through ``_delegated_params``)
+    so a retry after ``refresh`` runs against the new token. ``refresh`` delegates
+    to the backend's compare-and-swap re-mint, so concurrent requests that all hit
+    the same 401/403 coalesce into a single re-mint rather than a refresh storm.
+    """
+
+    def __init__(self, backend: DatabricksLiteLLMBackend) -> None:
+        self._backend = backend
+        self.current = backend.credentials()
+
+    def refresh(self) -> None:
+        self.current = self._backend.refresh_credentials(self.current)
+
+
+def _with_auth_retry(
+    call: Callable[[], _ResponseT], on_auth_refresh: Callable[[], None]
+) -> _ResponseT:
+    """Run a non-streaming call, re-minting the token once on a 401/403.
+
+    ``call`` reads credentials itself on each invocation (through
+    ``_delegated_params``), so the retry runs against the re-minted token rather
+    than the rejected one.
+    """
+    try:
+        return call()
+    except Exception as error:  # re-raised below unless it is an auth error
+        if not _is_auth_error(error):
+            raise
+        logger.warning(_AUTH_REFRESH_LOG)
+        on_auth_refresh()
+        return call()
+
+
+async def _with_auth_retry_async(
+    call: Callable[[], Awaitable[_ResponseT]], on_auth_refresh: Callable[[], None]
+) -> _ResponseT:
+    try:
+        return await call()
+    except Exception as error:  # re-raised below unless it is an auth error
+        if not _is_auth_error(error):
+            raise
+        logger.warning(_AUTH_REFRESH_LOG)
+        on_auth_refresh()
+        return await call()
+
+
+def _retrying_generic_stream(
+    factory: Callable[[], Any],
+    *,
+    on_auth_refresh: Callable[[], None] | None = None,
+) -> Iterator[GenericStreamingChunk]:
+    auth_retried = False
     for attempt in range(RATE_LIMIT_RETRIES + 1):
         emitted = False
         try:
@@ -535,11 +640,20 @@ def _retrying_generic_stream(factory: Callable[[], Any]) -> Iterator[GenericStre
                 RATE_LIMIT_RETRIES,
             )
             time.sleep(delay)
+        except Exception as error:  # re-raised unless it is a first, pre-stream auth error
+            if emitted or auth_retried or on_auth_refresh is None or not _is_auth_error(error):
+                raise
+            logger.warning(_AUTH_REFRESH_LOG)
+            on_auth_refresh()
+            auth_retried = True
 
 
 async def _retrying_async_generic_stream(
     factory: Callable[[], Awaitable[Any]],
+    *,
+    on_auth_refresh: Callable[[], None] | None = None,
 ) -> AsyncIterator[GenericStreamingChunk]:
+    auth_retried = False
     for attempt in range(RATE_LIMIT_RETRIES + 1):
         emitted = False
         try:
@@ -559,6 +673,12 @@ async def _retrying_async_generic_stream(
                 RATE_LIMIT_RETRIES,
             )
             await asyncio.sleep(delay)
+        except Exception as error:  # re-raised unless it is a first, pre-stream auth error
+            if emitted or auth_retried or on_auth_refresh is None or not _is_auth_error(error):
+                raise
+            logger.warning(_AUTH_REFRESH_LOG)
+            on_auth_refresh()
+            auth_retried = True
 
 
 def from_chunk(chunk: ModelResponseStream) -> GenericStreamingChunk:

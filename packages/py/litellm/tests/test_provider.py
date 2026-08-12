@@ -9,12 +9,16 @@ from dbx_tools.litellm.provider import (
     _apply_prompt_cache,
     _ensure_json_mentioned,
     _ensure_response_id,
+    _is_auth_error,
     _prepare_messages,
     _repair_trailing_assistant,
+    _RequestCredentials,
     _retrying_async_generic_stream,
     _retrying_generic_stream,
+    _with_auth_retry,
+    _with_auth_retry_async,
 )
-from litellm.exceptions import MidStreamFallbackError, RateLimitError
+from litellm.exceptions import AuthenticationError, MidStreamFallbackError, RateLimitError
 
 JSON_OBJECT = {"response_format": {"type": "json_object"}}
 # A non-Claude model so prompt-cache marking is a no-op for the message-repair
@@ -474,3 +478,262 @@ async def test_async_stream_retries_wrapped_pre_stream_rate_limits(
     assert attempts == 2
     # Floored to the rate-limit window (see the sync backoff test).
     assert delays == [provider_module.RATE_LIMIT_WINDOW_SECONDS]
+
+
+def _auth_error() -> AuthenticationError:
+    # LiteLLM maps Databricks' 403 "Invalid Token" to AuthenticationError.
+    return AuthenticationError(
+        "DatabricksException - Invalid Token",
+        llm_provider="databricks",
+        model="databricks-gpt-5-4-mini",
+    )
+
+
+class TestRequestCredentials:
+    """The per-request holder reads the current token and re-mints via the backend
+    (which coalesces concurrent callers), so a retry runs against the new token."""
+
+    class _FakeBackend:
+        def __init__(self) -> None:
+            self.refresh_calls = 0
+
+        def credentials(self) -> SimpleNamespace:
+            return SimpleNamespace(token="token-1", api_base="base")
+
+        def refresh_credentials(self, stale: SimpleNamespace) -> SimpleNamespace:
+            self.refresh_calls += 1
+            assert stale.token == "token-1"
+            return SimpleNamespace(token="token-2", api_base="base")
+
+    def test_current_starts_at_the_cached_token(self) -> None:
+        credentials = _RequestCredentials(self._FakeBackend())
+
+        assert credentials.current.token == "token-1"
+
+    def test_refresh_swaps_current_to_the_reminted_token(self) -> None:
+        backend = self._FakeBackend()
+        credentials = _RequestCredentials(backend)
+
+        credentials.refresh()
+
+        assert credentials.current.token == "token-2"
+        assert backend.refresh_calls == 1
+
+
+class TestIsAuthError:
+    def test_detects_authentication_error(self) -> None:
+        assert _is_auth_error(_auth_error())
+
+    def test_detects_a_wrapped_status_code(self) -> None:
+        class Boom(Exception):
+            status_code = 401
+
+        assert _is_auth_error(Boom("nope"))
+
+    def test_detects_auth_error_behind_original_exception(self) -> None:
+        outer = MidStreamFallbackError(
+            "wrapped",
+            model="databricks-gpt-5-4-mini",
+            llm_provider="databricks",
+            original_exception=_auth_error(),
+            is_pre_first_chunk=True,
+        )
+
+        assert _is_auth_error(outer)
+
+    def test_ignores_unrelated_errors(self) -> None:
+        assert not _is_auth_error(ValueError("boom"))
+        assert not _is_auth_error(_rate_limit())
+
+
+class TestWithAuthRetry:
+    """A cached token the workspace rejects is invalidated and re-minted once;
+    the call reads credentials itself, so the retry uses the fresh token."""
+
+    def test_refreshes_and_retries_once(self) -> None:
+        calls = 0
+        refreshed = 0
+
+        def refresh() -> None:
+            nonlocal refreshed
+            refreshed += 1
+
+        def call() -> str:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise _auth_error()
+            return "ok"
+
+        assert _with_auth_retry(call, refresh) == "ok"
+        assert calls == 2
+        assert refreshed == 1
+
+    def test_gives_up_after_a_second_auth_error(self) -> None:
+        calls = 0
+
+        def call() -> str:
+            nonlocal calls
+            calls += 1
+            raise _auth_error()
+
+        with pytest.raises(AuthenticationError):
+            _with_auth_retry(call, lambda: None)
+        assert calls == 2
+
+    def test_reraises_non_auth_errors_without_refreshing(self) -> None:
+        refreshed = 0
+
+        def refresh() -> None:
+            nonlocal refreshed
+            refreshed += 1
+
+        def call() -> str:
+            raise ValueError("nope")
+
+        with pytest.raises(ValueError):
+            _with_auth_retry(call, refresh)
+        assert refreshed == 0
+
+
+class TestWithAuthRetryAsync:
+    async def test_refreshes_and_retries_once(self) -> None:
+        calls = 0
+        refreshed = 0
+
+        def refresh() -> None:
+            nonlocal refreshed
+            refreshed += 1
+
+        async def call() -> str:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise _auth_error()
+            return "ok"
+
+        assert await _with_auth_retry_async(call, refresh) == "ok"
+        assert calls == 2
+        assert refreshed == 1
+
+    async def test_reraises_non_auth_errors_without_refreshing(self) -> None:
+        refreshed = 0
+
+        def refresh() -> None:
+            nonlocal refreshed
+            refreshed += 1
+
+        async def call() -> str:
+            raise ValueError("nope")
+
+        with pytest.raises(ValueError):
+            await _with_auth_retry_async(call, refresh)
+        assert refreshed == 0
+
+
+def test_stream_refreshes_token_and_retries_on_auth_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+    refreshed = 0
+
+    def refresh() -> None:
+        nonlocal refreshed
+        refreshed += 1
+
+    def factory() -> Iterator[str]:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _auth_error()
+        return iter(("ready",))
+
+    monkeypatch.setattr(provider_module, "from_chunk", lambda chunk: chunk)
+
+    assert list(_retrying_generic_stream(factory, on_auth_refresh=refresh)) == ["ready"]
+    assert attempts == 2
+    assert refreshed == 1
+
+
+def test_stream_auth_error_propagates_without_a_handler() -> None:
+    # No on_auth_refresh (the default) means an auth failure is not this layer's to
+    # retry — it must surface unchanged.
+    def factory() -> Iterator[str]:
+        raise _auth_error()
+
+    with pytest.raises(AuthenticationError):
+        list(_retrying_generic_stream(factory))
+
+
+def test_stream_does_not_retry_auth_error_after_emitting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    refreshed = 0
+
+    def refresh() -> None:
+        nonlocal refreshed
+        refreshed += 1
+
+    def factory() -> Iterator[str]:
+        def stream() -> Iterator[str]:
+            yield "partial"
+            raise _auth_error()
+
+        return stream()
+
+    monkeypatch.setattr(provider_module, "from_chunk", lambda chunk: chunk)
+    stream = _retrying_generic_stream(factory, on_auth_refresh=refresh)
+
+    assert next(stream) == "partial"
+    with pytest.raises(AuthenticationError):
+        next(stream)
+    assert refreshed == 0
+
+
+def test_stream_gives_up_after_a_second_auth_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    def factory() -> Iterator[str]:
+        nonlocal attempts
+        attempts += 1
+        raise _auth_error()
+
+    monkeypatch.setattr(provider_module, "from_chunk", lambda chunk: chunk)
+
+    with pytest.raises(AuthenticationError):
+        list(_retrying_generic_stream(factory, on_auth_refresh=lambda: None))
+    assert attempts == 2
+
+
+async def test_async_stream_refreshes_token_and_retries_on_auth_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+    refreshed = 0
+
+    def refresh() -> None:
+        nonlocal refreshed
+        refreshed += 1
+
+    async def factory() -> AsyncIterator[str]:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _auth_error()
+
+        async def stream() -> AsyncIterator[str]:
+            yield "ready"
+
+        return stream()
+
+    monkeypatch.setattr(provider_module, "from_chunk", lambda chunk: chunk)
+
+    result = [
+        chunk async for chunk in _retrying_async_generic_stream(factory, on_auth_refresh=refresh)
+    ]
+
+    assert result == ["ready"]
+    assert attempts == 2
+    assert refreshed == 1

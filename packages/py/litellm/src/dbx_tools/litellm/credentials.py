@@ -86,6 +86,24 @@ class DatabricksCredentials:
             self._cached = None
             self._renew_at = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
 
+    def refresh(self, stale: Credentials) -> Credentials:
+        """Re-mint once for a token the workspace rejected, coalescing callers.
+
+        The reactive counterpart to ``current()``'s proactive check-lock-check,
+        over the same lock: under it, re-check whether the cache still holds the
+        rejected ``stale`` token. If a concurrent caller already replaced it,
+        return that newer token instead of minting again — so a burst of 401/403s
+        that all carried the SAME rejected token triggers exactly one re-mint,
+        never a refresh storm. Cross-process refresh is already coordinated by the
+        Databricks SDK's file-locked token cache, so this in-process lock is the
+        right scope.
+        """
+        with self._lock:
+            if self._cached is not None and self._cached.token != stale.token:
+                return self._cached
+            self._cached = self._mint()
+            return self._cached
+
     def _mint(self) -> Credentials:
         headers = self._client.config.authenticate()
         authorization = headers.get(_AUTHORIZATION, "")

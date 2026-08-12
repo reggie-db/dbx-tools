@@ -164,6 +164,66 @@ def test_invalidate_forces_reauthentication() -> None:
     assert config.authenticate_count == 2
 
 
+def test_refresh_reauthenticates_a_rejected_token() -> None:
+    config = FakeConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
+    credentials = build(config)
+
+    stale = credentials.current()
+    fresh = credentials.refresh(stale)
+
+    assert fresh.token != stale.token
+    assert config.authenticate_count == 2
+
+
+def test_refresh_returns_the_current_token_when_it_already_advanced() -> None:
+    # A caller carrying an already-replaced token must NOT trigger another mint:
+    # the cache advanced past it, so refresh returns the current token as-is. This
+    # is the compare-and-swap that keeps a burst of 401s from re-minting per call.
+    config = FakeConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
+    credentials = build(config)
+
+    stale = credentials.current()  # token-1
+    current = credentials.refresh(stale)  # token-2, one re-mint
+    again = credentials.refresh(stale)  # stale is still token-1; cache holds token-2
+
+    assert current.token == again.token == "token-2"
+    assert config.authenticate_count == 2  # not 3 — the second refresh coalesced
+
+
+def test_concurrent_refreshes_of_one_rejected_token_share_a_single_remint() -> None:
+    # The reactive-path storm guard: many in-flight requests all carrying the same
+    # rejected token must coalesce into exactly one re-mint, not one per request.
+    started = threading.Event()
+    release = threading.Event()
+    second_entered = threading.Event()
+
+    class SlowConfig(FakeConfig):
+        def authenticate(self) -> dict[str, str]:
+            if self.authenticate_count >= 1:  # block only the reactive re-mint
+                started.set()
+                assert release.wait(timeout=5)
+            return super().authenticate()
+
+    config = SlowConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
+    credentials = build(config)
+    stale = credentials.current()  # token-1, fast
+
+    def refresh_stale() -> str:
+        second_entered.set()
+        return credentials.refresh(stale).token
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(lambda: credentials.refresh(stale).token)
+        assert started.wait(timeout=5)  # first holds the lock inside the blocked mint
+        second = executor.submit(refresh_stale)
+        assert second_entered.wait(timeout=5)
+        release.set()
+
+    assert first.result() == "token-2"
+    assert second.result() == "token-2"
+    assert config.authenticate_count == 2  # one re-mint, coalesced
+
+
 def test_non_bearer_authorization_is_rejected() -> None:
     config = FakeConfig(expiry=None)
     config.authenticate = lambda: {"Authorization": "Basic abc123"}  # type: ignore[method-assign]

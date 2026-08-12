@@ -101,6 +101,20 @@ class DatabricksLiteLLMBackend:
         """Return the cached bearer token and serving base URL for this profile."""
         return self._credentials.current()
 
+    def refresh_credentials(self, stale: Credentials) -> Credentials:
+        """Re-mint the bearer token after the workspace rejected ``stale``.
+
+        The proactive refresh in DatabricksCredentials only re-mints on a
+        schedule (10 minutes before expiry). A token the workspace rejects
+        EARLY — revocation, server-side rotation, or clock skew — would
+        otherwise keep being served from cache until its next scheduled renewal,
+        turning one rejection into a storm of identical 401/403s. Callers invoke
+        this after an upstream auth failure; the compare-and-swap in
+        DatabricksCredentials.refresh coalesces concurrent callers so a rejected
+        token drives exactly one re-mint, not one per in-flight request.
+        """
+        return self._credentials.refresh(stale)
+
     def models(self, *, force: bool = False) -> list[ServingEndpointSummary]:
         """List once per process, with an explicit refresh path for misses."""
         with self._lock:
