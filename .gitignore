@@ -87,6 +87,7 @@ jspm_packages/
 .astro/
 .worktrees/
 .kanna/
+.isaac/
 .polly/
 .home/
 **/.logs/

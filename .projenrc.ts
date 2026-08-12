@@ -114,6 +114,7 @@ root.gitignore.addPatterns(
   ".astro/",
   ".worktrees/",
   ".kanna/",
+  ".isaac/",
   ".polly/",
   ".home/",
   "**/.logs/",
