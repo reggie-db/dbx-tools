@@ -38,7 +38,7 @@ import { executeRead } from "./runtime.ts";
 import type { WebSearchCitation, WebSearchRequest, WebSearchResult } from "./schema.ts";
 import { runScrapeSearch } from "./scrape.ts";
 
-type WorkspaceClientLike = serving.WorkspaceClientLike;
+type WorkspaceClientLike = serving.WorkspaceClientLike & invoke.AuthenticatingClientLike;
 const logger = log.logger("web-search/search");
 const { resolveModel } = resolve;
 const { listServingEndpoints } = serving;
