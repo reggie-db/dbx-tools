@@ -1,11 +1,6 @@
 {
   "dependencies": [
     {
-      "name": "@databricks/appkit",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
       "name": "@types/bun",
       "version": "^1.3.14",
       "type": "build"
@@ -21,11 +16,6 @@
     },
     {
       "name": "@databricks/appkit",
-      "version": "catalog:",
-      "type": "peer"
-    },
-    {
-      "name": "@databricks/sdk-experimental",
       "version": "catalog:",
       "type": "runtime"
     },

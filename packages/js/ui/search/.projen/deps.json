@@ -25,6 +25,11 @@
       "type": "build"
     },
     {
+      "name": "@databricks/appkit-ui",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:*",
       "type": "runtime"

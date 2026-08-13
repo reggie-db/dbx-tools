@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { brand } from "../../packages/js/node/core/index.ts";
+import { docsSiteConfig } from "./site-config.mjs";
 
 const root = process.cwd();
 const sourceRoot = path.join(root, ".docs-build", "site");
@@ -10,13 +11,11 @@ const publicRoot = path.join(sourceRoot, "public");
 const repoUrl = "https://github.com/reggie-db/dbx-tools";
 const brandFile = path.join(root, "branding", "brand.yaml");
 const brandContext = await brand.loadBrandContextFile(brandFile);
+const { base, site } = docsSiteConfig();
 
-// Base path the site is served under. Must match `base` in the generated
-// astro.config.mjs. Starlight auto-prefixes this onto sidebar `link:` fields
-// and built assets, but NOT onto absolute links inside generated markdown
-// bodies or the plain-text llms files, so those go through `withBase`.
-const base = process.env.GITHUB_REPOSITORY?.endsWith("/dbx-tools") ? "/dbx-tools" : "";
-
+// The route base must match the generated Astro config. Starlight auto-prefixes
+// sidebar links and assets, but not absolute links in generated Markdown or
+// llms files, so those go through `withBase`.
 /** Prefix a site-absolute path (`/packages/x`) with the deployment {@link base}. */
 function withBase(sitePath) {
   if (!sitePath.startsWith("/")) return sitePath;
@@ -196,6 +195,13 @@ function firstParagraph(markdown) {
     ?.replace(/\s+/g, " ");
 }
 
+/** Plain prose for package indexes and llms summaries. */
+function summaryText(markdown) {
+  return (firstParagraph(markdown) ?? "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]*)`/g, "$1");
+}
+
 function docsPathForPackage(pkg) {
   return `/packages/${pkg.slug}`;
 }
@@ -227,11 +233,13 @@ function frontmatter({ title, description, sourcePath }) {
   if (title !== plainTitle(title)) {
     throw new Error(`Docs title must be plain text: ${title} (${sourcePath})`);
   }
+  const source = posix(path.relative(root, sourcePath));
   return `${[
     "---",
     `title: ${yamlString(title)}`,
     description ? `description: ${yamlString(description)}` : undefined,
-    `source: ${yamlString(posix(path.relative(root, sourcePath)))}`,
+    `source: ${yamlString(source)}`,
+    `editUrl: ${yamlString(`${repoUrl}/edit/main/${source}`)}`,
     "---",
   ]
     .filter(Boolean)
@@ -268,7 +276,8 @@ function transformLinks(markdown, fromDir, mappings) {
       const docsTarget = localDocsTarget(abs, mappings);
       if (docsTarget) return `${open}${withBase(docsTarget)}${hash}${close}`;
       const repoPath = posix(path.relative(root, abs));
-      return `${open}${repoUrl}/blob/main/${repoPath}${hash}${close}`;
+      const view = fs.existsSync(abs) && fs.statSync(abs).isDirectory() ? "tree" : "blob";
+      return `${open}${repoUrl}/${view}/main/${repoPath}${hash}${close}`;
     },
   );
 }
@@ -288,7 +297,7 @@ function generatedPage(sourcePath, markdown, fallbackTitle, fromDir, mappings) {
   return (
     frontmatter({
       title: pageTitle(markdown, fallbackTitle),
-      description: firstParagraph(markdown),
+      description: summaryText(markdown),
       sourcePath,
     }) +
     generatedHeader(sourcePath) +
@@ -299,7 +308,7 @@ function generatedPage(sourcePath, markdown, fallbackTitle, fromDir, mappings) {
 function buildPackageIndex(packages) {
   const rows = packages
     .map((pkg) => {
-      const summary = (firstParagraph(read(pkg.readme)) ?? "").replace(/\|/g, "\\|");
+      const summary = summaryText(read(pkg.readme)).replace(/\|/g, "\\|");
       return `| [${pkg.name}](${withBase(docsPathForPackage(pkg))}) | ${groupTitle(pkg.group)} | ${summary} |`;
     })
     .join("\n");
@@ -367,14 +376,14 @@ function llms(packages, guides) {
   if (guides.length) {
     lines.push("## Guides", "");
     for (const guide of guides) {
-      const summary = firstParagraph(read(guide.source)) ?? "";
+      const summary = summaryText(read(guide.source));
       lines.push(`- [${guide.title}](${withBase(docsPathForGuide(guide))}): ${summary}`);
     }
     lines.push("");
   }
   lines.push("## Packages", "");
   for (const pkg of packages) {
-    const summary = firstParagraph(read(pkg.readme)) ?? "";
+    const summary = summaryText(read(pkg.readme));
     lines.push(`- [${pkg.name}](${withBase(docsPathForPackage(pkg))}): ${summary}`);
   }
   lines.push("");
@@ -403,10 +412,13 @@ function docsPackageJson() {
       scripts: {
         dev: "astro dev --host 127.0.0.1",
         build: "astro build",
+        "check-links":
+          "linkinator ../dist --recurse --directory-listing --clean-urls --skip 'dbx\\.tools' --status-code '429:warn'",
       },
       dependencies: {
         "@astrojs/starlight": "^0.41.0",
         astro: "^7.0.0",
+        linkinator: "^8.0.3",
         typedoc: "^0.28.20",
         "typedoc-plugin-markdown": "^4.12.0",
       },
@@ -436,8 +448,8 @@ const generatedNav = fs.existsSync(navPath)
 
 export default defineConfig({
   outDir: path.join(repoRoot, ".docs-build", "dist"),
-  site: "https://reggie-db.github.io",
-  base: process.env.GITHUB_REPOSITORY?.endsWith("/dbx-tools") ? "/dbx-tools" : "/",
+  site: ${JSON.stringify(site)},
+  base: ${JSON.stringify(base || "/")},
   integrations: [
     starlight({
       title: ${JSON.stringify(brandContext.name)},

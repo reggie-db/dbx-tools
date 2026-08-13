@@ -21,7 +21,7 @@
  * @module
  */
 
-import { WorkspaceClient } from "@databricks/sdk-experimental";
+import { createWorkspaceClient, type WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
 import { error, json, log, object, string } from "@dbx-tools/shared-core";
 import { genieModel, type GenieSpace } from "@dbx-tools/shared-genie";
@@ -31,7 +31,7 @@ const logger = log.logger("genie/space");
 /** Options for {@link getGenieSpace}. */
 export interface GetGenieSpaceOptions {
   /**
-   * Explicit `WorkspaceClient`. Defaults to a fresh `new WorkspaceClient({})`
+   * Explicit `WorkspaceClient`. Defaults to `createWorkspaceClient()`
    * (env-var auth). Server callers should pass their OBO-scoped client so the
    * lookup runs as the user.
    */
@@ -71,7 +71,7 @@ export async function getGenieSpace(
   spaceId: string,
   options?: GetGenieSpaceOptions,
 ): Promise<GenieSpace> {
-  const client = options?.workspaceClient ?? new WorkspaceClient({});
+  const client = options?.workspaceClient ?? createWorkspaceClient();
   const serialized = options?.serialized !== false;
   const ctx = options?.context ? databricks.toContext(options.context) : undefined;
   const request = (includeSerialized: boolean): Promise<unknown> =>

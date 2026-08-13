@@ -204,11 +204,7 @@ def _reencode_smaller(raw: bytes) -> bytes | None:
 def _raise_too_large(size: int, *, downscaled: bool) -> None:
     limit_mib = _DATABRICKS_LIMIT_BYTES / 1024 / 1024
     size_mib = size / 1024 / 1024
-    detail = (
-        "even after downscaling images"
-        if downscaled
-        else "and it has no images to downscale"
-    )
+    detail = "even after downscaling images" if downscaled else "and it has no images to downscale"
     raise ValueError(
         f"Request body is {size_mib:.1f} MiB, over the Databricks "
         f"{limit_mib:.0f} MiB limit {detail}. Remove or shrink attachments and retry."

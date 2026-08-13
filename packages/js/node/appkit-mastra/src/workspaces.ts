@@ -18,8 +18,8 @@
  * @module
  */
 
-import type { WorkspaceClient } from "@databricks/sdk-experimental";
-import { DatabricksFileSystem } from "@dbx-tools/databricks";
+import type { WorkspaceClient } from "@databricks/appkit";
+import { DatabricksFileSystem, workspace as databricksWorkspace } from "@dbx-tools/databricks";
 import { error, log, string, token } from "@dbx-tools/shared-core";
 import type { RequestContext } from "@mastra/core/request-context";
 import {
@@ -409,7 +409,7 @@ async function databricksFilesystem(
   readOnly: boolean = true,
 ): Promise<WorkspaceFilesystem> {
   const fs = new DatabricksFileSystem({
-    client,
+    client: databricksWorkspace.toLegacyWorkspaceClient(client),
     root,
     readOnly,
     createRoot: !readOnly,

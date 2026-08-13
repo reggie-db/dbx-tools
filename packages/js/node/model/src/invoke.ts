@@ -81,7 +81,13 @@ export function chatCompletionsUrl(host: string): string {
  * those to {@link responsesUrl} instead of {@link invocationsUrl}.
  */
 export function isResponsesOnly(endpoint: string): boolean {
-  return /codex/i.test(endpoint);
+  if (/codex/i.test(endpoint)) return true;
+  if (/gpt[-_. ]?oss/i.test(endpoint)) return false;
+  const version = endpoint.match(/gpt[^0-9]*(\d+)(?:[._-](\d+))?/i);
+  if (!version) return false;
+  const major = Number(version[1]);
+  const minor = Number(version[2] ?? 0);
+  return major > 5 || (major === 5 && minor >= 4);
 }
 
 /**

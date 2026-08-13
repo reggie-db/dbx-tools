@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { genie, lakebase, server } from "@databricks/appkit";
+import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
 import {
   agents,
@@ -15,7 +16,7 @@ import {
 } from "@dbx-tools/appkit-web-search";
 import { config } from "@dbx-tools/core";
 import { brand as emailBrand, plugin as emailPlugin, tool as emailToolApi } from "@dbx-tools/email";
-import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
+import { lakebaseAiSearch, plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
 import { plugin as teamsPlugin, tool as teamsToolApi } from "@dbx-tools/teams";
 import { interceptor as tunnelInterceptorApi, plugin as tunnelPlugin } from "@dbx-tools/tunnel";
@@ -26,6 +27,41 @@ import { busDemo } from "./bus-demo.ts";
 
 /** Default search index used by both AppKit resource validation and the plugin. */
 const DEFAULT_SEARCH_INDEX = "reggie_pierce_aws_catalog.ai_search.docs";
+const SEARCH_ALIAS = "docs";
+const SEARCH_COLUMNS = ["id", "title", "text", "url"];
+const USE_VECTOR_SEARCH = Boolean(process.env.SEARCH_ENDPOINT);
+const SEARCH_DOCUMENTS = [
+  {
+    id: "1",
+    title: "Databricks AI Search overview",
+    text: "AI Search (Vector Search) indexes documents and finds the most relevant ones for a query using hybrid semantic + keyword matching.",
+    url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
+  },
+  {
+    id: "2",
+    title: "Delta Sync indexes",
+    text: "A Delta Sync index computes embeddings from a source Delta table and keeps the index in sync as rows change.",
+    url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
+  },
+  {
+    id: "3",
+    title: "Direct access indexes",
+    text: "A direct-access index lets you upsert documents yourself; with managed embeddings Databricks embeds a text column on write and query.",
+    url: "https://docs.databricks.com/aws/en/generative-ai/create-query-vector-search",
+  },
+  {
+    id: "4",
+    title: "Autocomplete and universal search",
+    text: "Autocomplete is a small-limit search over one index; universal search fans a query across every configured index and merges the hits.",
+    url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
+  },
+  {
+    id: "5",
+    title: "Unity Catalog governance",
+    text: "Indexes are Unity Catalog objects, so search runs under the caller's identity and SELECT permissions on the index apply.",
+    url: "https://docs.databricks.com/aws/en/data-governance/unity-catalog",
+  },
+];
 
 const { email } = emailPlugin;
 const { defaultEmailBrand } = emailBrand;
@@ -184,15 +220,16 @@ const supportDefinition: MastraAgentDefinition = {
       search: searchTool(),
       universal_search: universalSearchTool(),
       // Write surface (enabled below via `search({ allowWrite: true })`):
-      // `add_documents` upserts rows into a direct-access index,
-      // `create_index` provisions a new Vector Search index (inferring the
-      // endpoint, embedding model, key, and text column), and `sync_index`
-      // refreshes a Delta Sync index from its source table. These are gated
-      // because they change infrastructure/data, so only enable them for a
-      // trusted demo.
+      // `add_documents` works with either provider. `create_index` and
+      // `sync_index` are added only for native Vector Search, where they
+      // provision or refresh workspace infrastructure.
       add_documents: addDocumentsTool(),
-      create_index: createIndexTool(),
-      sync_index: syncIndexTool(),
+      ...(USE_VECTOR_SEARCH
+        ? {
+            create_index: createIndexTool(),
+            sync_index: syncIndexTool(),
+          }
+        : {}),
     });
     return agentTools;
   },
@@ -206,10 +243,32 @@ const support = createAgent(supportDefinition);
 // Override with `HOST=...` if you need a different bind address.
 const host = process.env.HOST ?? (config.isDatabricksAppEnv() ? "0.0.0.0" : "127.0.0.1");
 
-// The search plugin's explicit `index` promotes its optional AppKit resource to
-// required. Keep resource validation and runtime config on the same resolved
-// value instead of spelling the fallback only inside the plugin options.
+// Keep the provider and extension plugin on the same resolved index value.
 process.env.SEARCH_INDEX ??= DEFAULT_SEARCH_INDEX;
+const searchProvider = USE_VECTOR_SEARCH
+  ? aiSearch({
+      indexes: {
+        [SEARCH_ALIAS]: {
+          indexName: process.env.SEARCH_INDEX,
+          columns: SEARCH_COLUMNS,
+          queryType: "hybrid",
+          numResults: 10,
+        },
+      },
+    })
+  : lakebaseAiSearch({
+      indexes: {
+        [SEARCH_ALIAS]: {
+          indexName: process.env.SEARCH_INDEX,
+          columns: SEARCH_COLUMNS,
+          queryType: "full_text",
+          numResults: 10,
+          documents: SEARCH_DOCUMENTS,
+        },
+      },
+      ...(process.env.SEARCH_LAKEBASE_SCHEMA ? { schema: process.env.SEARCH_LAKEBASE_SCHEMA } : {}),
+      allowWrite: true,
+    });
 
 await appkit.createApp({
   plugins: [
@@ -250,66 +309,27 @@ await appkit.createApp({
     // deployment sets TEAMS_APP_ID / TEAMS_APP_PASSWORD instead and gets the
     // JWT-validated, Connector-delivered path.
     teams({ allowUnauthenticated: true }),
-    // Search runtime for the `search` / `universal_search` tools and the browser
-    // search box. `ensureOnSetup` seeds the dummy docs below on boot (background,
-    // idempotent) using the app's SDK auth (DATABRICKS_CONFIG_PROFILE in `.env`).
+    searchProvider,
+    // The provider registered above owns the AppKit AI Search query contract:
+    // native `aiSearch` when SEARCH_ENDPOINT is configured, otherwise
+    // `lakebaseAiSearch` over PostgreSQL full text. Both expose the same
+    // `/api/ai-search/:alias/query` route and client config consumed by
+    // AppKit's `useAiSearchQuery`.
     //
-    // The backend is chosen automatically:
-    //   - Set SEARCH_ENDPOINT (+ SEARCH_INDEX) and it wires up a REAL Databricks
-    //     Vector Search index: a MANAGED direct-access index (Databricks embeds
-    //     the `text` column on write AND query - no Delta table, no warehouse).
-    //     First boot is slow (endpoint creation takes minutes), runs in the
-    //     background, and later boots are no-ops.
-    //   - Leave SEARCH_ENDPOINT unset (the default here) and, because `lakebase()`
-    //     is registered above, search falls back to a Lakebase (Postgres)
-    //     full-text index - same tools, routes, hits, and UI. This zero-Vector-
-    //     Search path is what the demo uses out of the box.
-    // Mounts `POST /api/search`, `/universal`, `GET /indexes`, and (with
-    // `allowWrite`) `/documents`, `/index`, `/index/sync`; the UI reads the
-    // catalogue via `usePluginClientConfig("search")`.
+    // This `search` plugin adds agent tools, universal search, and index
+    // lifecycle routes. On the native path, `ensureOnSetup` creates and seeds
+    // the managed Vector Search index in the background. The Lakebase provider
+    // provisions and seeds its own full-text table during setup.
     search({
       allowWrite: true,
-      // Full UC name for the Vector Search path; the Lakebase fallback derives a
-      // Postgres table name from the last segment (`docs`).
+      // Full UC name for the Vector Search path; the Lakebase provider derives
+      // a Postgres table name from the last segment (`docs`).
       index: process.env.SEARCH_INDEX,
-      // Only set the endpoint (-> Vector Search) when one is configured; unset
-      // means the Lakebase full-text fallback answers (see the comment above).
+      // The endpoint is used only by native Vector Search lifecycle operations.
       ...(process.env.SEARCH_ENDPOINT ? { endpoint: process.env.SEARCH_ENDPOINT } : {}),
-      columns: ["title", "text", "url"],
-      ensureOnSetup: {
-        documents: [
-          {
-            id: "1",
-            title: "Databricks AI Search overview",
-            text: "AI Search (Vector Search) indexes documents and finds the most relevant ones for a query using hybrid semantic + keyword matching.",
-            url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
-          },
-          {
-            id: "2",
-            title: "Delta Sync indexes",
-            text: "A Delta Sync index computes embeddings from a source Delta table and keeps the index in sync as rows change.",
-            url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
-          },
-          {
-            id: "3",
-            title: "Direct access indexes",
-            text: "A direct-access index lets you upsert documents yourself; with managed embeddings Databricks embeds a text column on write and query.",
-            url: "https://docs.databricks.com/aws/en/generative-ai/create-query-vector-search",
-          },
-          {
-            id: "4",
-            title: "Autocomplete and universal search",
-            text: "Autocomplete is a small-limit search over one index; universal search fans a query across every configured index and merges the hits.",
-            url: "https://docs.databricks.com/aws/en/generative-ai/vector-search",
-          },
-          {
-            id: "5",
-            title: "Unity Catalog governance",
-            text: "Indexes are Unity Catalog objects, so search runs under the caller's identity and SELECT permissions on the index apply.",
-            url: "https://docs.databricks.com/aws/en/data-governance/unity-catalog",
-          },
-        ],
-      },
+      indexes: [{ name: process.env.SEARCH_INDEX, alias: SEARCH_ALIAS, columns: SEARCH_COLUMNS }],
+      columns: SEARCH_COLUMNS,
+      ...(USE_VECTOR_SEARCH ? { ensureOnSetup: { documents: SEARCH_DOCUMENTS } } : {}),
     }),
     mastra({
       storage: mastraStorage,

@@ -89,8 +89,8 @@ const DEFAULT_CATALOG: Catalog = {
   // Optional logger: shared-core's `log` module lazy-imports it and degrades to
   // a console fallback when it's absent, so consumers can leave it uninstalled.
   consola: "^3.4.2",
-  "@databricks/appkit": "^0.43.0",
-  "@databricks/appkit-ui": "^0.43.1",
+  "@databricks/appkit": "^0.60.0",
+  "@databricks/appkit-ui": "^0.60.0",
   "@databricks/sdk-experimental": "^0.17.0",
 };
 

@@ -31,6 +31,13 @@ them without a second database client or connection pool.
   listener reads back — which lifts the 8000-byte `NOTIFY` limit and keeps the
   contents behind a table grant.
 
+## Why Use This Over Native AppKit
+
+Use AppKit `lakebase()` to obtain and refresh the PostgreSQL pool. This package
+does not replace that plugin. Add it when work needs connection-correct advisory
+locks or cross-instance `LISTEN`/`NOTIFY` delivery, capabilities the native
+Lakebase plugin does not provide.
+
 ## Advisory Locks
 
 ```ts

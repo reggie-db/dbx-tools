@@ -18,10 +18,13 @@ jobs:
       contents: read
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@v6
       - name: Setup uv
+        id: setup_uv
         uses: astral-sh/setup-uv@v7
       - name: Stamp workspace versions
+        id: stamp_workspace_versions
         env:
           VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
         run: |-
@@ -61,6 +64,7 @@ jobs:
               path.write_text(source, encoding="utf-8")
           PY
       - name: Build distributions
+        id: build_distributions
         run: |-
           uv build --package dbx-tools-core --out-dir dist/core
           uv build --package dbx-tools-postgres --out-dir dist/postgres
@@ -68,10 +72,12 @@ jobs:
           uv build --package dbx-tools-litellm --out-dir dist/litellm
           uv build --package dbx-tools-graphiti --out-dir dist/graphiti
       - name: Validate distributions
+        id: validate_distributions
         run: |-
           test "$(find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 10
           uvx twine check dist/*/*.whl dist/*/*.tar.gz
       - name: Upload distributions
+        id: upload_distributions
         uses: actions/upload-artifact@v7
         with:
           name: python-distributions
@@ -88,11 +94,13 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download distributions
+        id: download_distributions
         uses: actions/download-artifact@v8
         with:
           name: python-distributions
           path: dist
       - name: Publish dbx-tools-core to PyPI
+        id: publish_dbx-tools-core_to_pypi
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/core
@@ -108,11 +116,13 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download distributions
+        id: download_distributions
         uses: actions/download-artifact@v8
         with:
           name: python-distributions
           path: dist
       - name: Publish dbx-tools-postgres to PyPI
+        id: publish_dbx-tools-postgres_to_pypi
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/postgres
@@ -128,11 +138,13 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download distributions
+        id: download_distributions
         uses: actions/download-artifact@v8
         with:
           name: python-distributions
           path: dist
       - name: Publish dbx-tools-model to PyPI
+        id: publish_dbx-tools-model_to_pypi
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/model
@@ -148,11 +160,13 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download distributions
+        id: download_distributions
         uses: actions/download-artifact@v8
         with:
           name: python-distributions
           path: dist
       - name: Publish dbx-tools-litellm to PyPI
+        id: publish_dbx-tools-litellm_to_pypi
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/litellm
@@ -168,11 +182,13 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download distributions
+        id: download_distributions
         uses: actions/download-artifact@v8
         with:
           name: python-distributions
           path: dist
       - name: Publish dbx-tools-graphiti to PyPI
+        id: publish_dbx-tools-graphiti_to_pypi
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/graphiti

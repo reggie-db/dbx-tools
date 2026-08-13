@@ -13,7 +13,6 @@
  * @module
  */
 
-import { WorkspaceClient } from "@databricks/sdk-experimental";
 import { hash, object } from "@dbx-tools/shared-core";
 import {
   BaseFileSystem,
@@ -32,7 +31,7 @@ import {
   resolveDatabricksRoot,
   type DatabricksFilesBackend,
 } from "./databricks-path.ts";
-import { getWorkspaceClient } from "./workspace.ts";
+import { getWorkspaceClient, type WorkspaceClient } from "./workspace.ts";
 
 const DBFS_READ_CHUNK_BYTES = 1024 * 1024;
 const DBFS_PUT_MAX_BYTES = 1024 * 1024;

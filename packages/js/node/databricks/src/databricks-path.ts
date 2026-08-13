@@ -11,9 +11,8 @@
  * @module
  */
 
-import type { WorkspaceClient } from "@databricks/sdk-experimental";
 import { posixPath } from "@dbx-tools/shared-fs";
-import { getCurrentUserName } from "./workspace.ts";
+import { getCurrentUserName, type WorkspaceClient } from "./workspace.ts";
 
 /** Which Databricks Files API serves an absolute path. */
 export type DatabricksFilesBackend = "workspace" | "volumes" | "dbfs";

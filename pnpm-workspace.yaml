@@ -61,21 +61,22 @@ catalog:
   concurrently: ^10.0.3
   pnpm: ^11.0.6
   consola: ^3.4.2
-  "@databricks/appkit": ^0.43.0
-  "@databricks/appkit-ui": ^0.43.1
+  "@databricks/appkit": ^0.60.0
+  "@databricks/appkit-ui": ^0.60.0
   "@databricks/sdk-experimental": ^0.17.0
   marked: ^18.0.5
   "@react-email/components": ^1.0.12
   "@react-email/render": ^2.1.0
-  "@mastra/core": ^1.47.0
-  "@mastra/ai-sdk": ^1.6.0
-  "@mastra/express": ^1.4.2
-  "@mastra/fastembed": ^1.2.0
-  "@mastra/mcp": ^1.12.0
-  "@mastra/memory": ^1.21.2
-  "@mastra/observability": ^1.15.2
-  "@mastra/otel-bridge": ^1.4.0
-  "@mastra/pg": ^1.14.2
+  "@mastra/core": 1.47.0
+  "@mastra/ai-sdk": 1.6.0
+  "@mastra/express": 1.4.2
+  "@mastra/fastembed": 1.2.0
+  "@mastra/mcp": 1.12.0
+  "@modelcontextprotocol/sdk": ^1.29.0
+  "@mastra/memory": 1.21.2
+  "@mastra/observability": 1.15.2
+  "@mastra/otel-bridge": 1.4.0
+  "@mastra/pg": 1.14.2
   "@opentelemetry/api": ^1.9.1
   undici: ^7.17.0
   http-proxy-3: ^1.23.1
@@ -87,7 +88,7 @@ catalog:
   lucide-react: ^0.554.0
   react-router-dom: ^7.6.2
   streamdown: ^2.5.0
-  "@mastra/client-js": ^1.28.0
+  "@mastra/client-js": 1.28.0
   "@tanstack/react-table": ^8.21.3
   ai: ^5.0.0
   echarts: ^6.0.0

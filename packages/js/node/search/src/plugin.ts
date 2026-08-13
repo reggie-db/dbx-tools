@@ -1,37 +1,29 @@
 /**
- * AppKit plugin (registered name: `search`) that turns a Databricks AI
- * Search (Vector Search) index into a batteries-included search surface. It is
- * the "shortcut" half of this package: register it with nothing but an index
- * name and you get, all at once -
+ * AppKit extension plugin (registered name: `search`) around a sibling
+ * `aiSearch` provider. Native AppKit owns Vector Search query execution; this
+ * plugin adds the surfaces that remain useful across native and Lakebase
+ * providers:
  *
  *   - a `search` / `universal_search` / (opt-in) `add_documents` tool set for
  *     both Mastra and AppKit agents (autocomplete is a small-`limit` search);
- *   - HTTP routes under `/api/search` a browser search box calls directly
+ *   - compatibility and extension routes under `/api/search`
  *     (`POST /` search, `POST /universal` federated, `GET /indexes` catalogue,
  *     and `POST /documents` when writes are enabled);
  *   - a `clientConfig()` payload so a UI knows the indexes, default, and page
  *     size at boot with no round-trip;
  *   - `exports()` so app code can `appkit.search.search(...)` directly.
  *
- * Everything runs under the caller's OBO identity (routes wrap in `asUser`),
- * so Unity Catalog ACLs on the index apply. Registering the plugin resolves
- * and logs the effective config (default index, known indexes, page size,
- * mode) so a misconfiguration shows up in the boot log rather than on the
- * first search.
+ * Vector Search reads delegate to the registered native AppKit `aiSearch`
+ * plugin, preserving its OBO, caching, reranking, and response handling. The
+ * alternative `lakebaseAiSearch` provider supplies the same query contract
+ * over PostgreSQL full-text search.
  *
  * @module
  */
 
+import { Plugin, toPlugin, type IAppRouter, type PluginManifest } from "@databricks/appkit";
 import {
-  lakebase,
-  Plugin,
-  ResourceType,
-  toPlugin,
-  type IAppRouter,
-  type PluginManifest,
-  type ResourceRequirement,
-} from "@databricks/appkit";
-import {
+  aiSearch,
   defineTool,
   executeFromRegistry,
   toolsFromRegistry,
@@ -42,16 +34,9 @@ import {
 import { plugin as appkitPlugin } from "@dbx-tools/appkit";
 import { error as sharedError, log, string } from "@dbx-tools/shared-core";
 import { search as sharedSearch, type SearchClientConfig } from "@dbx-tools/shared-search";
-import {
-  SEARCH_CONFIG_SCHEMA,
-  DATABRICKS_INDEX_ENV,
-  ENDPOINT_ENV,
-  INDEX_ENV,
-  resolveSearchConfig,
-  type SearchPluginConfig,
-} from "./config.ts";
+import { SEARCH_CONFIG_SCHEMA, resolveSearchConfig, type SearchPluginConfig } from "./config.ts";
 import { toCreateIndexOptions } from "./index-tools.ts";
-import { LakebaseSearchBackend } from "./lakebase.ts";
+import { nativeAiSearchBackend } from "./native.ts";
 import { toDocumentArray } from "./query.ts";
 import { getSearchRuntime, resetSearchRuntime } from "./runtime.ts";
 import {
@@ -63,9 +48,6 @@ import {
 } from "./schema.ts";
 
 const logger = log.logger("search");
-
-/** Mount-relative route (under `/api/search`) for a single-index search. */
-const SEARCH_ROUTE = "/";
 
 /** Mount-relative route for a universal (federated) search across indexes. */
 const UNIVERSAL_ROUTE = "/universal";
@@ -83,53 +65,31 @@ const INDEX_ROUTE = "/index";
 const INDEX_SYNC_ROUTE = "/index/sync";
 
 /**
- * The AI Search index resource. Declared optional because the plugin is happy
- * with no default index (a caller can name one per request); it is promoted to
- * required once a deployment pins one. `SELECT` is the permission a query needs.
- */
-const INDEX_RESOURCE = {
-  type: ResourceType.VECTOR_SEARCH_INDEX,
-  alias: "AI Search Index",
-  resourceKey: "search-index",
-  description:
-    "Databricks AI Search (Vector Search) index the app searches by default " +
-    "(catalog.schema.index). Optional: a request may name any index the caller can read.",
-  permission: "SELECT",
-  fields: {
-    name: {
-      env: INDEX_ENV,
-      description: `Default AI Search index. ${DATABRICKS_INDEX_ENV} is also honored.`,
-      discovery: {
-        type: "cli",
-        cliCommand:
-          "databricks vector-search-indexes list-indexes --endpoint-name <ENDPOINT> --output json",
-        selectField: ".name",
-      },
-    },
-  },
-} satisfies Omit<ResourceRequirement, "required">;
-
-/**
- * AppKit plugin exposing AI Search as a search box, an agent tool set, and a
- * direct API.
+ * AppKit extension plugin for agent tools, federated search, and optional
+ * Vector Search lifecycle operations. Register `aiSearch()` or
+ * `lakebaseAiSearch()` before this plugin.
  *
  * @example
  * ```ts
  * import { createApp, server } from "@databricks/appkit";
+ * import { aiSearch } from "@databricks/appkit/beta";
  * import { plugin as searchPlugin } from "@dbx-tools/search";
  *
  * await createApp({
  *   plugins: [
  *     server(),
- *     // zero-config: reads DATABRICKS_VECTOR_SEARCH_INDEX
- *     searchPlugin.search(),
- *     // or go deeper:
- *     // searchPlugin.search({
- *     //   index: "main.support.docs",
- *     //   indexes: ["main.support.docs", "main.catalog.products"],
- *     //   columns: ["title", "url", "body"],
- *     //   mode: "hybrid",
- *     // }),
+ *     aiSearch({
+ *       indexes: {
+ *         docs: {
+ *           indexName: "main.support.docs",
+ *           columns: ["id", "title", "body"],
+ *         },
+ *       },
+ *     }),
+ *     searchPlugin.search({
+ *       index: "main.support.docs",
+ *       indexes: [{ name: "main.support.docs", alias: "docs" }],
+ *     }),
  *   ],
  * });
  * ```
@@ -144,7 +104,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
     stability: "beta",
     resources: {
       required: [],
-      optional: [INDEX_RESOURCE],
+      optional: [],
     },
     config: { schema: SEARCH_CONFIG_SCHEMA },
   } satisfies PluginManifest<"search">;
@@ -155,18 +115,6 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
   }
 
   /**
-   * Promote the index to a required resource once a deployment pins a default,
-   * through plugin config or either environment name.
-   */
-  static getResourceRequirements(config: SearchPluginConfig): ResourceRequirement[] {
-    const pinned =
-      string.trimToNull(config.index) ??
-      string.trimToNull(process.env[INDEX_ENV]) ??
-      string.trimToNull(process.env[DATABRICKS_INDEX_ENV]);
-    return pinned === null ? [] : [{ ...INDEX_RESOURCE, required: true }];
-  }
-
-  /**
    * The tools this plugin offers to an AppKit agent. `search` /
    * `universal_search` are reads; `add_documents` / `create_index` /
    * `sync_index` are only offered when the write surface is enabled. None is
@@ -174,7 +122,7 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
    * granted explicitly.
    */
   private get tools(): ToolRegistry {
-    const { config } = getSearchRuntime({ config: this.config });
+    const { config, readBackend } = getSearchRuntime({ config: this.config });
     const registry: ToolRegistry = {
       search: defineTool({
         description: SEARCH_TOOL_DESCRIPTION,
@@ -201,40 +149,38 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
         autoInheritable: false,
         execute: async (args, signal) => this.runAddDocuments(args, signal),
       });
-      registry.create_index = defineTool({
-        description: CREATE_INDEX_TOOL_DESCRIPTION,
-        schema: sharedSearch.createIndexRequestSchema,
-        annotations: { effect: "write", requiresUserContext: true },
-        autoInheritable: false,
-        execute: async (args, signal) => this.runCreateIndex(args, signal),
-      });
-      registry.sync_index = defineTool({
-        description: SYNC_INDEX_TOOL_DESCRIPTION,
-        schema: sharedSearch.syncIndexRequestSchema,
-        annotations: { effect: "write", requiresUserContext: true },
-        autoInheritable: false,
-        execute: async (args, signal) => this.runSyncIndex(args, signal),
-      });
+      if (readBackend?.supportsLifecycle) {
+        registry.create_index = defineTool({
+          description: CREATE_INDEX_TOOL_DESCRIPTION,
+          schema: sharedSearch.createIndexRequestSchema,
+          annotations: { effect: "write", requiresUserContext: true },
+          autoInheritable: false,
+          execute: async (args, signal) => this.runCreateIndex(args, signal),
+        });
+        registry.sync_index = defineTool({
+          description: SYNC_INDEX_TOOL_DESCRIPTION,
+          schema: sharedSearch.syncIndexRequestSchema,
+          annotations: { effect: "write", requiresUserContext: true },
+          autoInheritable: false,
+          execute: async (args, signal) => this.runSyncIndex(args, signal),
+        });
+      }
     }
     return registry;
   }
 
   /** Prime the shared runtime from config and log the effective policy at boot. */
   override async setup(): Promise<void> {
-    // Choose a backend. Vector Search is primary; when NO Vector Search
-    // endpoint is configured but the AppKit `lakebase` plugin is registered,
-    // fall back to a Postgres full-text index. Both answer with the identical
-    // shape, so this choice is invisible to tools, routes, and the UI.
-    const lakebaseBackend = this.resolveLakebaseBackend();
+    const readBackend = this.resolveProviderBackend();
     // The runtime may already have been built (config-only) when `tools()` ran
     // during registration; rebuild it so it carries the chosen backend.
     resetSearchRuntime();
     const { config } = getSearchRuntime({
       config: this.config,
-      ...(lakebaseBackend ? { lakebase: lakebaseBackend } : {}),
+      readBackend,
     });
     logger.info("ready", {
-      backend: lakebaseBackend ? "lakebase" : "vector-search",
+      backend: readBackend.supportsLifecycle ? "appkit-ai-search" : "lakebase-ai-search",
       defaultIndex: config.defaultIndex ?? "(none - pass per request)",
       indexes: config.indexes.map((i) => i.alias),
       pageSize: config.pageSize,
@@ -247,33 +193,15 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
     });
     // Provision a real index in the BACKGROUND so a slow first-time endpoint or
     // index build never blocks the server from coming up.
-    if (config.ensureOnSetup) void this.runEnsureOnSetup(config);
+    if (config.ensureOnSetup && readBackend.supportsLifecycle) {
+      void this.runEnsureOnSetup(config);
+    }
   }
 
-  /**
-   * Build the Lakebase FALLBACK backend, or return `undefined` when Vector
-   * Search should be used. Falls back only when there is NO Vector Search
-   * endpoint configured (plugin config or `SEARCH_ENDPOINT` /
-   * `DATABRICKS_VECTOR_SEARCH_ENDPOINT`) AND the sibling AppKit `lakebase`
-   * plugin is registered. The pg pool is built from that plugin's
-   * service-principal config exactly like `@dbx-tools/appkit-mastra`'s memory
-   * pool - no auth is re-implemented here.
-   */
-  private resolveLakebaseBackend(): LakebaseSearchBackend | undefined {
-    const config = resolveSearchConfig(this.config);
-    const hasEndpoint =
-      config.endpoint !== undefined ||
-      string.trimToNull(process.env[ENDPOINT_ENV]) !== null ||
-      string.trimToNull(process.env.DATABRICKS_VECTOR_SEARCH_ENDPOINT) !== null;
-    if (hasEndpoint) return undefined;
-    const lake = appkitPlugin.instance(this.context, lakebase);
-    if (!lake) return undefined;
-    logger.info("backend-lakebase", {
-      reason: "no Vector Search endpoint configured; using the Lakebase full-text fallback",
-    });
-    // `getPgConfig()` must be read OUTSIDE any asUser scope (as it is here at
-    // setup) so it carries the SP connection target + token-refresh callback.
-    return new LakebaseSearchBackend(() => lake.exports().getPgConfig());
+  /** Resolve the registered AppKit-compatible AI Search provider. */
+  private resolveProviderBackend(): ReturnType<typeof nativeAiSearchBackend> {
+    const provider = appkitPlugin.require(this.context, aiSearch, this).exports();
+    return nativeAiSearchBackend(provider, resolveSearchConfig(this.config));
   }
 
   /**
@@ -356,23 +284,10 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
   }
 
   /**
-   * Mount the search routes under `/api/search`. Each is wrapped in
-   * `asUser(req)` so the query runs as the requesting user and the index's
-   * Unity Catalog ACLs apply. `GET /indexes` needs no user scope - it just
-   * echoes the configured catalogue.
+   * Mount extension routes under `/api/search`. Single-index queries stay on
+   * the provider's native `/api/ai-search/:alias/query` surface.
    */
   override injectRoutes(router: IAppRouter): void {
-    this.route(router, {
-      name: "search",
-      method: "post",
-      path: SEARCH_ROUTE,
-      handler: async (req, res) => {
-        await this.respond(res, "search", () => {
-          const request = sharedSearch.searchRequestSchema.parse(req.body ?? {});
-          return this.asUser(req).runSearch(request);
-        });
-      },
-    });
     this.route(router, {
       name: "universalSearch",
       method: "post",
@@ -412,8 +327,8 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       method: "post",
       path: INDEX_ROUTE,
       handler: async (req, res) => {
-        const { config } = getSearchRuntime();
-        if (!config.allowWrite) {
+        const { config, readBackend } = getSearchRuntime();
+        if (!config.allowWrite || !readBackend?.supportsLifecycle) {
           res.status(403).json({ error: "the index write surface is disabled" });
           return;
         }
@@ -427,8 +342,8 @@ export class SearchPlugin extends Plugin<SearchPluginConfig> implements ToolProv
       method: "post",
       path: INDEX_SYNC_ROUTE,
       handler: async (req, res) => {
-        const { config } = getSearchRuntime();
-        if (!config.allowWrite) {
+        const { config, readBackend } = getSearchRuntime();
+        if (!config.allowWrite || !readBackend?.supportsLifecycle) {
           res.status(403).json({ error: "the index write surface is disabled" });
           return;
         }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { WorkspaceClient } from "@databricks/sdk-experimental";
+import type { WorkspaceClient } from "@databricks/appkit";
 import type { GenieMessage } from "@dbx-tools/shared-genie";
 import { RequestContext } from "@mastra/core/request-context";
 

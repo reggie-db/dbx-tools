@@ -19,7 +19,7 @@
  * @module
  */
 
-import { WorkspaceClient } from "@databricks/sdk-experimental";
+import type { WorkspaceClient } from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
 import { object } from "@dbx-tools/shared-core";
 import type { GenieDatasetData } from "@dbx-tools/shared-mastra";

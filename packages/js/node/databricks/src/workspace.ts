@@ -6,19 +6,35 @@
  * @module
  */
 
-import { type Config, WorkspaceClient } from "@databricks/sdk-experimental";
+import {
+  createWorkspaceClient,
+  type WorkspaceClient as AppKitWorkspaceClient,
+} from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import { functionModule, net } from "@dbx-tools/shared-core";
 
 /** Databricks workspace ids are a 10-20 digit run embedded in the host. */
 const WORKSPACE_ID_REGEX = /\d{10,20}/;
 
+/** Legacy SDK client exposed by AppKit for APIs not yet on its facade. */
+export type WorkspaceClient = ReturnType<AppKitWorkspaceClient["toLegacyWorkspaceClient"]>;
+type Config = WorkspaceClient["config"];
+
+/** Resolve AppKit's facade or an existing legacy client to the legacy SDK surface. */
+export function toLegacyWorkspaceClient(
+  client: AppKitWorkspaceClient | WorkspaceClient,
+): WorkspaceClient {
+  return "toLegacyWorkspaceClient" in client ? client.toLegacyWorkspaceClient() : client;
+}
+
 /**
  * Lazily-constructed default `WorkspaceClient` (env / profile auth), memoized so
  * construction happens at most once per process. Used only when there's no
  * AppKit execution context to borrow a client from.
  */
-const getDefaultWorkspaceClient = functionModule.memoize(async () => new WorkspaceClient({}));
+const getDefaultWorkspaceClient = functionModule.memoize(async () =>
+  createWorkspaceClient().toLegacyWorkspaceClient(),
+);
 
 /**
  * The AppKit execution-context workspace client when available, otherwise
@@ -26,7 +42,7 @@ const getDefaultWorkspaceClient = functionModule.memoize(async () => new Workspa
  * missing AppKit scope.
  */
 export function tryGetWorkspaceClient(): WorkspaceClient | undefined {
-  return appkit.tryGetExecutionContext()?.client as WorkspaceClient | undefined;
+  return appkit.tryGetExecutionContext()?.client.toLegacyWorkspaceClient();
 }
 
 /**

@@ -118,4 +118,4 @@ Pattern helpers keep generated glob fragments escaped and consistent.
 - `pattern` - escaped directory-name and extension glob fragments.
 
 The projen engine uses this package in
-[`@dbx-tools/projen`](../../../projen).
+[`@dbx-tools/projen`](../../../../projen).

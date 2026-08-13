@@ -15,3 +15,4 @@ export type { DatabricksFileSystemOptions } from "./src/databricks-fs.ts";
 export { isHomeRelativePath } from "./src/databricks-path.ts";
 export type { DatabricksFilesBackend, NormalizeDatabricksRootOptions, ResolveDatabricksRootOptions } from "./src/databricks-path.ts";
 export { getPublicIp } from "./src/net.ts";
+export type { WorkspaceClient } from "./src/workspace.ts";

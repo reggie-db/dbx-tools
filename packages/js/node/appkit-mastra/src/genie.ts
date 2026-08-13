@@ -43,7 +43,7 @@ import {
   genie,
   ValidationError,
 } from "@databricks/appkit";
-import { WorkspaceClient } from "@databricks/sdk-experimental";
+import type { WorkspaceClient } from "@databricks/appkit";
 import { plugin } from "@dbx-tools/appkit";
 import { chat, space as genieSpace } from "@dbx-tools/genie";
 import { error, log, string } from "@dbx-tools/shared-core";

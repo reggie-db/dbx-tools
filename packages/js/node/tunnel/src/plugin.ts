@@ -452,6 +452,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
       publicDomain: this.resolved.publicDomains,
       forwardHeaders: this.resolved.forwardHeaders,
       gatePaths: this.resolved.gatePaths,
+      brandName: this.resolved.brandName,
     });
   }
 

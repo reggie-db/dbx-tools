@@ -279,21 +279,18 @@ def test_patch_prevents_thinking_keyerror_for_non_claude_models() -> None:
     assert mapped.get("reasoning_effort") == "high"
 
 
-def test_patch_unwraps_codex_namespace_tools() -> None:
+def test_patch_preserves_codex_namespace_tools() -> None:
     """A Codex `namespace` tool group must survive the Responses->Chat transform.
 
-    LiteLLM's converter drops tool types it can't map to Chat Completions,
-    including `namespace` — which is how Codex delivers its whole shell/apply-patch
-    toolset. Dropping it leaves Codex with "no filesystem or terminal tools". The
-    patch flattens the namespace into its inner function tools so they convert
-    normally instead of being dropped.
+    LiteLLM 1.96.2 still drops namespace tools from its Chat bridge. The patch
+    unwraps the inner functions before the native conversion.
     """
     from dbx_tools.litellm import apply_litellm_patches
     from litellm.responses.litellm_completion_transformation.transformation import (
         LiteLLMCompletionResponsesConfig,
     )
 
-    apply_litellm_patches()  # idempotent
+    apply_litellm_patches()
 
     tools = [
         {
@@ -315,7 +312,6 @@ def test_patch_unwraps_codex_namespace_tools() -> None:
         )
     )
 
-    # The inner function survived instead of the whole namespace being dropped.
     names = [t.get("function", {}).get("name") for t in converted if t.get("type") == "function"]
     assert names == ["exec"]
 

@@ -10,12 +10,15 @@ import pytest
 from dbx_tools.model import (
     ModelClass,
     ReasoningEffort,
+    ServingEndpointSummary,
     auth_headers,
     extract_embedding,
     invocations_url,
     list_serving_endpoints,
     post_json,
+    rank_model_id,
     reasoning_efforts_by_family,
+    repair_trailing_assistant_messages,
     resolve_model,
 )
 from typing_extensions import Self
@@ -215,3 +218,41 @@ def test_resolve_model_fuzzy_name_and_embedding_dimension() -> None:
     assert extract_embedding({"data": [{"embedding": [1, 2, 3]}]}, 3) == [1.0, 2.0, 3.0]
     with pytest.raises(ValueError, match="Expected embedding dimension 2"):
         extract_embedding({"data": [{"embedding": [1, 2, 3]}]}, 2)
+
+
+def test_repair_trailing_assistant_messages_preserves_valid_tool_results() -> None:
+    messages = [
+        {"role": "user", "content": "run it"},
+        {"role": "assistant", "tool_calls": [{"id": "call-1"}]},
+        {"role": "tool", "tool_call_id": "call-1", "content": "done"},
+    ]
+
+    assert repair_trailing_assistant_messages(messages) is messages
+    unanswered_tool_call = messages[:2]
+    assert repair_trailing_assistant_messages(unanswered_tool_call) is unanswered_tool_call
+    assert (
+        repair_trailing_assistant_messages([*messages, {"role": "assistant", "content": "partial"}])
+        == messages
+    )
+    all_assistant = [{"role": "assistant", "content": "partial"}]
+    assert repair_trailing_assistant_messages(all_assistant) is all_assistant
+
+
+def test_rank_model_id_preserves_an_exact_embedding_endpoint() -> None:
+    endpoints = [
+        ServingEndpointSummary(
+            name="databricks-gte-large-en",
+            task="llm/v1/embeddings",
+            modelClass=ModelClass.EMBEDDING,
+        ),
+        ServingEndpointSummary(
+            name="databricks-qwen3-next",
+            task="llm/v1/chat",
+            modelClass=ModelClass.CHAT_BALANCED,
+        ),
+    ]
+
+    resolved = rank_model_id(endpoints, "databricks-gte-large-en")
+
+    assert resolved.model_id == "databricks-gte-large-en"
+    assert resolved.matched is True

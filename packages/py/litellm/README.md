@@ -185,9 +185,10 @@ markers and reports the usage fields returned by the provider.
 ## Relationship to LiteLLM
 
 LiteLLM remains the proxy and provider implementation. It owns the
-OpenAI-compatible routes, Databricks authentication and transport, parameter
-mapping, streaming semantics, retries, embeddings, and Chat↔Responses
-conversion.
+OpenAI-compatible routes, Databricks transport, parameter mapping, streaming
+semantics, retries, embeddings, and Chat↔Responses conversion. The Databricks
+SDK owns authentication; this package caches its bearer result and passes it to
+LiteLLM explicitly so the provider does not construct a client per request.
 
 This package supplies only the workspace-specific layer LiteLLM does not have:
 deterministic profile selection, live endpoint discovery, fuzzy names, and
@@ -195,10 +196,26 @@ capability-aware routing. Request messages and content blocks are rewritten only
 to satisfy concrete Databricks serving constraints — the ordered pipeline under
 [Request processing](#request-processing) (trailing-assistant repair, JSON
 nudge, Claude prompt-cache marking) and the image payload guard — or when the
-caller explicitly requests automatic reasoning selection. Tools are not
-rewritten.
+caller explicitly requests automatic reasoning selection. Function tools pass
+through unchanged; the LiteLLM 1.96.2 namespace workaround unwraps only the
+grouping object around those functions.
 
-LiteLLM 1.83 loads custom handlers from a Python file beside the config. For an
+### Pinned compatibility
+
+The package pins `litellm[proxy]` to 1.96.2 because its two narrow startup
+patches target private LiteLLM APIs:
+
+- non-Claude `reasoning_effort` must not enter the thinking-token helper without
+  a `thinking` block;
+- Responses namespace tools must be unwrapped before LiteLLM's Chat bridge,
+  which still drops that wrapper in 1.96.2.
+
+The proxy also caps FastAPI below 0.140.7. That FastAPI release removed
+`get_flat_dependant`, which LiteLLM 1.96.2 imports during proxy startup. Remove
+the cap after LiteLLM ships its `get_flat_params` compatibility fix. Upgrade
+LiteLLM only with the full offline suite and proxy startup smoke test.
+
+LiteLLM 1.96 loads custom handlers from a Python file beside the config. For an
 existing LiteLLM config, add `config_provider.py` next to the YAML:
 
 ```python
@@ -327,9 +344,10 @@ one sees:
    does not support assistant message prefill. The conversation must end with a
    user message." Codex hits this on retry, when a stream that disconnected
    mid-turn is resumed with its partial answer replayed as the final message.
-   The repair drops trailing assistant turns (including an unanswered tool call)
-   so the transcript ends where the model can continue. It never empties the
-   list.
+   The repair drops trailing assistant text turns so the transcript ends where
+   the model can continue. It preserves trailing `tool_calls` /
+   `function_call`, which the client may be about to answer, and never empties
+   the list.
 2. **JSON nudge** (`_ensure_json_mentioned`). OpenAI-family endpoints refuse
    `response_format: {"type": "json_object"}` unless the prompt itself contains
    the word "json". This is a prompt-content rule, so no parameter filtering
@@ -426,6 +444,30 @@ LiteLLM's `databricks/responses/...` bridge. This keeps clients on one
 OpenAI-compatible proxy URL while selecting the Databricks surface that the
 resolved endpoint actually supports.
 
+## Validate
+
+Run the offline package checks:
+
+```sh
+uv run pytest packages/py/model packages/py/litellm -q
+uv run ruff check packages/py/model packages/py/litellm
+uv run dbx-litellm --help
+```
+
+Then start the proxy against an explicitly selected profile and exercise live
+discovery before inference:
+
+```sh
+uv run dbx-litellm --profile <PROFILE> --port 4000
+curl -fsS http://127.0.0.1:4000/health/readiness
+curl -fsS http://127.0.0.1:4000/v1/models
+```
+
+Release validation also covers non-streaming Chat, streaming Chat, Responses,
+function-call replay, namespace tools, and embeddings. An embedding request
+must preserve an exact embedding endpoint id rather than fuzzy-routing it to a
+chat endpoint.
+
 ## Modules
 
 - `backend` - profile-resolved workspace client, endpoint cache, and model
@@ -440,6 +482,7 @@ resolved endpoint actually supports.
 - `reasoning` — opt-in effort classification and TTL-backed follow-up context;
 - `routing` — model-only proxy hook for native Responses-only calls;
 - `access_log` — one-line per-request `dbx-access` telemetry;
+- `patches` - version-specific LiteLLM startup guards;
 - `cli` - profile-resolving launcher for the packaged LiteLLM proxy config.
 
 For standalone Python endpoint resolution and invocation helpers, use

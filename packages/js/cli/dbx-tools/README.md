@@ -122,4 +122,4 @@ should run the `dbx` bin.
 - `bun` - bun discovery, workspace install, registry forcing, and projen delegation.
 
 The reusable project classes and generators live in
-[`@dbx-tools/projen`](../../../projen).
+[`@dbx-tools/projen`](../../../../projen).

@@ -164,15 +164,16 @@ root.pnpmWorkspace?.allowBuild("protobufjs");
 root.pnpmWorkspace?.addCatalog("marked", "^18.0.5");
 root.pnpmWorkspace?.addCatalog("@react-email/components", "^1.0.12");
 root.pnpmWorkspace?.addCatalog("@react-email/render", "^2.1.0");
-root.pnpmWorkspace?.addCatalog("@mastra/core", "^1.47.0");
-root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "^1.6.0");
-root.pnpmWorkspace?.addCatalog("@mastra/express", "^1.4.2");
-root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "^1.2.0");
-root.pnpmWorkspace?.addCatalog("@mastra/mcp", "^1.12.0");
-root.pnpmWorkspace?.addCatalog("@mastra/memory", "^1.21.2");
-root.pnpmWorkspace?.addCatalog("@mastra/observability", "^1.15.2");
-root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "^1.4.0");
-root.pnpmWorkspace?.addCatalog("@mastra/pg", "^1.14.2");
+root.pnpmWorkspace?.addCatalog("@mastra/core", "1.47.0");
+root.pnpmWorkspace?.addCatalog("@mastra/ai-sdk", "1.6.0");
+root.pnpmWorkspace?.addCatalog("@mastra/express", "1.4.2");
+root.pnpmWorkspace?.addCatalog("@mastra/fastembed", "1.2.0");
+root.pnpmWorkspace?.addCatalog("@mastra/mcp", "1.12.0");
+root.pnpmWorkspace?.addCatalog("@modelcontextprotocol/sdk", "^1.29.0");
+root.pnpmWorkspace?.addCatalog("@mastra/memory", "1.21.2");
+root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.15.2");
+root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.4.0");
+root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.14.2");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
 root.pnpmWorkspace?.addCatalog("undici", "^7.17.0");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
@@ -192,7 +193,7 @@ root.pnpmWorkspace?.addCatalog("tw-animate-css", "^1.4.0");
 root.pnpmWorkspace?.addCatalog("lucide-react", "^0.554.0");
 root.pnpmWorkspace?.addCatalog("react-router-dom", "^7.6.2");
 root.pnpmWorkspace?.addCatalog("streamdown", "^2.5.0");
-root.pnpmWorkspace?.addCatalog("@mastra/client-js", "^1.28.0");
+root.pnpmWorkspace?.addCatalog("@mastra/client-js", "1.28.0");
 root.pnpmWorkspace?.addCatalog("@tanstack/react-table", "^8.21.3");
 root.pnpmWorkspace?.addCatalog("ai", "^5.0.0");
 root.pnpmWorkspace?.addCatalog("echarts", "^6.0.0");
@@ -274,7 +275,8 @@ project.applyToProjects(root, { identifierName: "core", tags: "node" }, (p) => {
   p.addDeps("extract-zip@^2.0.1", "tar@^7.5.22", "yaml", "zod@catalog:");
 });
 
-// node-appkit: the base for Node-side AppKit + experimental-SDK helpers.
+// node-appkit: the base for Node-side AppKit helpers and the legacy SDK
+// cancellation compatibility boundary.
 // Houses the SDK Context/AbortSignal adapter so the browser-safe shared-core
 // stays SDK-free. The Databricks SDK is a runtime dep here; `@databricks/appkit`
 // (used by `plugin.ts` for the execution-context + plugin-lookup helpers) is an
@@ -301,18 +303,14 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
-// Consumes the browser-safe shared-genie contracts, node-appkit's SDK glue,
-// and the SDK at runtime. AppKit is an OPTIONAL peer - the client resolver
-// lazy-imports it and falls back to env-var auth when it's absent.
+// Consumes the browser-safe shared-genie contracts and AppKit's public
+// workspace-client facade. AppKit handles request-scoped and default auth.
 project.applyToProjects(root, { identifierName: "genie", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/shared-genie@workspace:*",
     "@dbx-tools/appkit@workspace:*",
-    "@databricks/sdk-experimental@catalog:",
+    "@databricks/appkit@catalog:",
   );
-  p.addPeerDeps("@databricks/appkit@catalog:");
-  p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
-  p.addDevDeps("@databricks/appkit@catalog:");
 });
 
 // node-model: the server-side model resolver (cached Model Serving listing +
@@ -331,14 +329,15 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
 // node-databricks: generic Databricks/cloud infra with NO AppKit requirement -
 // workspace URL/id resolution + cloud provider/region detection (fetches
 // AWS/GCP/Azure IP-range feeds, DNS via node:dns, disk cache). Consumes
-// node-appkit only for the optional execution-context client + node-core for
-// fs stat; the SDK is a runtime dep.
+// node-appkit for the optional execution-context client + node-core for fs
+// stat. AppKit's facade owns client construction; workspace/DBFS calls cross
+// its explicit `toLegacyWorkspaceClient()` compatibility handoff.
 project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-fs@workspace:*",
-    "@databricks/sdk-experimental@catalog:",
+    "@databricks/appkit@catalog:",
   );
 });
 
@@ -422,14 +421,11 @@ project.applyToProjects(root, { identifierName: "teams", tags: "node" }, (p) => 
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
 });
 
-// node-search: a Meilisearch-style shortcut over Databricks AI Search
-// (Vector Search). A friendly SearchClient wraps the low-level
-// `vectorSearchIndexes.queryIndex` request + columnar response; the AppKit
-// `search` plugin adds `search` / `universal_search` / (opt-in)
-// `add_documents` tools, `/api/search` routes for a browser search box, and a
-// `clientConfig` catalogue. Reuses node-model to resolve an embedding endpoint
-// for index creation. Consumes the browser-safe shared-search contract.
-// Mirrors the node-email add-on's shape.
+// node-search: extensions around AppKit's beta `aiSearch` plugin. Native AppKit
+// owns Vector Search reads; this package adds agent tools, federated search,
+// index lifecycle, and an AppKit-compatible Lakebase full-text provider.
+// Reuses node-model to resolve an embedding endpoint for index creation and
+// consumes the browser-safe shared-search extension contract.
 project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) => {
   p.addDeps(
     "@dbx-tools/core@workspace:*",
@@ -440,9 +436,8 @@ project.applyToProjects(root, { identifierName: "search", tags: "node" }, (p) =>
     "@databricks/appkit@catalog:",
     "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
-    // pg powers the Lakebase full-text FALLBACK backend (a Postgres tsvector
-    // index) used when no Vector Search endpoint is configured. Pinned the same
-    // way node-appkit-mastra pins its Lakebase pool.
+    // pg powers `lakebaseAiSearch`, the PostgreSQL full-text implementation of
+    // AppKit's AI Search provider contract.
     "pg@^8.22.0",
     "zod@catalog:",
   );
@@ -467,7 +462,6 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/path@workspace:*",
-    "@databricks/sdk-experimental@catalog:",
     "@databricks/appkit@catalog:",
     "@mastra/core@catalog:",
     "@mastra/ai-sdk@catalog:",
@@ -479,6 +473,10 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
     "express@catalog:",
     "@mastra/fastembed@catalog:",
     "@mastra/mcp@catalog:",
+    // `@mastra/mcp` loads `@modelcontextprotocol/ext-apps`, whose SDK is a
+    // peer. Some production installers omit that nested peer even though MCP
+    // imports it at runtime, so publish the SDK from this package explicitly.
+    "@modelcontextprotocol/sdk@catalog:",
     "@mastra/memory@catalog:",
     "@mastra/observability@catalog:",
     "@mastra/otel-bridge@catalog:",
@@ -811,6 +809,7 @@ project.applyToProjects(root, { identifierName: "ui-teams", tags: "ui" }, (p) =>
 // shared-search contract and renders through ui-appkit's UI kit. `ui`-tagged.
 project.applyToProjects(root, { identifierName: "ui-search", tags: "ui" }, (p) => {
   p.addDeps(
+    "@databricks/appkit-ui@catalog:",
     "@dbx-tools/shared-search@workspace:*",
     "@dbx-tools/ui-appkit@workspace:*",
     "lucide-react@catalog:",
@@ -882,7 +881,6 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
     // runs the server directly rather than through a wrapper bin.
     "@dbx-tools/tunnel@workspace:*",
     "@databricks/appkit@catalog:",
-    "@databricks/sdk-experimental@catalog:",
     "@mastra/core@catalog:",
     "@mastra/ai-sdk@catalog:",
     "@mastra/express@catalog:",
@@ -973,7 +971,12 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
       "databricks-sdk>=0.63.0",
       projenProject.pythonGitDependency(pythonRepository, "dbx-tools-model", "model"),
       "diskcache>=5.6",
-      "litellm[proxy]>=1.83.14",
+      // LiteLLM 1.96.2 imports `get_flat_dependant`, removed in FastAPI
+      // 0.140.7. Keep the cap until LiteLLM ships its `get_flat_params` fix.
+      "fastapi<0.140.7",
+      // Exact because `patches.py` guards two upstream defects through private
+      // LiteLLM APIs; upgrade only with offline tests and a proxy startup smoke.
+      "litellm[proxy]==1.96.2",
       // Pillow lets the payload guard downscale oversize base64 images so a
       // request stays under Databricks' 32 MiB request-body limit.
       "pillow>=10.0",

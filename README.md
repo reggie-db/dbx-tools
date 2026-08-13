@@ -1,6 +1,6 @@
 <!-- docs-site:ignore:start -->
 
-**[Documentation](https://reggie-db.github.io/dbx-tools/)** - full package
+**[Documentation](https://dbx.tools/)** - full package
 reference, guides, and API docs.
 
 <!-- docs-site:ignore:end -->
@@ -20,7 +20,7 @@ and local developer tools while staying close to Databricks' own APIs.
 
 Use native AppKit first when it already gives you the exact surface you need.
 AppKit has strong built-in plugins for Analytics, Genie, Files, Lakebase, Model
-Serving, Jobs, Vector Search, and beta Agents, plus React UI primitives and
+Serving, Jobs, beta AI Search, and beta Agents, plus React UI primitives and
 hooks. `dbx-tools` is not a fork of that platform and should not replace AppKit
 for straightforward cases.
 
@@ -37,9 +37,9 @@ app:
   wiring every app to one serving endpoint alias;
 - you need local OpenAI-compatible development tooling on top of Databricks
   Model Serving;
-- you want a drop-in search box and `search` agent tool over Databricks AI
-  Search (Vector Search) rather than hand-writing the low-level `queryIndex`
-  request and unpacking its columnar response in every app;
+- you want agent tools, federated search, index lifecycle helpers, reusable
+  search components, or a Lakebase full-text provider around native AppKit AI
+  Search;
 - you need reusable UI surfaces for Mastra chat or human-approved email rather
   than a one-off component in each app.
 
@@ -71,14 +71,12 @@ app:
   native web-search tool, on its own Gemini/GPT web-capable model, returning an
   answer plus citations) and `web_fetch` (page contents) with an optional URL
   allow-list and per-tool approval gating.
-- **AI Search over Vector Search (with a Lakebase fallback)** — a Meilisearch-
-  style shortcut for Databricks AI Search: a friendly search client, `search` /
-  `universal_search` agent tools, `/api/search` routes for a search box, hybrid
-  matching, universal (federated) search across indexes, and a React `SearchBox`,
-  all from one `search()` plugin with sensible-default config. When no Vector
-  Search endpoint is configured but the AppKit `lakebase` plugin is registered,
-  it transparently falls back to a Postgres full-text index with the identical
-  search shape.
+- **AI Search extensions and Lakebase full text** - native AppKit `aiSearch`
+  owns Vector Search queries, OBO, caching, reranking, pagination, and the React
+  query hook. The dbx-tools search packages add agent tools, universal search,
+  index creation/sync/seed helpers, `SearchBox` / `SearchResults`, and
+  `lakebaseAiSearch`, a PostgreSQL full-text provider with the same AppKit query
+  contract.
 - **Teams bot endpoint and Adaptive Cards** — give an app a real Bot Framework
   messaging endpoint (inbound JWT validated, replies delivered over the Connector
   API), compile an agent's small card spec into a schema-valid Adaptive Card, and
@@ -170,7 +168,7 @@ export function App() {
 | Email workflows                | [`@dbx-tools/email`](packages/js/node/email), [`@dbx-tools/shared-email-template`](packages/js/shared/email-template), [`@dbx-tools/shared-email`](packages/js/shared/email), [`@dbx-tools/ui-email`](packages/js/ui/email) |
 | Web search and fetch           | [`@dbx-tools/appkit-web-search`](packages/js/node/appkit-web-search)                                                                                                                                                        |
 | Postgres locks and message bus | [`@dbx-tools/postgres`](packages/js/node/postgres), [`dbx-tools-postgres`](packages/py/postgres)                                                                                                                            |
-| AI Search (Vector Search)      | [`@dbx-tools/search`](packages/js/node/search), [`@dbx-tools/shared-search`](packages/js/shared/search), [`@dbx-tools/ui-search`](packages/js/ui/search)                                                                    |
+| AI Search extensions          | [`@dbx-tools/search`](packages/js/node/search), [`@dbx-tools/shared-search`](packages/js/shared/search), [`@dbx-tools/ui-search`](packages/js/ui/search)                                                                    |
 | Teams chat and cards           | [`@dbx-tools/teams`](packages/js/node/teams), [`@dbx-tools/shared-teams`](packages/js/shared/teams), [`@dbx-tools/ui-teams`](packages/js/ui/teams)                                                                          |
 | React/AppKit UI                | [`@dbx-tools/ui-appkit`](packages/js/ui/appkit), [`@dbx-tools/ui-mastra`](packages/js/ui/mastra), [`@dbx-tools/ui-auth`](packages/js/ui/auth), [`@dbx-tools/ui-email`](packages/js/ui/email)                                |
 | Brand context and assets       | [`@dbx-tools/shared-core`](packages/js/shared/core), [`@dbx-tools/core`](packages/js/node/core), [`@dbx-tools/ui-branding`](packages/js/ui/branding)                                                                        |

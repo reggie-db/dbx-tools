@@ -1,7 +1,6 @@
 /**
- * A Lakebase (Postgres) full-text search backend - the FALLBACK used when no
- * Databricks Vector Search endpoint/index is configured but a Lakebase pool is
- * available. It provisions a single table per index, indexes a generated
+ * Lakebase (Postgres) full-text runtime behind `lakebaseAiSearch`. It provisions
+ * a single table per index alias, indexes a generated
  * `tsvector`, and answers queries with a prefix `to_tsquery` + `ts_rank`.
  *
  * Queries are compiled rather than passed through `websearch_to_tsquery`,
@@ -30,6 +29,7 @@ import { log, object, string } from "@dbx-tools/shared-core";
 import type {
   SearchDocument,
   SearchHit,
+  SearchRequest,
   SearchResult,
   UpsertResult,
 } from "@dbx-tools/shared-search";
@@ -81,6 +81,7 @@ export function toTsQuery(terms: readonly string[], operator: "&" | "|" = "&"): 
 /** Options for a single-index Lakebase search (mirrors the client's `SearchOptions`). */
 export interface LakebaseSearchOptions {
   limit?: number;
+  filter?: SearchRequest["filter"];
   scoreThreshold?: number;
   signal?: AbortSignal;
 }
@@ -156,24 +157,33 @@ export class LakebaseSearchBackend {
     // An empty (or punctuation-only) box returns rows rather than nothing, so
     // the UI shows content before the user types - as a keyword index would.
     if (terms.length === 0) {
+      const filter = this.filterClause(options.filter, 1);
+      const limitPosition = filter.params.length + 1;
       const { rows } = await this.query<SearchRow>(
         pool,
-        `SELECT id, document, 0::float4 AS score FROM ${table} ORDER BY id LIMIT $1`,
-        [limit],
+        `SELECT id, document, 0::float4 AS score
+           FROM ${table}
+          WHERE TRUE${filter.sql}
+          ORDER BY id
+          LIMIT $${limitPosition}`,
+        [...filter.params, limit],
         options.signal,
       );
       return this.toResult(text, index, rows, options);
     }
 
     // Precise pass: every term must match, each as a prefix.
+    const strictFilter = this.filterClause(options.filter, 2);
+    const strictLimitPosition = strictFilter.params.length + 2;
     const strict = await this.query<SearchRow>(
       pool,
       `SELECT id, document, ts_rank(search_vector, to_tsquery('english', $1)) AS score
          FROM ${table}
         WHERE search_vector @@ to_tsquery('english', $1)
+          ${strictFilter.sql}
         ORDER BY score DESC
-        LIMIT $2`,
-      [toTsQuery(terms), limit],
+        LIMIT $${strictLimitPosition}`,
+      [toTsQuery(terms), ...strictFilter.params, limit],
       options.signal,
     );
     if (strict.rows.length > 0) return this.toResult(text, index, strict.rows, options);
@@ -183,15 +193,18 @@ export class LakebaseSearchBackend {
     // fragment that is not a prefix (`telligence`) or a token the text-search
     // parser split differently than expected. Substring matching cannot use
     // the GIN index, which is why it only runs once the indexed pass fails.
+    const relaxedFilter = this.filterClause(options.filter, 3);
+    const relaxedLimitPosition = relaxedFilter.params.length + 3;
     const relaxed = await this.query<SearchRow>(
       pool,
       `SELECT id, document, ts_rank(search_vector, to_tsquery('english', $1)) AS score
          FROM ${table}
-        WHERE search_vector @@ to_tsquery('english', $1)
-           OR search_text ILIKE ANY($2::text[])
+        WHERE (search_vector @@ to_tsquery('english', $1)
+           OR search_text ILIKE ANY($2::text[]))
+          ${relaxedFilter.sql}
         ORDER BY score DESC
-        LIMIT $3`,
-      [toTsQuery(terms, "|"), terms.map((term) => `%${term}%`), limit],
+        LIMIT $${relaxedLimitPosition}`,
+      [toTsQuery(terms, "|"), terms.map((term) => `%${term}%`), ...relaxedFilter.params, limit],
       options.signal,
     );
     return this.toResult(text, index, relaxed.rows, options);
@@ -285,6 +298,14 @@ export class LakebaseSearchBackend {
     );
     await this.query(
       pool,
+      `ALTER TABLE ${table}
+         ADD COLUMN IF NOT EXISTS search_vector tsvector
+         GENERATED ALWAYS AS (to_tsvector('english', search_text)) STORED`,
+      [],
+      signal,
+    );
+    await this.query(
+      pool,
       `CREATE INDEX IF NOT EXISTS ${this.ident(`${this.bareName(table)}_fts`)}
          ON ${table} USING gin (search_vector)`,
       [],
@@ -342,6 +363,29 @@ export class LakebaseSearchBackend {
     return fields;
   }
 
+  /** Compile AppKit scalar/array filters against the stored JSON document. */
+  private filterClause(
+    filter: SearchRequest["filter"],
+    startPosition: number,
+  ): { sql: string; params: unknown[] } {
+    if (!filter || Object.keys(filter).length === 0) return { sql: "", params: [] };
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    for (const [key, value] of Object.entries(filter)) {
+      const keyPosition = startPosition + params.length;
+      params.push(key);
+      const valuePosition = startPosition + params.length;
+      if (Array.isArray(value)) {
+        params.push(value.map(String));
+        clauses.push(`document ->> $${keyPosition} = ANY($${valuePosition}::text[])`);
+      } else {
+        params.push(String(value));
+        clauses.push(`document ->> $${keyPosition} = $${valuePosition}`);
+      }
+    }
+    return { sql: ` AND ${clauses.join(" AND ")}`, params };
+  }
+
   /** The fully-qualified table name for an index reference. */
   private tableFor(index: string): string {
     return `${this.ident(this.schema)}.${this.ident(this.bareName(index))}`;
@@ -350,10 +394,7 @@ export class LakebaseSearchBackend {
   /** A safe bare table name derived from an index reference. */
   private bareName(reference: string): string {
     const last = reference.split(".").filter(Boolean).pop() ?? reference;
-    const slug = last
-      .toLowerCase()
-      .replace(/[^a-z0-9_]+/g, "_")
-      .replace(/^_+|_+$/g, "");
+    const slug = string.toSlug(last).replace(/-/g, "_");
     return slug.length > 0 ? slug : "documents";
   }
 

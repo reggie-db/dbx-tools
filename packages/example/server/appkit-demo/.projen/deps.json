@@ -40,11 +40,6 @@
       "type": "runtime"
     },
     {
-      "name": "@databricks/sdk-experimental",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/appkit-mastra",
       "version": "workspace:*",
       "type": "runtime"

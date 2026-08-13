@@ -1,6 +1,8 @@
 from .chat import (
     UNSUPPORTED_CHAT_FIELDS,
     chat_content_to_text,
+    repair_trailing_assistant_messages,
+    repairTrailingAssistantMessages,
     sanitize_chat_request,
     strip_unsupported_chat_fields,
 )
@@ -116,6 +118,8 @@ __all__ = [
     "reasoningEffortsForNames",
     "reasoning_efforts_by_family",
     "reasoning_efforts_for_names",
+    "repairTrailingAssistantMessages",
+    "repair_trailing_assistant_messages",
     "resolve_model",
     "resolve_model_id",
     "responses_upstream_url",

@@ -200,9 +200,9 @@ preserve OBO auth in apps while still working from scripts.
 
 ```ts
 import { appkit } from "@dbx-tools/appkit";
-import { WorkspaceClient } from "@databricks/sdk-experimental";
+import { createWorkspaceClient } from "@databricks/appkit";
 
-const client = appkit.tryGetExecutionContext()?.client ?? new WorkspaceClient({});
+const client = appkit.tryGetExecutionContext()?.client ?? createWorkspaceClient();
 ```
 
 `appkit.ensureInitialized()` lazily initializes AppKit runtime state before

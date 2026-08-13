@@ -30,7 +30,6 @@
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
-    "@databricks/sdk-experimental": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/appkit-mastra": "workspace:*",
     "@dbx-tools/appkit-web-search": "workspace:*",

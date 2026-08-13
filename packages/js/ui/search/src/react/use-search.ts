@@ -1,17 +1,15 @@
-// `useSearch` — a small React hook that turns the AI Search plugin's HTTP
-// routes into a debounced, cancellable search-as-you-type state machine. It
-// reads the plugin's boot config (indexes, default index, page size, base path)
-// via AppKit's `usePluginClientConfig`, so a search box needs no props to know
-// where to POST. Point it at `@dbx-tools/search`'s `POST /api/search`
-// (single index) or `POST /api/search/universal` (federated) route.
+// `useSearch` adapts AppKit's native `useAiSearchQuery` to a debounced
+// search-as-you-type state machine. Single-index queries use AppKit's native
+// route and client config; universal queries use the dbx-tools extension route.
 
-import type {
-  SearchClientConfig,
-  SearchHit,
-  SearchMode,
-  SearchResult,
+import {
+  search as sharedSearch,
+  type SearchClientConfig,
+  type SearchHit,
+  type SearchMode,
+  type SearchResult,
 } from "@dbx-tools/shared-search";
-import { usePluginClientConfig } from "@dbx-tools/ui-appkit/react";
+import { useAiSearchQuery, type AiSearchRequest } from "@databricks/appkit-ui/react/beta";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /** Options for {@link useSearch}. */
@@ -28,8 +26,6 @@ export interface UseSearchOptions {
   debounceMs?: number;
   /** Minimum query length before searching. Defaults to 1. */
   minLength?: number;
-  /** The plugin name to read config from / route under. Defaults to "search". */
-  pluginName?: string;
 }
 
 /** The state {@link useSearch} returns. */
@@ -52,25 +48,34 @@ export interface UseSearchState {
   clear: () => void;
 }
 
-const DEFAULT_BASE_PATH = "/api/search";
+const UNIVERSAL_SEARCH_PATH = "/api/search/universal";
+
+function toHits(
+  results: Array<{ score: number; data: Record<string, unknown> }>,
+  index: string | null,
+): SearchHit[] {
+  return results.map((result, resultIndex) => ({
+    id: String(result.data.id ?? Object.values(result.data)[0] ?? resultIndex),
+    score: result.score,
+    fields: result.data,
+    ...(index ? { index } : {}),
+  }));
+}
 
 /**
- * Search-as-you-type against the AI Search plugin. Debounces input, cancels the
- * previous request when a new one starts, and exposes `{ query, setQuery, hits,
- * loading, error }` for a search box to render. Reads the plugin's client config
- * for the base path, default index, and page size.
+ * Search-as-you-type against AppKit AI Search. Debounces input, cancels stale
+ * native queries, and exposes `{ query, setQuery, hits, loading, error }` for a
+ * search box to render.
  */
 export function useSearch(options: UseSearchOptions = {}): UseSearchState {
-  const pluginName = options.pluginName ?? "search";
-  const config = usePluginClientConfig<SearchClientConfig>(pluginName);
-  const basePath = config?.basePath ?? DEFAULT_BASE_PATH;
+  const native = useAiSearchQuery({ ...(options.index ? { alias: options.index } : {}) });
   const debounceMs = options.debounceMs ?? 200;
   const minLength = options.minLength ?? 1;
 
   const [query, setQueryState] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [universalLoading, setUniversalLoading] = useState(false);
+  const [universalError, setUniversalError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,31 +85,33 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
       abortRef.current?.abort();
       if (text.trim().length < minLength) {
         setHits([]);
-        setLoading(false);
+        setUniversalLoading(false);
+        return;
+      }
+      if (!options.universal) {
+        const resolvedQueryType = sharedSearch.toAiSearchQueryType(options.mode);
+        const request: AiSearchRequest = {
+          queryText: text,
+          ...(options.limit ? { numResults: options.limit } : {}),
+          ...(resolvedQueryType ? { queryType: resolvedQueryType } : {}),
+        };
+        const result = await native.search(request);
+        setHits(result ? toHits(result.results, native.alias) : []);
         return;
       }
       const controller = new AbortController();
       abortRef.current = controller;
-      setLoading(true);
-      setError(null);
+      setUniversalLoading(true);
+      setUniversalError(null);
       try {
-        const path = options.universal ? `${basePath}/universal` : basePath;
-        const body = options.universal
-          ? {
-              query: text,
-              ...(options.limit ? { limit: options.limit } : {}),
-              ...(options.mode ? { mode: options.mode } : {}),
-            }
-          : {
-              query: text,
-              ...(options.index ? { index: options.index } : {}),
-              ...(options.limit ? { limit: options.limit } : {}),
-              ...(options.mode ? { mode: options.mode } : {}),
-            };
-        const response = await fetch(path, {
+        const response = await fetch(UNIVERSAL_SEARCH_PATH, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            query: text,
+            ...(options.limit ? { limit: options.limit } : {}),
+            ...(options.mode ? { mode: options.mode } : {}),
+          }),
           signal: controller.signal,
         });
         if (!response.ok) {
@@ -114,13 +121,13 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
         setHits(result.hits ?? []);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
-        setError((err as Error).message);
+        setUniversalError((err as Error).message);
         setHits([]);
       } finally {
-        if (abortRef.current === controller) setLoading(false);
+        if (abortRef.current === controller) setUniversalLoading(false);
       }
     },
-    [basePath, minLength, options.index, options.limit, options.mode, options.universal],
+    [minLength, native.alias, native.search, options.limit, options.mode, options.universal],
   );
 
   const setQuery = useCallback(
@@ -142,8 +149,8 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
     abortRef.current?.abort();
     setQueryState("");
     setHits([]);
-    setError(null);
-    setLoading(false);
+    setUniversalError(null);
+    setUniversalLoading(false);
   }, []);
 
   useEffect(
@@ -154,6 +161,21 @@ export function useSearch(options: UseSearchOptions = {}): UseSearchState {
     [],
   );
 
+  const config = useMemo<SearchClientConfig>(
+    () => ({
+      indexes: native.indexes.map((index) => ({
+        name: index.alias,
+        alias: index.alias,
+        isDefault: index.alias === native.alias,
+      })),
+      ...(native.alias ? { defaultIndex: native.alias } : {}),
+      pageSize: options.limit ?? 20,
+      basePath: "/api/ai-search",
+    }),
+    [native.alias, native.indexes, options.limit],
+  );
+  const loading = options.universal ? universalLoading : native.loading;
+  const error = options.universal ? universalError : native.error;
   return useMemo(
     () => ({ query, setQuery, hits, loading, error, config, submit, clear }),
     [query, setQuery, hits, loading, error, config, submit, clear],

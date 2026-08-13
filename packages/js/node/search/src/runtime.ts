@@ -8,31 +8,24 @@
  * @module
  */
 
-import { createSearchClient, SearchClient } from "./client.ts";
+import { createSearchClient, SearchClient, type SearchReadBackend } from "./client.ts";
 import {
   resolveSearchConfig,
   type SearchPluginConfig,
   type ResolvedSearchConfig,
 } from "./config.ts";
-import { LakebaseSearchBackend } from "./lakebase.ts";
 
-/**
- * How the runtime is built. `lakebase` (when present) is the Postgres full-text
- * FALLBACK backend the plugin wires up when no Vector Search endpoint is
- * configured but the AppKit `lakebase` plugin is registered. Every read/write
- * returns the same shape either way.
- */
+/** Configuration and provider used to build the shared extension runtime. */
 export interface SearchRuntimeOptions {
   config?: SearchPluginConfig;
-  lakebase?: LakebaseSearchBackend;
+  readBackend?: SearchReadBackend;
 }
 
 /** The shared resolved config plus the client reads run through. */
 export interface SearchRuntime {
   config: ResolvedSearchConfig;
   client: SearchClient;
-  /** The Lakebase fallback backend, when the runtime is backed by Postgres. */
-  lakebase?: LakebaseSearchBackend;
+  readBackend?: SearchReadBackend;
 }
 
 let runtime: SearchRuntime | undefined;
@@ -46,11 +39,10 @@ let runtime: SearchRuntime | undefined;
 export function getSearchRuntime(options?: SearchRuntimeOptions): SearchRuntime {
   if (!runtime) {
     const config = resolveSearchConfig(options?.config);
-    const lakebase = options?.lakebase;
     runtime = {
       config,
-      client: createSearchClient(config, undefined, lakebase),
-      ...(lakebase ? { lakebase } : {}),
+      client: createSearchClient(config, undefined, options?.readBackend),
+      ...(options?.readBackend ? { readBackend: options.readBackend } : {}),
     };
   }
   return runtime;
@@ -58,7 +50,5 @@ export function getSearchRuntime(options?: SearchRuntimeOptions): SearchRuntime 
 
 /** Drop the memoized runtime so the next {@link getSearchRuntime} rebuilds it. */
 export function resetSearchRuntime(): void {
-  const backend = runtime?.lakebase;
   runtime = undefined;
-  if (backend) void backend.close();
 }

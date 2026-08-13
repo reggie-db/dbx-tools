@@ -5,7 +5,7 @@ description: Pointer to the global format-databricks-bundle-yaml skill. Use when
 
 # Format Databricks Bundle YAML
 
-This skill now lives globally at `~/.codex/skills/format-databricks-bundle-yaml`
+This skill now lives globally at `~/.cursor/skills/format-databricks-bundle-yaml`
 so every repository shares one copy. Load that skill instead of maintaining
 bundle guidance here.
 

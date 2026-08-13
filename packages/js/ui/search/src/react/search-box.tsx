@@ -1,8 +1,7 @@
-// `SearchBox` — a drop-in, Meilisearch-style search-as-you-type input for
+// `SearchBox` is a drop-in search-as-you-type input for
 // Databricks AI Search. It wires an AppKit `Input` to the {@link useSearch}
-// hook and renders the hits in a dropdown as the user types, so adding search
-// to an app is one component and zero configuration: the plugin's client config
-// supplies the index, page size, and route.
+// hook and renders hits in a dropdown as the user types. AppKit's native
+// `aiSearch` client config supplies the index alias and query route.
 //
 // It is presentational and unopinionated about what a hit looks like: pass a
 // `renderHit` to control each row, or rely on the default which shows the first

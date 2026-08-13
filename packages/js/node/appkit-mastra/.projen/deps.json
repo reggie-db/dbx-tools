@@ -40,11 +40,6 @@
       "type": "runtime"
     },
     {
-      "name": "@databricks/sdk-experimental",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "@dbx-tools/appkit",
       "version": "workspace:*",
       "type": "runtime"
@@ -146,6 +141,11 @@
     },
     {
       "name": "@mastra/pg",
+      "version": "catalog:",
+      "type": "runtime"
+    },
+    {
+      "name": "@modelcontextprotocol/sdk",
       "version": "catalog:",
       "type": "runtime"
     },

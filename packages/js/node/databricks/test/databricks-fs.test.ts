@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { WorkspaceClient } from "@databricks/sdk-experimental";
+import type { WorkspaceClient } from "../src/workspace.ts";
 import { DatabricksFileSystem } from "../src/databricks-fs.ts";
 
 /** Minimal UC Files mock for a rooted volume filesystem. */

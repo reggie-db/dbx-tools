@@ -11,6 +11,8 @@ from threading import RLock
 from typing import Any, TypeVar, cast
 from uuid import uuid4
 
+from dbx_tools.model.chat import repair_trailing_assistant_messages
+
 import litellm
 from litellm import CustomLLM
 from litellm.exceptions import AuthenticationError, MidStreamFallbackError, RateLimitError
@@ -251,41 +253,7 @@ def _as_dict(message: Any) -> Any:
     return dumped if isinstance(dumped, dict) else message
 
 
-def _is_assistant_message(message: Any) -> bool:
-    """Whether a message is an assistant message — the prefill trigger."""
-    return _field(message, "role") == "assistant"
-
-
-def _repair_trailing_assistant(messages: list[Any]) -> list[Any]:
-    """Drop trailing assistant turns so the transcript ends where Anthropic can continue.
-
-    Databricks rejects a conversation whose last message is an assistant message:
-    "This model does not support assistant message prefill. The conversation must
-    end with a user message." (the upstream Bedrock route disallows prefill). The
-    Codex CLI hits this on RETRY — a stream that disconnects mid-turn is resumed
-    with the partial answer already replayed as the last message, so every
-    reconnect fails and the chat dies instead of recovering.
-
-    Dropping is the honest repair, not a lossy one: a trailing assistant turn is
-    output the model itself just produced, so it is not context the provider needs
-    repeated in order to continue. This includes an unanswered tool call. A client
-    that has a tool result sends that result as the terminal tool/user turn; when
-    no result follows, replaying the assistant tool call is still an unsupported
-    prefill and LiteLLM may separately drop its Responses-only tool definition.
-    Appending a synthetic "Continue." user turn would also satisfy the provider,
-    but it puts words in the user's mouth that then show up in model context.
-
-    Loops rather than checking once, since several assistant turns can be trailing.
-    Never empties the list: an all-assistant transcript is not something this can
-    rescue, so it is left for the provider to reject with its own message rather
-    than inventing a request.
-    """
-    if not messages or not _is_assistant_message(messages[-1]):
-        return messages
-    trimmed = list(messages)
-    while trimmed and _is_assistant_message(trimmed[-1]):
-        trimmed.pop()
-    return trimmed or messages
+_repair_trailing_assistant = repair_trailing_assistant_messages
 
 
 # OpenAI-family endpoints refuse `response_format: {"type": "json_object"}` unless

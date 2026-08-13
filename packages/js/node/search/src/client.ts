@@ -1,25 +1,16 @@
 /**
- * A small, Meilisearch-shaped client over Databricks AI Search (Vector
- * Search). The whole point of this module is ergonomics: the Databricks SDK's
- * `vectorSearchIndexes.queryIndex({ index_name, columns, query_text,
- * query_type, num_results, filters_json })` is powerful but verbose, and the
- * response is columnar. This client hides all of that behind two objects:
- *
- * ```ts
- * const client = createSearchClient();
- * const index = client.index("main.support.docs");
- * const { hits } = await index.search("reset my password", { limit: 5 });
- * await index.addDocuments([{ id: "42", title: "Reset", body: "..." }]);
- * ```
+ * Search extension client. Reads delegate to the registered AppKit-compatible
+ * `aiSearch` provider; this module owns federated fan-out and the Vector Search
+ * lifecycle APIs AppKit does not expose.
  *
  * `client.search(query, opts)` searches the default index; `client.index(name)`
  * returns a handle bound to one index; `client.universalSearch(query)` fans a
  * query across several indexes and merges the results (Meilisearch's federated
  * / multi-search, the "universal search" the caller asked for). Everything is
- * async and cancellable, resolves the OBO workspace client from the active
- * AppKit execution context (falling back to a service-principal client outside
- * a request), and returns the browser-safe shapes from
- * `@dbx-tools/shared-search`.
+ * async and cancellable and returns the browser-safe shapes from
+ * `@dbx-tools/shared-search`. Lifecycle methods cross AppKit's explicit legacy
+ * client handoff because the public facade does not yet expose index creation,
+ * sync, or deletion.
  *
  * Autocomplete is just a search with a small `limit` and the raw query text -
  * hybrid mode already prefix-matches, so no separate endpoint is needed; the
@@ -38,6 +29,7 @@ import type {
   SearchDocument,
   SearchHit,
   SearchMode,
+  SearchRequest,
   SearchResult,
   UpsertResult,
 } from "@dbx-tools/shared-search";
@@ -45,21 +37,24 @@ import {
   DEFAULT_MODE,
   DEFAULT_PAGE_SIZE,
   DEFAULT_TIMEOUT_MS,
-  indexConfigFor,
   resolveIndexName,
   type ResolvedSearchConfig,
 } from "./config.ts";
-import type { LakebaseSearchBackend } from "./lakebase.ts";
-import {
-  compileFilter,
-  toHits,
-  toQueryType,
-  toRequestColumns,
-  type QueryResponseLike,
-} from "./query.ts";
 
-type WorkspaceClientLike = appkit.WorkspaceClientLike;
+type WorkspaceClientLike = ReturnType<appkit.WorkspaceClientLike["toLegacyWorkspaceClient"]>;
 const logger = log.logger("search/client");
+
+/** Query backend used when AppKit owns the Vector Search execution path. */
+export interface SearchReadBackend {
+  /** Whether Vector Search lifecycle methods are valid for this provider. */
+  supportsLifecycle: boolean;
+  search(index: string, query: string, options?: SearchOptions): Promise<SearchResult>;
+  addDocuments?(
+    index: string,
+    documents: SearchDocument[],
+    signal?: AbortSignal,
+  ): Promise<UpsertResult>;
+}
 
 /** Options accepted by a single-index search. */
 export interface SearchOptions {
@@ -69,8 +64,8 @@ export interface SearchOptions {
   mode?: SearchMode;
   /** Columns to return per hit. Defaults to the index's configured columns. */
   columns?: readonly string[];
-  /** Attribute filters as `{ column: value }` or `{ column: { ">=": n } }`. */
-  filter?: Record<string, unknown>;
+  /** AppKit AI Search scalar/array filters. */
+  filter?: SearchRequest["filter"];
   /** Drop hits below this score. */
   scoreThreshold?: number;
   /** External cancellation. */
@@ -247,19 +242,8 @@ export class SearchClient {
       allowWrite: false,
     },
     private readonly workspaceClientFactory: () => WorkspaceClientLike = defaultWorkspaceClient,
-    /**
-     * Optional Lakebase full-text FALLBACK backend. Present only when no Vector
-     * Search endpoint is configured but a Lakebase pool is available; when set,
-     * search / provision / write operations delegate to it and return the exact
-     * same shapes, so nothing downstream can tell which backend answered.
-     */
-    private readonly lakebase?: LakebaseSearchBackend,
+    private readonly readBackend?: SearchReadBackend,
   ) {}
-
-  /** True when this client is answering out of the Lakebase fallback backend. */
-  get usesLakebase(): boolean {
-    return this.lakebase !== undefined;
-  }
 
   /** A handle bound to one index (by full UC name or configured alias). */
   index(reference: string): SearchIndex {
@@ -282,68 +266,16 @@ export class SearchClient {
         context: { operation: "search" },
       });
     }
-    if (this.lakebase) {
-      return this.lakebase.search(name, text, {
-        limit: options.limit ?? this.config.pageSize,
-        ...(options.scoreThreshold !== undefined ? { scoreThreshold: options.scoreThreshold } : {}),
-        ...(options.signal ? { signal: options.signal } : {}),
-      });
-    }
-    const known = indexConfigFor(this.config, name);
-    const primaryKey = known?.primaryKey;
-    const columns = toRequestColumns(
-      options.columns,
-      known?.columns ?? this.config.columns,
-      primaryKey,
-    );
-    const mode = options.mode ?? this.config.mode;
-    const limit = options.limit ?? this.config.pageSize;
-
-    // Databricks only manages embeddings for Delta Sync indexes, so a query
-    // against a DIRECT_ACCESS index must carry a query VECTOR, not text. Embed
-    // the query client-side in that case (the index type is cached after the
-    // first lookup so this costs one extra call per index, not per search).
-    const directAccess = await this.isDirectAccess(name, options.signal);
-    const queryVector = directAccess
-      ? (await this.embed([text], this.config.embeddingModel, options.signal))[0]
-      : undefined;
-
-    const response = await this.withClient("search", options.signal, async (client, context) => {
-      return client.vectorSearchIndexes.queryIndex(
-        {
-          index_name: name,
-          columns,
-          ...(queryVector ? { query_vector: queryVector } : { query_text: text }),
-          query_type: toQueryType(mode),
-          num_results: limit,
-          ...(compileFilter(options.filter) ? { filters_json: compileFilter(options.filter) } : {}),
-          ...(options.scoreThreshold !== undefined
-            ? { score_threshold: options.scoreThreshold }
-            : {}),
-        },
-        context,
+    if (!this.readBackend) {
+      throw new ExecutionError(
+        "search: no AI Search provider registered; add aiSearch() or lakebaseAiSearch()",
+        { context: { operation: "search" } },
       );
-    });
-
-    const hits = toHits(response as QueryResponseLike, primaryKey);
-    return { query: text, index: name, hits, count: hits.length };
-  }
-
-  /** Cache of index-name -> is-DIRECT_ACCESS, so a search embeds its query only when needed. */
-  private readonly directAccessCache = new Map<string, boolean>();
-
-  /** Whether an index is DIRECT_ACCESS (memoized); a lookup failure assumes Delta Sync. */
-  private async isDirectAccess(name: string, signal?: AbortSignal): Promise<boolean> {
-    const cached = this.directAccessCache.get(name);
-    if (cached !== undefined) return cached;
-    try {
-      const info = await this.getIndex(name, signal);
-      const value = info.directAccess ?? false;
-      this.directAccessCache.set(name, value);
-      return value;
-    } catch {
-      return false;
     }
+    return this.readBackend.search(name, text, {
+      ...options,
+      limit: options.limit ?? this.config.pageSize,
+    });
   }
 
   /**
@@ -405,8 +337,18 @@ export class SearchClient {
     return name;
   }
 
+  /** Reject Vector Search lifecycle calls against a non-Vector provider. */
+  private requireLifecycle(operation: string): void {
+    if (this.readBackend && !this.readBackend.supportsLifecycle) {
+      throw new ExecutionError(`search: the registered provider does not support ${operation}`, {
+        context: { operation },
+      });
+    }
+  }
+
   /** Fetch an index's live definition. */
   async getIndex(reference: string, signal?: AbortSignal): Promise<IndexInfo> {
+    this.requireLifecycle("getIndex");
     const name = this.requireIndexName(reference, "getIndex");
     const index = await this.withClient("getIndex", signal, (client, context) =>
       client.vectorSearchIndexes.getIndex({ index_name: name }, context),
@@ -446,14 +388,10 @@ export class SearchClient {
     signal?: AbortSignal,
   ): Promise<UpsertResult> {
     const name = this.requireIndexName(reference, "addDocuments");
-    if (this.lakebase) {
-      return this.lakebase.addDocuments(
-        name,
-        documents,
-        this.config.ensureOnSetup?.textColumn ?? "text",
-        signal,
-      );
+    if (this.readBackend?.addDocuments) {
+      return this.readBackend.addDocuments(name, documents, signal);
     }
+    this.requireLifecycle("addDocuments");
     await this.withClient("addDocuments", signal, (client, context) =>
       client.vectorSearchIndexes.upsertDataVectorIndex(
         { index_name: name, inputs_json: JSON.stringify(documents) },
@@ -469,10 +407,8 @@ export class SearchClient {
     ids: Array<string | number>,
     signal?: AbortSignal,
   ): Promise<UpsertResult> {
+    this.requireLifecycle("deleteDocuments");
     const name = this.requireIndexName(reference, "deleteDocuments");
-    if (this.lakebase) {
-      return this.lakebase.deleteDocuments(name, ids, signal);
-    }
     await this.withClient("deleteDocuments", signal, (client, context) =>
       client.vectorSearchIndexes.deleteDataVectorIndex(
         { index_name: name, primary_keys: ids.map(String) },
@@ -493,14 +429,15 @@ export class SearchClient {
     // is used verbatim - no need to fetch and fuzzy-match the live catalogue.
     // A genuinely loose name (e.g. "gte large") still resolves against it.
     if (explicit && !/\s/.test(explicit)) return explicit;
-    return this.withClient("resolveEmbeddingModel", signal, async (client) => {
-      const host = (await client.config.getHost()).toString();
-      const endpoints = await serving.listServingEndpoints(client, host);
-      const { modelId } = modelResolve.resolveModel(endpoints, {
-        ...(explicit ? { explicit } : { modelClass: ModelClass.Embedding }),
-      });
-      return string.trimToNull(modelId);
+    signal?.throwIfAborted();
+    const client = defaultAppKitWorkspaceClient();
+    const host = (await client.config.getHost()).toString();
+    const endpoints = await serving.listServingEndpoints(client, host);
+    signal?.throwIfAborted();
+    const { modelId } = modelResolve.resolveModel(endpoints, {
+      ...(explicit ? { explicit } : { modelClass: ModelClass.Embedding }),
     });
+    return string.trimToNull(modelId);
   }
 
   /**
@@ -571,6 +508,7 @@ export class SearchClient {
    * column (`embedding`). Returns the created index's {@link IndexInfo}.
    */
   async createIndex(name: string, options: CreateIndexOptions = {}): Promise<IndexInfo> {
+    this.requireLifecycle("createIndex");
     const endpoint = options.endpoint ?? this.config.endpoint;
     if (!endpoint) {
       throw new ExecutionError(
@@ -652,6 +590,7 @@ export class SearchClient {
    * index is present.
    */
   async ensureIndex(name: string, options: CreateIndexOptions = {}): Promise<IndexInfo> {
+    this.requireLifecycle("ensureIndex");
     try {
       return await this.getIndex(name, options.signal);
     } catch {
@@ -671,23 +610,7 @@ export class SearchClient {
    * rows and search-by-text works immediately.
    */
   async provision(name: string, options: ProvisionOptions = {}): Promise<IndexInfo> {
-    if (this.lakebase) {
-      // Lakebase fallback: no endpoint, no embeddings, no vectors - just a
-      // Postgres full-text table. Returns an IndexInfo-shaped result so the
-      // caller's logging + readiness handling is identical to Vector Search.
-      const rowCount = await this.lakebase.provision(name, {
-        textColumn: options.embeddingSourceColumn ?? "text",
-        ...(options.seed ? { seed: options.seed } : {}),
-        ...(options.signal ? { signal: options.signal } : {}),
-      });
-      return {
-        name,
-        primaryKey: options.primaryKey ?? "id",
-        columns: [],
-        ready: true,
-        rowCount,
-      };
-    }
+    this.requireLifecycle("provision");
     const wait = options.wait ?? true;
     const timeoutMs = options.timeoutMs ?? 20 * 60 * 1000;
     const endpoint = options.endpoint ?? this.config.endpoint;
@@ -742,6 +665,7 @@ export class SearchClient {
 
   /** Trigger a sync of a Delta Sync index from its source table. */
   async syncIndex(reference: string, signal?: AbortSignal): Promise<void> {
+    this.requireLifecycle("syncIndex");
     const name = this.requireIndexName(reference, "syncIndex");
     await this.withClient("syncIndex", signal, (client, context) =>
       client.vectorSearchIndexes.syncIndex({ index_name: name }, context),
@@ -751,6 +675,7 @@ export class SearchClient {
 
   /** Delete an index. */
   async deleteIndex(reference: string, signal?: AbortSignal): Promise<void> {
+    this.requireLifecycle("deleteIndex");
     const name = this.requireIndexName(reference, "deleteIndex");
     await this.withClient("deleteIndex", signal, (client, context) =>
       client.vectorSearchIndexes.deleteIndex({ index_name: name }, context),
@@ -760,6 +685,7 @@ export class SearchClient {
 
   /** List the indexes hosted on a Vector Search endpoint (name + type only). */
   async listIndexes(endpoint?: string, signal?: AbortSignal): Promise<string[]> {
+    this.requireLifecycle("listIndexes");
     const endpointName = endpoint ?? this.config.endpoint;
     if (!endpointName) {
       throw new ExecutionError("search: no endpoint configured to list indexes", {
@@ -783,6 +709,7 @@ export class SearchClient {
    * does not. Optionally wait for it to come online. Idempotent.
    */
   async ensureEndpoint(name?: string, options: EnsureEndpointOptions = {}): Promise<void> {
+    this.requireLifecycle("ensureEndpoint");
     const endpoint = name ?? this.config.endpoint;
     if (!endpoint) {
       throw new ExecutionError("search: no endpoint name to ensure", {
@@ -832,6 +759,11 @@ export class SearchClient {
 
 /** The OBO workspace client from the active context, or a service-principal client. */
 function defaultWorkspaceClient(): WorkspaceClientLike {
+  return defaultAppKitWorkspaceClient().toLegacyWorkspaceClient();
+}
+
+/** AppKit workspace-client facade from the active request or service context. */
+function defaultAppKitWorkspaceClient(): appkit.WorkspaceClientLike {
   const ctx = appkit.tryGetExecutionContext();
   if (ctx?.client) return ctx.client;
   // Outside a request scope (a script, a test): a fresh env-auth client.
@@ -842,7 +774,7 @@ function defaultWorkspaceClient(): WorkspaceClientLike {
 export function createSearchClient(
   config?: ResolvedSearchConfig,
   workspaceClientFactory?: () => WorkspaceClientLike,
-  lakebase?: LakebaseSearchBackend,
+  readBackend?: SearchReadBackend,
 ): SearchClient {
-  return new SearchClient(config, workspaceClientFactory, lakebase);
+  return new SearchClient(config, workspaceClientFactory, readBackend);
 }

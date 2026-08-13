@@ -9,7 +9,14 @@ Key features:
 - `BrandProvider`, `BrandIcon`, and `BrandLogo` React bindings.
 - Framework-agnostic CSS variable and document metadata helpers.
 - No duplicated hand-maintained artwork: package assets are generated from the
-  root [`branding`](../../../branding) source files.
+  root [`branding`](../../../../branding) source files.
+
+## Why Use This Over Native AppKit
+
+Use AppKit's own theming when its default palette and tokens are enough. Use
+this package when one portable `BrandContext` must drive dbx-tools UI, AppKit
+semantic tokens, logos, favicons, document metadata, and non-DOM surfaces such
+as email or chart configuration.
 
 ## React
 

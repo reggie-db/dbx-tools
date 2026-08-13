@@ -53,11 +53,11 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, posix } from "node:path";
-import type { WorkspaceClient } from "@databricks/sdk-experimental";
+import type { WorkspaceClient } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
 import type { WorkspaceClientLike } from "@dbx-tools/appkit";
 import { exec } from "@dbx-tools/core";
-import { DatabricksFileSystem } from "@dbx-tools/databricks";
+import { DatabricksFileSystem, workspace as databricksWorkspace } from "@dbx-tools/databricks";
 import { localFS, type LocalFileSystem } from "@dbx-tools/fs";
 import { find } from "@dbx-tools/path";
 import { error, hash, json, log, net, object, string } from "@dbx-tools/shared-core";
@@ -533,7 +533,7 @@ async function openWritableWorkspace(
   client: WorkspaceClient,
 ): Promise<DatabricksFileSystem | undefined> {
   const fs = new DatabricksFileSystem({
-    client,
+    client: databricksWorkspace.toLegacyWorkspaceClient(client),
     root: basePath,
     readOnly: false,
     createRoot: true,

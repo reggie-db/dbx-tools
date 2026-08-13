@@ -40,9 +40,7 @@ async def test_small_request_passes_through_unchanged() -> None:
     }
     before = dict(data)
 
-    result = await dbx_payload_guard.async_pre_call_hook(
-        data=data, call_type="acompletion"
-    )
+    result = await dbx_payload_guard.async_pre_call_hook(data=data, call_type="acompletion")
 
     assert result == before
 
@@ -64,9 +62,7 @@ async def test_oversize_image_request_is_downscaled_to_fit() -> None:
     }
     assert _request_size(data) > _DATABRICKS_LIMIT_BYTES
 
-    result = await dbx_payload_guard.async_pre_call_hook(
-        data=data, call_type="acompletion"
-    )
+    result = await dbx_payload_guard.async_pre_call_hook(data=data, call_type="acompletion")
 
     assert _request_size(result) <= _DATABRICKS_LIMIT_BYTES
     url = result["messages"][0]["content"][1]["image_url"]["url"]
@@ -96,11 +92,7 @@ async def test_downscales_bare_string_image_url_shape() -> None:
     }
     assert _request_size(data) > _DATABRICKS_LIMIT_BYTES
 
-    result = await dbx_payload_guard.async_pre_call_hook(
-        data=data, call_type="aresponses"
-    )
+    result = await dbx_payload_guard.async_pre_call_hook(data=data, call_type="aresponses")
 
     assert _request_size(result) <= _DATABRICKS_LIMIT_BYTES
-    assert result["input"][0]["content"][0]["image_url"].startswith(
-        "data:image/jpeg;base64,"
-    )
+    assert result["input"][0]["content"][0]["image_url"].startswith("data:image/jpeg;base64,")

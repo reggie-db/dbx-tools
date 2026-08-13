@@ -42,6 +42,16 @@ await polygotTest(
           "https://workspace.example.com/serving-endpoints/open-responses",
         );
       });
+
+      it("identifies endpoints that require native Responses", () => {
+        assert.equal(implementation.isResponsesOnly("databricks-gpt-5-3"), false);
+        assert.equal(implementation.isResponsesOnly("databricks-gpt-5-4"), true);
+        assert.equal(implementation.isResponsesOnly("databricks-gpt-6"), true);
+        assert.equal(implementation.isResponsesOnly("databricks-gpt-6-0"), true);
+        assert.equal(implementation.isResponsesOnly("databricks-gpt-oss-120b"), false);
+        assert.equal(implementation.isResponsesOnly("databricks-gpt-5-3-codex"), true);
+        assert.equal(implementation.isResponsesOnly("databricks-claude-sonnet-4-6"), false);
+      });
     });
   },
 );

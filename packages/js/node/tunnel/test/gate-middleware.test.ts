@@ -70,10 +70,11 @@ function makeReq(host: string, url: string, cookie?: string): Request {
   } as unknown as Request;
 }
 
-function makeRes(): Response & { statusCode?: number; jsonBody?: unknown } {
+function makeRes(): Response & { statusCode?: number; jsonBody?: unknown; sentBody?: unknown } {
   const res = {
     statusCode: undefined as number | undefined,
     jsonBody: undefined as unknown,
+    sentBody: undefined as unknown,
     setHeader() {},
     status(code: number) {
       res.statusCode = code;
@@ -83,8 +84,15 @@ function makeRes(): Response & { statusCode?: number; jsonBody?: unknown } {
       res.jsonBody = body;
       return res;
     },
+    type() {
+      return res;
+    },
+    send(body: unknown) {
+      res.sentBody = body;
+      return res;
+    },
   };
-  return res as unknown as Response & { statusCode?: number; jsonBody?: unknown };
+  return res as unknown as Response & { statusCode?: number; jsonBody?: unknown; sentBody?: unknown };
 }
 
 describe("isTunnelHost", () => {
@@ -138,6 +146,7 @@ describe("gate middleware", () => {
     );
     assert.equal(nexted, false);
     assert.equal(res.statusCode, 401);
+    assert.deepEqual(res.jsonBody, { error: "authentication required", loginPath: AUTH_PREFIX });
   });
 
   it("lets a tunnel /api/* with a valid session through, injecting identity", async () => {
@@ -196,6 +205,7 @@ describe("gate middleware", () => {
     );
     assert.equal(nexted, false);
     assert.equal(res.statusCode, 401);
+    assert.deepEqual(res.jsonBody, { error: "authentication required", loginPath: AUTH_PREFIX });
   });
 
   it("lets a `gatePaths` prefix through with a valid session", async () => {
@@ -226,6 +236,7 @@ describe("gate middleware", () => {
     );
     assert.equal(nexted, false);
     assert.equal(res.statusCode, 401);
+    assert.match(String(res.sentBody), /Sign in — Databricks App/);
   });
 
   it("without gatePaths, static still passes (self-protecting SPA model)", async () => {

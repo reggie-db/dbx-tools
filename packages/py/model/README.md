@@ -26,7 +26,10 @@ Key features:
 - exact and fuzzy endpoint resolution with deterministic class ordering;
 - Databricks invocation URL and process-serialized per-request authentication
   helpers, so concurrent SDK refreshes converge;
-- OpenAI chat request sanitization and content extraction;
+- shared Responses-only endpoint policy, including Codex and GPT 5.4+ while
+  excluding GPT-OSS;
+- OpenAI chat request sanitization, assistant-prefill repair, and content
+  extraction;
 - embedding vector extraction with optional dimension validation.
 
 ```python
@@ -61,6 +64,6 @@ and embedding normalization is the repetitive part.
 - `classify`, `classes`, `fallback` — model taxonomy and ordering;
 - `resolve` — exact/fuzzy ranking and single-model selection;
 - `serving` — structural `WorkspaceClient` endpoint listing;
-- `invoke` - URLs, process-serialized SDK authentication headers, and JSON POST
-  helpers;
-- `chat`, `embedding` — request sanitization and response extraction.
+- `invoke` - URLs, Responses-only policy, process-serialized SDK authentication
+  headers, and JSON POST helpers;
+- `chat`, `embedding` — request repair/sanitization and response extraction.

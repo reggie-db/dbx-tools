@@ -1,7 +1,7 @@
 """Runtime hardening for upstream LiteLLM bugs the proxy has to survive.
 
 Each patch here works around a concrete defect in the pinned LiteLLM release
-(1.94.1) that our request shapes trigger. They are deliberately narrow and
+(1.96.2) that our request shapes trigger. They are deliberately narrow and
 idempotent, applied once at proxy startup by :func:`apply_litellm_patches`.
 """
 
@@ -70,14 +70,7 @@ def _patch_thinking_tokens_keyerror() -> None:
 
 
 def _flatten_namespace_tools(tools: Any) -> Any:
-    """Unwrap Codex `namespace` tool groups into their inner tools.
-
-    A Responses request from Codex carries its shell / apply-patch / unified-exec
-    tools grouped under a `{"type": "namespace", "name": ..., "tools": [...]}`
-    entry (Codex: "dynamic tool namespace must contain at least one tool"). The
-    inner entries are ordinary `function` tools. Returning the inner tools in
-    place of the wrapper lets the normal `function` conversion handle them.
-    """
+    """Unwrap Codex namespace groups into their inner function tools."""
     if not isinstance(tools, list):
         return tools
     flattened: list[Any] = []
@@ -92,28 +85,14 @@ def _flatten_namespace_tools(tools: Any) -> Any:
 
 
 def _patch_responses_tools_namespace_drop() -> None:
-    """Stop LiteLLM silently dropping Codex's `namespace` (shell) tools.
-
-    When a Responses-API request reaches a custom provider that only implements
-    chat `completion` (our `dbx` provider), LiteLLM converts the request to Chat
-    Completions via
-    `LiteLLMCompletionResponsesConfig.transform_responses_api_tools_to_chat_completion_tools`.
-    That converter DROPS every tool whose type is in
-    `("computer_use", "image_generation", "namespace", "shell")`, warning that it
-    "has no Chat Completions equivalent". Codex delivers its entire filesystem /
-    terminal toolset inside a `namespace` group, so the drop strips all of it and
-    Codex reports it has "no filesystem or terminal tools" and stalls.
-
-    A `namespace` is just a wrapper around ordinary `function` tools. We wrap the
-    converter to flatten namespaces into their inner functions BEFORE the original
-    runs, so those tools convert normally and survive to the Databricks endpoint
-    (which accepts function tools). Other dropped types are left untouched.
-    """
+    """Preserve namespace-wrapped functions in Responses-to-Chat conversion."""
     from litellm.responses.litellm_completion_transformation.transformation import (
         LiteLLMCompletionResponsesConfig,
     )
 
-    original = LiteLLMCompletionResponsesConfig.transform_responses_api_tools_to_chat_completion_tools
+    original = (
+        LiteLLMCompletionResponsesConfig.transform_responses_api_tools_to_chat_completion_tools
+    )
 
     def unwrapped(tools: Any) -> Any:
         return original(_flatten_namespace_tools(tools))

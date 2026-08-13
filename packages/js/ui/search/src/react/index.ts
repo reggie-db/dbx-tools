@@ -1,8 +1,8 @@
 // React surface for `@dbx-tools/ui-search`: a drop-in `SearchBox`
 // (search-as-you-type over Databricks AI Search), a `SearchResults` list for a
-// full-page layout, and the `useSearch` hook they share. All three talk to the
-// `@dbx-tools/search` plugin's routes and read its boot config through
-// AppKit's `usePluginClientConfig`, so search is one component and zero props.
+// full-page layout, and the `useSearch` hook they share. Single-index queries
+// delegate to AppKit's native `useAiSearchQuery`; universal search uses the
+// dbx-tools extension route.
 // Styled with AppKit tokens (import `@dbx-tools/ui-search/styles.css`).
 
 export type {

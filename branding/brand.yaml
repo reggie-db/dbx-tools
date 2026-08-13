@@ -42,6 +42,6 @@ voice:
     - vague AI claims
     - unnecessary jargon
 links:
-  website: https://reggie-db.github.io/dbx-tools/
+  website: https://dbx.tools/
   repository: https://github.com/reggie-db/dbx-tools
-  documentation: https://reggie-db.github.io/dbx-tools/
+  documentation: https://dbx.tools/

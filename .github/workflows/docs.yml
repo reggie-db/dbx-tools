@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - v*
+  workflow_dispatch:
+
+env:
+  DOCS_SITE_URL: https://dbx.tools
+  DOCS_BASE: /
 
 permissions:
   contents: read
@@ -43,6 +48,8 @@ jobs:
         run: bun docs/scripts/generate-api-docs.mjs
       - name: Build docs
         run: bun run --cwd .docs-build/site build
+      - name: Check generated links
+        run: bun run --cwd .docs-build/site check-links
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

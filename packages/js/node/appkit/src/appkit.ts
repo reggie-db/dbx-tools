@@ -368,10 +368,10 @@ export type WorkspaceClientLike = ExecutionContextLike["client"];
  *
  * @example
  * import { appkit } from "@dbx-tools/appkit";
- * import { WorkspaceClient } from "@databricks/sdk-experimental";
+ * import { createWorkspaceClient } from "@databricks/appkit";
  *
  * // OBO-scoped inside a request, service principal from a CLI or script.
- * const client = appkit.tryGetExecutionContext()?.client ?? new WorkspaceClient({});
+ * const client = appkit.tryGetExecutionContext()?.client ?? createWorkspaceClient();
  */
 export function tryGetExecutionContext(): ExecutionContextLike | undefined {
   try {

@@ -1,44 +1,35 @@
 # @dbx-tools/search
 
-A Meilisearch-style shortcut over Databricks AI Search (Vector Search): a search
-client, agent tools, and an AppKit plugin.
+Extensions for AppKit's beta AI Search plugin: agent tools, federated search,
+index lifecycle helpers, and an AppKit-compatible Lakebase full-text provider.
 
-Import this package when an AppKit or Mastra backend needs to search a
+Use native AppKit `aiSearch` for
 [Databricks AI Search](https://docs.databricks.com/aws/en/ai-search/ai-search)
-index - for autocomplete, docs lookup, RAG retrieval, or a universal search box
-across several indexes. It wraps the low-level SDK
-(`vectorSearchIndexes.queryIndex({ index_name, columns, query_text, query_type,
-num_results, filters_json })` and its columnar response) behind an ergonomic
-client, and ships the agent tools, HTTP routes, and boot config a search UI
-needs - so search is one plugin and, in the simple case, zero config.
+queries. Add this package when an agent needs `search` /
+`universal_search`, an app needs to create, sync, or seed indexes, or a
+deployment needs the same AppKit query contract backed by PostgreSQL full-text
+search instead of Vector Search.
 
 **Key features:**
 
-- A small, Meilisearch-shaped client: `client.index("catalog.schema.docs")`,
-  `index.search(query)`, `index.autocomplete(prefix)`, `index.addDocuments(...)`,
-  and `client.universalSearch(query)` to fan a query across many indexes and
-  merge the hits.
-- Hybrid matching by default (semantic similarity fused with BM25 keyword
-  ranking), with `vector` and `keyword` modes when you want one or the other.
+- Vector Search reads delegate to AppKit `aiSearch`, which owns OBO execution,
+  caching, reranking, pagination, route validation, and response decoding.
+- `lakebaseAiSearch()` implements the same `aiSearch` alias, route,
+  client-config, and `SearchResponse` contract with PostgreSQL `tsvector`.
 - Agent tools for both Mastra (`searchTool()` etc.) and AppKit agents (through
-  the plugin's `ToolProvider`): `search` and `universal_search` reads, plus the
-  opt-in write tools `add_documents`, `create_index`, and `sync_index`.
-- HTTP routes under `/api/search` a browser search box calls directly:
-  `POST /` (search), `POST /universal` (federated), `GET /indexes` (catalogue),
-  and, when writes are enabled, `POST /documents` (upsert),
-  `POST /index` (create), and `POST /index/sync` (refresh).
-- A `clientConfig()` payload so a UI knows the indexes, default, and page size at
-  boot with no round-trip (read it with `usePluginClientConfig("search")`).
+  the extension plugin's `ToolProvider`): `search` and `universal_search`
+  reads, plus provider-aware write tools. Lakebase exposes `add_documents`;
+  native Vector Search can also expose `create_index` and `sync_index`.
+- AppKit-compatible query routes under `/api/ai-search/:alias`; extension
+  routes under `/api/search` cover universal search and optional lifecycle
+  operations.
 - Sensible-default config that infers almost everything: name a default index
   (or set `DATABRICKS_VECTOR_SEARCH_INDEX`) and the columns, page size, mode,
   aliases, and route path all have defaults you can override when you need to go
   deeper.
-- OBO throughout: routes wrap in `asUser(req)` and the client resolves the
-  execution-context workspace client, so search runs as the requesting user and
-  Unity Catalog ACLs apply.
-- Filters as plain `{ column: value }` (or `{ column: { ">=": n } }`) compiled to
-  the index `filters_json` for you; the columnar response is unpacked into
-  `{ id, score, fields }` hits.
+- OBO for Vector Search comes from native AppKit `aiSearch`. Lakebase full-text
+  search uses the sibling `lakebase` plugin's service-principal pool.
+- Filters use AppKit's scalar/array shape: `{ column: valueOrValues }`.
 - Embedding-model resolution for index creation reuses
   [`@dbx-tools/model`](../model): a loose name fuzzy-matches the live catalogue,
   or the best embedding endpoint is chosen automatically.
@@ -52,28 +43,24 @@ needs - so search is one plugin and, in the simple case, zero config.
   endpoint + index and seeds documents in the background using the app's SDK
   auth (env or `DATABRICKS_CONFIG_PROFILE`), so a fresh deployment is searchable
   with no manual setup.
-- A **Lakebase full-text fallback**: when no Vector Search endpoint is
-  configured but the AppKit `lakebase` plugin is registered, search transparently
-  runs on a Postgres `tsvector` index instead - same `provision` / `search` /
-  `add_documents` calls, same `{ id, score, fields }` hits, so tools, routes, and
-  the UI can't tell which backend answered. No endpoint, no embeddings, no Delta
-  table - just a table the plugin creates and seeds on boot.
+- An explicit **Lakebase full-text provider**: register `lakebaseAiSearch`
+  instead of native `aiSearch` to serve the same aliases, query routes, filters,
+  and result shape from a Postgres `tsvector` index.
 
 ## Why Use This Over Native AppKit
 
-AppKit exposes Vector Search as a resource type and a low-level serving surface,
-but nothing that makes a search box or an agent tool a one-liner. Use this
-package when you want search to be a drop-in: the friendly client hides the
-verbose `queryIndex` request and columnar response, the plugin gives agents a
-`search` tool and a browser a `POST /api/search` route in one registration,
-universal search fans across indexes, and the config infers everything from a
-single index name. Reach for the raw SDK when you need index lifecycle
-operations this package does not wrap.
+Do not use this package instead of native AppKit for ordinary Vector Search
+queries. Register `aiSearch` from `@databricks/appkit/beta`.
+
+Use this package for capabilities AppKit does not ship: agent tool providers,
+federated fan-out, index lifecycle and seeding, reusable result components, or
+the Lakebase full-text implementation of the AppKit AI Search contract.
 
 ## Quick Start
 
 ```ts
 import { createApp, server } from "@databricks/appkit";
+import { aiSearch } from "@databricks/appkit/beta";
 import { plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
 import { agents, plugin as mastraPlugin } from "@dbx-tools/appkit-mastra";
 
@@ -85,47 +72,50 @@ const support = agents.createAgent({
 await createApp({
   plugins: [
     server(),
-    // zero-config: reads DATABRICKS_VECTOR_SEARCH_INDEX / SEARCH_INDEX
-    searchPlugin.search(),
+    aiSearch({
+      indexes: {
+        docs: {
+          indexName: "main.support.docs",
+          columns: ["id", "title", "url", "body"],
+        },
+      },
+    }),
+    searchPlugin.search({
+      index: "main.support.docs",
+      indexes: [{ name: "main.support.docs", alias: "docs" }],
+    }),
     mastraPlugin.mastra({ agents: support }),
   ],
 });
 ```
 
-Going deeper:
+Use Lakebase full-text search without changing the AppKit UI hook:
 
 ```ts
-searchPlugin.search({
-  index: "main.support.docs",
-  indexes: [
-    "main.support.docs",
-    { name: "main.catalog.products", alias: "products", columns: ["name", "sku", "price"] },
+import { lakebase } from "@databricks/appkit";
+import { lakebaseAiSearch } from "@dbx-tools/search";
+
+createApp({
+  plugins: [
+    lakebase(),
+    lakebaseAiSearch({
+      indexes: {
+        docs: {
+          indexName: "docs",
+          columns: ["id", "title", "body"],
+          queryType: "full_text",
+        },
+      },
+    }),
   ],
-  columns: ["title", "url", "body"],
-  mode: "hybrid",
-  pageSize: 10,
-  allowWrite: false,
 });
-```
-
-## Use The Client Directly
-
-```ts
-import { createSearchClient } from "@dbx-tools/search";
-
-const client = createSearchClient();
-const docs = client.index("main.support.docs");
-
-const { hits } = await docs.search("reset my password", { limit: 5 });
-const suggestions = await docs.autocomplete("rese");
-const everywhere = await client.universalSearch("invoice error 402");
-
-await docs.addDocuments([{ id: "42", title: "Reset", body: "…" }]);
 ```
 
 ## Manage Indexes
 
-Create and maintain indexes with the same infer-everything ergonomics. A Delta
+`SearchClient` is the lifecycle client; query execution requires the registered
+AppKit-compatible provider. Create and maintain indexes with the same
+infer-everything ergonomics. A Delta
 Sync index computes embeddings from a source Delta table and stays synced; the
 embedding model, endpoint, primary key (`id`), and text column
 (`text`/`content`/`body`) are all inferred when omitted.
@@ -207,16 +197,14 @@ Idempotent: later boots see the endpoint, index, and rows already present and do
 nothing. Point `ensureOnSetup.sourceTable` at a Delta table to provision a Delta
 Sync index instead of a managed direct-access one.
 
-### Lakebase full-text fallback
+### Lakebase full-text provider
 
-When you have **no** Vector Search endpoint configured but the AppKit `lakebase`
-plugin is registered, the plugin transparently falls back to a Postgres
-full-text index. It provisions one table per index (a generated `tsvector`
-column with a GIN index), seeds the same `ensureOnSetup.documents`, and answers
-queries with a prefix `to_tsquery` + `ts_rank`. The pool is built from the
-`lakebase` plugin's service-principal config exactly like
-[`@dbx-tools/appkit-mastra`](../appkit-mastra) builds its memory pool - no auth
-is re-implemented.
+`lakebaseAiSearch()` is an AppKit `aiSearch` provider backed by a Postgres
+full-text index. It provisions one table per alias (a generated `tsvector`
+column with a GIN index), seeds configured documents, and answers queries with
+a prefix `to_tsquery` + `ts_rank`. The pool comes from the native `lakebase`
+plugin's service-principal config, so database authentication is not
+re-implemented.
 
 Queries are compiled from the search box rather than handed to
 `websearch_to_tsquery`, which is too literal for type-ahead in two ways:
@@ -229,40 +217,39 @@ Queries are compiled from the search box rather than handed to
 - **Prefixes.** Every term is matched as a prefix, so `intel` reaches
   `intelligence` and `store intel` finds `racetrac-store-intelligence`.
 
-All terms must match. When none do, the search relaxes instead of returning an
+All terms must match. When none do, search relaxes instead of returning an
 empty box: any single term counts, plus a substring pass that catches a
 fragment which is not a prefix (`telligence`). The substring pass cannot use
 the GIN index, so it only runs after the indexed pass finds nothing.
 
-The point is parity: the client returns the identical `SearchResult` /
-`SearchHit` (`{ id, score, fields }`) / `UpsertResult` shapes, so the agent
-tools, the `/api/search` routes, and the React search box behave the same
-whichever backend is active. Register `lakebase()`, omit `endpoint`, and search
-works with no Vector Search infrastructure:
+The provider returns AppKit's `SearchResponse` and mounts the same
+`/api/ai-search/:alias` query surface. AppKit UI's `useAiSearchQuery` and
+`@dbx-tools/ui-search` work without a backend-specific client:
 
 ```ts
 import { createApp, lakebase } from "@databricks/appkit";
-import { plugin as searchPlugin } from "@dbx-tools/search";
-
-const { search } = searchPlugin;
+import { lakebaseAiSearch } from "@dbx-tools/search";
 
 createApp({
   plugins: [
-    lakebase(), // register it and search uses Postgres full-text
-    search({
-      // no `endpoint` -> Lakebase full-text fallback
-      index: "docs",
-      ensureOnSetup: {
-        documents: [{ id: "1", title: "Overview", text: "Search over Postgres full-text." }],
+    lakebase(),
+    lakebaseAiSearch({
+      indexes: {
+        docs: {
+          indexName: "docs",
+          queryType: "full_text",
+          columns: ["id", "title", "text"],
+          documents: [{ id: "1", title: "Overview", text: "Search over Postgres full-text." }],
+        },
       },
     }),
   ],
 });
 ```
 
-Selection is automatic and logged at boot (`backend: "vector-search"` vs
-`"lakebase"`). Configure an `endpoint` and Vector Search wins; drop it and the
-Lakebase fallback takes over.
+Register either native `aiSearch` for Vector Search or `lakebaseAiSearch` for
+Postgres full text. Both use the registered plugin name `aiSearch`, so they are
+alternatives and must not be registered together.
 
 ## Configuration
 
@@ -279,16 +266,14 @@ default.
 | `mode`           | `SEARCH_MODE`                                    | `hybrid`                | `hybrid` / `vector` / `keyword`.                                                           |
 | `embeddingModel` | `SEARCH_EMBEDDING_MODEL`                         | best embedding endpoint | Embedding endpoint for index creation.                                                     |
 | `timeoutMs`      | `SEARCH_TIMEOUT_MS`                              | `30000`                 | Per-call timeout.                                                                          |
-| `allowWrite`     | `SEARCH_WRITE`                                   | `false`                 | Enable the write tools (`add_documents` / `create_index` / `sync_index`) and their routes. |
-| `ensureOnSetup`  | –                                                | –                       | Provision the endpoint + index and seed documents at boot (background).                    |
+| `allowWrite`     | `SEARCH_WRITE`                                   | `false`                 | Enable provider-supported write tools and routes.                                           |
+| `ensureOnSetup`  | –                                                | –                       | Provision and seed a native Vector Search index at boot.                                    |
 
 ## Modules
 
-- `client` - `SearchClient`, `SearchIndex`, `createSearchClient`, the search
-  methods, and the index lifecycle (`createIndex` / `ensureIndex` / `syncIndex`
-  / `deleteIndex` / `listIndexes` / `ensureEndpoint`), plus the `SearchOptions` /
-  `UniversalSearchOptions` / `IndexInfo` / `CreateIndexOptions` /
-  `EnsureEndpointOptions` types.
+- `client` - `SearchClient`, `SearchIndex`, and the Vector Search lifecycle
+  (`createIndex` / `ensureIndex` / `syncIndex` / `deleteIndex` / `listIndexes`
+  / `ensureEndpoint`), plus provider-backed federated reads.
 - `plugin` - `SearchPlugin` and the `search()` factory (`ToolProvider`,
   routes, `clientConfig`, `exports`).
 - `tool` - the `searchTool()`, `universalSearchTool()`, `addDocumentsTool()`,
@@ -299,11 +284,12 @@ default.
 - `config` - `resolveSearchConfig`, `resolveIndexName`, `SEARCH_CONFIG_SCHEMA`,
   the config env constants, and the `SearchPluginConfig` /
   `ResolvedSearchConfig` types.
-- `query` - `toQueryType`, `compileFilter`, `toHits`, `toRequestColumns`,
-  `toDocumentArray` (contract ↔ serving-API translation).
-- `lakebase` - `LakebaseSearchBackend`, the Postgres full-text FALLBACK used
-  when no Vector Search endpoint is configured (provision + seed + `tsvector`
-  search, same hit shape as Vector Search).
+- `native` - adapter from an AppKit-compatible `aiSearch` provider to the
+  extension tools and universal-search client.
+- `lakebase-plugin` - `lakebaseAiSearch`, the AppKit-compatible PostgreSQL
+  full-text provider.
+- `lakebase` - `LakebaseSearchBackend`, the provider's `tsvector` runtime.
+- `query` - `toDocumentArray`, shared by write routes and tools.
 - `runtime` - `getSearchRuntime` / `resetSearchRuntime` (the shared client).
 - `schema` - the tool descriptions and re-exported request schemas.
 

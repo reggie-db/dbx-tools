@@ -53,10 +53,10 @@ endpoint:
 ## Select One Model
 
 ```ts
-import { WorkspaceClient } from "@databricks/sdk-experimental";
+import { createWorkspaceClient } from "@databricks/appkit";
 import { resolve } from "@dbx-tools/model";
 
-const client = new WorkspaceClient({});
+const client = createWorkspaceClient();
 const host = String(await client.config.getHost());
 
 const selected = await resolve.selectModel(client, host, {
@@ -183,7 +183,8 @@ builder: `INVOCATIONS_SUFFIX` / `invocationsUrl()`, `RESPONSES_PATH` /
 `/serving-endpoints/...` literal in a consumer: which path a model can accept is
 a property of the model (see `isResponsesOnly()` and `responsesUpstreamUrl()`),
 so a hard-coded string in one package silently diverges when that routing
-changes.
+changes. `isResponsesOnly()` covers Codex and GPT 5.4+ endpoints, which reject
+tool-bearing Chat Completions, while keeping GPT-OSS on its supported Chat path.
 
 ## Use Static Fallbacks
 

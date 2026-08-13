@@ -26,6 +26,7 @@ import type { IncomingMessage } from "node:http";
 import { log, token } from "@dbx-tools/shared-core";
 import type { RequestHandler, Response } from "express";
 import { toHeaderPolicy, type HeaderPolicy } from "./headers.ts";
+import { loginPageHtml } from "./login-page.ts";
 import type { AuthGateApi } from "./plugin.ts";
 
 const logger = log.logger("tunnel:gate");
@@ -61,6 +62,8 @@ export interface GateOptions {
    * here so they are gated too. Login routes (`AUTH_PREFIX`) are always open.
    */
   gatePaths?: readonly string[];
+  /** Product name displayed by the hosted login page. */
+  brandName?: string;
 }
 
 /**
@@ -289,7 +292,7 @@ export function mountGate(
   _addRoute: (method: "get" | "post", path: string, handler: RequestHandler) => void,
   addMiddleware: (path: string, handler: RequestHandler) => void,
 ): void {
-  const { gate, publicDomain, forwardHeaders, gatePaths } = opts;
+  const { gate, publicDomain, forwardHeaders, gatePaths, brandName } = opts;
   const headerPolicy = toHeaderPolicy(forwardHeaders);
   logger.debug("gate mounted", { publicDomain, forward: headerPolicy.patterns, gatePaths });
 
@@ -313,7 +316,9 @@ export function mountGate(
 
   const gateMiddleware = (async (req, res, next) => {
     const action = await gateRequest(req, { gate, publicDomain, headerPolicy, gatePaths });
-    if (action === "deny") res.status(401).json(UNAUTHORIZED_BODY);
+    if (action === "deny" && wantsLoginPage(req)) {
+      res.status(401).type("html").send(loginPageHtml({ brandName: brandName ?? "Databricks App" }));
+    } else if (action === "deny") res.status(401).json(UNAUTHORIZED_BODY);
     else next();
   }) as RequestHandler;
 

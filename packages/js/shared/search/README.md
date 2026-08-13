@@ -1,6 +1,7 @@
 # @dbx-tools/shared-search
 
-Browser-safe AI Search (Databricks Vector Search) schemas and inferred types.
+Browser-safe schemas and extension types for AppKit-compatible AI Search
+providers.
 
 Import this package when a UI, Mastra tool schema, server route, or test needs
 to validate the same search payloads that
@@ -10,8 +11,8 @@ Key features:
 
 - Shared `SearchRequest` / `SearchResult` contract with `{ id, score, fields }`
   hits, so an autocomplete box, a docs lookup, and a Mastra tool speak one shape.
-- `SearchMode` (`hybrid` / `vector` / `keyword`) matching the serving query
-  types, with hybrid as the sensible default.
+- `SearchMode` (`hybrid` / `vector` / `keyword`) plus
+  `toAiSearchQueryType()` for the AppKit query vocabulary.
 - `UniversalSearchRequest` for federated search across several indexes at once.
 - `SearchDocument` / `UpsertResult` for adding and updating direct-access index
   contents.
@@ -30,7 +31,7 @@ const request: SearchRequest = search.searchRequestSchema.parse({
   index: "main.support.docs",
   limit: 5,
   mode: "hybrid",
-  filter: { locale: "en", published: true },
+  filter: { locale: "en", category: ["billing", "support"] },
 });
 ```
 
@@ -55,14 +56,15 @@ const config = search.searchClientConfigSchema.parse(
 );
 ```
 
-`searchClientConfigSchema` is what a search box reads at boot to know which
-indexes it may query, which is the default, and the page size to request.
+`searchClientConfigSchema` is the extension catalogue for universal search.
+Single-index UI queries read native `aiSearch` client config instead.
 
 ## Module
 
 - `search` - `searchModeSchema`, `searchRequestSchema`, `searchHitSchema`,
   `searchResultSchema`, `universalSearchRequestSchema`, `searchDocumentSchema`,
   `upsertResultSchema`, `searchIndexInfoSchema`, `searchClientConfigSchema`, and
+  `toAiSearchQueryType`,
   the flat inferred types (`SearchMode`, `SearchRequest`, `SearchHit`,
   `SearchResult`, `UniversalSearchRequest`, `SearchDocument`, `UpsertResult`,
   `SearchIndexInfo`, `SearchClientConfig`).

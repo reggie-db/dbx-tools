@@ -40,6 +40,17 @@ export const searchModeSchema = z
 /** How a query is matched (see {@link searchModeSchema}). */
 export type SearchMode = z.infer<typeof searchModeSchema>;
 
+/** AppKit AI Search query modes. */
+export type AiSearchQueryType = "ann" | "hybrid" | "full_text";
+
+/** Map the dbx-tools extension vocabulary onto AppKit AI Search. */
+export function toAiSearchQueryType(mode: SearchMode | undefined): AiSearchQueryType | undefined {
+  if (mode === "vector") return "ann";
+  if (mode === "keyword") return "full_text";
+  if (mode === "hybrid") return "hybrid";
+  return undefined;
+}
+
 /** Schema for a search request against a single index. */
 export const searchRequestSchema = z.object({
   query: z
@@ -67,10 +78,13 @@ export const searchRequestSchema = z.object({
       "Which document columns to return per hit. Defaults to the plugin's configured columns (or all indexed columns).",
     ),
   filter: z
-    .record(z.string(), z.unknown())
+    .record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]),
+    )
     .optional()
     .describe(
-      'Attribute filters as { column: value } (a value, or an operator map like { ">=": 10 }). Combined with AND. Maps onto the index `filters_json`.',
+      "AppKit AI Search attribute filters as { column: scalarOrArray }. Combined with AND.",
     ),
   scoreThreshold: z
     .number()

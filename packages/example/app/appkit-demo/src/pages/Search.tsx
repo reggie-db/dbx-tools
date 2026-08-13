@@ -3,7 +3,7 @@ import { SearchBox, SearchResults, useSearch } from "@dbx-tools/ui-search/react"
 import type { SearchHit } from "@dbx-tools/ui-search/react";
 import { useState } from "react";
 
-// AI Search demo over the server's `search()` plugin (@dbx-tools/search).
+// AI Search demo over AppKit's `aiSearch` contract.
 //
 // - "Instant" is the drop-in `SearchBox`: search-as-you-type against the app's
 //   default index, with a results dropdown. This is the autocomplete surface.
@@ -11,8 +11,8 @@ import { useState } from "react";
 // - "Results" uses the `useSearch` hook directly to drive a full-page
 //   `SearchResults` list, showing how to compose the primitives yourself.
 //
-// All three read the plugin's boot config via `usePluginClientConfig("search")`
-// (indexes, default, page size), so nothing here is hard-coded to a workspace.
+// Single-index queries and aliases come from native `useAiSearchQuery`;
+// universal search comes from the dbx-tools extension plugin.
 
 const Selected = ({ hit }: { hit: SearchHit | null }) =>
   hit ? (
@@ -48,8 +48,8 @@ const Search = () => {
       <div>
         <h1 className="text-lg font-semibold">AI Search</h1>
         <p className="text-sm text-muted-foreground">
-          Search Databricks AI Search (Vector Search) through the <code>@dbx-tools/search</code>{" "}
-          plugin. Hybrid semantic + keyword matching.
+          Search through AppKit <code>aiSearch</code>, with dbx-tools agent, universal-search,
+          lifecycle, and Lakebase full-text extensions.
         </p>
       </div>
       <Tabs defaultValue="instant" className="flex min-h-0 flex-1 flex-col gap-4">

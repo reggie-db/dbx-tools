@@ -55,7 +55,17 @@ def chat_completions_url(host: str) -> str:
 
 
 def is_responses_only(endpoint: str) -> bool:
-    return "codex" in endpoint.lower()
+    normalized = endpoint.lower()
+    if "codex" in normalized:
+        return True
+    if re.search(r"gpt[-_. ]?oss", normalized):
+        return False
+    version = re.search(r"gpt[^0-9]*(\d+)(?:[._-](\d+))?", normalized)
+    if version is None:
+        return False
+    major = int(version.group(1))
+    minor = int(version.group(2) or 0)
+    return major > 5 or (major == 5 and minor >= 4)
 
 
 def responses_upstream_url(host: str, endpoint: str) -> str:

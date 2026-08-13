@@ -3,19 +3,21 @@
 React search box and results for Databricks AI Search.
 
 Import this package when an AppKit UI wants a drop-in, search-as-you-type box
-over the [`@dbx-tools/search`](../../node/search) plugin. The components
-read the plugin's boot config (indexes, default index, page size, route path)
-through AppKit's `usePluginClientConfig`, so search is one component and zero
-props.
+over AppKit's beta `aiSearch` plugin. The components delegate single-index
+queries to `useAiSearchQuery`, so native AppKit owns aliases, routes,
+cancellation, and query state. The same UI works with
+`@dbx-tools/search`'s `lakebaseAiSearch` provider because it implements the
+native client-config and response contract.
 
 **Key features:**
 
 - `SearchBox` - a debounced, cancellable search-as-you-type input with a results
   dropdown, styled with AppKit tokens. Meilisearch-style instant search.
 - `SearchResults` - a presentational hit list for a full-page results layout.
-- `useSearch` - the hook the components share: `{ query, setQuery, hits,
+- `useSearch` - a debounced presentation adapter over AppKit
+  `useAiSearchQuery`: `{ query, setQuery, hits,
 loading, error, config, submit, clear }`, debounced and abortable, targeting
-  the single-index or universal (federated) route.
+  native single-index queries or the dbx-tools universal route.
 - Universal search with one flag (`universal`) to search every configured index.
 - `renderHit` overrides on both components for full control of a row; a sensible
   default shows a title, id, and score.
@@ -61,6 +63,7 @@ function Results() {
 - `@dbx-tools/ui-search/styles.css` - AppKit-token styling for the box and
   results; import once after Tailwind and your AppKit-UI theme.
 
-Runtime search, routes, and the plugin live in
-[`@dbx-tools/search`](../../node/search); the wire contract lives in
-[`@dbx-tools/shared-search`](../../shared/search).
+Native Vector Search runtime and routes come from `@databricks/appkit`.
+Federated search, agent tools, lifecycle operations, and the Lakebase provider
+live in [`@dbx-tools/search`](../../node/search); its extension wire contract
+lives in [`@dbx-tools/shared-search`](../../shared/search).

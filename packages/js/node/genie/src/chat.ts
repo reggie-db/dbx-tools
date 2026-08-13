@@ -21,7 +21,11 @@
  * @module
  */
 
-import { WorkspaceClient } from "@databricks/sdk-experimental";
+import {
+  createWorkspaceClient,
+  getExecutionContext,
+  type WorkspaceClient,
+} from "@databricks/appkit";
 import { databricks } from "@dbx-tools/appkit";
 import { async, log, type PollContext } from "@dbx-tools/shared-core";
 import { event, genieModel, type GenieChatEvent, type GenieMessage } from "@dbx-tools/shared-genie";
@@ -61,7 +65,7 @@ export interface GenieChatOptions {
   /**
    * Explicit `WorkspaceClient`. Defaults to AppKit's per-request
    * execution-context client when AppKit is installed and we're inside a
-   * request; falls back to a fresh `new WorkspaceClient({})` (env-var auth)
+   * request; falls back to `createWorkspaceClient()` (default auth)
    * otherwise.
    */
   workspaceClient?: WorkspaceClient;
@@ -296,31 +300,17 @@ export async function* genieEventChat(
  * Resolve a `WorkspaceClient` in this preference order:
  *
  *   1. Caller-supplied `options.workspaceClient`.
- *   2. AppKit's per-request execution-context client, when AppKit is installed
- *      AND we're inside a request scope.
- *   3. Fresh `new WorkspaceClient({})` (env-var auth via
+ *   2. AppKit's per-request execution-context client inside a request scope.
+ *   3. Fresh `createWorkspaceClient()` (env-var auth via
  *      `DATABRICKS_CONFIG_PROFILE` / `DATABRICKS_HOST` / `DATABRICKS_TOKEN`).
  *
- * AppKit is loaded lazily so this package stays usable in non-AppKit
- * environments.
  */
 async function getWorkspaceClient(options?: GenieChatOptions): Promise<WorkspaceClient> {
   if (options?.workspaceClient) return options.workspaceClient;
-  const appkit = await getAppKit();
-  if (appkit) {
-    try {
-      return appkit.getExecutionContext().client;
-    } catch {
-      // Not inside an AppKit request context; fall through to env.
-    }
-  }
-  return new WorkspaceClient({});
-}
-
-async function getAppKit() {
   try {
-    return await import("@databricks/appkit");
+    return getExecutionContext().client;
   } catch {
-    return undefined;
+    // Not inside an AppKit request context; fall through to default auth.
   }
+  return createWorkspaceClient();
 }

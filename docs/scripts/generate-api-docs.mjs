@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { docsSiteConfig } from "./site-config.mjs";
 
 const root = process.cwd();
 const siteRoot = path.join(root, ".docs-build", "site");
@@ -16,10 +17,9 @@ const write = (p, text) => {
 };
 const posix = (p) => p.split(path.sep).join("/");
 
-// Site base path, derived exactly like docs/scripts/sync-readmes.mjs so the
-// absolute API links this generator emits resolve under GitHub Pages' project
-// subpath (`/dbx-tools`) and under a local root serve alike.
-const base = process.env.GITHUB_REPOSITORY?.endsWith("/dbx-tools") ? "/dbx-tools" : "";
+// Use the same route base as the README generator so absolute API links resolve
+// under either the custom-domain root or a project-site subpath.
+const { base } = docsSiteConfig();
 
 function walk(dir, files = []) {
   if (!fs.existsSync(dir)) return files;
@@ -63,6 +63,13 @@ function firstParagraph(markdown) {
     .map((s) => s.trim())
     .find((s) => s && !s.startsWith("```") && !s.startsWith("|"))
     ?.replace(/\s+/g, " ");
+}
+
+/** Plain prose for API package index summaries. */
+function summaryText(markdown) {
+  return (firstParagraph(markdown) ?? "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]*)`/g, "$1");
 }
 
 /**
@@ -244,6 +251,7 @@ function addFrontmatter(file, fallbackTitle, sourcePath) {
       `title: ${yamlString(title)}`,
       `description: ${yamlString(`Generated TypeScript API reference for ${fallbackTitle}.`)}`,
       `source: ${yamlString(posix(path.relative(root, sourcePath)))}`,
+      "editUrl: false",
       "---",
       "",
       "<!--",
@@ -256,20 +264,15 @@ function addFrontmatter(file, fallbackTitle, sourcePath) {
   );
 }
 
-function relativeLink(fromFile, toFile) {
-  let rel = posix(path.relative(path.dirname(fromFile), toFile));
-  if (!rel.startsWith(".")) rel = `./${rel}`;
-  return rel.replace(/\.md$/, "");
-}
-
 function buildApiIndex(packages) {
   const indexPath = path.join(apiRoot, "index.md");
   const rows = packages
     .map((pkg) => {
-      const link = relativeLink(indexPath, path.join(apiRoot, pkg.slug, "index.md"));
-      const summary = (
-        (fs.existsSync(pkg.readme) ? firstParagraph(read(pkg.readme)) : "") ?? ""
-      ).replace(/\|/g, "\\|");
+      const link = `./${pkg.slug}/`;
+      const summary = (fs.existsSync(pkg.readme) ? summaryText(read(pkg.readme)) : "").replace(
+        /\|/g,
+        "\\|",
+      );
       return `| [${pkg.name}](${link}) | ${groupTitle(pkg.group)} | ${summary} |`;
     })
     .join("\n");
@@ -278,6 +281,7 @@ function buildApiIndex(packages) {
     'title: "API Reference"',
     'description: "Generated TypeScript API reference for dbx-tools packages."',
     'source: "packages/js"',
+    "editUrl: false",
     "---",
     "",
     "<!--",

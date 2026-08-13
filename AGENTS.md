@@ -68,6 +68,12 @@ Primary package areas:
 - `packages/js/node/model`, `packages/js/shared/model`, and
   `packages/js/cli/model-proxy` — intent-based Model Serving endpoint selection,
   shared schemas/classification, and local OpenAI-compatible proxying.
+- `packages/js/node/search`, `packages/js/shared/search`, and
+  `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
+  agent tools, federated search, Vector Search index lifecycle, reusable search
+  UI, and an AppKit-compatible Lakebase full-text provider. Native AppKit owns
+  Vector Search query execution, OBO, caching, reranking, pagination, routes,
+  and the React query hook.
 - `packages/js/node/email`, `packages/js/shared/email-template`,
   `packages/js/shared/email`, and `packages/js/ui/email` — approval-gated email
   tool/runtime, a universal React Email presentation layer, shared payload
@@ -198,15 +204,21 @@ Primary package areas:
   Serving. It resolves the profile from the CLI argument,
   `DATABRICKS_CONFIG_PROFILE`, then the Databricks CLI's configured default;
   adds live endpoint discovery, fuzzy model resolution, and tool-capability
-  filtering; then delegates the unchanged request to LiteLLM's built-in
-  Databricks provider. Keep authentication,
+  filtering; then delegates to LiteLLM's built-in Databricks provider. Keep
+  authentication,
   transport, parameter mapping, streaming, retries, embeddings, and
-  Chat↔Responses conversion in LiteLLM; do not add provider-specific content
-  rewriting here. The Responses pre-call hook may change only the resolved
+  Chat↔Responses conversion in LiteLLM. Compatibility guards may repair only
+  documented Databricks serving constraints: assistant text prefill, the JSON
+  prompt rule, Claude cache breakpoints, request size, and rejected Chat-only
+  parameters. Do not add general provider conversion here. The Responses
+  pre-call hook may change only the resolved
   model identifier so Responses-only endpoints reach LiteLLM's native
   Databricks Responses provider. Its process-wide credential cache is the sole
   refresh owner: SDK background refresh stays disabled and `current()` uses a
   check-lock-check load so parallel requests cannot pile up token mints.
+  LiteLLM is exact-pinned because the remaining narrow monkey-patches touch
+  private APIs. Keep the FastAPI upper bound until LiteLLM includes its
+  `get_flat_params` compatibility fix.
 - `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
   server with a Neo4j 5 backend. It must not use containers: provision Java and
   uv through mise, cache pinned upstream distributions under the user's data
@@ -318,10 +330,10 @@ Package README rules:
 Docs site rules:
 
 - Source of truth is `README.md` plus `packages/js/**/README.md`.
-- `packages/py/**/README.md` documents the published Python packages on GitHub.
-  Python package discovery is not yet part of the generated docs site, so keep
-  their install and runtime guidance in those READMEs and summarize them in the
-  root README's Python Packages table.
+- `packages/py/**/README.md` documents the published Python packages on GitHub
+  and generates the Python package pages under `/packages/py-*`. Python packages
+  have no TypeDoc API pages; keep install and runtime guidance in their READMEs
+  and summarize them in the root README's Python Packages table.
 - A `private: true` package is EXCLUDED from the site by both generators. A
   private package never reaches npm, so a page for it documents something a
   reader cannot install. Both `discoverPackages()` functions filter on it, which
@@ -352,8 +364,20 @@ native one, not about how to author one.
 
 Use native AppKit first when it already provides the needed surface. AppKit has
 first-party plugins and UI for Analytics, Genie, Files, Lakebase, Model Serving,
-Jobs, Vector Search, beta Agents, AppKit UI primitives, and standard plugin
+Jobs, beta AI Search, beta Agents, AppKit UI primitives, and standard plugin
 lifecycle behavior.
+
+AppKit's public `WorkspaceClient` is the SDK migration seam. In the installed
+0.60 surface it still delegates every service to
+`@databricks/sdk-experimental`; it is not a completed modular-SDK migration.
+Use `WorkspaceClient` / `createWorkspaceClient` and
+`toLegacyWorkspaceClient()` at compatibility handoffs. Direct experimental-SDK
+imports are ratcheted to `node/appkit/src/databricks.ts` (cancellation),
+`node/search/src/client.ts` (Vector Search lifecycle), and
+`cli/model-proxy/src/backend.ts` (explicit profile support). The Genie
+declaration is also the synth-time input for `shared/genie/src/dashboards.ts`.
+Do not add another direct import, and do not replace generated Genie Zod schemas
+with hand-maintained copies unless AppKit publishes browser-safe runtime schemas.
 
 When a `dbx-tools` package overlaps native AppKit, the README must explicitly say
 why to use this package anyway:
@@ -418,6 +442,15 @@ why to use this package anyway:
   tool and resolves its own web-capable model (so an agent on a non-web model
   still searches); `web_fetch` uses got-scraping. Same add-on shape as
   node-email (Mastra tool pair + AppKit plugin priming a shared runtime).
+- `@dbx-tools/search`: use native AppKit `aiSearch` for Vector Search queries.
+  This package adds the surfaces AppKit does not ship: `search` /
+  `universal_search` agent tools, cross-index fan-out, index creation/sync/seed
+  helpers, `SearchBox` / `SearchResults`, and `lakebaseAiSearch`, a PostgreSQL
+  full-text provider with the same aliases, routes, client config, response
+  shape, and `useAiSearchQuery` compatibility. Register native `aiSearch` OR
+  `lakebaseAiSearch` as the provider, then register `search` for extension
+  tools. Do not restore a second Vector Search query client in the extension
+  plugin.
 - `@dbx-tools/postgres`: use for connection-correct Postgres utilities shared
   across packages. Advisory locks belong to a dedicated connection, so callers
   must not reproduce them with separate `pool.query()` calls. Explicit bigint
@@ -508,10 +541,10 @@ rule above; the verdicts are recorded here so the audit is not re-litigated:
   `node:fs` / `node:os` surface is exactly what a `shared-*` or `ui-*` consumer
   must not be able to reach. The tag split is the boundary here, not the
   consumer count.
-- `node/genie` (only `appkit-mastra`) - KEEP. It isolates
-  `@databricks/sdk-experimental` and takes a `@databricks/appkit` PEER; folding
-  it into `appkit-mastra` would make the Genie driver unusable from a non-Mastra
-  backend, which is the documented reason it exists.
+- `node/genie` (only `appkit-mastra`) - KEEP. It provides raw snapshot and
+  semantic-event streaming over AppKit's public workspace-client facade;
+  folding it into `appkit-mastra` would make the Genie driver unusable from a
+  non-Mastra backend, which is the documented reason it exists.
 - `node/email` (only `cli-tunnel`) - KEEP. Six external deps (SMTP transport
   among them) that `cli-tunnel` genuinely needs, and it is a published add-on
   consumers install directly. Its single INTERNAL consumer understates its use.
@@ -1117,6 +1150,13 @@ a package with many peers (`@mastra/*`) gets two peer-hash variants of the same
 `@mastra/core` version and TypeScript rejects passing a value built against one to
 an API typed by the other. Hoisted de-dupes to a single flat copy - the coherence
 the old cross-workspace `.pnpmfile.cjs` bridge used to provide. Do not remove it.
+
+The Mastra catalogue entries in `.projenrc.ts` are exact versions, not caret
+ranges. Keep the server packages, `@mastra/core`, and `@mastra/client-js` on the
+tested coherent set. A fresh unlocked install once floated the client to 1.37
+and core to 1.56; the browser client then imported core's Node-only rolldown
+runtime (`import "module"`), and the demo's browser build failed. Upgrade the
+Mastra set together and prove the demo browser build before moving any pin.
 
 ## Migrating an existing workspace from pnpm to bun
 
@@ -1907,6 +1947,11 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
   ranking/fallback, and model-proxy rejects tool-bearing requests whose resolved
   endpoint is not capable. Update the policy only after testing both the initial
   function call and stateless `function_call_output` replay.
+- **Responses-only endpoint policy is shared across Node and Python.**
+  `@dbx-tools/model` `invoke.isResponsesOnly` and
+  `dbx_tools.model.is_responses_only` classify Codex and GPT 5.4+ as native
+  Responses endpoints, while GPT-OSS remains on Chat Completions. LiteLLM calls
+  the Python helper; do not reintroduce a second version threshold in the proxy.
 - **Model display names.** `ServingEndpointSummary` carries an optional
   `displayName` alongside `name` (the invoke id). It flows through `/models`
   (wire `ServingEndpointsResponseSchema`) automatically. Derivation lives in the

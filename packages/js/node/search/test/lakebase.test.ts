@@ -38,7 +38,7 @@ function fakePool() {
         else rows.push({ id, search_text: searchText, document: doc });
         return { rows: [] };
       }
-      if (text.includes("ORDER BY ID LIMIT")) {
+      if (text.includes("ORDER BY ID")) {
         // Empty-query browse: every row, oldest id first.
         return { rows: rows.map((r) => ({ id: r.id, document: r.document, score: 0 })) };
       }
@@ -103,6 +103,21 @@ describe("lakebase search backend", () => {
     assert.equal(fake.rows.length, 2);
   });
 
+  it("provisions full-text indexes in a configured schema", async () => {
+    const fake = fakePool();
+    const be = new LakebaseSearchBackend(
+      () => ({}),
+      "compliance_engine",
+      () => fake.pool,
+    );
+    await be.addDocuments("municipalities_ga", [{ id: "GA:1", text: "Atlanta Georgia" }]);
+    const sql = fake.statements.map((statement) => statement.sql).join("\n");
+    assert.match(sql, /CREATE SCHEMA IF NOT EXISTS "compliance_engine"/);
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS "compliance_engine"\."municipalities_ga"/);
+    assert.match(sql, /ALTER TABLE "compliance_engine"\."municipalities_ga"/);
+    assert.match(sql, /ADD COLUMN IF NOT EXISTS search_vector/);
+  });
+
   it("returns hits shaped { id, score, fields } identical to Vector Search", async () => {
     const { be } = backend();
     await be.provision("support", {
@@ -122,6 +137,32 @@ describe("lakebase search backend", () => {
     assert.equal(hit.fields.title, "Reset password");
     assert.equal(hit.fields.url, "/reset");
     assert.equal(hit.fields.search_vector, undefined);
+  });
+
+  it("compiles AppKit scalar and array filters with bound parameters", async () => {
+    const { be, fake } = backend();
+    await be.provision("support", {
+      seed: [{ id: "1", text: "billing support", locale: "en", category: "billing" }],
+    });
+
+    await be.search("support", "billing", {
+      limit: 5,
+      filter: { locale: "en", category: ["billing", "support"] },
+    });
+
+    const query = fake.statements.findLast((statement) =>
+      statement.sql.includes("search_vector @@"),
+    );
+    assert.match(query?.sql ?? "", /document ->> \$2 = \$3/);
+    assert.match(query?.sql ?? "", /document ->> \$4 = ANY\(\$5::text\[\]\)/);
+    assert.deepEqual(query?.params, [
+      "billing:*",
+      "locale",
+      "en",
+      "category",
+      ["billing", "support"],
+      5,
+    ]);
   });
 
   it("does not re-seed a table that already has rows", async () => {

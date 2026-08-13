@@ -112,11 +112,11 @@ conversation id back into this driver when a turn continues.
 ## Resolve A Workspace Client
 
 ```ts
-import { WorkspaceClient } from "@databricks/sdk-experimental";
+import { createWorkspaceClient } from "@databricks/appkit";
 import { chat } from "@dbx-tools/genie";
 
 await chat.genieEventChat(spaceId, content, {
-  workspaceClient: new WorkspaceClient({ profile: "dev" }),
+  workspaceClient: createWorkspaceClient(),
 });
 ```
 
@@ -124,7 +124,7 @@ Client resolution order:
 
 1. `options.workspaceClient`;
 2. AppKit execution-context client, when present;
-3. `new WorkspaceClient({})` using normal Databricks SDK auth.
+3. `createWorkspaceClient()` using AppKit's normal Databricks auth chain.
 
 Pass `options.context` as an `AbortSignal` or SDK context to cancel SDK calls and
 the polling sleep.
