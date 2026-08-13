@@ -147,6 +147,28 @@ export const GenieQueryAttachmentSchema = SDKGenieQueryAttachmentSchema.extend({
 export type GenieQueryAttachment = z.infer<typeof GenieQueryAttachmentSchema>;
 
 /**
+ * Purpose attached to a Genie text response.
+ *
+ * The generated Databricks SDK schema currently knows only
+ * `FOLLOW_UP_QUESTION`, while the live Genie API also emits
+ * `TEXT_ATTACHMENT_PURPOSE_ANSWER` for the primary answer text. Keep the
+ * known values discoverable and accept future string values so an additive
+ * server-side enum change cannot invalidate an otherwise complete message.
+ */
+export type GenieTextAttachmentPurpose =
+  | "FOLLOW_UP_QUESTION"
+  | "TEXT_ATTACHMENT_PURPOSE_ANSWER"
+  | (string & {});
+
+/** Text attachment schema widened for forward-compatible purpose values. */
+export const GenieTextAttachmentSchema = dashboards.textAttachmentSchema.extend({
+  purpose: z
+    .custom<GenieTextAttachmentPurpose>((value) => typeof value === "string")
+    .optional(),
+});
+export type GenieTextAttachment = z.infer<typeof GenieTextAttachmentSchema>;
+
+/**
  * `GenieAttachment` with:
  *
  *   - `query` re-typed to the thoughts-aware
@@ -158,14 +180,17 @@ export type GenieQueryAttachment = z.infer<typeof GenieQueryAttachmentSchema>;
  *     callers compute it with {@link detectAttachmentType} when
  *     they want the literal up-front.
  *
- * `attachment_id`, `text`, and `suggested_questions` pass through
- * unchanged. `attachment_id` is genuinely optional on the wire:
+ * `text` is re-typed to the forward-compatible
+ * {@link GenieTextAttachmentSchema}. `attachment_id` and
+ * `suggested_questions` pass through unchanged. `attachment_id` is genuinely
+ * optional on the wire:
  * the first text attachment Genie emits per turn (the "main
  * answer text") arrives with no id, only the follow-up text
  * attachment gets one.
  */
 export const GenieAttachmentSchema = SDKGenieAttachmentSchema.extend({
   query: GenieQueryAttachmentSchema.optional(),
+  text: GenieTextAttachmentSchema.optional(),
   attachment_type: z.custom<AttachmentType>((v) => typeof v === "string").optional(),
 });
 export type GenieAttachment = z.infer<typeof GenieAttachmentSchema>;
