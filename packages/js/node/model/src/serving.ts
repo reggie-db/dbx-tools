@@ -44,7 +44,7 @@ const logger = log.logger("model/serving");
  * of this package can keep importing it from here. See
  * `appkit.WorkspaceClientLike` (node-appkit) for the canonical definition.
  */
-export type WorkspaceClientLike = appkit.WorkspaceClientLike;
+export type WorkspaceClientLike = Pick<appkit.WorkspaceClientLike, "servingEndpoints">;
 
 /** Default TTL for the in-memory endpoint cache. Matches the Databricks SDK's session lifetime budget. */
 export const DEFAULT_MODEL_CACHE_TTL_MS = 5 * 60 * 1000;
