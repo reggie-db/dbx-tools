@@ -151,6 +151,20 @@ describe("lakebase search backend", () => {
     assert.equal(resolved, 1);
   });
 
+  it("waits for AppKit to initialize its managed Lakebase pool", async () => {
+    const fake = fakePool();
+    let attempts = 0;
+    const be = new LakebaseSearchBackend({
+      managedPool: () => {
+        attempts += 1;
+        return attempts < 2 ? null : fake.pool;
+      },
+    });
+
+    await be.addDocuments("support", [{ id: "1", text: "eventual pool" }]);
+    assert.equal(attempts, 2);
+  });
+
   it("returns hits shaped { id, score, fields } identical to Vector Search", async () => {
     const { be } = backend();
     await be.provision("support", {

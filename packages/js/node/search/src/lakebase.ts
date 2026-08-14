@@ -100,7 +100,7 @@ export interface LakebaseSearchPool {
 type LakebasePoolSource =
   | (() => Promise<PoolConfig> | PoolConfig)
   | LakebaseSearchPool
-  | { managedPool: () => LakebaseSearchPool };
+  | { managedPool: () => LakebaseSearchPool | null | undefined };
 
 /** Options for provisioning a Lakebase-backed index. */
 export interface LakebaseProvisionOptions {
@@ -132,8 +132,14 @@ export class LakebaseSearchBackend {
   private async getPool(): Promise<LakebaseSearchPool> {
     if (this.pool) return this.pool;
     if ("managedPool" in this.poolSource) {
-      this.pool = this.poolSource.managedPool();
-      return this.pool;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        this.pool = this.poolSource.managedPool() ?? undefined;
+        if (this.pool) return this.pool;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new ExecutionError("search (lakebase): managed pool did not initialize", {
+        context: { operation: "connect" },
+      });
     }
     if (typeof this.poolSource !== "function") {
       this.pool = this.poolSource;
