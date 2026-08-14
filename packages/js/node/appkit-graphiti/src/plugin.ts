@@ -42,6 +42,7 @@ const PACKAGE_VERSION = (
 const MCP_PATH = "/api/graphiti/mcp";
 const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
 const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
+const SIDECAR_SHUTDOWN_GRACE_MS = 10_000;
 const SCOPED_TOOL_FIELDS = {
   add_memory: "group_id",
   add_triplet: "group_id",
@@ -338,13 +339,25 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
     this.stopping = true;
     if (this.mcpServerSweep) clearInterval(this.mcpServerSweep);
     this.mcpServerSweep = undefined;
-    await Promise.allSettled([...this.mcpServers.values()].map(({ server }) => server.close()));
+    const commands = this.commands;
+    const supervision = this.supervision;
+    for (const command of commands) command.kill("SIGTERM");
+    const cleanup = Promise.allSettled([
+      ...[...this.mcpServers.values()].map(({ server }) => server.close()),
+      this.mcp?.disconnect(),
+      supervision?.result,
+    ]);
+    const completed = await Promise.race([
+      cleanup.then(() => true),
+      asyncModule.sleep(SIDECAR_SHUTDOWN_GRACE_MS).then(() => false),
+    ]);
+    if (!completed) {
+      this.logger.warn("sidecars ignored SIGTERM; escalating to SIGKILL");
+      for (const command of commands) command.kill("SIGKILL");
+    }
     this.mcpServers.clear();
-    await this.mcp?.disconnect();
     this.mcp = undefined;
     this.mcpTools = {};
-    for (const command of this.commands) command.kill("SIGTERM");
-    if (this.supervision) await this.supervision.result.catch(() => undefined);
     this.commands = [];
     this.supervision = undefined;
   }

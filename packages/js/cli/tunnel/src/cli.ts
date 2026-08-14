@@ -34,8 +34,8 @@ export { CommanderError };
 
 const logger = log.logger("tunnel");
 
-/** How long a child gets to exit on SIGTERM before the wrapper leaves anyway. */
-const SHUTDOWN_GRACE_MS = 3_000;
+/** How long a child gets to exit on SIGTERM before the wrapper escalates. */
+const SHUTDOWN_GRACE_MS = 10_000;
 
 /**
  * A free loopback port, from the OS rather than a random guess: binding `0` and
@@ -99,7 +99,10 @@ function supervise(children: readonly ChildProcess[]): void {
     if (stopping) return;
     stopping = true;
     for (const child of children) if (!child.killed) child.kill("SIGTERM");
-    setTimeout(() => process.exit(code), SHUTDOWN_GRACE_MS).unref();
+    setTimeout(() => {
+      for (const child of children) child.kill("SIGKILL");
+      process.exit(code);
+    }, SHUTDOWN_GRACE_MS);
   };
   for (const child of children) child.on("exit", (code) => stop(code ?? 1));
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
@@ -176,10 +179,11 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
     children.push(frp.startFrp(resolved.frp, frpEnv, configPath));
   }
   const activeTunnelCount = children.length - (executable ? 1 : 0);
-  if (!activeTunnelCount) logger.info("no selected public tunnel is configured", {
-    transport: resolved.transport,
-    publicPort: resolved.publicPort,
-  });
+  if (!activeTunnelCount)
+    logger.info("no selected public tunnel is configured", {
+      transport: resolved.transport,
+      publicPort: resolved.publicPort,
+    });
   supervise(children);
 }
 

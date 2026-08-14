@@ -69,6 +69,27 @@ describe("superviseProcessForever", () => {
     assert.equal(children.length, 1);
   });
 
+  it("force-kills a child that ignores SIGTERM", async () => {
+    const children: FakeChild[] = [];
+    const supervisor = superviseProcessForever({
+      name: "test-client",
+      logger: log.logger("test:supervisor"),
+      retryDelaysMs: [0],
+      shutdownGraceMs: 1,
+      start: () => {
+        const child = new FakeChild();
+        children.push(child);
+        return child as unknown as ChildProcess;
+      },
+    });
+
+    await waitFor(() => children.length === 1);
+    supervisor.stop();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    assert.deepEqual(children[0]!.signals, ["SIGTERM", "SIGKILL"]);
+  });
+
   it("kills a child that reports a process error before retrying", async () => {
     const children: FakeChild[] = [];
     const supervisor = superviseProcessForever({

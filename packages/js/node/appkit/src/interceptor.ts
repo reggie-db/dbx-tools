@@ -127,11 +127,15 @@ function teardownProcess(code: number): void {
   processShuttingDown = true;
   for (const handler of teardownHandlers) handler();
   teardownHandlers.clear();
-  for (const child of boundChildren) {
+  const children = [...boundChildren];
+  for (const child of children) {
     if (!child.killed) child.kill("SIGTERM");
   }
   boundChildren.clear();
-  setTimeout(() => process.exit(code), TEARDOWN_GRACE_MS).unref();
+  setTimeout(() => {
+    for (const child of children) child.kill("SIGKILL");
+    process.exit(code);
+  }, TEARDOWN_GRACE_MS).unref();
 }
 
 function broadcastProcessSignal(signal: NodeJS.Signals): void {

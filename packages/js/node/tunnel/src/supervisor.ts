@@ -2,6 +2,7 @@ import type { ChildProcess } from "node:child_process";
 import { async as asyncTools, type Logger } from "@dbx-tools/shared-core";
 
 const STABLE_CONNECTION_MS = 60_000;
+const DEFAULT_SHUTDOWN_GRACE_MS = 10_000;
 
 export interface ProcessSupervisor {
   stop(): void;
@@ -18,18 +19,29 @@ export function superviseProcessForever(options: {
   logger: Logger;
   start: () => ChildProcess | Promise<ChildProcess>;
   retryDelaysMs?: readonly number[];
+  shutdownGraceMs?: number;
 }): ProcessSupervisor {
   const controller = new AbortController();
   let child: ChildProcess | undefined;
 
+  const terminateChild = () => {
+    const stoppingChild = child;
+    if (!stoppingChild) return;
+    stoppingChild.kill("SIGTERM");
+    setTimeout(
+      () => stoppingChild.kill("SIGKILL"),
+      options.shutdownGraceMs ?? DEFAULT_SHUTDOWN_GRACE_MS,
+    ).unref();
+  };
+
   const stop = () => {
     if (controller.signal.aborted) return;
     controller.abort();
-    if (child && !child.killed) child.kill("SIGTERM");
+    terminateChild();
     process.off("exit", onProcessExit);
   };
   const onProcessExit = () => {
-    if (child && !child.killed) child.kill("SIGTERM");
+    if (child) child.kill("SIGTERM");
   };
   process.once("exit", onProcessExit);
 
@@ -75,11 +87,10 @@ function processOutcome(child: ChildProcess, signal: AbortSignal): Promise<Proce
     const onExit = (code: number | null, exitSignal: NodeJS.Signals | null) =>
       finish({ code, signal: exitSignal });
     const onError = (error: Error) => {
-      if (!child.killed) child.kill("SIGTERM");
+      child.kill("SIGTERM");
       finish({ error });
     };
     const onAbort = () => {
-      if (!child.killed) child.kill("SIGTERM");
       finish({ signal: "SIGTERM" });
     };
     child.once("exit", onExit);

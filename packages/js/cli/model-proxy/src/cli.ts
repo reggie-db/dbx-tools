@@ -169,7 +169,17 @@ export function buildProgram(name = "dbx model-proxy"): Command {
       server.close();
       process.exit(code ?? 0);
     });
-    process.on("SIGINT", () => child.kill("SIGINT"));
+    let stopping = false;
+    const stop = (): void => {
+      if (stopping) return;
+      stopping = true;
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 10_000).unref();
+      server.close();
+    };
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+      process.on(signal, stop);
+    }
   });
 
   addAuthOptions(
