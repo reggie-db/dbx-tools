@@ -55,9 +55,7 @@ Primary package areas:
 - `packages/js/node/appkit` and `packages/js/cli/appkit-env` — AppKit defaults,
   Lakebase env/config resolution, execution-context helpers, plugin lookup, SDK
   cancellation, and cache-schema provisioning. Bound child processes receive a
-  10-second shutdown grace, long enough for Graphiti's Honcho supervisor to
-  finish its own five-second SIGTERM-to-SIGKILL sequence and still inside the
-  Databricks Apps 15-second platform deadline.
+  10-second shutdown grace.
 - `packages/js/node/postgres` — reusable Postgres advisory-lock primitives plus a
   topic bus built on dedicated `LISTEN` connections and `NOTIFY` broadcasts.
 - `packages/js/node/appkit-mastra`, `packages/js/shared/mastra`, and
@@ -109,24 +107,27 @@ Primary package areas:
   citations / refusing disallowed fetches, per-tool approval gating, and the
   AppKit `web-search` plugin. Same shape as node-email.
 - `packages/js/node/appkit-graphiti` — AppKit process plugin for the Python
-  `dbx-tools-graphiti` runtime. It reads the Lakebase environment resolved by
-  `@dbx-tools/appkit` / native `lakebase()`, launches Graphiti on a loopback
-  port selected from the OS when none is pinned, gives managed LiteLLM its own
-  random loopback port so an unrelated proxy cannot be adopted, launches
-  mise-managed Caddy on `DATABRICKS_APP_PORT`, and routes
-  `/graphiti/*` to Graphiti while forwarding everything else to AppKit's
-  loopback server. Its children use the shared AppKit concurrently-style
-  supervisor so any exit tears down the group and signals flow through.
-  `onTeardown` starts `dbx-graphiti down` before the supervisor signals children,
-  so the recorded uv process group is reaped even when another add-on's child
-  caused shutdown. The host app must install `dbx-tools-graphiti` as a Python
-  dependency and bind AppKit to the plugin's resolved internal port. The Python server records its actual
-  process group in launcher state; the plugin invokes `dbx-graphiti down` during
-  shutdown so uv/Graphiti descendants are reaped even when an outer process
-  manager terminates the Python supervisor first. Once the MCP health endpoint
-  is ready, the plugin discovers Graphiti tools with Mastra's `MCPClient` and
-  exposes them through the standard AppKit toolkit shape, so
-  `plugins.graphiti?.toolkit()` registers them on Mastra agents.
+  `dbx-tools-graphiti` runtime. It inherits the app's Lakebase environment,
+  selects separate loopback ports for Graphiti, managed LiteLLM, and Caddy,
+  and runs Caddy as an internal loopback proxy in front of upstream Graphiti.
+  The plugin republishes a user-scoped MCP server at `/api/graphiti/mcp`
+  through AppKit's native plugin route system. AppKit keeps its normal
+  `DATABRICKS_APP_PORT`; enabling `graphiti()` requires no server-port
+  coordination. The host app must install `dbx-tools-graphiti` as a Python
+  dependency. The plugin runs the Python launcher and Caddy under
+  `concurrently`; the Python launcher runs Graphiti and LiteLLM under Honcho.
+  Both supervisors propagate termination and escalate after a bounded grace,
+  so the plugin does not inspect or clean up process ids. After Graphiti and
+  Caddy answer `/health`, the plugin discovers Graphiti tools with Mastra's
+  `MCPClient` and republishes the group-scoped subset through a Mastra
+  `MCPServer`. Every call derives its Graphiti group from the AppKit user or
+  Mastra memory resource id; caller-supplied groups are overwritten, and tools
+  that cannot enforce a group constraint are omitted. The structural toolkit
+  consumed by `@dbx-tools/appkit-mastra` means
+  `plugins.graphiti?.toolkit()` registers the same scoped tools on Mastra
+  agents. The generic AppKit-to-Mastra toolkit adapter passes the turn's
+  resource id as the optional fourth `executeAgentTool` argument so
+  service-principal execution does not collapse users onto one graph.
 - `packages/js/node/teams`, `packages/js/shared/teams`, and `packages/js/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
@@ -264,17 +265,22 @@ Primary package areas:
   to each child process group, stops the sibling when either exits, and
   escalates from SIGTERM to SIGKILL after its bounded grace period. Keep process
   supervision in Honcho rather than reproducing it in this package.
-  The launcher requires no `config.yaml`: construct the upstream command and
-  environment from CLI-over-environment settings, default to Databricks GPT
-  plus the 1024-dimensional GTE embedding endpoint, and let an explicit
-  LiteLLM URL disable proxy ownership. Managed mode resolves
+  The launcher requires no caller-owned `config.yaml`: its server entry point
+  supplies an empty temporary YAML file for the lifetime of the upstream
+  process, while the launcher constructs the command and environment from
+  CLI-over-environment settings. Default to Databricks GPT plus the
+  1024-dimensional GTE embedding endpoint, and let an explicit LiteLLM URL
+  disable proxy ownership. Managed mode resolves
   an optional profile override, then `DATABRICKS_CONFIG_PROFILE`, and otherwise
-  inherits the Databricks CLI default. Reuse `uv` from `PATH`; ask mise to
+  inherits the Databricks CLI default. A Databricks App with `DATABRICKS_HOST`
+  uses ambient service-principal authentication and does not require or
+  synthesize a profile. Reuse `uv` from `PATH`; ask mise to
   install its pinned uv only when none is available. Ephemeral graph backends
   can be wrapped with `DelegatingGraphDriver`, which delegates to any upstream
-  `GraphDriver` while journaling successful mutations through a supplied
-  storage driver. The Postgres implementation uses `dbx-tools-postgres` and
-  replays the ordered journal into an empty delegated graph during startup.
+  `GraphDriver` while write-ahead journaling mutations through a supplied
+  storage driver before the graph operation commits. The Postgres
+  implementation uses `dbx-tools-postgres` and replays the ordered journal into
+  an empty delegated graph during startup.
   Keep the decorator backend-agnostic and keep Postgres connection resolution
   in the existing Postgres package. A Neo4j credential mismatch may reset the
   local data directory only when that durable journal is configured; otherwise
@@ -508,9 +514,10 @@ why to use this package anyway:
 - `@dbx-tools/appkit-graphiti`: AppKit has no Graphiti or embedded MCP sidecar
   surface. Use this package to run `dbx-tools-graphiti` beside an AppKit server,
   reuse the app's Lakebase binding for durable journal recovery, and publish
-  Graphiti through the app's single public port with Caddy. The Python package
-  owns Graphiti, Neo4j, and LiteLLM; this package owns AppKit lifecycle and
-  routing.
+  a user-scoped Graphiti MCP server through `/api/graphiti/mcp` on the app's
+  existing public port. The Python package owns Graphiti, Neo4j, and LiteLLM;
+  this package owns AppKit lifecycle, identity-to-group enforcement, and the
+  internal Caddy route.
 - `@dbx-tools/search`: use native AppKit `aiSearch` for Vector Search queries.
   This package adds the surfaces AppKit does not ship: `search` /
   `universal_search` agent tools, cross-index fan-out, index creation/sync/seed
@@ -1549,7 +1556,7 @@ no link hook, no `DBX_TOOLS_LINK` switch, and no consumer-mode registry install
 
 ```sh
 bun install                                   # one workspace; demo resolves packages from source
-bun run demo                                  # build client, then run Caddy/AppKit/Graphiti + emitter on :8000
+bun run demo                                  # build client, then run AppKit/Graphiti + emitter on :8000
 # or individually:
 bun run --filter @dbx-tools/demo-appkit-server dev   # bun --watch src/server.ts
 bun run --filter @dbx-tools/demo-appkit-app dev      # Bun.serve dev server (HMR) via dev.ts

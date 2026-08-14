@@ -24,9 +24,10 @@ without taking on a heavier feature package.
   that hands add-ons the computed env, AppKit lifecycle hooks (`onLifecycle`, using
   AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary),
   synchronous `onTeardown` cleanup, signal broadcast, and `bindProcess` for
-  concurrently-style child supervision. Every interceptor context shares one
-  process group: any bound process's death tears down every sibling and signals
-  pass through. `@dbx-tools/tunnel` and `@dbx-tools/appkit-graphiti` consume it.
+  concurrently-style child supervision. Interceptor contexts share a
+  process-wide child registry and teardown guard. Any bound child exit starts
+  sibling teardown, callbacks run before child termination, and bound children
+  receive a 10-second shutdown grace. `@dbx-tools/tunnel` consumes this surface.
 
 ## Why Use This Over Native AppKit
 
@@ -324,8 +325,9 @@ is shared. `@dbx-tools/appkit-mastra` exposes this as its `genieIdentity` option
 | `appkit`           | `createApp()` / `autoConfigure()`, plus execution context lookup and initialization.                                                            |
 | `lakebaseResolver` | Lakebase connection discovery, default picking, optional auto-create, and env application (`applyLakebaseEnv()` for the full set a pool needs). |
 | `pgaddress`        | Permissive Lakebase/Postgres address parser.                                                                                                    |
-| `config`           | Local/env/bundle/app-yaml config lookup.                                                                                                        |
-| `databricks`       | App env detection and SDK context cancellation adapters.                                                                                        |
+| `bundle`           | Bundle and Databricks App environment compatibility helpers.                                                                                    |
+| `databricks`       | Databricks SDK context cancellation adapters.                                                                                                   |
+| `interceptor`      | Lifecycle bridging, teardown callbacks, and process-wide child supervision.                                                                     |
 | `plugin`           | Typed AppKit plugin data, instance, and required-instance lookup.                                                                               |
 | `provision`        | Cache schema provisioning helpers.                                                                                                              |
 | `identity`         | OBO-vs-service-principal request identity: modes, resolution, and the forwarded headers.                                                        |

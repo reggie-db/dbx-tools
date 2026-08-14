@@ -366,6 +366,10 @@ function generatePackageApi(pkg) {
     "bun",
     [
       "x",
+      "--package",
+      "typedoc",
+      "--package",
+      "typedoc-plugin-markdown",
       "typedoc",
       posix(path.relative(siteRoot, pkg.entry)),
       "--plugin",

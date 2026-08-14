@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import secrets
@@ -16,7 +17,7 @@ from pathlib import Path
 from dbx_tools.core import bin
 from honcho.manager import Manager
 
-from .constants import UPSTREAM_MCP_PATH_ENV
+from .constants import UPSTREAM_MCP_PATH_ENV, persistence_configured
 from .settings import ModelSettings
 
 """Installation and native process lifecycle for Graphiti, LiteLLM, and Neo4j."""
@@ -26,6 +27,7 @@ NEO4J_VERSION = "5.26.12"
 JAVA_VERSION = "21"
 UV_VERSION = "0.11"
 SUPERVISOR_START_TIMEOUT = 5.0
+SUPERVISOR_STOP_TIMEOUT = 7.0
 
 GRAPHITI_MISE_TOOL = (
     "http:graphiti["
@@ -146,6 +148,11 @@ class Runtime:
         supervisor_pid = state.get("graphiti_pid")
         if isinstance(supervisor_pid, int) and _is_running(supervisor_pid):
             os.kill(supervisor_pid, signal.SIGTERM)
+            deadline = time.monotonic() + SUPERVISOR_STOP_TIMEOUT
+            while time.monotonic() < deadline and _is_running(supervisor_pid):
+                time.sleep(0.1)
+            if _is_running(supervisor_pid):
+                os.kill(supervisor_pid, signal.SIGKILL)
         if (self.paths.neo4j / "bin" / "neo4j").exists():
             self._neo4j_command("stop", check=False)
         state = self.read_state(required=False)
@@ -226,8 +233,10 @@ class Runtime:
             ]
         )
         environment[UPSTREAM_MCP_PATH_ENV] = str(self.paths.graphiti / "mcp_server")
-        environment[PROCESS_STATE_PATH_ENV] = str(self.paths.state)
         environment.update(settings.graphiti_environment())
+        if persistence_configured(environment):
+            namespace = hashlib.sha256(str(self.paths.root.resolve()).encode()).hexdigest()[:16]
+            environment.setdefault("JOURNAL_NAMESPACE", f"runtime_{namespace}")
         return environment
 
     def connection_settings(
@@ -262,7 +271,12 @@ class Runtime:
         )
         self._write_state(state)
         try:
-            if settings.manage_litellm and not _url_ready(settings.health_url):
+            if settings.manage_litellm:
+                if _url_ready(settings.health_url):
+                    raise RuntimeError(
+                        f"Managed LiteLLM port {settings.litellm_port} is already in use; "
+                        "set LITELLM_URL to use an external proxy"
+                    )
                 manager.add_process(
                     "litellm",
                     shlex.join(self._litellm_command(settings)),
@@ -367,7 +381,7 @@ class Runtime:
         authenticated, authentication_failed = self._wait_for_neo4j(password)
         if authenticated:
             return
-        if not authentication_failed or not _persistence_configured():
+        if not authentication_failed or not persistence_configured():
             raise RuntimeError("Neo4j did not become ready with the configured credentials")
         self._neo4j_command("stop", check=False)
         shutil.rmtree(self.paths.neo4j_data, ignore_errors=True)
@@ -517,19 +531,6 @@ def _child_python_paths() -> list[str]:
         if resolved not in paths:
             paths.append(resolved)
     return paths
-
-
-def _persistence_configured() -> bool:
-    """Return whether Postgres can rebuild an ephemeral Neo4j store."""
-    return any(
-        os.getenv(name)
-        for name in (
-            "JOURNAL_DATABASE_URL",
-            "LAKEBASE_ENDPOINT",
-            "LAKEBASE_INSTANCE_NAME",
-            "PGHOST",
-        )
-    )
 
 
 def _is_running(pid: int) -> bool:

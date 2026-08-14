@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from unittest.mock import Mock
 
+import pytest
 from dbx_tools.graphiti.cli import main
 from dbx_tools.graphiti.constants import UPSTREAM_MCP_PATH_ENV
 from dbx_tools.graphiti.proxy import caddy_config
@@ -15,10 +16,9 @@ from dbx_tools.graphiti.runtime import (
     UV_MISE_TOOL,
     Runtime,
     RuntimePaths,
-    _GraphitiManager,
     _link_tool,
 )
-from dbx_tools.graphiti.server import _record_process_group, _upstream_config
+from dbx_tools.graphiti.server import _upstream_config
 from dbx_tools.graphiti.settings import ModelSettings
 
 _PROFILE_ENV = {"DATABRICKS_CONFIG_PROFILE": "DEFAULT"}
@@ -72,34 +72,6 @@ def test_state_is_private(tmp_path: Path) -> None:
 
     assert json.loads(runtime.paths.state.read_text()) == {"neo4j_password": "secret"}
     assert runtime.paths.state.stat().st_mode & 0o777 == 0o600
-
-
-def test_server_records_process_group_for_external_shutdown(monkeypatch, tmp_path: Path) -> None:
-    path = tmp_path / "state.json"
-    path.write_text('{"neo4j_password":"secret"}')
-    monkeypatch.setenv("PROCESS_STATE_PATH", str(path))
-
-    _record_process_group(321)
-    _record_process_group(654, "litellm_process_group")
-
-    state = json.loads(path.read_text())
-    assert state["graphiti_process_group"] == 321
-    assert state["litellm_process_group"] == 654
-    assert path.stat().st_mode & 0o777 == 0o600
-
-
-def test_honcho_manager_reaps_recorded_graphiti_group(monkeypatch, tmp_path: Path) -> None:
-    runtime = Runtime(RuntimePaths(tmp_path))
-    runtime._write_state({"neo4j_password": "secret", "graphiti_process_group": 321})
-    terminate = Mock()
-    monkeypatch.setattr("dbx_tools.graphiti.runtime._terminate_process_group", terminate)
-    manager = _GraphitiManager(runtime)
-
-    manager.terminate()
-    manager.events.close()
-    manager.events.join_thread()
-
-    terminate.assert_called_once_with(321)
 
 
 def test_startup_resolves_prerequisites_through_core_bin(monkeypatch, tmp_path: Path) -> None:
@@ -272,19 +244,14 @@ def test_graphiti_command_uses_databricks_app_listener(monkeypatch, tmp_path: Pa
     assert command[command.index("--port") + 1] == "9001"
 
 
-def test_caddy_config_routes_graphiti_and_appkit() -> None:
+def test_caddy_config_routes_to_graphiti() -> None:
     config = caddy_config(
-        public_port=8000,
-        app_port=8001,
+        proxy_port=8000,
         graphiti_port=8002,
-        route_prefix="/graphiti/",
     )
 
-    assert "handle /graphiti/mcp/" in config
-    assert "rewrite * /mcp" in config
-    assert "handle_path /graphiti/*" in config
+    assert "127.0.0.1:8000" in config
     assert "reverse_proxy 127.0.0.1:8002" in config
-    assert "reverse_proxy 127.0.0.1:8001" in config
 
 
 def test_managed_litellm_uses_selected_profile(monkeypatch, tmp_path: Path) -> None:
@@ -296,7 +263,7 @@ def test_managed_litellm_uses_selected_profile(monkeypatch, tmp_path: Path) -> N
     )
     manager = Mock()
     manager.returncode = 0
-    monkeypatch.setattr("dbx_tools.graphiti.runtime._GraphitiManager", Mock(return_value=manager))
+    monkeypatch.setattr("dbx_tools.graphiti.runtime.Manager", Mock(return_value=manager))
     monkeypatch.setattr("dbx_tools.graphiti.runtime._url_ready", lambda _: False)
 
     result = runtime.supervise(settings, [])
@@ -307,7 +274,7 @@ def test_managed_litellm_uses_selected_profile(monkeypatch, tmp_path: Path) -> N
     assert shlex.split(litellm.args[1]) == [
         sys.executable,
         "-m",
-        "dbx_tools.graphiti.litellm_process",
+        "dbx_tools.litellm",
         "--host",
         "127.0.0.1",
         "--port",
@@ -316,3 +283,16 @@ def test_managed_litellm_uses_selected_profile(monkeypatch, tmp_path: Path) -> N
     assert litellm.kwargs["env"]["DATABRICKS_CONFIG_PROFILE"] == "DEV"
     assert manager.add_process.call_args_list[1].args[0] == "graphiti"
     manager.loop.assert_called_once_with()
+
+
+def test_managed_litellm_rejects_an_occupied_port(monkeypatch, tmp_path: Path) -> None:
+    runtime = Runtime(RuntimePaths(tmp_path))
+    runtime._write_state({"neo4j_password": "secret"})
+    manager = Mock()
+    monkeypatch.setattr("dbx_tools.graphiti.runtime.Manager", Mock(return_value=manager))
+    monkeypatch.setattr("dbx_tools.graphiti.runtime._url_ready", lambda _: True)
+
+    with pytest.raises(RuntimeError, match="already in use"):
+        runtime.supervise(ModelSettings.resolve(environ=_PROFILE_ENV), [])
+
+    manager.add_process.assert_not_called()

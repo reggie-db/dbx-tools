@@ -1,28 +1,24 @@
 /**
- * AppKit Graphiti sidecar ports, route prefix, and Python command.
+ * AppKit Graphiti sidecar ports and Python command.
  *
  * @module
  */
 import { ConfigurationError, type BasePluginConfig } from "@databricks/appkit";
-import { config as coreConfig } from "@dbx-tools/core";
+import { config as coreConfig, project as coreProject } from "@dbx-tools/core";
 import type { JSONSchema7 } from "json-schema";
 
 export interface GraphitiPluginConfig extends BasePluginConfig {
-  publicPort?: number;
-  appPort?: number;
   graphitiPort?: number;
   litellmPort?: number;
-  routePrefix?: string;
+  proxyPort?: number;
   python?: string;
   journalNamespace?: string;
 }
 
 export interface ResolvedGraphitiPluginConfig extends GraphitiPluginConfig {
-  publicPort: number;
-  appPort: number;
   graphitiPort: number;
   litellmPort: number;
-  routePrefix: string;
+  proxyPort: number;
   python: string;
   journalNamespace: string;
 }
@@ -30,11 +26,9 @@ export interface ResolvedGraphitiPluginConfig extends GraphitiPluginConfig {
 export const GRAPHITI_CONFIG_SCHEMA = {
   type: "object",
   properties: {
-    publicPort: { type: "integer", minimum: 1, maximum: 65535 },
-    appPort: { type: "integer", minimum: 1, maximum: 65535 },
     graphitiPort: { type: "integer", minimum: 1, maximum: 65535 },
     litellmPort: { type: "integer", minimum: 1, maximum: 65535 },
-    routePrefix: { type: "string" },
+    proxyPort: { type: "integer", minimum: 1, maximum: 65535 },
     python: { type: "string" },
     journalNamespace: { type: "string" },
   },
@@ -45,18 +39,6 @@ export const GRAPHITI_CONFIG_SCHEMA = {
 export function resolveGraphitiConfig(
   config: GraphitiPluginConfig = {},
 ): ResolvedGraphitiPluginConfig {
-  const publicPort = coreConfig.port(
-    config.publicPort,
-    "DATABRICKS_APP_PORT",
-    8000,
-    coreConfig.ENV_ONLY,
-  );
-  const appPort = coreConfig.port(
-    config.appPort,
-    "GRAPHITI_APP_PORT",
-    publicPort + 1,
-    coreConfig.ENV_ONLY,
-  );
   const graphitiPort = coreConfig.port(
     config.graphitiPort,
     "GRAPHITI_PORT",
@@ -64,42 +46,24 @@ export function resolveGraphitiConfig(
     coreConfig.ENV_ONLY,
   );
   const litellmPort = coreConfig.port(config.litellmPort, "LITELLM_PORT", 0, coreConfig.ENV_ONLY);
-  const configuredPorts = [publicPort, appPort, graphitiPort, litellmPort].filter(Boolean);
+  const proxyPort = coreConfig.port(config.proxyPort, "PROXY_PORT", 0, coreConfig.ENV_ONLY);
+  const configuredPorts = [graphitiPort, litellmPort, proxyPort].filter(Boolean);
   if (new Set(configuredPorts).size !== configuredPorts.length) {
-    throw new ConfigurationError("Graphiti public, AppKit, and sidecar ports must be distinct");
+    throw new ConfigurationError("Graphiti sidecar ports must be distinct");
   }
-  const routePrefix = normalizeRoutePrefix(
-    config.routePrefix ??
-      coreConfig.text("GRAPHITI_ROUTE_PREFIX", coreConfig.ENV_ONLY) ??
-      "/graphiti",
-  );
   const python =
     config.python ?? coreConfig.text("PYTHON", coreConfig.ENV_ONLY)?.trim() ?? "python3";
   const journalNamespace =
     config.journalNamespace ??
     coreConfig.text("JOURNAL_NAMESPACE", coreConfig.ENV_ONLY)?.trim() ??
     process.env.DATABRICKS_APP_NAME?.trim() ??
+    coreProject.name() ??
     "default";
   return {
-    publicPort,
-    appPort,
     graphitiPort,
     litellmPort,
-    routePrefix,
+    proxyPort,
     python,
     journalNamespace,
   };
-}
-
-/** Return the internal port an AppKit `server()` plugin should bind. */
-export function appPort(config: GraphitiPluginConfig = {}): number {
-  return resolveGraphitiConfig(config).appPort;
-}
-
-function normalizeRoutePrefix(value: string): string {
-  const normalized = `/${value.trim().replace(/^\/+|\/+$/g, "")}`;
-  if (normalized === "/") {
-    throw new ConfigurationError("Graphiti routePrefix must contain a path segment");
-  }
-  return normalized;
 }

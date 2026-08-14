@@ -145,6 +145,44 @@ def test_delegate_journals_writes_but_not_reads() -> None:
     asyncio.run(run())
 
 
+def test_journal_failure_prevents_graph_mutation() -> None:
+    class FailingStorage(MemoryStorage):
+        async def append(self, writes: Sequence[GraphWrite]) -> None:
+            del writes
+            raise RuntimeError("journal unavailable")
+
+    async def run() -> None:
+        delegate = FakeDriver()
+        driver = DelegatingGraphDriver(delegate, FailingStorage())
+
+        with pytest.raises(RuntimeError, match="journal unavailable"):
+            await driver.execute_query("CREATE (n {uuid: $uuid})", uuid="node-1")
+
+        assert delegate.queries == []
+
+    asyncio.run(run())
+
+
+def test_delegate_failure_retains_write_ahead_record() -> None:
+    class FailingDriver(FakeDriver):
+        async def execute_query(self, cypher_query_: str, **kwargs: Any) -> Any:
+            del cypher_query_, kwargs
+            raise RuntimeError("graph unavailable")
+
+    async def run() -> None:
+        storage = MemoryStorage()
+        driver = DelegatingGraphDriver(FailingDriver(), storage)
+
+        with pytest.raises(RuntimeError, match="graph unavailable"):
+            await driver.execute_query("CREATE (n {uuid: $uuid})", uuid="node-1")
+
+        assert storage.writes == [
+            GraphWrite(query="CREATE (n {uuid: $uuid})", parameters={"uuid": "node-1"})
+        ]
+
+    asyncio.run(run())
+
+
 def test_hydration_clears_and_replays_once(monkeypatch) -> None:
     async def run() -> None:
         cleared: list[GraphDriver] = []
@@ -260,4 +298,5 @@ def test_persistent_constructor_wraps_any_explicit_driver(monkeypatch) -> None:
 def test_persistence_activation_uses_postgres_environment() -> None:
     assert persistence_configured({"PGHOST": "database.example"})
     assert persistence_configured({"JOURNAL_DATABASE_URL": "postgresql://example/db"})
+    assert not persistence_configured({"PGHOST": "  "})
     assert not persistence_configured({})

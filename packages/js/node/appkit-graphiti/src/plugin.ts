@@ -1,21 +1,30 @@
 /**
- * AppKit plugin that supervises Graphiti and a Caddy single-port proxy.
+ * AppKit plugin that supervises Graphiti and republishes user-scoped MCP tools.
  *
  * @module
  */
+import { createHash } from "node:crypto";
 import { createServer } from "node:net";
 import {
+  ConfigurationError,
   Plugin,
   lakebase,
   toPlugin,
+  type IAppRouter,
   type PluginManifest,
   type ResourceRequirement,
 } from "@databricks/appkit";
-import { interceptor as appkitInterceptor, plugin as appkitPlugin } from "@dbx-tools/appkit";
-import { exec } from "@dbx-tools/core";
-import { async as asyncModule, log } from "@dbx-tools/shared-core";
-import type { Tool } from "@mastra/core/tools";
-import { MCPClient } from "@mastra/mcp";
+import {
+  appkit as dbxAppkit,
+  identity as appkitIdentity,
+  plugin as appkitPlugin,
+} from "@dbx-tools/appkit";
+import { config as coreConfig } from "@dbx-tools/core";
+import { async as asyncModule, log, object } from "@dbx-tools/shared-core";
+import { createTool, type Tool } from "@mastra/core/tools";
+import { MCPClient, MCPServer } from "@mastra/mcp";
+import concurrently, { type Command, type ConcurrentlyResult } from "concurrently";
+import type express from "express";
 import {
   GRAPHITI_CONFIG_SCHEMA,
   resolveGraphitiConfig,
@@ -24,8 +33,31 @@ import {
 } from "./config.ts";
 
 const LAKEBASE_MANIFEST = appkitPlugin.data(lakebase).plugin.manifest;
+const MCP_PATH = "/api/graphiti/mcp";
+const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
+const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
+const SCOPED_TOOL_FIELDS = {
+  add_memory: "group_id",
+  add_triplet: "group_id",
+  build_communities: "group_ids",
+  get_episodes: "group_ids",
+  get_status: undefined,
+  search_memory_facts: "group_ids",
+  search_nodes: "group_ids",
+  summarize_saga: "group_id",
+} as const;
+const WRITE_TOOLS = new Set(["add_memory", "add_triplet", "build_communities", "summarize_saga"]);
+const UNSCOPED_ARGUMENTS = [
+  "center_node_uuid",
+  "previous_episode_uuids",
+  "saga_previous_episode_uuid",
+  "source_node_uuid",
+  "target_node_uuid",
+  "uuid",
+] as const;
 
 interface ToolkitEntry {
+  readonly __toolkitRef: true;
   pluginName: string;
   localName: string;
   def: {
@@ -33,6 +65,15 @@ interface ToolkitEntry {
     description: string;
     parameters: unknown;
   };
+  annotations: {
+    effect: "read" | "write";
+    requiresUserContext: true;
+  };
+}
+
+interface UserMcpServer {
+  lastUsed: number;
+  server: MCPServer;
 }
 
 export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
@@ -58,117 +99,144 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
   }
 
   private readonly logger = log.logger(this);
-  private children: ReturnType<typeof exec.spawn>[] = [];
+  private commands: Command[] = [];
   private mcp?: MCPClient;
+  private mcpServers = new Map<string, UserMcpServer>();
+  private mcpServerSweep?: NodeJS.Timeout;
   private mcpTools: Record<string, Tool> = {};
   private resolved?: ResolvedGraphitiPluginConfig;
+  private setupComplete = false;
+  private supervision?: ConcurrentlyResult;
   private stopping = false;
 
   override async setup(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
-    const graphitiPort = configured.graphitiPort || (await availablePort());
-    let litellmPort = configured.litellmPort || (await availablePort());
-    while (litellmPort === graphitiPort) litellmPort = await availablePort();
+    const [graphitiPort, litellmPort, proxyPort] = await distinctPorts(
+      coreConfig.port(undefined, "DATABRICKS_APP_PORT", 8000, coreConfig.ENV_ONLY),
+      configured.graphitiPort,
+      configured.litellmPort,
+      configured.proxyPort,
+    );
     this.resolved = {
       ...configured,
       graphitiPort,
       litellmPort,
+      proxyPort,
     };
-    if (!process.env.LAKEBASE_ENDPOINT && !process.env.PGHOST) {
-      throw new Error(
-        "Graphiti requires Lakebase; register lakebase() before graphiti() and bind its Postgres resource",
-      );
-    }
-    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-      process.once(signal, () => this.stopGraphiti());
-    }
-    const supervisor = appkitInterceptor.createInterceptorContext({});
-    supervisor.context.onTeardown(() => this.stopGraphiti());
-    const graphiti = exec.spawn(this.resolved.python, ["-m", "dbx_tools.graphiti", "start"], {
-      env: {
-        ...process.env,
-        GRAPHITI_HOST: "127.0.0.1",
-        GRAPHITI_PORT: String(this.resolved.graphitiPort),
-        JOURNAL_NAMESPACE: this.resolved.journalNamespace,
-        LITELLM_HOST: "127.0.0.1",
-        LITELLM_PORT: String(this.resolved.litellmPort),
-        MANAGE_LITELLM: "true",
-      },
-      stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    const caddy = exec.spawn(
-      this.resolved.python,
+    this.supervision = concurrently(
       [
-        "-m",
-        "dbx_tools.graphiti.proxy",
-        "--public-port",
-        String(this.resolved.publicPort),
-        "--app-port",
-        String(this.resolved.appPort),
-        "--graphiti-port",
-        String(this.resolved.graphitiPort),
-        "--route-prefix",
-        this.resolved.routePrefix,
+        {
+          name: "graphiti",
+          command: commandLine([this.resolved.python, "-m", "dbx_tools.graphiti", "start"]),
+          env: {
+            ...process.env,
+            GRAPHITI_HOST: "127.0.0.1",
+            GRAPHITI_PORT: String(this.resolved.graphitiPort),
+            JOURNAL_NAMESPACE: this.resolved.journalNamespace,
+            LITELLM_HOST: "127.0.0.1",
+            LITELLM_PORT: String(this.resolved.litellmPort),
+            MANAGE_LITELLM: "true",
+          },
+        },
+        {
+          name: "caddy",
+          command: commandLine([
+            this.resolved.python,
+            "-m",
+            "dbx_tools.graphiti.proxy",
+            "--proxy-port",
+            String(this.resolved.proxyPort),
+            "--graphiti-port",
+            String(this.resolved.graphitiPort),
+          ]),
+          env: process.env,
+        },
       ],
       {
-        env: process.env,
-        stdin: "ignore",
-        stdout: "inherit",
-        stderr: "inherit",
+        killOthersOn: ["failure", "success"],
+        killSignal: "SIGTERM",
+        killTimeout: 12_000,
+        prefix: "name",
+        prefixColors: false,
       },
     );
-    this.children = [graphiti, caddy];
-    for (const child of this.children) supervisor.context.bindProcess(child);
-    await waitForGraphiti(this.resolved.graphitiPort);
-    this.mcp = new MCPClient({
-      id: `appkit-graphiti-${this.resolved.graphitiPort}`,
-      servers: {
-        graphiti: {
-          url: new URL(`http://127.0.0.1:${this.resolved.graphitiPort}/mcp`),
+    this.commands = this.supervision.commands;
+    void this.supervision.result.then(
+      () => this.onSupervisorExit(),
+      (error) => this.onSupervisorExit(error),
+    );
+    const supervisionFailure = this.supervision.result.then(
+      () => {
+        throw new Error("Graphiti sidecar supervisor exited during startup");
+      },
+      (error) => {
+        throw error;
+      },
+    );
+    try {
+      await Promise.race([
+        (async () => {
+          await waitForGraphiti(graphitiPort);
+          await waitForGraphiti(proxyPort);
+        })(),
+        supervisionFailure,
+      ]);
+      this.mcp = new MCPClient({
+        id: `appkit-graphiti-${this.resolved.graphitiPort}`,
+        servers: {
+          graphiti: {
+            url: new URL(`http://127.0.0.1:${this.resolved.proxyPort}/mcp`),
+          },
         },
-      },
-    });
-    const discovered = await this.mcp.listTools();
-    this.mcpTools = Object.fromEntries(
-      Object.entries(discovered).map(([name, tool]) => [
-        name.replace(/^graphiti_/, ""),
-        tool as Tool,
-      ]),
-    );
+      });
+      const discovered = await this.mcp.listTools();
+      this.mcpTools = Object.fromEntries(
+        Object.entries(discovered)
+          .map(([name, tool]) => [name.replace(/^graphiti_/, ""), tool as Tool] as const)
+          .filter(([name]) => name in SCOPED_TOOL_FIELDS),
+      );
+      const missing = Object.keys(SCOPED_TOOL_FIELDS).filter((name) => !this.mcpTools[name]);
+      if (missing.length > 0) {
+        throw new Error(`Graphiti did not publish required scoped tools: ${missing.join(", ")}`);
+      }
+    } catch (error) {
+      await this.stopSidecars();
+      throw error;
+    }
+    this.setupComplete = true;
+    this.mcpServerSweep = setInterval(() => this.closeIdleMcpServers(), MCP_SERVER_SWEEP_MS);
+    this.mcpServerSweep.unref();
     this.logger.info("ready", {
-      appPort: this.resolved.appPort,
       graphitiPort: this.resolved.graphitiPort,
       litellmPort: this.resolved.litellmPort,
-      publicPort: this.resolved.publicPort,
-      mcpPath: `${this.resolved.routePrefix}/mcp/`,
+      proxyPort: this.resolved.proxyPort,
+      mcpPath: MCP_PATH,
       tools: Object.keys(this.mcpTools),
     });
   }
 
+  override injectRoutes(router: IAppRouter): void {
+    for (const method of ["get", "post", "delete"] as const) {
+      this.route(router, {
+        name: `${method}Mcp`,
+        method,
+        path: "/mcp",
+        handler: (request, response) => this.forwardMcp(request, response),
+      });
+    }
+  }
+
   override abortActiveOperations(): void {
     super.abortActiveOperations();
-    this.stopGraphiti();
     void this.mcp?.disconnect();
-    this.mcp = undefined;
-    this.mcpTools = {};
-    for (const child of this.children) {
-      if (!child.killed) child.kill("SIGTERM");
-    }
-    this.children = [];
+  }
+
+  async shutdown(): Promise<void> {
+    await this.stopSidecars();
   }
 
   override exports() {
-    const resolved = this.resolved ?? resolveGraphitiConfig(this.config);
-    return {
-      appPort: resolved.appPort,
-      graphitiPort: resolved.graphitiPort,
-      litellmPort: resolved.litellmPort,
-      mcpPath: `${resolved.routePrefix}/mcp/`,
-      publicPort: resolved.publicPort,
-      routePrefix: resolved.routePrefix,
-    };
+    return { mcpPath: MCP_PATH };
   }
 
   toolkit(): Record<string, ToolkitEntry> {
@@ -176,6 +244,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
       Object.entries(this.mcpTools).map(([name, tool]) => [
         name,
         {
+          __toolkitRef: true as const,
           pluginName: "graphiti",
           localName: name,
           def: {
@@ -183,30 +252,129 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
             description: tool.description,
             parameters: tool.inputSchema ?? { type: "object", properties: {} },
           },
+          annotations: {
+            effect: WRITE_TOOLS.has(name) ? ("write" as const) : ("read" as const),
+            requiresUserContext: true as const,
+          },
         },
       ]),
     );
   }
 
-  async executeAgentTool(name: string, args: unknown, signal?: AbortSignal): Promise<unknown> {
+  async executeAgentTool(
+    name: string,
+    args: unknown,
+    signal?: AbortSignal,
+    context?: { resourceId?: string },
+  ): Promise<unknown> {
     const tool = this.mcpTools[name];
     if (!tool?.execute) throw new Error(`Unknown Graphiti tool: ${name}`);
-    return tool.execute(args, { abortSignal: signal } as never);
+    const userId = context?.resourceId ?? executionContextUserId();
+    return tool.execute(scopedArguments(name, args, userScope(userId)), {
+      abortSignal: signal,
+    } as never);
   }
 
-  private stopGraphiti(): void {
-    if (this.stopping || !this.resolved) return;
-    this.stopping = true;
-    void exec.spawn(this.resolved.python, ["-m", "dbx_tools.graphiti", "down"], {
-      env: process.env,
-      stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
+  private async forwardMcp(request: express.Request, response: express.Response): Promise<void> {
+    if (!this.resolved) {
+      response.status(503).json({ error: "Graphiti is not ready" });
+      return;
+    }
+    const userId = appkitIdentity.requestUserId(request) ?? executionContextUserId();
+    const server = this.mcpServer(userId);
+    await server.startHTTP({
+      url: new URL(request.originalUrl, "http://app.local"),
+      httpPath: MCP_PATH,
+      req: request,
+      res: response,
     });
+  }
+
+  private mcpServer(userId: string): MCPServer {
+    const existing = this.mcpServers.get(userId);
+    if (existing) {
+      existing.lastUsed = Date.now();
+      return existing.server;
+    }
+    const scope = userScope(userId);
+    const tools = Object.fromEntries(
+      Object.entries(this.mcpTools).map(([name, tool]) => [
+        name,
+        createTool({
+          id: name,
+          description: tool.description ?? name,
+          ...(tool.inputSchema ? { inputSchema: tool.inputSchema as never } : {}),
+          execute: (args: unknown, context: unknown) => {
+            if (!tool.execute) throw new Error(`Graphiti tool cannot execute: ${name}`);
+            return tool.execute(scopedArguments(name, args, scope), context as never);
+          },
+        }),
+      ]),
+    );
+    const server = new MCPServer({
+      name: "Graphiti",
+      version: "1.0.0",
+      tools,
+    });
+    this.mcpServers.set(userId, { lastUsed: Date.now(), server });
+    return server;
+  }
+
+  private onSupervisorExit(error?: unknown): void {
+    if (this.stopping || !this.setupComplete) return;
+    this.logger.error("sidecar supervisor exited", { error });
+    process.kill(process.pid, "SIGTERM");
+  }
+
+  private async stopSidecars(): Promise<void> {
+    if (this.stopping) return;
+    this.stopping = true;
+    if (this.mcpServerSweep) clearInterval(this.mcpServerSweep);
+    this.mcpServerSweep = undefined;
+    await Promise.allSettled([...this.mcpServers.values()].map(({ server }) => server.close()));
+    this.mcpServers.clear();
+    await this.mcp?.disconnect();
+    this.mcp = undefined;
+    this.mcpTools = {};
+    for (const command of this.commands) command.kill("SIGTERM");
+    if (this.supervision) await this.supervision.result.catch(() => undefined);
+    this.commands = [];
+    this.supervision = undefined;
+  }
+
+  private closeIdleMcpServers(): void {
+    const cutoff = Date.now() - MCP_SERVER_IDLE_MS;
+    for (const [userId, entry] of this.mcpServers) {
+      if (entry.lastUsed >= cutoff) continue;
+      this.mcpServers.delete(userId);
+      void entry.server.close().catch((error) => {
+        this.logger.warn("idle MCP server close failed", { error });
+      });
+    }
   }
 }
 
 export const graphiti = toPlugin(GraphitiPlugin);
+
+function executionContextUserId(): string {
+  const context = dbxAppkit.tryGetExecutionContext();
+  if (!context) throw new Error("Graphiti memory requires an AppKit execution context");
+  return "userId" in context ? context.userId : context.serviceUserId;
+}
+
+function userScope(userId: string): string {
+  return `user_${createHash("sha256").update(userId).digest("base64url")}`;
+}
+
+function scopedArguments(name: string, args: unknown, scope: string): Record<string, unknown> {
+  if (!(name in SCOPED_TOOL_FIELDS)) throw new Error(`Graphiti tool is not user-scoped: ${name}`);
+  const scoped = object.isRecord(args) ? { ...args } : {};
+  for (const argument of UNSCOPED_ARGUMENTS) delete scoped[argument];
+  const field = SCOPED_TOOL_FIELDS[name as keyof typeof SCOPED_TOOL_FIELDS];
+  if (field === "group_id") scoped.group_id = scope;
+  if (field === "group_ids") scoped.group_ids = [scope];
+  return scoped;
+}
 
 async function waitForGraphiti(port: number): Promise<void> {
   for await (const ready of asyncModule.poll(
@@ -242,4 +410,26 @@ async function availablePort(): Promise<number> {
       server.close((error) => (error ? reject(error) : resolve(address.port)));
     });
   });
+}
+
+async function distinctPorts(
+  appPort: number,
+  graphitiPort: number,
+  litellmPort: number,
+  proxyPort: number,
+): Promise<[number, number, number]> {
+  const ports = [appPort];
+  for (const configuredPort of [graphitiPort, litellmPort, proxyPort]) {
+    if (configuredPort && ports.includes(configuredPort)) {
+      throw new ConfigurationError("Graphiti sidecar ports must differ from DATABRICKS_APP_PORT");
+    }
+    let port = configuredPort || (await availablePort());
+    while (ports.includes(port)) port = await availablePort();
+    ports.push(port);
+  }
+  return ports.slice(1) as [number, number, number];
+}
+
+function commandLine(arguments_: string[]): string {
+  return arguments_.map((value) => `'${value.replaceAll("'", "'\\''")}'`).join(" ");
 }

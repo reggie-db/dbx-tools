@@ -144,7 +144,7 @@ async function createLoggedOutput(): Promise<{
   };
 }
 
-/** Build the client, then run the Caddy-fronted server and emitter together. */
+/** Build the client, then run the AppKit server and emitter together. */
 async function runDemo(): Promise<void> {
   delete process.env.FORCE_COLOR;
   await buildClient();

@@ -21,6 +21,7 @@ import { fallback } from "@dbx-tools/model";
 import { log, object, string } from "@dbx-tools/shared-core";
 import type { AgentConfig, ToolsInput } from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
+import { MASTRA_RESOURCE_ID_KEY } from "@mastra/core/request-context";
 import type { Tool } from "@mastra/core/tools";
 import { createTool } from "@mastra/core/tools";
 import type { Workspace } from "@mastra/core/workspace";
@@ -772,7 +773,7 @@ function resolveAgentWorkspace(
  * Implemented as a `Proxy` over the AppKit plugin context so
  * `plugins.<name>` resolves at first access. Any sibling plugin that
  * implements AppKit's standard `ToolProvider` interface
- * (`toolkit(opts?)` + `executeAgentTool(name, args, signal?)`) is
+ * (`toolkit(opts?)` + `executeAgentTool(name, args, signal?, context?)`) is
  * auto-adapted into Mastra tools. Unknown names return `undefined`,
  * matching AppKit's `Plugins` semantics so `plugins.foo?.toolkit()`
  * remains safe in environments where `foo` isn't registered.
@@ -843,17 +844,27 @@ function resolveProvider(
  */
 interface AppKitToolkitProvider {
   toolkit?: (opts?: ToolkitOptions) => Record<string, AppKitToolkitEntry>;
-  executeAgentTool?: (name: string, args: unknown, signal?: AbortSignal) => Promise<unknown>;
+  executeAgentTool?: (
+    name: string,
+    args: unknown,
+    signal?: AbortSignal,
+    context?: { resourceId?: string },
+  ) => Promise<unknown>;
 }
 
 /** Single entry returned by an AppKit plugin's `.toolkit(opts)` call. */
 interface AppKitToolkitEntry {
+  readonly __toolkitRef?: true;
   pluginName: string;
   localName: string;
   def: {
     name: string;
     description: string;
     parameters: unknown;
+  };
+  annotations?: {
+    effect?: "read" | "write" | "update" | "destructive";
+    requiresUserContext?: boolean;
   };
 }
 
@@ -884,9 +895,9 @@ function adaptPluginToolkit(plugin: unknown): MastraPluginToolkitProvider | null
 /**
  * Wrap a single {@link AppKitToolkitEntry} as a Mastra tool whose
  * `execute` dispatches back through `plugin.executeAgentTool(...)` so
- * AppKit's OBO auth (`asUser`) and telemetry spans stay intact. JSON
- * Schema parameters pass through unchanged - Mastra's `PublicSchema`
- * accepts `JSONSchema7` directly via `@mastra/schema-compat`.
+ * AppKit's OBO auth (`asUser`), telemetry spans, and the Mastra memory resource
+ * id stay intact. JSON Schema parameters pass through unchanged - Mastra's
+ * `PublicSchema` accepts `JSONSchema7` directly via `@mastra/schema-compat`.
  */
 function toolkitEntryToMastraTool(entry: AppKitToolkitEntry, plugin: AppKitToolkitProvider): Tool {
   return createTool({
@@ -894,8 +905,16 @@ function toolkitEntryToMastraTool(entry: AppKitToolkitEntry, plugin: AppKitToolk
     description: entry.def.description,
     ...(entry.def.parameters ? { inputSchema: entry.def.parameters as never } : {}),
     execute: async (input: unknown, context: unknown) => {
-      const signal = (context as { abortSignal?: AbortSignal } | undefined)?.abortSignal;
-      return plugin.executeAgentTool!(entry.localName, input, signal);
+      const execution = context as
+        | {
+            abortSignal?: AbortSignal;
+            requestContext?: { get(key: string): unknown };
+          }
+        | undefined;
+      const resourceId = execution?.requestContext?.get(MASTRA_RESOURCE_ID_KEY);
+      return plugin.executeAgentTool!(entry.localName, input, execution?.abortSignal, {
+        ...(typeof resourceId === "string" ? { resourceId } : {}),
+      });
     },
   });
 }

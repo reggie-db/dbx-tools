@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
+    "@types/express": "catalog:",
     "@types/json-schema": "^7",
     "@types/node": "catalog:",
     "typescript": "^5.9.3"
@@ -29,7 +30,8 @@
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@mastra/core": "catalog:",
-    "@mastra/mcp": "catalog:"
+    "@mastra/mcp": "catalog:",
+    "concurrently": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -45,7 +47,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.114",
+  "version": "0.6.115",
   "types": "index.ts",
   "type": "module",
   "exports": {

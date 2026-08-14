@@ -35,6 +35,8 @@ app:
   consume, enrich, and turn into chart/data embeds;
 - you want model selection by intent (`"sonnet"`, `"chat-fast"`) rather than
   wiring every app to one serving endpoint alias;
+- you need a managed Graphiti memory sidecar with Lakebase recovery, per-user
+  graph groups, and a constrained AppKit MCP endpoint;
 - you need local OpenAI-compatible development tooling on top of Databricks
   Model Serving;
 - you want agent tools, federated search, index lifecycle helpers, reusable
@@ -64,6 +66,9 @@ app:
   catalogues, fuzzy matching, class ceilings, cache, and fallbacks.
 - **OpenAI-compatible local proxy** — point OpenAI-shaped clients at Databricks
   Model Serving without hand-managing Databricks auth or endpoint ids.
+- **Managed Graphiti memory** - provision Graphiti, Neo4j, and LiteLLM; journal
+  graph mutations to Lakebase; enforce per-user graph groups; and republish a
+  constrained MCP surface through AppKit.
 - **Approval-gated email workflows** — give agents a `send_email` tool that
   suspends for human approval, supports SMTP or local outbox mode, derives safe
   senders, and renders Markdown email.
@@ -200,7 +205,7 @@ The root uv workspace contains these Python counterparts:
 | [`dbx-tools-postgres`](packages/py/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
 | [`dbx-tools-model`](packages/py/model)       | Lists and classifies Databricks Model Serving endpoints, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies.                                         |
 | [`dbx-tools-litellm`](packages/py/litellm)   | Adds explicit-profile Databricks endpoint discovery and fuzzy, tool-aware model routing to LiteLLM while leaving request conversion, transport, streaming, retries, embeddings, and Responses bridging to LiteLLM's built-in Databricks provider.                                  |
-| [`dbx-tools-graphiti`](packages/py/graphiti) | Launches upstream Graphiti's MCP server with native Neo4j 5 and a managed Databricks LiteLLM proxy, using GPT and GTE defaults with no Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.                             |
+| [`dbx-tools-graphiti`](packages/py/graphiti) | Launches upstream Graphiti's MCP server with native Neo4j 5 and a managed Databricks LiteLLM proxy, using GPT and GTE defaults without requiring a caller-authored Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart. |
 
 ### Load One Brand File
 

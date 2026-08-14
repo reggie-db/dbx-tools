@@ -2,7 +2,7 @@ import path from "node:path";
 import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
-import { config as graphitiConfig, plugin as graphitiPlugin } from "@dbx-tools/appkit-graphiti";
+import { plugin as graphitiPlugin } from "@dbx-tools/appkit-graphiti";
 import {
   agents,
   genie as appkitMastraGenie,
@@ -71,7 +71,6 @@ const { GENIE_INSTRUCTIONS } = appkitMastraGenie;
 const { mastra } = appkitMastraPlugin;
 const { webSearch } = appkitWebSearchPlugin;
 const { graphiti } = graphitiPlugin;
-const { resolveGraphitiConfig } = graphitiConfig;
 const { webSearchTool, webFetchTool } = appkitWebSearchToolApi;
 const { teams } = teamsPlugin;
 const { teamsCardTool } = teamsToolApi;
@@ -242,9 +241,6 @@ const supportDefinition: MastraAgentDefinition = {
 };
 const support = createAgent(supportDefinition);
 
-// Caddy owns the public Databricks App port and forwards ordinary traffic to
-// AppKit while publishing Graphiti at /graphiti/*. Both backends stay loopback-only.
-const graphitiRuntime = resolveGraphitiConfig();
 const host = process.env.HOST ?? "127.0.0.1";
 
 // Keep the provider and extension plugin on the same resolved index value.
@@ -276,10 +272,10 @@ const searchProvider = USE_VECTOR_SEARCH
 
 await appkit.createApp({
   plugins: [
-    server({ host, port: graphitiRuntime.appPort, staticPath: clientDist }),
+    server({ host, staticPath: clientDist }),
     genie(),
     lakebase(),
-    graphiti(graphitiRuntime),
+    graphiti(),
     // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
     // Lakebase connection and fans topic broadcasts out to its browser viewers.
     busDemo(),

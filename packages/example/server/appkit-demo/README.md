@@ -1,8 +1,8 @@
 # @dbx-tools/demo-appkit-server
 
 The AppKit server half of the demo Databricks App. One `createApp` call mounts
-the plugins; one `createAgent` defines the analyst agent. That's the whole
-backend.
+the plugins, and one `createAgent` defines the analyst agent. Supporting modules
+handle the topic bus, static delivery, deployment staging, and shared types.
 
 ## What it wires
 
@@ -24,8 +24,9 @@ backend.
 - `graphiti()` from
   [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
   the Python Graphiti MCP sidecar, journals its graph writes to the same
-  Lakebase binding, and fronts AppKit + `/graphiti/mcp/` through Caddy on the
-  single Databricks App port.
+  Lakebase binding, and mounts its Caddy-backed MCP transport at
+  `/api/graphiti/mcp` on the AppKit server. Graphiti groups use the same
+  per-user resource id as Mastra memory.
 - `busDemo()` from `src/bus-demo.ts` — a `PostgresTopicBus` from
   [`@dbx-tools/postgres`](../../../js/node/postgres) on the Lakebase pool:
   `POST /api/bus-demo/messages` broadcasts, `GET /api/bus-demo/events` streams to
@@ -33,28 +34,38 @@ backend.
 
 ## Files
 
-- `src/server.ts` — the plugin list + agent definition (the only code here).
+- `src/server.ts` — the plugin list and agent definition.
 - `src/bus-demo.ts` — the topic-bus plugin behind the Bus page.
 - `app.yaml` — Databricks App runtime env wiring (`genie-space`, `postgres`).
 - `databricks.yml` — Asset Bundle: the Lakebase autoscaling Postgres project,
   the app resource, and the deployed `command`/`env` overrides.
 - `stage-deploy.ts` — stages a self-contained deploy tree (see Deploy).
-- `appkit.plugins.json` — AppKit plugin manifest (`appkit plugin sync`).
+- `appkit.plugins.json` — native AppKit template plugins synchronized by
+  `appkit plugin sync`; Graphiti is registered directly in `server.ts`.
 
 ## Run
 
 ```bash
+bun install
+uv sync --all-packages
 bun run demo
 ```
 
-From the repository root, this builds the client once, then starts the
-Caddy-fronted server at `http://localhost:8000` and a local uv Python emitter
-that publishes `Hello world` onto the Bus page every random 5–10 seconds. The
+From the repository root, this builds the client once, then starts AppKit at
+`http://localhost:8000`. Graphiti, managed LiteLLM, and Caddy use separate
+loopback ports. A local uv Python emitter publishes `Hello world` onto the Bus
+page every random 5 to 10 seconds. The
 demo runner reads the endpoint from this package's bundle defaults and uses
 `@dbx-tools/appkit` auto-configuration once before passing the resolved
 Lakebase environment to every child. The emitter is not included in the
-Databricks App deployment. See the [demo README](../../README.md) for full setup
-and env.
+Databricks App deployment. See the repository root README and `AGENTS.md` for
+workspace setup and environment behavior.
+
+On shutdown, AppKit closes the per-user MCP servers and internal client.
+`concurrently` terminates Graphiti and Caddy, Honcho forwards termination to
+Graphiti and managed LiteLLM, and both supervisors escalate unresponsive
+children after their bounded grace periods. The Python launcher stops Neo4j
+when Honcho exits.
 
 ## Deploy
 
@@ -75,6 +86,9 @@ databricks bundle run demo_app
 The staged app includes both `package.json` and `requirements.txt`. Databricks
 Apps installs the Node server and matching `dbx-tools-graphiti` Python release;
 the Graphiti plugin installs Caddy through mise on first start.
+Staging replaces workspace dependencies with `^<workspace-version>` and writes
+`dbx-tools-graphiti==<workspace-version>`. Uncommitted package changes are not
+included unless that version has been published.
 
 Two things worth knowing before changing this flow:
 

@@ -9,28 +9,21 @@ afterEach(() => {
 });
 
 describe("resolveGraphitiConfig", () => {
-  it("derives the AppKit port and defers Graphiti port allocation", () => {
-    process.env.DATABRICKS_APP_PORT = "9000";
+  it("defers sidecar port allocation", () => {
     process.env.DATABRICKS_APP_NAME = "demo";
 
     assert.deepEqual(resolveGraphitiConfig(), {
-      publicPort: 9000,
-      appPort: 9001,
       graphitiPort: 0,
       litellmPort: 0,
-      routePrefix: "/graphiti",
+      proxyPort: 0,
       python: "python3",
       journalNamespace: "demo",
     });
   });
 
-  it("normalizes a configured route prefix", () => {
-    assert.equal(resolveGraphitiConfig({ routePrefix: "memory/" }).routePrefix, "/memory");
-  });
-
   it("rejects colliding ports", () => {
     assert.throws(
-      () => resolveGraphitiConfig({ publicPort: 8000, appPort: 8000 }),
+      () => resolveGraphitiConfig({ graphitiPort: 8000, proxyPort: 8000 }),
       /ports must be distinct/,
     );
   });

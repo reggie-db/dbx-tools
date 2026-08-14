@@ -20,7 +20,8 @@ uv add "dbx-tools-graphiti @ git+https://github.com/reggie-db/dbx-tools.git@main
 
 - launches upstream Graphiti's HTTP MCP server at `http://127.0.0.1:8000/mcp/`;
 - runs Neo4j Community 5.26 as a native background process;
-- starts `dbx-tools-litellm` and authenticates through a Databricks CLI profile;
+- starts `dbx-tools-litellm` with an optional CLI profile, the configured CLI
+  default, or ambient Databricks App authentication;
 - supervises Graphiti and managed LiteLLM with Honcho so they share one
   lifecycle, receive SIGTERM as process groups, and receive SIGKILL after
   Honcho's bounded shutdown grace if needed;
@@ -32,13 +33,14 @@ uv add "dbx-tools-graphiti @ git+https://github.com/reggie-db/dbx-tools.git@main
   Graphiti source through mise;
 - pins Graphiti and Neo4j versions for repeatable local environments;
 - caches downloads, Python dependencies, Neo4j data, credentials, and logs;
-- needs no `config.yaml` and does not vendor Graphiti code.
+- needs no caller-owned `config.yaml` and does not vendor Graphiti code.
 
 ## Quick start
 
-`mise` and a working Databricks CLI profile must already be configured. The
-launcher handles Java, LiteLLM, Graphiti, and Neo4j, and installs `uv` only when
-it is not already available:
+Outside a Databricks App, configure a working Databricks CLI profile. A
+Databricks App uses its ambient service-principal authentication. The launcher
+installs mise when needed, handles Java, LiteLLM, Graphiti, and Neo4j, and
+installs `uv` only when it is not already available:
 
 ```bash
 uv run dbx-graphiti start
@@ -89,10 +91,10 @@ uv run dbx-graphiti start -- --port 9000 --group-id my-agent
 
 `DelegatingGraphDriver` accepts any Graphiti `GraphDriver` and delegates its
 provider behavior, operations, sessions, transactions, search, and maintenance
-to that driver. Successful mutating Cypher statements are appended to a
-supplied ordered storage driver before the call returns. During the first index
-setup, the wrapper clears the delegated graph and replays the stored mutations
-in order without journaling them again.
+to that driver. Mutating Cypher statements are appended to a supplied ordered
+storage driver before the graph operation or transaction commits. During the
+first index setup, the wrapper clears the delegated graph and replays the
+stored mutations in order without journaling them again.
 
 `PostgresWriteStorage` provides the durable implementation. It stores a
 namespaced append-only JSONB journal and accepts the async SQLAlchemy engine
@@ -118,8 +120,9 @@ is present:
 - `PGHOST`, `LAKEBASE_ENDPOINT`, or `LAKEBASE_INSTANCE_NAME`: resolve the
   connection and rotating credential through `dbx-tools-postgres` and
   `WorkspaceClient`.
-- `JOURNAL_NAMESPACE`: isolates one journal within the table. Defaults to
-  `default`.
+- `JOURNAL_NAMESPACE`: isolates one journal within the table. The launcher
+  derives a stable value from its data directory when omitted. A direct
+  `dbx_tools.graphiti.server` invocation must set it explicitly.
 - `JOURNAL_TABLE`: journal table name. Defaults to
   `graphiti_write_journal`.
 
@@ -127,7 +130,10 @@ When persistence is configured, Postgres initialization or replay failure stops
 server startup rather than running without durability. The journal is restart
 recovery for one live graph instance. It does not replicate new writes into
 other concurrently running Graphiti instances. A process crash after the graph
-commit but before its synchronous journal append can lose that final mutation.
+write-ahead append but before the graph commit can leave an unacknowledged
+mutation in the journal; restart recovery applies journal entries at least once.
+Graphiti's UUID-backed mutation queries are compatible with this replay model,
+but a custom delegate or write predicate must supply replay-safe mutations.
 If the local Neo4j credential no longer matches its ephemeral data directory,
 the launcher resets that directory only when a Postgres journal is configured,
 then Graphiti rebuilds it from the journal. Without durable storage, an
@@ -152,11 +158,10 @@ The package deliberately keeps orchestration separate from Graphiti itself:
    and Graphiti receives its OpenAI-compatible URL and model settings through
    environment variables and CLI flags.
 
-The cache root is:
+The launcher is supported on macOS and Linux. The cache root is:
 
 - macOS: `~/Library/Application Support/dbx-tools/graphiti`
 - Linux: `${XDG_DATA_HOME:-~/.local/share}/dbx-tools/graphiti`
-- Windows: `%LOCALAPPDATA%/dbx-tools/graphiti`
 
 Set `DBX_GRAPHITI_HOME` to override it. The directory contains links to the
 mise-managed tools plus launcher state, logs, and Neo4j data. Removing it
@@ -165,8 +170,10 @@ and installation directories separately.
 
 ## Configuration
 
-There is no Graphiti `config.yaml`. Model and server settings resolve from CLI
-option, environment variable, then package default:
+Callers do not supply a Graphiti `config.yaml`. The server creates an empty
+temporary YAML file for the lifetime of the upstream process because upstream
+requires the argument. Model and server settings resolve from CLI option,
+environment variable, then package default:
 
 - `--profile` / `DATABRICKS_CONFIG_PROFILE`: an optional Databricks profile
   override for managed LiteLLM. When both are absent, the launcher uses the
@@ -178,9 +185,16 @@ option, environment variable, then package default:
 - `--embedder-dimensions` / `EMBEDDER_DIMENSIONS`: defaults to `1024`.
 - `--litellm-host` / `LITELLM_HOST`: defaults to `127.0.0.1`.
 - `--litellm-port` / `LITELLM_PORT`: defaults to `4000`.
+- `--litellm-url` / `LITELLM_URL`: selects an external OpenAI-compatible
+  LiteLLM endpoint.
+- `--manage-litellm`, `--no-manage-litellm` / `MANAGE_LITELLM`: explicitly
+  controls whether the launcher owns the proxy.
+- `LLM_STRUCTURED_OUTPUT_MODE`: defaults to `json_object`.
 - `GRAPHITI_GROUP_ID`: defaults upstream to `main`.
-- `GRAPHITI_HOST` and `GRAPHITI_PORT`: default upstream to `127.0.0.1` and
-  `8000`.
+- `GRAPHITI_HOST` and `GRAPHITI_PORT`: environment-only listener settings.
+  Without a port, the launcher uses `DATABRICKS_APP_PORT` when present and
+  `8000` otherwise. Without a host, it binds `0.0.0.0` in a Databricks App and
+  `127.0.0.1` elsewhere. The AppKit plugin selects a loopback endpoint for both.
 - `NEO4J_URI` and `NEO4J_DATABASE`: default to
   `bolt://127.0.0.1:7687` and `neo4j`.
 
@@ -211,3 +225,13 @@ lifecycle. To run it beside an AppKit server through one Databricks App port,
 use [`@dbx-tools/appkit-graphiti`](../../js/node/appkit-graphiti). See the
 [upstream MCP server documentation](https://github.com/getzep/graphiti/tree/main/mcp_server)
 for its complete API.
+
+## Modules
+
+- `cli`: Cyclopts commands and CLI-over-environment option binding;
+- `settings`: model, embedding, profile, and LiteLLM resolution;
+- `runtime`: on-demand provisioning and Honcho lifecycle;
+- `server`: upstream MCP entry point, temporary config, and persistence wiring;
+- `proxy`: loopback Caddy process used by the AppKit plugin;
+- `persistence`: delegating graph driver and Postgres write-ahead journal;
+- `supervisor`: detached `up` entry point.

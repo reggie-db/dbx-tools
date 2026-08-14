@@ -476,7 +476,10 @@ chat endpoint.
 
 - `backend` - profile-resolved workspace client, endpoint cache, and model
   resolution;
+- `credentials` - process-wide Databricks credential caching and refresh;
+- `config_provider` - generated LiteLLM proxy configuration;
 - `models` — Responses-only endpoint routing policy;
+- `models_api` - OpenAI-compatible model-list endpoint behavior;
 - `provider` — LiteLLM `CustomLLM` adapter and exported `dbx_provider`
   singleton; owns the Chat Completions message pipeline (trailing-assistant
   repair, JSON nudge, Claude prompt-cache marking) and the rate-limit-aware
@@ -492,3 +495,5 @@ chat endpoint.
 For standalone Python endpoint resolution and invocation helpers, use
 [`dbx-tools-model`](../model). For the TypeScript local proxy, use
 [`@dbx-tools/cli-model-proxy`](../../js/cli/model-proxy).
+[`dbx-tools-graphiti`](../graphiti) launches this proxy in managed mode and
+supplies its private host and port to upstream Graphiti.

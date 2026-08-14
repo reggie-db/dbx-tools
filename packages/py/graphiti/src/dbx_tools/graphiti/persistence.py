@@ -223,14 +223,13 @@ class DelegatingGraphDriver(GraphDriver):
         return self._delegate.graph_ops
 
     async def execute_query(self, cypher_query_: str, **kwargs: Any) -> Any:
-        """Execute through the delegate and journal successful mutations."""
+        """Journal a mutation before executing it through the delegate."""
         if not self._write_predicate(cypher_query_, kwargs):
             return await self._delegate.execute_query(cypher_query_, **kwargs)
         async with self._write_lock:
             await self._ensure_storage()
-            result = await self._delegate.execute_query(cypher_query_, **kwargs)
             await self._storage.append([GraphWrite(query=cypher_query_, parameters=dict(kwargs))])
-            return result
+            return await self._delegate.execute_query(cypher_query_, **kwargs)
 
     def session(self, database: str | None = None) -> GraphDriverSession:
         """Return a session that journals direct and transactional writes."""
@@ -238,13 +237,13 @@ class DelegatingGraphDriver(GraphDriver):
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[Transaction]:
-        """Commit a delegated transaction before journaling its mutation batch."""
+        """Journal a delegated transaction's mutations before commit."""
         writes: list[GraphWrite] = []
         async with self._write_lock:
             await self._ensure_storage()
             async with self._delegate.transaction() as transaction:
                 yield _RecordingTransaction(transaction, writes, self._write_predicate)
-            await self._storage.append(writes)
+                await self._storage.append(writes)
 
     async def close(self) -> None:
         """Close the delegate and the supplied storage driver."""
@@ -324,18 +323,15 @@ class _DelegatingSession(GraphDriverSession):
             return await self._delegate.run(query, **kwargs)
         async with self._driver._write_lock:
             await self._driver._ensure_storage()
-            result = await self._delegate.run(query, **kwargs)
             await self._driver._storage.append([GraphWrite(query=query, parameters=dict(kwargs))])
-            return result
+            return await self._delegate.run(query, **kwargs)
 
     async def close(self) -> None:
         await self._delegate.close()
 
     async def execute_write(self, func, *args, **kwargs):
-        writes: list[GraphWrite] = []
-
         async def record_attempt(transaction, *callback_args, **callback_kwargs):
-            """Retain only the transaction attempt that reaches commit."""
+            """Journal each transaction attempt before the driver commits it."""
             attempt: list[GraphWrite] = []
             result = await func(
                 _RecordingTransaction(
@@ -346,13 +342,12 @@ class _DelegatingSession(GraphDriverSession):
                 *callback_args,
                 **callback_kwargs,
             )
-            writes[:] = attempt
+            await self._driver._storage.append(attempt)
             return result
 
         async with self._driver._write_lock:
             await self._driver._ensure_storage()
             result = await self._delegate.execute_write(record_attempt, *args, **kwargs)
-            await self._driver._storage.append(writes)
             return result
 
 

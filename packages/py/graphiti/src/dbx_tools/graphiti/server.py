@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import json
 import os
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from importlib import import_module
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import ModuleType
-from typing import Any, Iterator
+from typing import Any
 
 from databricks.sdk import WorkspaceClient
 from dbx_tools.postgres import create_async_engine
@@ -17,56 +16,19 @@ from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import create_async_engine as sqlalchemy_create_async_engine
 
-from .constants import PROCESS_STATE_PATH_ENV, UPSTREAM_MCP_PATH_ENV
+from .constants import UPSTREAM_MCP_PATH_ENV, persistence_configured
 from .persistence import DelegatingGraphDriver, PostgresWriteStorage
 
 """Pinned upstream MCP entry point with optional Postgres graph persistence."""
 
-_PERSISTENCE_ENV = (
-    "JOURNAL_DATABASE_URL",
-    "LAKEBASE_ENDPOINT",
-    "LAKEBASE_INSTANCE_NAME",
-    "PGHOST",
-)
-
 
 def main() -> None:
     """Load the upstream MCP server and install persistence when configured."""
-    _record_process_group(os.getpgid(0))
-    try:
-        graphiti_server = _load_upstream()
-        if persistence_configured():
-            graphiti_server.Graphiti = _persistent_graphiti_constructor(graphiti_server.Graphiti)
-        with _upstream_config():
-            graphiti_server.main()
-    finally:
-        _record_process_group(None)
-
-
-def persistence_configured(environ: Mapping[str, str] | None = None) -> bool:
-    """Return whether the environment selects a Postgres write journal."""
-    env = os.environ if environ is None else environ
-    return any(env.get(name, "").strip() for name in _PERSISTENCE_ENV)
-
-
-def _record_process_group(
-    process_group: int | None,
-    key: str = "graphiti_process_group",
-) -> None:
-    """Record the sidecar group so an external `down` can reap descendants."""
-    value = os.getenv(PROCESS_STATE_PATH_ENV)
-    if not value:
-        return
-    path = Path(value)
-    state = json.loads(path.read_text()) if path.exists() else {}
-    if process_group is None:
-        state.pop(key, None)
-    else:
-        state[key] = process_group
-    temporary = path.with_suffix(f".{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(state, indent=2) + "\n")
-    temporary.chmod(0o600)
-    temporary.replace(path)
+    graphiti_server = _load_upstream()
+    if persistence_configured():
+        graphiti_server.Graphiti = _persistent_graphiti_constructor(graphiti_server.Graphiti)
+    with _upstream_config():
+        graphiti_server.main()
 
 
 @contextmanager
@@ -78,11 +40,12 @@ def _upstream_config() -> Iterator[None]:
     with TemporaryDirectory(prefix="dbx-graphiti-") as directory:
         path = Path(directory) / "config.yaml"
         path.write_text("{}\n")
+        original_arguments = list(sys.argv)
         sys.argv[1:1] = ["--config", str(path)]
         try:
             yield
         finally:
-            del sys.argv[1:3]
+            sys.argv[:] = original_arguments
 
 
 def _load_upstream() -> ModuleType:
@@ -124,6 +87,9 @@ def _persistent_graphiti_constructor(graphiti_constructor: Callable[..., Any]):
 
 def _postgres_storage() -> PostgresWriteStorage:
     """Create journal storage through a URL or dbx-tools Lakebase resolution."""
+    namespace = os.getenv("JOURNAL_NAMESPACE", "").strip()
+    if not namespace:
+        raise ValueError("JOURNAL_NAMESPACE is required when Postgres persistence is enabled")
     database_url = os.getenv("JOURNAL_DATABASE_URL", "").strip()
     if database_url:
         url = make_url(database_url)
@@ -136,7 +102,7 @@ def _postgres_storage() -> PostgresWriteStorage:
         engine = create_async_engine(WorkspaceClient(), pool_pre_ping=True)
     return PostgresWriteStorage(
         engine,
-        namespace=os.getenv("JOURNAL_NAMESPACE", "default"),
+        namespace=namespace,
         table=os.getenv("JOURNAL_TABLE", "graphiti_write_journal"),
         close_engine=True,
     )

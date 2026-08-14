@@ -403,8 +403,9 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@dbx-tools/shared-core@workspace:*",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
+    "concurrently@catalog:",
   );
-  p.addDevDeps("@types/json-schema@^7");
+  p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
 });
 
 // node-postgres: connection-correct Postgres utilities shared by packages.
