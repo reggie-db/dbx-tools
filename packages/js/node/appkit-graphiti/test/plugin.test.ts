@@ -16,18 +16,18 @@ describe("GraphitiPlugin routes", () => {
     release();
   });
 
-  it("installs the matching Python package when the module is absent", async () => {
+  it("installs the matching Python package when its version is absent or stale", async () => {
     const calls: Array<{ file: string; args: string[] }> = [];
     await ensureGraphitiPython("python3", async (file, args) => {
       calls.push({ file, args });
       if (calls.length === 1) throw new Error("missing module");
     });
 
-    assert.deepEqual(calls[0], {
-      file: "python3",
-      args: ["-c", "import dbx_tools.graphiti"],
-    });
+    assert.equal(calls[0]?.file, "python3");
+    assert.equal(calls[0]?.args[0], "-c");
+    assert.match(calls[0]?.args[1] ?? "", /importlib\.metadata\.version/);
     assert.deepEqual(calls[1], { file: "python3", args: ["-m", "pip", "--version"] });
+    assert.ok(calls[2]?.args.includes("--upgrade"));
     assert.match(calls[2]?.args.at(-1) ?? "", /^dbx-tools-graphiti==0\.6\./);
   });
 

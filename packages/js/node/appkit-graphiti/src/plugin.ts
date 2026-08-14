@@ -374,7 +374,10 @@ export async function ensureGraphitiPython(
   run: ExecPython = (file, args) => promisify(execFile)(file, args),
 ): Promise<void> {
   try {
-    await run(python, ["-c", "import dbx_tools.graphiti"]);
+    await run(python, [
+      "-c",
+      `import importlib.metadata; assert importlib.metadata.version('dbx-tools-graphiti') == '${PACKAGE_VERSION}'`,
+    ]);
   } catch {
     try {
       await run(python, ["-m", "pip", "--version"]);
@@ -391,6 +394,7 @@ export async function ensureGraphitiPython(
       "pip",
       "install",
       "--disable-pip-version-check",
+      "--upgrade",
       "--user",
       "--break-system-packages",
       `dbx-tools-graphiti==${PACKAGE_VERSION}`,
