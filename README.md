@@ -1,6 +1,6 @@
 <!-- docs-site:ignore:start -->
 
-**[Documentation](https://dbx.tools/)** - full package
+**[Documentation](https://docs.dbx.tools/)** - full package
 reference, guides, and API docs.
 
 <!-- docs-site:ignore:end -->

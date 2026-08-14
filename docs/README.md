@@ -53,17 +53,17 @@ bun run --cwd .docs-build/site check-links
 ```
 
 Generated files live under `.docs-build/` and should not be committed.
-The published site uses `https://dbx.tools` with a root base path. GitHub Pages
+The published site uses `https://docs.dbx.tools` with a root base path. GitHub Pages
 custom-domain state is configured through repository settings or the Pages API;
 Actions-based Pages ignores a repository or artifact `CNAME` file.
 
-After the Pages custom domain is set to `dbx.tools`, configure the apex records
+After the Pages custom domain is set to `docs.dbx.tools`, configure the CNAME
 with a Cloudflare token carrying Zone Read and DNS Edit:
 
 ```sh
 CLOUDFLARE_API_TOKEN=... scripts/configure-pages-dns.sh
 ```
 
-The script replaces existing apex A, AAAA, and CNAME records with GitHub Pages
-addresses and leaves Cloudflare proxying disabled for GitHub's DNS and TLS
-verification. It does not change `www.dbx.tools`.
+The script replaces existing records for `docs.dbx.tools` with a CNAME to
+`reggie-db.github.io` and leaves Cloudflare proxying disabled for GitHub's DNS
+and TLS verification.

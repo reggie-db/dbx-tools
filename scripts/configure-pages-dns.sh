@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DOMAIN="${DOMAIN:-dbx.tools}"
+DOMAIN="${DOMAIN:-docs.dbx.tools}"
+ZONE="${ZONE:-dbx.tools}"
+PAGES_HOST="${PAGES_HOST:-reggie-db.github.io}"
 API_ROOT="https://api.cloudflare.com/client/v4"
 
 if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
@@ -17,7 +19,7 @@ request() {
 }
 
 zone_id="$(
-  request "${API_ROOT}/zones?name=${DOMAIN}&status=active" |
+  request "${API_ROOT}/zones?name=${ZONE}&status=active" |
     jq -er '.result | if length == 1 then .[0].id else error("expected one active zone") end'
 )"
 
@@ -50,20 +52,6 @@ create_record() {
     jq -e '.success == true' >/dev/null
 }
 
-for address in \
-  185.199.108.153 \
-  185.199.109.153 \
-  185.199.110.153 \
-  185.199.111.153; do
-  create_record A "${address}"
-done
-
-for address in \
-  2606:50c0:8000::153 \
-  2606:50c0:8001::153 \
-  2606:50c0:8002::153 \
-  2606:50c0:8003::153; do
-  create_record AAAA "${address}"
-done
+create_record CNAME "${PAGES_HOST}"
 
 echo "Configured ${DOMAIN} for GitHub Pages with Cloudflare proxying disabled."
