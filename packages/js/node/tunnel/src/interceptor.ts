@@ -60,13 +60,49 @@ export interface TunnelInterceptorOptions {
 /** Public tunnel clients supported by the interceptor and CLI. */
 export type TunnelTransport = "portr" | "frp" | "both";
 
+interface TunnelAuxiliary {
+  stop(): void;
+}
+
+interface TunnelRuntime {
+  startPortr(config: NonNullable<ReturnType<typeof resolvePortrConfig>>): Promise<TunnelAuxiliary>;
+  startFrp(
+    config: NonNullable<ReturnType<typeof resolveFrpConfig>>,
+    ctx: InterceptorContext,
+  ): Promise<TunnelAuxiliary>;
+}
+
+const defaultRuntime: TunnelRuntime = {
+  async startPortr(config) {
+    const portrEnv = await installPortr();
+    await writePortrConfig(config, portrEnv);
+    return supervisePortr(config, portrEnv);
+  },
+  async startFrp(config, ctx) {
+    const pathProxy =
+      config.stripPrefix && config.path !== "/"
+        ? await startPathProxy(config.targetPort, config.path)
+        : undefined;
+    if (pathProxy) {
+      config.targetPort = pathProxy.port;
+      ctx.onLifecycle("shutdown", () => void pathProxy.close());
+    }
+    const frpEnv = await installFrp();
+    const configPath = await writeFrpConfig(config, frpEnv);
+    const supervisor = superviseFrp(config, frpEnv, configPath);
+    return {
+      stop() {
+        supervisor.stop();
+        void pathProxy?.close();
+      },
+    };
+  },
+};
+
 /** Resolve and validate the tunnel transport selector. */
 export function resolveTunnelTransport(transport?: string): TunnelTransport {
   const resolved =
-    transport ??
-    process.env.DBX_TOOLS_TUNNEL_TRANSPORT ??
-    process.env.TUNNEL_TRANSPORT ??
-    "portr";
+    transport ?? process.env.DBX_TOOLS_TUNNEL_TRANSPORT ?? process.env.TUNNEL_TRANSPORT ?? "portr";
   if (resolved === "portr" || resolved === "frp" || resolved === "both") return resolved;
   throw new TypeError(`invalid tunnel transport: ${resolved} (expected portr, frp, or both)`);
 }
@@ -91,7 +127,10 @@ function resolvePublicPort(port?: number): number {
  *   interceptor: tunnelInterceptor(),
  * });
  */
-export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Interceptor {
+export function tunnelInterceptor(
+  options: TunnelInterceptorOptions = {},
+  runtime: TunnelRuntime = defaultRuntime,
+): Interceptor {
   return async (ctx: InterceptorContext): Promise<void> => {
     if (ctx.env.databricksHost) {
       process.env.DATABRICKS_HOST ??= ctx.env.databricksHost;
@@ -99,7 +138,7 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
 
     const port = resolvePublicPort(options.port);
     const transport = resolveTunnelTransport(options.transport);
-    const auxiliaries: Array<{ stop(): void }> = [];
+    const initializers: Array<Promise<TunnelAuxiliary>> = [];
     if (transport === "portr" || transport === "both") {
       const portrConfig = resolvePortrConfig({
         publicDomain: options.publicDomain,
@@ -107,9 +146,7 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
         port,
       });
       if (portrConfig) {
-        const portrEnv = await installPortr();
-        await writePortrConfig(portrConfig, portrEnv);
-        auxiliaries.push(supervisePortr(portrConfig, portrEnv));
+        initializers.push(runtime.startPortr(portrConfig));
       } else {
         logger.info("portr not configured (requires PORTR_TOKEN and TUNNEL_PUBLIC_DOMAIN)");
       }
@@ -127,28 +164,31 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
         port,
       });
       if (frpConfig) {
-        const pathProxy =
-          frpConfig.stripPrefix && frpConfig.path !== "/"
-            ? await startPathProxy(port, frpConfig.path)
-            : undefined;
-        if (pathProxy) {
-          frpConfig.targetPort = pathProxy.port;
-          ctx.onLifecycle("shutdown", () => void pathProxy.close());
-        }
-        const frpEnv = await installFrp();
-        const configPath = await writeFrpConfig(frpConfig, frpEnv);
-        auxiliaries.push(superviseFrp(frpConfig, frpEnv, configPath));
+        initializers.push(runtime.startFrp(frpConfig, ctx));
       } else {
         logger.info("frp not configured (requires TUNNEL_PUBLIC_DOMAIN)");
       }
     }
-    if (!auxiliaries.length) return;
-    ctx.onTeardown(() => {
+    if (!initializers.length) return;
+    const auxiliaries: TunnelAuxiliary[] = [];
+    let stopped = false;
+    const stop = () => {
+      stopped = true;
       for (const auxiliary of auxiliaries) auxiliary.stop();
+    };
+    ctx.onTeardown(stop);
+    ctx.onLifecycle("shutdown", stop);
+    void Promise.allSettled(initializers).then((results) => {
+      for (const result of results) {
+        if (result.status === "rejected") {
+          logger.error("tunnel failed to start", { error: result.reason });
+          continue;
+        }
+        if (stopped) result.value.stop();
+        else auxiliaries.push(result.value);
+      }
+      if (!stopped && auxiliaries.length) logger.info(`tunnel bound: ${transport} -> :${port}`);
     });
-    ctx.onLifecycle("shutdown", () => {
-      for (const auxiliary of auxiliaries) auxiliary.stop();
-    });
-    logger.info(`tunnel bound: ${transport} -> :${port}`);
+    logger.info(`tunnel initialization scheduled: ${transport} -> :${port}`);
   };
 }
