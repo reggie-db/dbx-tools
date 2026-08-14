@@ -118,6 +118,24 @@ describe("lakebase search backend", () => {
     assert.match(sql, /ADD COLUMN IF NOT EXISTS search_vector/);
   });
 
+  it("reuses a managed Lakebase pool without owning its lifecycle", async () => {
+    const fake = fakePool();
+    let ended = false;
+    const managedPool = {
+      connect: fake.pool.connect.bind(fake.pool),
+      end: async () => {
+        ended = true;
+      },
+    };
+    const be = new LakebaseSearchBackend(managedPool);
+
+    await be.addDocuments("support", [{ id: "1", text: "managed pool" }]);
+    await be.close();
+
+    assert.equal(fake.rows.length, 1);
+    assert.equal(ended, false);
+  });
+
   it("returns hits shaped { id, score, fields } identical to Vector Search", async () => {
     const { be } = backend();
     await be.provision("support", {

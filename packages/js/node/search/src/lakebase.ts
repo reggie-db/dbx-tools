@@ -16,10 +16,9 @@
  * A hit's `id` is the primary key, its `score` is the text-rank, and `fields`
  * is the stored document minus the internal columns.
  *
- * The Postgres pool is built the same way `@dbx-tools/appkit-mastra` builds its
- * memory pool: the AppKit `lakebase` plugin resolves a service-principal
- * `PoolConfig` (connection target + OAuth token-refresh `password` callback),
- * and this backend constructs a `pg.Pool` from it. It never re-implements auth.
+ * Standalone callers can supply a `PoolConfig` factory and let this backend own
+ * the resulting pool. AppKit integrations instead supply the Lakebase plugin's
+ * managed pool directly, preserving its routing and credential refresh.
  *
  * @module
  */
@@ -33,7 +32,7 @@ import type {
   SearchResult,
   UpsertResult,
 } from "@dbx-tools/shared-search";
-import { Pool, type PoolConfig } from "pg";
+import { Pool, type PoolClient, type PoolConfig } from "pg";
 
 const logger = log.logger("search/lakebase");
 
@@ -93,6 +92,13 @@ interface SearchRow {
   score: number;
 }
 
+/** The managed-pool surface needed by the search backend. */
+export interface LakebaseSearchPool {
+  connect(): Promise<PoolClient>;
+}
+
+type LakebasePoolSource = (() => Promise<PoolConfig> | PoolConfig) | LakebaseSearchPool;
+
 /** Options for provisioning a Lakebase-backed index. */
 export interface LakebaseProvisionOptions {
   /** Text column embedded into the search vector. Defaults to `text`. */
@@ -107,24 +113,31 @@ export interface LakebaseProvisionOptions {
  * index maps to a table whose name is derived from the index reference.
  */
 export class LakebaseSearchBackend {
-  private pool: Pool | undefined;
-  private poolPromise: Promise<Pool> | undefined;
+  private pool: LakebaseSearchPool | undefined;
+  private poolPromise: Promise<LakebaseSearchPool> | undefined;
+  private ownsPool = false;
   private readonly provisioned = new Set<string>();
 
   constructor(
-    private readonly pgConfigFactory: () => Promise<PoolConfig> | PoolConfig,
+    private readonly poolSource: LakebasePoolSource,
     private readonly schema = "public",
     /** How a pool is built from the resolved config. Overridable for tests. */
     private readonly poolFactory: (config: PoolConfig) => Pool = (config) => new Pool(config),
   ) {}
 
   /** Lazily build (and cache) the pg pool from the resolved Lakebase config. */
-  private async getPool(): Promise<Pool> {
+  private async getPool(): Promise<LakebaseSearchPool> {
     if (this.pool) return this.pool;
+    if (typeof this.poolSource !== "function") {
+      this.pool = this.poolSource;
+      return this.pool;
+    }
+    const pgConfigFactory = this.poolSource;
     this.poolPromise ??= (async () => {
-      const config = await this.pgConfigFactory();
+      const config = await pgConfigFactory();
       const pool = this.poolFactory(config);
       this.pool = pool;
+      this.ownsPool = true;
       return pool;
     })();
     return this.poolPromise;
@@ -136,7 +149,8 @@ export class LakebaseSearchBackend {
     this.pool = undefined;
     this.poolPromise = undefined;
     this.provisioned.clear();
-    if (pool) await pool.end();
+    if (pool && this.ownsPool) await (pool as Pool).end();
+    this.ownsPool = false;
   }
 
   /**
@@ -279,7 +293,11 @@ export class LakebaseSearchBackend {
   }
 
   /** Create the table + GIN index once per table (memoized across calls). */
-  private async ensureTable(pool: Pool, table: string, signal?: AbortSignal): Promise<void> {
+  private async ensureTable(
+    pool: LakebaseSearchPool,
+    table: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
     if (this.provisioned.has(table)) return;
     // `document` holds the whole row; `search_text` is the indexed text; the
     // generated `search_vector` keeps the tsvector in lockstep with it so a
@@ -317,7 +335,7 @@ export class LakebaseSearchBackend {
 
   /** Upsert rows: the whole document as jsonb + a flattened text blob to index. */
   private async upsert(
-    pool: Pool,
+    pool: LakebaseSearchPool,
     table: string,
     documents: SearchDocument[],
     textColumn: string,
@@ -405,7 +423,7 @@ export class LakebaseSearchBackend {
 
   /** Run one query under external cancellation. */
   private async query<T>(
-    pool: Pool,
+    pool: LakebaseSearchPool,
     sql: string,
     params: unknown[],
     signal?: AbortSignal,
