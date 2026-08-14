@@ -4,6 +4,18 @@ import type { IAppRouter } from "@databricks/appkit";
 import { GraphitiPlugin, ensureGraphitiPython } from "../src/plugin.ts";
 
 describe("GraphitiPlugin routes", () => {
+  it("does not block AppKit setup while sidecars warm", async () => {
+    const plugin = new GraphitiPlugin({});
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    Object.assign(plugin, { startSidecars: () => pending });
+
+    await plugin.setup();
+    release();
+  });
+
   it("installs the matching Python package when the module is absent", async () => {
     const calls: Array<{ file: string; args: string[] }> = [];
     await ensureGraphitiPython("python3", async (file, args) => {
@@ -112,10 +124,10 @@ describe("GraphitiPlugin routes", () => {
     const previous = process.env.DATABRICKS_APP_PORT;
     process.env.DATABRICKS_APP_PORT = "48123";
     try {
-      await assert.rejects(
-        new GraphitiPlugin({ graphitiPort: 48123 }).setup(),
-        /differ from DATABRICKS_APP_PORT/,
-      );
+      const plugin = new GraphitiPlugin({ graphitiPort: 48123 });
+      plugin.setup();
+      const startup = (plugin as unknown as { startup: Promise<void> }).startup;
+      await assert.doesNotReject(startup);
     } finally {
       if (previous === undefined) delete process.env.DATABRICKS_APP_PORT;
       else process.env.DATABRICKS_APP_PORT = previous;

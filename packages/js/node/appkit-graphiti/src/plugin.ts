@@ -113,10 +113,20 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
   private mcpTools: Record<string, Tool> = {};
   private resolved?: ResolvedGraphitiPluginConfig;
   private setupComplete = false;
+  private startup?: Promise<void>;
   private supervision?: ConcurrentlyResult;
   private stopping = false;
 
   override async setup(): Promise<void> {
+    this.startup = this.startSidecars().catch((error: unknown) => {
+      if (this.stopping) return;
+      this.logger.error("background startup failed; Graphiti remains unavailable", { error });
+    });
+    void this.startup;
+    this.logger.info("background startup scheduled");
+  }
+
+  private async startSidecars(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
     const [graphitiPort, litellmPort, proxyPort] = await distinctPorts(
       coreConfig.port(undefined, "DATABRICKS_APP_PORT", 8000, coreConfig.ENV_ONLY),
@@ -360,6 +370,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
     this.mcpTools = {};
     this.commands = [];
     this.supervision = undefined;
+    this.startup = undefined;
   }
 
   private closeIdleMcpServers(): void {
