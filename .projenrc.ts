@@ -715,7 +715,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
   // so it resolves for this package's own tests.
   p.addPeerDeps("@dbx-tools/email@workspace:*");
   p.package.addField("peerDependenciesMeta", { "@dbx-tools/email": { optional: true } });
-  p.addDevDeps("@dbx-tools/email@workspace:*");
+  p.addDeps("@dbx-tools/email@workspace:*");
 });
 
 project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {

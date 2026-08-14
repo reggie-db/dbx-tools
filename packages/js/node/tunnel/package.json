@@ -18,7 +18,6 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@dbx-tools/email": "workspace:*",
     "@types/bun": "^1.3.14",
     "@types/node": "catalog:",
     "typescript": "^5.9.3"
@@ -31,6 +30,7 @@
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/auth": "workspace:*",
     "@dbx-tools/core": "workspace:*",
+    "@dbx-tools/email": "workspace:*",
     "@dbx-tools/shared-auth": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "http-proxy-3": "catalog:"
@@ -49,7 +49,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.122",
+  "version": "0.6.123",
   "types": "index.ts",
   "type": "module",
   "exports": {
