@@ -43,7 +43,6 @@ const MCP_PATH = "/api/graphiti/mcp";
 const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
 const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
 const SIDECAR_SHUTDOWN_GRACE_MS = 10_000;
-const SIDECAR_STARTUP_TIMEOUT_MS = 10 * 60_000;
 const SCOPED_TOOL_FIELDS = {
   add_memory: "group_id",
   add_triplet: "group_id",
@@ -121,7 +120,8 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
   override async setup(): Promise<void> {
     this.startup = this.startSidecars().catch((error: unknown) => {
       if (this.stopping) return;
-      this.logger.error("background startup failed; Graphiti remains unavailable", { error });
+      this.logger.error("background startup failed", { error });
+      process.kill(process.pid, "SIGTERM");
     });
     void this.startup;
     this.logger.info("background startup scheduled");
@@ -180,57 +180,18 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
       },
     );
     this.commands = this.supervision.commands;
+    this.setupComplete = true;
     void this.supervision.result.then(
       () => this.onSupervisorExit(),
       (error) => this.onSupervisorExit(error),
     );
-    const supervisionFailure = this.supervision.result.then(
-      () => {
-        throw new Error("Graphiti sidecar supervisor exited during startup");
-      },
-      (error) => {
-        throw error;
-      },
-    );
-    try {
-      await Promise.race([
-        (async () => {
-          await waitForGraphiti(graphitiPort);
-          await waitForGraphiti(proxyPort);
-        })(),
-        supervisionFailure,
-      ]);
-      this.mcp = new MCPClient({
-        id: `appkit-graphiti-${this.resolved.graphitiPort}`,
-        servers: {
-          graphiti: {
-            url: new URL(`http://127.0.0.1:${this.resolved.proxyPort}/mcp`),
-          },
-        },
-      });
-      const discovered = await this.mcp.listTools();
-      this.mcpTools = Object.fromEntries(
-        Object.entries(discovered)
-          .map(([name, tool]) => [name.replace(/^graphiti_/, ""), tool as Tool] as const)
-          .filter(([name]) => name in SCOPED_TOOL_FIELDS),
-      );
-      const missing = Object.keys(SCOPED_TOOL_FIELDS).filter((name) => !this.mcpTools[name]);
-      if (missing.length > 0) {
-        throw new Error(`Graphiti did not publish required scoped tools: ${missing.join(", ")}`);
-      }
-    } catch (error) {
-      await this.stopSidecars();
-      throw error;
-    }
-    this.setupComplete = true;
     this.mcpServerSweep = setInterval(() => this.closeIdleMcpServers(), MCP_SERVER_SWEEP_MS);
     this.mcpServerSweep.unref();
-    this.logger.info("ready", {
+    this.logger.info("sidecars launched", {
       graphitiPort: this.resolved.graphitiPort,
       litellmPort: this.resolved.litellmPort,
       proxyPort: this.resolved.proxyPort,
       mcpPath: MCP_PATH,
-      tools: Object.keys(this.mcpTools),
     });
   }
 
@@ -260,7 +221,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
 
   toolkit(): Record<string, ToolkitEntry> {
     return Object.fromEntries(
-      Object.entries(this.mcpTools).map(([name, tool]) => [
+      Object.keys(SCOPED_TOOL_FIELDS).map((name) => [
         name,
         {
           __toolkitRef: true as const,
@@ -268,8 +229,8 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
           localName: name,
           def: {
             name,
-            description: tool.description,
-            parameters: tool.inputSchema ?? { type: "object", properties: {} },
+            description: `Graphiti ${name.replaceAll("_", " ")}`,
+            parameters: { type: "object", properties: {} },
           },
           annotations: {
             effect: WRITE_TOOLS.has(name) ? ("write" as const) : ("read" as const),
@@ -286,6 +247,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
     signal?: AbortSignal,
     context?: { resourceId?: string },
   ): Promise<unknown> {
+    await this.ensureMcpTools();
     const tool = this.mcpTools[name];
     if (!tool?.execute) throw new Error(`Unknown Graphiti tool: ${name}`);
     const userId = context?.resourceId ?? executionContextUserId();
@@ -295,10 +257,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
   }
 
   private async forwardMcp(request: express.Request, response: express.Response): Promise<void> {
-    if (!this.resolved) {
-      response.status(503).json({ error: "Graphiti is not ready" });
-      return;
-    }
+    await this.ensureMcpTools();
     const userId = appkitIdentity.requestUserId(request) ?? executionContextUserId();
     const server = this.mcpServer(userId);
     await server.startHTTP({
@@ -307,6 +266,27 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
       req: request,
       res: response,
     });
+  }
+
+  private async ensureMcpTools(): Promise<void> {
+    if (Object.keys(this.mcpTools).length > 0) return;
+    if (!this.resolved) throw new Error("Graphiti sidecars have not launched");
+    this.mcp ??= new MCPClient({
+      id: `appkit-graphiti-${this.resolved.graphitiPort}`,
+      servers: {
+        graphiti: { url: new URL(`http://127.0.0.1:${this.resolved.proxyPort}/mcp`) },
+      },
+    });
+    const discovered = await this.mcp.listTools();
+    this.mcpTools = Object.fromEntries(
+      Object.entries(discovered)
+        .map(([name, tool]) => [name.replace(/^graphiti_/, ""), tool as Tool] as const)
+        .filter(([name]) => name in SCOPED_TOOL_FIELDS),
+    );
+    const missing = Object.keys(SCOPED_TOOL_FIELDS).filter((name) => !this.mcpTools[name]);
+    if (missing.length > 0) {
+      throw new Error(`Graphiti did not publish required scoped tools: ${missing.join(", ")}`);
+    }
   }
 
   private mcpServer(userId: string): MCPServer {
@@ -438,26 +418,6 @@ function scopedArguments(name: string, args: unknown, scope: string): Record<str
   if (field === "group_id") scoped.group_id = scope;
   if (field === "group_ids") scoped.group_ids = [scope];
   return scoped;
-}
-
-async function waitForGraphiti(port: number): Promise<void> {
-  for await (const ready of asyncModule.poll(
-    async ({ signal }) => {
-      try {
-        const response = await fetch(`http://127.0.0.1:${port}/health`, { signal });
-        return response.ok;
-      } catch {
-        return false;
-      }
-    },
-    {
-      intervalMs: 250,
-      timeoutMs: SIDECAR_STARTUP_TIMEOUT_MS,
-      predicate: (ready) => !ready,
-    },
-  )) {
-    if (ready) return;
-  }
 }
 
 async function availablePort(): Promise<number> {
