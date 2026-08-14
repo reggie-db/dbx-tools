@@ -19,7 +19,7 @@ export type { SearchReadBackend, SearchOptions, UniversalSearchOptions, IndexInf
 export { INDEX_ENV, DATABRICKS_INDEX_ENV, ENDPOINT_ENV, DEFAULT_MODE, DEFAULT_PAGE_SIZE, DEFAULT_TIMEOUT_MS, DEFAULT_BASE_PATH, SEARCH_CONFIG_SCHEMA } from "./src/config.ts";
 export type { SearchIndexConfig, SearchPluginConfig, EnsureOnSetupConfig, ResolvedIndexConfig, ResolvedSearchConfig } from "./src/config.ts";
 export { LakebaseSearchBackend } from "./src/lakebase.ts";
-export type { LakebaseSearchOptions, LakebaseProvisionOptions } from "./src/lakebase.ts";
+export type { LakebaseSearchOptions, LakebaseSearchPool, LakebaseProvisionOptions } from "./src/lakebase.ts";
 export { LakebaseAiSearchPlugin, lakebaseAiSearch } from "./src/lakebase-plugin.ts";
 export type { LakebaseAiSearchIndexConfig, LakebaseAiSearchConfig } from "./src/lakebase-plugin.ts";
 export type { AiSearchProvider } from "./src/native.ts";
