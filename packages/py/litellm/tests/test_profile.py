@@ -39,6 +39,18 @@ def test_environment_profile_wins_without_spawning_cli(monkeypatch: pytest.Monke
     assert require_profile(environ={DATABRICKS_PROFILE_ENV: "  environment  "}) == "environment"
 
 
+def test_databricks_host_uses_ambient_auth_without_spawning_cli(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        backend_module.subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail(f"unexpected CLI spawn: {args}, {kwargs}"),
+    )
+
+    assert require_profile(environ={"DATABRICKS_HOST": "https://workspace.example"}) is None
+
+
 def test_uses_databricks_cli_default_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[Sequence[str], dict[str, object]]] = []
 

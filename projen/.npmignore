@@ -11,10 +11,10 @@ dist
 /.github/
 /.vscode/
 /.idea/
-/.projenrc.js
 tsconfig.tsbuildinfo
 .projenrc.ts
 projenrc/
 /.projenrc.ts
 /tsconfig.projen.json
 /.gitattributes
+/.projenrc.js

@@ -28,11 +28,15 @@ def require_profile(
     profile: str | None = None,
     *,
     environ: Mapping[str, str] | None = None,
-) -> str:
-    """Resolve an explicit override, configured environment, or CLI default."""
+) -> str | None:
+    """Resolve a profile, or ambient Databricks App authentication."""
     env = os.environ if environ is None else environ
     selected = _profile_name(profile) or _profile_name(env.get(DATABRICKS_PROFILE_ENV))
-    return selected or _default_cli_profile()
+    if selected:
+        return selected
+    if _profile_name(env.get("DATABRICKS_HOST")):
+        return None
+    return _default_cli_profile()
 
 
 def _default_cli_profile() -> str:
@@ -90,7 +94,8 @@ class DatabricksLiteLLMBackend:
         # LiteLLM's built-in Databricks provider constructs WorkspaceClient()
         # itself. Pin its unified-auth lookup to the same resolved profile used
         # by this resolver, for any path that still falls back to SDK auth.
-        os.environ[DATABRICKS_PROFILE_ENV] = self.profile
+        if self.profile:
+            os.environ[DATABRICKS_PROFILE_ENV] = self.profile
 
         self._credentials = DatabricksCredentials(profile=self.profile)
         self.client = self._credentials.client

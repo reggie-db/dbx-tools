@@ -1,7 +1,7 @@
 # `dbx-tools-core`
 
-Dependency-free Python configuration and identity helpers shared by dbx-tools
-packages.
+Dependency-free Python configuration, identity, and mise-backed executable
+helpers shared by dbx-tools packages.
 
 Install from PyPI:
 
@@ -47,6 +47,13 @@ pip install "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@mai
   same loose configuration coercions as `@dbx-tools/core`.
 - Stable-key, FNV hash, and identifier functions preserve deterministic Node and
   Python identity contracts.
+- `bin.resolve()` reuses executables from `PATH`, otherwise performs a
+  check-lock-check mise installation and returns the path reported by
+  `mise which`.
+- `bin.execute()` has the `asyncio.create_subprocess_exec` calling convention,
+  adds only `mise_tool=`, and returns the native `asyncio.subprocess.Process`.
+  If mise itself is missing on macOS or Linux, the official checksum-verifying
+  installer is run under the same cross-process lock.
 
 ## Quick start
 
@@ -63,6 +70,25 @@ endpoint = config.resolve_value(
     },
 )
 ```
+
+Mise-backed async subprocesses retain the standard library process API:
+
+```python
+import asyncio
+
+from dbx_tools.core import bin
+
+process = await bin.execute(
+    "uv",
+    "--version",
+    mise_tool="uv@0.11",
+    stdout=asyncio.subprocess.PIPE,
+)
+stdout, _ = await process.communicate()
+```
+
+Use `bin.ensure_tool("neo4j@5.26.12").root` when a caller needs an installed
+tool directory rather than one executable.
 
 The default key order for `HOST` with prefix `SMTP` is
 `DBX_TOOLS_SMTP_HOST`, `SMTP_HOST`, then `HOST`. Pass `config.ENV_ONLY` when a
@@ -82,6 +108,8 @@ production.
 
 ## Modules
 
+- `bin` — locked mise bootstrap, tool installation, executable resolution, and
+  native asyncio subprocess creation;
 - `config` — layered environment, dotenv, Databricks bundle, and app YAML configuration;
 - `hash.fnv_hash()` — the single-string subset of TypeScript
   `fnvHashWithOptions`, including UTF-16 code-unit hashing and base-32 output;

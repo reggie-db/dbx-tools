@@ -53,6 +53,9 @@ new package membership.
 without turning Python packages into JavaScript workspace projects. It generates
 the root and member `pyproject.toml` files, standard `py:*` tasks, the VS Code
 interpreter setting, and an optional manual PyPI trusted-publishing workflow.
+Every generated TOML file is parsed and reserialized with `smol-toml`, so nested
+tables and arrays use consistent formatting instead of projen's indented table
+headers.
 
 ```ts
 import { project, projectPy } from "@dbx-tools/projen";

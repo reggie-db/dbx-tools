@@ -36,13 +36,22 @@ export interface FrpConfig {
   protocol: string;
   token?: string;
   proxyName: string;
+  path: string;
+  stripPrefix: boolean;
   port: number;
+  targetPort: number;
 }
 
 function bareHost(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const normalized = value.replace(/^https?:\/\//, "").split("/")[0]?.trim();
   return normalized || undefined;
+}
+
+function normalizePath(value: string | undefined): string {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "/") return "/";
+  return `/${trimmed.replace(/^\/+|\/+$/g, "")}`;
 }
 
 /** Resolve frpc config from the public domain and FRP-specific environment. */
@@ -53,7 +62,10 @@ export function resolveFrpConfig(opts: {
   protocol?: string;
   token?: string;
   proxyName?: string;
+  path?: string;
+  stripPrefix?: boolean;
   port: number;
+  targetPort?: number;
 }): FrpConfig | undefined {
   const publicDomain = bareHost(
     config.string(
@@ -69,6 +81,9 @@ export function resolveFrpConfig(opts: {
   const token = config.string(opts.token, ["FRP_TOKEN", "TUNNEL_TOKEN"]);
   const proxyName =
     config.string(opts.proxyName, "FRP_PROXY_NAME") ?? publicDomain.split(".")[0] ?? "app";
+  const appName = config.string(undefined, "DATABRICKS_APP_NAME") ?? proxyName;
+  const path = normalizePath(config.string(opts.path, "FRP_PATH") ?? appName);
+  const stripPrefix = config.boolean(opts.stripPrefix, "FRP_STRIP_PREFIX") ?? path !== "/";
   return {
     publicDomain,
     server,
@@ -76,7 +91,10 @@ export function resolveFrpConfig(opts: {
     protocol,
     ...(token ? { token } : {}),
     proxyName,
+    path,
+    stripPrefix,
     port: opts.port,
+    targetPort: opts.targetPort ?? opts.port,
   };
 }
 
@@ -164,8 +182,9 @@ export async function writeFrpConfig(
     "[[proxies]]",
     `name = ${tomlString(resolved.proxyName)}`,
     'type = "http"',
-    `localPort = ${resolved.port}`,
+    `localPort = ${resolved.targetPort}`,
     `customDomains = [${tomlString(resolved.publicDomain)}]`,
+    ...(resolved.path === "/" ? [] : [`locations = [${tomlString(resolved.path)}]`]),
     "",
   );
   await writeFile(path, lines.join("\n"));
@@ -178,6 +197,8 @@ export function startFrp(
   childEnv: NodeJS.ProcessEnv,
   configPath: string,
 ): ReturnType<typeof spawn> {
-  logger.info(`frpc tunneling https://${resolved.publicDomain} -> :${resolved.port}`);
+  logger.info(
+    `frpc tunneling https://${resolved.publicDomain}${resolved.path === "/" ? "" : resolved.path} -> :${resolved.port}`,
+  );
   return spawn("frpc", ["-c", configPath], { env: childEnv, stdio: "inherit" });
 }

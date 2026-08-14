@@ -2,27 +2,20 @@
 
 [project]
 name = "dbx-tools-litellm"
-version = "0.6.112"
+version = "0.6.113"
 description = "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution"
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = [
-  "databricks-sdk>=0.63.0",
-  "dbx-tools-model @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/model",
-  "diskcache>=5.6",
-  "fastapi<0.140.7",
-  "litellm[proxy]==1.96.2",
-  "pillow>=10.0"
-]
+requires-python = ">=3.10,<3.14"
+dependencies = ["cyclopts>=4.11,<6", "databricks-sdk>=0.63.0", "dbx-tools-model @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/model", "diskcache>=5.6", "fastapi<0.140.7", "litellm[proxy]==1.96.2", "pillow>=10.0"]
 
-  [project.urls]
-  Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/litellm"
+[project.urls]
+Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/litellm"
 
-  [project.scripts]
-  dbx-litellm = "dbx_tools.litellm.cli:main"
+[project.scripts]
+dbx-litellm = "dbx_tools.litellm.cli:main"
 
 [build-system]
-requires = [ "uv_build>=0.11.28,<0.12.0" ]
+requires = ["uv_build>=0.11.28,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

@@ -10,6 +10,7 @@ export * as gate from "./src/gate.ts";
 export * as headers from "./src/headers.ts";
 export * as interceptor from "./src/interceptor.ts";
 export * as loginPage from "./src/login-page.ts";
+export * as pathProxy from "./src/path-proxy.ts";
 export * as plugin from "./src/plugin.ts";
 export * as portr from "./src/portr.ts";
 export * as sendCode from "./src/send-code.ts";

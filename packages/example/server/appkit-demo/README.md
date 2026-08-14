@@ -21,6 +21,11 @@ backend.
   `send_email` tool: the model can call it, but the send suspends until the user
   approves it in the chat UI.
 - `lakebase()` (AppKit) — backs Mastra Memory.
+- `graphiti()` from
+  [`@dbx-tools/appkit-graphiti`](../../../js/node/appkit-graphiti) — launches
+  the Python Graphiti MCP sidecar, journals its graph writes to the same
+  Lakebase binding, and fronts AppKit + `/graphiti/mcp/` through Caddy on the
+  single Databricks App port.
 - `busDemo()` from `src/bus-demo.ts` — a `PostgresTopicBus` from
   [`@dbx-tools/postgres`](../../../js/node/postgres) on the Lakebase pool:
   `POST /api/bus-demo/messages` broadcasts, `GET /api/bus-demo/events` streams to
@@ -42,11 +47,14 @@ backend.
 bun run demo
 ```
 
-From the repository root, this starts the server, client, and a local uv Python
-emitter that publishes `Hello world` onto the Bus page every random 5–10 seconds.
-The emitter loads its Lakebase environment through `dbx appkit env` and is
-not included in the Databricks App deployment. See the [demo README](../../README.md)
-for full setup and env.
+From the repository root, this builds the client once, then starts the
+Caddy-fronted server at `http://localhost:8000` and a local uv Python emitter
+that publishes `Hello world` onto the Bus page every random 5–10 seconds. The
+demo runner reads the endpoint from this package's bundle defaults and uses
+`@dbx-tools/appkit` auto-configuration once before passing the resolved
+Lakebase environment to every child. The emitter is not included in the
+Databricks App deployment. See the [demo README](../../README.md) for full setup
+and env.
 
 ## Deploy
 
@@ -63,6 +71,10 @@ databricks bundle validate
 databricks bundle deploy
 databricks bundle run demo_app
 ```
+
+The staged app includes both `package.json` and `requirements.txt`. Databricks
+Apps installs the Node server and matching `dbx-tools-graphiti` Python release;
+the Graphiti plugin installs Caddy through mise on first start.
 
 Two things worth knowing before changing this flow:
 

@@ -54,7 +54,10 @@ Primary package areas:
 
 - `packages/js/node/appkit` and `packages/js/cli/appkit-env` — AppKit defaults,
   Lakebase env/config resolution, execution-context helpers, plugin lookup, SDK
-  cancellation, and cache-schema provisioning.
+  cancellation, and cache-schema provisioning. Bound child processes receive a
+  10-second shutdown grace, long enough for Graphiti's Honcho supervisor to
+  finish its own five-second SIGTERM-to-SIGKILL sequence and still inside the
+  Databricks Apps 15-second platform deadline.
 - `packages/js/node/postgres` — reusable Postgres advisory-lock primitives plus a
   topic bus built on dedicated `LISTEN` connections and `NOTIFY` broadcasts.
 - `packages/js/node/appkit-mastra`, `packages/js/shared/mastra`, and
@@ -105,6 +108,24 @@ Primary package areas:
   optional URL allow-list (built on `@dbx-tools/path`'s `match`) filtering
   citations / refusing disallowed fetches, per-tool approval gating, and the
   AppKit `web-search` plugin. Same shape as node-email.
+- `packages/js/node/appkit-graphiti` — AppKit process plugin for the Python
+  `dbx-tools-graphiti` runtime. It reads the Lakebase environment resolved by
+  `@dbx-tools/appkit` / native `lakebase()`, launches Graphiti on a loopback
+  port selected from the OS when none is pinned, launches mise-managed Caddy on
+  `DATABRICKS_APP_PORT`, and routes
+  `/graphiti/*` to Graphiti while forwarding everything else to AppKit's
+  loopback server. Its children use the shared AppKit concurrently-style
+  supervisor so any exit tears down the group and signals flow through.
+  `onTeardown` starts `dbx-graphiti down` before the supervisor signals children,
+  so the recorded uv process group is reaped even when another add-on's child
+  caused shutdown. The host app must install `dbx-tools-graphiti` as a Python
+  dependency and bind AppKit to the plugin's resolved internal port. The Python server records its actual
+  process group in launcher state; the plugin invokes `dbx-graphiti down` during
+  shutdown so uv/Graphiti descendants are reaped even when an outer process
+  manager terminates the Python supervisor first. Once the MCP health endpoint
+  is ready, the plugin discovers Graphiti tools with Mastra's `MCPClient` and
+  exposes them through the standard AppKit toolkit shape, so
+  `plugins.graphiti?.toolkit()` registers them on Mastra agents.
 - `packages/js/node/teams`, `packages/js/shared/teams`, and `packages/js/ui/teams`
   — Teams Adaptive Card add-on. The headline surface is `POST
 /api/teams/messages`, a REAL Microsoft Teams messaging endpoint an Azure Bot
@@ -165,7 +186,16 @@ Primary package areas:
   Databricks App detection, and the same string/boolean/positive-number/list
   coercions. Keep this base deliberately small so importing config, a hash,
   stable key, or identifier formatter does not pull database/runtime
-  dependencies with it.
+  dependencies with it. Its `bin` module is the dependency-free executable seam:
+  resolve an existing executable first, otherwise bootstrap mise under a
+  cross-process lock, install the requested `mise_tool` through `mise use -g`,
+  and resolve the exact executable with `mise which`. `bin.execute` adds only
+  `mise_tool` to `asyncio.create_subprocess_exec` and returns its native
+  `asyncio.subprocess.Process`; do not build another subprocess result wrapper.
+- Python command lines use Cyclopts with dataclass option models. Annotate fields
+  with their established environment names so CLI arguments override
+  environment values and both surfaces remain documented by one type. Do not
+  add `argparse`. TypeScript command lines use Commander.
 - `packages/py/postgres` — Python Lakebase/Postgres address parsing and
   WorkspaceClient-backed connection resolution, sync/async advisory locks, and
   the async topic bus. It is the port of ONE Node package
@@ -203,7 +233,9 @@ Primary package areas:
 - `packages/py/litellm` — thin LiteLLM integration for Databricks Model
   Serving. An explicit profile is an optional override; otherwise it resolves
   `DATABRICKS_CONFIG_PROFILE`, then the one entry marked as the Databricks CLI
-  default in `databricks auth profiles --output json --skip-validate`;
+  default in `databricks auth profiles --output json --skip-validate`. A
+  Databricks App with `DATABRICKS_HOST` uses ambient service-principal
+  authentication and does not require or synthesize a profile;
   adds live endpoint discovery, fuzzy model resolution, and tool-capability
   filtering; then delegates to LiteLLM's built-in Databricks provider. Keep
   authentication,
@@ -222,15 +254,30 @@ Primary package areas:
   `get_flat_params` compatibility fix.
 - `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
   server with a Neo4j 5 backend and a managed `dbx-tools-litellm` process.
-  It must not use containers: provision Java and uv through mise, cache pinned
-  upstream distributions under the user's data directory, and keep Graphiti
-  behavior in upstream Graphiti rather than vendoring its implementation here.
+  It must not use containers: provision Java, uv, Neo4j, and the pinned Graphiti
+  source through `dbx_tools.core.bin` and mise, link those mise installations
+  into the launcher data directory, and keep Graphiti behavior in upstream
+  Graphiti rather than vendoring its implementation here. There is no separate
+  setup command: `start` and `up` install missing prerequisites on demand.
+  Run Graphiti and managed LiteLLM under Honcho so it forwards shutdown signals
+  to each child process group, stops the sibling when either exits, and
+  escalates from SIGTERM to SIGKILL after its bounded grace period. Keep process
+  supervision in Honcho rather than reproducing it in this package.
   The launcher requires no `config.yaml`: construct the upstream command and
   environment from CLI-over-environment settings, default to Databricks GPT
   plus the 1024-dimensional GTE embedding endpoint, and let an explicit
   LiteLLM URL disable proxy ownership. Managed mode resolves
   an optional profile override, then `DATABRICKS_CONFIG_PROFILE`, and otherwise
-  inherits the Databricks CLI default.
+  inherits the Databricks CLI default. Reuse `uv` from `PATH`; ask mise to
+  install its pinned uv only when none is available. Ephemeral graph backends
+  can be wrapped with `DelegatingGraphDriver`, which delegates to any upstream
+  `GraphDriver` while journaling successful mutations through a supplied
+  storage driver. The Postgres implementation uses `dbx-tools-postgres` and
+  replays the ordered journal into an empty delegated graph during startup.
+  Keep the decorator backend-agnostic and keep Postgres connection resolution
+  in the existing Postgres package. A Neo4j credential mismatch may reset the
+  local data directory only when that durable journal is configured; otherwise
+  fail rather than deleting the only copy.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
@@ -241,6 +288,14 @@ Primary package areas:
   Keep the root and every member's `requires-python` generated from the same
   `pythonRequires` value; the default Databricks serverless notebook runtime is
   part of the supported floor and must be covered by the Python test matrix.
+  The shared range ends below Python 3.14 because the exact-pinned LiteLLM
+  dependency does not publish support for 3.14; claiming the open-ended range
+  makes uv reject the entire workspace even when running Python 3.10. The root
+  uv workspace uses `index-strategy = "unsafe-best-match"` because both configured
+  package indexes are trusted and the corporate mirror can lag the local devpi
+  index containing the exact LiteLLM pin. The root workspace depends on
+  `dbx-tools-graphiti` so `uv run dbx-graphiti` and its transitive
+  `dbx-litellm` command are available from the repository root.
   Do not copy lfp-build's `${PROJECT_ROOT}` file-reference mode here: that is a
   local workspace convenience, while pip ignores uv workspace sources when it
   resolves a package selected by Git `#subdirectory`.
@@ -449,6 +504,12 @@ why to use this package anyway:
   tool and resolves its own web-capable model (so an agent on a non-web model
   still searches); `web_fetch` uses got-scraping. Same add-on shape as
   node-email (Mastra tool pair + AppKit plugin priming a shared runtime).
+- `@dbx-tools/appkit-graphiti`: AppKit has no Graphiti or embedded MCP sidecar
+  surface. Use this package to run `dbx-tools-graphiti` beside an AppKit server,
+  reuse the app's Lakebase binding for durable journal recovery, and publish
+  Graphiti through the app's single public port with Caddy. The Python package
+  owns Graphiti, Neo4j, and LiteLLM; this package owns AppKit lifecycle and
+  routing.
 - `@dbx-tools/search`: use native AppKit `aiSearch` for Vector Search queries.
   This package adds the surfaces AppKit does not ship: `search` /
   `universal_search` agent tools, cross-index fan-out, index creation/sync/seed
@@ -776,7 +837,9 @@ Python package, check these first:
   `shared-core` used by Python packages;
 - `dbx_tools.core.object.to_stable_key` - strict structured identity
   canonicalization;
-- `dbx_tools.core.string.to_identifier` - readable identifier tokenization.
+- `dbx_tools.core.string.to_identifier` - readable identifier tokenization;
+- `dbx_tools.core.bin` - dependency-free, locked mise bootstrap and executable
+  resolution plus an `asyncio.create_subprocess_exec`-compatible `execute`.
 
 Only port the helper subset needed by multiple Python packages; do not mirror
 all of shared-core speculatively. When moving duplicated Python helper code into
@@ -817,6 +880,10 @@ projen`, then `uv sync --all-packages`. Use `uv run pytest`, `uv run ruff check
 packages/py`, and `uv run ruff format packages/py` for Python validation and
 formatting. `uv.lock` and `bun.lock` are local install artifacts and must remain
 untracked; `.venv/`, Python caches, and built wheels are ignored too.
+`DBXToolsPythonWorkspace` parses and reserializes every generated
+`pyproject.toml` with `smol-toml` during synthesis because projen's underlying
+`@iarna/toml` writer indents nested table headers. Keep this normalization on
+both the root workspace file and every member's `uv.file`.
 
 `bun run format` is `prettier . --write` over the WHOLE repo, and `.prettierignore`
 does not exclude `packages/js/`. Some committed files predate the current
@@ -972,10 +1039,15 @@ whether the sentence is about the code as it stands or about the act of changing
   package's path + the tags implied by its path, reading no manifest), while
   `recordedPackages()` reads the recorded members back from `pnpm-workspace.yaml`
   and augments each with the `name` + `tags` from its own `package.json` — what
-  every post-synth command (`barrels`, the watcher, `openapi`) uses.
+  every post-synth command (`barrels`, the watcher, `openapi`) uses. The root
+  also records the exact configured roots as `dbxToolsConfig.packageRoots`;
+  `watchRoots()` reads that field rather than widening `packages/js` to
+  `packages`, which would make Python edits under `packages/py` look like
+  unowned JavaScript package changes. The broad recorded-member/default fallback
+  exists only for workspaces synthesized by older engines.
 - **Discovery + tag resolution.** Under each `packageRoots` root (this
-  repo passes `["packages/js", "packages/example"]`), ANY `src`-bearing folder at
-  ANY depth is a package. Its path relative to the root is decomposed into
+  repo passes `["packages/js", "packages/test", "packages/example"]`), ANY
+  `src`-bearing folder at ANY depth is a package. Its path relative to the root is decomposed into
   cumulative dash-join **tag candidates**: `ui/app` → `[ui, ui-app]`;
   `dir/another/path` → `[dir, dir-another, dir-another-path]`. Each candidate is
   looked up in **`packageTagPaths`** (`Record<token, string[]>`,
@@ -1136,8 +1208,11 @@ not reproduce or prune its installation and do not depend on mise.
 
 The custom root applies `ROOT_INSTALL_ONLY_MIXIN` during every pre-synth by
 default (`rootInstallOnly: true`). It clears child `install` / `install:ci` task
-steps, so child `NodePackage.postSynthesize()` hooks cannot run the same
-workspace install once per package; only the root performs `bun install`.
+steps and makes each child package hook's `installDependencies` and
+`logInstallTrigger` calls no-ops, so children neither run the same workspace
+install nor print a misleading install message once per package. The rest of
+`NodePackage.postSynthesize()` still performs dependency resolution; only the
+root performs `bun install`.
 `rootInstallOnly: false` restores projen's native per-project behavior. Apply the
 mixin in pre-synth rather than only at construction so packages attached later
 are covered too.
@@ -1473,7 +1548,7 @@ no link hook, no `DBX_TOOLS_LINK` switch, and no consumer-mode registry install
 
 ```sh
 bun install                                   # one workspace; demo resolves packages from source
-bun run demo                                  # server dev + client dev server (Bun.serve + HMR), concurrently
+bun run demo                                  # build client, then run Caddy/AppKit/Graphiti + emitter on :8000
 # or individually:
 bun run --filter @dbx-tools/demo-appkit-server dev   # bun --watch src/server.ts
 bun run --filter @dbx-tools/demo-appkit-app dev      # Bun.serve dev server (HMR) via dev.ts

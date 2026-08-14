@@ -20,7 +20,8 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
 
 - accepts an optional `--profile` override, otherwise resolving
   `DATABRICKS_CONFIG_PROFILE`, then the one marked as the Databricks CLI
-  default;
+  default; a Databricks App uses its ambient service-principal environment
+  without a profile;
 - discovers serving endpoints from the selected workspace and caches them per
   process;
 - advertises discovered endpoints and family aliases only under `dbx/*` by
@@ -68,7 +69,8 @@ curl http://127.0.0.1:4000/v1/chat/completions \
 
 The resolved profile is written to `DATABRICKS_CONFIG_PROFILE`, so endpoint
 discovery and LiteLLM's delegated Databricks request use the same workspace
-credentials.
+credentials. In a Databricks App, `DATABRICKS_HOST` selects ambient SDK
+authentication and no profile value is written.
 
 ## How a request flows
 
@@ -116,10 +118,11 @@ Profile selection happens once, at proxy startup, in this order:
 
 1. optional `dbx-litellm --profile <name>` override;
 2. `DATABRICKS_CONFIG_PROFILE`;
-3. the one profile marked as the Databricks CLI default.
+3. ambient Databricks App authentication when `DATABRICKS_HOST` is present;
+4. the one profile marked as the Databricks CLI default.
 
-Startup fails rather than guessing when none of those produces exactly one
-profile. The same selected profile creates one process-wide `WorkspaceClient`
+Startup fails rather than guessing when none of those resolves authentication.
+The same selected profile or ambient environment creates one process-wide `WorkspaceClient`
 used for both endpoint discovery and authentication, so model names cannot be
 pulled from one workspace while requests are sent to another.
 

@@ -16,6 +16,7 @@ function fakeContext(databricksHost?: string): InterceptorContext & {
     lifecycle,
     env: databricksHost ? { databricksHost } : {},
     onLifecycle: (event) => void lifecycle.push(event),
+    onTeardown: () => {},
     broadcastSignal: () => {},
     bindProcess: (child) => void bound.push(child),
   };

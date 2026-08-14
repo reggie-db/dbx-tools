@@ -64,6 +64,33 @@ describe("bindProcess teardown", () => {
 
     assert.deepEqual(b.signals, []); // guard prevents a repeat teardown
   });
+
+  it("tears down children bound through different interceptor contexts", () => {
+    const first = createInterceptorContext({});
+    const second = createInterceptorContext({});
+    const a = new FakeChild();
+    const b = new FakeChild();
+    first.context.bindProcess(a);
+    second.context.bindProcess(b);
+
+    a.emitExit(1);
+
+    assert.deepEqual(b.signals, ["SIGTERM"]);
+  });
+
+  it("runs shared teardown handlers before killing children", () => {
+    const first = createInterceptorContext({});
+    const second = createInterceptorContext({});
+    const a = new FakeChild();
+    const seen: string[] = [];
+    first.context.onTeardown(() => seen.push("first"));
+    second.context.onTeardown(() => seen.push("second"));
+    first.context.bindProcess(a);
+
+    a.emitExit(1);
+
+    assert.deepEqual(seen, ["first", "second"]);
+  });
 });
 
 describe("broadcastSignal", () => {

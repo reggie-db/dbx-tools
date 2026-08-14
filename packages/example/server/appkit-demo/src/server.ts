@@ -1,8 +1,8 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { genie, lakebase, server } from "@databricks/appkit";
 import { aiSearch } from "@databricks/appkit/beta";
 import { appkit } from "@dbx-tools/appkit";
+import { config as graphitiConfig, plugin as graphitiPlugin } from "@dbx-tools/appkit-graphiti";
 import {
   agents,
   genie as appkitMastraGenie,
@@ -14,7 +14,7 @@ import {
   plugin as appkitWebSearchPlugin,
   tool as appkitWebSearchToolApi,
 } from "@dbx-tools/appkit-web-search";
-import { config } from "@dbx-tools/core";
+import { config, project as coreProject } from "@dbx-tools/core";
 import { brand as emailBrand, plugin as emailPlugin, tool as emailToolApi } from "@dbx-tools/email";
 import { lakebaseAiSearch, plugin as searchPlugin, tool as searchToolApi } from "@dbx-tools/search";
 import { brand as sharedBrand } from "@dbx-tools/shared-core";
@@ -70,6 +70,8 @@ const { createAgent, tool } = agents;
 const { GENIE_INSTRUCTIONS } = appkitMastraGenie;
 const { mastra } = appkitMastraPlugin;
 const { webSearch } = appkitWebSearchPlugin;
+const { graphiti } = graphitiPlugin;
+const { resolveGraphitiConfig } = graphitiConfig;
 const { webSearchTool, webFetchTool } = appkitWebSearchToolApi;
 const { teams } = teamsPlugin;
 const { teamsCardTool } = teamsToolApi;
@@ -79,6 +81,7 @@ const { searchTool, universalSearchTool, addDocumentsTool, createIndexTool, sync
 const { defaultBrandContext } = sharedBrand;
 const mastraStorage = config.boolean(undefined, "MASTRA_STORAGE", config.ENV_ONLY) ?? true;
 const mastraMemory = config.boolean(undefined, "MASTRA_MEMORY", config.ENV_ONLY) ?? true;
+const localDevelopment = process.env.NODE_ENV === "development";
 const { tunnelInterceptor } = tunnelInterceptorApi;
 const { authGate } = tunnelPlugin;
 
@@ -89,7 +92,7 @@ const { authGate } = tunnelPlugin;
 // sibling path does not exist in the deployed tree.
 const clientDist =
   process.env.CLIENT_DIST ??
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../app/appkit-demo/dist");
+  path.resolve(coreProject.root() ?? process.cwd(), "packages/example/app/appkit-demo/dist");
 
 // AppKit demo wiring for `@dbx-tools/appkit-mastra`.
 //
@@ -166,6 +169,8 @@ const supportDefinition: MastraAgentDefinition = {
     "about the data the space covers. Reserve direct (no-tool)",
     "answers for pure meta-questions about your own behaviour or",
     "the conversation itself.",
+    "Graphiti MCP memory tools are also available. Use them when the user",
+    "asks to save, retrieve, or manage durable knowledge and preferences.",
     "",
     GENIE_INSTRUCTIONS,
   ].join("\n"),
@@ -176,6 +181,7 @@ const supportDefinition: MastraAgentDefinition = {
     // depth; Object.assign preserves the same flat runtime record without
     // forcing that useless cross-tool type expansion.
     const agentTools = Object.assign({}, plugins.genie?.toolkit()) as MastraTools;
+    Object.assign(agentTools, plugins.graphiti?.toolkit());
     Object.assign(agentTools, {
       // Auto-discovered AppKit `ToolProvider` plugins. `plugins.<name>`
       // is `undefined` when the plugin isn't registered, so the `?.`
@@ -236,12 +242,10 @@ const supportDefinition: MastraAgentDefinition = {
 };
 const support = createAgent(supportDefinition);
 
-// Bind to loopback (`127.0.0.1`) locally so the dev server isn't
-// exposed on the LAN, but fall back to `0.0.0.0` when the Databricks
-// Apps platform is running us (it reaches the container over the
-// LAN-bound interface, so anything else won't accept traffic).
-// Override with `HOST=...` if you need a different bind address.
-const host = process.env.HOST ?? (config.isDatabricksAppEnv() ? "0.0.0.0" : "127.0.0.1");
+// Caddy owns the public Databricks App port and forwards ordinary traffic to
+// AppKit while publishing Graphiti at /graphiti/*. Both backends stay loopback-only.
+const graphitiRuntime = resolveGraphitiConfig();
+const host = process.env.HOST ?? "127.0.0.1";
 
 // Keep the provider and extension plugin on the same resolved index value.
 process.env.SEARCH_INDEX ??= DEFAULT_SEARCH_INDEX;
@@ -272,9 +276,10 @@ const searchProvider = USE_VECTOR_SEARCH
 
 await appkit.createApp({
   plugins: [
-    server({ host, staticPath: clientDist }),
+    server({ host, port: graphitiRuntime.appPort, staticPath: clientDist }),
     genie(),
     lakebase(),
+    graphiti(graphitiRuntime),
     // Postgres LISTEN/NOTIFY demo. Every app instance listens on one dedicated
     // Lakebase connection and fans topic broadcasts out to its browser viewers.
     busDemo(),
@@ -289,7 +294,8 @@ await appkit.createApp({
     // `TUNNEL_PUBLIC_DOMAIN`); the platform front door passes through. `allow`
     // comes from `TUNNEL_AUTH_ALLOW`, `publicDomain` from `TUNNEL_PUBLIC_DOMAIN`
     // (both set on the deployed app). Codes send through the `email()` transport
-    // above. Inert locally when no tunnel domain is set.
+    // above. Localhost gets an explicit disabled status because its Host header
+    // never matches the tunnel domain.
     authGate({}),
     // Web-search runtime for the `web_search` / `web_fetch` tools. The
     // web-search model defaults to Gemini, then GPT (the native web-search
@@ -360,10 +366,9 @@ await appkit.createApp({
   },
   // Front the app with a public portr tunnel IN-PROCESS: `tunnelInterceptor`
   // applies the computed DATABRICKS_HOST, launches portr pointed at this app's
-  // public port, and binds it so the app and portr live/die as one. A no-op when
-  // no PORTR_TOKEN / TUNNEL_PUBLIC_DOMAIN is set (local runs, or a deploy without a
-  // tunnel), so it is safe to register unconditionally.
-  interceptor: tunnelInterceptor(),
+  // public port, and binds it so the app and portr live/die as one. Local
+  // development omits the tunnel so localhost never enters the OTP flow.
+  interceptor: !localDevelopment ? tunnelInterceptor() : undefined,
   cache: {
     enabled: true,
   },

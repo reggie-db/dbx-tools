@@ -80,6 +80,7 @@ const root = new projenProject.DBXToolsNodeProject({
   // by source path either way.
   devDeps: [
     "concurrently",
+    "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/shared-core@workspace:*",
     "@dbx-tools/projen@workspace:*",
     // shared-core's public brand namespace is Zod-backed and is loaded while
@@ -391,6 +392,21 @@ project.applyToProjects(root, { identifierName: "appkit-web-search", tags: "node
   p.addDevDeps("@types/express@catalog:", "@types/json-schema@^7");
 });
 
+// node-appkit-graphiti: AppKit lifecycle + Caddy routing for the Python Graphiti
+// sidecar. The Python package owns Graphiti, Neo4j, LiteLLM, and Postgres replay;
+// this package owns the AppKit plugin, child supervision, and single public port.
+project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" }, (p) => {
+  p.addDeps(
+    "@databricks/appkit@catalog:",
+    "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/core@workspace:*",
+    "@dbx-tools/shared-core@workspace:*",
+    "@mastra/core@catalog:",
+    "@mastra/mcp@catalog:",
+  );
+  p.addDevDeps("@types/json-schema@^7");
+});
+
 // node-postgres: connection-correct Postgres utilities shared by packages.
 // Advisory locks reserve one PoolClient for the full protected callback.
 project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) => {
@@ -689,6 +705,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-auth@workspace:*",
     "@databricks/appkit@catalog:",
+    "http-proxy-3@catalog:",
   );
   // `@dbx-tools/email` is OPTIONAL: only the OTP gate's code delivery needs it, and
   // it is imported LAZILY (`send-code.ts`). A tunnel used without the gate (or in
@@ -867,6 +884,7 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
   p.package.addField("exports", { "./package.json": "./package.json" });
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
+    "@dbx-tools/appkit-graphiti@workspace:*",
     "@dbx-tools/appkit-mastra@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/databricks@workspace:*",
@@ -936,7 +954,8 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     directory: "core",
     name: "dbx-tools-core",
     module: "dbx_tools.core",
-    description: "Dependency-free configuration and identity helpers for dbx-tools Python packages",
+    description:
+      "Dependency-free configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
     dependencies: [],
   },
   {
@@ -968,6 +987,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     description:
       "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution",
     dependencies: [
+      "cyclopts>=4.11,<6",
       "databricks-sdk>=0.63.0",
       projenProject.pythonGitDependency(pythonRepository, "dbx-tools-model", "model"),
       "diskcache>=5.6",
@@ -992,7 +1012,12 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     description:
       "Native Graphiti MCP and Neo4j launcher with Databricks models through LiteLLM",
     dependencies: [
+      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-core", "core"),
       projenProject.pythonGitDependency(pythonRepository, "dbx-tools-litellm", "litellm"),
+      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-postgres", "postgres"),
+      "cyclopts>=4.11,<6",
+      "graphiti-core==0.29.3",
+      "honcho>=2,<3",
     ],
     scripts: {
       "dbx-graphiti": "dbx_tools.graphiti.cli:main",
@@ -1003,7 +1028,13 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
 new projenProject.DBXToolsPythonWorkspace(root, {
   repository: pythonRepository,
   packages: pythonPackages,
-  requiresPython: ">=3.10",
+  dependencies: ["dbx-tools-graphiti"],
+  // The exact LiteLLM pin does not support Python 3.14, so an open-ended
+  // range makes uv reject the workspace even under a supported interpreter.
+  requiresPython: ">=3.10,<3.14",
+  // This workspace uses two trusted corporate indexes. The first can lag the
+  // local devpi index, so uv must consider the pinned version from both.
+  indexStrategy: "unsafe-best-match",
   ruffTarget: "py310",
   workspaceName: "dbx-tools-python-workspace",
   testPaths: ["packages/py"],
@@ -1043,7 +1074,6 @@ root.addTask("demo", {
   env: {
     NODE_ENV: "development",
     BUN_CONFIG_ELIDE_LINES: "0",
-    FORCE_COLOR: "1",
   },
   exec: "bun scripts/run-demo.ts",
   description: "Run the local demo server, client, and Python bus emitter",

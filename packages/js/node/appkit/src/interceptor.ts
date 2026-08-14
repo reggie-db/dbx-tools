@@ -93,6 +93,8 @@ export interface InterceptorContext {
    * retroactively (same semantics as AppKit).
    */
   onLifecycle(event: LifecycleEvent, fn: LifecycleHandler): void;
+  /** Register synchronous cleanup that runs before any bound process is killed. */
+  onTeardown(fn: () => void): void;
   /**
    * Broadcast a termination signal from the main app to every bound process.
    * Called automatically when this process receives `SIGINT`/`SIGTERM`/`SIGHUP`;
@@ -111,10 +113,41 @@ export interface InterceptorContext {
 export type Interceptor = (ctx: InterceptorContext) => void | Promise<void>;
 
 /** How long bound children get to exit on `SIGTERM` before the app force-exits. */
-const TEARDOWN_GRACE_MS = 3000;
+const TEARDOWN_GRACE_MS = 10_000;
 
 /** The signals that trigger teardown when the MAIN process receives them. */
 const TEARDOWN_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+const boundChildren = new Set<BindableProcess>();
+const teardownHandlers = new Set<() => void>();
+let processShuttingDown = false;
+let processSignalsBound = false;
+
+function teardownProcess(code: number): void {
+  if (processShuttingDown) return;
+  processShuttingDown = true;
+  for (const handler of teardownHandlers) handler();
+  teardownHandlers.clear();
+  for (const child of boundChildren) {
+    if (!child.killed) child.kill("SIGTERM");
+  }
+  boundChildren.clear();
+  setTimeout(() => process.exit(code), TEARDOWN_GRACE_MS).unref();
+}
+
+function broadcastProcessSignal(signal: NodeJS.Signals): void {
+  for (const child of boundChildren) {
+    if (!child.killed) child.kill(signal);
+  }
+  teardownProcess(0);
+}
+
+function bindProcessSignals(): void {
+  if (processSignalsBound) return;
+  processSignalsBound = true;
+  for (const signal of TEARDOWN_SIGNALS) {
+    process.on(signal, () => broadcastProcessSignal(signal));
+  }
+}
 
 /**
  * The mutable machinery behind an {@link InterceptorContext}. Split out so
@@ -139,40 +172,20 @@ export interface InterceptorRuntime {
  */
 export function createInterceptorContext(env: ResolvedAppEnv): InterceptorRuntime {
   const handlers = new Map<LifecycleEvent, LifecycleHandler[]>();
-  const children = new Set<BindableProcess>();
-  let shuttingDown = false;
-  let signalsBound = false;
-
-  const teardown = (code: number): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    for (const child of children) {
-      if (!child.killed) child.kill("SIGTERM");
-    }
-    setTimeout(() => process.exit(code), TEARDOWN_GRACE_MS).unref();
-  };
-
-  const broadcastSignal = (signal: NodeJS.Signals): void => {
-    for (const child of children) {
-      if (!child.killed) child.kill(signal);
-    }
-    teardown(0);
-  };
-
-  const bindProcessSignals = (): void => {
-    if (signalsBound) return;
-    signalsBound = true;
-    for (const signal of TEARDOWN_SIGNALS) {
-      process.on(signal, () => broadcastSignal(signal));
-    }
-  };
+  if (processShuttingDown && boundChildren.size === 0) processShuttingDown = false;
+  if (
+    processSignalsBound &&
+    TEARDOWN_SIGNALS.every((signal) => process.listenerCount(signal) === 0)
+  ) {
+    processSignalsBound = false;
+  }
 
   const bindProcess = (child: BindableProcess): void => {
     bindProcessSignals();
-    children.add(child);
+    boundChildren.add(child);
     child.once("exit", (code) => {
       logger.warn("bound process exited; tearing down the app", { code });
-      teardown(typeof code === "number" ? code : 1);
+      teardownProcess(typeof code === "number" ? code : 1);
     });
   };
 
@@ -199,7 +212,8 @@ export function createInterceptorContext(env: ResolvedAppEnv): InterceptorRuntim
   const context: InterceptorContext = {
     env,
     onLifecycle,
-    broadcastSignal,
+    onTeardown: (fn) => teardownHandlers.add(fn),
+    broadcastSignal: broadcastProcessSignal,
     bindProcess,
   };
 

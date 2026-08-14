@@ -80,6 +80,11 @@
       "type": "runtime"
     },
     {
+      "name": "smol-toml",
+      "version": "^1.7.1",
+      "type": "runtime"
+    },
+    {
       "name": "ts-to-zod",
       "version": "^5.1.0",
       "type": "runtime"

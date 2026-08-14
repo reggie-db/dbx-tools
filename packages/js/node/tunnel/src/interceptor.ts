@@ -22,6 +22,7 @@ import type { Interceptor, InterceptorContext } from "@dbx-tools/appkit";
 import { log, object } from "@dbx-tools/shared-core";
 import { installFrp, resolveFrpConfig, startFrp, writeFrpConfig } from "./frp.ts";
 import { installPortr, resolvePortrConfig, startPortr, writePortrConfig } from "./portr.ts";
+import { startPathProxy } from "./path-proxy.ts";
 
 const logger = log.logger("tunnel:interceptor");
 
@@ -51,6 +52,10 @@ export interface TunnelInterceptorOptions {
   frpToken?: string;
   /** frp proxy registration name. Env `FRP_PROXY_NAME`. */
   frpProxyName?: string;
+  /** FRP path location. Env `FRP_PATH`; defaults to `DATABRICKS_APP_NAME`. */
+  frpPath?: string;
+  /** Strip the FRP path before forwarding. Env `FRP_STRIP_PREFIX`; defaults true for non-root paths. */
+  frpStripPrefix?: boolean;
 }
 
 /** Public tunnel clients supported by the interceptor and CLI. */
@@ -118,9 +123,19 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
         protocol: options.frpProtocol,
         token: options.frpToken,
         proxyName: options.frpProxyName,
+        path: options.frpPath,
+        stripPrefix: options.frpStripPrefix,
         port,
       });
       if (frpConfig) {
+        const pathProxy =
+          frpConfig.stripPrefix && frpConfig.path !== "/"
+            ? await startPathProxy(port, frpConfig.path)
+            : undefined;
+        if (pathProxy) {
+          frpConfig.targetPort = pathProxy.port;
+          ctx.onLifecycle("shutdown", () => void pathProxy.close());
+        }
         const frpEnv = await installFrp();
         const configPath = await writeFrpConfig(frpConfig, frpEnv);
         children.push(startFrp(frpConfig, frpEnv, configPath));

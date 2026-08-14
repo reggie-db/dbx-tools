@@ -52,7 +52,9 @@ describe("DBXToolsPythonWorkspace", () => {
           dependencies: [pythonGitDependency(repository, "fixture-core", "core")],
         },
       ],
+      dependencies: ["fixture-app"],
       requiresPython: ">=3.12",
+      indexStrategy: "unsafe-best-match",
       ruffTarget: "py312",
       lintPaths: ["python"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
@@ -63,8 +65,12 @@ describe("DBXToolsPythonWorkspace", () => {
 
     const workspace = readFileSync(join(outdir, "pyproject.toml"), "utf8");
     assert.match(workspace, /members = \[\s*"python\/packages\/\*"\s*\]/);
+    assert.match(workspace, /dependencies = \[\s*"fixture-app"\s*\]/);
     assert.match(workspace, /requires-python = ">=3\.12"/);
+    assert.match(workspace, /index-strategy = "unsafe-best-match"/);
     assert.match(workspace, /target[_-]version = "py312"/);
+    assert.doesNotMatch(workspace, /^  \[/m);
+    assert.doesNotMatch(workspace, /= \[ /);
 
     const app = readFileSync(join(outdir, "python/packages/app/pyproject.toml"), "utf8");
     assert.match(
@@ -72,6 +78,8 @@ describe("DBXToolsPythonWorkspace", () => {
       /fixture-core @ git\+https:\/\/github\.com\/example\/fixture\.git@main#subdirectory=python\/packages\/core/,
     );
     assert.doesNotMatch(app, /\[dependency-groups\]/);
+    assert.doesNotMatch(app, /^  \[/m);
+    assert.doesNotMatch(app, /= \[ /);
 
     const settings = readFileSync(join(outdir, ".vscode/settings.json"), "utf8");
     assert.match(settings, /python\/\.venv\/bin\/python/);

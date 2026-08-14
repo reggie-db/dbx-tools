@@ -212,6 +212,7 @@
             "is-identifier",
             "openapi-typescript",
             "oxc-parser",
+            "smol-toml",
             "ts-to-zod",
             "yaml"
           ]

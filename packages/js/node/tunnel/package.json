@@ -32,7 +32,8 @@
     "@dbx-tools/auth": "workspace:*",
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-auth": "workspace:*",
-    "@dbx-tools/shared-core": "workspace:*"
+    "@dbx-tools/shared-core": "workspace:*",
+    "http-proxy-3": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -48,7 +49,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.112",
+  "version": "0.6.113",
   "types": "index.ts",
   "type": "module",
   "exports": {

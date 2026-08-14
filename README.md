@@ -167,6 +167,7 @@ export function App() {
 | Configuration and local locks  | [`@dbx-tools/core`](packages/js/node/core), [`dbx-tools-core`](packages/py/core)                                                                                                                                            |
 | Email workflows                | [`@dbx-tools/email`](packages/js/node/email), [`@dbx-tools/shared-email-template`](packages/js/shared/email-template), [`@dbx-tools/shared-email`](packages/js/shared/email), [`@dbx-tools/ui-email`](packages/js/ui/email) |
 | Web search and fetch           | [`@dbx-tools/appkit-web-search`](packages/js/node/appkit-web-search)                                                                                                                                                        |
+| Graphiti AppKit sidecar        | [`@dbx-tools/appkit-graphiti`](packages/js/node/appkit-graphiti), [`dbx-tools-graphiti`](packages/py/graphiti)                                                                                                              |
 | Postgres locks and message bus | [`@dbx-tools/postgres`](packages/js/node/postgres), [`dbx-tools-postgres`](packages/py/postgres)                                                                                                                            |
 | AI Search extensions           | [`@dbx-tools/search`](packages/js/node/search), [`@dbx-tools/shared-search`](packages/js/shared/search), [`@dbx-tools/ui-search`](packages/js/ui/search)                                                                    |
 | Teams chat and cards           | [`@dbx-tools/teams`](packages/js/node/teams), [`@dbx-tools/shared-teams`](packages/js/shared/teams), [`@dbx-tools/ui-teams`](packages/js/ui/teams)                                                                          |
@@ -189,15 +190,17 @@ Install the published Python packages by distribution name:
 uv add dbx-tools-core dbx-tools-postgres dbx-tools-model dbx-tools-litellm dbx-tools-graphiti
 ```
 
+The Python packages support Python 3.10 through 3.13.
+
 The root uv workspace contains these Python counterparts:
 
 | Package                                      | Purpose                                                                                                                                                                                                                                                                            |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dbx-tools-core`](packages/py/core)         | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free stable-key, FNV hash, and identifier helpers.                                              |
+| [`dbx-tools-core`](packages/py/core)         | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                             |
 | [`dbx-tools-postgres`](packages/py/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope. |
 | [`dbx-tools-model`](packages/py/model)       | Lists and classifies Databricks Model Serving endpoints, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies.                                         |
 | [`dbx-tools-litellm`](packages/py/litellm)   | Adds explicit-profile Databricks endpoint discovery and fuzzy, tool-aware model routing to LiteLLM while leaving request conversion, transport, streaming, retries, embeddings, and Responses bridging to LiteLLM's built-in Databricks provider.                                  |
-| [`dbx-tools-graphiti`](packages/py/graphiti) | Launches upstream Graphiti's MCP server with native Neo4j 5 and a managed Databricks LiteLLM proxy, using GPT and GTE defaults with no Graphiti config file while preserving CLI and environment overrides.                                                                        |
+| [`dbx-tools-graphiti`](packages/py/graphiti) | Launches upstream Graphiti's MCP server with native Neo4j 5 and a managed Databricks LiteLLM proxy, using GPT and GTE defaults with no Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.                             |
 
 ### Load One Brand File
 

@@ -128,8 +128,7 @@
       "description": "Run the local demo server, client, and Python bus emitter",
       "env": {
         "NODE_ENV": "development",
-        "BUN_CONFIG_ELIDE_LINES": "0",
-        "FORCE_COLOR": "1"
+        "BUN_CONFIG_ELIDE_LINES": "0"
       },
       "steps": [
         {

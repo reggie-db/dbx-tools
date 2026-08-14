@@ -68,4 +68,33 @@ describe("ROOT_INSTALL_ONLY_MIXIN", () => {
     assert.ok(taskSteps(join(outdir, "packages/child"), "install").length > 0);
     assert.ok(taskSteps(join(outdir, "packages/child"), "install:ci").length > 0);
   });
+
+  it("suppresses child install hooks and their trigger logs", () => {
+    const outdir = join(temp, "hooks");
+    const root = new DBXToolsNodeProject({
+      name: "hooks",
+      outdir,
+      defaultTagMixins: false,
+    });
+    const child = new DBXToolsTypeScriptProject({
+      parent: root,
+      outdir: "packages/child",
+      name: "@fixture/hooks-child",
+    });
+    const nodePackage = child.package as unknown as {
+      installDependencies(trigger: unknown): void;
+      logInstallTrigger(trigger: unknown): void;
+    };
+    let installs = 0;
+    let logs = 0;
+    nodePackage.installDependencies = () => installs++;
+    nodePackage.logInstallTrigger = () => logs++;
+
+    root.synth();
+    nodePackage.logInstallTrigger({});
+    nodePackage.installDependencies({});
+
+    assert.equal(logs, 0);
+    assert.equal(installs, 0);
+  });
 });

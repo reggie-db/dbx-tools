@@ -17,6 +17,8 @@
  *                       fetches the runtime (research: pnpm installs, bun runs);
  *   - a `pnpm-workspace.yaml` carrying `allowBuilds` (esbuild/unrs-resolver/bun/
  *     onnxruntime-node...) so pnpm 10+ doesn't fail the build on their postinstalls;
+ *   - `requirements.txt` installing the matching `dbx-tools-graphiti` release
+ *     so the AppKit Graphiti plugin can launch its Python sidecar;
  *   - `app.yaml` copied unchanged; deployment-only command/env overrides live in
  *     `databricks.yml` under the app resource's `config`;
  *   - the client `dist/` copied in and the server `src/` + support files.
@@ -100,9 +102,11 @@ if (existsSync(join(serverDir, "shared")))
 if (existsSync(clientDist)) cpSync(clientDist, join(outDir, "client-dist"), { recursive: true });
 writeFileSync(join(outDir, "package.json"), `${JSON.stringify(deployPkg, null, 2)}\n`);
 writeFileSync(join(outDir, "pnpm-workspace.yaml"), stringify(deployWorkspace));
+writeFileSync(join(outDir, "requirements.txt"), `dbx-tools-graphiti==${version}\n`);
 cpSync(join(serverDir, "app.yaml"), join(outDir, "app.yaml"));
 cpSync(join(serverDir, "databricks.yml"), join(outDir, "databricks.yml"));
 
 console.log(`staged deploy at ${outDir}`);
 console.log(`  @dbx-tools/* -> ^${version}, catalog resolved, bun+pnpm-workspace added`);
+console.log(`  dbx-tools-graphiti==${version} added as the Python sidecar`);
 console.log(`  app.yaml copied unchanged; databricks.yml owns deployed command/env overrides`);

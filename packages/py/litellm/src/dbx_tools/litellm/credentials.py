@@ -47,14 +47,15 @@ class DatabricksCredentials:
     PAT or metadata-backed profile it can block on network probing.
     """
 
-    def __init__(self, *, profile: str) -> None:
+    def __init__(self, *, profile: str | None) -> None:
         self.profile = profile
         # disable_async_token_refresh must be passed on Config; WorkspaceClient
         # does not accept it, and its env var is parsed as a string. Keep SDK
         # background refresh off so every mint runs through the guarded
         # check-lock-check path below.
+        config_options = {"profile": profile} if profile else {}
         self._client = WorkspaceClient(
-            config=Config(profile=profile, disable_async_token_refresh=True)
+            config=Config(disable_async_token_refresh=True, **config_options)
         )
         self._api_base = f"{self._client.config.host.rstrip('/')}/serving-endpoints"
         self._lock = threading.RLock()
@@ -108,8 +109,9 @@ class DatabricksCredentials:
         headers = self._client.config.authenticate()
         authorization = headers.get(_AUTHORIZATION, "")
         if not authorization.startswith(_BEARER_PREFIX):
+            source = f"profile {self.profile!r}" if self.profile else "ambient authentication"
             raise RuntimeError(
-                f"Databricks profile {self.profile!r} produced a non-bearer "
+                f"Databricks {source} produced a non-bearer "
                 f"{_AUTHORIZATION} header; cannot forward it as an api_key."
             )
         self._renew_at = self._next_renewal()

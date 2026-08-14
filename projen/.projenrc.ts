@@ -94,6 +94,7 @@ const project = new typescript.TypeScriptProject({
     "openapi-typescript@^7.13.0",
     "oxc-parser@^0.90.0",
     "projen@^0.101.16",
+    "smol-toml@^1.7.1",
     "ts-to-zod@^5.1.0",
     "yaml@^2.9.0",
   ],

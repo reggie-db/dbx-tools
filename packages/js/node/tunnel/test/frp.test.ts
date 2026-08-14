@@ -38,11 +38,25 @@ describe("frp", () => {
           'type = "http"',
           "localPort = 8000",
           'customDomains = ["inspire.example.com"]',
+          'locations = ["/inspire"]',
           "",
         ].join("\n"),
       );
     } finally {
       await rm(homeDir, { recursive: true, force: true });
     }
+  });
+
+  it("uses the configured path and strip-prefix setting", () => {
+    const resolved = resolveFrpConfig({
+      publicDomain: "dbx.example.com",
+      proxyName: "demo1",
+      path: "/demo1/",
+      stripPrefix: false,
+      port: 8000,
+    });
+    assert.ok(resolved);
+    assert.equal(resolved.path, "/demo1");
+    assert.equal(resolved.stripPrefix, false);
   });
 });

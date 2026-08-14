@@ -611,9 +611,10 @@ export class DBXToolsNodeProject
  *
  * Every projen child has its own `NodePackage` post-synth hook, which otherwise
  * runs `bun install` against the same root workspace once per package. Clear the
- * child install tasks while leaving the root's real install/install:ci tasks
- * intact. Applied in root `preSynthesize` so manually attached late children are
- * included and repeated synths remain idempotent.
+ * child install tasks and suppress the package hook's install call and trigger
+ * log while leaving dependency resolution and the root's real install/install:ci
+ * tasks intact. Applied in root `preSynthesize` so manually attached late
+ * children are included and repeated synths remain idempotent.
  */
 export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
   (construct: IConstruct): construct is DBXToolsNodeProject | DBXToolsTypeScriptProject =>
@@ -622,6 +623,12 @@ export const ROOT_INSTALL_ONLY_MIXIN = mixin.create(
   (child) => {
     child.package.installTask.reset();
     child.package.installCiTask.reset();
+    const nodePackage = child.package as unknown as {
+      installDependencies(trigger: unknown): void;
+      logInstallTrigger(trigger: unknown): void;
+    };
+    nodePackage.installDependencies = () => {};
+    nodePackage.logInstallTrigger = () => {};
   },
 );
 
@@ -1014,6 +1021,8 @@ function initProject(
   // Root carries the bare `repository` (no `directory`); children add their subpath.
   applyRepository(project, options.repository);
 
+  const roots = options.packageRoots ?? DEFAULT_PACKAGE_ROOTS;
+  project.dbxToolsConfig.packageRoots = [...roots];
   if (options.syncResynthPaths?.length) {
     project.dbxToolsConfig.syncResynthPaths = [...options.syncResynthPaths];
   }
@@ -1040,7 +1049,6 @@ function initProject(
   // local editor state. Both ignore CONTENTS (`.idea/*`) rather than the
   // directory, so a later `!` negation can still reach a file inside.
   project.gitignore.addPatterns(".env", ".env.*", "!.env.example", "!.env.sample", ".idea/*");
-  const roots = options.packageRoots ?? DEFAULT_PACKAGE_ROOTS;
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/openapi/**`);

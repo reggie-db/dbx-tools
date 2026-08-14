@@ -1,106 +1,156 @@
 from __future__ import annotations
 
-import argparse
 import json
+import sys
 from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Annotated
+
+from cyclopts import App, Parameter
 
 from .runtime import Runtime
 from .settings import ModelSettings
 
 """Command-line interface for the native Graphiti stack."""
 
+_APP = App(
+    name="dbx-graphiti",
+    help="Run Graphiti MCP with a local native Neo4j backend (no containers).",
+)
 
-def main(argv: Sequence[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(
-        prog="dbx-graphiti",
-        description="Run Graphiti MCP with a local native Neo4j backend (no containers).",
-    )
-    subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("setup", help="Install pinned native prerequisites")
-    start = subparsers.add_parser("start", help="Start Neo4j, LiteLLM, and Graphiti")
-    _add_model_options(start)
-    start.add_argument("graphiti_args", nargs=argparse.REMAINDER)
-    up = subparsers.add_parser("up", help="Start Neo4j, LiteLLM, and Graphiti in the background")
-    _add_model_options(up)
-    up.add_argument("graphiti_args", nargs=argparse.REMAINDER)
-    subparsers.add_parser("down", help="Stop Graphiti, LiteLLM, and Neo4j")
-    subparsers.add_parser("status", help="Show native process status")
-    environment = subparsers.add_parser("env", help="Print resolved runtime settings")
-    _add_model_options(environment)
 
-    parsed = parser.parse_args(argv)
-    runtime = Runtime()
-    command = parsed.command or "start"
-    if command == "setup":
-        runtime.setup()
-        print(f"Graphiti is ready under {runtime.paths.root}")
-    elif command in {"start", "up"}:
-        extra_args = getattr(parsed, "graphiti_args", [])
-        if extra_args[:1] == ["--"]:
-            extra_args = extra_args[1:]
-        result = runtime.start(
-            foreground=command == "start",
-            extra_args=extra_args,
-            settings=_model_settings(parsed),
+@dataclass
+class ModelOptions:
+    """Model, profile, and managed LiteLLM settings shared by commands."""
+
+    profile: Annotated[
+        str | None,
+        Parameter(name="--profile", env_var="DATABRICKS_CONFIG_PROFILE"),
+    ] = None
+    model: Annotated[str | None, Parameter(name="--model", env_var="MODEL_NAME")] = None
+    embedder_model: Annotated[
+        str | None,
+        Parameter(name="--embedder-model", env_var="EMBEDDER_MODEL"),
+    ] = None
+    embedder_dimensions: Annotated[
+        int | None,
+        Parameter(name="--embedder-dimensions", env_var="EMBEDDER_DIMENSIONS"),
+    ] = None
+    litellm_url: Annotated[
+        str | None,
+        Parameter(name="--litellm-url", env_var="LITELLM_URL"),
+    ] = None
+    litellm_host: Annotated[
+        str | None,
+        Parameter(name="--litellm-host", env_var="LITELLM_HOST"),
+    ] = None
+    litellm_port: Annotated[
+        int | None,
+        Parameter(name="--litellm-port", env_var="LITELLM_PORT"),
+    ] = None
+    manage_litellm: Annotated[
+        bool | None,
+        Parameter(
+            name="--manage-litellm",
+            env_var="MANAGE_LITELLM",
+            negative="--no-manage-litellm",
+        ),
+    ] = None
+
+    def settings(self) -> ModelSettings:
+        """Resolve CLI and environment values into runtime settings."""
+        return ModelSettings.resolve(
+            profile=self.profile,
+            model=self.model,
+            embedder_model=self.embedder_model,
+            embedder_dimensions=self.embedder_dimensions,
+            litellm_url=self.litellm_url,
+            litellm_host=self.litellm_host,
+            litellm_port=self.litellm_port,
+            manage_litellm=self.manage_litellm,
         )
-        if command == "up":
-            print(json.dumps({"graphiti_pid": result, **runtime.status()}, indent=2))
-        elif result:
-            raise SystemExit(result)
-    elif command == "down":
-        runtime.stop()
-    elif command == "status":
-        print(json.dumps(runtime.status(), indent=2))
-    elif command == "env":
+
+
+@_APP.command
+@dataclass
+class Start(ModelOptions):
+    """Start Neo4j, LiteLLM, and Graphiti."""
+
+    graphiti_args: list[str] = field(default_factory=list, init=False)
+
+    def __call__(self) -> int:
+        return Runtime().start(extra_args=self.graphiti_args, settings=self.settings())
+
+
+@_APP.command
+@dataclass
+class Up(ModelOptions):
+    """Start Neo4j, LiteLLM, and Graphiti in the background."""
+
+    graphiti_args: list[str] = field(default_factory=list, init=False)
+
+    def __call__(self) -> None:
+        runtime = Runtime()
+        process_id = runtime.start(
+            foreground=False,
+            extra_args=self.graphiti_args,
+            settings=self.settings(),
+        )
+        print(json.dumps({"graphiti_pid": process_id, **runtime.status()}, indent=2))
+
+
+@_APP.command
+@dataclass
+class Down:
+    """Stop Graphiti, LiteLLM, and Neo4j."""
+
+    def __call__(self) -> None:
+        Runtime().stop()
+
+
+@_APP.command
+@dataclass
+class Status:
+    """Show native process status."""
+
+    def __call__(self) -> None:
+        print(json.dumps(Runtime().status(), indent=2))
+
+
+@_APP.command
+@dataclass
+class Env(ModelOptions):
+    """Print resolved runtime settings, including the Neo4j password."""
+
+    def __call__(self) -> None:
+        runtime = Runtime()
         state = runtime.read_state()
         print(
             json.dumps(
                 runtime.connection_settings(
                     str(state["neo4j_password"]),
-                    _model_settings(parsed),
+                    self.settings(),
                 ),
                 indent=2,
             )
         )
 
 
-def _add_model_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--profile",
-        help=(
-            "Optional Databricks profile override; otherwise uses "
-            "DATABRICKS_CONFIG_PROFILE, then the Databricks CLI default"
-        ),
-    )
-    parser.add_argument("--model", help="Graphiti LLM model")
-    parser.add_argument("--embedder-model", help="Graphiti embedding model")
-    parser.add_argument("--embedder-dimensions", type=int, help="Embedding vector dimensions")
-    parser.add_argument("--litellm-url", help="External LiteLLM OpenAI-compatible base URL")
-    parser.add_argument("--litellm-host", help="Managed LiteLLM listen host")
-    parser.add_argument("--litellm-port", type=int, help="Managed LiteLLM listen port")
-    ownership = parser.add_mutually_exclusive_group()
-    ownership.add_argument(
-        "--manage-litellm",
-        action="store_true",
-        default=None,
-        help="Start and stop the bundled LiteLLM proxy",
-    )
-    ownership.add_argument(
-        "--no-manage-litellm",
-        action="store_false",
-        dest="manage_litellm",
-        help="Use the configured external OpenAI-compatible endpoint",
-    )
-
-
-def _model_settings(args: argparse.Namespace) -> ModelSettings:
-    return ModelSettings.resolve(
-        profile=getattr(args, "profile", None),
-        model=getattr(args, "model", None),
-        embedder_model=getattr(args, "embedder_model", None),
-        embedder_dimensions=getattr(args, "embedder_dimensions", None),
-        litellm_url=getattr(args, "litellm_url", None),
-        litellm_host=getattr(args, "litellm_host", None),
-        litellm_port=getattr(args, "litellm_port", None),
-        manage_litellm=getattr(args, "manage_litellm", None),
-    )
+def main(argv: Sequence[str] | None = None) -> None:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if not arguments or arguments[0].startswith("-"):
+        arguments.insert(0, "start")
+    forwarded: list[str] = []
+    if "--" in arguments:
+        separator = arguments.index("--")
+        forwarded = arguments[separator + 1 :]
+        arguments = arguments[:separator]
+    command, bound, _ = _APP.parse_args(arguments)
+    options = command(*bound.args, **bound.kwargs)
+    if options is None:
+        return
+    if isinstance(options, (Start, Up)):
+        options.graphiti_args.extend(forwarded)
+    result = options()
+    if isinstance(result, int) and result:
+        raise SystemExit(result)

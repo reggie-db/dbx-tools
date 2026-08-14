@@ -40,3 +40,5 @@ env:
   # no user) sends from no-reply@EMAIL_DOMAIN. Leaving it unset is what dogfoods
   # both defaults. Set it (from the `email-from` secret) to force every message
   # from one fixed mailbox, or EMAIL_SYSTEM_FROM to rename the no-reply address.
+  - name: TEST
+    value: email-domain

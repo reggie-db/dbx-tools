@@ -22,10 +22,11 @@ without taking on a heavier feature package.
   be granted access before persistent cache initialization.
 - An interceptor context on `createApp` (`interceptor?: Interceptor | Interceptor[]`)
   that hands add-ons the computed env, AppKit lifecycle hooks (`onLifecycle`, using
-  AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary), signal
-  broadcast, and `bindProcess` for concurrently-style child supervision - any
-  bound process's death tears the app down, signals pass through. `@dbx-tools/tunnel`
-  is the primary consumer.
+  AppKit's own `setup:complete` / `server:ready` / `shutdown` vocabulary),
+  synchronous `onTeardown` cleanup, signal broadcast, and `bindProcess` for
+  concurrently-style child supervision. Every interceptor context shares one
+  process group: any bound process's death tears down every sibling and signals
+  pass through. `@dbx-tools/tunnel` and `@dbx-tools/appkit-graphiti` consume it.
 
 ## Why Use This Over Native AppKit
 
@@ -115,7 +116,7 @@ reason.
 | Option          | Type                            | Default       | Description                                                                                                                                                                                                                                                                                                                 |
 | --------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `autoConfigure` | `"provision" \| "env" \| false` | `"provision"` | What to run before AppKit boots. `"provision"` resolves the Lakebase connection into `process.env` and grants the AppKit cache schema; `"env"` resolves the connection only; `false` skips auto-configuration. Omit it to gate the default on a `lakebase` plugin being registered, or set it explicitly to run regardless. |
-| `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env, `onLifecycle` (AppKit's `setup:complete` / `server:ready` / `shutdown`), `broadcastSignal`, and `bindProcess` for concurrently-style child supervision.              |
+| `interceptor`   | `Interceptor \| Interceptor[]`  | none          | One or many callbacks handed an `InterceptorContext` after auto-config computes the env and before AppKit boots. The context carries the resolved env, `onLifecycle`, `onTeardown`, `broadcastSignal`, and globally shared `bindProcess` supervision.                                                                       |
 
 Set `autoConfigure` explicitly on an app that registers no `lakebase()` plugin but
 still wants AppKit's PERSISTENT cache. AppKit only chooses Lakebase for

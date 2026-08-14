@@ -314,12 +314,16 @@ export function recordedPackages(projectRoot: string = repoRoot): RecordedPackag
 }
 
 /**
- * The roots to scan for a live filesystem check: the distinct first segment of
- * every recorded member, unioned with the defaults. Lets a command compare disk
- * against the recorded truth without knowing the `packageRoots` the last
- * synth was configured with.
+ * The configured roots recorded in the root manifest. Older workspaces without
+ * that field fall back to the distinct first segment of every recorded member,
+ * unioned with the defaults.
  */
 export function recordedRoots(projectRoot: string = repoRoot): string[] {
+  const configured = readDbxToolsConfig(projectRoot)?.packageRoots;
+  if (Array.isArray(configured)) {
+    const roots = string.parseList(configured.map((root) => String(root)));
+    if (roots.length) return roots;
+  }
   const roots = new Set<string>(DEFAULT_PACKAGE_ROOTS);
   for (const member of readRecordedMembers(projectRoot)) {
     const pkg = packageOfMember(projectRoot, member);

@@ -3,16 +3,20 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import shlex
 import shutil
 import signal
 import subprocess
 import sys
-import tarfile
 import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from dbx_tools.core import bin
+from honcho.manager import Manager
+
+from .constants import PROCESS_STATE_PATH_ENV, UPSTREAM_MCP_PATH_ENV
 from .settings import ModelSettings
 
 """Installation and native process lifecycle for Graphiti, LiteLLM, and Neo4j."""
@@ -21,6 +25,17 @@ GRAPHITI_VERSION = "0.29.3"
 NEO4J_VERSION = "5.26.12"
 JAVA_VERSION = "21"
 UV_VERSION = "0.11"
+SUPERVISOR_START_TIMEOUT = 5.0
+
+GRAPHITI_MISE_TOOL = (
+    "http:graphiti["
+    "url=https://github.com/getzep/graphiti/archive/refs/tags/v{{version}}.tar.gz,"
+    "strip_components=1"
+    f"]@{GRAPHITI_VERSION}"
+)
+NEO4J_MISE_TOOL = f"neo4j@{NEO4J_VERSION}"
+JAVA_MISE_TOOL = f"java@{JAVA_VERSION}"
+UV_MISE_TOOL = f"uv@{UV_VERSION}"
 
 
 def default_data_dir() -> Path:
@@ -55,11 +70,11 @@ class RuntimePaths:
 
     @property
     def graphiti(self) -> Path:
-        return self.root / "graphiti" / GRAPHITI_VERSION
+        return self.root / "tools" / "graphiti" / GRAPHITI_VERSION
 
     @property
     def neo4j(self) -> Path:
-        return self.root / "neo4j" / NEO4J_VERSION
+        return self.root / "tools" / "neo4j" / NEO4J_VERSION
 
     @property
     def neo4j_data(self) -> Path:
@@ -73,9 +88,18 @@ class RuntimePaths:
     def log(self) -> Path:
         return self.root / "graphiti.log"
 
-    @property
-    def litellm_log(self) -> Path:
-        return self.root / "litellm.log"
+
+class _GraphitiManager(Manager):
+    """Honcho manager that reaps the recorded Graphiti process group first."""
+
+    def __init__(self, runtime: Runtime) -> None:
+        super().__init__()
+        self._runtime = runtime
+
+    def terminate(self) -> None:
+        state = self._runtime.read_state(required=False)
+        _terminate_process_group(state.get("graphiti_process_group"))
+        super().terminate()
 
 
 class Runtime:
@@ -84,10 +108,10 @@ class Runtime:
     def __init__(self, paths: RuntimePaths | None = None) -> None:
         self.paths = paths or RuntimePaths.default()
 
-    def setup(self) -> None:
-        self._require_mise()
-        self._ensure_mise_tool("java", JAVA_VERSION)
-        self._ensure_mise_tool("uv", UV_VERSION)
+    def _ensure_runtime(self) -> None:
+        """Install and initialize runtime prerequisites on first start."""
+        bin.ensure_tool(JAVA_MISE_TOOL)
+        bin.resolve("uv", mise_tool=UV_MISE_TOOL)
         self.paths.root.mkdir(parents=True, exist_ok=True)
         self._install_neo4j()
         self._install_graphiti()
@@ -101,50 +125,45 @@ class Runtime:
         settings: ModelSettings | None = None,
     ) -> int:
         settings = settings or ModelSettings.resolve()
-        self.setup()
+        self._ensure_runtime()
         state = self.read_state()
         self._start_neo4j(state["neo4j_password"])
-        owns_litellm = self._start_litellm(settings, state)
-        command = self.graphiti_command(settings, extra_args or [])
-        environment = self.environment(state["neo4j_password"], settings)
         if foreground:
-            try:
-                return subprocess.call(
-                    command,
-                    cwd=self.paths.graphiti / "mcp_server",
-                    env=environment,
-                )
-            finally:
-                if owns_litellm:
-                    self._stop_litellm(state)
+            return self.supervise(settings, extra_args or [])
+        command = [
+            sys.executable,
+            "-m",
+            "dbx_tools.graphiti.supervisor",
+            "--home",
+            str(self.paths.root),
+            "--",
+            *(extra_args or []),
+        ]
         try:
             with self.paths.log.open("ab") as output:
                 process = subprocess.Popen(
                     command,
-                    cwd=self.paths.graphiti / "mcp_server",
-                    env=environment,
+                    env=self._supervisor_environment(settings),
                     stdout=output,
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
                 )
         except Exception:
-            if owns_litellm:
-                self._stop_litellm(state)
+            self._neo4j_command("stop", check=False)
             raise
-        state["graphiti_pid"] = process.pid
-        state["model_settings"] = settings.public_settings()
-        self._write_state(state)
+        self._wait_for_supervisor(process.pid)
         return process.pid
 
     def stop(self) -> None:
         state = self.read_state(required=False)
-        pid = state.pop("graphiti_pid", None)
-        _terminate_pid(pid)
-        self._stop_litellm(state)
+        supervisor_pid = state.get("graphiti_pid")
+        if isinstance(supervisor_pid, int) and _is_running(supervisor_pid):
+            os.kill(supervisor_pid, signal.SIGTERM)
+        _terminate_process_group(state.get("graphiti_process_group"))
         if (self.paths.neo4j / "bin" / "neo4j").exists():
             self._neo4j_command("stop", check=False)
-        if state:
-            self._write_state(state)
+        state = self.read_state(required=False)
+        self._clear_process_state(state)
 
     def status(self) -> dict[str, object]:
         state = self.read_state(required=False)
@@ -152,6 +171,12 @@ class Runtime:
         model_settings = state.get("model_settings")
         manages_litellm = (
             model_settings.get("manage_litellm") if isinstance(model_settings, dict) else None
+        )
+        litellm_url = (
+            model_settings.get("litellm_url") if isinstance(model_settings, dict) else None
+        )
+        litellm_running = isinstance(litellm_url, str) and _url_ready(
+            f"{litellm_url.removesuffix('/v1')}/health/readiness"
         )
         neo4j_running = False
         if (self.paths.neo4j / "bin" / "neo4j").exists():
@@ -162,38 +187,31 @@ class Runtime:
             "graphiti": "running" if isinstance(pid, int) and _is_running(pid) else "stopped",
             "graphiti_pid": pid,
             "neo4j": "running" if neo4j_running else "stopped",
-            "mcp_url": (
-                f"http://{os.getenv('GRAPHITI_HOST', '127.0.0.1')}:"
-                f"{os.getenv('GRAPHITI_PORT', '8000')}/mcp/"
-            ),
+            "mcp_url": f"http://{_graphiti_host()}:{_graphiti_port()}/mcp/",
             "litellm": (
                 "running"
-                if isinstance(state.get("litellm_pid"), int) and _is_running(state["litellm_pid"])
+                if manages_litellm is True and litellm_running
                 else "external"
                 if manages_litellm is False
                 else "stopped"
             ),
-            "litellm_pid": state.get("litellm_pid"),
             "models": model_settings,
         }
 
     def graphiti_command(self, settings: ModelSettings, extra_args: list[str]) -> list[str]:
         """Build the upstream command entirely from defaults, environment, and CLI flags."""
         return [
-            "mise",
-            "exec",
-            f"uv@{UV_VERSION}",
-            "--",
-            "uv",
+            *self._uv_command(),
             "run",
             "--project",
             str(self.paths.graphiti / "mcp_server"),
             "python",
-            str(self.paths.graphiti / "mcp_server" / "main.py"),
+            "-m",
+            "dbx_tools.graphiti.server",
             "--host",
-            os.getenv("GRAPHITI_HOST", "127.0.0.1"),
+            _graphiti_host(),
             "--port",
-            os.getenv("GRAPHITI_PORT", "8000"),
+            _graphiti_port(),
             "--database-provider",
             "neo4j",
             "--llm-provider",
@@ -214,6 +232,15 @@ class Runtime:
         environment.setdefault("NEO4J_USER", "neo4j")
         environment.setdefault("NEO4J_PASSWORD", password)
         environment.setdefault("NEO4J_DATABASE", "neo4j")
+        existing_python_path = environment.get("PYTHONPATH")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            [
+                *_child_python_paths(),
+                *([existing_python_path] if existing_python_path else []),
+            ]
+        )
+        environment[UPSTREAM_MCP_PATH_ENV] = str(self.paths.graphiti / "mcp_server")
+        environment[PROCESS_STATE_PATH_ENV] = str(self.paths.state)
         environment.update(settings.graphiti_environment())
         return environment
 
@@ -232,54 +259,97 @@ class Runtime:
         result.update(settings.public_settings())
         return result
 
-    def _require_mise(self) -> None:
-        if not shutil.which("mise"):
-            raise RuntimeError("mise is required; install it from https://mise.jdx.dev")
-
-    def _ensure_mise_tool(self, tool: str, version: str) -> None:
-        result = subprocess.run(
-            ["mise", "where", f"{tool}@{version}"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
+    def supervise(
+        self,
+        settings: ModelSettings,
+        extra_args: list[str],
+    ) -> int:
+        """Run Graphiti and managed LiteLLM under Honcho."""
+        state = self.read_state()
+        manager = _GraphitiManager(self)
+        state.update(
+            {
+                "graphiti_pid": os.getpid(),
+                "graphiti_supervisor": True,
+                "model_settings": settings.public_settings(),
+            }
         )
-        if result.returncode:
-            subprocess.run(["mise", "use", "-g", "--yes", f"{tool}@{version}"], check=True)
+        self._write_state(state)
+        try:
+            if settings.manage_litellm and not _url_ready(settings.health_url):
+                manager.add_process(
+                    "litellm",
+                    shlex.join(self._litellm_command(settings)),
+                    env=self._litellm_environment(settings),
+                )
+            manager.add_process(
+                "graphiti",
+                shlex.join(self.graphiti_command(settings, extra_args)),
+                cwd=self.paths.graphiti / "mcp_server",
+                env=self.environment(str(state["neo4j_password"]), settings),
+            )
+            manager.loop()
+            return manager.returncode or 0
+        finally:
+            if (self.paths.neo4j / "bin" / "neo4j").exists():
+                self._neo4j_command("stop", check=False)
+            self._clear_process_state(self.read_state(required=False))
+
+    def _supervisor_environment(self, settings: ModelSettings) -> dict[str, str]:
+        environment = os.environ.copy()
+        environment.update(settings.graphiti_environment())
+        environment.update(
+            {
+                "MANAGE_LITELLM": "true" if settings.manage_litellm else "false",
+                "LITELLM_HOST": settings.litellm_host,
+                "LITELLM_PORT": str(settings.litellm_port),
+                "LITELLM_URL": settings.openai_api_url,
+            }
+        )
+        return environment
+
+    def _wait_for_supervisor(self, pid: int) -> None:
+        deadline = time.monotonic() + SUPERVISOR_START_TIMEOUT
+        while time.monotonic() < deadline:
+            state = self.read_state(required=False)
+            if state.get("graphiti_pid") == pid and state.get("graphiti_supervisor") is True:
+                return
+            if not _is_running(pid):
+                raise RuntimeError(
+                    f"Graphiti supervisor exited during startup; see {self.paths.log}"
+                )
+            time.sleep(0.1)
+        os.kill(pid, signal.SIGTERM)
+        raise RuntimeError(
+            f"Graphiti supervisor did not start within {SUPERVISOR_START_TIMEOUT:g} seconds; "
+            f"see {self.paths.log}"
+        )
+
+    def _clear_process_state(self, state: dict[str, object]) -> None:
+        for name in (
+            "graphiti_child_pid",
+            "graphiti_pid",
+            "graphiti_process_group",
+            "graphiti_supervisor",
+            "litellm_pid",
+        ):
+            state.pop(name, None)
+        if state:
+            self._write_state(state)
+
+    def _uv_command(self) -> list[str]:
+        return [bin.resolve("uv", mise_tool=UV_MISE_TOOL)]
 
     def _install_neo4j(self) -> None:
-        if (self.paths.neo4j / "bin" / "neo4j").exists():
-            return
-        archive = self.paths.root / f"neo4j-community-{NEO4J_VERSION}-unix.tar.gz"
-        url = f"https://dist.neo4j.org/neo4j-community-{NEO4J_VERSION}-unix.tar.gz"
-        _download(url, archive)
-        target_parent = self.paths.neo4j.parent
-        target_parent.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(archive, "r:gz") as bundle:
-            _extract_archive(bundle, target_parent)
-        extracted = target_parent / f"neo4j-community-{NEO4J_VERSION}"
-        extracted.rename(self.paths.neo4j)
-        archive.unlink()
+        installation = bin.ensure_tool(NEO4J_MISE_TOOL)
+        _link_tool(installation.root, self.paths.neo4j)
 
     def _install_graphiti(self) -> None:
-        if (self.paths.graphiti / "mcp_server" / "main.py").exists():
-            return
-        archive = self.paths.root / f"graphiti-{GRAPHITI_VERSION}.tar.gz"
-        url = f"https://github.com/getzep/graphiti/archive/refs/tags/v{GRAPHITI_VERSION}.tar.gz"
-        _download(url, archive)
-        target_parent = self.paths.graphiti.parent
-        target_parent.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(archive, "r:gz") as bundle:
-            _extract_archive(bundle, target_parent)
-        extracted = target_parent / f"graphiti-{GRAPHITI_VERSION}"
-        extracted.rename(self.paths.graphiti)
-        archive.unlink()
+        installation = bin.ensure_tool(GRAPHITI_MISE_TOOL)
+        _link_tool(installation.root, self.paths.graphiti)
         subprocess.run(
             [
-                "mise",
-                "exec",
-                f"uv@{UV_VERSION}",
-                "--",
-                "uv",
+                *self._uv_command(),
                 "sync",
                 "--project",
                 str(self.paths.graphiti / "mcp_server"),
@@ -292,6 +362,10 @@ class Runtime:
             return
         password = secrets.token_urlsafe(24)
         self._write_state({"neo4j_password": password})
+        self._set_initial_password(password)
+
+    def _set_initial_password(self, password: str) -> None:
+        """Initialize the ephemeral Neo4j store with the launcher password."""
         subprocess.run(
             self._mise_java_command(
                 self.paths.neo4j / "bin" / "neo4j-admin",
@@ -304,32 +378,59 @@ class Runtime:
         )
 
     def _start_neo4j(self, password: str) -> None:
-        del password
         result = self._neo4j_command("status", check=False)
         if result.returncode:
             self._neo4j_command("start")
+        authenticated, authentication_failed = self._wait_for_neo4j(password)
+        if authenticated:
+            return
+        if not authentication_failed or not _persistence_configured():
+            raise RuntimeError("Neo4j did not become ready with the configured credentials")
+        self._neo4j_command("stop", check=False)
+        shutil.rmtree(self.paths.neo4j_data, ignore_errors=True)
+        self._set_initial_password(password)
+        self._neo4j_command("start")
+        authenticated, _ = self._wait_for_neo4j(password)
+        if authenticated:
+            return
+        raise RuntimeError("Neo4j did not recover after resetting its ephemeral data")
+
+    def _wait_for_neo4j(self, password: str) -> tuple[bool, bool]:
+        """Wait for Bolt readiness and distinguish authentication rejection."""
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             result = self._neo4j_command("status", check=False)
             if result.returncode == 0:
-                return
+                authenticated = self._neo4j_auth_command(password)
+                if authenticated.returncode == 0:
+                    return True, False
+                detail = f"{authenticated.stdout}\n{authenticated.stderr}".lower()
+                if "authentication" in detail or "credentials" in detail:
+                    return False, True
             time.sleep(1)
-        raise RuntimeError("Neo4j did not become ready within 60 seconds")
+        return False, False
 
-    def _start_litellm(
-        self,
-        settings: ModelSettings,
-        state: dict[str, object],
-    ) -> bool:
-        if not settings.manage_litellm:
-            return False
-        if _url_ready(settings.health_url):
-            return False
-        existing_pid = state.get("litellm_pid")
-        if isinstance(existing_pid, int) and _is_running(existing_pid):
-            self._wait_for_litellm(settings, existing_pid)
-            return False
-        command = [
+    def _neo4j_auth_command(self, password: str) -> subprocess.CompletedProcess[str]:
+        """Probe Neo4j with the launcher credential without logging the secret."""
+        return subprocess.run(
+            self._mise_java_command(
+                self.paths.neo4j / "bin" / "cypher-shell",
+                "--address",
+                os.getenv("NEO4J_URI", "bolt://127.0.0.1:7687"),
+                "--username",
+                os.getenv("NEO4J_USER", "neo4j"),
+                "--password",
+                password,
+                "RETURN 1",
+            ),
+            env=self._neo4j_environment(),
+            text=True,
+            check=False,
+            capture_output=True,
+        )
+
+    def _litellm_command(self, settings: ModelSettings) -> list[str]:
+        return [
             sys.executable,
             "-m",
             "dbx_tools.litellm",
@@ -338,44 +439,11 @@ class Runtime:
             "--port",
             str(settings.litellm_port),
         ]
+
+    def _litellm_environment(self, settings: ModelSettings) -> dict[str, str]:
         environment = os.environ.copy()
         environment.update(settings.databricks_environment())
-        with self.paths.litellm_log.open("ab") as output:
-            process = subprocess.Popen(
-                command,
-                env=environment,
-                stdout=output,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-        state["litellm_pid"] = process.pid
-        state["model_settings"] = settings.public_settings()
-        self._write_state(state)
-        try:
-            self._wait_for_litellm(settings, process.pid)
-        except Exception:
-            self._stop_litellm(state)
-            raise
-        return True
-
-    def _stop_litellm(self, state: dict[str, object]) -> None:
-        _terminate_pid(state.pop("litellm_pid", None))
-        if state:
-            self._write_state(state)
-
-    def _wait_for_litellm(self, settings: ModelSettings, pid: int) -> None:
-        deadline = time.monotonic() + 60
-        while time.monotonic() < deadline:
-            if _url_ready(settings.health_url):
-                return
-            if not _is_running(pid):
-                raise RuntimeError(
-                    f"LiteLLM exited before becoming ready; see {self.paths.litellm_log}"
-                )
-            time.sleep(1)
-        raise RuntimeError(
-            f"LiteLLM did not become ready within 60 seconds; see {self.paths.litellm_log}"
-        )
+        return environment
 
     def _neo4j_command(
         self,
@@ -393,7 +461,8 @@ class Runtime:
         )
 
     def _mise_java_command(self, executable: Path, *arguments: str) -> list[str]:
-        return ["mise", "exec", f"java@{JAVA_VERSION}", "--", str(executable), *arguments]
+        mise = bin.ensure_tool(JAVA_MISE_TOOL).mise
+        return [str(mise), "exec", JAVA_MISE_TOOL, "--", str(executable), *arguments]
 
     def _neo4j_environment(self) -> dict[str, str]:
         environment = os.environ.copy()
@@ -406,7 +475,7 @@ class Runtime:
     def read_state(self, *, required: bool = True) -> dict[str, object]:
         if not self.paths.state.exists():
             if required:
-                raise RuntimeError("Graphiti is not set up; run `dbx-graphiti setup`")
+                raise RuntimeError("Graphiti has not been started")
             return {}
         return json.loads(self.paths.state.read_text())
 
@@ -416,21 +485,23 @@ class Runtime:
         self.paths.state.chmod(0o600)
 
 
-def _download(url: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_suffix(f"{target.suffix}.part")
-    with urllib.request.urlopen(url) as response, temporary.open("wb") as output:
-        shutil.copyfileobj(response, output)
-    temporary.replace(target)
-
-
-def _extract_archive(bundle: tarfile.TarFile, destination: Path) -> None:
-    destination = destination.resolve()
-    for member in bundle.getmembers():
-        extracted = (destination / member.name).resolve()
-        if destination not in extracted.parents and extracted != destination:
-            raise RuntimeError(f"Archive member escapes destination: {member.name}")
-    bundle.extractall(destination)
+def _link_tool(source: Path, destination: Path) -> None:
+    """Link one mise-managed installation into the launcher runtime layout."""
+    source = source.expanduser().absolute()
+    if destination.is_symlink():
+        current = destination.readlink()
+        current = current if current.is_absolute() else destination.parent / current
+        if current.absolute() == source:
+            return
+        destination.unlink()
+    elif destination.exists():
+        raise RuntimeError(f"Tool destination exists outside mise: {destination}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        destination.symlink_to(source, target_is_directory=True)
+    except FileExistsError:
+        if not destination.is_symlink() or destination.readlink() != source:
+            raise
 
 
 def _url_ready(url: str) -> bool:
@@ -441,9 +512,66 @@ def _url_ready(url: str) -> bool:
         return False
 
 
-def _terminate_pid(pid: object) -> None:
-    if isinstance(pid, int) and _is_running(pid):
-        os.kill(pid, signal.SIGTERM)
+def _graphiti_host() -> str:
+    """Resolve the listener host for local or Databricks App execution."""
+    return os.getenv(
+        "GRAPHITI_HOST", "0.0.0.0" if os.getenv("DATABRICKS_APP_PORT") else "127.0.0.1"
+    )
+
+
+def _graphiti_port() -> str:
+    """Resolve the listener port, honoring Databricks App injection."""
+    return os.getenv("GRAPHITI_PORT") or os.getenv("DATABRICKS_APP_PORT", "8000")
+
+
+def _child_python_paths() -> list[str]:
+    """Expose this package and its dependencies to the upstream virtualenv."""
+    paths = [str(Path(__file__).resolve().parents[2])]
+    for value in sys.path:
+        if not value:
+            continue
+        resolved = str(Path(value).resolve())
+        if resolved not in paths:
+            paths.append(resolved)
+    return paths
+
+
+def _persistence_configured() -> bool:
+    """Return whether Postgres can rebuild an ephemeral Neo4j store."""
+    return any(
+        os.getenv(name)
+        for name in (
+            "JOURNAL_DATABASE_URL",
+            "LAKEBASE_ENDPOINT",
+            "LAKEBASE_INSTANCE_NAME",
+            "PGHOST",
+        )
+    )
+
+
+def _terminate_process_group(process_group: object) -> None:
+    """Terminate a recorded sidecar group, escalating after Honcho's grace."""
+    if not isinstance(process_group, int) or not _is_process_group_running(process_group):
+        return
+    os.killpg(process_group, signal.SIGTERM)
+    deadline = time.monotonic() + 6
+    while time.monotonic() < deadline:
+        if not _is_process_group_running(process_group):
+            return
+        time.sleep(0.1)
+    if _is_process_group_running(process_group):
+        os.killpg(process_group, signal.SIGKILL)
+
+
+def _is_process_group_running(process_group: int) -> bool:
+    """Return whether a POSIX process group still has members."""
+    try:
+        os.killpg(process_group, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def _is_running(pid: int) -> bool:

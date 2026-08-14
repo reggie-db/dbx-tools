@@ -1,8 +1,10 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
 import { string } from "@dbx-tools/shared-core";
 import { Component, type Project, javascript, python, vscode } from "projen";
+import type { IResolver } from "projen/lib/file";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
+import { parse, stringify } from "smol-toml";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
@@ -45,7 +47,11 @@ export interface PythonReleaseOptions {
 export interface DBXToolsPythonWorkspaceOptions {
   readonly packages: readonly PythonPackageOptions[];
   readonly repository: PythonRepositoryOptions;
+  /** Workspace packages exposed as commands from the repository root. */
+  readonly dependencies?: readonly string[];
   readonly requiresPython?: string;
+  /** uv strategy for repositories that intentionally use multiple trusted indexes. */
+  readonly indexStrategy?: "first-index" | "unsafe-first-match" | "unsafe-best-match";
   readonly ruffTarget?: string;
   readonly workspaceName?: string;
   readonly devDependencies?: readonly string[];
@@ -64,6 +70,24 @@ const DEFAULT_DEV_DEPENDENCIES = [
 ] as const;
 
 const quote = (value: string): string => JSON.stringify(value);
+
+interface TomlSynthesizer {
+  synthesizeContent(resolver: IResolver): string | undefined;
+}
+
+function formatPyproject(file: python.PyprojectTomlFile): void {
+  const target = file as unknown as TomlSynthesizer;
+  const synthesize = target.synthesizeContent.bind(file);
+  target.synthesizeContent = (resolver) => {
+    const content = synthesize(resolver);
+    if (!content) return content;
+    const marker = content.startsWith("# ") ? content.slice(0, content.indexOf("\n")) : undefined;
+    const body = stringify(parse(content))
+      .trimEnd()
+      .replace(/ = \[ (.*) \]$/gm, " = [$1]");
+    return `${marker ? `${marker}\n\n` : ""}${body}\n`;
+  };
+}
 
 /** Repository-relative path for a Python package directory. */
 export function pythonPackagePath(repository: PythonRepositoryOptions, directory: string): string {
@@ -147,6 +171,7 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     if (pkg.scripts) {
       this.uv.file.addOverride("project.scripts", pkg.scripts);
     }
+    formatPyproject(this.uv.file);
     this.uv.file.readonly = true;
 
     for (const path of [".gitattributes", ".gitignore"]) {
@@ -230,7 +255,7 @@ export class DBXToolsPythonWorkspace extends Component {
         name: options.workspaceName ?? `${string.toSlug(project.name)}-python-workspace`,
         version: this.version,
         requiresPython: this.requiresPython,
-        dependencies: [],
+        dependencies: [...(options.dependencies ?? [])],
       },
       dependencyGroups: {
         dev: [...(options.devDependencies ?? DEFAULT_DEV_DEPENDENCIES)],
@@ -255,10 +280,14 @@ export class DBXToolsPythonWorkspace extends Component {
         },
       },
     });
+    if (options.indexStrategy) {
+      file.addOverride("tool.uv.index-strategy", options.indexStrategy);
+    }
     file.addOverride(
       "tool.uv.sources",
       Object.fromEntries(options.packages.map((pkg) => [pkg.name, { workspace: true }])),
     );
+    formatPyproject(file);
     file.readonly = true;
     return file;
   }

@@ -158,6 +158,8 @@ without touching code.
 | `FRP_PROTOCOL`                | `wss`                        |
 | `FRP_TOKEN`                   | unset (no frps auth)         |
 | `FRP_PROXY_NAME`              | public domain's first label  |
+| `FRP_PATH`                    | `DATABRICKS_APP_NAME`        |
+| `FRP_STRIP_PREFIX`            | `true` for non-root paths    |
 | `TUNNEL_FORWARD_HEADERS`      | the built-in `x-` allow-list |
 | `TUNNEL_AUTH_JWT_SECRET`      | an ephemeral per-process key |
 
