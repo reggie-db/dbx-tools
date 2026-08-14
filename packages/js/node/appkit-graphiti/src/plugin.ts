@@ -43,6 +43,7 @@ const MCP_PATH = "/api/graphiti/mcp";
 const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
 const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
 const SIDECAR_SHUTDOWN_GRACE_MS = 10_000;
+const SIDECAR_STARTUP_TIMEOUT_MS = 10 * 60_000;
 const SCOPED_TOOL_FIELDS = {
   add_memory: "group_id",
   add_triplet: "group_id",
@@ -173,7 +174,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
       {
         killOthersOn: ["failure", "success"],
         killSignal: "SIGTERM",
-        killTimeout: 12_000,
+        killTimeout: SIDECAR_SHUTDOWN_GRACE_MS,
         prefix: "name",
         prefixColors: false,
       },
@@ -451,7 +452,7 @@ async function waitForGraphiti(port: number): Promise<void> {
     },
     {
       intervalMs: 250,
-      timeoutMs: 60_000,
+      timeoutMs: SIDECAR_STARTUP_TIMEOUT_MS,
       predicate: (ready) => !ready,
     },
   )) {
