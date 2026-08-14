@@ -989,8 +989,11 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     directory: "graphiti",
     name: "dbx-tools-graphiti",
     module: "dbx_tools.graphiti",
-    description: "Native Graphiti MCP and Neo4j launcher with mise-managed prerequisites",
-    dependencies: [],
+    description:
+      "Native Graphiti MCP and Neo4j launcher with Databricks models through LiteLLM",
+    dependencies: [
+      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-litellm", "litellm"),
+    ],
     scripts: {
       "dbx-graphiti": "dbx_tools.graphiti.cli:main",
     },

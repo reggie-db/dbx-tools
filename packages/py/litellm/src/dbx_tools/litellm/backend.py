@@ -29,7 +29,7 @@ def require_profile(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> str:
-    """Resolve the CLI argument, configured environment, or Databricks CLI default."""
+    """Resolve an explicit override, configured environment, or CLI default."""
     env = os.environ if environ is None else environ
     selected = _profile_name(profile) or _profile_name(env.get(DATABRICKS_PROFILE_ENV))
     return selected or _default_cli_profile()

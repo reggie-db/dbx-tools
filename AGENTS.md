@@ -201,8 +201,9 @@ Primary package areas:
   cache or Mastra dependencies; deterministic behavior belongs in the colocated
   model polyglot tests.
 - `packages/py/litellm` — thin LiteLLM integration for Databricks Model
-  Serving. It resolves the profile from the CLI argument,
-  `DATABRICKS_CONFIG_PROFILE`, then the Databricks CLI's configured default;
+  Serving. An explicit profile is an optional override; otherwise it resolves
+  `DATABRICKS_CONFIG_PROFILE`, then the one entry marked as the Databricks CLI
+  default in `databricks auth profiles --output json --skip-validate`;
   adds live endpoint discovery, fuzzy model resolution, and tool-capability
   filtering; then delegates to LiteLLM's built-in Databricks provider. Keep
   authentication,
@@ -220,10 +221,16 @@ Primary package areas:
   private APIs. Keep the FastAPI upper bound until LiteLLM includes its
   `get_flat_params` compatibility fix.
 - `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
-  server with a Neo4j 5 backend. It must not use containers: provision Java and
-  uv through mise, cache pinned upstream distributions under the user's data
-  directory, and keep Graphiti behavior in upstream Graphiti rather than
-  vendoring its implementation here.
+  server with a Neo4j 5 backend and a managed `dbx-tools-litellm` process.
+  It must not use containers: provision Java and uv through mise, cache pinned
+  upstream distributions under the user's data directory, and keep Graphiti
+  behavior in upstream Graphiti rather than vendoring its implementation here.
+  The launcher requires no `config.yaml`: construct the upstream command and
+  environment from CLI-over-environment settings, default to Databricks GPT
+  plus the 1024-dimensional GTE embedding endpoint, and let an explicit
+  LiteLLM URL disable proxy ownership. Managed mode resolves
+  an optional profile override, then `DATABRICKS_CONFIG_PROFILE`, and otherwise
+  inherits the Databricks CLI default.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
 - **`packages/py/`** — Python packages in the root uv workspace go here.

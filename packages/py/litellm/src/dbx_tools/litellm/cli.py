@@ -22,8 +22,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--profile",
         help=(
-            "Databricks profile used for endpoint discovery and model requests; "
-            "defaults to DATABRICKS_CONFIG_PROFILE, then the Databricks CLI default"
+            "Optional Databricks profile override; otherwise uses "
+            "DATABRICKS_CONFIG_PROFILE, then the Databricks CLI default"
         ),
     )
     parsed, proxy_args = parser.parse_known_args(argv)

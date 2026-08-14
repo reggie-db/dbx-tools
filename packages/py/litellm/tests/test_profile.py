@@ -20,8 +20,12 @@ def test_explicit_profile_wins_without_spawning_cli(monkeypatch: pytest.MonkeyPa
         lambda *args, **kwargs: pytest.fail(f"unexpected CLI spawn: {args}, {kwargs}"),
     )
 
-    assert require_profile("  explicit  ", environ={DATABRICKS_PROFILE_ENV: "environment"}) == (
-        "explicit"
+    assert (
+        require_profile(
+            "  explicit  ",
+            environ={DATABRICKS_PROFILE_ENV: "environment"},
+        )
+        == "explicit"
     )
 
 
@@ -74,7 +78,7 @@ def test_missing_cli_default_has_actionable_error(monkeypatch: pytest.MonkeyPatc
         require_profile(environ={})
 
 
-def test_cli_profile_argument_is_optional(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_uses_environment_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     proxy_arguments: list[str] = []
     monkeypatch.setenv(DATABRICKS_PROFILE_ENV, "environment")
     monkeypatch.setattr(
@@ -88,6 +92,38 @@ def test_cli_profile_argument_is_optional(monkeypatch: pytest.MonkeyPatch) -> No
     assert proxy_arguments[:2] == ["--port", "4000"]
     assert "--config" in proxy_arguments
     assert backend_module.os.environ[DATABRICKS_PROFILE_ENV] == "environment"
+
+
+def test_cli_sets_databricks_cli_default_in_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    proxy_arguments: list[str] = []
+    monkeypatch.delenv(DATABRICKS_PROFILE_ENV, raising=False)
+    monkeypatch.setattr(cli_module, "require_profile", lambda _: "DEFAULT")
+    monkeypatch.setattr(
+        cli_module,
+        "_run_proxy",
+        lambda arguments: proxy_arguments.extend(arguments),
+    )
+
+    cli_module.main(["--port", "4000"])
+
+    assert proxy_arguments[:2] == ["--port", "4000"]
+    assert backend_module.os.environ[DATABRICKS_PROFILE_ENV] == "DEFAULT"
+
+
+def test_cli_allows_profile_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    proxy_arguments: list[str] = []
+    monkeypatch.setattr(
+        cli_module,
+        "_run_proxy",
+        lambda arguments: proxy_arguments.extend(arguments),
+    )
+
+    cli_module.main(["--profile", "other", "--port", "4000"])
+
+    assert proxy_arguments[:2] == ["--port", "4000"]
+    assert backend_module.os.environ[DATABRICKS_PROFILE_ENV] == "other"
 
 
 def test_repeated_provider_prefixes_are_normalized() -> None:

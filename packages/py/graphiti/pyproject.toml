@@ -2,11 +2,13 @@
 
 [project]
 name = "dbx-tools-graphiti"
-version = "0.6.111"
-description = "Native Graphiti MCP and Neo4j launcher with mise-managed prerequisites"
+version = "0.6.112"
+description = "Native Graphiti MCP and Neo4j launcher with Databricks models through LiteLLM"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [ ]
+dependencies = [
+  "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/litellm"
+]
 
   [project.urls]
   Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/graphiti"

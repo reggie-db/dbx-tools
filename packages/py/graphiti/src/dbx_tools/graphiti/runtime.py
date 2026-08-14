@@ -1,5 +1,3 @@
-"""Installation and native process lifecycle for Graphiti and Neo4j."""
-
 from __future__ import annotations
 
 import json
@@ -13,8 +11,11 @@ import tarfile
 import time
 import urllib.request
 from dataclasses import dataclass
-from importlib import resources
 from pathlib import Path
+
+from .settings import ModelSettings
+
+"""Installation and native process lifecycle for Graphiti, LiteLLM, and Neo4j."""
 
 GRAPHITI_VERSION = "0.29.3"
 NEO4J_VERSION = "5.26.12"
@@ -72,6 +73,10 @@ class RuntimePaths:
     def log(self) -> Path:
         return self.root / "graphiti.log"
 
+    @property
+    def litellm_log(self) -> Path:
+        return self.root / "litellm.log"
+
 
 class Runtime:
     """Provision and run a pinned native Graphiti stack."""
@@ -88,32 +93,54 @@ class Runtime:
         self._install_graphiti()
         self._ensure_state()
 
-    def start(self, *, foreground: bool = True, extra_args: list[str] | None = None) -> int:
+    def start(
+        self,
+        *,
+        foreground: bool = True,
+        extra_args: list[str] | None = None,
+        settings: ModelSettings | None = None,
+    ) -> int:
+        settings = settings or ModelSettings.resolve()
         self.setup()
         state = self.read_state()
         self._start_neo4j(state["neo4j_password"])
-        command = self.graphiti_command(extra_args or [])
-        environment = self.environment(state["neo4j_password"])
+        owns_litellm = self._start_litellm(settings, state)
+        command = self.graphiti_command(settings, extra_args or [])
+        environment = self.environment(state["neo4j_password"], settings)
         if foreground:
-            return subprocess.call(command, cwd=self.paths.graphiti / "mcp_server", env=environment)
-        with self.paths.log.open("ab") as output:
-            process = subprocess.Popen(
-                command,
-                cwd=self.paths.graphiti / "mcp_server",
-                env=environment,
-                stdout=output,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
+            try:
+                return subprocess.call(
+                    command,
+                    cwd=self.paths.graphiti / "mcp_server",
+                    env=environment,
+                )
+            finally:
+                if owns_litellm:
+                    self._stop_litellm(state)
+        try:
+            with self.paths.log.open("ab") as output:
+                process = subprocess.Popen(
+                    command,
+                    cwd=self.paths.graphiti / "mcp_server",
+                    env=environment,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+        except Exception:
+            if owns_litellm:
+                self._stop_litellm(state)
+            raise
         state["graphiti_pid"] = process.pid
+        state["model_settings"] = settings.public_settings()
         self._write_state(state)
         return process.pid
 
     def stop(self) -> None:
         state = self.read_state(required=False)
         pid = state.pop("graphiti_pid", None)
-        if pid and _is_running(pid):
-            os.kill(pid, signal.SIGTERM)
+        _terminate_pid(pid)
+        self._stop_litellm(state)
         if (self.paths.neo4j / "bin" / "neo4j").exists():
             self._neo4j_command("stop", check=False)
         if state:
@@ -122,6 +149,10 @@ class Runtime:
     def status(self) -> dict[str, object]:
         state = self.read_state(required=False)
         pid = state.get("graphiti_pid")
+        model_settings = state.get("model_settings")
+        manages_litellm = (
+            model_settings.get("manage_litellm") if isinstance(model_settings, dict) else None
+        )
         neo4j_running = False
         if (self.paths.neo4j / "bin" / "neo4j").exists():
             result = self._neo4j_command("status", check=False, capture_output=True)
@@ -131,11 +162,23 @@ class Runtime:
             "graphiti": "running" if isinstance(pid, int) and _is_running(pid) else "stopped",
             "graphiti_pid": pid,
             "neo4j": "running" if neo4j_running else "stopped",
-            "mcp_url": "http://127.0.0.1:8000/mcp/",
+            "mcp_url": (
+                f"http://{os.getenv('GRAPHITI_HOST', '127.0.0.1')}:"
+                f"{os.getenv('GRAPHITI_PORT', '8000')}/mcp/"
+            ),
+            "litellm": (
+                "running"
+                if isinstance(state.get("litellm_pid"), int) and _is_running(state["litellm_pid"])
+                else "external"
+                if manages_litellm is False
+                else "stopped"
+            ),
+            "litellm_pid": state.get("litellm_pid"),
+            "models": model_settings,
         }
 
-    def graphiti_command(self, extra_args: list[str]) -> list[str]:
-        config = resources.files("dbx_tools.graphiti").joinpath("config.yaml")
+    def graphiti_command(self, settings: ModelSettings, extra_args: list[str]) -> list[str]:
+        """Build the upstream command entirely from defaults, environment, and CLI flags."""
         return [
             "mise",
             "exec",
@@ -147,28 +190,47 @@ class Runtime:
             str(self.paths.graphiti / "mcp_server"),
             "python",
             str(self.paths.graphiti / "mcp_server" / "main.py"),
-            "--config",
-            str(config),
+            "--host",
+            os.getenv("GRAPHITI_HOST", "127.0.0.1"),
+            "--port",
+            os.getenv("GRAPHITI_PORT", "8000"),
             "--database-provider",
             "neo4j",
+            "--llm-provider",
+            "openai",
+            "--model",
+            settings.model,
+            "--embedder-provider",
+            "openai",
+            "--embedder-model",
+            settings.embedder_model,
             *extra_args,
         ]
 
-    def environment(self, password: str) -> dict[str, str]:
+    def environment(self, password: str, settings: ModelSettings) -> dict[str, str]:
+        """Build the upstream process environment without a Graphiti config file."""
         environment = os.environ.copy()
         environment.setdefault("NEO4J_URI", "bolt://127.0.0.1:7687")
         environment.setdefault("NEO4J_USER", "neo4j")
         environment.setdefault("NEO4J_PASSWORD", password)
         environment.setdefault("NEO4J_DATABASE", "neo4j")
+        environment.update(settings.graphiti_environment())
         return environment
 
-    def connection_settings(self, password: str) -> dict[str, str]:
-        """Return only the Neo4j settings callers need to connect."""
-        environment = self.environment(password)
-        return {
+    def connection_settings(
+        self,
+        password: str,
+        settings: ModelSettings | None = None,
+    ) -> dict[str, object]:
+        """Return the resolved Neo4j, model, and proxy settings."""
+        settings = settings or ModelSettings.resolve()
+        environment = self.environment(password, settings)
+        result: dict[str, object] = {
             name: environment[name]
             for name in ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD", "NEO4J_DATABASE")
         }
+        result.update(settings.public_settings())
+        return result
 
     def _require_mise(self) -> None:
         if not shutil.which("mise"):
@@ -254,6 +316,67 @@ class Runtime:
             time.sleep(1)
         raise RuntimeError("Neo4j did not become ready within 60 seconds")
 
+    def _start_litellm(
+        self,
+        settings: ModelSettings,
+        state: dict[str, object],
+    ) -> bool:
+        if not settings.manage_litellm:
+            return False
+        if _url_ready(settings.health_url):
+            return False
+        existing_pid = state.get("litellm_pid")
+        if isinstance(existing_pid, int) and _is_running(existing_pid):
+            self._wait_for_litellm(settings, existing_pid)
+            return False
+        command = [
+            sys.executable,
+            "-m",
+            "dbx_tools.litellm",
+            "--host",
+            settings.litellm_host,
+            "--port",
+            str(settings.litellm_port),
+        ]
+        environment = os.environ.copy()
+        environment.update(settings.databricks_environment())
+        with self.paths.litellm_log.open("ab") as output:
+            process = subprocess.Popen(
+                command,
+                env=environment,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        state["litellm_pid"] = process.pid
+        state["model_settings"] = settings.public_settings()
+        self._write_state(state)
+        try:
+            self._wait_for_litellm(settings, process.pid)
+        except Exception:
+            self._stop_litellm(state)
+            raise
+        return True
+
+    def _stop_litellm(self, state: dict[str, object]) -> None:
+        _terminate_pid(state.pop("litellm_pid", None))
+        if state:
+            self._write_state(state)
+
+    def _wait_for_litellm(self, settings: ModelSettings, pid: int) -> None:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            if _url_ready(settings.health_url):
+                return
+            if not _is_running(pid):
+                raise RuntimeError(
+                    f"LiteLLM exited before becoming ready; see {self.paths.litellm_log}"
+                )
+            time.sleep(1)
+        raise RuntimeError(
+            f"LiteLLM did not become ready within 60 seconds; see {self.paths.litellm_log}"
+        )
+
     def _neo4j_command(
         self,
         action: str,
@@ -308,6 +431,19 @@ def _extract_archive(bundle: tarfile.TarFile, destination: Path) -> None:
         if destination not in extracted.parents and extracted != destination:
             raise RuntimeError(f"Archive member escapes destination: {member.name}")
     bundle.extractall(destination)
+
+
+def _url_ready(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=1) as response:
+            return response.status < 500
+    except OSError:
+        return False
+
+
+def _terminate_pid(pid: object) -> None:
+    if isinstance(pid, int) and _is_running(pid):
+        os.kill(pid, signal.SIGTERM)
 
 
 def _is_running(pid: int) -> bool:

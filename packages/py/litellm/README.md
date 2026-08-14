@@ -18,8 +18,9 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
 
 ## Key features
 
-- resolves a Databricks profile from `--profile`, then
-  `DATABRICKS_CONFIG_PROFILE`, then the Databricks CLI's configured default;
+- accepts an optional `--profile` override, otherwise resolving
+  `DATABRICKS_CONFIG_PROFILE`, then the one marked as the Databricks CLI
+  default;
 - discovers serving endpoints from the selected workspace and caches them per
   process;
 - advertises discovered endpoints and family aliases only under `dbx/*` by
@@ -49,7 +50,7 @@ uv run dbx-litellm --port 4000
 
 The launcher listens on `127.0.0.1` by default. Pass an explicit LiteLLM
 `--host` value or set `HOST` to expose it on another interface.
-Pass `--profile my-workspace` to override both the environment and CLI default.
+`--profile` is available as an override but is not required.
 
 The equivalent module invocation is:
 
@@ -74,9 +75,11 @@ credentials.
 The package has two paths because LiteLLM's `CustomLLM` interface handles Chat
 Completions and embeddings, but does not expose a native Responses hook:
 
-1. **Select one workspace.** `dbx-litellm` resolves `--profile`, then
-   `DATABRICKS_CONFIG_PROFILE`, then the Databricks CLI's configured default. It
-   writes the result back to `DATABRICKS_CONFIG_PROFILE` before LiteLLM starts.
+1. **Select one workspace.** An explicit `--profile` overrides
+   `DATABRICKS_CONFIG_PROFILE`; when neither is present, `dbx-litellm` runs
+   `databricks auth profiles --output json --skip-validate` and selects the one
+   entry marked `"default": true`. It writes the result back to
+   `DATABRICKS_CONFIG_PROFILE` before LiteLLM starts.
 2. **Discover and resolve the model.** The first model-dependent request lazily
    calls the selected workspace's Serving Endpoints API. An exact endpoint name,
    a family alias such as `dbx/databricks-claude`, or a loose name such as
@@ -111,7 +114,7 @@ out of LiteLLM's way.
 
 Profile selection happens once, at proxy startup, in this order:
 
-1. `dbx-litellm --profile <name>`;
+1. optional `dbx-litellm --profile <name>` override;
 2. `DATABRICKS_CONFIG_PROFILE`;
 3. the one profile marked as the Databricks CLI default.
 
@@ -128,11 +131,10 @@ to LiteLLM's built-in Databricks provider. SDK background token refresh is
 disabled because this package's guarded credential cache is the sole refresh
 owner.
 
-For an unambiguous launch, especially with multiple profiles, pass the profile
-explicitly:
+To override the Databricks CLI default for a process, set the environment:
 
 ```bash
-uv run dbx-litellm --profile my-workspace --port 4000
+DATABRICKS_CONFIG_PROFILE=my-workspace uv run dbx-litellm --port 4000
 ```
 
 ## Model discovery and names
@@ -259,8 +261,8 @@ model_list:
       model: "databricks/*"
 ```
 
-Set `DATABRICKS_CONFIG_PROFILE` before starting LiteLLM to override the
-Databricks CLI default when `--profile` is not available.
+Set `DATABRICKS_CONFIG_PROFILE` or pass `--profile` to override the Databricks
+CLI default.
 
 ## Automatic reasoning effort
 
@@ -454,11 +456,10 @@ uv run ruff check packages/py/model packages/py/litellm
 uv run dbx-litellm --help
 ```
 
-Then start the proxy against an explicitly selected profile and exercise live
-discovery before inference:
+Then start the proxy and exercise live discovery before inference:
 
 ```sh
-uv run dbx-litellm --profile <PROFILE> --port 4000
+uv run dbx-litellm --port 4000
 curl -fsS http://127.0.0.1:4000/health/readiness
 curl -fsS http://127.0.0.1:4000/v1/models
 ```
