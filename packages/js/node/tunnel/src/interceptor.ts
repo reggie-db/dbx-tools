@@ -17,11 +17,10 @@
  * @module
  */
 
-import type { ChildProcess } from "node:child_process";
 import type { Interceptor, InterceptorContext } from "@dbx-tools/appkit";
 import { log, object } from "@dbx-tools/shared-core";
-import { installFrp, resolveFrpConfig, startFrp, writeFrpConfig } from "./frp.ts";
-import { installPortr, resolvePortrConfig, startPortr, writePortrConfig } from "./portr.ts";
+import { installFrp, resolveFrpConfig, superviseFrp, writeFrpConfig } from "./frp.ts";
+import { installPortr, resolvePortrConfig, supervisePortr, writePortrConfig } from "./portr.ts";
 import { startPathProxy } from "./path-proxy.ts";
 
 const logger = log.logger("tunnel:interceptor");
@@ -100,7 +99,7 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
 
     const port = resolvePublicPort(options.port);
     const transport = resolveTunnelTransport(options.transport);
-    const children: ChildProcess[] = [];
+    const auxiliaries: Array<{ stop(): void }> = [];
     if (transport === "portr" || transport === "both") {
       const portrConfig = resolvePortrConfig({
         publicDomain: options.publicDomain,
@@ -110,7 +109,7 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
       if (portrConfig) {
         const portrEnv = await installPortr();
         await writePortrConfig(portrConfig, portrEnv);
-        children.push(await startPortr(portrConfig, portrEnv));
+        auxiliaries.push(supervisePortr(portrConfig, portrEnv));
       } else {
         logger.info("portr not configured (requires PORTR_TOKEN and TUNNEL_PUBLIC_DOMAIN)");
       }
@@ -138,15 +137,17 @@ export function tunnelInterceptor(options: TunnelInterceptorOptions = {}): Inter
         }
         const frpEnv = await installFrp();
         const configPath = await writeFrpConfig(frpConfig, frpEnv);
-        children.push(startFrp(frpConfig, frpEnv, configPath));
+        auxiliaries.push(superviseFrp(frpConfig, frpEnv, configPath));
       } else {
         logger.info("frp not configured (requires TUNNEL_PUBLIC_DOMAIN)");
       }
     }
-    if (!children.length) return;
-    for (const child of children) ctx.bindProcess(child);
+    if (!auxiliaries.length) return;
+    ctx.onTeardown(() => {
+      for (const auxiliary of auxiliaries) auxiliary.stop();
+    });
     ctx.onLifecycle("shutdown", () => {
-      for (const child of children) if (!child.killed) child.kill("SIGTERM");
+      for (const auxiliary of auxiliaries) auxiliary.stop();
     });
     logger.info(`tunnel bound: ${transport} -> :${port}`);
   };

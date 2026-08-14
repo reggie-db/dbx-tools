@@ -38,6 +38,7 @@ import type { PluginMap } from "@databricks/appkit/dist/shared/src/plugin";
 import { async, log } from "@dbx-tools/shared-core";
 
 import { createSoftPersistentStorage } from "./_cache-storage.ts";
+import { loadBrandContext } from "./brand.ts";
 import {
   createInterceptorContext,
   type Interceptor,
@@ -284,6 +285,8 @@ export async function createApp<T extends AppKitPlugins>(
   });
 
   logger.debug("createApp: autoConfigure");
+  const brandContext = await loadBrandContext();
+  logger.debug("createApp: brand context loaded", { name: brandContext.name });
   const lakebase = await autoConfigure(config);
   logger.debug("createApp: autoConfigure returned", {
     lakebase: lakebase ? redactLakebaseConnection(lakebase) : undefined,

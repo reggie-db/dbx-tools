@@ -8,6 +8,16 @@
  */
 import { deepEqual } from "./object.ts";
 
+const DEFAULT_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000] as const;
+
+export function boundedRetryDelay(
+  attempt: number,
+  delaysMs: readonly number[] = DEFAULT_RETRY_DELAYS_MS,
+): number {
+  if (!delaysMs.length) return 0;
+  return delaysMs[Math.min(Math.max(0, attempt), delaysMs.length - 1)]!;
+}
+
 /**
  * Per-iteration context handed to {@link PollProducer} and the
  * predicate on each step of a {@link poll} loop. Bundles the

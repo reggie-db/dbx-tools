@@ -718,6 +718,10 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
   p.addDevDeps("@dbx-tools/email@workspace:*");
 });
 
+project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {
+  p.addDeps("@dbx-tools/appkit@workspace:*");
+});
+
 // ui-appkit: the shared React UI base for the feature UI packages. Re-exports
 // AppKit's UI kit (`@databricks/appkit-ui/react`) and the shared stylesheet.
 // `ui`-tagged (React + jsx come from the ui tag). Tailwind v4 is compiled by the

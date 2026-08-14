@@ -108,6 +108,16 @@ describe("broadcastSignal", () => {
   });
 });
 
+describe("onTeardown", () => {
+  it("installs process signal handling without a bound child", () => {
+    const { context } = createInterceptorContext({});
+
+    context.onTeardown(() => {});
+
+    assert.ok(process.listenerCount("SIGTERM") > 0);
+  });
+});
+
 describe("lifecycle", () => {
   it("invokes handlers registered for the emitted event", async () => {
     const { context, emitLifecycle } = createInterceptorContext({});

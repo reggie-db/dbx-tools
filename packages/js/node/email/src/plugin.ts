@@ -45,6 +45,7 @@ import {
   type ToolProvider,
   type ToolRegistry,
 } from "@databricks/appkit/beta";
+import { brand as appkitBrand } from "@dbx-tools/appkit";
 import { log, string, token } from "@dbx-tools/shared-core";
 import {
   email as sharedEmail,
@@ -53,6 +54,7 @@ import {
   type EmailSenders,
 } from "@dbx-tools/shared-email";
 import { EMAIL_CONFIG_SCHEMA, type EmailPluginConfig } from "./config.ts";
+import { emailBrandFromContext } from "./brand.ts";
 import { EMAIL_SENDERS_SETTINGS, EMAIL_VERIFY_SETTINGS } from "./defaults.ts";
 import { isSenderAllowed, listSenderOptions, resolveSenderAddress } from "./sender.ts";
 import { SEND_EMAIL_DESCRIPTION } from "./tool.ts";
@@ -142,7 +144,10 @@ export class EmailPlugin extends Plugin<EmailPluginConfig> implements ToolProvid
    * is being written to disk rather than sent.
    */
   override async setup(): Promise<void> {
-    const { transporter, config } = getEmailRuntime(this.config);
+    const { transporter, config } = getEmailRuntime({
+      ...this.config,
+      brand: this.config.brand ?? emailBrandFromContext(appkitBrand.getBrandContext()),
+    });
     setEmailExecutor((fn, settings) => this.execute(fn, settings));
     const policy = {
       mode: config.mode,

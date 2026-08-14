@@ -31,6 +31,7 @@ describe("frp", () => {
           'serverAddr = "inspire.example.com"',
           "serverPort = 443",
           'transport.protocol = "wss"',
+          "loginFailExit = false",
           'auth.token = "secret\\\"token"',
           "",
           "[[proxies]]",

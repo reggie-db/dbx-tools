@@ -3,6 +3,15 @@ import { describe, it } from "node:test";
 
 import { async } from "../index.ts";
 
+describe("async.boundedRetryDelay", () => {
+  it("caps an infinite retry sequence at the last configured delay", () => {
+    assert.deepEqual(
+      [0, 1, 2, 3, 4, 5, 50].map((attempt) => async.boundedRetryDelay(attempt)),
+      [1_000, 2_000, 5_000, 10_000, 30_000, 30_000, 30_000],
+    );
+  });
+});
+
 describe("poll", () => {
   it("waits between values skipped by the distinct filter", async () => {
     let attempts = 0;

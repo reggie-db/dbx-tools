@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
+    "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@dbx-tools/shared-email": "workspace:*",
@@ -51,7 +52,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.120",
+  "version": "0.6.121",
   "types": "index.ts",
   "type": "module",
   "exports": {

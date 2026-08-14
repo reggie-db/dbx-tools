@@ -25,6 +25,7 @@ import {
   ResourceType,
 } from "@databricks/appkit";
 import { plugin as appkitPlugin } from "@dbx-tools/appkit";
+import { brand as appkitBrand } from "@dbx-tools/appkit";
 import {
   auth as passwordlessAuth,
   storage as authStorage,
@@ -356,7 +357,7 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   } satisfies PluginManifest<"authGate">;
 
   private resolved!: ResolvedAuthGateConfig;
-  private runtime?: PasswordlessAuthRuntime;
+  private readonly runtimes = new Map<string, PasswordlessAuthRuntime>();
 
   static getResourceRequirements(config: AuthGateConfig): ResourceRequirement[] {
     if (authStorage.resolveAuthStorageConfig(config).mode !== "lakebase") return [];
@@ -378,32 +379,40 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
 
   override async setup(): Promise<void> {
     this.resolved = resolveAuthGateConfig(this.config);
+    if (!this.config.brandName && !coreConfig.text("AUTH_BRAND_NAME", TUNNEL_CONFIG)) {
+      this.resolved.brandName = appkitBrand.getBrandContext().name;
+    }
 
     if (this.resolved.insecure) {
       logger.warn("insecure mode - the tunnel runs OPEN with no auth gate");
     } else {
       const lakebasePlugin = appkitPlugin.instance(this.context, lakebase);
-      const storage = await authStorage.createAuthStorage(
-        this.resolved,
-        lakebasePlugin?.exports().pool,
-      );
       const { key } = await signingKey(this.resolved.sessionCutoffMs);
-      this.runtime = await passwordlessAuth.createPasswordlessAuth({
-        storage,
-        baseURL: authOrigin(this.resolved.publicDomain),
-        basePath: "/api/email/auth",
-        appName: this.resolved.brandName,
-        secret: Buffer.from(key).toString("base64url"),
-        sessionTtlSeconds: this.resolved.sessionTtlSeconds,
-        sessionCutoffMs: this.resolved.sessionCutoffMs,
-        logoutRedirectPath: this.resolved.logoutRedirectPath,
-        codeTtlSeconds: this.resolved.codeTtlSeconds,
-        maxAttempts: this.resolved.maxAttempts,
-        authorizeIdentity: (email) => this.authorizeIdentity(email),
-        sendCode: (email, code, options) => this.sendCode(email, code, options),
-        subject: this.resolved.subject,
-        message: this.resolved.message,
-      });
+      const origins = this.resolved.publicDomains.length
+        ? this.resolved.publicDomains.map(authOrigin)
+        : [authOrigin(this.resolved.publicDomain)];
+      for (const origin of new Set(origins)) {
+        const storage = await authStorage.createAuthStorage(
+          this.resolved,
+          lakebasePlugin?.exports().pool,
+        );
+        this.runtimes.set(new URL(origin).host.toLowerCase(), await passwordlessAuth.createPasswordlessAuth({
+          storage,
+          baseURL: origin,
+          basePath: "/api/email/auth",
+          appName: this.resolved.brandName,
+          secret: Buffer.from(key).toString("base64url"),
+          sessionTtlSeconds: this.resolved.sessionTtlSeconds,
+          sessionCutoffMs: this.resolved.sessionCutoffMs,
+          logoutRedirectPath: this.resolved.logoutRedirectPath,
+          codeTtlSeconds: this.resolved.codeTtlSeconds,
+          maxAttempts: this.resolved.maxAttempts,
+          authorizeIdentity: (email) => this.authorizeIdentity(email),
+          sendCode: (email, code, options) => this.sendCode(email, code, options),
+          subject: this.resolved.subject,
+          message: this.resolved.message,
+        }));
+      }
       // `server()` is deferred, so it does not exist during this plugin's setup.
       // At `setup:complete` the Express app exists but has not injected plugin
       // routes or static handling yet, which is the one point the gate can mount
@@ -431,7 +440,8 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   }
 
   async shutdown(): Promise<void> {
-    await this.runtime?.close();
+    await Promise.all([...this.runtimes.values()].map((runtime) => runtime.close()));
+    this.runtimes.clear();
   }
 
   /**
@@ -467,16 +477,19 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
   }
 
   override exports(): AuthGateApi {
-    const runtime = this.runtime;
+    const runtime = (headers?: Headers, request?: Request) => {
+      const host = (headers?.get("host") ?? (request ? new URL(request.url).host : "")).toLowerCase();
+      return this.runtimes.get(host) ?? this.runtimes.values().next().value;
+    };
     return {
-      passkeysEnabled: runtime?.passkeysEnabled ?? false,
+      passkeysEnabled: [...this.runtimes.values()].some((entry) => entry.passkeysEnabled),
       handler: (request) =>
-        runtime?.handler(request) ?? Promise.resolve(new Response("Not Found", { status: 404 })),
-      session: (headers) => runtime?.session(headers) ?? Promise.resolve(undefined),
+        runtime(request.headers, request)?.handler(request) ?? Promise.resolve(new Response("Not Found", { status: 404 })),
+      session: (headers) => runtime(headers)?.session(headers) ?? Promise.resolve(undefined),
       status: (headers) =>
-        runtime?.status(headers) ??
+        runtime(headers)?.status(headers) ??
         Promise.resolve({ authenticated: false, enabled: false, passkeysEnabled: false }),
-      close: () => runtime?.close() ?? Promise.resolve(),
+      close: () => this.shutdown(),
     };
   }
 }

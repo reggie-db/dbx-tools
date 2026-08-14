@@ -15,6 +15,7 @@ export * as plugin from "./src/plugin.ts";
 export * as portr from "./src/portr.ts";
 export * as sendCode from "./src/send-code.ts";
 export * as signingKey from "./src/signing-key.ts";
+export * as supervisor from "./src/supervisor.ts";
 export type { CodeCopy } from "./src/code-email.ts";
 export type { FrpInstallOptions, FrpConfig } from "./src/frp.ts";
 export { AUTH_PREFIX, UNAUTHORIZED_BODY } from "./src/gate.ts";
@@ -28,3 +29,4 @@ export type { AuthGateConfig, SendCodeOptions, ResolvedAuthGateConfig, AuthGateA
 export type { PortrInstallOptions, PortrConfig } from "./src/portr.ts";
 export { KEY_TTL_SECONDS } from "./src/signing-key.ts";
 export type { SigningKey } from "./src/signing-key.ts";
+export type { ProcessSupervisor } from "./src/supervisor.ts";

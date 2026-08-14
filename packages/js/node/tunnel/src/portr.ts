@@ -18,6 +18,7 @@ import { promisify } from "node:util";
 import { bin, config } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { TUNNEL_CONFIG } from "./_config.ts";
+import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
 
 const logger = log.logger("tunnel:portr");
 const PORTR_VERSION = "1.0.15-sse.2";
@@ -140,4 +141,12 @@ export async function startPortr(
 
   logger.info(`portr tunneling https://${config.subdomain}.${config.server} -> :${config.port}`);
   return spawn("portr", ["start"], { env: childEnv, stdio: "inherit" });
+}
+
+export function supervisePortr(config: PortrConfig, childEnv: NodeJS.ProcessEnv): ProcessSupervisor {
+  return superviseProcessForever({
+    name: "portr",
+    logger,
+    start: () => startPortr(config, childEnv),
+  });
 }

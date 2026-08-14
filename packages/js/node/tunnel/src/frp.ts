@@ -17,6 +17,7 @@ import { delimiter, join } from "node:path";
 import { bin, config } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import { TUNNEL_CONFIG } from "./_config.ts";
+import { superviseProcessForever, type ProcessSupervisor } from "./supervisor.ts";
 
 const logger = log.logger("tunnel:frp");
 const FRP_VERSION = "0.68.1";
@@ -175,6 +176,7 @@ export async function writeFrpConfig(
     `serverAddr = ${tomlString(resolved.server)}`,
     `serverPort = ${resolved.serverPort}`,
     `transport.protocol = ${tomlString(resolved.protocol)}`,
+    "loginFailExit = false",
   ];
   if (resolved.token) lines.push(`auth.token = ${tomlString(resolved.token)}`);
   lines.push(
@@ -201,4 +203,16 @@ export function startFrp(
     `frpc tunneling https://${resolved.publicDomain}${resolved.path === "/" ? "" : resolved.path} -> :${resolved.port}`,
   );
   return spawn("frpc", ["-c", configPath], { env: childEnv, stdio: "inherit" });
+}
+
+export function superviseFrp(
+  resolved: FrpConfig,
+  childEnv: NodeJS.ProcessEnv,
+  configPath: string,
+): ProcessSupervisor {
+  return superviseProcessForever({
+    name: "frpc",
+    logger,
+    start: () => startFrp(resolved, childEnv, configPath),
+  });
 }

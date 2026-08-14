@@ -4,6 +4,7 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit";
 export * as appkit from "./src/appkit.ts";
+export * as brand from "./src/brand.ts";
 export * as bundle from "./src/bundle.ts";
 export * as databricks from "./src/databricks.ts";
 export * as identity from "./src/identity.ts";

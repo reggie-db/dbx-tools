@@ -212,7 +212,10 @@ export function createInterceptorContext(env: ResolvedAppEnv): InterceptorRuntim
   const context: InterceptorContext = {
     env,
     onLifecycle,
-    onTeardown: (fn) => teardownHandlers.add(fn),
+    onTeardown: (fn) => {
+      bindProcessSignals();
+      teardownHandlers.add(fn);
+    },
     broadcastSignal: broadcastProcessSignal,
     bindProcess,
   };
