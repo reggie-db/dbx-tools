@@ -5,7 +5,6 @@ import json
 import os
 import secrets
 import shlex
-import shutil
 import signal
 import subprocess
 import sys
@@ -115,8 +114,7 @@ class Runtime:
     ) -> int:
         settings = settings or ModelSettings.resolve()
         self._ensure_runtime()
-        state = self.read_state()
-        self._start_neo4j(state["neo4j_password"])
+        self._start_neo4j()
         if foreground:
             return self.supervise(settings, extra_args or [])
         command = [
@@ -374,57 +372,10 @@ class Runtime:
             check=True,
         )
 
-    def _start_neo4j(self, password: str) -> None:
+    def _start_neo4j(self) -> None:
         result = self._neo4j_command("status", check=False)
         if result.returncode:
             self._neo4j_command("start")
-        authenticated, authentication_failed = self._wait_for_neo4j(password)
-        if authenticated:
-            return
-        if not authentication_failed or not persistence_configured():
-            raise RuntimeError("Neo4j did not become ready with the configured credentials")
-        self._neo4j_command("stop", check=False)
-        shutil.rmtree(self.paths.neo4j_data, ignore_errors=True)
-        self._set_initial_password(password)
-        self._neo4j_command("start")
-        authenticated, _ = self._wait_for_neo4j(password)
-        if authenticated:
-            return
-        raise RuntimeError("Neo4j did not recover after resetting its ephemeral data")
-
-    def _wait_for_neo4j(self, password: str) -> tuple[bool, bool]:
-        """Wait for Bolt readiness and distinguish authentication rejection."""
-        deadline = time.monotonic() + 60
-        while time.monotonic() < deadline:
-            result = self._neo4j_command("status", check=False)
-            if result.returncode == 0:
-                authenticated = self._neo4j_auth_command(password)
-                if authenticated.returncode == 0:
-                    return True, False
-                detail = f"{authenticated.stdout}\n{authenticated.stderr}".lower()
-                if "authentication" in detail or "credentials" in detail:
-                    return False, True
-            time.sleep(1)
-        return False, False
-
-    def _neo4j_auth_command(self, password: str) -> subprocess.CompletedProcess[str]:
-        """Probe Neo4j with the launcher credential without logging the secret."""
-        return subprocess.run(
-            self._mise_java_command(
-                self.paths.neo4j / "bin" / "cypher-shell",
-                "--address",
-                os.getenv("NEO4J_URI", "bolt://127.0.0.1:7687"),
-                "--username",
-                os.getenv("NEO4J_USER", "neo4j"),
-                "--password",
-                password,
-                "RETURN 1",
-            ),
-            env=self._neo4j_environment(),
-            text=True,
-            check=False,
-            capture_output=True,
-        )
 
     def _litellm_command(self, settings: ModelSettings) -> list[str]:
         return [

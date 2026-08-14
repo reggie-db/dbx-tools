@@ -107,25 +107,14 @@ def test_tool_link_targets_mise_install_path(tmp_path: Path) -> None:
     assert destination.readlink() == source
 
 
-def test_neo4j_auth_failure_resets_only_ephemeral_persistent_store(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_start_neo4j_does_not_poll_readiness(monkeypatch, tmp_path: Path) -> None:
     runtime = Runtime(RuntimePaths(tmp_path))
-    command = Mock(return_value=Mock(returncode=0))
-    wait = Mock(side_effect=[(False, True), (True, False)])
-    set_password = Mock()
-    remove_data = Mock()
-    monkeypatch.setenv("LAKEBASE_ENDPOINT", "projects/demo/branches/main/endpoints/primary")
+    command = Mock(side_effect=[Mock(returncode=1), Mock(returncode=0)])
     monkeypatch.setattr(runtime, "_neo4j_command", command)
-    monkeypatch.setattr(runtime, "_wait_for_neo4j", wait)
-    monkeypatch.setattr(runtime, "_set_initial_password", set_password)
-    monkeypatch.setattr("dbx_tools.graphiti.runtime.shutil.rmtree", remove_data)
 
-    runtime._start_neo4j("secret")
+    runtime._start_neo4j()
 
-    set_password.assert_called_once_with("secret")
-    remove_data.assert_called_once_with(runtime.paths.neo4j_data, ignore_errors=True)
-    assert [call.args[0] for call in command.call_args_list] == ["status", "stop", "start"]
+    assert [call.args[0] for call in command.call_args_list] == ["status", "start"]
 
 
 def test_cli_strips_argument_separator(monkeypatch) -> None:
