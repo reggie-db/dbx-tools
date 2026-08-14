@@ -17,6 +17,7 @@ describe("resolveGraphitiConfig", () => {
       publicPort: 9000,
       appPort: 9001,
       graphitiPort: 0,
+      litellmPort: 0,
       routePrefix: "/graphiti",
       python: "python3",
       journalNamespace: "demo",

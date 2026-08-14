@@ -62,6 +62,9 @@ Plugin config overrides environment values:
 - `appPort` / `GRAPHITI_APP_PORT`: AppKit's internal port, default public + 1;
 - `graphitiPort` / `GRAPHITI_PORT`: Graphiti's internal port; a free loopback
   port is selected automatically when omitted;
+- `litellmPort` / `LITELLM_PORT`: the managed LiteLLM port; a separate free
+  loopback port is selected automatically so another local proxy cannot be
+  mistaken for Graphiti's model backend;
 - `routePrefix` / `GRAPHITI_ROUTE_PREFIX`: public Graphiti prefix, default
   `/graphiti`;
 - `python` / `PYTHON`: Python executable, default `python3`;

@@ -18,7 +18,7 @@ from dbx_tools.graphiti.runtime import (
     _GraphitiManager,
     _link_tool,
 )
-from dbx_tools.graphiti.server import _record_process_group
+from dbx_tools.graphiti.server import _record_process_group, _upstream_config
 from dbx_tools.graphiti.settings import ModelSettings
 
 _PROFILE_ENV = {"DATABRICKS_CONFIG_PROFILE": "DEFAULT"}
@@ -42,6 +42,8 @@ def test_environment_preserves_explicit_neo4j_values(monkeypatch, tmp_path: Path
 
     assert environment["NEO4J_URI"] == "bolt://example:7687"
     assert environment["NEO4J_PASSWORD"] == "generated"
+    assert environment["LLM__PROVIDERS__OPENAI__API_URL"] == "http://127.0.0.1:4000/v1"
+    assert environment["EMBEDDER__PROVIDERS__OPENAI__API_KEY"] == "not-required"
     assert environment[UPSTREAM_MCP_PATH_ENV] == str(runtime.paths.graphiti / "mcp_server")
     assert str(Path(__file__).parents[1] / "src") in environment["PYTHONPATH"]
 
@@ -78,8 +80,11 @@ def test_server_records_process_group_for_external_shutdown(monkeypatch, tmp_pat
     monkeypatch.setenv("PROCESS_STATE_PATH", str(path))
 
     _record_process_group(321)
+    _record_process_group(654, "litellm_process_group")
 
-    assert json.loads(path.read_text())["graphiti_process_group"] == 321
+    state = json.loads(path.read_text())
+    assert state["graphiti_process_group"] == 321
+    assert state["litellm_process_group"] == 654
     assert path.stat().st_mode & 0o777 == 0o600
 
 
@@ -246,6 +251,17 @@ def test_graphiti_command_does_not_require_config_yaml(tmp_path: Path) -> None:
     ]
 
 
+def test_server_uses_temporary_empty_config(monkeypatch) -> None:
+    monkeypatch.setattr("dbx_tools.graphiti.server.sys.argv", ["dbx-graphiti"])
+
+    with _upstream_config():
+        config_path = Path(sys.argv[sys.argv.index("--config") + 1])
+        assert config_path.read_text() == "{}\n"
+
+    assert sys.argv == ["dbx-graphiti"]
+    assert not config_path.exists()
+
+
 def test_graphiti_command_uses_databricks_app_listener(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DATABRICKS_APP_PORT", "9001")
     runtime = Runtime(RuntimePaths(tmp_path))
@@ -291,7 +307,7 @@ def test_managed_litellm_uses_selected_profile(monkeypatch, tmp_path: Path) -> N
     assert shlex.split(litellm.args[1]) == [
         sys.executable,
         "-m",
-        "dbx_tools.litellm",
+        "dbx_tools.graphiti.litellm_process",
         "--host",
         "127.0.0.1",
         "--port",

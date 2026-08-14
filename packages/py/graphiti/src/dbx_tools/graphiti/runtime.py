@@ -16,7 +16,7 @@ from pathlib import Path
 from dbx_tools.core import bin
 from honcho.manager import Manager
 
-from .constants import PROCESS_STATE_PATH_ENV, UPSTREAM_MCP_PATH_ENV
+from .constants import UPSTREAM_MCP_PATH_ENV
 from .settings import ModelSettings
 
 """Installation and native process lifecycle for Graphiti, LiteLLM, and Neo4j."""
@@ -89,19 +89,6 @@ class RuntimePaths:
         return self.root / "graphiti.log"
 
 
-class _GraphitiManager(Manager):
-    """Honcho manager that reaps the recorded Graphiti process group first."""
-
-    def __init__(self, runtime: Runtime) -> None:
-        super().__init__()
-        self._runtime = runtime
-
-    def terminate(self) -> None:
-        state = self._runtime.read_state(required=False)
-        _terminate_process_group(state.get("graphiti_process_group"))
-        super().terminate()
-
-
 class Runtime:
     """Provision and run a pinned native Graphiti stack."""
 
@@ -159,7 +146,6 @@ class Runtime:
         supervisor_pid = state.get("graphiti_pid")
         if isinstance(supervisor_pid, int) and _is_running(supervisor_pid):
             os.kill(supervisor_pid, signal.SIGTERM)
-        _terminate_process_group(state.get("graphiti_process_group"))
         if (self.paths.neo4j / "bin" / "neo4j").exists():
             self._neo4j_command("stop", check=False)
         state = self.read_state(required=False)
@@ -266,7 +252,7 @@ class Runtime:
     ) -> int:
         """Run Graphiti and managed LiteLLM under Honcho."""
         state = self.read_state()
-        manager = _GraphitiManager(self)
+        manager = Manager()
         state.update(
             {
                 "graphiti_pid": os.getpid(),
@@ -327,11 +313,8 @@ class Runtime:
 
     def _clear_process_state(self, state: dict[str, object]) -> None:
         for name in (
-            "graphiti_child_pid",
             "graphiti_pid",
-            "graphiti_process_group",
             "graphiti_supervisor",
-            "litellm_pid",
         ):
             state.pop(name, None)
         if state:
@@ -547,31 +530,6 @@ def _persistence_configured() -> bool:
             "PGHOST",
         )
     )
-
-
-def _terminate_process_group(process_group: object) -> None:
-    """Terminate a recorded sidecar group, escalating after Honcho's grace."""
-    if not isinstance(process_group, int) or not _is_process_group_running(process_group):
-        return
-    os.killpg(process_group, signal.SIGTERM)
-    deadline = time.monotonic() + 6
-    while time.monotonic() < deadline:
-        if not _is_process_group_running(process_group):
-            return
-        time.sleep(0.1)
-    if _is_process_group_running(process_group):
-        os.killpg(process_group, signal.SIGKILL)
-
-
-def _is_process_group_running(process_group: int) -> bool:
-    """Return whether a POSIX process group still has members."""
-    try:
-        os.killpg(process_group, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
 
 
 def _is_running(pid: int) -> bool:

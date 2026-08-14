@@ -11,6 +11,7 @@ export interface GraphitiPluginConfig extends BasePluginConfig {
   publicPort?: number;
   appPort?: number;
   graphitiPort?: number;
+  litellmPort?: number;
   routePrefix?: string;
   python?: string;
   journalNamespace?: string;
@@ -20,6 +21,7 @@ export interface ResolvedGraphitiPluginConfig extends GraphitiPluginConfig {
   publicPort: number;
   appPort: number;
   graphitiPort: number;
+  litellmPort: number;
   routePrefix: string;
   python: string;
   journalNamespace: string;
@@ -31,6 +33,7 @@ export const GRAPHITI_CONFIG_SCHEMA = {
     publicPort: { type: "integer", minimum: 1, maximum: 65535 },
     appPort: { type: "integer", minimum: 1, maximum: 65535 },
     graphitiPort: { type: "integer", minimum: 1, maximum: 65535 },
+    litellmPort: { type: "integer", minimum: 1, maximum: 65535 },
     routePrefix: { type: "string" },
     python: { type: "string" },
     journalNamespace: { type: "string" },
@@ -60,7 +63,9 @@ export function resolveGraphitiConfig(
     0,
     coreConfig.ENV_ONLY,
   );
-  if (new Set([publicPort, appPort, graphitiPort]).size !== 3) {
+  const litellmPort = coreConfig.port(config.litellmPort, "LITELLM_PORT", 0, coreConfig.ENV_ONLY);
+  const configuredPorts = [publicPort, appPort, graphitiPort, litellmPort].filter(Boolean);
+  if (new Set(configuredPorts).size !== configuredPorts.length) {
     throw new ConfigurationError("Graphiti public, AppKit, and sidecar ports must be distinct");
   }
   const routePrefix = normalizeRoutePrefix(
@@ -79,6 +84,7 @@ export function resolveGraphitiConfig(
     publicPort,
     appPort,
     graphitiPort,
+    litellmPort,
     routePrefix,
     python,
     journalNamespace,

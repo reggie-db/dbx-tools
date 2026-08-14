@@ -296,7 +296,7 @@ await appkit.createApp({
     // (both set on the deployed app). Codes send through the `email()` transport
     // above. Localhost gets an explicit disabled status because its Host header
     // never matches the tunnel domain.
-    authGate({}),
+    authGate(),
     // Web-search runtime for the `web_search` / `web_fetch` tools. The
     // web-search model defaults to Gemini, then GPT (the native web-search
     // tool is provider-specific); set `model` / WEB_SEARCH_MODEL to pin one,

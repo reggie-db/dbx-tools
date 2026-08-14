@@ -16,6 +16,22 @@ function listen(server: ReturnType<typeof createServer>): Promise<number> {
 }
 
 describe("FRP path proxy", () => {
+  it("redirects the bare prefix so relative browser assets stay scoped", async () => {
+    const upstream = createServer((_request, response) => response.end("upstream"));
+    const appPort = await listen(upstream);
+    const proxy = await startPathProxy(appPort, "/demo1");
+    try {
+      const response = await fetch(`http://127.0.0.1:${proxy.port}/demo1`, { redirect: "manual" });
+      assert.equal(response.status, 308);
+      assert.equal(response.headers.get("location"), "/demo1/");
+    } finally {
+      await proxy.close();
+      await new Promise<void>((resolve, reject) =>
+        upstream.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
   it("strips the registered prefix and preserves query strings", async () => {
     const upstream = createServer((request, response) => response.end(request.url));
     const appPort = await listen(upstream);

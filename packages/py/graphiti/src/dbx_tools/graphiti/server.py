@@ -4,10 +4,12 @@ import json
 import os
 import sys
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
 from importlib import import_module
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import ModuleType
-from typing import Any
+from typing import Any, Iterator
 
 from databricks.sdk import WorkspaceClient
 from dbx_tools.postgres import create_async_engine
@@ -35,7 +37,8 @@ def main() -> None:
         graphiti_server = _load_upstream()
         if persistence_configured():
             graphiti_server.Graphiti = _persistent_graphiti_constructor(graphiti_server.Graphiti)
-        graphiti_server.main()
+        with _upstream_config():
+            graphiti_server.main()
     finally:
         _record_process_group(None)
 
@@ -46,7 +49,10 @@ def persistence_configured(environ: Mapping[str, str] | None = None) -> bool:
     return any(env.get(name, "").strip() for name in _PERSISTENCE_ENV)
 
 
-def _record_process_group(process_group: int | None) -> None:
+def _record_process_group(
+    process_group: int | None,
+    key: str = "graphiti_process_group",
+) -> None:
     """Record the sidecar group so an external `down` can reap descendants."""
     value = os.getenv(PROCESS_STATE_PATH_ENV)
     if not value:
@@ -54,13 +60,29 @@ def _record_process_group(process_group: int | None) -> None:
     path = Path(value)
     state = json.loads(path.read_text()) if path.exists() else {}
     if process_group is None:
-        state.pop("graphiti_process_group", None)
+        state.pop(key, None)
     else:
-        state["graphiti_process_group"] = process_group
+        state[key] = process_group
     temporary = path.with_suffix(f".{os.getpid()}.tmp")
     temporary.write_text(json.dumps(state, indent=2) + "\n")
     temporary.chmod(0o600)
     temporary.replace(path)
+
+
+@contextmanager
+def _upstream_config() -> Iterator[None]:
+    """Supply an empty temporary YAML config unless the caller provided one."""
+    if "--config" in sys.argv:
+        yield
+        return
+    with TemporaryDirectory(prefix="dbx-graphiti-") as directory:
+        path = Path(directory) / "config.yaml"
+        path.write_text("{}\n")
+        sys.argv[1:1] = ["--config", str(path)]
+        try:
+            yield
+        finally:
+            del sys.argv[1:3]
 
 
 def _load_upstream() -> ModuleType:

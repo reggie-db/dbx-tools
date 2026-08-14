@@ -111,8 +111,9 @@ Primary package areas:
 - `packages/js/node/appkit-graphiti` — AppKit process plugin for the Python
   `dbx-tools-graphiti` runtime. It reads the Lakebase environment resolved by
   `@dbx-tools/appkit` / native `lakebase()`, launches Graphiti on a loopback
-  port selected from the OS when none is pinned, launches mise-managed Caddy on
-  `DATABRICKS_APP_PORT`, and routes
+  port selected from the OS when none is pinned, gives managed LiteLLM its own
+  random loopback port so an unrelated proxy cannot be adopted, launches
+  mise-managed Caddy on `DATABRICKS_APP_PORT`, and routes
   `/graphiti/*` to Graphiti while forwarding everything else to AppKit's
   loopback server. Its children use the shared AppKit concurrently-style
   supervisor so any exit tears down the group and signals flow through.

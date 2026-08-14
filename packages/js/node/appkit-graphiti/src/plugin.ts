@@ -66,9 +66,13 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
 
   override async setup(): Promise<void> {
     const configured = resolveGraphitiConfig(this.config);
+    const graphitiPort = configured.graphitiPort || (await availablePort());
+    let litellmPort = configured.litellmPort || (await availablePort());
+    while (litellmPort === graphitiPort) litellmPort = await availablePort();
     this.resolved = {
       ...configured,
-      graphitiPort: configured.graphitiPort || (await availablePort()),
+      graphitiPort,
+      litellmPort,
     };
     if (!process.env.LAKEBASE_ENDPOINT && !process.env.PGHOST) {
       throw new Error(
@@ -86,6 +90,9 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
         GRAPHITI_HOST: "127.0.0.1",
         GRAPHITI_PORT: String(this.resolved.graphitiPort),
         JOURNAL_NAMESPACE: this.resolved.journalNamespace,
+        LITELLM_HOST: "127.0.0.1",
+        LITELLM_PORT: String(this.resolved.litellmPort),
+        MANAGE_LITELLM: "true",
       },
       stdin: "ignore",
       stdout: "inherit",
@@ -133,6 +140,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
     this.logger.info("ready", {
       appPort: this.resolved.appPort,
       graphitiPort: this.resolved.graphitiPort,
+      litellmPort: this.resolved.litellmPort,
       publicPort: this.resolved.publicPort,
       mcpPath: `${this.resolved.routePrefix}/mcp/`,
       tools: Object.keys(this.mcpTools),
@@ -156,6 +164,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
     return {
       appPort: resolved.appPort,
       graphitiPort: resolved.graphitiPort,
+      litellmPort: resolved.litellmPort,
       mcpPath: `${resolved.routePrefix}/mcp/`,
       publicPort: resolved.publicPort,
       routePrefix: resolved.routePrefix,

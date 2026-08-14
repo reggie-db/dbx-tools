@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-core"
-version = "0.6.113"
+version = "0.6.114"
 description = "Dependency-free configuration, identity, and mise-backed executable helpers for dbx-tools Python packages"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"

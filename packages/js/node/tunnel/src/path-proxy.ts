@@ -21,6 +21,11 @@ export async function startPathProxy(
     xfwd: true,
   });
   const server = createServer((request, response) => {
+    if (path !== "/" && request.url === path) {
+      response.writeHead(308, { Location: `${path}/` });
+      response.end();
+      return;
+    }
     stripPathPrefix(request, path);
     proxy.web(request, response);
   });
