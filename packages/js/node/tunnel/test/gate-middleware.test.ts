@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { SESSION_COOKIE_NAME } from "@dbx-tools/shared-auth";
 import type { Request, RequestHandler, Response } from "express";
-import { AUTH_PREFIX, isTunnelHost, mountGate, webHeaders, type GateOptions } from "../src/gate.ts";
+import {
+  AUTH_PREFIX,
+  isTunnelHost,
+  mountGate,
+  normalizeReturnTo,
+  webHeaders,
+  type GateOptions,
+} from "../src/gate.ts";
+import { loginPageHtml } from "../src/login-page.ts";
 import { mountGateOnContext, type AuthGateApi } from "../src/plugin.ts";
 
 const PUBLIC_DOMAIN = "demo.apps.dbx.tools";
@@ -10,10 +18,7 @@ const PUBLIC_DOMAIN = "demo.apps.dbx.tools";
 describe("isTunnelHost", () => {
   it("accepts any configured public tunnel domain", () => {
     const request = makeReq("demo.frp.example.com:443", "/");
-    assert.equal(
-      isTunnelHost(request, ["demo.apps.dbx.tools", "demo.frp.example.com"]),
-      true,
-    );
+    assert.equal(isTunnelHost(request, ["demo.apps.dbx.tools", "demo.frp.example.com"]), true);
     assert.equal(isTunnelHost(request, ["demo.apps.dbx.tools"]), false);
   });
 });
@@ -64,6 +69,7 @@ function mount(opts: Partial<GateOptions> = {}): {
 function makeReq(host: string, url: string, cookie?: string): Request {
   return {
     url,
+    originalUrl: url,
     headers: { host, ...(cookie ? { cookie } : {}) },
     socket: { remoteAddress: "127.0.0.1" },
     on: () => {},
@@ -92,7 +98,11 @@ function makeRes(): Response & { statusCode?: number; jsonBody?: unknown; sentBo
       return res;
     },
   };
-  return res as unknown as Response & { statusCode?: number; jsonBody?: unknown; sentBody?: unknown };
+  return res as unknown as Response & {
+    statusCode?: number;
+    jsonBody?: unknown;
+    sentBody?: unknown;
+  };
 }
 
 describe("isTunnelHost", () => {
@@ -146,7 +156,28 @@ describe("gate middleware", () => {
     );
     assert.equal(nexted, false);
     assert.equal(res.statusCode, 401);
-    assert.deepEqual(res.jsonBody, { error: "authentication required", loginPath: AUTH_PREFIX });
+    assert.deepEqual(res.jsonBody, {
+      error: "authentication required",
+      loginPath: `${AUTH_PREFIX}?returnTo=%2F`,
+    });
+  });
+
+  it("preserves the same-origin referring page for an API login", async () => {
+    const { middleware } = mount();
+    const res = makeRes();
+    const req = makeReq(PUBLIC_DOMAIN, "/api/data");
+    req.headers.referer = `https://${PUBLIC_DOMAIN}/reports/weekly?team=data`;
+
+    await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
+      req,
+      res,
+      () => {},
+    );
+
+    assert.deepEqual(res.jsonBody, {
+      error: "authentication required",
+      loginPath: `${AUTH_PREFIX}?returnTo=${encodeURIComponent("/reports/weekly?team=data")}`,
+    });
   });
 
   it("lets a tunnel /api/* with a valid session through, injecting identity", async () => {
@@ -205,7 +236,10 @@ describe("gate middleware", () => {
     );
     assert.equal(nexted, false);
     assert.equal(res.statusCode, 401);
-    assert.deepEqual(res.jsonBody, { error: "authentication required", loginPath: AUTH_PREFIX });
+    assert.deepEqual(res.jsonBody, {
+      error: "authentication required",
+      loginPath: `${AUTH_PREFIX}?returnTo=%2F`,
+    });
   });
 
   it("lets a `gatePaths` prefix through with a valid session", async () => {
@@ -237,6 +271,54 @@ describe("gate middleware", () => {
     assert.equal(nexted, false);
     assert.equal(res.statusCode, 401);
     assert.match(String(res.sentBody), /Sign in — Databricks App/);
+    assert.match(String(res.sentBody), /var RETURN_TO = "\/"/);
+    assert.match(String(res.sentBody), /window\.location\.replace\(RETURN_TO\)/);
+  });
+
+  it("preserves a deep navigation path through hosted login", async () => {
+    const { middleware } = mount({ gatePaths: ["/ws"] });
+    const res = makeRes();
+    const req = makeReq(PUBLIC_DOMAIN, "/reports/weekly?team=data");
+    req.headers.accept = "text/html";
+
+    await (middleware as (r: Request, s: Response, n: () => void) => Promise<void>)(
+      req,
+      res,
+      () => {},
+    );
+
+    assert.equal(res.statusCode, 401);
+    assert.match(String(res.sentBody), /var RETURN_TO = "\/reports\/weekly\?team=data"/);
+  });
+
+  it("serves a dedicated login URL with a validated return path", async () => {
+    const { authMiddleware } = mount();
+    const res = makeRes();
+    const req = makeReq(
+      PUBLIC_DOMAIN,
+      `${AUTH_PREFIX}?returnTo=${encodeURIComponent("/reports/weekly?team=data")}`,
+    );
+    req.headers.accept = "text/html";
+
+    await Promise.resolve(authMiddleware(req, res, () => {}));
+
+    assert.equal(res.statusCode, 200);
+    assert.match(String(res.sentBody), /var RETURN_TO = "\/reports\/weekly\?team=data"/);
+  });
+
+  it("escapes a return path before embedding it in the login script", async () => {
+    const { authMiddleware } = mount();
+    const res = makeRes();
+    const req = makeReq(
+      PUBLIC_DOMAIN,
+      `${AUTH_PREFIX}?returnTo=${encodeURIComponent("/</script><script>alert(1)</script>")}`,
+    );
+    req.headers.accept = "text/html";
+
+    await Promise.resolve(authMiddleware(req, res, () => {}));
+
+    assert.doesNotMatch(String(res.sentBody), /var RETURN_TO = "\/<\/script>/);
+    assert.match(String(res.sentBody), /var RETURN_TO = "\/%3C/);
   });
 
   it("without gatePaths, static still passes (self-protecting SPA model)", async () => {
@@ -291,6 +373,24 @@ describe("gate middleware", () => {
       );
       assert.equal(res.statusCode, 404);
     }
+  });
+});
+
+describe("login return paths", () => {
+  it("accepts same-origin paths and rejects external redirects", () => {
+    assert.equal(normalizeReturnTo("/reports/weekly?team=data"), "/reports/weekly?team=data");
+    assert.equal(normalizeReturnTo("https://example.com/reports"), "/");
+    assert.equal(normalizeReturnTo("//example.com/reports"), "/");
+    assert.equal(normalizeReturnTo("/\\example.com"), "/");
+  });
+
+  it("escapes direct login-page values for an inline script", () => {
+    const html = loginPageHtml({
+      brandName: "Example",
+      returnTo: "/</script><script>alert(1)</script>",
+    });
+    assert.doesNotMatch(html, /var RETURN_TO = "\/<\/script>/);
+    assert.match(html, /var RETURN_TO = "\/\\u003c/);
   });
 });
 

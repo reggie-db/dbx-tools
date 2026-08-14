@@ -19,14 +19,15 @@ import { AUTH_PREFIX } from "./gate.ts";
 export interface LoginPageOptions {
   /** Product/brand name shown in the heading. */
   brandName: string;
+  /** Validated same-origin path loaded after authentication succeeds. */
+  returnTo: string;
 }
 
 /** The login page HTML for a `text/html` request to a gated path with no session. */
 export function loginPageHtml(options: LoginPageOptions): string {
   const brand = escapeHtml(options.brandName);
-  // AUTH_PREFIX is a fixed constant, not user input, but JSON-encode it so the
-  // inlined script is always valid regardless of its value.
-  const prefix = JSON.stringify(AUTH_PREFIX);
+  const prefix = jsonForInlineScript(AUTH_PREFIX);
+  const returnTo = jsonForInlineScript(options.returnTo);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -106,6 +107,11 @@ export function loginPageHtml(options: LoginPageOptions): string {
 <script>
 (function () {
   var PREFIX = ${prefix};
+  var RETURN_TO = ${returnTo};
+  // An in-place login can preserve browser-only hash state that never reached the server.
+  if (window.location.pathname !== PREFIX) {
+    RETURN_TO = window.location.pathname + window.location.search + window.location.hash;
+  }
   var emailForm = document.getElementById("email-form");
   var codeForm = document.getElementById("code-form");
   var emailInput = document.getElementById("email");
@@ -179,9 +185,7 @@ export function loginPageHtml(options: LoginPageOptions): string {
       });
       if (r.ok) {
         say("Signed in. Loading…");
-        // The session cookie is set; reload so the now-authenticated request
-        // reaches the app.
-        window.location.reload();
+        window.location.replace(RETURN_TO);
       } else {
         say(errorText(r.data, "That code was not accepted. Try again."), true);
         submit.disabled = false;
@@ -215,4 +219,14 @@ const HTML_ESCAPES: Record<string, string> = {
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch] ?? ch);
+}
+
+/** Encode a string literal without allowing it to terminate the surrounding script. */
+function jsonForInlineScript(value: string): string {
+  return JSON.stringify(value)
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
 }

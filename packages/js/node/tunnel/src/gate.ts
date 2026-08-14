@@ -258,6 +258,61 @@ export const UNAUTHORIZED_BODY = {
   loginPath: AUTH_PREFIX,
 } as const;
 
+/** Restrict a post-login destination to one same-origin application path. */
+export function normalizeReturnTo(value: string | undefined): string {
+  const candidate = value?.trim();
+  if (!candidate?.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) {
+    return "/";
+  }
+  const parsed = new URL(candidate, "http://app.local");
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
+/** Resolve the page a browser should return to after tunnel authentication. */
+export function requestReturnTo(req: IncomingMessage): string {
+  if (wantsLoginPage(req)) {
+    const originalUrl = (req as IncomingMessage & { originalUrl?: string }).originalUrl;
+    return normalizeReturnTo(originalUrl || req.url);
+  }
+  const referer = String(req.headers.referer ?? "").trim();
+  if (!referer) return "/";
+  try {
+    const parsed = new URL(referer);
+    const host = String(req.headers.host ?? "").toLowerCase();
+    if (parsed.host.toLowerCase() !== host) return "/";
+    return normalizeReturnTo(`${parsed.pathname}${parsed.search}${parsed.hash}`);
+  } catch {
+    return "/";
+  }
+}
+
+/** Build the hosted login URL with a validated same-origin return path. */
+export function loginPath(req: IncomingMessage): string {
+  return `${AUTH_PREFIX}?returnTo=${encodeURIComponent(requestReturnTo(req))}`;
+}
+
+/** Build a denied JSON response that preserves the calling page. */
+export function unauthorizedBody(req: IncomingMessage): {
+  error: typeof UNAUTHORIZED_BODY.error;
+  loginPath: string;
+} {
+  return { ...UNAUTHORIZED_BODY, loginPath: loginPath(req) };
+}
+
+/** Return the validated destination carried by a hosted login URL. */
+export function loginReturnTo(req: IncomingMessage): string {
+  const url = new URL(req.url ?? AUTH_PREFIX, "http://app.local");
+  return normalizeReturnTo(url.searchParams.get("returnTo") ?? "/");
+}
+
+/** Whether this request asks for the hosted login document itself. */
+export function wantsHostedLogin(req: IncomingMessage): boolean {
+  const method = (req.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") return false;
+  const path = (req.url ?? "/").split("?")[0] ?? "/";
+  return path === AUTH_PREFIX && String(req.headers.accept ?? "").includes("text/html");
+}
+
 /**
  * Whether a denied request is a top-level BROWSER NAVIGATION that should be
  * answered with the hosted login page rather than a 401.
@@ -308,6 +363,18 @@ export function mountGate(
       }
       return;
     }
+    if (wantsHostedLogin(req)) {
+      res
+        .status(200)
+        .type("html")
+        .send(
+          loginPageHtml({
+            brandName: brandName ?? "Databricks App",
+            returnTo: loginReturnTo(req),
+          }),
+        );
+      return;
+    }
     await sendWebResponse(res, await gate.handler(await webRequest(req)));
   }) as RequestHandler;
   addMiddleware(AUTH_PREFIX, authHandler);
@@ -317,9 +384,20 @@ export function mountGate(
   const gateMiddleware = (async (req, res, next) => {
     const action = await gateRequest(req, { gate, publicDomain, headerPolicy, gatePaths });
     if (action === "deny" && wantsLoginPage(req)) {
-      res.status(401).type("html").send(loginPageHtml({ brandName: brandName ?? "Databricks App" }));
-    } else if (action === "deny") res.status(401).json(UNAUTHORIZED_BODY);
-    else next();
+      res
+        .status(401)
+        .type("html")
+        .send(
+          loginPageHtml({
+            brandName: brandName ?? "Databricks App",
+            returnTo: requestReturnTo(req),
+          }),
+        );
+    } else if (action === "deny") {
+      res.status(401).json(unauthorizedBody(req));
+    } else {
+      next();
+    }
   }) as RequestHandler;
 
   addMiddleware("/", gateMiddleware);

@@ -75,9 +75,20 @@ async function handleAuthRoute(
   response: ServerResponse,
   path: string,
   gate: AuthGateApi,
+  brandName: string,
 ): Promise<boolean> {
   const prefix = tunnelGate.AUTH_PREFIX;
   if (!path.startsWith(prefix)) return false;
+  if (tunnelGate.wantsHostedLogin(request)) {
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    response.end(
+      tunnelLoginPage.loginPageHtml({
+        brandName,
+        returnTo: tunnelGate.loginReturnTo(request),
+      }),
+    );
+    return true;
+  }
   const result = await gate.handler(await tunnelGate.webRequest(request));
   const headers: Record<string, string | string[]> = {};
   for (const [name, value] of result.headers.entries()) {
@@ -121,18 +132,20 @@ export async function startProxy(options: ProxyOptions): Promise<void> {
   const onRequest = (request: IncomingMessage, response: ServerResponse): void => {
     void (async () => {
       const path = (request.url ?? "/").split("?")[0] ?? "/";
-      if (gate && (await handleAuthRoute(request, response, path, gate))) return;
+      const brandName = options.brandName ?? "this app";
+      if (gate && (await handleAuthRoute(request, response, path, gate, brandName))) return;
       if ((await decide(request)) === "deny") {
         // A denied browser navigation gets the hosted login page; anything else
         // (an XHR, a /ws upgrade probe, a non-HTML fetch) gets the 401 JSON.
         if (gate && tunnelGate.wantsLoginPage(request)) {
           const html = tunnelLoginPage.loginPageHtml({
-            brandName: options.brandName ?? "this app",
+            brandName,
+            returnTo: tunnelGate.requestReturnTo(request),
           });
           response.writeHead(401, { "content-type": "text/html; charset=utf-8" });
           response.end(html);
         } else {
-          sendJson(response, 401, tunnelGate.UNAUTHORIZED_BODY);
+          sendJson(response, 401, tunnelGate.unauthorizedBody(request));
         }
         return;
       }

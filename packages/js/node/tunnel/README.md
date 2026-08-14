@@ -357,6 +357,12 @@ the cookie, because that request was never going to be gated. So the same runnin
 app shows the OTP screen to a portr visitor and no login at all to a browser on
 `localhost` or the platform front door.
 
+When the hosted login page interrupts a navigation, it carries the original
+same-origin path through the login flow and replaces the page with that path
+after OTP verification. API denials expose the hosted login URL in `loginPath`;
+its `returnTo` query value comes from a same-origin referrer and is normalized
+to an application path, so it cannot become an external redirect.
+
 `POST /api/email/auth/logout` clears the current session and returns
 `{ ok, redirectTo }`. `GET` on the same path clears the session and answers with
 a `303` redirect. `logoutRedirectPath` or

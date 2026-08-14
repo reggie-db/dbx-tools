@@ -96,7 +96,10 @@ Primary package areas:
   modes construct the same `authGate` plugin through `@dbx-tools/appkit`'s
   `createApp` lifecycle; CLI mode needs no `server()` plugin and can still add
   native `lakebase()`. Authentication UI imports directly from
-  `@dbx-tools/ui-auth`; email packages do not re-export auth.
+  `@dbx-tools/ui-auth`; email packages do not re-export auth. The hosted login
+  preserves the interrupted page in a normalized same-origin `returnTo` query
+  and replaces the login page with that path after authentication. Never allow
+  an absolute, protocol-relative, or backslash-containing return target.
 - `packages/js/node/appkit-web-search` — web-search add-on: `web_search` (the
   Databricks Model Serving NATIVE web-search tool — the model searches the web
   server-side and returns answer + citations; resolves its OWN web-capable model
