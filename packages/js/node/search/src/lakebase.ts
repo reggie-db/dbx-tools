@@ -97,7 +97,10 @@ export interface LakebaseSearchPool {
   connect(): Promise<PoolClient>;
 }
 
-type LakebasePoolSource = (() => Promise<PoolConfig> | PoolConfig) | LakebaseSearchPool;
+type LakebasePoolSource =
+  | (() => Promise<PoolConfig> | PoolConfig)
+  | LakebaseSearchPool
+  | { managedPool: () => LakebaseSearchPool };
 
 /** Options for provisioning a Lakebase-backed index. */
 export interface LakebaseProvisionOptions {
@@ -128,6 +131,10 @@ export class LakebaseSearchBackend {
   /** Lazily build (and cache) the pg pool from the resolved Lakebase config. */
   private async getPool(): Promise<LakebaseSearchPool> {
     if (this.pool) return this.pool;
+    if ("managedPool" in this.poolSource) {
+      this.pool = this.poolSource.managedPool();
+      return this.pool;
+    }
     if (typeof this.poolSource !== "function") {
       this.pool = this.poolSource;
       return this.pool;

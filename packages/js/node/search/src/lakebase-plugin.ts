@@ -93,7 +93,7 @@ export class LakebaseAiSearchPlugin extends Plugin<LakebaseAiSearchConfig> {
   override async setup(): Promise<void> {
     const lake = appkitPlugin.require(this.context, lakebase, this);
     this.backend = new LakebaseSearchBackend(
-      lake.exports().pool,
+      { managedPool: () => lake.exports().pool },
       string.trimToNull(this.config.schema) ?? "public",
     );
     for (const index of this.indexes()) {

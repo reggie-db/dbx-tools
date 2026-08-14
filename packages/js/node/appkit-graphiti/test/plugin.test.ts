@@ -1,9 +1,24 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { IAppRouter } from "@databricks/appkit";
-import { GraphitiPlugin } from "../src/plugin.ts";
+import { GraphitiPlugin, ensureGraphitiPython } from "../src/plugin.ts";
 
 describe("GraphitiPlugin routes", () => {
+  it("installs the matching Python package when the module is absent", async () => {
+    const calls: Array<{ file: string; args: string[] }> = [];
+    await ensureGraphitiPython("python3", async (file, args) => {
+      calls.push({ file, args });
+      if (calls.length === 1) throw new Error("missing");
+    });
+
+    assert.deepEqual(calls[0], {
+      file: "python3",
+      args: ["-c", "import dbx_tools.graphiti"],
+    });
+    assert.equal(calls[1]?.file, "python3");
+    assert.match(calls[1]?.args.at(-1) ?? "", /^dbx-tools-graphiti==0\.6\./);
+  });
+
   it("registers the MCP transport on the AppKit server", () => {
     const routes: Array<{ method: string; path: string }> = [];
     const router = Object.fromEntries(

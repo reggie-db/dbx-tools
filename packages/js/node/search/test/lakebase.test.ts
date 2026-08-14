@@ -136,6 +136,21 @@ describe("lakebase search backend", () => {
     assert.equal(ended, false);
   });
 
+  it("resolves a managed Lakebase pool lazily", async () => {
+    const fake = fakePool();
+    let resolved = 0;
+    const be = new LakebaseSearchBackend({
+      managedPool: () => {
+        resolved += 1;
+        return fake.pool;
+      },
+    });
+
+    assert.equal(resolved, 0);
+    await be.addDocuments("support", [{ id: "1", text: "lazy pool" }]);
+    assert.equal(resolved, 1);
+  });
+
   it("returns hits shaped { id, score, fields } identical to Vector Search", async () => {
     const { be } = backend();
     await be.provision("support", {

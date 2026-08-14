@@ -4,7 +4,10 @@
  * @module
  */
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { createServer } from "node:net";
+import { createRequire } from "node:module";
+import { promisify } from "node:util";
 import {
   ConfigurationError,
   Plugin,
@@ -33,6 +36,9 @@ import {
 } from "./config.ts";
 
 const LAKEBASE_MANIFEST = appkitPlugin.data(lakebase).plugin.manifest;
+const PACKAGE_VERSION = (
+  createRequire(import.meta.url)("@dbx-tools/appkit-graphiti/package.json") as { version: string }
+).version;
 const MCP_PATH = "/api/graphiti/mcp";
 const MCP_SERVER_IDLE_MS = 30 * 60 * 1000;
 const MCP_SERVER_SWEEP_MS = 5 * 60 * 1000;
@@ -117,6 +123,7 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
       configured.litellmPort,
       configured.proxyPort,
     );
+    await ensureGraphitiPython(configured.python);
     this.resolved = {
       ...configured,
       graphitiPort,
@@ -351,6 +358,28 @@ export class GraphitiPlugin extends Plugin<GraphitiPluginConfig> {
         this.logger.warn("idle MCP server close failed", { error });
       });
     }
+  }
+}
+
+type ExecPython = (file: string, args: string[]) => Promise<unknown>;
+
+/** Ensure Databricks Apps has the Python sidecar matching this Node package. */
+export async function ensureGraphitiPython(
+  python: string,
+  run: ExecPython = (file, args) => promisify(execFile)(file, args),
+): Promise<void> {
+  try {
+    await run(python, ["-c", "import dbx_tools.graphiti"]);
+  } catch {
+    await run(python, [
+      "-m",
+      "pip",
+      "install",
+      "--disable-pip-version-check",
+      "--user",
+      "--break-system-packages",
+      `dbx-tools-graphiti==${PACKAGE_VERSION}`,
+    ]);
   }
 }
 
