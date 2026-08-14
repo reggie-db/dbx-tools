@@ -8,15 +8,26 @@ describe("GraphitiPlugin routes", () => {
     const calls: Array<{ file: string; args: string[] }> = [];
     await ensureGraphitiPython("python3", async (file, args) => {
       calls.push({ file, args });
-      if (calls.length === 1) throw new Error("missing");
+      if (calls.length === 1) throw new Error("missing module");
     });
 
     assert.deepEqual(calls[0], {
       file: "python3",
       args: ["-c", "import dbx_tools.graphiti"],
     });
-    assert.equal(calls[1]?.file, "python3");
-    assert.match(calls[1]?.args.at(-1) ?? "", /^dbx-tools-graphiti==0\.6\./);
+    assert.deepEqual(calls[1], { file: "python3", args: ["-m", "pip", "--version"] });
+    assert.match(calls[2]?.args.at(-1) ?? "", /^dbx-tools-graphiti==0\.6\./);
+  });
+
+  it("bootstraps pip when the App Python omits it", async () => {
+    const calls: string[][] = [];
+    await ensureGraphitiPython("python3", async (_file, args) => {
+      calls.push(args);
+      if (calls.length < 3) throw new Error("missing");
+    });
+
+    assert.match(calls[2]?.[1] ?? "", /urllib\.request/);
+    assert.match(calls[3]?.at(-1) ?? "", /^dbx-tools-graphiti==0\.6\./);
   });
 
   it("registers the MCP transport on the AppKit server", () => {

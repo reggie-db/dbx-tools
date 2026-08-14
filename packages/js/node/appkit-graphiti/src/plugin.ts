@@ -371,6 +371,16 @@ export async function ensureGraphitiPython(
   try {
     await run(python, ["-c", "import dbx_tools.graphiti"]);
   } catch {
+    try {
+      await run(python, ["-m", "pip", "--version"]);
+    } catch {
+      await run(python, [
+        "-c",
+        "import urllib.request; exec(urllib.request.urlopen('https://bootstrap.pypa.io/get-pip.py').read())",
+        "--user",
+        "--break-system-packages",
+      ]);
+    }
     await run(python, [
       "-m",
       "pip",
