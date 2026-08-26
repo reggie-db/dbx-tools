@@ -85,6 +85,10 @@ Plugin config overrides environment values:
 - `journalNamespace` / `JOURNAL_NAMESPACE`: Postgres journal namespace, default
   `DATABRICKS_APP_NAME`, then the detected project name, then `default`.
 
+The Python runtime defaults the journal table to
+`dbx_tools_graphiti.graphiti_write_journal` and provisions that schema when
+absent, so a Lakebase service principal does not need write access to `public`.
+
 The app must package both Node and Python dependencies. Databricks Apps supports
 this directly with `package.json` plus `pyproject.toml` or `requirements.txt`.
 

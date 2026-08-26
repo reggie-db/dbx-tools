@@ -11,18 +11,8 @@
       "type": "build"
     },
     {
-      "name": "consola",
-      "version": "catalog:",
-      "type": "build"
-    },
-    {
       "name": "typescript",
       "type": "build"
-    },
-    {
-      "name": "consola",
-      "version": "catalog:",
-      "type": "peer"
     },
     {
       "name": "zod",

@@ -13,6 +13,10 @@ the installed AppKit surface directly (`npx @databricks/appkit docs`, plus the
 `.d.ts` files under `node_modules/@databricks/appkit`) so `dbx-tools` packages
 stay shaped like first-party AppKit ones.
 
+Never use emojis in source code, generated output, logs, documentation, commit
+messages, or user-facing text. When wrapping a third-party process that emits
+emojis, normalize its output before forwarding it.
+
 If an older section below conflicts with the current README/package state or the
 Databricks/AppKit positioning guidance near the top of this file, prefer the
 newer guidance and the current source tree.
@@ -38,6 +42,10 @@ When you update docs, README positioning, or agent instructions:
   `config as runtimeConfig` or `config as configModule`. Preserve conventional
   compatibility aliases and aliases that disambiguate two same-named symbols;
   when an alias is needed, a reader should be able to infer where it came from.
+- Keep shared logging dependency-free. `@dbx-tools/shared-core` owns the tagged,
+  leveled console logger for browser and server runtimes; do not add an optional
+  bare import such as `consola` because Vite can retain it in optimized browser
+  chunks and force downstream apps to install an otherwise optional package.
 
 ## What this repo is
 
@@ -283,7 +291,9 @@ Primary package areas:
   `GraphDriver` while write-ahead journaling mutations through a supplied
   storage driver before the graph operation commits. The Postgres
   implementation uses `dbx-tools-postgres` and replays the ordered journal into
-  an empty delegated graph during startup.
+  an empty delegated graph during startup. Its default journal table lives in
+  the dedicated `dbx_tools_graphiti` schema, which the journal provisions on
+  startup; do not default writes to the commonly locked-down `public` schema.
   Keep the decorator backend-agnostic and keep Postgres connection resolution
   in the existing Postgres package. A Neo4j credential mismatch may reset the
   local data directory only when that durable journal is configured; otherwise
@@ -1217,6 +1227,17 @@ environment exists, then prefers `pnpm add -g bun` and falls back to
 `npm install -g bun`. Let NVM's official installer own shell-profile setup; do
 not reproduce or prune its installation and do not depend on mise.
 
+`scripts/install.ts` is the standalone Bun surface for mise and mise-backed
+commands. Its `ensureCommand(command, minVersion, options)` checks PATH and
+returns an acceptable executable without invoking mise; only a missing or old
+command triggers `mise use -g --yes -- <tool>` and `mise which`. The optional
+`miseTool` accepts backend specs such as `github:caddyserver/caddy`, and
+`versionCommand` defaults to `--version`. The script's stdout remains reserved
+for shell commands that apply a changed setup to the current process; logs and
+child output go to stderr. `bun scripts/install.ts <command>` prints only the
+resolved executable path and accepts `--minVersion` (default `0`),
+`--versionCommand` (default `--version`), and `--miseTool` (default the command).
+
 The custom root applies `ROOT_INSTALL_ONLY_MIXIN` during every pre-synth by
 default (`rootInstallOnly: true`). It clears child `install` / `install:ci` task
 steps and makes each child package hook's `installDependencies` and
@@ -1354,6 +1375,7 @@ bun run openapi              # generate the openapi packages from tsoa controlle
 bun run clean                # remove generated files (read-only ones); interactive picker, -y to skip
 bun run --filter '*' compile # type-check every package (projen's per-package compile: tsc --build)
 bun run --filter '*' test    # run every package's node:test suite (via `bun test`)
+bun run test:installer       # standalone installer tests; RUN_DOCKER_INSTALL_TESTS=1 adds container coverage
 bun run eslint               # lint (autofix) every package under `packages/js`
 bun run format               # prettier over the WHOLE repo - pre-push/pre-bump only; see "Formatting and diff hygiene"
 ```

@@ -124,7 +124,9 @@ is present:
   derives a stable value from its data directory when omitted. A direct
   `dbx_tools.graphiti.server` invocation must set it explicitly.
 - `JOURNAL_TABLE`: journal table name. Defaults to
-  `graphiti_write_journal`.
+  `dbx_tools_graphiti.graphiti_write_journal`. A schema-qualified table causes
+  the journal to create that schema when absent, avoiding Lakebase deployments
+  where the application identity cannot write to `public`.
 
 When persistence is configured, Postgres initialization or replay failure stops
 server startup rather than running without durability. The journal is restart

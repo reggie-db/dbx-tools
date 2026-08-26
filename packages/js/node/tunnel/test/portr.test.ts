@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { portrAssetName } from "../src/portr.ts";
+import { normalizePortrOutput, portrAssetName } from "../src/portr.ts";
+
+describe("normalizePortrOutput", () => {
+  it("removes pictographs from portr lifecycle logs", () => {
+    const rocket = String.fromCodePoint(0x1f680);
+    const stop = String.fromCodePoint(0x1f6d1);
+    assert.equal(
+      normalizePortrOutput(
+        `${rocket} Starting tunnel: demo (localhost:8000)\n${stop} Shutting down tunnels...\n`,
+      ),
+      "Starting tunnel: demo (localhost:8000)\nShutting down tunnels...\n",
+    );
+  });
+});
 
 describe("portrAssetName", () => {
   it("selects Darwin and Linux architecture assets", () => {

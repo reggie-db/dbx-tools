@@ -31,6 +31,7 @@
     "py:test": "projen py:test",
     "sync": "projen sync",
     "test": "projen test",
+    "test:installer": "projen test:installer",
     "projen": "projen"
   },
   "devDependencies": {
@@ -66,7 +67,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.130",
+  "version": "0.6.131",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -131,7 +132,6 @@
     "tsoa": "^6.6.0",
     "concurrently": "^10.0.3",
     "pnpm": "^11.0.6",
-    "consola": "^3.4.2",
     "@databricks/appkit": "^0.60.0",
     "@databricks/appkit-ui": "^0.60.0",
     "@databricks/sdk-experimental": "^0.17.0",

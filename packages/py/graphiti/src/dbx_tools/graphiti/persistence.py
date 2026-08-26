@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 _TAG = "__graphiti_type__"
 _TABLE_COMPONENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _WRITE_KEYWORD = re.compile(r"\b(?:CREATE|DELETE|DETACH|MERGE|REMOVE|SET)\b", re.IGNORECASE)
+DEFAULT_POSTGRES_JOURNAL_TABLE = "dbx_tools_graphiti.graphiti_write_journal"
 
 WritePredicate = Callable[[str, Mapping[str, Any]], bool]
 
@@ -66,12 +67,15 @@ class PostgresWriteStorage:
         self._engine = engine
         self._namespace = namespace
         self._table = _quote_table(table)
+        self._schema = _table_schema(table)
         self._index = _quote_identifier(f"{table.rsplit('.', 1)[-1]}_namespace_sequence_idx")
         self._close_engine = close_engine
 
     async def setup(self) -> None:
         """Create the journal table and replay index when absent."""
         async with self._engine.begin() as connection:
+            if self._schema:
+                await connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {self._schema}"))
             await connection.execute(
                 text(
                     f"""
@@ -383,6 +387,14 @@ def _quote_table(value: str) -> str:
     if not components or any(not _TABLE_COMPONENT.fullmatch(component) for component in components):
         raise ValueError(f"Invalid Postgres table name: {value!r}")
     return ".".join(_quote_identifier(component) for component in components)
+
+
+def _table_schema(value: str) -> str | None:
+    """Return the quoted schema from a schema-qualified table name."""
+    components = value.split(".")
+    if len(components) != 2:
+        return None
+    return _quote_identifier(components[0])
 
 
 def _quote_identifier(value: str) -> str:

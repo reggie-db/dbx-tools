@@ -13,6 +13,8 @@ import { execFile, spawn } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import os from "node:os";
 import { delimiter, join } from "node:path";
+import { Transform } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 import { promisify } from "node:util";
 
 import { bin, config } from "@dbx-tools/core";
@@ -25,6 +27,27 @@ const PORTR_VERSION = "1.0.15-sse.2";
 const PORTR_RELEASE_URL = `https://github.com/reggie-db/portr/releases/download/v${PORTR_VERSION}`;
 const PORTR_MIN_VERSION = "v1.0.15";
 const execFileAsync = promisify(execFile);
+
+const EMOJI = /\p{Extended_Pictographic}\uFE0F?/gu;
+
+/** Remove pictographs from third-party process output before forwarding it. */
+export function normalizePortrOutput(value: string): string {
+  return value.replace(EMOJI, "").replace(/^[ \t]+/gm, "");
+}
+
+function normalizedOutput(destination: NodeJS.WriteStream): Transform {
+  const decoder = new StringDecoder("utf8");
+  return new Transform({
+    transform(chunk, _encoding, callback) {
+      destination.write(normalizePortrOutput(decoder.write(chunk)));
+      callback();
+    },
+    flush(callback) {
+      destination.write(normalizePortrOutput(decoder.end()));
+      callback();
+    },
+  });
+}
 
 /** Options for installing the portr executable. */
 export interface PortrInstallOptions {
@@ -140,7 +163,10 @@ export async function startPortr(
   await execFileAsync("pkill", ["-x", "portr"]).catch(() => undefined);
 
   logger.info(`portr tunneling https://${config.subdomain}.${config.server} -> :${config.port}`);
-  return spawn("portr", ["start"], { env: childEnv, stdio: "inherit" });
+  const child = spawn("portr", ["start"], { env: childEnv, stdio: ["inherit", "pipe", "pipe"] });
+  child.stdout?.pipe(normalizedOutput(process.stdout));
+  child.stderr?.pipe(normalizedOutput(process.stderr));
+  return child;
 }
 
 export function supervisePortr(config: PortrConfig, childEnv: NodeJS.ProcessEnv): ProcessSupervisor {

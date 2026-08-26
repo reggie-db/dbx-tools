@@ -390,9 +390,10 @@ if (log.isLevelEnabled("debug")) {
 }
 ```
 
-`log.logger()` uses `consola` when installed and falls back to `console`. It
-honors `LOG_LEVEL` per call, so debug statements can stay in production code
-without paying formatting cost when disabled.
+`log.logger()` is dependency-free and uses the platform console in browsers or
+formatted stderr output on server runtimes. It honors `LOG_LEVEL` per call, so
+debug statements can stay in production code without paying formatting cost
+when disabled.
 
 ## Modules
 

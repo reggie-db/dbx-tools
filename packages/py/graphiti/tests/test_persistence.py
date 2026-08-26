@@ -10,8 +10,10 @@ from uuid import UUID
 
 import pytest
 from dbx_tools.graphiti.persistence import (
+    DEFAULT_POSTGRES_JOURNAL_TABLE,
     DelegatingGraphDriver,
     GraphWrite,
+    PostgresWriteStorage,
     WriteStorageDriver,
     _decode_value,
     _encode_value,
@@ -39,6 +41,24 @@ class MemoryStorage(WriteStorageDriver):
 
     async def close(self) -> None:
         self.closed = True
+
+
+class RecordingConnection:
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    async def execute(self, statement, *args) -> None:
+        del args
+        self.statements.append(str(statement))
+
+
+class RecordingEngine:
+    def __init__(self) -> None:
+        self.connection = RecordingConnection()
+
+    @asynccontextmanager
+    async def begin(self):
+        yield self.connection
 
 
 class FakeTransaction(Transaction):
@@ -121,6 +141,26 @@ def test_write_classifier_distinguishes_graph_mutations() -> None:
     assert is_write_query("UNWIND $nodes AS node MERGE (n {uuid: node.uuid})")
     assert is_write_query("MATCH (n) DETACH DELETE n")
     assert not is_write_query("MATCH (n) RETURN n.created_at")
+
+
+def test_postgres_journal_provisions_qualified_schema() -> None:
+    async def run() -> None:
+        engine = RecordingEngine()
+        storage = PostgresWriteStorage(
+            engine,  # type: ignore[arg-type]
+            table=DEFAULT_POSTGRES_JOURNAL_TABLE,
+        )
+
+        await storage.setup()
+
+        assert engine.connection.statements[0] == (
+            'CREATE SCHEMA IF NOT EXISTS "dbx_tools_graphiti"'
+        )
+        assert 'CREATE TABLE IF NOT EXISTS "dbx_tools_graphiti"."graphiti_write_journal"' in (
+            engine.connection.statements[1]
+        )
+
+    asyncio.run(run())
 
 
 def test_delegate_journals_writes_but_not_reads() -> None:

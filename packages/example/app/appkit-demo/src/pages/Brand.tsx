@@ -64,9 +64,9 @@ Your team completed **1,284 successful runs** this week with a 99.7% success rat
 
 | Workflow | Status | Median duration |
 | --- | --- | ---: |
-| Customer 360 refresh | ✅ Healthy | 8m 42s |
-| Feature pipeline | ✅ Healthy | 3m 18s |
-| Executive metrics | ⚠️ Review | 12m 05s |
+| Customer 360 refresh | Healthy | 8m 42s |
+| Feature pipeline | Healthy | 3m 18s |
+| Executive metrics | Review | 12m 05s |
 
 ### Recommended next steps
 

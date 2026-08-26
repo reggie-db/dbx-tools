@@ -90,6 +90,13 @@ const root = new projenProject.DBXToolsNodeProject({
 });
 new PythonVersionHookCleanup(root);
 
+const installerTest = root.addTask("test:installer", {
+  description:
+    "Test the standalone mise installer (set RUN_DOCKER_INSTALL_TESTS=1 for container coverage)",
+});
+installerTest.exec("bun test scripts/install.test.ts");
+root.testTask.spawn(installerTest);
+
 // `projen/` is an extra workspace member rather than an attached subproject, so
 // the engine cannot discover its generated barrel for the root formatter.
 root.prettier?.addIgnorePattern("projen/index.ts");
@@ -252,16 +259,11 @@ project.applyToProjects(root, { path: "packages/js/**", identifierName: "!shared
   p.addDeps("@dbx-tools/shared-core@workspace:*");
 });
 
-// shared-core: the browser-safe base every package builds on. consola is an
-// OPTIONAL peer: the `log` module lazy-imports it and degrades to a console
-// fallback when it's absent, so consumers may leave it uninstalled. Version
-// tracks the hardcoded DEFAULT_CATALOG entry.
+// shared-core: the dependency-light, browser-safe base every package builds on.
+// Its logger uses only platform console/stderr surfaces so browser bundlers do
+// not retain optional bare imports that consumers must install themselves.
 project.applyToProjects(root, { identifierName: "shared-core", tags: "shared" }, (p) => {
   p.addDeps("zod@catalog:");
-  p.addPeerDeps("consola@catalog:");
-  p.package.addField("peerDependenciesMeta", { consola: { optional: true } });
-  // Present for local dev/typecheck; consumers opt in via the catalog.
-  p.addDevDeps("consola@catalog:");
 });
 
 // node-core: the Node-only half of the shared runtime (exec + project +

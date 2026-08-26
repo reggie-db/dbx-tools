@@ -17,7 +17,11 @@ from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import create_async_engine as sqlalchemy_create_async_engine
 
 from .constants import UPSTREAM_MCP_PATH_ENV, persistence_configured
-from .persistence import DelegatingGraphDriver, PostgresWriteStorage
+from .persistence import (
+    DEFAULT_POSTGRES_JOURNAL_TABLE,
+    DelegatingGraphDriver,
+    PostgresWriteStorage,
+)
 
 """Pinned upstream MCP entry point with optional Postgres graph persistence."""
 
@@ -103,7 +107,7 @@ def _postgres_storage() -> PostgresWriteStorage:
     return PostgresWriteStorage(
         engine,
         namespace=namespace,
-        table=os.getenv("JOURNAL_TABLE", "graphiti_write_journal"),
+        table=os.getenv("JOURNAL_TABLE", DEFAULT_POSTGRES_JOURNAL_TABLE),
         close_engine=True,
     )
 

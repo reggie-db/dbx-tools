@@ -289,7 +289,19 @@
           "spawn": "eslint"
         },
         {
+          "spawn": "test:installer"
+        },
+        {
           "exec": "bun run --filter '*' test"
+        }
+      ]
+    },
+    "test:installer": {
+      "name": "test:installer",
+      "description": "Test the standalone mise installer (set RUN_DOCKER_INSTALL_TESTS=1 for container coverage)",
+      "steps": [
+        {
+          "exec": "bun test scripts/install.test.ts"
         }
       ]
     }

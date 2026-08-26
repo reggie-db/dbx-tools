@@ -61,7 +61,6 @@ catalog:
   tsoa: ^6.6.0
   concurrently: ^10.0.3
   pnpm: ^11.0.6
-  consola: ^3.4.2
   "@databricks/appkit": ^0.60.0
   "@databricks/appkit-ui": ^0.60.0
   "@databricks/sdk-experimental": ^0.17.0

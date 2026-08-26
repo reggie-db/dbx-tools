@@ -2,20 +2,12 @@
  * Tagged, leveled logging for every runtime - the one logger the whole
  * monorepo shares.
  *
- * {@link logger} resolves a tagged {@link Logger} via a {@link LoggerFactory}.
- * The factory starts as a synchronous console sink so this module never uses
- * top-level `await` (that left importers with a null namespace mid-load in
- * browser bundles). A memoized async chain then upgrades to consola when it
- * is available. {@link LogLevel} filtering runs through {@link shouldEmit} in
- * the consola reporter or in per-level wrappers on the `console` fallbacks.
- *
- * Sink selection chains two factories with nullish coalescing (first match
- * wins):
- *
- * 1. {@link createConsolaLoggerFactory} when consola resolves and
- *    `LOG_CONSOLA_DISABLED` is not truthy.
- * 2. {@link createConsoleLoggerFactory} everywhere else (also the sync
- *    bootstrap before that promise settles).
+ * {@link logger} resolves a tagged {@link Logger} through a synchronous console
+ * sink, then upgrades its server-side formatter when `node:util` resolves.
+ * Keeping the sink dependency-free prevents browser bundlers from retaining an
+ * optional bare import that downstream apps would still have to install.
+ * {@link LogLevel} filtering runs through {@link shouldEmit} in per-level
+ * wrappers around the platform console or stderr sink.
  *
  * The console fallback writes formatted lines to `process.stderr` when it is
  * available (Bun `inspect` per argument when `LOG_BUN_CONSOLE_DISABLED` is
@@ -24,14 +16,13 @@
  * the `LEVEL` text prefix (devtools show severity) and keep only the `[name]`
  * tag.
  *
- * Env toggles: `LOG_LEVEL` (read per call), `LOG_CONSOLA_DISABLED` /
- * `LOG_BUN_CONSOLE_DISABLED` (read once during factory init).
+ * Env toggles: `LOG_LEVEL` (read per call) and `LOG_BUN_CONSOLE_DISABLED`
+ * (read once during factory init).
  *
  * Browser-safe: `process` / `Bun` / `window` / `document` are all reached
- * through `globalThis` and guarded, consola loads lazily, and `node:util` is
- * imported ONLY on a host that has `process.stderr` - never in a browser,
- * where the specifier is unresolvable - so the module works in any runtime.
- * Consola is an optional peer; the module loads fine without it.
+ * through `globalThis` and guarded, and `node:util` is imported ONLY on a host
+ * that has `process.stderr` - never in a browser, where the specifier is
+ * unresolvable - so the module works in any runtime.
  *
  * @module
  */
@@ -56,9 +47,8 @@ const globalBun = (globalThis as { Bun?: BunLike }).Bun;
 
 /**
  * Node `process.stderr` when writable, else `undefined` (stable for the
- * process). Typed loosely (`any`) because it is handed to consola's
- * `ctx.options.stdout` (a `WriteStream`) and to the console fallback's
- * `.write`, neither of which our structural {@link ProcessLike} shape satisfies
+ * process). Typed loosely (`any`) because it is handed to the console sink's
+ * `.write`, which our structural {@link ProcessLike} shape does not satisfy
  * nominally.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,76 +96,14 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 export type Logger = {
   [K in LogLevel]: (...args: any[]) => void;
 } & {
-  /** Success message (consola `success`; falls back to `info`-level output). */
+  /** Success message emitted at `info` level. */
   success: (...args: any[]) => void;
-  /** Start / in-progress message (consola `start`; falls back to `info`-level output). */
+  /** Start / in-progress message emitted at `info` level. */
   start: (...args: any[]) => void;
 };
 
 /** `(name?) => Logger` sink constructor returned by the init-time factory chain. */
 type LoggerFactory = (name?: string) => Logger;
-
-/**
- * Consola-backed {@link LoggerFactory}, or `undefined` when consola is
- * disabled, fails to import, or throws during setup.
- *
- * Builds one `createConsola` instance (badge off, level `verbose`) whose
- * reporter calls {@link shouldEmit} on `logObj.type` before delegating to
- * consola's default reporters. In Node, when `globalProcessStdErr` is set,
- * recognized {@link LogLevel} types are redirected to stderr for that write.
- * Tags use `withTag` (rendered `[name]`, not merged into args).
- *
- * Memoized: the dynamic `consola` import, env checks, and `createConsola`
- * setup (plus the import/throw fallback) run once; later calls share the one
- * resolved factory (or the one resolved `undefined`). A rejection is evicted
- * by {@link memoize} so a later call retries.
- */
-const createConsolaLoggerFactory = memoize(async (): Promise<LoggerFactory | undefined> => {
-  const consolaDisabled = toBoolean(globalProcess?.env?.LOG_CONSOLA_DISABLED);
-  if (!consolaDisabled) {
-    try {
-      const { consola, createConsola, LogLevels } = await import(/* @vite-ignore */ "consola");
-      const defaultOptions = consola.options;
-      const createConsolaOptions = {
-        ...consola.options,
-        defaults: { badge: false },
-        // `LOG_LEVEL` is enforced in {@link shouldEmit}; keep consola permissive
-        // so a threshold change after import is not blocked by its own filter.
-        level: LogLevels.verbose,
-        reporters: [
-          {
-            log: (logObj, ctx) => {
-              const logLevel = parseLogLevel(logObj.type);
-              if (!shouldEmit(logLevel, true)) return;
-              const ctxStdout = ctx.options.stdout;
-              try {
-                if (globalProcessStdErr !== undefined && logLevel !== undefined) {
-                  ctx.options.stdout = globalProcessStdErr;
-                }
-                defaultOptions.reporters.forEach((reporter) => reporter.log(logObj, ctx));
-              } finally {
-                ctx.options.stdout = ctxStdout;
-              }
-            },
-          },
-        ],
-      } as NonNullable<Parameters<typeof createConsola>[0]>;
-      const consolaLogger = createConsola(createConsolaOptions);
-      return (name?: string) => {
-        return name ? consolaLogger.withTag(name) : consolaLogger;
-      };
-    } catch (error) {
-      // consola is an OPTIONAL peer - not having it installed is the EXPECTED
-      // path (the module degrades to the console fallback), so this is not an
-      // error. Note it only at debug level, and without a stack trace (the
-      // message, not `console.trace`, so a missing optional dep stays quiet).
-      if (isLevelEnabled("debug")) {
-        console.debug("consola not available; using console fallback:", String(error));
-      }
-    }
-  }
-  return undefined;
-});
 
 /**
  * Console {@link LoggerFactory}; always succeeds.
@@ -270,7 +198,7 @@ function consoleLoggerFactory(
         return [level, emitter];
       }),
     ) as Logger;
-    // consola sugar the console fallback doesn't have natively - route to info.
+    // Convenience levels share the info sink.
     logger.success = logger.info;
     logger.start = logger.info;
     return logger;
@@ -280,21 +208,17 @@ function consoleLoggerFactory(
 }
 
 /**
- * Preferred factory: consola when it loads, else the full console sink (with
- * optional `node:util` inspect). Memoized so concurrent / repeat callers share
- * one in-flight promise and one settled result.
+ * Full console sink with optional `node:util` inspection. Memoized so
+ * concurrent and repeat callers share one in-flight promise and settled result.
  */
 const resolveFactory = memoize(async (): Promise<LoggerFactory> => {
-  return (
-    (await createConsolaLoggerFactory()) ?? (await createConsoleLoggerFactory(globalProcessStdErr))
-  );
+  return createConsoleLoggerFactory(globalProcessStdErr);
 });
 
 /**
  * Active factory starts as a sync console sink (no `await`, so this module
  * finishes evaluating immediately) and swaps to {@link resolveFactory}'s
- * result when that lands. Kick the resolve off at load so consola is usually
- * ready before the first interesting log line.
+ * result when server-side argument inspection is ready.
  */
 let activeFactory: LoggerFactory = consoleLoggerFactory(globalProcessStdErr);
 void resolveFactory().then(
@@ -308,8 +232,8 @@ void resolveFactory().then(
 
 /**
  * Build a logger that rebinds when {@link activeFactory} upgrades. Callers that
- * capture `const log = logger("x")` at module scope still get consola once it
- * arrives, without every call site waiting on a promise.
+ * capture `const log = logger("x")` at module scope still get the upgraded
+ * formatter once it arrives, without every call site waiting on a promise.
  */
 function createLogger(name?: string): Logger {
   let bound: { factory: LoggerFactory; logger: Logger } | undefined;
@@ -396,9 +320,7 @@ function activeLevel(): LogLevel {
  * Whether `raw` meets the current `LOG_LEVEL` threshold.
  *
  * Parses `raw` as a {@link LogLevel}; when parsing fails, returns
- * `defaultResult` if supplied, otherwise `false`. Used for consola reporter
- * lines where unknown `logObj.type` values should pass through when
- * `defaultResult` is `true`.
+ * `defaultResult` if supplied, otherwise `false`.
  */
 function shouldEmit(raw: unknown, defaultResult?: boolean): boolean {
   const level = parseLogLevel(raw);
@@ -442,9 +364,8 @@ function extractLoggerName(loggerName: NameLike | string | undefined): string | 
  *
  * The tag is `[name]` when `loggerName` is a non-empty string, a
  * {@link NameLike} with `name`, or a file / URL path (the basename without
- * extension is used). Consola applies the tag via `withTag` (render-time).
- * The `console` fallbacks prepend `LEVEL [name]` on Node/Bun hosts or `[name]`
- * alone in browsers via {@link createFormatter}.
+ * extension is used). The console sink prepends `LEVEL [name]` on Node/Bun
+ * hosts or `[name]` alone in browsers via {@link createFormatter}.
  *
  * Calls below `process.env.LOG_LEVEL` are dropped by {@link shouldEmit} before
  * the sink formats or writes the line.

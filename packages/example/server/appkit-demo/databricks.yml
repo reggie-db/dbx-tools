@@ -98,7 +98,7 @@ resources:
         # `TUNNEL_AUTH_ALLOW` is the old `--allow`.
         command:
           - bun
-          - src/server.ts
+          - src/launch.ts
         env:
           # OTP gate allow-list (was the tunnel CLI's `--allow`). No subject /
           # brand-name override: the defaults are the conventional one-time-code
@@ -107,6 +107,24 @@ resources:
           # brand context. A novel subject is what breaks that.
           - name: TUNNEL_AUTH_ALLOW
             value: ${var.tunnel_auth_allow}
+          # Keep the public OTP shell on its small local SQLite store. Auto mode
+          # sees the sibling Lakebase plugin and selects Postgres, but Better
+          # Auth's unqualified migrations then target the locked-down `public`
+          # schema and crash the app with `permission denied for schema public`.
+          # Mastra memory and search still use the bound Lakebase project.
+          - name: AUTH_STORAGE
+            value: sqlite
+          # The Lakebase search provider provisions its own schema. PostgreSQL
+          # `public` is intentionally not writable by the app service principal,
+          # so never leave this at the provider default in a deployed app.
+          - name: SEARCH_LAKEBASE_SCHEMA
+            value: dbx_tools_search
+          # The currently released Graphiti runtime defaults its journal to the
+          # locked-down `public` schema. Reuse the search plugin's provisioned,
+          # writable schema until the dedicated `dbx_tools_graphiti` default is
+          # available in the next dbx-tools release.
+          - name: JOURNAL_TABLE
+            value: dbx_tools_search.graphiti_write_journal
           - name: DATABRICKS_WAREHOUSE_ID
             value_from: sql-warehouse
           - name: DATABRICKS_GENIE_SPACE_ID

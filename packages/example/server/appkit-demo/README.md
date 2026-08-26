@@ -35,6 +35,7 @@ handle the topic bus, static delivery, deployment staging, and shared types.
 ## Files
 
 - `src/server.ts` — the plugin list and agent definition.
+- `src/launch.ts` — the deployed process wrapper that strips emojis from logs.
 - `src/bus-demo.ts` — the topic-bus plugin behind the Bus page.
 - `app.yaml` — Databricks App runtime env wiring (`genie-space`, `postgres`).
 - `databricks.yml` — Asset Bundle: the Lakebase autoscaling Postgres project,
@@ -78,9 +79,9 @@ workspace release, and staging converts `@dbx-tools/*` to that published version
 bun run --filter '@dbx-tools/demo-appkit-app' compile   # client build the server serves
 bun stage-deploy.ts                                     # reads the linked example version
 cd "$(dirname "$(mktemp -u)")/dbx-tools-deploy-app"     # printed by stage-deploy
-databricks bundle validate
-databricks bundle deploy
-databricks bundle run demo_app
+databricks bundle validate --profile FEVM-REGGIE-PIERCE-AWS
+databricks bundle deploy --profile FEVM-REGGIE-PIERCE-AWS
+databricks bundle run demo_app --profile FEVM-REGGIE-PIERCE-AWS
 ```
 
 The staged app includes both `package.json` and `requirements.txt`. Databricks
@@ -97,9 +98,15 @@ Two things worth knowing before changing this flow:
   `.gitignore`, and this repo ignores every `dist` directory — staged there,
   `bundle deploy` warns "There are no files to sync" and ships an app with no
   source.
+- **Pass the FEVM profile explicitly.** `DATABRICKS_CONFIG_PROFILE` overrides
+  the profile declared by the bundle target. Without `--profile
+  FEVM-REGGIE-PIERCE-AWS`, a shell configured for the deployment service
+  principal creates a separate bundle state and then fails because the app and
+  Lakebase project are already managed by the human-owned FEVM bundle.
 - **Start with `bundle run`, not `databricks apps deploy` or `apps start`.** The
-  deployed `command` (`bun src/server.ts`, which fronts itself with the public
-  portr tunnel + OTP gate in-process via `@dbx-tools/tunnel`'s `tunnelInterceptor`)
+  deployed `command` (`bun src/launch.ts`, which normalizes child output and
+  starts the server that fronts itself with the public portr tunnel + OTP gate
+  in-process via `@dbx-tools/tunnel`'s `tunnelInterceptor`)
   lives in `databricks.yml` under the app resource's `config`, which only the
   bundle applies. A bare `apps deploy` falls back to `app.yaml`'s `npm run start`,
   which the staged tree has no script for, and the app crashes on boot. `databricks

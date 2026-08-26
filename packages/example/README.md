@@ -264,8 +264,9 @@ via `valueFrom`. Grant the app's service principal `READ` on the scope
 
 ```bash
 cd server/appkit-demo
-databricks bundle validate
-databricks bundle deploy
+databricks bundle validate --profile FEVM-REGGIE-PIERCE-AWS
+databricks bundle deploy --profile FEVM-REGGIE-PIERCE-AWS
+databricks bundle run demo_app --profile FEVM-REGGIE-PIERCE-AWS
 ```
 
 The bundle ([`databricks.yml`](server/appkit-demo/databricks.yml)) provisions the
