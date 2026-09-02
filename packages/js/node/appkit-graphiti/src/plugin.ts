@@ -3,10 +3,10 @@
  *
  * @module
  */
-import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { createServer } from "node:net";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
+import { createServer } from "node:net";
 import { promisify } from "node:util";
 import {
   ConfigurationError,

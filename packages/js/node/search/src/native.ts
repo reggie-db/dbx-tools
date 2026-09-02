@@ -11,6 +11,7 @@ import type {
   SearchRequest as AppKitSearchRequest,
   SearchResponse as AppKitSearchResponse,
 } from "@databricks/appkit/beta";
+import { string } from "@dbx-tools/shared-core";
 import {
   search as sharedSearch,
   type SearchDocument,
@@ -19,7 +20,6 @@ import {
   type SearchResult,
   type UpsertResult,
 } from "@dbx-tools/shared-search";
-import { string } from "@dbx-tools/shared-core";
 import type { SearchOptions, SearchReadBackend } from "./client.ts";
 import { indexConfigFor, type ResolvedSearchConfig } from "./config.ts";
 

@@ -169,7 +169,10 @@ export async function startPortr(
   return child;
 }
 
-export function supervisePortr(config: PortrConfig, childEnv: NodeJS.ProcessEnv): ProcessSupervisor {
+export function supervisePortr(
+  config: PortrConfig,
+  childEnv: NodeJS.ProcessEnv,
+): ProcessSupervisor {
   return superviseProcessForever({
     name: "portr",
     logger,

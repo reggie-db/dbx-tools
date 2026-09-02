@@ -100,7 +100,7 @@ Two things worth knowing before changing this flow:
   source.
 - **Pass the FEVM profile explicitly.** `DATABRICKS_CONFIG_PROFILE` overrides
   the profile declared by the bundle target. Without `--profile
-  FEVM-REGGIE-PIERCE-AWS`, a shell configured for the deployment service
+FEVM-REGGIE-PIERCE-AWS`, a shell configured for the deployment service
   principal creates a separate bundle state and then fails because the app and
   Lakebase project are already managed by the human-owned FEVM bundle.
 - **Start with `bundle run`, not `databricks apps deploy` or `apps start`.** The

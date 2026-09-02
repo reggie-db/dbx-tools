@@ -106,8 +106,8 @@ Omitted values fall back to the environment, a `.env` file, then
 
 | Flag                          | Meaning                                                    |
 | ----------------------------- | ---------------------------------------------------------- |
-| `--transport <mode>`         | `portr` (default), `frp`, or `both`                         |
-| `--public-domain <host>`      | Portr public domain (`<subdomain>.<server>`)                |
+| `--transport <mode>`          | `portr` (default), `frp`, or `both`                        |
+| `--public-domain <host>`      | Portr public domain (`<subdomain>.<server>`)               |
 | `--subdomain <name>`          | portr subdomain, else derived from the public domain       |
 | `--frp-public-domain <host>`  | FRP public HTTP domain                                     |
 | `--frp-server <host>`         | frps control host, else the FRP public domain              |

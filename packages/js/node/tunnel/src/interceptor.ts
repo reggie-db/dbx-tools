@@ -20,8 +20,8 @@
 import type { Interceptor, InterceptorContext } from "@dbx-tools/appkit";
 import { log, object } from "@dbx-tools/shared-core";
 import { installFrp, resolveFrpConfig, superviseFrp, writeFrpConfig } from "./frp.ts";
-import { installPortr, resolvePortrConfig, supervisePortr, writePortrConfig } from "./portr.ts";
 import { startPathProxy } from "./path-proxy.ts";
+import { installPortr, resolvePortrConfig, supervisePortr, writePortrConfig } from "./portr.ts";
 
 const logger = log.logger("tunnel:interceptor");
 

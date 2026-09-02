@@ -45,7 +45,10 @@ export interface FrpConfig {
 
 function bareHost(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  const normalized = value.replace(/^https?:\/\//, "").split("/")[0]?.trim();
+  const normalized = value
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    ?.trim();
   return normalized || undefined;
 }
 
@@ -69,11 +72,7 @@ export function resolveFrpConfig(opts: {
   targetPort?: number;
 }): FrpConfig | undefined {
   const publicDomain = bareHost(
-    config.string(
-      opts.publicDomain,
-      ["FRP_PUBLIC_DOMAIN", "PUBLIC_DOMAIN"],
-      TUNNEL_CONFIG,
-    ),
+    config.string(opts.publicDomain, ["FRP_PUBLIC_DOMAIN", "PUBLIC_DOMAIN"], TUNNEL_CONFIG),
   );
   if (!publicDomain) return undefined;
   const server = bareHost(config.string(opts.server, "FRP_SERVER")) ?? publicDomain;

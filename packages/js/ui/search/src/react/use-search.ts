@@ -2,6 +2,7 @@
 // search-as-you-type state machine. Single-index queries use AppKit's native
 // route and client config; universal queries use the dbx-tools extension route.
 
+import { useAiSearchQuery, type AiSearchRequest } from "@databricks/appkit-ui/react/beta";
 import {
   search as sharedSearch,
   type SearchClientConfig,
@@ -9,7 +10,6 @@ import {
   type SearchMode,
   type SearchResult,
 } from "@dbx-tools/shared-search";
-import { useAiSearchQuery, type AiSearchRequest } from "@databricks/appkit-ui/react/beta";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /** Options for {@link useSearch}. */

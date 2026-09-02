@@ -179,11 +179,12 @@ async function run(raw: TunnelOptions, command: readonly string[]): Promise<void
     children.push(frp.startFrp(resolved.frp, frpEnv, configPath));
   }
   const activeTunnelCount = children.length - (executable ? 1 : 0);
-  if (!activeTunnelCount)
+  if (!activeTunnelCount) {
     logger.info("no selected public tunnel is configured", {
       transport: resolved.transport,
       publicPort: resolved.publicPort,
     });
+  }
   supervise(children);
 }
 

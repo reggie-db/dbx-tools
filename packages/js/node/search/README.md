@@ -256,18 +256,18 @@ alternatives and must not be registered together.
 All fields are optional. Precedence is plugin config, then environment, then a
 default.
 
-| Config           | Environment                                      | Default                 | Purpose                                                                                    |
-| ---------------- | ------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------ |
-| `index`          | `SEARCH_INDEX`, `DATABRICKS_VECTOR_SEARCH_INDEX` | –                       | Default index (name or alias).                                                             |
-| `indexes`        | –                                                | `[index]`               | Indexes known for aliases, universal search, and the UI.                                   |
-| `endpoint`       | `SEARCH_ENDPOINT`                                | –                       | Vector Search endpoint (only needed to create an index).                                   |
-| `columns`        | `SEARCH_COLUMNS`                                 | index's columns         | Default columns per hit.                                                                   |
-| `pageSize`       | `SEARCH_PAGE_SIZE`                               | `10`                    | Default hits per search.                                                                   |
-| `mode`           | `SEARCH_MODE`                                    | `hybrid`                | `hybrid` / `vector` / `keyword`.                                                           |
-| `embeddingModel` | `SEARCH_EMBEDDING_MODEL`                         | best embedding endpoint | Embedding endpoint for index creation.                                                     |
-| `timeoutMs`      | `SEARCH_TIMEOUT_MS`                              | `30000`                 | Per-call timeout.                                                                          |
-| `allowWrite`     | `SEARCH_WRITE`                                   | `false`                 | Enable provider-supported write tools and routes.                                           |
-| `ensureOnSetup`  | –                                                | –                       | Provision and seed a native Vector Search index at boot.                                    |
+| Config           | Environment                                      | Default                 | Purpose                                                  |
+| ---------------- | ------------------------------------------------ | ----------------------- | -------------------------------------------------------- |
+| `index`          | `SEARCH_INDEX`, `DATABRICKS_VECTOR_SEARCH_INDEX` | –                       | Default index (name or alias).                           |
+| `indexes`        | –                                                | `[index]`               | Indexes known for aliases, universal search, and the UI. |
+| `endpoint`       | `SEARCH_ENDPOINT`                                | –                       | Vector Search endpoint (only needed to create an index). |
+| `columns`        | `SEARCH_COLUMNS`                                 | index's columns         | Default columns per hit.                                 |
+| `pageSize`       | `SEARCH_PAGE_SIZE`                               | `10`                    | Default hits per search.                                 |
+| `mode`           | `SEARCH_MODE`                                    | `hybrid`                | `hybrid` / `vector` / `keyword`.                         |
+| `embeddingModel` | `SEARCH_EMBEDDING_MODEL`                         | best embedding endpoint | Embedding endpoint for index creation.                   |
+| `timeoutMs`      | `SEARCH_TIMEOUT_MS`                              | `30000`                 | Per-call timeout.                                        |
+| `allowWrite`     | `SEARCH_WRITE`                                   | `false`                 | Enable provider-supported write tools and routes.        |
+| `ensureOnSetup`  | –                                                | –                       | Provision and seed a native Vector Search index at boot. |
 
 ## Modules
 

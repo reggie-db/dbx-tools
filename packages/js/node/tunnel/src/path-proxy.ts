@@ -5,8 +5,9 @@ import ProxyModule from "http-proxy-3";
 function stripPathPrefix(request: IncomingMessage, prefix: string): void {
   if (prefix === "/") return;
   const url = request.url ?? "/";
-  if (url === prefix) request.url = "/";
-  else if (url.startsWith(`${prefix}/`) || url.startsWith(`${prefix}?`)) {
+  if (url === prefix) {
+    request.url = "/";
+  } else if (url.startsWith(`${prefix}/`) || url.startsWith(`${prefix}?`)) {
     request.url = url.slice(prefix.length) || "/";
   }
 }

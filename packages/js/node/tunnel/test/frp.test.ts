@@ -20,7 +20,7 @@ describe("frp", () => {
     try {
       const resolved = resolveFrpConfig({
         publicDomain: "inspire.example.com",
-        token: "secret\"token",
+        token: 'secret"token',
         port: 8000,
       });
       assert.ok(resolved);

@@ -156,7 +156,7 @@ export type VideoTrack = {
   tracks={tracks}
   onTimeChange={setTime}
   renderMarker={renderDetection}
-/>
+/>;
 ```
 
 `VolumeVideo` should remain useful without `tracks`. If the timeline grows substantial,
@@ -236,9 +236,11 @@ Document a minimal AppKit example:
 appkit.createApp({
   onPluginsReady(instance) {
     instance.server.extend((app) => {
-      app.use(createVolumeMediaHandler({
-        resolve: async (request) => lookupMedia(request.params.id),
-      }));
+      app.use(
+        createVolumeMediaHandler({
+          resolve: async (request) => lookupMedia(request.params.id),
+        }),
+      );
     });
   },
 });

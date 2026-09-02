@@ -1,9 +1,9 @@
 # @dbx-tools/cli
 
-The single `dbx` CLI: workspace lifecycle, Model Serving proxy, AppKit env, and
-a gated public tunnel.
+The single `dbx` CLI: workspace lifecycle, Model Serving proxy, AppKit env,
+local token brokering, and a gated public tunnel.
 
-This package installs one command, `dbx` (aliased `dbx-tools`), with four
+This package installs one command, `dbx` (aliased `dbx-tools`), with five
 groups:
 
 | Command           | What it does                                                             |
@@ -12,6 +12,7 @@ groups:
 | `dbx model-proxy` | Local OpenAI-compatible proxy in front of Databricks Model Serving.      |
 | `dbx appkit env`  | Print the environment an AppKit app resolves, as eval-able shell output. |
 | `dbx tunnel`      | Front any command with a public portr tunnel and an email-OTP gate.      |
+| `dbx token`       | Broker short-lived provider tokens for host and container clients.       |
 
 Key features:
 
@@ -29,10 +30,11 @@ Key features:
 Every feature group lives in its own package -
 [`@dbx-tools/cli-model-proxy`](../model-proxy),
 [`@dbx-tools/cli-appkit-env`](../appkit-env), and
-[`@dbx-tools/cli-tunnel`](../tunnel) - and is imported LAZILY, only once its name
-is matched, so `dbx dev` never pays to load the Databricks SDK, AppKit, or the
-SMTP stack. Run `dbx <group> --help` for a group's own flags; each forwards
-`--help` to the child program rather than answering it at the root.
+[`@dbx-tools/cli-tunnel`](../tunnel), and [`@dbx-tools/cli-token`](../token) -
+and is imported LAZILY, only once its name is matched, so `dbx dev` never pays
+to load the Databricks SDK, AppKit, SMTP, keychain, or X.509 stack. Run
+`dbx <group> --help` for a group's own flags; each forwards `--help` to the child
+program rather than answering it at the root.
 
 ## Bootstrap A Workspace
 
@@ -84,6 +86,18 @@ eval "$(dbx appkit env --quiet)"
 See [`@dbx-tools/cli-model-proxy`](../model-proxy) and
 [`@dbx-tools/cli-appkit-env`](../appkit-env) for the full flag surface, auth
 resolution, and output formats.
+
+## Broker Local Provider Tokens
+
+```sh
+dbx token serve --google --auth jwt --bind-docker
+dbx token client-token container-client --scope https://www.googleapis.com/auth/gmail.modify
+dbx token access-token --client container-client
+```
+
+The broker keeps Google ADC under gcloud, caches access tokens only in memory,
+and defaults to mTLS. See [`@dbx-tools/cli-token`](../token) for service
+installation, client authorization, Docker, Podman, and configuration.
 
 ## Put A Gated Public URL In Front Of A Command
 

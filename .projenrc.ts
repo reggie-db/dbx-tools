@@ -190,6 +190,10 @@ root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
 root.pnpmWorkspace?.addCatalog("better-auth", "^1.6.25");
 root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "^1.6.25");
 root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
+root.pnpmWorkspace?.addCatalog("@napi-rs/keyring", "^1.2.0");
+root.pnpmWorkspace?.addCatalog("@peculiar/x509", "^2.0.0");
+root.pnpmWorkspace?.addCatalog("jose", "^6.2.3");
+root.pnpmWorkspace?.addCatalog("reflect-metadata", "^0.2.2");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
 // v4 + the Mastra chat-UI deps). These only load in ui/app-tagged (browser)
@@ -303,6 +307,20 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
 // `dbx appkit`, lazily, so AppKit only loads when that command is named.
 project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" }, (p) => {
   p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
+});
+
+// cli-token: the `dbx token` local credential broker. Commander comes from the
+// cli tag; runtime dependencies are isolated here so unrelated dbx commands do
+// not load keychain, JWT, or X.509 code.
+project.applyToProjects(root, { identifierName: "cli-token", tags: "cli" }, (p) => {
+  p.addDeps(
+    "@dbx-tools/core@workspace:*",
+    "@napi-rs/keyring@catalog:",
+    "@peculiar/x509@catalog:",
+    "env-paths@catalog:",
+    "jose@catalog:",
+    "reflect-metadata@catalog:",
+  );
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -615,10 +633,10 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 // `@dbx-tools/cli`); every other package keeps whatever discovery derives from its
 // path. Ships the `dbx-tools` bin plus the short `dbx` alias (npm exposes every
 // `bin` key as its own command). The sibling CLI packages contribute COMMANDS
-// rather than bins - `dbx model-proxy` and `dbx appkit` - and stay separate
-// packages so their heavy deps (the Databricks SDK, AppKit) are `await import()`ed
-// only when named; see `src/cli.ts`. They are workspace deps here because the
-// installed `dbx` has to be able to reach them.
+// rather than bins - `dbx model-proxy`, `dbx appkit`, `dbx tunnel`, and
+// `dbx token` - and stay separate packages so their heavy dependencies are
+// `await import()`ed only when named; see `src/cli.ts`. They are workspace deps
+// here because the installed `dbx` has to be able to reach them.
 // Tsconfig/exports come from the `cli` tag.
 // (shared-core comes from the blanket base-dep mixin above.) No `pnpm` dep: the
 // CLI drives `bun` (the ambient runtime) - see `src/bun.ts`.
@@ -631,6 +649,7 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/cli-model-proxy@workspace:*",
     "@dbx-tools/cli-appkit-env@workspace:*",
+    "@dbx-tools/cli-token@workspace:*",
     "@dbx-tools/cli-tunnel@workspace:*",
   );
 });
@@ -1067,6 +1086,10 @@ for (const task of [SCOPE, "dbx"]) {
     exec: "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
     receiveArgs: true,
   });
+  root.package.file.addOverride(
+    `scripts.${task}`,
+    "bun packages/js/cli/dbx-tools/bin/dbx-tools.ts",
+  );
 }
 
 // Run the demo server, client, and local Python bus emitter together. The emitter

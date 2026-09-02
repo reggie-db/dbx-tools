@@ -267,7 +267,9 @@ program
             "-m",
             "Co-Authored-By: Kanna <noreply@kanna.sh>\nKanna-Agent: codex/gpt",
           ]);
-        } else logger.info("nothing to commit");
+        } else {
+          logger.info("nothing to commit");
+        }
       }
 
       if (opts.tag) {

@@ -158,7 +158,10 @@ describe("resolveTunnelOptions", () => {
       serverPort: 443,
       protocol: "wss",
       proxyName: "demo",
+      path: "/demo",
+      stripPrefix: true,
       port: 8123,
+      targetPort: 8123,
     });
   });
 
@@ -182,7 +185,10 @@ describe("resolveTunnelOptions", () => {
       protocol: "wss",
       token: "frp_test_token",
       proxyName: "demo-frp",
+      path: "/demo-frp",
+      stripPrefix: true,
       port: 8000,
+      targetPort: 8000,
     });
     assert.deepEqual(resolved.gate.publicDomains, [
       "demo.apps.example.com",

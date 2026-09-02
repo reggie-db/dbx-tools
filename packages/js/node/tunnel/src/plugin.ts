@@ -24,8 +24,7 @@ import {
   type ResourceRequirement,
   ResourceType,
 } from "@databricks/appkit";
-import { plugin as appkitPlugin } from "@dbx-tools/appkit";
-import { brand as appkitBrand } from "@dbx-tools/appkit";
+import { plugin as appkitPlugin, brand as appkitBrand } from "@dbx-tools/appkit";
 import {
   auth as passwordlessAuth,
   storage as authStorage,
@@ -290,11 +289,9 @@ export function resolveAuthGateConfig(config: AuthGateConfig): ResolvedAuthGateC
     publicDomain,
     publicDomains: [
       ...new Set(
-        [
-          publicDomain,
-          frpPublicDomain,
-          ...string.parseList(config.publicDomains),
-        ].filter((value): value is string => !!value),
+        [publicDomain, frpPublicDomain, ...string.parseList(config.publicDomains)].filter(
+          (value): value is string => !!value,
+        ),
       ),
     ],
     forwardHeaders: [
@@ -396,22 +393,25 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
           this.resolved,
           lakebasePlugin?.exports().pool,
         );
-        this.runtimes.set(new URL(origin).host.toLowerCase(), await passwordlessAuth.createPasswordlessAuth({
-          storage,
-          baseURL: origin,
-          basePath: "/api/email/auth",
-          appName: this.resolved.brandName,
-          secret: Buffer.from(key).toString("base64url"),
-          sessionTtlSeconds: this.resolved.sessionTtlSeconds,
-          sessionCutoffMs: this.resolved.sessionCutoffMs,
-          logoutRedirectPath: this.resolved.logoutRedirectPath,
-          codeTtlSeconds: this.resolved.codeTtlSeconds,
-          maxAttempts: this.resolved.maxAttempts,
-          authorizeIdentity: (email) => this.authorizeIdentity(email),
-          sendCode: (email, code, options) => this.sendCode(email, code, options),
-          subject: this.resolved.subject,
-          message: this.resolved.message,
-        }));
+        this.runtimes.set(
+          new URL(origin).host.toLowerCase(),
+          await passwordlessAuth.createPasswordlessAuth({
+            storage,
+            baseURL: origin,
+            basePath: "/api/email/auth",
+            appName: this.resolved.brandName,
+            secret: Buffer.from(key).toString("base64url"),
+            sessionTtlSeconds: this.resolved.sessionTtlSeconds,
+            sessionCutoffMs: this.resolved.sessionCutoffMs,
+            logoutRedirectPath: this.resolved.logoutRedirectPath,
+            codeTtlSeconds: this.resolved.codeTtlSeconds,
+            maxAttempts: this.resolved.maxAttempts,
+            authorizeIdentity: (email) => this.authorizeIdentity(email),
+            sendCode: (email, code, options) => this.sendCode(email, code, options),
+            subject: this.resolved.subject,
+            message: this.resolved.message,
+          }),
+        );
       }
       // `server()` is deferred, so it does not exist during this plugin's setup.
       // At `setup:complete` the Express app exists but has not injected plugin
@@ -478,13 +478,16 @@ export class AuthGatePlugin extends Plugin<AuthGateConfig> {
 
   override exports(): AuthGateApi {
     const runtime = (headers?: Headers, request?: Request) => {
-      const host = (headers?.get("host") ?? (request ? new URL(request.url).host : "")).toLowerCase();
+      const host = (
+        headers?.get("host") ?? (request ? new URL(request.url).host : "")
+      ).toLowerCase();
       return this.runtimes.get(host) ?? this.runtimes.values().next().value;
     };
     return {
       passkeysEnabled: [...this.runtimes.values()].some((entry) => entry.passkeysEnabled),
       handler: (request) =>
-        runtime(request.headers, request)?.handler(request) ?? Promise.resolve(new Response("Not Found", { status: 404 })),
+        runtime(request.headers, request)?.handler(request) ??
+        Promise.resolve(new Response("Not Found", { status: 404 })),
       session: (headers) => runtime(headers)?.session(headers) ?? Promise.resolve(undefined),
       status: (headers) =>
         runtime(headers)?.status(headers) ??

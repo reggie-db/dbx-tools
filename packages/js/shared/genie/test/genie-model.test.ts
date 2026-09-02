@@ -3,10 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  GenieMessageSchema,
-  GenieTextAttachmentSchema,
-} from "../src/genie-model.ts";
+import { GenieMessageSchema, GenieTextAttachmentSchema } from "../src/genie-model.ts";
 
 describe("GenieTextAttachmentSchema", () => {
   it("accepts answer purposes emitted by the live Genie API", () => {
@@ -53,9 +50,6 @@ describe("GenieMessageSchema", () => {
     });
 
     assert.equal(message.attachments?.[0]?.query?.statement_id, "statement-1");
-    assert.equal(
-      message.attachments?.[1]?.text?.purpose,
-      "TEXT_ATTACHMENT_PURPOSE_ANSWER",
-    );
+    assert.equal(message.attachments?.[1]?.text?.purpose, "TEXT_ATTACHMENT_PURPOSE_ANSWER");
   });
 });

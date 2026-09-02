@@ -30,6 +30,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/cli-token",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/cli-tunnel",
       "version": "workspace:*",
       "type": "runtime"

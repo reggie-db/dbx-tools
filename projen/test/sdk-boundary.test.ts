@@ -3,11 +3,11 @@
  * compatibility boundaries that need APIs AppKit does not expose.
  */
 
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { find } from "@dbx-tools/path";
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { find } from "@dbx-tools/path";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const ALLOWED = new Set([

@@ -1,18 +1,20 @@
 /**
  * The single `dbx` (alias `dbx-tools`) commander entry.
  *
- * One bin, three command groups:
+ * One bin, five command groups:
  *   - `dev` - workspace lifecycle: detect the root, bootstrap or repair, then
  *     forward whatever follows to projen. This is the passthrough, and it is an
  *     EXPLICIT subcommand rather than the bare root action so a projen task
  *     name can never shadow (or be shadowed by) a sibling command.
  *   - `model-proxy` - the local OpenAI-compatible Model Serving proxy.
  *   - `appkit` - AppKit environment helpers (`appkit env`).
+ *   - `tunnel` - public portr tunnel with passwordless access gating.
+ *   - `token` - local provider access-token broker.
  *
- * The two feature groups stay in their own packages (`@dbx-tools/cli-model-proxy`,
- * `@dbx-tools/cli-appkit-env`) and are `await import()`ed only once their name is
- * matched, so `dbx dev` never loads the Databricks SDK or AppKit. That lazy hop
- * is also why they are mounted as ARG-FORWARDING commands instead of
+ * The four feature groups stay in sibling packages and are `await import()`ed
+ * only once their name is matched, so `dbx dev` never loads the Databricks SDK,
+ * AppKit, tunnel, or token-broker dependencies. That lazy hop is also why they
+ * are mounted as ARG-FORWARDING commands instead of
  * `addCommand()`: building a child program eagerly to register it would defeat
  * the point. Each forwards its own `--help`, so the child prints its real help.
  *
@@ -92,7 +94,9 @@ function addForwardedCommand(
 export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   const program = new Command()
     .name(name)
-    .description("Databricks developer tools: workspace lifecycle, model proxy, AppKit env")
+    .description(
+      "Databricks developer tools: workspace lifecycle, model proxy, AppKit env, tunnel, and token broker",
+    )
     .showHelpAfterError()
     .helpOption("-h, --help", `Show ${name} help`);
 
@@ -126,6 +130,13 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
     "tunnel",
     "Run a public portr tunnel with an email-OTP gate",
     async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
+  );
+
+  addForwardedCommand(
+    program,
+    "token",
+    "Broker short-lived provider access tokens for local development",
+    async () => (await import("@dbx-tools/cli-token/cli")).buildProgram,
   );
 
   return program;

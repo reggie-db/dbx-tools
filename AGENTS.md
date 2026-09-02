@@ -77,6 +77,12 @@ Primary package areas:
 - `packages/js/node/model`, `packages/js/shared/model`, and
   `packages/js/cli/model-proxy` — intent-based Model Serving endpoint selection,
   shared schemas/classification, and local OpenAI-compatible proxying.
+- `packages/js/cli/token` — the `dbx token` local credential broker. It delegates
+  Google login and refresh credentials to gcloud ADC, caches only short-lived
+  access tokens in memory by canonical scope set, serves them over mTLS with
+  optional password or signed client-token authorization, and installs as a
+  native per-user service. Docker and Podman gateway binds are discovered
+  dynamically; the broker never silently widens to every interface.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search
@@ -1485,9 +1491,9 @@ error source:
 ## The `dbx` CLI
 
 `@dbx-tools/cli` ships the repo's ONLY bin, `dbx` (aliased `dbx-tools`), with
-three command groups: `dev` (workspace lifecycle -> projen), `model-proxy`, and
-`appkit`. The latter two live in their own packages
-(`@dbx-tools/cli-model-proxy`, `@dbx-tools/cli-appkit-env`) and are mounted as
+five command groups: `dev` (workspace lifecycle -> projen), `model-proxy`,
+`appkit`, `tunnel`, and `token`. The latter four live in sibling CLI packages
+and are mounted as
 ARG-FORWARDING commands that `await import()` the sibling's `buildProgram(name)`
 only once the name is matched - so `dbx dev` never loads the Databricks SDK or
 AppKit. Those packages therefore declare NO bin; adding one back re-splits a

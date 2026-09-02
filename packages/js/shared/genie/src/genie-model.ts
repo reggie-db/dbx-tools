@@ -156,15 +156,11 @@ export type GenieQueryAttachment = z.infer<typeof GenieQueryAttachmentSchema>;
  * server-side enum change cannot invalidate an otherwise complete message.
  */
 export type GenieTextAttachmentPurpose =
-  | "FOLLOW_UP_QUESTION"
-  | "TEXT_ATTACHMENT_PURPOSE_ANSWER"
-  | (string & {});
+  "FOLLOW_UP_QUESTION" | "TEXT_ATTACHMENT_PURPOSE_ANSWER" | (string & {});
 
 /** Text attachment schema widened for forward-compatible purpose values. */
 export const GenieTextAttachmentSchema = dashboards.textAttachmentSchema.extend({
-  purpose: z
-    .custom<GenieTextAttachmentPurpose>((value) => typeof value === "string")
-    .optional(),
+  purpose: z.custom<GenieTextAttachmentPurpose>((value) => typeof value === "string").optional(),
 });
 export type GenieTextAttachment = z.infer<typeof GenieTextAttachmentSchema>;
 
