@@ -81,6 +81,11 @@ requires an explicit secret. The running service holds a fail-fast file lock for
 its complete lifetime, so a duplicate process exits instead of waiting.
 Removal keeps the secret; pass `--purge` to remove broker state.
 
+The service resolves `gcloud` to an absolute executable path before its first
+token request. It checks PATH, common operating-system and package-manager
+locations, and Google Cloud SDK install directories, then reuses the resolved
+path for the process lifetime.
+
 ## Create a client identity
 
 ```sh
@@ -107,18 +112,17 @@ defaults automatically:
 dbx token access-token
 ```
 
-Complete foreground flow:
+Start the server:
 
 ```sh
 SECRET=supersecret
-dbx token serve --secret "$SECRET" &
-SERVER_PID=$!
-trap 'kill "$SERVER_PID"' EXIT
+dbx token serve --secret "$SECRET"
+```
 
-until curl --fail --silent http://127.0.0.1:5556/health >/dev/null; do
-  sleep 0.1
-done
+In another terminal:
 
+```sh
+SECRET=supersecret
 CLIENT_JWT="$(dbx token client-jwt example-client --secret "$SECRET")"
 dbx token access-token --auth "$CLIENT_JWT"
 ```

@@ -90,6 +90,8 @@ jspm_packages/
 .isaac/
 .polly/
 .home/
+.dev.token
+.dev.client.test/
 **/.logs/
 .venv/
 .pytest_cache/

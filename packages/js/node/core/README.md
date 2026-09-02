@@ -21,12 +21,27 @@ Key features:
 - Layered config from process env, environment-specific `.env` files, and the
   Databricks bundle's App `config.env`.
 - YAML/JSON brand-context discovery and loading with shared Zod validation.
+- Executable lookup across PATH, common operating-system locations, and
+  caller-supplied directories.
 - Idempotent executable downloads with zip/tar extraction and atomic installs.
 - Cross-process file locks with a Bun `flock(2)` fast path and a portable,
   stale-reclaiming lock-directory fallback.
 - Keyed mutual exclusion across the main thread and its worker threads.
 
-## Install A Binary
+## Find Or Install A Binary
+
+```ts
+import { bin } from "@dbx-tools/core";
+
+const gcloud = await bin.which("gcloud", {
+  defaultLocations: true,
+  locations: ["/opt/google-cloud-sdk/bin"],
+});
+```
+
+`bin.which()` checks PATH first, then caller-supplied directories, then common
+operating-system and package-manager locations when `defaultLocations` is true.
+It returns the absolute executable path or `undefined`.
 
 ```ts
 import { join } from "node:path";
@@ -317,8 +332,8 @@ cached too.
 ## Modules
 
 - `exec` - async/sync process spawning, stdio handling, abort wiring, and shlex.
-- `bin` - executable download, optional archive extraction, selection, and
-  atomic installation.
+- `bin` - executable lookup, download, optional archive extraction, selection,
+  and atomic installation.
 - `bundle` - asynchronous streaming of CLI-resolved Databricks bundle App resources.
 - `project` - cwd normalization, root discovery, project naming, and git-remote
   parsing.

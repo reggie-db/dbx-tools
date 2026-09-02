@@ -55,6 +55,68 @@ describe("bin.parseVersion", () => {
   });
 });
 
+describe("bin.which", () => {
+  it("checks PATH, caller locations, and default user locations in order", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dbx-bin-which-"));
+    const pathDir = join(root, "path");
+    const fallbackDir = join(root, "fallback");
+    const defaultDir = join(root, "home", ".local", "bin");
+    await Promise.all([
+      mkdir(pathDir, { recursive: true }),
+      mkdir(fallbackDir, { recursive: true }),
+      mkdir(defaultDir, { recursive: true }),
+    ]);
+    const pathExecutable = join(pathDir, "path-tool");
+    const fallbackExecutable = join(fallbackDir, "fallback-tool");
+    const defaultExecutable = join(defaultDir, "default-tool");
+    await Promise.all([
+      writeFile(pathExecutable, "#!/bin/sh\n"),
+      writeFile(fallbackExecutable, "#!/bin/sh\n"),
+      writeFile(defaultExecutable, "#!/bin/sh\n"),
+    ]);
+    await Promise.all([
+      chmod(pathExecutable, 0o755),
+      chmod(fallbackExecutable, 0o755),
+      chmod(defaultExecutable, 0o755),
+    ]);
+
+    try {
+      assert.equal(
+        await bin.which("path-tool", {
+          environment: { PATH: pathDir },
+          locations: [fallbackDir],
+        }),
+        pathExecutable,
+      );
+      assert.equal(
+        await bin.which("fallback-tool", {
+          environment: { PATH: pathDir },
+          locations: [fallbackDir],
+        }),
+        fallbackExecutable,
+      );
+      assert.equal(
+        await bin.which("default-tool", {
+          defaultLocations: true,
+          environment: { PATH: "" },
+          homeDir: join(root, "home"),
+          platform: "linux",
+        }),
+        defaultExecutable,
+      );
+      assert.equal(
+        await bin.which("missing-tool", {
+          environment: { PATH: pathDir },
+          locations: [fallbackDir],
+        }),
+        undefined,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("bin.ensure", () => {
   it("downloads an executable and reuses the installed path", async () => {
     const homeDir = await mkdtemp(join(tmpdir(), "dbx-bin-home-"));

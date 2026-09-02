@@ -125,6 +125,8 @@ root.gitignore.addPatterns(
   ".isaac/",
   ".polly/",
   ".home/",
+  ".dev.token",
+  ".dev.client.test/",
   "**/.logs/",
   ".venv/",
   ".pytest_cache/",

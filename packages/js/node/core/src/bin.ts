@@ -17,7 +17,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, posix, resolve, win32 } from "node:path";
 import { promisify } from "node:util";
 
 import { error, log } from "@dbx-tools/shared-core";
@@ -81,8 +81,112 @@ export interface BinOptions {
   versionParser?: BinVersionParser;
 }
 
+/** Search paths and platform inputs for {@link which}. */
+export interface BinWhichOptions {
+  /** Check common system and package-manager binary directories after PATH. */
+  defaultLocations?: boolean;
+  /** Additional directories checked after PATH and before default locations. */
+  locations?: readonly string[];
+  /** Environment supplying PATH and PATHEXT. */
+  environment?: NodeJS.ProcessEnv;
+  /** Home directory used by default per-user binary locations. */
+  homeDir?: string;
+  /** Operating system whose path conventions and defaults should be used. */
+  platform?: NodeJS.Platform;
+}
+
 /** A URL resolved only when the executable is not already installed. */
 export type BinUrl = string | (() => string | Promise<string>);
+
+/**
+ * Find an existing executable on PATH or in optional fallback directories.
+ *
+ * Returns an absolute candidate path when found and `undefined` otherwise.
+ */
+export async function which(
+  command: string,
+  options: BinWhichOptions = {},
+): Promise<string | undefined> {
+  if (
+    !command ||
+    basename(command) !== command ||
+    win32.basename(command) !== command ||
+    command === "." ||
+    command === ".."
+  ) {
+    throw new TypeError(`invalid binary name: ${command}`);
+  }
+  const platform = options.platform ?? process.platform;
+  const environment = options.environment ?? process.env;
+  const homeDir = options.homeDir ?? homedir();
+  const locations = [
+    ...pathLocations(environment, platform),
+    ...(options.locations ?? []),
+    ...(options.defaultLocations ? defaultBinLocations(platform, homeDir, environment) : []),
+  ];
+  const names = executableNames(command, platform, environment);
+  const resolvePath = platform === "win32" ? win32.resolve : resolve;
+  for (const location of new Set(locations.filter(Boolean))) {
+    for (const name of names) {
+      const candidate = resolvePath(location, name);
+      if ((await accessContext(candidate)).executable) return candidate;
+    }
+  }
+  return undefined;
+}
+
+function pathLocations(environment: NodeJS.ProcessEnv, platform: NodeJS.Platform): string[] {
+  const path = Object.entries(environment).find(([key]) => key.toLowerCase() === "path")?.[1];
+  return path?.split(platform === "win32" ? win32.delimiter : posix.delimiter) ?? [];
+}
+
+function executableNames(
+  command: string,
+  platform: NodeJS.Platform,
+  environment: NodeJS.ProcessEnv,
+): string[] {
+  if (platform !== "win32" || win32.extname(command)) return [command];
+  const extensions = (environment.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((extension) => extension.trim())
+    .filter(Boolean);
+  return [command, ...extensions.map((extension) => `${command}${extension.toLowerCase()}`)];
+}
+
+function defaultBinLocations(
+  platform: NodeJS.Platform,
+  homeDir: string,
+  environment: NodeJS.ProcessEnv,
+): string[] {
+  if (platform === "darwin") {
+    return [
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+      join(homeDir, ".local", "bin"),
+      join(homeDir, "bin"),
+    ];
+  }
+  if (platform === "linux") {
+    return [
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+      "/snap/bin",
+      join(homeDir, ".local", "bin"),
+      join(homeDir, "bin"),
+    ];
+  }
+  if (platform === "win32") {
+    return [
+      environment.SystemRoot && win32.join(environment.SystemRoot, "System32"),
+      environment.LOCALAPPDATA && win32.join(environment.LOCALAPPDATA, "Microsoft", "WindowsApps"),
+      win32.join(homeDir, "AppData", "Local", "Microsoft", "WindowsApps"),
+    ].filter((path): path is string => Boolean(path));
+  }
+  return [];
+}
 
 function context(name: string, homeDir: string): BinContext {
   if (!name || basename(name) !== name || name === "." || name === "..") {

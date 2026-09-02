@@ -4,6 +4,8 @@ import { exec } from "@dbx-tools/core";
 
 import { GoogleTokenProvider } from "../src/google.ts";
 
+const GCLOUD = "/opt/homebrew/bin/gcloud";
+
 describe("GoogleTokenProvider", () => {
   it("delegates scoped ADC token minting to gcloud", async () => {
     const calls: { command: string; args: string[] }[] = [];
@@ -15,6 +17,7 @@ describe("GoogleTokenProvider", () => {
       accessTokenTtlSeconds: 3600,
       now: () => 1_000,
       execute,
+      resolveExecutable: async () => GCLOUD,
     });
 
     assert.deepEqual(await provider.acquire(["scope:a", "scope:b"]), {
@@ -25,7 +28,7 @@ describe("GoogleTokenProvider", () => {
     });
     assert.deepEqual(calls, [
       {
-        command: "gcloud",
+        command: GCLOUD,
         args: [
           "auth",
           "application-default",
@@ -46,6 +49,7 @@ describe("GoogleTokenProvider", () => {
     const provider = new GoogleTokenProvider({
       accessTokenTtlSeconds: 3600,
       execute,
+      resolveExecutable: async () => GCLOUD,
     });
 
     await assert.rejects(() => provider.acquire([]), /application-default login/);
@@ -60,6 +64,7 @@ describe("GoogleTokenProvider", () => {
     const provider = new GoogleTokenProvider({
       accessTokenTtlSeconds: 3600,
       execute,
+      resolveExecutable: async () => GCLOUD,
     });
 
     await provider.acquire([]);
