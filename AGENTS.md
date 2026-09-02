@@ -77,12 +77,18 @@ Primary package areas:
 - `packages/js/node/model`, `packages/js/shared/model`, and
   `packages/js/cli/model-proxy` — intent-based Model Serving endpoint selection,
   shared schemas/classification, and local OpenAI-compatible proxying.
-- `packages/js/cli/token` — the `dbx token` local credential broker. It delegates
+- `packages/js/cli/token` - the `dbx token` local credential broker. It delegates
   Google login and refresh credentials to gcloud ADC, caches only short-lived
-  access tokens in memory by canonical scope set, serves them over mTLS with
-  optional password or signed client-token authorization, and installs as a
-  native per-user service. Docker and Podman gateway binds are discovered
-  dynamically; the broker never silently widens to every interface.
+  access tokens in memory by canonical scope set, and authenticates local HTTP
+  clients with a shared password or a client JWT signed by the broker secret.
+  JWT is the default. Foreground `serve` requires an explicit secret;
+  `client-jwt` uses that explicit secret or an existing installed-service
+  secret. Native service mode owns the common secret store: installation
+  synchronizes a supplied secret or generates one with check-lock-check, and the
+  service process holds one fail-fast file lock for its complete lifetime so a
+  duplicate cannot start. Docker and Podman gateway binds are discovered
+  by default alongside `127.0.0.1`; the broker never silently widens to every
+  interface.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search

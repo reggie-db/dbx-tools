@@ -1,27 +1,24 @@
 /**
- * Local HTTP/mTLS token broker server.
+ * Local HTTP token broker server.
  *
  * @module
  */
 
-import { readFile } from "node:fs/promises";
 import {
   createServer as createHttpServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { createServer as createHttpsServer } from "node:https";
 import { isIP } from "node:net";
-import type { TLSSocket } from "node:tls";
-import { error, json, log, net, string } from "@dbx-tools/shared-core";
+import { error, json, log, string } from "@dbx-tools/shared-core";
 
 import { AuthorizationError, authorizeClient } from "./auth.ts";
 import type { TokenBroker } from "./broker.ts";
 import type { ResolvedTokenConfig, TokenProviderName } from "./config.ts";
-import type { BrokerTlsMaterial } from "./tls.ts";
 
 const logger = log.logger("token-broker/server");
 const MAX_BODY_BYTES = 64 * 1024;
+const WILDCARD_BINDS = new Set(["0.0.0.0", "::"]);
 
 export interface TokenServer {
   /** Reachable listener URLs. */
@@ -31,39 +28,26 @@ export interface TokenServer {
 }
 
 /**
- * Start one listener per bind address over plain HTTP or mandatory-client-cert
- * HTTPS. Plain HTTP is loopback-only regardless of password/JWT mode, preventing
- * reusable credentials from crossing a container or LAN bridge in clear text.
+ * Start one authenticated HTTP listener per explicit bind address.
+ *
+ * Wildcard binds are rejected so enabling container discovery never exposes the
+ * broker on an unrelated host interface.
  */
 export async function startTokenServer(
   broker: TokenBroker,
   config: ResolvedTokenConfig,
   binds: readonly string[],
-  tls?: BrokerTlsMaterial,
 ): Promise<TokenServer> {
-  if (config.tls === "none" && binds.some((bind) => !isLoopback(bind))) {
-    throw new TypeError("Plain HTTP token broker must bind only to loopback");
+  if (binds.some((bind) => WILDCARD_BINDS.has(bind))) {
+    throw new TypeError("Token broker wildcard binds are not allowed");
   }
-  if (config.tls === "mtls" && !tls) throw new TypeError("mTLS configuration is required");
-  const credentials =
-    config.tls === "mtls" && tls
-      ? {
-          ca: await readFile(tls.ca),
-          cert: await readFile(tls.cert),
-          key: tls.keyPem,
-          requestCert: true,
-          rejectUnauthorized: true,
-        }
-      : undefined;
   const servers: ReturnType<typeof createHttpServer>[] = [];
   const allowedHosts = new Set([...config.allowedHosts, ...binds].map(normalizeHost));
   const handler = (request: IncomingMessage, response: ServerResponse) =>
     void handleRequest(broker, config, allowedHosts, request, response);
   try {
     for (const bind of binds) {
-      const server = credentials
-        ? createHttpsServer(credentials, handler)
-        : createHttpServer(handler);
+      const server = createHttpServer(handler);
       await listen(server, config.port, bind);
       servers.push(server);
     }
@@ -71,9 +55,8 @@ export async function startTokenServer(
     await Promise.all(servers.map(closeServer));
     throw cause;
   }
-  const scheme = config.tls === "mtls" ? "https" : "http";
-  const urls = binds.map((bind) => `${scheme}://${urlHost(bind)}:${config.port}`);
-  logger.info("ready", { urls, auth: authSummary(config) });
+  const urls = binds.map((bind) => `http://${urlHost(bind)}:${config.port}`);
+  logger.info("ready", { urls, auth: config.auth });
   return {
     urls,
     close: async () => {
@@ -81,10 +64,6 @@ export async function startTokenServer(
       await Promise.all(servers.map(closeServer));
     },
   };
-}
-
-function authSummary(config: ResolvedTokenConfig): string {
-  return config.tls === "mtls" ? `mtls+${config.auth}` : config.auth;
 }
 
 async function handleRequest(
@@ -112,12 +91,10 @@ async function handleRequest(
     const grant = await authorizeClient({
       mode: config.auth,
       authorization: string.trimToNull(request.headers.authorization) ?? undefined,
-      password: config.password,
-      signingSecret: config.signingSecret,
-      certificateName: certificateName(request),
+      secret: config.secret,
     });
     const body = await requestBody(request);
-    const provider = tokenProvider(body.provider ?? config.provider);
+    const provider = tokenProvider(body.provider ?? config.providers[0]);
     const requestedScopes = Array.isArray(body.scopes)
       ? body.scopes.filter((scope): scope is string => typeof scope === "string")
       : [];
@@ -171,13 +148,6 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
   response.end(JSON.stringify(body));
 }
 
-function certificateName(request: IncomingMessage): string | undefined {
-  const socket = request.socket as TLSSocket;
-  if (typeof socket.getPeerCertificate !== "function") return undefined;
-  const certificate = socket.getPeerCertificate();
-  return string.trimToNull(certificate.subject?.CN) ?? undefined;
-}
-
 function tokenProvider(value: unknown): TokenProviderName {
   if (value === "google") return value;
   throw new TypeError("Unsupported token provider");
@@ -188,11 +158,6 @@ function normalizeHost(value: string): string {
   const ipv6End = host.indexOf("]");
   if (host.startsWith("[") && ipv6End > 1) return host.slice(1, ipv6End);
   return host.split(":")[0] ?? "";
-}
-
-function isLoopback(host: string): boolean {
-  const normalized = normalizeHost(host);
-  return net.isLoopbackHost(`http://${urlHost(normalized)}`);
 }
 
 function urlHost(host: string): string {

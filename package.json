@@ -67,7 +67,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.133",
+  "version": "0.6.134",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -156,9 +156,7 @@
     "@better-auth/passkey": "^1.6.25",
     "env-paths": "^4.0.0",
     "@napi-rs/keyring": "^1.2.0",
-    "@peculiar/x509": "^2.0.0",
     "jose": "^6.2.3",
-    "reflect-metadata": "^0.2.2",
     "tailwindcss": "^4.3.2",
     "tw-animate-css": "^1.4.0",
     "lucide-react": "^0.554.0",

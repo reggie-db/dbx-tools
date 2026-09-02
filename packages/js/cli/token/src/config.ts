@@ -18,35 +18,33 @@ import {
   DEFAULT_ALLOWED_HOSTS,
   DEFAULT_AUTH_MODE,
   DEFAULT_BIND,
+  DEFAULT_BIND_DOCKER,
   DEFAULT_CLIENT_TOKEN_TTL_SECONDS,
   DEFAULT_GOOGLE_SCOPES,
   DEFAULT_PORT,
-  DEFAULT_PROVIDER,
   DEFAULT_REFRESH_SKEW_SECONDS,
   DEFAULT_SERVICE_NAME,
-  DEFAULT_TLS_MODE,
 } from "./defaults.ts";
 
 /** Shared config namespace for all broker CLI and environment settings. */
 export const TOKEN_CONFIG = { prefix: "TOKEN_BROKER" } as const;
 
 /** Provider identifiers accepted on the wire and CLI. */
-export type TokenProviderName = "google";
-/** Application authorization layered over the transport. */
-export type BrokerAuthMode = "none" | "password" | "jwt";
-/** `none` is plain HTTP; `mtls` requires trusted client certificates. */
-export type BrokerTlsMode = "none" | "mtls";
+export const TOKEN_PROVIDERS = ["google"] as const;
+export type TokenProviderName = (typeof TOKEN_PROVIDERS)[number];
+/** Mutually exclusive client authentication modes. */
+export type BrokerAuthMode = "password" | "jwt";
 /** Container network engine selection for gateway discovery. */
 export type ContainerEngine = "auto" | "docker" | "podman";
 
 /** Fields shared by unresolved CLI input and fully resolved configuration. */
-interface TokenConfigFields<Text, NumberValue, List, Provider = Text, Auth = Text, Tls = Text> {
+interface TokenConfigFields<Text, NumberValue, List, ProviderList = List, Auth = Text> {
   /** Explicit listener addresses. */
   bind: List;
   /** Listener and client default port. */
   port: NumberValue;
-  /** Provider selected when a request omits one. */
-  provider: Provider;
+  /** Enabled providers in request-default order. */
+  providers: ProviderList;
   /** Provider scopes used when a request omits scopes. */
   scopes: List;
   /** Maximum scope set clients may request. */
@@ -55,12 +53,10 @@ interface TokenConfigFields<Text, NumberValue, List, Provider = Text, Auth = Tex
   refreshSkewSeconds: NumberValue;
   /** Conservative lifetime assigned to gcloud access tokens. */
   accessTokenTtlSeconds: NumberValue;
-  /** Application authorization mode layered over transport security. */
+  /** Client authorization mode. */
   auth: Auth;
   /** Lifetime of broker-issued client JWTs. */
   clientTokenTtlSeconds: NumberValue;
-  /** `mtls` or `none`; no-auth always resolves to `none`. */
-  tls: Tls;
   /** Persistent public material, service definitions, and secret fallback root. */
   stateDir: Text;
   /** Additional accepted HTTP Host header values. */
@@ -75,18 +71,8 @@ interface TokenConfigFields<Text, NumberValue, List, Provider = Text, Auth = Tex
 interface OptionalTokenConfigFields<Text> {
   /** Full broker URL for client commands. */
   serverUrl?: Text;
-  /** Password-mode shared secret. */
-  password?: Text;
-  /** JWT-mode HMAC secret override. */
-  signingSecret?: Text;
-  /** Existing signed client JWT. */
-  clientToken?: Text;
-  /** Client-side CA certificate override. */
-  caPath?: Text;
-  /** Client-side mTLS certificate override. */
-  certPath?: Text;
-  /** Client-side mTLS private-key override. */
-  keyPath?: Text;
+  /** Shared password or JWT HMAC signing secret. */
+  secret?: Text;
 }
 
 /** User-supplied token settings before shared config and defaults are applied. */
@@ -100,7 +86,7 @@ export type TokenConfigInput = Partial<
 /** Fully resolved broker and client configuration with no implicit coercions left. */
 export interface ResolvedTokenConfig
   extends
-    TokenConfigFields<string, number, string[], TokenProviderName, BrokerAuthMode, BrokerTlsMode>,
+    TokenConfigFields<string, number, string[], TokenProviderName[], BrokerAuthMode>,
     OptionalTokenConfigFields<string> {
   /** Container gateway discovery mode when enabled. */
   bindDocker?: ContainerEngine;
@@ -108,39 +94,36 @@ export interface ResolvedTokenConfig
 
 /**
  * Resolve one config object through CLI values, scoped environment values, and
- * stable defaults. No-auth is an explicit plaintext-loopback mode and therefore
- * suppresses all TLS and application-secret settings.
+ * stable defaults.
  */
 export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenConfig {
   const paths = envPaths("dbx-tools", { suffix: "" });
-  const provider = oneOf(
-    config.string(input.provider, "PROVIDER", TOKEN_CONFIG) ?? DEFAULT_PROVIDER,
-    ["google"] as const,
-    "token provider",
+  const configuredProviders = config.list(input.providers, "PROVIDER", undefined, TOKEN_CONFIG);
+  const providers = distinct(
+    (configuredProviders.length > 0 ? configuredProviders : TOKEN_PROVIDERS).map((provider) =>
+      oneOf(provider, TOKEN_PROVIDERS, "token provider"),
+    ),
   );
   const auth = oneOf(
     config.string(input.auth, "AUTH", TOKEN_CONFIG) ?? DEFAULT_AUTH_MODE,
-    ["none", "password", "jwt"] as const,
+    ["password", "jwt"] as const,
     "broker auth",
   );
-  const configuredTls = oneOf(
-    config.string(input.tls, "TLS", TOKEN_CONFIG) ?? DEFAULT_TLS_MODE,
-    ["none", "mtls"] as const,
-    "broker TLS",
-  );
-  const tls = auth === "none" ? "none" : configuredTls;
   const scopes = canonicalScopes(config.list(input.scopes, "SCOPES", undefined, TOKEN_CONFIG));
   const allowedScopes = canonicalScopes(
     config.list(input.allowedScopes, "ALLOWED_SCOPES", undefined, TOKEN_CONFIG),
   );
+  const clientJwtTtlSeconds = config.string(undefined, "CLIENT_JWT_TTL_SECONDS", TOKEN_CONFIG);
   const binds = string.parseList(input.bind);
   const configuredBinds = config.list(undefined, "BIND", undefined, TOKEN_CONFIG);
   const bindDockerConfigured =
-    typeof input.bindDocker === "string"
-      ? input.bindDocker
-      : input.bindDocker
-        ? "auto"
-        : config.string(undefined, "BIND_DOCKER", TOKEN_CONFIG);
+    input.bindDocker === false
+      ? false
+      : typeof input.bindDocker === "string"
+        ? input.bindDocker
+        : input.bindDocker
+          ? "auto"
+          : (config.string(undefined, "BIND_DOCKER", TOKEN_CONFIG) ?? DEFAULT_BIND_DOCKER);
   const bindDockerBoolean = object.toBoolean(bindDockerConfigured);
   const bindDockerValue =
     bindDockerBoolean === true
@@ -163,7 +146,7 @@ export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenC
       : {}),
     port: config.port(input.port, "PORT", DEFAULT_PORT, TOKEN_CONFIG),
     ...object.optional("serverUrl", config.string(input.serverUrl, "SERVER_URL", TOKEN_CONFIG)),
-    provider,
+    providers,
     scopes: scopes.length > 0 ? scopes : [...DEFAULT_GOOGLE_SCOPES],
     allowedScopes:
       allowedScopes.length > 0
@@ -184,22 +167,17 @@ export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenC
       TOKEN_CONFIG,
     ),
     auth,
-    ...(auth === "password"
-      ? object.optional("password", config.string(input.password, "PASSWORD", TOKEN_CONFIG))
-      : {}),
-    ...(auth === "jwt"
-      ? object.optional(
-          "signingSecret",
-          config.string(input.signingSecret, "SIGNING_SECRET", TOKEN_CONFIG),
-        )
-      : {}),
+    ...object.optional(
+      "secret",
+      config.string(input.secret, "SECRET", TOKEN_CONFIG) ??
+        config.string(undefined, auth === "password" ? "PASSWORD" : "SIGNING_SECRET", TOKEN_CONFIG),
+    ),
     clientTokenTtlSeconds: config.positiveInt(
-      input.clientTokenTtlSeconds,
+      input.clientTokenTtlSeconds ?? clientJwtTtlSeconds,
       "CLIENT_TOKEN_TTL_SECONDS",
       DEFAULT_CLIENT_TOKEN_TTL_SECONDS,
       TOKEN_CONFIG,
     ),
-    tls,
     stateDir: resolve(
       config.string(input.stateDir, "STATE_DIR", TOKEN_CONFIG) ??
         resolve(paths.data, "token-broker"),
@@ -211,13 +189,6 @@ export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenC
     serviceName:
       config.string(input.serviceName, "SERVICE_NAME", TOKEN_CONFIG) ?? DEFAULT_SERVICE_NAME,
     client: config.string(input.client, "CLIENT", TOKEN_CONFIG) ?? "local-cli",
-    ...object.optional(
-      "clientToken",
-      config.string(input.clientToken, "CLIENT_TOKEN", TOKEN_CONFIG),
-    ),
-    ...object.optional("caPath", config.string(input.caPath, "CA", TOKEN_CONFIG)),
-    ...object.optional("certPath", config.string(input.certPath, "CERT", TOKEN_CONFIG)),
-    ...object.optional("keyPath", config.string(input.keyPath, "KEY", TOKEN_CONFIG)),
   };
 }
 
@@ -236,6 +207,6 @@ function oneOf<const T extends readonly string[]>(
   throw new TypeError(`${label} must be one of: ${values.join(", ")}`);
 }
 
-function distinct(values: readonly string[]): string[] {
+function distinct<T>(values: readonly T[]): T[] {
   return [...object.distinct(values)];
 }

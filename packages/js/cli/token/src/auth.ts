@@ -5,15 +5,16 @@
  */
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { SignJWT, jwtVerify } from "jose";
+import { decodeJwt, decodeProtectedHeader, SignJWT, jwtVerify } from "jose";
 
-import type { BrokerAuthMode, TokenProviderName } from "./config.ts";
+import { TOKEN_PROVIDERS, type BrokerAuthMode, type TokenProviderName } from "./config.ts";
 
 const JWT_ISSUER = "dbx-tools-token-broker";
 const JWT_AUDIENCE = "dbx-tools-token-broker";
+const TOKEN_PROVIDER_SET = new Set<string>(TOKEN_PROVIDERS);
 
 export interface ClientGrant {
-  /** Stable client identity from the password session, JWT subject, or mTLS CN. */
+  /** Stable client identity from the password session or JWT subject. */
   client: string;
   /** Providers this client token permits. */
   providers: TokenProviderName[];
@@ -33,16 +34,12 @@ export interface ClientTokenOptions extends ClientGrant {
 
 /** Request credentials and transport identity presented to the authorizer. */
 export interface AuthorizeOptions {
-  /** Configured application auth mode. */
+  /** Configured client authentication mode. */
   mode: BrokerAuthMode;
   /** HTTP Authorization header. */
   authorization?: string;
-  /** Expected password in password mode. */
-  password?: string;
-  /** HMAC verification secret in JWT mode. */
-  signingSecret?: string;
-  /** Peer certificate common name when mTLS is active. */
-  certificateName?: string;
+  /** Expected password or HMAC verification secret. */
+  secret?: string;
 }
 
 /** Mint a scope- and provider-constrained HS256 client JWT. */
@@ -62,43 +59,49 @@ export async function createClientToken(options: ClientTokenOptions): Promise<st
 }
 
 /**
+ * Infer the authorization header scheme for one client credential.
+ *
+ * A structurally valid compact JWT uses bearer authentication. Every other
+ * value is treated as the shared password, including values containing dots.
+ */
+export function clientCredentialMode(credential: string): BrokerAuthMode {
+  try {
+    decodeProtectedHeader(credential);
+    decodeJwt(credential);
+    return "jwt";
+  } catch {
+    return "password";
+  }
+}
+
+/**
  * Authenticate one request and return its effective client grant.
  *
- * JWT subjects must match the mTLS certificate common name when both layers are
- * active. Password and no-auth modes remain constrained by server scope policy.
+ * Password clients remain constrained by server scope policy.
  */
 export async function authorizeClient(options: AuthorizeOptions): Promise<ClientGrant> {
-  if (options.mode === "none") {
-    return {
-      client: options.certificateName ?? "local",
-      providers: ["google"],
-    };
-  }
   if (options.mode === "password") {
-    if (!options.password || !basicPassword(options.authorization, options.password)) {
+    if (!options.secret || !basicPassword(options.authorization, options.secret)) {
       throw new AuthorizationError("Invalid broker password");
     }
     return {
-      client: options.certificateName ?? "password",
-      providers: ["google"],
+      client: "password",
+      providers: [...TOKEN_PROVIDERS],
     };
   }
-  if (!options.signingSecret) throw new AuthorizationError("JWT signing secret is unavailable");
+  if (!options.secret) throw new AuthorizationError("JWT signing secret is unavailable");
   const token = bearerToken(options.authorization);
   if (!token) throw new AuthorizationError("Missing client bearer token");
   try {
-    const verified = await jwtVerify(token, secretKey(options.signingSecret), {
+    const verified = await jwtVerify(token, secretKey(options.secret), {
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
       algorithms: ["HS256"],
     });
     const subject = verified.payload.sub;
     if (!subject) throw new AuthorizationError("Client token has no subject");
-    if (options.certificateName && options.certificateName !== subject) {
-      throw new AuthorizationError("Client token does not match the mTLS certificate");
-    }
     const providers = stringArray(verified.payload.providers).filter(
-      (provider): provider is TokenProviderName => provider === "google",
+      (provider): provider is TokenProviderName => TOKEN_PROVIDER_SET.has(provider),
     );
     const scopes = stringArray(verified.payload.scopes);
     if (providers.length === 0) throw new AuthorizationError("Client token allows no providers");

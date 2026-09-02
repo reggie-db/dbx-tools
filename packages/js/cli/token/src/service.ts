@@ -60,7 +60,8 @@ export async function manageService(
 ): Promise<ServiceResult> {
   const execute = options.execute ?? exec.spawn;
   const home = options.home ?? homedir();
-  switch (options.platform ?? process.platform) {
+  const platform = options.platform ?? process.platform;
+  switch (platform) {
     case "darwin":
       return manageLaunchd(action, spec, execute, home, options.uid ?? process.getuid?.() ?? 0);
     case "linux":

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { AuthorizationError, authorizeClient, createClientToken } from "../src/auth.ts";
+import {
+  AuthorizationError,
+  authorizeClient,
+  clientCredentialMode,
+  createClientToken,
+} from "../src/auth.ts";
 
 describe("client authorization", () => {
   it("authenticates a password without exposing it in the result", async () => {
@@ -12,18 +17,17 @@ describe("client authorization", () => {
       await authorizeClient({
         mode: "password",
         authorization,
-        password,
-        certificateName: "container-client",
+        secret: password,
       }),
-      { client: "container-client", providers: ["google"] },
+      { client: "password", providers: ["google"] },
     );
     await assert.rejects(
-      () => authorizeClient({ mode: "password", authorization, password: "wrong" }),
+      () => authorizeClient({ mode: "password", authorization, secret: "wrong" }),
       AuthorizationError,
     );
   });
 
-  it("signs constrained JWTs and binds them to the mTLS client name", async () => {
+  it("signs and verifies constrained JWTs", async () => {
     const secret = "test-signing-secret-at-least-thirty-two-characters";
     const token = await createClientToken({
       secret,
@@ -37,21 +41,13 @@ describe("client authorization", () => {
       await authorizeClient({
         mode: "jwt",
         authorization: `Bearer ${token}`,
-        signingSecret: secret,
-        certificateName: "container-client",
+        secret,
       }),
       { client: "container-client", providers: ["google"], scopes: ["scope:a"] },
     );
-    await assert.rejects(
-      () =>
-        authorizeClient({
-          mode: "jwt",
-          authorization: `Bearer ${token}`,
-          signingSecret: secret,
-          certificateName: "different-client",
-        }),
-      /does not match/,
-    );
+    assert.equal(clientCredentialMode(token), "jwt");
+    assert.equal(clientCredentialMode("shared.password.with.dots"), "password");
+    assert.equal(clientCredentialMode("not-a-token"), "password");
   });
 
   it("represents an empty JWT scope claim as no explicit scope permission", async () => {
@@ -68,7 +64,7 @@ describe("client authorization", () => {
       await authorizeClient({
         mode: "jwt",
         authorization: `Bearer ${token}`,
-        signingSecret: secret,
+        secret,
       }),
       { client: "default-scope-client", providers: ["google"], scopes: [] },
     );

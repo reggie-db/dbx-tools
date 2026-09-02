@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { getOrCreateSecret, type SecretStore } from "../src/secrets.ts";
 
 describe("secret creation", () => {
-  it("coalesces concurrent first-use generation through the process lock", async () => {
+  it("coalesces concurrent first-use generation through the storage lock", async () => {
     let value: string | undefined;
     let writes = 0;
     const store: SecretStore = {
@@ -25,5 +25,25 @@ describe("secret creation", () => {
 
     assert.equal(writes, 1);
     assert.equal(new Set(secrets).size, 1);
+  });
+
+  it("updates a different stored service secret once", async () => {
+    let value = "old-secret";
+    let writes = 0;
+    const store: SecretStore = {
+      lockScope: ["test", "configured-secret"],
+      get: async () => value,
+      set: async (_name, next) => {
+        writes++;
+        value = next;
+      },
+      delete: async () => {
+        value = "";
+      },
+    };
+
+    assert.equal(await getOrCreateSecret(store, "jwt-signing", "new-secret"), "new-secret");
+    assert.equal(await getOrCreateSecret(store, "jwt-signing", "new-secret"), "new-secret");
+    assert.equal(writes, 1);
   });
 });

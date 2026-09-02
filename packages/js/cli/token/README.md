@@ -13,11 +13,10 @@ Key features:
 - scope-keyed in-memory access-token cache with proactive refresh;
 - process-wide check-lock-check refresh, so concurrent callers mint once;
 - Google ADC through `gcloud auth application-default print-access-token`;
-- mTLS by default for password and JWT modes, with explicit no-auth HTTP mode;
+- shared-password or signed-JWT client authentication;
 - Docker and Podman host-gateway discovery through `--bind-docker`;
 - native per-user launchd, systemd, and Windows Task Scheduler installation;
-- no refresh tokens, access tokens, passwords, signing keys, or private keys in
-  logs.
+- no refresh tokens, access tokens, passwords, or signing keys in logs.
 
 This package ships no bin. Install `@dbx-tools/cli` and use its single `dbx`
 command.
@@ -25,16 +24,18 @@ command.
 ## Start a foreground broker
 
 ```sh
-dbx token serve --google --auth jwt
+dbx token serve --auth jwt --secret "$TOKEN_BROKER_SECRET"
 ```
 
-The no-auth default listens on `http://127.0.0.1:4010` and does not create or
-load TLS material. Selecting `password` or `jwt` auth defaults to mTLS and
-creates a private CA and server certificate under the platform application-data
-directory. The CA is not added to the system trust store.
-
-`--tls none` switches to plain HTTP and does not generate or load any TLS
-certificate or key. There is no server-only HTTPS mode.
+The JWT default listens on `http://127.0.0.1:5556`. The broker accepts explicit
+local-interface binds, discovers Docker and Podman gateways by default, and
+rejects wildcard binds. Pass `--no-bind-docker` to keep only the configured
+addresses. Pass `--auth password` to use the configured secret as a shared
+password instead.
+Foreground `serve` requires `--secret`; it does not read or write the common
+service secret store.
+When `--provider` is omitted, every provider in `TOKEN_PROVIDERS` is enabled;
+that list currently contains only `google`.
 
 Configure Google ADC once with every scope the broker may later request:
 
@@ -47,10 +48,11 @@ Then pass default and allowed scopes:
 
 ```sh
 dbx token serve \
-  --google \
+  --provider google \
   --scope https://www.googleapis.com/auth/gmail.modify \
   --allowed-scope https://www.googleapis.com/auth/gmail.modify \
-  --auth jwt
+  --auth jwt \
+  --secret "$TOKEN_BROKER_SECRET"
 ```
 
 Clients may omit scopes. The default empty scope set calls
@@ -63,7 +65,7 @@ client JWT grant. `--scopes` accepts a comma- or whitespace-separated list;
 ## Install the user service
 
 ```sh
-dbx token service install --google --auth jwt --bind-docker
+dbx token service install
 dbx token service status
 dbx token service stop
 dbx token service start
@@ -71,42 +73,68 @@ dbx token service remove
 ```
 
 Installation is idempotent and uses a LaunchAgent on macOS, a systemd user unit
-on Linux, or Task Scheduler on Windows. Installed services require `password` or
-`jwt` application authentication in addition to the default mTLS transport.
-Removal keeps certificates and secrets; pass `--purge` to remove broker state.
+on Linux, or Task Scheduler on Windows. JWT service installation creates a
+secret when none exists. Passing `--secret` synchronizes a different value into
+the same operating-system keychain or protected state file. The secret is
+omitted from the rendered service command. Password service installation
+requires an explicit secret. The running service holds a fail-fast file lock for
+its complete lifetime, so a duplicate process exits instead of waiting.
+Removal keeps the secret; pass `--purge` to remove broker state.
 
 ## Create a client identity
 
 ```sh
-dbx token client-token container-client \
-  --google \
-  --scope https://www.googleapis.com/auth/gmail.modify \
-  --output ./token-client
+CLIENT_AUTH="$(dbx token client-jwt container-client \
+  --provider google \
+  --scope https://www.googleapis.com/auth/gmail.modify)"
 ```
 
-The JWT is the command's only stdout value. Diagnostics and mTLS file locations
-go to stderr. The output directory contains:
+`client-jwt` signs a provider- and scope-constrained client token. Pass
+`--secret` for a foreground broker. When omitted, the command reads the
+installed service secret without modifying it:
 
-- `ca.crt`;
-- `client.crt`;
-- `client.key`.
-
-When JWT and mTLS are both enabled, the JWT subject must match the certificate
-common name.
+```sh
+CLIENT_AUTH="$(dbx token client-jwt container-client \
+  --secret "$TOKEN_BROKER_SECRET")"
+```
 
 ## Request an access token
 
+Same-machine clients use the installed service secret, port, providers, and JWT
+defaults automatically:
+
+```sh
+dbx token access-token
+```
+
+Complete foreground flow:
+
+```sh
+SECRET=supersecret
+dbx token serve --secret "$SECRET" &
+SERVER_PID=$!
+trap 'kill "$SERVER_PID"' EXIT
+
+until curl --fail --silent http://127.0.0.1:5556/health >/dev/null; do
+  sleep 0.1
+done
+
+CLIENT_JWT="$(dbx token client-jwt example-client --secret "$SECRET")"
+dbx token access-token --auth "$CLIENT_JWT"
+```
+
+Pass either the shared password or signed JWT through the same `--auth` option:
+
 ```sh
 dbx token access-token \
-  --google \
-  --auth jwt \
-  --client container-client \
-  --client-token "$TOKEN_BROKER_CLIENT_TOKEN" \
-  --ca ./token-client/ca.crt \
-  --cert ./token-client/client.crt \
-  --key ./token-client/client.key \
+  --provider google \
+  --auth "$CLIENT_AUTH" \
   --scope https://www.googleapis.com/auth/gmail.modify
 ```
+
+The client parses structurally valid compact JWTs as bearer tokens. Every other
+value, including a dotted value that is not a valid JWT, is sent as the shared
+password.
 
 Only the Google access token is written to stdout.
 
@@ -122,19 +150,19 @@ Content-Type: application/json
 
 ## Docker and Podman
 
-`--bind-docker` inspects both engines by default. It adds Docker or Podman bridge
-gateway addresses only when they are real host interfaces and always retains
-loopback for Docker Desktop or Podman machine forwarding. Use
-`--bind-docker docker` or `--bind-docker podman` to inspect one engine.
+Docker and Podman discovery is enabled by default. It adds bridge gateway
+addresses only when they are real host interfaces and always retains
+`127.0.0.1` for Docker Desktop or Podman machine forwarding. Use
+`--bind-docker docker` or `--bind-docker podman` to inspect one engine, or
+`--no-bind-docker` to disable discovery.
 
-Mount the client bundle read-only and pass the JWT separately:
+Pass the generated client JWT into the container:
 
 ```sh
 docker run --rm \
   --add-host host.docker.internal:host-gateway \
-  -v "$PWD/token-client:/run/dbx-token:ro" \
-  -e TOKEN_BROKER_URL=https://host.docker.internal:4010 \
-  -e TOKEN_BROKER_CLIENT_TOKEN \
+  -e TOKEN_BROKER_URL=http://host.docker.internal:5556 \
+  -e TOKEN_BROKER_CLIENT_AUTH="$CLIENT_AUTH" \
   your-image
 ```
 
@@ -159,26 +187,19 @@ Primary variables:
 - `TOKEN_BROKER_SCOPES`;
 - `TOKEN_BROKER_ALLOWED_SCOPES`;
 - `TOKEN_BROKER_AUTH`;
-- `TOKEN_BROKER_PASSWORD`;
-- `TOKEN_BROKER_SIGNING_SECRET`;
-- `TOKEN_BROKER_TLS`;
+- `TOKEN_BROKER_SECRET`;
 - `TOKEN_BROKER_STATE_DIR`;
 - `TOKEN_BROKER_ALLOWED_HOSTS`;
 - `TOKEN_BROKER_REFRESH_SKEW_SECONDS`;
 - `TOKEN_BROKER_ACCESS_TOKEN_TTL_SECONDS`;
-- `TOKEN_BROKER_CLIENT_TOKEN_TTL_SECONDS`;
+- `TOKEN_BROKER_CLIENT_JWT_TTL_SECONDS`;
 - `TOKEN_BROKER_SERVICE_NAME`;
 - `TOKEN_BROKER_CLIENT`;
-- `TOKEN_BROKER_CLIENT_TOKEN`;
-- `TOKEN_BROKER_CA`;
-- `TOKEN_BROKER_CERT`;
-- `TOKEN_BROKER_KEY`.
+- `TOKEN_BROKER_CLIENT_AUTH`.
 
-Generated password, JWT signing secrets, the CA private key, and the server
-private key prefer the operating system keychain. If it is unavailable, the
-broker warns and falls back to mode-`0600` files in its state directory. CA and
-server certificates are public and remain on disk. Client keys are exported as
-mode-`0600` files because external and container clients must mount them.
+Service-mode JWT signing secrets and passwords prefer the operating system
+keychain. If it is unavailable, the broker warns and falls back to mode-`0600`
+files in its state directory. Foreground mode never uses this store.
 
 ## Public modules
 
@@ -186,6 +207,6 @@ mode-`0600` files because external and container clients must mount them.
 - `config` / `defaults` - typed configuration and stable defaults;
 - `broker` / `provider` / `google` - refresh coordination and provider adapter;
 - `server` / `client` - broker protocol;
-- `auth` / `secrets` / `tls` - client authorization and local credentials;
+- `auth` / `secrets` - client authorization and service-mode credentials;
 - `network` - Docker and Podman bind discovery;
 - `service` - native user-service lifecycle.

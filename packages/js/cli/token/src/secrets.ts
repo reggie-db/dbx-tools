@@ -14,8 +14,10 @@ import { safeName } from "./_name.ts";
 
 const logger = log.logger("token-broker/secrets");
 
-/** Minimal asynchronous secret backend used by JWT, password, and mTLS keys. */
+/** Minimal asynchronous secret backend used by JWT and password keys. */
 export interface SecretStore {
+  /** Stable namespace for cross-process coordination of this backing store. */
+  readonly lockScope?: unknown;
   /** Read a secret without creating it. */
   get(name: string): Promise<string | undefined>;
   /** Replace a secret. */
@@ -34,7 +36,9 @@ export async function createSecretStore(service: string, stateDir: string): Prom
     const { Entry } = await import("@napi-rs/keyring");
     const probe = new Entry(service, "availability-probe");
     probe.getPassword();
+    const lockScope = ["keychain", service];
     return {
+      lockScope,
       get: async (name) => string.trimToNull(new Entry(service, name).getPassword()) ?? undefined,
       set: async (name, value) => {
         new Entry(service, name).setPassword(value);
@@ -52,32 +56,45 @@ export async function createSecretStore(service: string, stateDir: string): Prom
 }
 
 /**
- * Return an explicit or stored secret, generating one under a process lock on
- * first use. The post-write read adopts the value accepted by the backend.
+ * Synchronize an explicit service secret or generate one with check-lock-check.
+ *
+ * A configured value replaces a different stored value inside the same locked
+ * critical section used for first-use generation.
  */
 export async function getOrCreateSecret(
   store: SecretStore,
   name: string,
   configured?: string,
 ): Promise<string> {
-  if (configured) return configured;
+  const expected = string.trimToNull(configured) ?? undefined;
   const existing = await store.get(name);
-  if (existing) return existing;
-  return processLock.withProcessLock(["token-broker", "secret", name], async () => {
-    const current = await store.get(name);
-    if (current) return current;
-    const generated = randomBytes(32).toString("base64url");
-    await store.set(name, generated);
-    return (await store.get(name)) ?? generated;
-  });
+  if (expected && existing === expected) return expected;
+  if (!expected && existing) return existing;
+  return processLock.withProcessLock(
+    ["token-broker", "secret-sync", store.lockScope ?? "unscoped", name],
+    async () => {
+      const current = await store.get(name);
+      if (expected) {
+        if (current !== expected) await store.set(name, expected);
+        return (await store.get(name)) ?? expected;
+      }
+      if (current) return current;
+      const created = randomBytes(32).toString("base64url");
+      await store.set(name, created);
+      return (await store.get(name)) ?? created;
+    },
+  );
 }
 
 function fileSecretStore(directory: string): SecretStore {
   const pathFor = (name: string) => resolve(directory, `${safeName(name, "Secret")}.secret`);
+  const lockScope = ["secret-files", directory];
   return {
+    lockScope,
     get: async (name) => {
+      const path = pathFor(name);
       try {
-        return string.trimToNull(await readFile(pathFor(name), "utf8")) ?? undefined;
+        return string.trimToNull(await readFile(path, "utf8")) ?? undefined;
       } catch {
         return undefined;
       }
@@ -88,8 +105,6 @@ function fileSecretStore(directory: string): SecretStore {
       await writeFile(path, `${value}\n`, { mode: 0o600 });
       await chmod(path, 0o600);
     },
-    delete: async (name) => {
-      await rm(pathFor(name), { force: true });
-    },
+    delete: async (name) => rm(pathFor(name), { force: true }),
   };
 }

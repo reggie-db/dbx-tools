@@ -191,9 +191,7 @@ root.pnpmWorkspace?.addCatalog("better-auth", "^1.6.25");
 root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "^1.6.25");
 root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
 root.pnpmWorkspace?.addCatalog("@napi-rs/keyring", "^1.2.0");
-root.pnpmWorkspace?.addCatalog("@peculiar/x509", "^2.0.0");
 root.pnpmWorkspace?.addCatalog("jose", "^6.2.3");
-root.pnpmWorkspace?.addCatalog("reflect-metadata", "^0.2.2");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
 // v4 + the Mastra chat-UI deps). These only load in ui/app-tagged (browser)
@@ -311,15 +309,13 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
 
 // cli-token: the `dbx token` local credential broker. Commander comes from the
 // cli tag; runtime dependencies are isolated here so unrelated dbx commands do
-// not load keychain, JWT, or X.509 code.
+// not load keychain or JWT code.
 project.applyToProjects(root, { identifierName: "cli-token", tags: "cli" }, (p) => {
   p.addDeps(
     "@dbx-tools/core@workspace:*",
     "@napi-rs/keyring@catalog:",
-    "@peculiar/x509@catalog:",
     "env-paths@catalog:",
     "jose@catalog:",
-    "reflect-metadata@catalog:",
   );
 });
 

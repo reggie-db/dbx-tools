@@ -30,11 +30,6 @@
       "type": "runtime"
     },
     {
-      "name": "@peculiar/x509",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
       "name": "commander",
       "version": "catalog:",
       "type": "runtime"
@@ -46,11 +41,6 @@
     },
     {
       "name": "jose",
-      "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "reflect-metadata",
       "version": "catalog:",
       "type": "runtime"
     }

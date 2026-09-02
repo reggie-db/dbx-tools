@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { exec } from "@dbx-tools/core";
 
+import { withBrokerServiceLock } from "../src/_lock.ts";
 import {
   manageService,
   renderLaunchdPlist,
@@ -23,6 +24,32 @@ const SPEC: ServiceSpec = {
 };
 
 describe("native service definitions", () => {
+  it("fails immediately when the service singleton lock is held", async () => {
+    let release!: () => void;
+    let acquired!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      acquired = resolve;
+    });
+    const running = withBrokerServiceLock("singleton-test", async () => {
+      acquired();
+      await released;
+    });
+
+    await ready;
+    try {
+      await assert.rejects(
+        () => withBrokerServiceLock("singleton-test", async () => {}),
+        /already running/,
+      );
+    } finally {
+      release();
+      await running;
+    }
+  });
+
   it("renders a launchd user agent with restart and log paths", () => {
     const source = renderLaunchdPlist("com.dbx-tools.token", SPEC);
     assert.match(source, /<key>KeepAlive<\/key><true\/>/);

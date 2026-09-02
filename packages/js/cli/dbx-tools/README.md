@@ -90,13 +90,14 @@ resolution, and output formats.
 ## Broker Local Provider Tokens
 
 ```sh
-dbx token serve --google --auth jwt --bind-docker
-dbx token client-token container-client --scope https://www.googleapis.com/auth/gmail.modify
-dbx token access-token --client container-client
+dbx token serve --secret "$TOKEN_BROKER_SECRET"
+CLIENT_AUTH="$(dbx token client-jwt container-client --secret "$TOKEN_BROKER_SECRET")"
+dbx token access-token --auth "$CLIENT_AUTH"
 ```
 
 The broker keeps Google ADC under gcloud, caches access tokens only in memory,
-and defaults to mTLS. See [`@dbx-tools/cli-token`](../token) for service
+and defaults to signed JWT client authentication. See
+[`@dbx-tools/cli-token`](../token) for service
 installation, client authorization, Docker, Podman, and configuration.
 
 ## Put A Gated Public URL In Front Of A Command

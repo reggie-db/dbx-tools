@@ -26,11 +26,9 @@
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@napi-rs/keyring": "catalog:",
-    "@peculiar/x509": "catalog:",
     "commander": "catalog:",
     "env-paths": "catalog:",
-    "jose": "catalog:",
-    "reflect-metadata": "catalog:"
+    "jose": "catalog:"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -91,14 +89,10 @@
         "types": "./lib/src/service.d.ts",
         "default": "./lib/src/service.js"
       },
-      "./tls": {
-        "types": "./lib/src/tls.d.ts",
-        "default": "./lib/src/tls.js"
-      },
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.133",
+  "version": "0.6.134",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -115,7 +109,6 @@
     "./secrets": "./src/secrets.ts",
     "./server": "./src/server.ts",
     "./service": "./src/service.ts",
-    "./tls": "./src/tls.ts",
     "./package.json": "./package.json"
   },
   "files": [
