@@ -13,6 +13,7 @@ Key features:
 - scope-keyed in-memory access-token cache with proactive refresh;
 - process-wide check-lock-check refresh, so concurrent callers mint once;
 - Google ADC through `gcloud auth application-default print-access-token`;
+- process-locked browser authorization when ADC is missing requested scopes;
 - shared-password or signed-JWT client authentication;
 - Docker and Podman host-gateway discovery through `--bind-docker`;
 - native per-user launchd, systemd, and Windows Task Scheduler installation;
@@ -63,6 +64,13 @@ An omitted `--allowed-scope` list and an omitted client JWT scope list both
 allow every scope. Repeat singular list flags such as `--scope`; the matching
 plural environment variable, such as `TOKEN_BROKER_SCOPES`, accepts a comma- or
 whitespace-separated list.
+
+When gcloud reports that the current ADC grant does not cover requested scopes,
+the broker serializes one authorization flow across the process and retries the
+request under that lock. It inspects the current ADC token, returns it directly
+when it already covers the request, or combines its scopes with the requested
+scopes and runs `gcloud auth application-default login --launch-browser`.
+Foreground and installed-service modes use the same behavior.
 
 ## Install the user service
 

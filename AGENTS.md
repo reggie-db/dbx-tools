@@ -95,7 +95,11 @@ Primary package areas:
   command. An omitted broker allow-list and an omitted client-JWT scope claim
   both mean unrestricted; explicit scope lists remain exact allow-lists. List
   configuration uses singular repeatable CLI flags and plural comma-separated
-  environment variables.
+  environment variables. A gcloud invalid-scope response enters one
+  process-wide check-lock-check authorization flow in foreground and service
+  modes: inspect the current ADC token scopes, return that token when it already
+  covers the request, otherwise combine current and requested scopes, launch the
+  browser through `gcloud auth application-default login`, and retry.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search
