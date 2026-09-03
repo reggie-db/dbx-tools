@@ -32,11 +32,34 @@ export interface GoogleProviderOptions {
 }
 
 /**
+ * Read scope claims from a JWT-shaped access token without verifying it.
+ *
+ * This is only a comparison fast path for tokens returned directly by gcloud.
+ * Opaque tokens and JWTs without scope claims fall through to tokeninfo.
+ */
+function unverifiedTokenScopes(accessToken: string): string[] | undefined {
+  const parts = accessToken.split(".");
+  const payload = parts.length === 3 ? parts[1] : undefined;
+  if (!payload) return undefined;
+  try {
+    const claims = json.parseRecord(Buffer.from(payload, "base64url").toString("utf8"));
+    const value = claims?.scope ?? claims?.scp;
+    if (value === undefined) return undefined;
+    const scopes = Array.isArray(value)
+      ? value.filter((scope): scope is string => typeof scope === "string")
+      : string.parseList(string.trimToNull(value));
+    return canonicalScopes(scopes);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Google provider that delegates credential ownership to gcloud ADC.
  *
  * Empty scopes intentionally omit the gcloud `--scopes` flag. Explicit scopes
- * are passed verbatim after broker canonicalization and must already belong to
- * the ADC login grant.
+ * are passed verbatim after broker canonicalization. A missing grant enters one
+ * process-locked browser authorization flow before retrying.
  */
 export class GoogleTokenProvider implements TokenProvider {
   readonly name = "google";
@@ -147,6 +170,8 @@ export class GoogleTokenProvider implements TokenProvider {
   }
 
   private async currentScopes(accessToken: string): Promise<string[]> {
+    const local = unverifiedTokenScopes(accessToken);
+    if (local) return local;
     try {
       const response = await this.fetch(TOKEN_INFO_URL, {
         method: "POST",

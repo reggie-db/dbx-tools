@@ -100,6 +100,8 @@ Primary package areas:
   modes: inspect the current ADC token scopes, return that token when it already
   covers the request, otherwise combine current and requested scopes, launch the
   browser through `gcloud auth application-default login`, and retry.
+  JWT-shaped access tokens use an unverified local `scope`/`scp` parse only for
+  that comparison; opaque tokens fall back to Google's tokeninfo endpoint.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search

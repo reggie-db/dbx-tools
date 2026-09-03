@@ -12,6 +12,14 @@ function requestedScopes(args: string[]): string[] {
   return value ? value.slice("--scopes=".length).split(",") : [];
 }
 
+function unverifiedToken(payload: Record<string, unknown>): string {
+  return [
+    Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url"),
+    Buffer.from(JSON.stringify(payload)).toString("base64url"),
+    "unverified",
+  ].join(".");
+}
+
 describe("GoogleTokenProvider", () => {
   it("delegates scoped ADC token minting to gcloud", async () => {
     const calls: { command: string; args: string[] }[] = [];
@@ -157,6 +165,36 @@ describe("GoogleTokenProvider", () => {
 
     assert.equal(token.accessToken, "current-token");
     assert.deepEqual(token.scopes, ["scope:new"]);
+    assert.equal(loginCount, 0);
+  });
+
+  it("reads JWT scope claims locally without calling tokeninfo", async () => {
+    const currentToken = unverifiedToken({ scope: "scope:existing scope:new" });
+    let fetchCount = 0;
+    let loginCount = 0;
+    const execute = (async (_command: string, args: string[]) => {
+      if (args.includes("print-access-token")) {
+        return requestedScopes(args).length === 0
+          ? { exitCode: 0, stdout: currentToken, stderr: "" }
+          : { exitCode: 1, stdout: "", stderr: INVALID_SCOPES };
+      }
+      loginCount++;
+      return { exitCode: 0, stdout: "", stderr: "" };
+    }) as typeof exec.spawn;
+    const provider = new GoogleTokenProvider({
+      accessTokenTtlSeconds: 3600,
+      execute,
+      executable: GCLOUD,
+      fetch: (async () => {
+        fetchCount++;
+        throw new Error("tokeninfo must not be called");
+      }) as typeof globalThis.fetch,
+    });
+
+    const token = await provider.acquire(["scope:new"]);
+
+    assert.equal(token.accessToken, currentToken);
+    assert.equal(fetchCount, 0);
     assert.equal(loginCount, 0);
   });
 });
