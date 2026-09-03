@@ -264,30 +264,35 @@ Primary package areas:
   pool connect storm mints once. A caller-supplied `credential_provider` owns
   its own caching and refresh policy.
 - `packages/py/model` — Python Model Serving invocation, endpoint listing,
-  classification, resolution, plain standard model-alias generation, chat
-  sanitization, and embedding helpers. Its `models` module owns the single
-  family registry, family/version/model parser, provider-neutral search terms,
-  and the established sorting-version parser. The alias module only formats
-  parsed identities and builds collision-safe alias-to-search maps from a
-  caller-supplied live catalogue. It mirrors the reusable `shared/model` +
+  classification, resolution, model-name parsing, chat sanitization, and
+  embedding helpers. Its `models` module owns the single family registry,
+  family/version/model parser, provider-neutral search terms, and the
+  established sorting-version parser. It mirrors the reusable `shared/model` +
   `node/model` contract without AppKit cache or Mastra dependencies;
   deterministic behavior belongs in the colocated model polyglot tests.
 - `packages/py/litellm` — thin LiteLLM integration for Databricks Model
   Serving. An explicit profile is an optional override; otherwise it resolves
-  `DATABRICKS_CONFIG_PROFILE`, then the one entry marked as the Databricks CLI
-  default in `databricks auth profiles --output json --skip-validate`. A
+  `DATABRICKS_CONFIG_PROFILE`, then inspects
+  `databricks auth profiles --output json --skip-validate`: use the entry
+  marked `default: true`, else the profile
+  named `DEFAULT`, else the sole configured profile, and fail when several
+  unmarked profiles remain. The TypeScript model proxy uses the same local
+  precedence. A
   Databricks App with `DATABRICKS_HOST` uses ambient service-principal
   authentication and does not require or synthesize a profile;
   adds live endpoint discovery, fuzzy model resolution, plain standard model
   aliases, and tool-capability filtering; then delegates to LiteLLM's built-in
-  Databricks provider. Provider aliases are generated lazily from the live
+  Databricks provider. LiteLLM-only aliases are generated lazily from the live
   endpoint catalogue, converted back to provider-neutral terms before fuzzy
   matching, and refreshed atomically with the catalogue by one five-minute TTL
   cache decorator. Suppress ambiguous aliases instead of choosing one endpoint
-  by list order. `dbx-litellm models` reads that same cached catalogue:
-  aliases are the default, `--endpoints` selects Databricks endpoint records,
-  and `--output json|names` selects structured output or a sorted
-  newline-delimited name list. Keep authentication,
+  by list order. `/v1/models` keeps exact ids in the OpenAI-standard `data`
+  envelope plus the Codex `models` extension. `/alias/v1/models` returns the
+  same one-entry-per-endpoint list with a `dbx/` alias substituted when one
+  exists; every other `/alias/v1/*` request is internally routed to `/v1/*`, so
+  `/alias/v1` works as an alternate OpenAI base URL. `dbx-litellm models` reads
+  that same cached catalogue and emits complete normalized endpoint records,
+  including derived capabilities, with no alias projection. Keep authentication,
   transport, parameter mapping, streaming, retries, embeddings, and
   Chat↔Responses conversion in LiteLLM. Compatibility guards may repair only
   documented Databricks serving constraints: assistant text prefill, the JSON
@@ -319,7 +324,8 @@ Primary package areas:
   1024-dimensional GTE embedding endpoint, and let an explicit LiteLLM URL
   disable proxy ownership. Managed mode resolves
   an optional profile override, then `DATABRICKS_CONFIG_PROFILE`, and otherwise
-  inherits the Databricks CLI default. A Databricks App with `DATABRICKS_HOST`
+  uses the same marked-default, named-`DEFAULT`, sole-profile precedence as
+  LiteLLM. A Databricks App with `DATABRICKS_HOST`
   uses ambient service-principal authentication and does not require or
   synthesize a profile. Reuse `uv` from `PATH`; ask mise to
   install its pinned uv only when none is available. Ephemeral graph backends

@@ -1,11 +1,16 @@
-"""Plain standard aliases generated from parsed model identities."""
+"""LiteLLM aliases generated from parsed model identities."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
-from .models import ModelFamily, ParsedModelName, model_search_query, parse_model_name
+from dbx_tools.model.models import (
+    ModelFamily,
+    ParsedModelName,
+    model_search_query,
+    parse_model_name,
+)
 
 
 @dataclass(frozen=True)
@@ -16,7 +21,7 @@ class ModelAliasIndex:
     searches_by_alias: Mapping[str, str]
 
     def aliases_for(self, model: str) -> tuple[str, ...]:
-        """Return standard aliases generated for a model."""
+        """Return the LiteLLM aliases generated for a model."""
         return self.aliases_by_model.get(model, ())
 
     def search_for(self, alias: str) -> str | None:
@@ -25,11 +30,13 @@ class ModelAliasIndex:
 
 
 def generate_model_aliases(value: str | ParsedModelName) -> tuple[str, ...]:
-    """Generate every recognized standard alias for one model."""
+    """Generate every recognized LiteLLM alias for one model."""
     parsed = value if isinstance(value, ParsedModelName) else parse_model_name(value)
     if parsed is None:
         return ()
-    aliases = [alias for generator in ALIAS_GENERATORS if (alias := generator(parsed)) is not None]
+    aliases = [
+        f"dbx/{alias}" for generator in ALIAS_GENERATORS if (alias := generator(parsed)) is not None
+    ]
     return tuple(dict.fromkeys(aliases))
 
 

@@ -18,9 +18,9 @@ from dbx_tools.model import (
     rank_model_id,
     reasoning_efforts_by_family,
 )
-from dbx_tools.model.aliases import ModelAliasIndex, build_model_alias_index
 from dbx_tools.model.models import model_search_query
 
+from .aliases import ModelAliasIndex, build_model_alias_index
 from .credentials import Credentials, DatabricksCredentials
 from .models import register_streaming_support
 
@@ -54,7 +54,14 @@ def require_profile(
 def _default_cli_profile() -> str:
     try:
         result = subprocess.run(
-            ["databricks", "auth", "profiles", "-o", "json", "--skip-validate"],
+            [
+                "databricks",
+                "auth",
+                "profiles",
+                "--output",
+                "json",
+                "--skip-validate",
+            ],
             check=True,
             capture_output=True,
             text=True,
@@ -72,19 +79,23 @@ def _default_cli_profile() -> str:
         payload = json.loads(result.stdout)
     except (TypeError, json.JSONDecodeError) as error:
         raise RuntimeError("Databricks CLI returned invalid profile JSON") from error
-    profiles = payload.get("profiles") if isinstance(payload, dict) else None
-    defaults = [
-        name
-        for item in profiles or []
-        if isinstance(item, dict)
-        and item.get("default") is True
-        and (name := _profile_name(item.get("name"))) is not None
+    raw_profiles = payload.get("profiles") if isinstance(payload, dict) else None
+    profiles = [
+        (name, item.get("default") is True)
+        for item in raw_profiles or []
+        if isinstance(item, dict) and (name := _profile_name(item.get("name"))) is not None
     ]
-    if len(defaults) != 1:
-        raise RuntimeError(
-            "No Databricks profile was selected and the CLI has no configured default profile"
-        )
-    return defaults[0]
+    marked_default = next((name for name, default in profiles if default), None)
+    if marked_default is not None:
+        return marked_default
+    if any(name == "DEFAULT" for name, _ in profiles):
+        return "DEFAULT"
+    if len(profiles) == 1:
+        return profiles[0][0]
+    raise RuntimeError(
+        "No Databricks profile was selected and the CLI has no marked default, "
+        "DEFAULT profile, or single configured profile"
+    )
 
 
 def _profile_name(value: object) -> str | None:

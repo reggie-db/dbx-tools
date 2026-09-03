@@ -8,9 +8,10 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from importlib import resources
-from typing import Annotated, Literal
+from typing import Annotated
 
 from cyclopts import App, Parameter
+from dbx_tools.model import endpoint_capabilities
 
 from .backend import (
     DATABRICKS_PROFILE_ENV,
@@ -65,37 +66,23 @@ _APP = App(
 @_APP.command
 @dataclass
 class Models(ProfileOptions):
-    """List the cached Databricks model catalogue and generated aliases."""
-
-    endpoints: bool = False
-    output: Literal["json", "names"] = "json"
+    """List complete normalized records from the cached model catalogue."""
 
     def __call__(self) -> None:
-        """Load the catalogue once and write the selected representation."""
+        """Load the catalogue once and write every retained model field."""
         profile = require_profile(self.profile)
         catalogue = DatabricksLiteLLMBackend(profile=profile).catalogue()
-        alias_names = sorted(
-            {
-                alias
-                for endpoint in catalogue.endpoints
-                for alias in catalogue.aliases.aliases_for(endpoint.name)
-            }
-        )
-        if not self.endpoints:
-            _write_output(alias_names, self.output)
-            return
-
         models = sorted(
             (
                 {
                     **endpoint.as_dict(),
-                    "aliases": list(catalogue.aliases.aliases_for(endpoint.name)),
+                    "capabilities": endpoint_capabilities(endpoint).as_dict(),
                 }
                 for endpoint in catalogue.endpoints
             ),
             key=lambda model: str(model["name"]),
         )
-        _write_output(models, self.output)
+        _write_output(models)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -123,13 +110,7 @@ def _parse_options(arguments: list[str]) -> object | None:
     return command(*bound.args, **bound.kwargs)
 
 
-def _write_output(values: list[object], output: Literal["json", "names"]) -> None:
-    if output == "names":
-        names = (
-            str(value.get("name")) if isinstance(value, dict) else str(value) for value in values
-        )
-        sys.stdout.write("".join(f"{name}\n" for name in names))
-        return
+def _write_output(values: list[object]) -> None:
     sys.stdout.write(f"{json.dumps(values, indent=2)}\n")
 
 

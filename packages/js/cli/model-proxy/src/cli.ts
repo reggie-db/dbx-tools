@@ -5,8 +5,8 @@
  * Databricks Model Serving with fuzzy model names and per-request auth. `chat`
  * starts that same proxy and hands off to an off-the-shelf terminal client
  * wired to it. `models` lists the resolvable endpoints; `resolve` shows what a
- * fuzzy name snaps to. Auth comes from the standard Databricks SDK resolution
- * (env vars, `--profile`, or `databricks auth login`).
+ * fuzzy name snaps to. Auth uses `--profile`, `DATABRICKS_CONFIG_PROFILE`, or
+ * the Databricks CLI profile fallback before constructing the SDK client.
  *
  * This package ships no bin of its own: {@link buildProgram} is mounted as the
  * `model-proxy` subcommand of the single `dbx` CLI (`@dbx-tools/cli`), which

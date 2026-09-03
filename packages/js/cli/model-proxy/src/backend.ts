@@ -22,11 +22,13 @@ import { invoke, resolve, serving, type ResolvedModel } from "@dbx-tools/model";
 import { log } from "@dbx-tools/shared-core";
 import { type ServingEndpointSummary } from "@dbx-tools/shared-model";
 
+import { resolveDatabricksProfile } from "./_profile.ts";
+
 const logger = log.logger("model-proxy/backend");
 
 /** Options for {@link DatabricksBackend.create}. */
 export interface BackendOptions {
-  /** Databricks config profile (`~/.databrickscfg`). Defaults to SDK auth resolution. */
+  /** Databricks config profile (`~/.databrickscfg`). Defaults through CLI profile discovery. */
   profile?: string;
   /** Override the workspace host; otherwise resolved from SDK auth (env / profile). */
   host?: string;
@@ -49,14 +51,15 @@ export class DatabricksBackend {
   }
 
   /**
-   * Build a backend: construct a default-auth workspace client (optionally
-   * pinned to a profile / host) and resolve the workspace host once, so a bad
-   * profile fails at start-up rather than on the first proxied request.
+   * Build a backend: resolve an optional profile through the Databricks CLI,
+   * construct the workspace client, and resolve the host once so bad
+   * authentication fails at start-up rather than on the first proxied request.
    */
   static async create(options: BackendOptions = {}): Promise<DatabricksBackend> {
+    const profile = resolveDatabricksProfile(options.profile, { host: options.host });
     const client = new WorkspaceClient({
       ...(options.host ? { host: options.host } : {}),
-      ...(options.profile ? { profile: options.profile } : {}),
+      ...(profile ? { profile } : {}),
     });
     const host = (await client.config.getHost()).toString();
     logger.info("connected", { host });

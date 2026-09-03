@@ -1,4 +1,4 @@
-"""Model discovery compatibility and resolvable family aliases."""
+"""Model discovery compatibility and the alternate alias API view."""
 
 from __future__ import annotations
 
@@ -10,19 +10,15 @@ from typing import Any
 
 from databricks.sdk.errors import DatabricksError
 from dbx_tools.model import ServingEndpointSummary, reasoning_efforts_by_family
-from dbx_tools.model.aliases import (
-    ModelAliasIndex,
-    build_model_alias_index,
-)
-from dbx_tools.model.models import (
-    VERSIONED_MODEL_FAMILIES,
-    ModelFamily,
-    parse_model_name,
-)
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
 from litellm import model_cost
+
+from .aliases import ModelAliasIndex, build_model_alias_index
+
+ALIAS_API_PREFIX = "/alias/v1"
+STANDARD_API_PREFIX = "/v1"
 
 _EFFORT_DESCRIPTIONS = {
     "low": "Faster responses with lighter reasoning",
@@ -38,21 +34,36 @@ def augment_models_payload(
     payload: Any,
     endpoints: Sequence[ServingEndpointSummary] | None = None,
     aliases: ModelAliasIndex | None = None,
+    *,
+    alias_view: bool = False,
 ) -> Any:
-    """Advertise dbx-routed models from discovery or LiteLLM registry metadata."""
+    """Advertise exact models or their one-to-one alias projection."""
     if not isinstance(payload, Mapping) or "models" in payload:
         return payload
     data = payload.get("data")
     if not isinstance(data, Sequence) or isinstance(data, (str, bytes, bytearray)):
         return payload
-    native_enabled = any(
+    native_enabled = not alias_view and any(
         isinstance(item, Mapping) and item.get("id") == "databricks/*" for item in data
     )
-    model_aliases = aliases or _model_alias_index(data, endpoints)
     augmented_data = _discovered_models(data, endpoints, native_enabled=native_enabled)
-    augmented_data = _append_provider_aliases(augmented_data, model_aliases, endpoints)
-    augmented_data = _append_family_models(augmented_data)
+    if alias_view:
+        model_aliases = aliases or _model_alias_index(data, endpoints)
+        augmented_data = _alias_models(augmented_data, model_aliases, endpoints)
     return {**payload, "data": augmented_data, "models": _codex_models(augmented_data)}
+
+
+def _alias_target_path(path: str) -> str | None:
+    if path == ALIAS_API_PREFIX:
+        return STANDARD_API_PREFIX
+    if path.startswith(f"{ALIAS_API_PREFIX}/"):
+        return f"{STANDARD_API_PREFIX}{path[len(ALIAS_API_PREFIX) :]}"
+    return None
+
+
+def _rewrite_request_path(request: Request, path: str) -> None:
+    request.scope["path"] = path
+    request.scope["raw_path"] = path.encode()
 
 
 def install_models_compatibility_middleware() -> None:
@@ -65,9 +76,15 @@ def install_models_compatibility_middleware() -> None:
     app.state.dbx_models_compatibility = True
 
     @app.middleware("http")
-    async def add_codex_models_envelope(request: Request, call_next: Any) -> Response:
+    async def alias_api_and_models_envelope(request: Request, call_next: Any) -> Response:
+        original_path = str(request.scope.get("path", ""))
+        alias_target = _alias_target_path(original_path)
+        if alias_target is not None:
+            _rewrite_request_path(request, alias_target)
+
         response = await call_next(request)
-        if request.url.path != "/v1/models" or response.status_code != 200:
+        effective_path = alias_target or original_path
+        if effective_path != "/v1/models" or response.status_code != 200:
             return response
 
         body = b"".join([chunk async for chunk in response.body_iterator])
@@ -88,7 +105,12 @@ def install_models_compatibility_middleware() -> None:
             endpoints = None
             aliases = None
             logger.warning("Live model discovery failed; using LiteLLM registry: %s", error)
-        payload = augment_models_payload(payload, endpoints, aliases)
+        payload = augment_models_payload(
+            payload,
+            endpoints,
+            aliases,
+            alias_view=alias_target is not None,
+        )
         return JSONResponse(
             content=payload,
             status_code=response.status_code,
@@ -239,6 +261,7 @@ def _model_entry(
         "default_reasoning_effort",
     ):
         entry.pop(key, None)
+    entry.pop("alias", None)
     return entry
 
 
@@ -271,44 +294,6 @@ def _dbx_model_id(slug: str) -> str:
     return f"dbx/{slug.removeprefix('dbx/').removeprefix('databricks/')}"
 
 
-def _append_family_models(data: Sequence[Any]) -> list[Any]:
-    """Append one resolvable alias for each deployed basic model family."""
-    result = list(data)
-    existing = {
-        model_id
-        for item in data
-        if isinstance(item, Mapping) and isinstance((model_id := item.get("id")), str)
-    }
-    representatives: dict[str, Mapping[str, Any]] = {}
-    for item in data:
-        if not isinstance(item, Mapping):
-            continue
-        model_id = item.get("id")
-        if not isinstance(model_id, str) or not model_id.startswith("dbx/"):
-            continue
-        slug = model_id.removeprefix("dbx/")
-        family = _basic_family(slug)
-        if family is not None:
-            representatives.setdefault(family, item)
-
-    for family, representative in representatives.items():
-        alias = f"dbx/databricks-{family}"
-        if alias in existing:
-            continue
-        result.append(_model_entry(alias, representative, owned_by="dbx"))
-        existing.add(alias)
-    return result
-
-
-def _basic_family(model: str) -> str | None:
-    parsed = parse_model_name(model)
-    if parsed is None:
-        return None
-    if parsed.family == ModelFamily.GPT and "oss" in parsed.model:
-        return "gpt-oss"
-    return parsed.family.value if parsed.family in VERSIONED_MODEL_FAMILIES else None
-
-
 def _model_alias_index(
     data: Sequence[Any],
     endpoints: Sequence[ServingEndpointSummary] | None,
@@ -327,38 +312,35 @@ def _model_alias_index(
     return build_model_alias_index(names)
 
 
-def _append_provider_aliases(
+def _alias_models(
     data: Sequence[Any],
     aliases: ModelAliasIndex,
     endpoints: Sequence[ServingEndpointSummary] | None,
 ) -> list[Any]:
-    """Append provider-native aliases after exact dbx endpoint entries."""
-    result = list(data)
-    existing = {
-        model_id
-        for item in data
-        if isinstance(item, Mapping) and isinstance((model_id := item.get("id")), str)
-    }
+    """Replace each exact dbx id with its unique alias when one exists."""
+    result: list[Any] = []
     endpoint_by_name = {endpoint.name: endpoint for endpoint in endpoints or ()}
     for item in data:
         if not isinstance(item, Mapping):
+            result.append(item)
             continue
         model_id = item.get("id")
         if not isinstance(model_id, str) or not model_id.startswith("dbx/"):
+            result.append(item)
             continue
         endpoint_name = model_id.removeprefix("dbx/")
-        for alias in aliases.aliases_for(endpoint_name):
-            if alias in existing:
-                continue
+        generated = aliases.aliases_for(endpoint_name)
+        if generated:
             result.append(
                 _model_entry(
-                    alias,
+                    generated[0],
                     item,
                     owned_by="dbx",
                     endpoint=endpoint_by_name.get(endpoint_name),
                 )
             )
-            existing.add(alias)
+        else:
+            result.append(item)
     return result
 
 

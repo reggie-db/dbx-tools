@@ -51,18 +51,18 @@ def test_catalogue_and_aliases_share_the_model_cache_ttl(
     catalogue = backend.catalogue()
 
     assert [model.name for model in catalogue.endpoints] == ["databricks-gpt-5-6-sol"]
-    assert catalogue.aliases.search_for("gpt-5.6-sol") == "gpt 5 6 sol"
+    assert catalogue.aliases.search_for("dbx/gpt-5.6-sol") == "gpt 5 6 sol"
     assert calls == 1
 
     now += DEFAULT_MODEL_CACHE_TTL_SECONDS - 1
-    assert backend.model_aliases().search_for("gpt-5.6-sol") == "gpt 5 6 sol"
+    assert backend.model_aliases().search_for("dbx/gpt-5.6-sol") == "gpt 5 6 sol"
     assert calls == 1
 
     now += 2
     catalogue = backend.catalogue()
     assert [model.name for model in catalogue.endpoints] == ["databricks-gpt-5-6-terra"]
-    assert catalogue.aliases.search_for("gpt-5.6-sol") is None
-    assert catalogue.aliases.search_for("gpt-5.6-terra") == "gpt 5 6 terra"
+    assert catalogue.aliases.search_for("dbx/gpt-5.6-sol") is None
+    assert catalogue.aliases.search_for("dbx/gpt-5.6-terra") == "gpt 5 6 terra"
     assert calls == 2
 
 
@@ -82,7 +82,7 @@ def test_resolve_prefers_provider_alias_before_fuzzy_matching(
     monkeypatch.setattr(backend_module, "register_streaming_support", lambda _: None)
     backend = _backend()
 
-    assert backend.resolve(" qwen3.5-122b-a10b ") == "databricks-qwen35-122b-a10b"
+    assert backend.resolve(" dbx/qwen3.5-122b-a10b ") == "databricks-qwen35-122b-a10b"
 
 
 def test_model_cache_can_be_forced_before_expiry(

@@ -44,6 +44,12 @@ nothing about AppKit:
 dbx model-proxy --profile my-workspace --port 4000
 ```
 
+When `--profile` and `DATABRICKS_CONFIG_PROFILE` are absent, the proxy runs
+`databricks auth profiles --output json --skip-validate` and selects the entry
+marked `"default": true`, then the profile named `DEFAULT`, then the sole
+configured profile. An explicit workspace host preserves ambient SDK
+authentication instead.
+
 This package ships no bin of its own. It contributes the `model-proxy` command
 group to the single `dbx` CLI in [`@dbx-tools/cli`](../dbx-tools), which is what
 you install:
