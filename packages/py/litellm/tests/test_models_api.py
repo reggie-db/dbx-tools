@@ -29,16 +29,20 @@ def test_adds_codex_models_alongside_openai_data() -> None:
     assert [model["id"] for model in augmented["data"]] == [
         "dbx/databricks-gpt-5-6-sol",
         "dbx/databricks-claude-opus-5",
+        "gpt-5.6-sol",
+        "claude-opus-5",
         "dbx/databricks-gpt",
         "dbx/databricks-claude",
     ]
     assert [model["slug"] for model in augmented["models"]] == [
         "dbx/databricks-gpt-5-6-sol",
         "dbx/databricks-claude-opus-5",
+        "gpt-5.6-sol",
+        "claude-opus-5",
         "dbx/databricks-gpt",
         "dbx/databricks-claude",
     ]
-    gpt, claude, gpt_family, claude_family = augmented["models"]
+    gpt, claude, _, _, gpt_family, claude_family = augmented["models"]
     assert gpt["context_window"] == 272_000
     assert gpt["default_reasoning_level"] == "medium"
     assert [level["effort"] for level in gpt["supported_reasoning_levels"]] == [
@@ -103,6 +107,12 @@ def test_appends_each_recognized_basic_family_after_exact_models() -> None:
         f"dbx/{model_id}" for model_id in exact_ids
     ]
     assert [model["id"] for model in augmented["data"][len(exact_ids) :]] == [
+        "gpt-oss-120b",
+        "gemini-3-pro",
+        "llama-4-maverick",
+        "qwen3-next",
+        "glm-5",
+        "gemma-3",
         "dbx/databricks-gpt-oss",
         "dbx/databricks-gemini",
         "dbx/databricks-llama",
@@ -130,16 +140,22 @@ def test_merges_live_endpoints_missing_from_litellm_registry() -> None:
     assert [model["id"] for model in augmented["data"]] == [
         "dbx/databricks-gpt-5-6-sol",
         "dbx/databricks-gpt-5-6-terra",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
         "dbx/databricks-gpt",
     ]
     assert [model["name"] for model in augmented["data"]] == [
         "GPT 5 6 Sol",
         "GPT 5 6 Terra",
+        "GPT 5.6 Sol",
+        "GPT 5.6 Terra",
         "GPT",
     ]
     assert [model["slug"] for model in augmented["models"]] == [
         "dbx/databricks-gpt-5-6-sol",
         "dbx/databricks-gpt-5-6-terra",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
         "dbx/databricks-gpt",
     ]
 
@@ -178,6 +194,7 @@ def test_explicit_native_route_opts_into_databricks_models() -> None:
     assert [model["id"] for model in augmented["data"]] == [
         "dbx/databricks-gpt-5-6-sol",
         "databricks/databricks-gpt-5-6-sol",
+        "gpt-5.6-sol",
         "dbx/databricks-gpt",
     ]
 
@@ -196,9 +213,13 @@ def test_keeps_already_qualified_dbx_models_without_native_duplicates() -> None:
 
     assert [model["id"] for model in augmented["data"]] == [
         "dbx/databricks-gpt-5-6-sol",
+        "gpt-5.6-sol",
         "dbx/databricks-gpt",
     ]
-    assert all(model["id"].startswith("dbx/") for model in augmented["data"])
+    assert all(
+        model["id"].startswith("dbx/") or model["id"] == "gpt-5.6-sol"
+        for model in augmented["data"]
+    )
 
 
 def test_non_reasoning_model_is_explicitly_advertised() -> None:

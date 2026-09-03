@@ -9,6 +9,8 @@ from typing import Any, Protocol
 from urllib.parse import quote, urljoin
 from urllib.request import Request, urlopen
 
+from .models import ModelFamily, parse_model_name
+
 """Model Serving URL, authentication, and JSON invocation helpers."""
 
 INVOCATIONS_SUFFIX = "invocations"
@@ -58,20 +60,20 @@ def is_responses_only(endpoint: str) -> bool:
     normalized = endpoint.lower()
     if "codex" in normalized:
         return True
-    if re.search(r"gpt[-_. ]?oss", normalized):
+    parsed = parse_model_name(endpoint)
+    if parsed is None or parsed.family != ModelFamily.GPT:
         return False
-    version = re.search(r"gpt[^0-9]*(\d+)(?:[._-](\d+))?", normalized)
-    if version is None:
+    if "oss" in parsed.model or not parsed.version:
         return False
-    major = int(version.group(1))
-    minor = int(version.group(2) or 0)
+    major, minor = (*parsed.version, 0)[:2]
     return major > 5 or (major == 5 and minor >= 4)
 
 
 def responses_upstream_url(host: str, endpoint: str) -> str:
     normalized = endpoint.lower()
+    parsed = parse_model_name(endpoint)
     openai_family = (
-        "gpt" in normalized
+        (parsed is not None and parsed.family == ModelFamily.GPT)
         or "codex" in normalized
         or re.search(r"(^|[^a-z])o[1-9]([^a-z]|$)", normalized) is not None
         or "openai" in normalized

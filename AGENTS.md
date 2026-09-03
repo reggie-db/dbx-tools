@@ -264,19 +264,30 @@ Primary package areas:
   pool connect storm mints once. A caller-supplied `credential_provider` owns
   its own caching and refresh policy.
 - `packages/py/model` — Python Model Serving invocation, endpoint listing,
-  classification, resolution, chat sanitization, and embedding helpers. It
-  mirrors the reusable `shared/model` + `node/model` contract without AppKit
-  cache or Mastra dependencies; deterministic behavior belongs in the colocated
-  model polyglot tests.
+  classification, resolution, plain standard model-alias generation, chat
+  sanitization, and embedding helpers. Its `models` module owns the single
+  family registry, family/version/model parser, provider-neutral search terms,
+  and the established sorting-version parser. The alias module only formats
+  parsed identities and builds collision-safe alias-to-search maps from a
+  caller-supplied live catalogue. It mirrors the reusable `shared/model` +
+  `node/model` contract without AppKit cache or Mastra dependencies;
+  deterministic behavior belongs in the colocated model polyglot tests.
 - `packages/py/litellm` — thin LiteLLM integration for Databricks Model
   Serving. An explicit profile is an optional override; otherwise it resolves
   `DATABRICKS_CONFIG_PROFILE`, then the one entry marked as the Databricks CLI
   default in `databricks auth profiles --output json --skip-validate`. A
   Databricks App with `DATABRICKS_HOST` uses ambient service-principal
   authentication and does not require or synthesize a profile;
-  adds live endpoint discovery, fuzzy model resolution, and tool-capability
-  filtering; then delegates to LiteLLM's built-in Databricks provider. Keep
-  authentication,
+  adds live endpoint discovery, fuzzy model resolution, plain standard model
+  aliases, and tool-capability filtering; then delegates to LiteLLM's built-in
+  Databricks provider. Provider aliases are generated lazily from the live
+  endpoint catalogue, converted back to provider-neutral terms before fuzzy
+  matching, and refreshed atomically with the catalogue by one five-minute TTL
+  cache decorator. Suppress ambiguous aliases instead of choosing one endpoint
+  by list order. `dbx-litellm models` reads that same cached catalogue:
+  aliases are the default, `--endpoints` selects Databricks endpoint records,
+  and `--output json|names` selects structured output or a sorted
+  newline-delimited name list. Keep authentication,
   transport, parameter mapping, streaming, retries, embeddings, and
   Chat↔Responses conversion in LiteLLM. Compatibility guards may repair only
   documented Databricks serving constraints: assistant text prefill, the JSON

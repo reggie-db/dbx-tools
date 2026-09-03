@@ -5,19 +5,22 @@ from collections.abc import Iterable, Sequence
 from difflib import SequenceMatcher
 
 from .classes import CHAT_CLASS_ORDER, MODEL_CLASS_ORDER, classes_at_or_below
-from .classify import classified_summaries, endpoint_capabilities, version_tuple
+from .classify import classified_summaries, endpoint_capabilities
 from .fallback import FALLBACK_MODEL_IDS, models_for_class
 from .models import (
+    VERSIONED_MODEL_FAMILIES,
     ModelClass,
+    ModelFamily,
     ModelQuery,
     RankedModel,
     ResolvedModel,
     ResolvedModelSelection,
     ServingEndpointSummary,
+    parse_model_name,
+    version_tuple,
 )
 
 DEFAULT_FUZZY_THRESHOLD = 0.4
-VERSIONED_FAMILY_SEARCHES = frozenset({"claude", "gemini", "gemma", "glm", "gpt", "llama", "qwen"})
 
 
 def search_serving_endpoints(
@@ -85,7 +88,9 @@ def rank_models(
     search = request.search.strip() if request.search else ""
     if search:
         gpt_family_search = search.lower() == "gpt"
-        versioned_family_search = search.lower() in VERSIONED_FAMILY_SEARCHES
+        versioned_family_search = any(
+            search.lower() == family.value for family in VERSIONED_MODEL_FAMILIES
+        )
         scores = {
             str(match["endpoint"]["name"]): float(match["score"])
             for match in search_serving_endpoints(
@@ -99,10 +104,10 @@ def rank_models(
             candidates = [
                 candidate
                 for candidate in candidates
-                if not re.search(
-                    r"(?:^|[-_.])gpt[-_.]?oss(?:[-_.]|$)",
-                    candidate.endpoint.name,
-                    re.IGNORECASE,
+                if not (
+                    (parsed := parse_model_name(candidate.endpoint.name)) is not None
+                    and parsed.family == ModelFamily.GPT
+                    and "oss" in parsed.model
                 )
             ]
         for candidate in candidates:

@@ -23,6 +23,9 @@ Key features:
 - score-driven model classification with family fallbacks;
 - reasoning-effort levels inferred from Databricks served-entity identity, with
   endpoint-family fallback for summaries that omit it;
+- flexible family, version, and model parsing plus collision-safe plain
+  standard aliases for OpenAI, Anthropic, Gemini, Qwen, Meta Llama,
+  Gemma, GLM, Grok, DeepSeek, Kimi, Inkling, GTE, and BGE;
 - exact and fuzzy endpoint resolution with deterministic class ordering;
 - Databricks invocation URL and process-serialized per-request authentication
   helpers, so concurrent SDK refreshes converge;
@@ -50,6 +53,31 @@ The Python port intentionally omits AppKit `CacheManager` integration,
 Mastra-specific adapters, and browser-only schemas. Callers can cache the plain
 Pydantic results with their preferred Python cache.
 
+Standard aliases are generated from a caller-supplied catalogue rather than a
+static endpoint list:
+
+```python
+from dbx_tools.model.aliases import build_model_alias_index
+from dbx_tools.model.models import parse_model_name
+
+parsed = parse_model_name("databricks-qwen35-122b-a10b")
+assert parsed is not None
+assert parsed.family == "qwen"
+assert parsed.version == (3, 5)
+
+aliases = build_model_alias_index(
+    ["databricks-gpt-5-6-sol", "databricks-qwen35-122b-a10b"]
+)
+assert aliases.search_for("gpt-5.6-sol") == "gpt 5 6 sol"
+assert aliases.search_for("qwen3.5-122b-a10b") == "qwen 3 5 122b a10b"
+```
+
+Only aliases that identify one endpoint are retained. If two live endpoints
+generate the same provider alias, or an alias collides with an exact model name,
+the index omits that alias instead of choosing by catalogue order. Reverse
+lookup returns provider-neutral search terms for the existing fuzzy resolver;
+it does not encode an endpoint-specific translation table.
+
 ## Relationship to the Databricks SDK
 
 Use the native SDK directly when an endpoint name is already known and its typed
@@ -59,7 +87,9 @@ and embedding normalization is the repetitive part.
 
 ## Module map
 
-- `models` — Pydantic wire contracts;
+- `models` — Pydantic wire contracts plus shared family/version/model parsing;
+- `aliases` - provider-native alias generators and collision-safe fuzzy-search
+  lookup;
 - `reasoning` — model-family and served-entity reasoning-level inference;
 - `classify`, `classes`, `fallback` — model taxonomy and ordering;
 - `resolve` — exact/fuzzy ranking and single-model selection;

@@ -2,26 +2,37 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from importlib import resources
-from typing import Annotated
+from typing import Annotated, Literal
 
 from cyclopts import App, Parameter
 
-from .backend import DATABRICKS_PROFILE_ENV, require_profile
+from .backend import (
+    DATABRICKS_PROFILE_ENV,
+    DatabricksLiteLLMBackend,
+    require_profile,
+)
 
 
 @dataclass
-class CliOptions:
-    """dbx-tools options parsed before forwarding the remaining LiteLLM args."""
+class ProfileOptions:
+    """Databricks profile shared by LiteLLM commands."""
 
     profile: Annotated[
         str | None,
         Parameter(name="--profile", env_var=DATABRICKS_PROFILE_ENV),
     ] = None
+
+
+@dataclass
+class CliOptions(ProfileOptions):
+    """dbx-tools options parsed before forwarding the remaining LiteLLM args."""
+
     proxy_args: list[str] = field(default_factory=list, init=False)
 
     def __call__(self) -> None:
@@ -51,16 +62,75 @@ _APP = App(
 )
 
 
+@_APP.command
+@dataclass
+class Models(ProfileOptions):
+    """List the cached Databricks model catalogue and generated aliases."""
+
+    endpoints: bool = False
+    output: Literal["json", "names"] = "json"
+
+    def __call__(self) -> None:
+        """Load the catalogue once and write the selected representation."""
+        profile = require_profile(self.profile)
+        catalogue = DatabricksLiteLLMBackend(profile=profile).catalogue()
+        alias_names = sorted(
+            {
+                alias
+                for endpoint in catalogue.endpoints
+                for alias in catalogue.aliases.aliases_for(endpoint.name)
+            }
+        )
+        if not self.endpoints:
+            _write_output(alias_names, self.output)
+            return
+
+        models = sorted(
+            (
+                {
+                    **endpoint.as_dict(),
+                    "aliases": list(catalogue.aliases.aliases_for(endpoint.name)),
+                }
+                for endpoint in catalogue.endpoints
+            ),
+            key=lambda model: str(model["name"]),
+        )
+        _write_output(models, self.output)
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Start LiteLLM with a resolved Databricks profile and default config."""
     arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["models"]:
+        _run_command(arguments)
+        return
     options_tokens, proxy_args = _split_options(arguments)
-    command, bound, _ = _APP.parse_args(options_tokens)
-    options = command(*bound.args, **bound.kwargs)
+    options = _parse_options(options_tokens)
     if options is None:
         return
     options.proxy_args.extend(proxy_args)
     options()
+
+
+def _run_command(arguments: list[str]) -> None:
+    options = _parse_options(arguments)
+    if options is not None:
+        options()
+
+
+def _parse_options(arguments: list[str]) -> object | None:
+    command, bound, _ = _APP.parse_args(arguments)
+    return command(*bound.args, **bound.kwargs)
+
+
+def _write_output(values: list[object], output: Literal["json", "names"]) -> None:
+    if output == "names":
+        names = (
+            str(value.get("name")) if isinstance(value, dict) else str(value) for value in values
+        )
+        sys.stdout.write("".join(f"{name}\n" for name in names))
+        return
+    sys.stdout.write(f"{json.dumps(values, indent=2)}\n")
 
 
 def _split_options(arguments: list[str]) -> tuple[list[str], list[str]]:

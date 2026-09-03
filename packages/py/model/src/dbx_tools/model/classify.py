@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import math
-import re
 from collections.abc import Iterable
 
-from .models import EndpointCapabilities, ModelClass, ServingEndpointSummary
+from .models import (
+    EndpointCapabilities,
+    ModelClass,
+    ModelFamily,
+    ServingEndpointSummary,
+    parse_model_name,
+    version_tuple,
+)
 from .reasoning import reasoning_efforts_by_family
 
 CHAT_TASK = "llm/v1/chat"
@@ -12,10 +18,20 @@ EMBEDDING_TASK = "llm/v1/embeddings"
 
 
 def supports_tools_by_family(name: str) -> bool:
-    normalized = name.lower()
-    if "gemini" in normalized or "gpt-oss" in normalized:
+    parsed = parse_model_name(name)
+    if parsed is None:
         return False
-    return any(family in normalized for family in ("claude", "gpt", "qwen", "glm", "llama"))
+    if parsed.family == ModelFamily.GEMINI:
+        return False
+    if parsed.family == ModelFamily.GPT and "oss" in parsed.model:
+        return False
+    return parsed.family in {
+        ModelFamily.CLAUDE,
+        ModelFamily.GLM,
+        ModelFamily.GPT,
+        ModelFamily.LLAMA,
+        ModelFamily.QWEN,
+    }
 
 
 def endpoint_capabilities(
@@ -38,56 +54,47 @@ def endpoint_capabilities(
     )
 
 
-def version_tuple(name: str) -> list[int]:
-    match = re.search(r"\d", name)
-    if match is None:
-        return [0, 0, 0]
-    numbers = []
-    for chunk in re.split(r"[^a-z0-9]+", name[match.start() :], flags=re.IGNORECASE):
-        digits = re.match(r"^\d+", chunk)
-        if digits:
-            numbers.append(int(digits.group(0)))
-    return (numbers + [0, 0, 0])[:3]
-
-
 def classify_by_family(name: str) -> dict[str, object] | None:
-    normalized = name.lower()
+    parsed = parse_model_name(name)
+    if parsed is None:
+        return None
+    model = set(parsed.model)
 
     def result(model_class: ModelClass) -> dict[str, object]:
-        major, minor, patch = version_tuple(normalized)
+        major, minor, patch = version_tuple(name)
         return {"class": model_class.value, "rank": major * 1_000_000 + minor * 1_000 + patch}
 
-    if "opus" in normalized:
+    if parsed.family == ModelFamily.CLAUDE and "opus" in model:
         return result(ModelClass.CHAT_THINKING)
-    if "sonnet" in normalized:
+    if parsed.family == ModelFamily.CLAUDE and "sonnet" in model:
         return result(ModelClass.CHAT_BALANCED)
-    if "haiku" in normalized:
+    if parsed.family == ModelFamily.CLAUDE and "haiku" in model:
         return result(ModelClass.CHAT_FAST)
-    if "gpt-oss" in normalized:
-        return result(ModelClass.CHAT_BALANCED if "120b" in normalized else ModelClass.CHAT_FAST)
-    if "gpt" in normalized:
-        if "pro" in normalized:
+    if parsed.family == ModelFamily.GPT and "oss" in model:
+        return result(ModelClass.CHAT_BALANCED if "120b" in model else ModelClass.CHAT_FAST)
+    if parsed.family == ModelFamily.GPT:
+        if "pro" in model:
             return result(ModelClass.CHAT_THINKING)
-        if "mini" in normalized or "nano" in normalized:
+        if "mini" in model or "nano" in model:
             return result(ModelClass.CHAT_FAST)
         return result(ModelClass.CHAT_BALANCED)
-    if "gemini" in normalized:
-        if "flash-lite" in normalized:
+    if parsed.family == ModelFamily.GEMINI:
+        if {"flash", "lite"} <= model:
             return result(ModelClass.CHAT_FAST)
-        if "pro" in normalized:
+        if "pro" in model:
             return result(ModelClass.CHAT_THINKING)
         return result(ModelClass.CHAT_BALANCED)
-    if "gemma" in normalized:
+    if parsed.family == ModelFamily.GEMMA:
         return result(ModelClass.CHAT_FAST)
-    if "llama" in normalized:
-        if "maverick" in normalized or "405b" in normalized:
+    if parsed.family == ModelFamily.LLAMA:
+        if "maverick" in model or "405b" in model:
             return result(ModelClass.CHAT_THINKING)
-        if "70b" in normalized:
+        if "70b" in model:
             return result(ModelClass.CHAT_BALANCED)
-        if "8b" in normalized or "1b" in normalized:
+        if "8b" in model or "1b" in model:
             return result(ModelClass.CHAT_FAST)
         return result(ModelClass.CHAT_BALANCED)
-    if "qwen" in normalized:
+    if parsed.family == ModelFamily.QWEN:
         return result(ModelClass.CHAT_BALANCED)
     return None
 

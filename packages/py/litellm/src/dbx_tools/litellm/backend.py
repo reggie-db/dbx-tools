@@ -6,8 +6,9 @@ import json
 import os
 import subprocess
 from collections.abc import Mapping
-from threading import RLock
+from dataclasses import dataclass
 
+from cachetools import TTLCache, cachedmethod
 from dbx_tools.model import (
     DEFAULT_FUZZY_THRESHOLD,
     ReasoningEffort,
@@ -17,11 +18,22 @@ from dbx_tools.model import (
     rank_model_id,
     reasoning_efforts_by_family,
 )
+from dbx_tools.model.aliases import ModelAliasIndex, build_model_alias_index
+from dbx_tools.model.models import model_search_query
 
 from .credentials import Credentials, DatabricksCredentials
 from .models import register_streaming_support
 
 DATABRICKS_PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
+DEFAULT_MODEL_CACHE_TTL_SECONDS = 5 * 60
+
+
+@dataclass(frozen=True)
+class ModelCatalogue:
+    """One endpoint snapshot with aliases derived from that snapshot."""
+
+    endpoints: tuple[ServingEndpointSummary, ...]
+    aliases: ModelAliasIndex
 
 
 def require_profile(
@@ -87,9 +99,13 @@ class DatabricksLiteLLMBackend:
         *,
         profile: str | None = None,
         threshold: float = DEFAULT_FUZZY_THRESHOLD,
+        cache_ttl_seconds: float = DEFAULT_MODEL_CACHE_TTL_SECONDS,
     ) -> None:
+        if cache_ttl_seconds <= 0:
+            raise ValueError("cache_ttl_seconds must be positive")
         self.profile = require_profile(profile)
         self.threshold = threshold
+        self.cache_ttl_seconds = cache_ttl_seconds
 
         # LiteLLM's built-in Databricks provider constructs WorkspaceClient()
         # itself. Pin its unified-auth lookup to the same resolved profile used
@@ -99,8 +115,10 @@ class DatabricksLiteLLMBackend:
 
         self._credentials = DatabricksCredentials(profile=self.profile)
         self.client = self._credentials.client
-        self._models: list[ServingEndpointSummary] | None = None
-        self._lock = RLock()
+        self._catalogue_cache: TTLCache[tuple[object, ...], ModelCatalogue] = TTLCache(
+            maxsize=1,
+            ttl=self.cache_ttl_seconds,
+        )
 
     def credentials(self) -> Credentials:
         """Return the cached bearer token and serving base URL for this profile."""
@@ -120,30 +138,47 @@ class DatabricksLiteLLMBackend:
         """
         return self._credentials.refresh(stale)
 
-    def models(self, *, force: bool = False) -> list[ServingEndpointSummary]:
-        """List once per process, with an explicit refresh path for misses."""
-        with self._lock:
-            if self._models is None or force:
-                self._models = list_serving_endpoints(self.client)
-            return list(self._models)
+    @cachedmethod(lambda self: self._catalogue_cache)
+    def catalogue(self) -> ModelCatalogue:
+        """Return one TTL-cached endpoint and alias snapshot."""
+        endpoints = tuple(list_serving_endpoints(self.client))
+        return ModelCatalogue(
+            endpoints=endpoints,
+            aliases=build_model_alias_index(endpoint.name for endpoint in endpoints),
+        )
 
-    def cached_models(self) -> list[ServingEndpointSummary]:
-        """Return the last successful catalogue without triggering discovery."""
-        with self._lock:
-            return list(self._models or ())
+    def refresh_catalogue(self) -> ModelCatalogue:
+        """Invalidate the endpoint snapshot and load it again."""
+        self._catalogue_cache.clear()
+        return self.catalogue()
+
+    def models(self, *, force: bool = False) -> list[ServingEndpointSummary]:
+        """Return lazily discovered endpoints from the TTL-cached catalogue."""
+        catalogue = self.refresh_catalogue() if force else self.catalogue()
+        return list(catalogue.endpoints)
+
+    def model_aliases(self, *, force: bool = False) -> ModelAliasIndex:
+        """Return aliases derived from the same TTL-cached endpoint catalogue."""
+        catalogue = self.refresh_catalogue() if force else self.catalogue()
+        return catalogue.aliases
 
     def resolve(self, requested: str, *, requires_tools: bool = False) -> str:
         """Resolve a loose model name, refreshing the live catalogue on a miss."""
-        query = _strip_provider_prefix(requested)
+        catalogue = self.catalogue()
+        models = list(catalogue.endpoints)
+        query = _resolution_query(requested, models, catalogue.aliases)
         resolved = rank_model_id(
-            self.models(),
+            models,
             query,
             threshold=self.threshold,
             requires_tools=requires_tools,
         )
         if not resolved.matched:
+            catalogue = self.refresh_catalogue()
+            models = list(catalogue.endpoints)
+            query = _resolution_query(requested, models, catalogue.aliases)
             resolved = rank_model_id(
-                self.models(force=True),
+                models,
                 query,
                 threshold=self.threshold,
                 requires_tools=requires_tools,
@@ -152,7 +187,7 @@ class DatabricksLiteLLMBackend:
         model_id = resolved.model_id
         if requires_tools:
             endpoint = next(
-                (candidate for candidate in self.models() if candidate.name == model_id),
+                (candidate for candidate in models if candidate.name == model_id),
                 None,
             )
             if endpoint is None or not endpoint_capabilities(endpoint).tools:
@@ -170,12 +205,15 @@ class DatabricksLiteLLMBackend:
         return reasoning_efforts_by_family(model_id)
 
 
-def _strip_provider_prefix(model: str) -> str:
-    stripped = model
-    while True:
-        for prefix in ("dbx/", "databricks/"):
-            if stripped.startswith(prefix):
-                stripped = stripped[len(prefix) :]
-                break
-        else:
-            return stripped
+def _resolution_query(
+    requested: str,
+    models: list[ServingEndpointSummary],
+    aliases: ModelAliasIndex,
+) -> str:
+    alias_query = aliases.search_for(requested)
+    if alias_query is not None:
+        return alias_query
+    stripped = requested.strip()
+    if any(endpoint.name == stripped for endpoint in models):
+        return stripped
+    return model_search_query(stripped) or stripped

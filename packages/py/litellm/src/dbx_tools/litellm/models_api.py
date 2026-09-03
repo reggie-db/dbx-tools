@@ -5,12 +5,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from databricks.sdk.errors import DatabricksError
 from dbx_tools.model import ServingEndpointSummary, reasoning_efforts_by_family
+from dbx_tools.model.aliases import (
+    ModelAliasIndex,
+    build_model_alias_index,
+)
+from dbx_tools.model.models import (
+    VERSIONED_MODEL_FAMILIES,
+    ModelFamily,
+    parse_model_name,
+)
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
@@ -22,7 +30,6 @@ _EFFORT_DESCRIPTIONS = {
     "high": "Deeper reasoning for complex tasks",
     "xhigh": "Maximum reasoning for the hardest tasks",
 }
-_BASIC_FAMILIES = ("gpt", "claude", "gemini", "llama", "qwen", "glm", "gemma")
 _ROUTE_MODEL_IDS = frozenset({"*", "databricks/*", "dbx/*"})
 logger = logging.getLogger(__name__)
 
@@ -30,6 +37,7 @@ logger = logging.getLogger(__name__)
 def augment_models_payload(
     payload: Any,
     endpoints: Sequence[ServingEndpointSummary] | None = None,
+    aliases: ModelAliasIndex | None = None,
 ) -> Any:
     """Advertise dbx-routed models from discovery or LiteLLM registry metadata."""
     if not isinstance(payload, Mapping) or "models" in payload:
@@ -40,7 +48,9 @@ def augment_models_payload(
     native_enabled = any(
         isinstance(item, Mapping) and item.get("id") == "databricks/*" for item in data
     )
+    model_aliases = aliases or _model_alias_index(data, endpoints)
     augmented_data = _discovered_models(data, endpoints, native_enabled=native_enabled)
+    augmented_data = _append_provider_aliases(augmented_data, model_aliases, endpoints)
     augmented_data = _append_family_models(augmented_data)
     return {**payload, "data": augmented_data, "models": _codex_models(augmented_data)}
 
@@ -71,12 +81,14 @@ def install_models_compatibility_middleware() -> None:
                 media_type=response.media_type,
             )
         try:
-            endpoints = await asyncio.to_thread(dbx_provider.backend.models, force=True)
+            catalogue = await asyncio.to_thread(dbx_provider.backend.catalogue)
+            endpoints = catalogue.endpoints
+            aliases = catalogue.aliases
         except (DatabricksError, OSError, RuntimeError, ValueError) as error:
-            endpoints = dbx_provider.backend.cached_models()
-            source = "cached endpoint catalogue" if endpoints else "LiteLLM registry"
-            logger.warning("Live model discovery failed; using %s: %s", source, error)
-        payload = augment_models_payload(payload, endpoints)
+            endpoints = None
+            aliases = None
+            logger.warning("Live model discovery failed; using LiteLLM registry: %s", error)
+        payload = augment_models_payload(payload, endpoints, aliases)
         return JSONResponse(
             content=payload,
             status_code=response.status_code,
@@ -289,16 +301,65 @@ def _append_family_models(data: Sequence[Any]) -> list[Any]:
 
 
 def _basic_family(model: str) -> str | None:
-    normalized = model.lower()
-    if not normalized.startswith(("databricks-", "system.ai.")):
+    parsed = parse_model_name(model)
+    if parsed is None:
         return None
-    tokens = set(re.findall(r"[a-z0-9]+", normalized))
-    if "gpt" in tokens and "oss" in tokens:
+    if parsed.family == ModelFamily.GPT and "oss" in parsed.model:
         return "gpt-oss"
-    return next(
-        (family for family in _BASIC_FAMILIES if any(token.startswith(family) for token in tokens)),
-        None,
+    return parsed.family.value if parsed.family in VERSIONED_MODEL_FAMILIES else None
+
+
+def _model_alias_index(
+    data: Sequence[Any],
+    endpoints: Sequence[ServingEndpointSummary] | None,
+) -> ModelAliasIndex:
+    names = (
+        (endpoint.name for endpoint in endpoints)
+        if endpoints is not None
+        else (
+            slug
+            for item in data
+            if isinstance(item, Mapping)
+            and isinstance((model_id := item.get("id")), str)
+            and (slug := _databricks_slug(model_id)) is not None
+        )
     )
+    return build_model_alias_index(names)
+
+
+def _append_provider_aliases(
+    data: Sequence[Any],
+    aliases: ModelAliasIndex,
+    endpoints: Sequence[ServingEndpointSummary] | None,
+) -> list[Any]:
+    """Append provider-native aliases after exact dbx endpoint entries."""
+    result = list(data)
+    existing = {
+        model_id
+        for item in data
+        if isinstance(item, Mapping) and isinstance((model_id := item.get("id")), str)
+    }
+    endpoint_by_name = {endpoint.name: endpoint for endpoint in endpoints or ()}
+    for item in data:
+        if not isinstance(item, Mapping):
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str) or not model_id.startswith("dbx/"):
+            continue
+        endpoint_name = model_id.removeprefix("dbx/")
+        for alias in aliases.aliases_for(endpoint_name):
+            if alias in existing:
+                continue
+            result.append(
+                _model_entry(
+                    alias,
+                    item,
+                    owned_by="dbx",
+                    endpoint=endpoint_by_name.get(endpoint_name),
+                )
+            )
+            existing.add(alias)
+    return result
 
 
 def _codex_model(slug: str, item: Mapping[str, Any], *, priority: int) -> dict[str, Any]:

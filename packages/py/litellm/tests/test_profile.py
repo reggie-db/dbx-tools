@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from collections.abc import Sequence
+from types import SimpleNamespace
 
 import dbx_tools.litellm.backend as backend_module
 import dbx_tools.litellm.cli as cli_module
 import pytest
-from dbx_tools.litellm.backend import (
-    DATABRICKS_PROFILE_ENV,
-    _strip_provider_prefix,
-    require_profile,
-)
+from dbx_tools.litellm.backend import DATABRICKS_PROFILE_ENV, ModelCatalogue, require_profile
+from dbx_tools.model import ServingEndpointSummary
+from dbx_tools.model.aliases import build_model_alias_index
 
 
 def test_explicit_profile_wins_without_spawning_cli(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -138,5 +138,71 @@ def test_cli_allows_profile_override(monkeypatch: pytest.MonkeyPatch) -> None:
     assert backend_module.os.environ[DATABRICKS_PROFILE_ENV] == "other"
 
 
-def test_repeated_provider_prefixes_are_normalized() -> None:
-    assert _strip_provider_prefix("dbx/databricks/databricks-gpt-5-5") == "databricks-gpt-5-5"
+@pytest.fixture
+def models_cli(monkeypatch: pytest.MonkeyPatch) -> ModelCatalogue:
+    endpoints = (
+        ServingEndpointSummary(name="databricks-qwen35-122b-a10b"),
+        ServingEndpointSummary(name="databricks-gpt-5-6-sol"),
+    )
+    catalogue = ModelCatalogue(
+        endpoints=endpoints,
+        aliases=build_model_alias_index(endpoint.name for endpoint in endpoints),
+    )
+    monkeypatch.setattr(cli_module, "require_profile", lambda profile: profile)
+    monkeypatch.setattr(
+        cli_module,
+        "DatabricksLiteLLMBackend",
+        lambda **_: SimpleNamespace(catalogue=lambda: catalogue),
+    )
+    return catalogue
+
+
+def test_models_cli_defaults_to_alias_json(
+    models_cli: ModelCatalogue,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cli_module.main(["models", "--profile", "test"])
+
+    assert json.loads(capsys.readouterr().out) == [
+        "gpt-5.6-sol",
+        "qwen3.5-122b-a10b",
+    ]
+
+
+def test_models_cli_alias_names_output_is_sorted(
+    models_cli: ModelCatalogue,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cli_module.main(["models", "--profile", "test", "--output", "names"])
+
+    assert capsys.readouterr().out.splitlines() == [
+        "gpt-5.6-sol",
+        "qwen3.5-122b-a10b",
+    ]
+
+
+def test_models_cli_endpoints_json(
+    models_cli: ModelCatalogue,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cli_module.main(["models", "--profile", "test", "--endpoints"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert [model["name"] for model in payload] == [
+        "databricks-gpt-5-6-sol",
+        "databricks-qwen35-122b-a10b",
+    ]
+    assert payload[0]["aliases"] == ["gpt-5.6-sol"]
+    assert payload[1]["aliases"] == ["qwen3.5-122b-a10b"]
+
+
+def test_models_cli_endpoint_names(
+    models_cli: ModelCatalogue,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cli_module.main(["models", "--profile", "test", "--endpoints", "--output", "names"])
+
+    assert capsys.readouterr().out.splitlines() == [
+        "databricks-gpt-5-6-sol",
+        "databricks-qwen35-122b-a10b",
+    ]

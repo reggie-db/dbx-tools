@@ -1,0 +1,269 @@
+{
+  "info": {
+    "_postman_id": "84a51e28-9165-46cc-a944-a0308de193ac",
+    "name": "Databricks Route-Optimized Serving",
+    "description": "Mints a service-principal OAuth token scoped to one route-optimized Databricks Model Serving endpoint, then queries that endpoint.\n\nAfter importing, open the collection's Variables tab and set `databricks_host`, `client_id`, `client_secret`, and `serving_endpoint_url`. Adjust `action` or `inference_request_body` if needed. Run the requests in order, or run the collection.\n\nThe collection derives the workspace token URL and serving endpoint id from the supplied URLs. It stores the returned access token as the current `access_token` collection variable for the inference request.\n\nReference: https://learn.microsoft.com/en-us/azure/databricks/machine-learning/model-serving/query-route-optimization",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const inputNames = [",
+          "  \"databricks_host\",",
+          "  \"client_id\",",
+          "  \"client_secret\",",
+          "  \"serving_endpoint_url\",",
+          "];",
+          "",
+          "const inputs = Object.fromEntries(",
+          "  inputNames.map((name) => [name, String(pm.variables.get(name) ?? \"\").trim()]),",
+          ");",
+          "const missing = inputNames.filter((name) => !inputs[name]);",
+          "if (missing.length > 0) {",
+          "  throw new Error(`Set these collection variables before sending requests: ${missing.join(\", \")}`);",
+          "}",
+          "",
+          "function parseUrl(value, name) {",
+          "  const normalized = /^https?:\\/\\//i.test(value) ? value : `https://${value}`;",
+          "  try {",
+          "    return new URL(normalized);",
+          "  } catch {",
+          "    throw new Error(`${name} must be a valid URL`);",
+          "  }",
+          "}",
+          "",
+          "const workspaceUrl = parseUrl(inputs.databricks_host, \"databricks_host\");",
+          "const servingUrl = parseUrl(inputs.serving_endpoint_url, \"serving_endpoint_url\");",
+          "const endpointId = servingUrl.hostname.split(\".\")[0];",
+          "const action = String(pm.variables.get(\"action\") ?? \"\").trim() || \"query_inference_endpoint\";",
+          "",
+          "// A route-optimized endpoint id is the first label of its serving hostname.",
+          "const authorizationDetails = [{",
+          "  type: \"workspace_permission\",",
+          "  object_type: \"serving-endpoints\",",
+          "  object_path: `/serving-endpoints/${endpointId}`,",
+          "  actions: [action],",
+          "}];",
+          "",
+          "pm.collectionVariables.set(\"token_url\", `${workspaceUrl.origin}/oidc/v1/token`);",
+          "pm.collectionVariables.set(\"normalized_serving_endpoint_url\", servingUrl.href.replace(/\\/$/, \"\"));",
+          "pm.collectionVariables.set(\"endpoint_id\", endpointId);",
+          "pm.collectionVariables.set(\"authorization_details\", JSON.stringify(authorizationDetails));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Mint scoped OAuth token",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.unset(\"access_token\");"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"OAuth token was minted\", function () {",
+              "  pm.response.to.have.status(200);",
+              "  const response = pm.response.json();",
+              "  pm.expect(response.access_token).to.be.a(\"string\").and.not.empty;",
+              "  pm.collectionVariables.set(\"access_token\", response.access_token);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{client_id}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{client_secret}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "text"
+            },
+            {
+              "key": "scope",
+              "value": "all-apis",
+              "type": "text"
+            },
+            {
+              "key": "authorization_details",
+              "value": "{{authorization_details}}",
+              "type": "text"
+            }
+          ]
+        },
+        "url": "{{token_url}}",
+        "description": "Requests a service-principal OAuth token from the workspace host. The collection-level pre-request script scopes `authorization_details` to the endpoint id derived from `serving_endpoint_url`."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Query route-optimized endpoint",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!String(pm.variables.get(\"access_token\") ?? \"\").trim()) {",
+              "  throw new Error(\"Run '1. Mint scoped OAuth token' before querying the endpoint\");",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Endpoint query succeeded\", function () {",
+              "  pm.expect(pm.response.code).to.be.within(200, 299);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{access_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{{inference_request_body}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{normalized_serving_endpoint_url}}",
+        "description": "Queries the route-optimized serving URL with the scoped OAuth token. Change `inference_request_body` to match the model's input schema."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "databricks_host",
+      "value": "",
+      "type": "string",
+      "description": "Workspace URL used to mint the OAuth token. This is not the serving host."
+    },
+    {
+      "key": "client_id",
+      "value": "",
+      "type": "string",
+      "description": "Service principal application client id."
+    },
+    {
+      "key": "client_secret",
+      "value": "",
+      "type": "string",
+      "description": "Service principal OAuth secret. Set only the current value and do not export it."
+    },
+    {
+      "key": "serving_endpoint_url",
+      "value": "",
+      "type": "string",
+      "description": "Full route-optimized endpoint invocations URL."
+    },
+    {
+      "key": "action",
+      "value": "query_inference_endpoint",
+      "type": "string",
+      "description": "Workspace permission action placed in authorization_details."
+    },
+    {
+      "key": "inference_request_body",
+      "value": "{\n  \"dataframe_split\": {\n    \"columns\": [\"order_id\", \"rest_id\", \"order_timestamp\", \"bag\"],\n    \"data\": [[\"order-1\", \"rest-1\", \"2026-06-12T18:00:00Z\", [1, 2, 3]]]\n  }\n}",
+      "type": "string",
+      "description": "JSON request body sent to the model. Replace this sample with the target model's expected schema."
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string",
+      "description": "Generated by the token request. Do not export or share its current value."
+    },
+    {
+      "key": "token_url",
+      "value": "",
+      "type": "string",
+      "description": "Derived from databricks_host at request time."
+    },
+    {
+      "key": "normalized_serving_endpoint_url",
+      "value": "",
+      "type": "string",
+      "description": "Derived from serving_endpoint_url at request time."
+    },
+    {
+      "key": "endpoint_id",
+      "value": "",
+      "type": "string",
+      "description": "Derived from the first label of the route-optimized serving hostname."
+    },
+    {
+      "key": "authorization_details",
+      "value": "",
+      "type": "string",
+      "description": "Generated OAuth authorization_details JSON."
+    }
+  ]
+}

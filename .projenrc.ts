@@ -1011,6 +1011,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     description:
       "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution",
     dependencies: [
+      "cachetools>=5.5,<7",
       "cyclopts>=4.11,<6",
       "databricks-sdk>=0.63.0",
       projenProject.pythonGitDependency(pythonRepository, "dbx-tools-model", "model"),
