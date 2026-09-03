@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 from .classes import MODEL_CLASS_ORDER
 from .classify import classified_summaries, supports_tools_by_family
-from .models import ModelProfile, ServingEndpointSummary
+from .models import ModelProfile, ModelService, ServingEndpointSummary, model_service_names
 from .reasoning import reasoning_efforts_for_names
 
 
@@ -38,6 +38,7 @@ def list_serving_endpoints_uncached(client: WorkspaceClientLike) -> list[Serving
         name = _value(endpoint, "name")
         if not isinstance(name, str) or not name:
             continue
+        identities = _model_identities(endpoint, name)
         summaries.append(
             ServingEndpointSummary(
                 name=name,
@@ -47,7 +48,8 @@ def list_serving_endpoints_uncached(client: WorkspaceClientLike) -> list[Serving
                 description=_string(_value(endpoint, "description")),
                 supportsTools=supports_tools_by_family(name),
                 profile=_extract_profile(endpoint),
-                reasoningEfforts=reasoning_efforts_for_names(_model_identities(endpoint, name)),
+                reasoningEfforts=reasoning_efforts_for_names(identities),
+                serviceNames=_service_names(identities),
             )
         )
     return summaries
@@ -130,6 +132,14 @@ def _model_identities(endpoint: object, endpoint_name: str) -> list[str]:
             if isinstance(value, str) and value:
                 identities.append(value)
     return identities
+
+
+def _service_names(identities: Iterable[str]) -> dict[ModelService, str]:
+    names: dict[ModelService, str] = {}
+    for identity in identities:
+        for service, name in model_service_names(identity).items():
+            names.setdefault(service, name)
+    return names
 
 
 def _value(value: object, key: str) -> Any:

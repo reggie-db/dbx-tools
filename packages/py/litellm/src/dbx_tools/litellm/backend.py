@@ -20,7 +20,6 @@ from dbx_tools.model import (
 )
 from dbx_tools.model.models import model_search_query
 
-from .aliases import ModelAliasIndex, build_model_alias_index
 from .credentials import Credentials, DatabricksCredentials
 from .models import register_streaming_support
 
@@ -30,10 +29,9 @@ DEFAULT_MODEL_CACHE_TTL_SECONDS = 5 * 60
 
 @dataclass(frozen=True)
 class ModelCatalogue:
-    """One endpoint snapshot with aliases derived from that snapshot."""
+    """One endpoint snapshot."""
 
     endpoints: tuple[ServingEndpointSummary, ...]
-    aliases: ModelAliasIndex
 
 
 def require_profile(
@@ -151,12 +149,9 @@ class DatabricksLiteLLMBackend:
 
     @cachedmethod(lambda self: self._catalogue_cache)
     def catalogue(self) -> ModelCatalogue:
-        """Return one TTL-cached endpoint and alias snapshot."""
+        """Return one TTL-cached endpoint snapshot."""
         endpoints = tuple(list_serving_endpoints(self.client))
-        return ModelCatalogue(
-            endpoints=endpoints,
-            aliases=build_model_alias_index(endpoint.name for endpoint in endpoints),
-        )
+        return ModelCatalogue(endpoints=endpoints)
 
     def refresh_catalogue(self) -> ModelCatalogue:
         """Invalidate the endpoint snapshot and load it again."""
@@ -168,16 +163,11 @@ class DatabricksLiteLLMBackend:
         catalogue = self.refresh_catalogue() if force else self.catalogue()
         return list(catalogue.endpoints)
 
-    def model_aliases(self, *, force: bool = False) -> ModelAliasIndex:
-        """Return aliases derived from the same TTL-cached endpoint catalogue."""
-        catalogue = self.refresh_catalogue() if force else self.catalogue()
-        return catalogue.aliases
-
     def resolve(self, requested: str, *, requires_tools: bool = False) -> str:
         """Resolve a loose model name, refreshing the live catalogue on a miss."""
         catalogue = self.catalogue()
         models = list(catalogue.endpoints)
-        query = _resolution_query(requested, models, catalogue.aliases)
+        query = _resolution_query(requested, models)
         resolved = rank_model_id(
             models,
             query,
@@ -187,7 +177,7 @@ class DatabricksLiteLLMBackend:
         if not resolved.matched:
             catalogue = self.refresh_catalogue()
             models = list(catalogue.endpoints)
-            query = _resolution_query(requested, models, catalogue.aliases)
+            query = _resolution_query(requested, models)
             resolved = rank_model_id(
                 models,
                 query,
@@ -219,11 +209,7 @@ class DatabricksLiteLLMBackend:
 def _resolution_query(
     requested: str,
     models: list[ServingEndpointSummary],
-    aliases: ModelAliasIndex,
 ) -> str:
-    alias_query = aliases.search_for(requested)
-    if alias_query is not None:
-        return alias_query
     stripped = requested.strip()
     if any(endpoint.name == stripped for endpoint in models):
         return stripped

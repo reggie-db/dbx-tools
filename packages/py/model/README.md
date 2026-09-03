@@ -20,6 +20,8 @@ Key features:
 
 - stable Pydantic endpoint, profile, query, and ranked-result models;
 - live endpoint listing through a structural `WorkspaceClient` protocol;
+- canonical first-party service model names exposed through a typed
+  `serviceNames` map on library endpoint results;
 - score-driven model classification with family fallbacks;
 - reasoning-effort levels inferred from Databricks served-entity identity, with
   endpoint-family fallback for summaries that omit it;
@@ -41,6 +43,7 @@ from dbx_tools.model import ModelClass, list_serving_endpoints, resolve_model
 endpoints = list_serving_endpoints(WorkspaceClient())
 selection = resolve_model(endpoints, model_class=ModelClass.CHAT_BALANCED)
 print(selection.model_id)
+print(endpoints[0].service_names)
 print(
     next(
         endpoint.reasoning_efforts for endpoint in endpoints if endpoint.name == selection.model_id
@@ -63,6 +66,11 @@ assert parsed is not None
 assert parsed.family == "qwen"
 assert parsed.version == (3, 5)
 ```
+
+Known first-party identities are keyed by `ModelService`, such as `openai`,
+`anthropic`, `google`, `xai`, `deepseek`, `moonshot`, `alibaba`, `zhipu`, and
+`meta`. A model without a canonical name on one of those services has no entry;
+the package does not invent names for third-party hosts.
 
 ## Relationship to the Databricks SDK
 

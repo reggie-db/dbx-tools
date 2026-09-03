@@ -280,19 +280,13 @@ Primary package areas:
   precedence. A
   Databricks App with `DATABRICKS_HOST` uses ambient service-principal
   authentication and does not require or synthesize a profile;
-  adds live endpoint discovery, fuzzy model resolution, plain standard model
-  aliases, and tool-capability filtering; then delegates to LiteLLM's built-in
-  Databricks provider. LiteLLM-only aliases are generated lazily from the live
-  endpoint catalogue, converted back to provider-neutral terms before fuzzy
-  matching, and refreshed atomically with the catalogue by one five-minute TTL
-  cache decorator. Suppress ambiguous aliases instead of choosing one endpoint
-  by list order. `/v1/models` keeps exact ids in the OpenAI-standard `data`
-  envelope plus the Codex `models` extension. `/alias/v1/models` returns the
-  same one-entry-per-endpoint list with an unqualified alias substituted when one
-  exists; every other `/alias/v1/*` request is internally routed to `/v1/*`, so
-  `/alias/v1` works as an alternate OpenAI base URL. `dbx-litellm models` reads
-  that same cached catalogue and emits complete normalized endpoint records,
-  including derived capabilities, with no alias projection. Keep authentication,
+  adds live endpoint discovery, fuzzy model resolution, and tool-capability
+  filtering; then delegates to LiteLLM's built-in Databricks provider.
+  `/v1/models` keeps exact ids in the OpenAI-standard `data` envelope plus the
+  Codex `models` extension. The Python model package enriches library endpoint
+  lookups with a `serviceNames` map keyed by its well-known first-party service
+  enum. LiteLLM does not expose that field, an alternate alias route, or a
+  separate model-list CLI command. Keep authentication,
   transport, parameter mapping, streaming, retries, embeddings, and
   Chat↔Responses conversion in LiteLLM. Compatibility guards may repair only
   documented Databricks serving constraints: assistant text prefill, the JSON

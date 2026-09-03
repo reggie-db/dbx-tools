@@ -9,6 +9,7 @@ from urllib.request import Request
 import pytest
 from dbx_tools.model import (
     ModelClass,
+    ModelService,
     ReasoningEffort,
     ServingEndpointSummary,
     auth_headers,
@@ -108,9 +109,13 @@ def test_list_serving_endpoints_returns_stable_models() -> None:
         ReasoningEffort.XHIGH,
         ReasoningEffort.MAX,
     )
+    assert endpoints[0].service_names == {
+        ModelService.ANTHROPIC: "claude-sonnet-4-6"
+    }
     assert endpoints[1].model_class == ModelClass.CHAT_FAST
     custom = next(endpoint for endpoint in endpoints if endpoint.name == "reasoning-primary")
     assert custom.reasoning_efforts[-1] == ReasoningEffort.MAX
+    assert custom.service_names == {ModelService.OPENAI: "gpt-5.6-sol"}
 
 
 def test_reasoning_efforts_are_inferred_from_family_and_served_entity() -> None:

@@ -25,6 +25,18 @@ class ModelFamily(str, Enum):
     QWEN = "qwen"
 
 
+class ModelService(str, Enum):
+    ALIBABA = "alibaba"
+    ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
+    GOOGLE = "google"
+    META = "meta"
+    MOONSHOT = "moonshot"
+    OPENAI = "openai"
+    XAI = "xai"
+    ZHIPU = "zhipu"
+
+
 MODEL_FAMILIES = frozenset(ModelFamily)
 VERSIONED_MODEL_FAMILIES = frozenset(
     family
@@ -86,6 +98,7 @@ class ServingEndpointSummary(WireModel):
     model_class: ModelClass | None = Field(default=None, alias="class")
     dimension: int | None = None
     reasoning_efforts: tuple[ReasoningEffort, ...] = Field(default=(), alias="reasoningEfforts")
+    service_names: dict[ModelService, str] = Field(default_factory=dict, alias="serviceNames")
 
 
 class ModelQuery(WireModel):
@@ -159,6 +172,19 @@ def model_search_query(value: str | ParsedModelName) -> str | None:
     )
 
 
+def model_service_names(value: str | ParsedModelName) -> dict[ModelService, str]:
+    """Return canonical first-party service names for a model identity."""
+    parsed = value if isinstance(value, ParsedModelName) else parse_model_name(value)
+    if parsed is None:
+        return {}
+    service_name = _SERVICE_NAMES_BY_FAMILY.get(parsed.family)
+    if service_name is None:
+        return {}
+    service, name_for = service_name
+    name = name_for(parsed)
+    return {service: name} if name is not None else {}
+
+
 def version_tuple(name: str) -> list[int]:
     """Return sortable major, minor, and patch components from a model name."""
     match = re.search(r"\d", name)
@@ -167,6 +193,65 @@ def version_tuple(name: str) -> list[int]:
     parts = re.split(r"[^a-z0-9]+", name[match.start() :], flags=re.IGNORECASE)
     numbers = _numeric_prefixes(parts)
     return (numbers + [0, 0, 0])[:3]
+
+
+def _dotted_name(prefix: str, parsed: ParsedModelName) -> str | None:
+    if not parsed.version and not parsed.model:
+        return None
+    version = ".".join(str(part) for part in parsed.version)
+    return _joined_name(prefix, version, *parsed.model)
+
+
+def _claude_name(parsed: ParsedModelName) -> str | None:
+    return _joined_name(
+        "claude",
+        *parsed.model[:1],
+        *(str(part) for part in parsed.version),
+        *parsed.model[1:],
+    )
+
+
+def _gpt_name(parsed: ParsedModelName) -> str | None:
+    if parsed.model[:1] == ("oss",):
+        return None
+    return _dotted_name("gpt", parsed)
+
+
+def _prefixed_version_name(prefix: str, marker: str, parsed: ParsedModelName) -> str | None:
+    version = f"{marker}{parsed.version[0]}" if parsed.version else ""
+    return _joined_name(prefix, version, *parsed.model)
+
+
+def _qwen_name(parsed: ParsedModelName) -> str | None:
+    if not parsed.version:
+        return None
+    suffix = f"-{'-'.join(parsed.model)}" if parsed.model else ""
+    return f"qwen{'.'.join(str(part) for part in parsed.version)}{suffix}"
+
+
+def _joined_name(*parts: str) -> str | None:
+    value = "-".join(part for part in parts if part)
+    return value or None
+
+
+_SERVICE_NAMES_BY_FAMILY = {
+    ModelFamily.CLAUDE: (ModelService.ANTHROPIC, _claude_name),
+    ModelFamily.DEEPSEEK: (
+        ModelService.DEEPSEEK,
+        lambda parsed: _prefixed_version_name("deepseek", "v", parsed),
+    ),
+    ModelFamily.GEMINI: (ModelService.GOOGLE, lambda parsed: _dotted_name("gemini", parsed)),
+    ModelFamily.GEMMA: (ModelService.GOOGLE, lambda parsed: _dotted_name("gemma", parsed)),
+    ModelFamily.GLM: (ModelService.ZHIPU, lambda parsed: _dotted_name("glm", parsed)),
+    ModelFamily.GPT: (ModelService.OPENAI, _gpt_name),
+    ModelFamily.GROK: (ModelService.XAI, lambda parsed: _dotted_name("grok", parsed)),
+    ModelFamily.KIMI: (
+        ModelService.MOONSHOT,
+        lambda parsed: _prefixed_version_name("kimi", "k", parsed),
+    ),
+    ModelFamily.LLAMA: (ModelService.META, lambda parsed: _dotted_name("llama", parsed)),
+    ModelFamily.QWEN: (ModelService.ALIBABA, _qwen_name),
+}
 
 
 def _find_model_family(

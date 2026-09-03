@@ -23,14 +23,10 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
   default; a Databricks App uses its ambient service-principal environment
   without a profile;
 - discovers serving endpoints from the selected workspace and caches the
-  catalogue plus generated aliases for five minutes per process;
-- exposes exact endpoint ids at `/v1` and one-to-one standard aliases such as
-  `gpt-5.6-sol`, `claude-sonnet-4-6`, and `qwen3.5-122b-a10b` through the
-  alternate `/alias/v1` base URL;
+  catalogue for five minutes per process;
+- exposes exact endpoint ids at `/v1`;
 - resolves exact or fuzzy model names with `dbx-tools-model`, refreshing the
-  live catalogue once after a miss; alias reverse lookup produces
-  provider-neutral terms for the same fuzzy ranker rather than selecting an
-  endpoint from a static translation table;
+  live catalogue once after a miss;
 - restricts tool-bearing requests to endpoints classified as tool-capable;
 - routes Responses-only models through LiteLLM's
   `databricks/responses/...` bridge;
@@ -87,8 +83,7 @@ Completions and embeddings, but does not expose a native Responses hook:
    `DATABRICKS_CONFIG_PROFILE` before LiteLLM starts.
 2. **Discover and resolve the model.** The first model-dependent request lazily
    calls the selected workspace's Serving Endpoints API. An exact endpoint name,
-   a standard alias such as `claude-sonnet-4-6`, or a loose name such as
-   `claude sonnet` is ranked against that live catalogue. A request containing
+   or a loose name such as `claude sonnet` is ranked against that live catalogue. A request containing
    function tools can match only an endpoint classified as tool-capable.
 3. **Choose the serving surface.** Chat-compatible endpoints stay on Chat
    Completions. Responses-only endpoints, including newer GPT endpoints that
@@ -153,12 +148,8 @@ Models are pulled from the selected workspace's live Serving Endpoints API, not
 from a static list in this package:
 
 - discovery is lazy on the first request that needs model resolution;
-- the successful endpoint catalogue and its alias index are retained in memory
-  for five minutes;
+- the successful endpoint catalogue is retained in memory for five minutes;
 - exact endpoint names and fuzzy family names are ranked by `dbx-tools-model`;
-- standard aliases are parsed by `dbx-tools-model`, converted back to
-  provider-neutral family/version/model terms, and resolved by the same fuzzy
-  ranking path;
 - a miss forces one fresh endpoint listing and retries resolution once;
 - tool-bearing requests filter out endpoints not classified as tool-capable;
 - resolving a model also registers its native streaming capability with
@@ -167,31 +158,13 @@ from a static list in this package:
 
 `GET /v1/models` lazily reads the same five-minute catalogue cache used by
 requests and publishes each exact endpoint as `dbx/<endpoint>`.
-`GET /alias/v1/models` returns a one-to-one projection of that list, replacing
-an exact id with its generated unqualified alias when one exists and retaining the
-exact id otherwise. Ambiguous aliases are omitted from the index, so those
-endpoints remain exact in the alias view. Neither response adds an alias marker.
-Both preserve the OpenAI-standard `data` list and the additional Codex `models`
-envelope.
+The response preserves the OpenAI-standard `data` list and the additional Codex
+`models` envelope. Library-only service names from `dbx-tools-model` are not
+projected into this HTTP response.
 
 The packaged proxy keeps exact workspace endpoint ids in the `dbx/*` namespace
 so callers can distinguish this discovery-and-routing layer from LiteLLM's
-native `databricks/*` provider. Use `http://127.0.0.1:4000/alias/v1` as the
-OpenAI base URL when clients should discover aliases. Every non-model request
-under `/alias/v1/*` is internally routed to the matching `/v1/*` endpoint.
-Generated aliases are unqualified and resolve through the same fuzzy ranker.
-Other loose names remain accepted.
-
-Inspect the same cached catalogue without starting the proxy:
-
-```bash
-uv run dbx-litellm models --profile my-workspace
-```
-
-The command emits complete normalized endpoint records from the cached
-catalogue, sorted by endpoint name. Each record includes the task, state,
-display name, profile, class, reasoning efforts, tool-support signal, and
-derived capabilities when available. Alias projection is only an HTTP concern.
+native `databricks/*` provider. Other loose names remain accepted.
 
 ## What is cached
 
@@ -200,7 +173,7 @@ serve different purposes:
 
 | Cache                        | Storage and scope                                                                                 | Filled when                                                   | Refresh or expiry                                                                                                      | Purpose                                                                                                    |
 | ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Endpoint catalogue + aliases | Memory, one proxy process                                                                         | First resolution or `/v1/models`                              | Five-minute TTL; forced once after a resolution miss; aliases refresh atomically with endpoints                        | Avoid listing Serving Endpoints and rebuilding alias maps on every request                                 |
+| Endpoint catalogue           | Memory, one proxy process                                                                         | First resolution or `/v1/models`                              | Five-minute TTL; forced once after a resolution miss                                                                    | Avoid listing Serving Endpoints on every request                                                            |
 | Databricks bearer token      | Memory, one proxy process/profile                                                                 | First delegated request needing credentials                   | OAuth expiry minus 10 minutes; 30-minute fallback when no expiry is exposed; check-lock-check makes one caller refresh | Avoid a new SDK client and token mint per request                                                          |
 | Reasoning context and scores | `diskcache`, default `~/.cache/dbx-tools/litellm`, shared by local processes using that directory | Only for `reasoning_effort: auto` or `reasoning.effort: auto` | TTL, default 86,400 seconds; bounded to 64 MiB, eight turns, and 6,000 sampled characters                              | Reuse follow-up context and avoid classifying the same sample again                                        |
 | Provider prompt cache        | Databricks/model-provider managed                                                                 | Repeated prompt prefixes                                      | Provider-defined lifetime and eviction                                                                                 | Reduce billed/counted repeated input tokens; GPT is automatic, Claude uses explicit breakpoints added here |
@@ -221,11 +194,10 @@ SDK owns authentication; this package caches its bearer result and passes it to
 LiteLLM explicitly so the provider does not construct a client per request.
 
 This package supplies only the workspace-specific layer LiteLLM does not have:
-deterministic profile selection, live endpoint discovery, standard aliases,
-fuzzy names, and capability-aware routing. Shared family/version/model parsing
-lives in `dbx-tools-model`; LiteLLM owns alias formatting and route projection.
-Request
-messages and content blocks are rewritten only
+deterministic profile selection, live endpoint discovery, fuzzy names, and
+capability-aware routing. Shared family/version/model parsing and canonical
+first-party service names live in `dbx-tools-model`. Request messages and
+content blocks are rewritten only
 to satisfy concrete Databricks serving constraints — the ordered pipeline under
 [Request processing](#request-processing) (trailing-assistant repair, JSON
 nudge, Claude prompt-cache marking) and the image payload guard — or when the
@@ -493,7 +465,6 @@ Then start the proxy and exercise live discovery before inference:
 uv run dbx-litellm --port 4000
 curl -fsS http://127.0.0.1:4000/health/readiness
 curl -fsS http://127.0.0.1:4000/v1/models
-curl -fsS http://127.0.0.1:4000/alias/v1/models
 ```
 
 Release validation also covers non-streaming Chat, streaming Chat, Responses,
@@ -505,7 +476,6 @@ chat endpoint.
 
 - `backend` - profile-resolved workspace client, endpoint cache, and model
   resolution;
-- `aliases` - LiteLLM alias generation and collision-safe fuzzy-search lookup;
 - `credentials` - process-wide Databricks credential caching and refresh;
 - `config_provider` - generated LiteLLM proxy configuration;
 - `models` — Responses-only endpoint routing policy;

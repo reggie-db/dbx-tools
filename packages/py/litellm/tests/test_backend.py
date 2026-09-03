@@ -30,7 +30,7 @@ def _backend(
     return backend
 
 
-def test_catalogue_and_aliases_share_the_model_cache_ttl(
+def test_catalogue_uses_the_model_cache_ttl(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     now = 100.0
@@ -51,22 +51,19 @@ def test_catalogue_and_aliases_share_the_model_cache_ttl(
     catalogue = backend.catalogue()
 
     assert [model.name for model in catalogue.endpoints] == ["databricks-gpt-5-6-sol"]
-    assert catalogue.aliases.search_for("gpt-5.6-sol") == "gpt 5 6 sol"
     assert calls == 1
 
     now += DEFAULT_MODEL_CACHE_TTL_SECONDS - 1
-    assert backend.model_aliases().search_for("gpt-5.6-sol") == "gpt 5 6 sol"
+    assert backend.models()[0].name == "databricks-gpt-5-6-sol"
     assert calls == 1
 
     now += 2
     catalogue = backend.catalogue()
     assert [model.name for model in catalogue.endpoints] == ["databricks-gpt-5-6-terra"]
-    assert catalogue.aliases.search_for("gpt-5.6-sol") is None
-    assert catalogue.aliases.search_for("gpt-5.6-terra") == "gpt 5 6 terra"
     assert calls == 2
 
 
-def test_resolve_prefers_provider_alias_before_fuzzy_matching(
+def test_resolve_uses_provider_neutral_model_parsing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(

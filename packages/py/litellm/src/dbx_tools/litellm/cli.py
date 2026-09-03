@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from collections.abc import Sequence
@@ -11,11 +10,9 @@ from importlib import resources
 from typing import Annotated
 
 from cyclopts import App, Parameter
-from dbx_tools.model import endpoint_capabilities
 
 from .backend import (
     DATABRICKS_PROFILE_ENV,
-    DatabricksLiteLLMBackend,
     require_profile,
 )
 
@@ -63,34 +60,9 @@ _APP = App(
 )
 
 
-@_APP.command
-@dataclass
-class Models(ProfileOptions):
-    """List complete normalized records from the cached model catalogue."""
-
-    def __call__(self) -> None:
-        """Load the catalogue once and write every retained model field."""
-        profile = require_profile(self.profile)
-        catalogue = DatabricksLiteLLMBackend(profile=profile).catalogue()
-        models = sorted(
-            (
-                {
-                    **endpoint.as_dict(),
-                    "capabilities": endpoint_capabilities(endpoint).as_dict(),
-                }
-                for endpoint in catalogue.endpoints
-            ),
-            key=lambda model: str(model["name"]),
-        )
-        _write_output(models)
-
-
 def main(argv: Sequence[str] | None = None) -> None:
     """Start LiteLLM with a resolved Databricks profile and default config."""
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if arguments[:1] == ["models"]:
-        _run_command(arguments)
-        return
     options_tokens, proxy_args = _split_options(arguments)
     options = _parse_options(options_tokens)
     if options is None:
@@ -99,19 +71,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     options()
 
 
-def _run_command(arguments: list[str]) -> None:
-    options = _parse_options(arguments)
-    if options is not None:
-        options()
-
-
 def _parse_options(arguments: list[str]) -> object | None:
     command, bound, _ = _APP.parse_args(arguments)
     return command(*bound.args, **bound.kwargs)
-
-
-def _write_output(values: list[object]) -> None:
-    sys.stdout.write(f"{json.dumps(values, indent=2)}\n")
 
 
 def _split_options(arguments: list[str]) -> tuple[list[str], list[str]]:

@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import json
 import subprocess
 from collections.abc import Sequence
-from types import SimpleNamespace
 
 import dbx_tools.litellm.backend as backend_module
 import dbx_tools.litellm.cli as cli_module
 import pytest
-from dbx_tools.litellm.aliases import build_model_alias_index
-from dbx_tools.litellm.backend import DATABRICKS_PROFILE_ENV, ModelCatalogue, require_profile
-from dbx_tools.model import ModelClass, ReasoningEffort, ServingEndpointSummary
+from dbx_tools.litellm.backend import DATABRICKS_PROFILE_ENV, require_profile
 
 
 def test_explicit_profile_wins_without_spawning_cli(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -173,64 +169,3 @@ def test_cli_allows_profile_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert proxy_arguments[:2] == ["--port", "4000"]
     assert backend_module.os.environ[DATABRICKS_PROFILE_ENV] == "other"
-
-
-@pytest.fixture
-def models_cli(monkeypatch: pytest.MonkeyPatch) -> ModelCatalogue:
-    endpoints = (
-        ServingEndpointSummary(
-            name="databricks-qwen35-122b-a10b",
-            displayName="Qwen 3.5",
-            task="llm/v1/chat",
-            state="READY",
-            supportsTools=True,
-            model_class=ModelClass.CHAT_BALANCED,
-            reasoningEfforts=(ReasoningEffort.HIGH,),
-        ),
-        ServingEndpointSummary(
-            name="databricks-gpt-5-6-sol",
-            displayName="GPT 5.6 Sol",
-            task="llm/v1/chat",
-            state="READY",
-            supportsTools=True,
-            model_class=ModelClass.CHAT_THINKING,
-            reasoningEfforts=(ReasoningEffort.XHIGH,),
-        ),
-    )
-    catalogue = ModelCatalogue(
-        endpoints=endpoints,
-        aliases=build_model_alias_index(endpoint.name for endpoint in endpoints),
-    )
-    monkeypatch.setattr(cli_module, "require_profile", lambda profile: profile)
-    monkeypatch.setattr(
-        cli_module,
-        "DatabricksLiteLLMBackend",
-        lambda **_: SimpleNamespace(catalogue=lambda: catalogue),
-    )
-    return catalogue
-
-
-def test_models_cli_returns_complete_normalized_records(
-    models_cli: ModelCatalogue,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    cli_module.main(["models", "--profile", "test"])
-
-    payload = json.loads(capsys.readouterr().out)
-    assert [model["name"] for model in payload] == [
-        "databricks-gpt-5-6-sol",
-        "databricks-qwen35-122b-a10b",
-    ]
-    assert payload[0]["displayName"] == "GPT 5.6 Sol"
-    assert payload[0]["task"] == "llm/v1/chat"
-    assert payload[0]["state"] == "READY"
-    assert payload[0]["supportsTools"] is True
-    assert payload[0]["class"] == "chat-thinking"
-    assert payload[0]["reasoningEfforts"] == ["xhigh"]
-    assert payload[0]["capabilities"] == {
-        "chat": True,
-        "embedding": False,
-        "tools": True,
-        "reasoningEfforts": ["xhigh"],
-    }
-    assert all("alias" not in model and "aliases" not in model for model in payload)
