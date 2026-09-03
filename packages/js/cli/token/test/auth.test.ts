@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decodeProtectedHeader } from "jose";
+import { decodeJwt, decodeProtectedHeader } from "jose";
 
 import {
   AuthorizationError,
@@ -52,7 +52,7 @@ describe("client authorization", () => {
     assert.equal(clientCredentialMode("not-a-token"), "password");
   });
 
-  it("represents an empty JWT scope claim as no explicit scope permission", async () => {
+  it("treats an empty JWT scope list as unrestricted", async () => {
     const secret = "test-signing-secret-at-least-thirty-two-characters";
     const token = await createClientToken({
       secret,
@@ -62,13 +62,14 @@ describe("client authorization", () => {
       ttlSeconds: 60,
     });
 
+    assert.equal(decodeJwt(token).scopes, undefined);
     assert.deepEqual(
       await authorizeClient({
         mode: "jwt",
         authorization: `Bearer ${token}`,
         secret,
       }),
-      { client: "default-scope-client", providers: ["google"], scopes: [] },
+      { client: "default-scope-client", providers: ["google"] },
     );
   });
 });

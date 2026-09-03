@@ -10,7 +10,7 @@
 
 import { resolve } from "node:path";
 import { config } from "@dbx-tools/core";
-import { object, string } from "@dbx-tools/shared-core";
+import { object } from "@dbx-tools/shared-core";
 import envPaths from "env-paths";
 
 import {
@@ -100,7 +100,7 @@ export interface ResolvedTokenConfig
  */
 export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenConfig {
   const paths = envPaths("dbx-tools", { suffix: "" });
-  const configuredProviders = config.list(input.providers, "PROVIDER", undefined, TOKEN_CONFIG);
+  const configuredProviders = config.list(input.providers, "PROVIDERS", undefined, TOKEN_CONFIG);
   const providers = distinct(
     (configuredProviders.length > 0 ? configuredProviders : TOKEN_PROVIDERS).map((provider) =>
       oneOf(provider, TOKEN_PROVIDERS, "token provider"),
@@ -116,8 +116,7 @@ export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenC
     config.list(input.allowedScopes, "ALLOWED_SCOPES", undefined, TOKEN_CONFIG),
   );
   const clientJwtTtlSeconds = config.string(undefined, "CLIENT_JWT_TTL_SECONDS", TOKEN_CONFIG);
-  const binds = string.parseList(input.bind);
-  const configuredBinds = config.list(undefined, "BIND", undefined, TOKEN_CONFIG);
+  const binds = config.list(input.bind, "BINDS", undefined, TOKEN_CONFIG);
   const bindDockerConfigured =
     input.bindDocker === false
       ? false
@@ -134,9 +133,7 @@ export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenC
         ? undefined
         : bindDockerConfigured;
   return {
-    bind: distinct(
-      binds.length > 0 ? binds : configuredBinds.length > 0 ? configuredBinds : DEFAULT_BIND,
-    ),
+    bind: distinct(binds.length > 0 ? binds : DEFAULT_BIND),
     ...(bindDockerValue
       ? {
           bindDocker: oneOf(
@@ -151,12 +148,7 @@ export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenC
     ...object.optional("gcloudPath", config.string(input.gcloudPath, "GCLOUD", TOKEN_CONFIG)),
     providers,
     scopes: scopes.length > 0 ? scopes : [...DEFAULT_GOOGLE_SCOPES],
-    allowedScopes:
-      allowedScopes.length > 0
-        ? allowedScopes
-        : scopes.length > 0
-          ? scopes
-          : [...DEFAULT_GOOGLE_SCOPES],
+    allowedScopes,
     refreshSkewSeconds: config.positiveInt(
       input.refreshSkewSeconds,
       "REFRESH_SKEW_SECONDS",

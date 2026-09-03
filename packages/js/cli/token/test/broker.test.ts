@@ -68,6 +68,31 @@ describe("TokenBroker", () => {
     broker.close();
   });
 
+  it("allows every scope when no broker allow-list is configured", async () => {
+    const provider: TokenProvider = {
+      name: "google",
+      acquire: async (scopes) => ({
+        accessToken: scopes.join("|"),
+        tokenType: "Bearer",
+        expiresAt: Date.now() + 60 * 60 * 1000,
+        scopes: [...scopes],
+      }),
+    };
+    const broker = new TokenBroker({
+      providers: [provider],
+      defaultProvider: "google",
+      defaultScopes: [],
+      allowedScopes: [],
+      refreshSkewSeconds: 300,
+    });
+
+    assert.equal(
+      (await broker.accessToken({ scopes: ["scope:admin"] })).accessToken,
+      "scope:admin",
+    );
+    broker.close();
+  });
+
   it("keeps the previous token when proactive refresh fails", async () => {
     let callback: (() => void) | undefined;
     let acquisitions = 0;

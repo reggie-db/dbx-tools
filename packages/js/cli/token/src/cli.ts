@@ -36,9 +36,7 @@ type CommonOptions = Omit<
 > & {
   provider?: string[];
   scope?: string[];
-  scopes?: string;
   allowedScope?: string[];
-  allowedScopes?: string;
   bindDocker?: string | boolean;
   allowedHost?: string[];
   clientJwtTtlSeconds?: string | number;
@@ -58,7 +56,6 @@ function addCommonOptions(
 ): Command {
   addProviderOptions(command)
     .option("--allowed-scope <scope>", "scope the broker may issue (repeatable)", collect)
-    .option("--allowed-scopes <scopes>", "allowed scopes (comma or whitespace separated)")
     .option("--port <port>", "broker port")
     .option("--allowed-host <host>", "allowed HTTP Host header (repeatable)", collect)
     .option("--refresh-skew-seconds <seconds>", "refresh before access-token expiry")
@@ -83,8 +80,7 @@ function addCommonOptions(
 function addProviderOptions(command: Command): Command {
   return command
     .option("--provider <name>", "enable a token provider (repeatable)", collect)
-    .option("--scope <scope>", "provider scope (repeatable)", collect)
-    .option("--scopes <scopes>", "provider scopes (comma or whitespace separated)");
+    .option("--scope <scope>", "provider scope (repeatable)", collect);
 }
 
 function addCredentialOptions(command: Command, jwtOnly = false): Command {
@@ -311,8 +307,8 @@ function resolveOptions(options: CommonOptions): ResolvedTokenConfig {
     clientTokenTtlSeconds: clientJwtTtlSeconds,
     gcloudPath: gcloud,
     providers: options.provider,
-    scopes: [...(options.scope ?? []), ...string.parseList(options.scopes)],
-    allowedScopes: [...(options.allowedScope ?? []), ...string.parseList(options.allowedScopes)],
+    scopes: options.scope,
+    allowedScopes: options.allowedScope,
     allowedHosts: options.allowedHost,
     bindDocker: normalizeBindDocker(options.bindDocker),
   };

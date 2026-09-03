@@ -92,6 +92,7 @@ export class TokenBroker {
   }
 
   private assertAllowedScopes(scopes: readonly string[]): void {
+    if (this.options.allowedScopes.length === 0) return;
     const allowed = new Set(this.options.allowedScopes);
     const denied = scopes.filter((scope) => !allowed.has(scope));
     if (denied.length > 0) {

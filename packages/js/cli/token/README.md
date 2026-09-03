@@ -58,9 +58,11 @@ dbx token serve \
 Clients may omit scopes. The default empty scope set calls
 `gcloud auth application-default print-access-token` without `--scopes`, using
 the ADC grant as configured. Explicit scopes are canonicalized, cached
-separately, and rejected unless they are within both the server policy and the
-client JWT grant. `--scopes` accepts a comma- or whitespace-separated list;
-`--scope` remains repeatable.
+separately, and checked against any explicit server policy and client JWT grant.
+An omitted `--allowed-scope` list and an omitted client JWT scope list both
+allow every scope. Repeat singular list flags such as `--scope`; the matching
+plural environment variable, such as `TOKEN_BROKER_SCOPES`, accepts a comma- or
+whitespace-separated list.
 
 ## Install the user service
 
@@ -186,8 +188,8 @@ compatibility name.
 
 Primary variables:
 
-- `TOKEN_BROKER_PROVIDER`;
-- `TOKEN_BROKER_BIND`;
+- `TOKEN_BROKER_PROVIDERS`;
+- `TOKEN_BROKER_BINDS`;
 - `TOKEN_BROKER_BIND_DOCKER`;
 - `TOKEN_BROKER_PORT`;
 - `TOKEN_BROKER_SERVER_URL`;

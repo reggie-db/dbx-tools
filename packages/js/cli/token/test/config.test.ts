@@ -4,6 +4,16 @@ import { afterEach, describe, it } from "node:test";
 import { canonicalScopes, resolveTokenConfig, TOKEN_PROVIDERS } from "../src/config.ts";
 
 const ENV_KEYS = [
+  "DBX_TOOLS_TOKEN_BROKER_PROVIDERS",
+  "TOKEN_BROKER_PROVIDERS",
+  "DBX_TOOLS_TOKEN_BROKER_SCOPES",
+  "TOKEN_BROKER_SCOPES",
+  "DBX_TOOLS_TOKEN_BROKER_ALLOWED_SCOPES",
+  "TOKEN_BROKER_ALLOWED_SCOPES",
+  "DBX_TOOLS_TOKEN_BROKER_BINDS",
+  "TOKEN_BROKER_BINDS",
+  "DBX_TOOLS_TOKEN_BROKER_ALLOWED_HOSTS",
+  "TOKEN_BROKER_ALLOWED_HOSTS",
   "DBX_TOOLS_TOKEN_BROKER_PORT",
   "TOKEN_BROKER_PORT",
   "DBX_TOOLS_TOKEN_BROKER_AUTH",
@@ -42,7 +52,7 @@ describe("token broker config", () => {
       "/opt/homebrew/bin/gcloud",
     );
     assert.deepEqual(resolved.scopes, ["scope:a", "scope:b"]);
-    assert.deepEqual(resolved.allowedScopes, ["scope:a", "scope:b"]);
+    assert.deepEqual(resolved.allowedScopes, []);
   });
 
   it("resolves scoped env before capability env and CLI before both", () => {
@@ -50,10 +60,21 @@ describe("token broker config", () => {
     process.env.DBX_TOOLS_TOKEN_BROKER_PORT = "4200";
     process.env.DBX_TOOLS_TOKEN_BROKER_AUTH = "jwt";
     process.env.DBX_TOOLS_TOKEN_BROKER_CLIENT_JWT_TTL_SECONDS = "120";
+    process.env.DBX_TOOLS_TOKEN_BROKER_PROVIDERS = "google";
+    process.env.DBX_TOOLS_TOKEN_BROKER_SCOPES = "scope:b,scope:a";
+    process.env.DBX_TOOLS_TOKEN_BROKER_ALLOWED_SCOPES = "scope:a,scope:b";
+    process.env.DBX_TOOLS_TOKEN_BROKER_BINDS = "127.0.0.1,::1";
+    process.env.DBX_TOOLS_TOKEN_BROKER_ALLOWED_HOSTS = "broker.internal,broker.local";
 
-    assert.equal(resolveTokenConfig().port, 4200);
-    assert.equal(resolveTokenConfig().auth, "jwt");
-    assert.equal(resolveTokenConfig().clientTokenTtlSeconds, 120);
+    const resolved = resolveTokenConfig();
+    assert.equal(resolved.port, 4200);
+    assert.equal(resolved.auth, "jwt");
+    assert.equal(resolved.clientTokenTtlSeconds, 120);
+    assert.deepEqual(resolved.providers, ["google"]);
+    assert.deepEqual(resolved.scopes, ["scope:a", "scope:b"]);
+    assert.deepEqual(resolved.allowedScopes, ["scope:a", "scope:b"]);
+    assert.deepEqual(resolved.bind, ["127.0.0.1", "::1"]);
+    assert.ok(resolved.allowedHosts.includes("broker.internal"));
     assert.equal(resolveTokenConfig({ port: 4300, auth: "password" }).port, 4300);
     assert.equal(resolveTokenConfig({ port: 4300, auth: "password" }).auth, "password");
   });

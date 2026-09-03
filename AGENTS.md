@@ -92,7 +92,10 @@ Primary package areas:
   interface. Native services have a restricted PATH, so service installation
   resolves the current `gcloud` with `Bun.which` (with a system lookup fallback
   when the CLI runs under Node) and records its absolute path in the service
-  command.
+  command. An omitted broker allow-list and an omitted client-JWT scope claim
+  both mean unrestricted; explicit scope lists remain exact allow-lists. List
+  configuration uses singular repeatable CLI flags and plural comma-separated
+  environment variables.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search
@@ -446,6 +449,9 @@ Docs site rules:
 - `.github/workflows/docs.yml` builds and deploys GitHub Pages from generated
   README and API content.
 - Generated files under `.docs-build/` are build artifacts; never commit them.
+- The generated Linkinator command uses bounded concurrency, request timeouts,
+  and error retries. Its default concurrency can exhaust the local static
+  server and report valid generated API routes with synthetic status `0`.
 - If navigation is wrong, update the generator. If prose is wrong, update the
   source README.
 - Content that belongs on GitHub but not on the site goes between

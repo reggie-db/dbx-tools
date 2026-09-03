@@ -40,7 +40,7 @@ describe("authenticated token server", () => {
       secret,
       client: "container-client",
       providers: ["google"],
-      scopes: ["scope:a"],
+      scopes: [],
       ttlSeconds: 60,
     });
     const server = await startTokenServer(broker, config, config.bind);

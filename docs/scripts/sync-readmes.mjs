@@ -413,7 +413,7 @@ function docsPackageJson() {
         dev: "astro dev --host 127.0.0.1",
         build: "astro build",
         "check-links":
-          "linkinator ../dist --recurse --directory-listing --clean-urls --skip 'dbx\\.tools' --status-code '429:warn'",
+          "linkinator ../dist --recurse --directory-listing --clean-urls --concurrency 20 --timeout 10000 --retry-errors --skip 'dbx\\.tools' --status-code '429:warn'",
       },
       dependencies: {
         "@astrojs/starlight": "^0.41.0",

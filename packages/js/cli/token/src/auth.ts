@@ -47,7 +47,7 @@ export async function createClientToken(options: ClientTokenOptions): Promise<st
   const now = Math.floor((options.now?.() ?? Date.now()) / 1000);
   return new SignJWT({
     providers: options.providers,
-    scopes: options.scopes,
+    ...(options.scopes && options.scopes.length > 0 ? { scopes: options.scopes } : {}),
   })
     .setProtectedHeader({
       alg: "HS256",
@@ -116,7 +116,7 @@ export async function authorizeClient(options: AuthorizeOptions): Promise<Client
     return {
       client: subject,
       providers,
-      scopes,
+      ...(scopes.length > 0 ? { scopes } : {}),
     };
   } catch (cause) {
     if (cause instanceof AuthorizationError) throw cause;
