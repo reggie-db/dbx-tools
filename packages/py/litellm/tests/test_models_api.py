@@ -71,13 +71,13 @@ def test_alias_models_view_replaces_each_known_exact_id_once() -> None:
     )
 
     assert [model["id"] for model in augmented["data"]] == [
-        "dbx/gpt-5.6-sol",
-        "dbx/qwen3.5-122b-a10b",
+        "gpt-5.6-sol",
+        "qwen3.5-122b-a10b",
         "dbx/custom-endpoint",
     ]
     assert [model["slug"] for model in augmented["models"]] == [
-        "dbx/gpt-5.6-sol",
-        "dbx/qwen3.5-122b-a10b",
+        "gpt-5.6-sol",
+        "qwen3.5-122b-a10b",
         "dbx/custom-endpoint",
     ]
     assert all("alias" not in model for model in augmented["data"])

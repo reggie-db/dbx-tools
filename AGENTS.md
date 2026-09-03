@@ -288,7 +288,7 @@ Primary package areas:
   cache decorator. Suppress ambiguous aliases instead of choosing one endpoint
   by list order. `/v1/models` keeps exact ids in the OpenAI-standard `data`
   envelope plus the Codex `models` extension. `/alias/v1/models` returns the
-  same one-entry-per-endpoint list with a `dbx/` alias substituted when one
+  same one-entry-per-endpoint list with an unqualified alias substituted when one
   exists; every other `/alias/v1/*` request is internally routed to `/v1/*`, so
   `/alias/v1` works as an alternate OpenAI base URL. `dbx-litellm models` reads
   that same cached catalogue and emits complete normalized endpoint records,

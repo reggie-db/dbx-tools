@@ -25,8 +25,8 @@ uv add "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#
 - discovers serving endpoints from the selected workspace and caches the
   catalogue plus generated aliases for five minutes per process;
 - exposes exact endpoint ids at `/v1` and one-to-one standard aliases such as
-  `dbx/gpt-5.6-sol`, `dbx/claude-sonnet-4-6`, and
-  `dbx/qwen3.5-122b-a10b` through the alternate `/alias/v1` base URL;
+  `gpt-5.6-sol`, `claude-sonnet-4-6`, and `qwen3.5-122b-a10b` through the
+  alternate `/alias/v1` base URL;
 - resolves exact or fuzzy model names with `dbx-tools-model`, refreshing the
   live catalogue once after a miss; alias reverse lookup produces
   provider-neutral terms for the same fuzzy ranker rather than selecting an
@@ -87,7 +87,7 @@ Completions and embeddings, but does not expose a native Responses hook:
    `DATABRICKS_CONFIG_PROFILE` before LiteLLM starts.
 2. **Discover and resolve the model.** The first model-dependent request lazily
    calls the selected workspace's Serving Endpoints API. An exact endpoint name,
-   a standard alias such as `dbx/claude-sonnet-4-6`, or a loose name such as
+   a standard alias such as `claude-sonnet-4-6`, or a loose name such as
    `claude sonnet` is ranked against that live catalogue. A request containing
    function tools can match only an endpoint classified as tool-capable.
 3. **Choose the serving surface.** Chat-compatible endpoints stay on Chat
@@ -168,7 +168,7 @@ from a static list in this package:
 `GET /v1/models` lazily reads the same five-minute catalogue cache used by
 requests and publishes each exact endpoint as `dbx/<endpoint>`.
 `GET /alias/v1/models` returns a one-to-one projection of that list, replacing
-an exact id with its generated `dbx/` alias when one exists and retaining the
+an exact id with its generated unqualified alias when one exists and retaining the
 exact id otherwise. Ambiguous aliases are omitted from the index, so those
 endpoints remain exact in the alias view. Neither response adds an alias marker.
 Both preserve the OpenAI-standard `data` list and the additional Codex `models`
@@ -179,8 +179,8 @@ so callers can distinguish this discovery-and-routing layer from LiteLLM's
 native `databricks/*` provider. Use `http://127.0.0.1:4000/alias/v1` as the
 OpenAI base URL when clients should discover aliases. Every non-model request
 under `/alias/v1/*` is internally routed to the matching `/v1/*` endpoint.
-Generated aliases keep the `dbx/` prefix and resolve through the same fuzzy
-ranker. Other unqualified loose names remain accepted.
+Generated aliases are unqualified and resolve through the same fuzzy ranker.
+Other loose names remain accepted.
 
 Inspect the same cached catalogue without starting the proxy:
 

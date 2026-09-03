@@ -57,7 +57,9 @@
     {
       "id": "dbx/gpt-5.6-sol",
       "object": "model",
+      "created": 1677610602,
       "owned_by": "dbx",
+      "mode": "responses",
       "name": "GPT 5.6 Sol",
       "context_window": 922000,
       "max_input_tokens": 922000
@@ -87,7 +89,9 @@
     {
       "id": "dbx/gpt-5.6-terra",
       "object": "model",
+      "created": 1677610602,
       "owned_by": "dbx",
+      "mode": "responses",
       "name": "GPT 5.6 Terra",
       "context_window": 922000,
       "max_input_tokens": 922000
@@ -195,10 +199,13 @@
     {
       "id": "dbx/gpt-5.4-mini",
       "object": "model",
+      "created": 1677610602,
       "owned_by": "dbx",
+      "mode": "responses",
+      "max_input_tokens": 272000,
+      "max_output_tokens": 128000,
       "name": "GPT 5.4 Mini",
-      "context_window": 272000,
-      "max_input_tokens": 272000
+      "context_window": 272000
     },
     {
       "id": "dbx/gpt-5.4-nano",

@@ -34,9 +34,7 @@ def generate_model_aliases(value: str | ParsedModelName) -> tuple[str, ...]:
     parsed = value if isinstance(value, ParsedModelName) else parse_model_name(value)
     if parsed is None:
         return ()
-    aliases = [
-        f"dbx/{alias}" for generator in ALIAS_GENERATORS if (alias := generator(parsed)) is not None
-    ]
+    aliases = [alias for generator in ALIAS_GENERATORS if (alias := generator(parsed)) is not None]
     return tuple(dict.fromkeys(aliases))
 
 
