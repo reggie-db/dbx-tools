@@ -37,6 +37,10 @@ describe("token broker config", () => {
     assert.equal(clientDefaults.stateDir, defaults.stateDir);
     assert.equal(clientDefaults.serviceName, defaults.serviceName);
     assert.equal(clientDefaults.client, "local-cli");
+    assert.equal(
+      resolveTokenConfig({ gcloudPath: "/opt/homebrew/bin/gcloud" }).gcloudPath,
+      "/opt/homebrew/bin/gcloud",
+    );
     assert.deepEqual(resolved.scopes, ["scope:a", "scope:b"]);
     assert.deepEqual(resolved.allowedScopes, ["scope:a", "scope:b"]);
   });

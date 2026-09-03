@@ -83,15 +83,16 @@ Primary package areas:
   clients with a shared password or a client JWT signed by the broker secret.
   JWT is the default. Foreground `serve` requires an explicit secret;
   `client-jwt` uses that explicit secret or an existing installed-service
-  secret. Native service mode owns the common secret store: installation
+  secret. Its optional client name defaults to `local-cli` and is signed into
+  both the JWT subject and protected header. Native service mode owns the common secret store: installation
   synchronizes a supplied secret or generates one with check-lock-check, and the
   service process holds one fail-fast file lock for its complete lifetime so a
   duplicate cannot start. Docker and Podman gateway binds are discovered
   by default alongside `127.0.0.1`; the broker never silently widens to every
-  interface. Native services have a restricted PATH, so the Google provider
-  resolves `gcloud` through the system executable lookup first, then checks
-  operating-system-specific install locations such as Homebrew, and memoizes
-  the absolute path for the process lifetime.
+  interface. Native services have a restricted PATH, so service installation
+  resolves the current `gcloud` with `Bun.which` (with a system lookup fallback
+  when the CLI runs under Node) and records its absolute path in the service
+  command.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search
@@ -834,10 +835,9 @@ second package, put it in shared-core rather than duplicating it.
   TypeScript `@dbx-tools/model` authentication caller-owned: `authHeaders()`
   delegates directly to the SDK, and its caller owns any broader refresh gate.
 
-Node-only equivalents live in `@dbx-tools/core` (`bin.which` for PATH lookup
-with optional operating-system and caller-supplied fallback directories;
-`bin.ensure` for idempotent executable downloads, archive selection, version
-validation, and atomic install; `exec.spawn`/`spawnSync`;
+Node-only equivalents live in `@dbx-tools/core` (`bin.ensure` for idempotent
+executable downloads, archive selection, version validation, and atomic install;
+`exec.spawn`/`spawnSync`;
 `project.root`/`name`/`repositoryUrl`/`npmRegistry`;
 `processLock.withProcessLock` for keyed mutual exclusion across the main thread
 and its workers - a module-level promise chain only serializes ONE thread, and

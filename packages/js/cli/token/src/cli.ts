@@ -5,6 +5,7 @@
  */
 
 import { rm } from "node:fs/promises";
+import { exec } from "@dbx-tools/core";
 import { error, string } from "@dbx-tools/shared-core";
 import { Command, CommanderError, Option } from "commander";
 
@@ -25,7 +26,13 @@ import { manageService, type ServiceAction, type ServiceSpec } from "./service.t
 
 type CommonOptions = Omit<
   TokenConfigInput,
-  "allowedHosts" | "allowedScopes" | "bindDocker" | "clientTokenTtlSeconds" | "providers" | "scopes"
+  | "allowedHosts"
+  | "allowedScopes"
+  | "bindDocker"
+  | "clientTokenTtlSeconds"
+  | "gcloudPath"
+  | "providers"
+  | "scopes"
 > & {
   provider?: string[];
   scope?: string[];
@@ -35,10 +42,15 @@ type CommonOptions = Omit<
   bindDocker?: string | boolean;
   allowedHost?: string[];
   clientJwtTtlSeconds?: string | number;
+  gcloud?: string;
   serviceMode?: boolean;
 };
 
 type AccessTokenOptions = Omit<CommonOptions, "auth"> & { auth?: string };
+
+interface BunRuntime {
+  which(command: string): string | null;
+}
 
 function addCommonOptions(
   command: Command,
@@ -50,7 +62,8 @@ function addCommonOptions(
     .option("--port <port>", "broker port")
     .option("--allowed-host <host>", "allowed HTTP Host header (repeatable)", collect)
     .option("--refresh-skew-seconds <seconds>", "refresh before access-token expiry")
-    .option("--access-token-ttl-seconds <seconds>", "conservative provider token lifetime");
+    .option("--access-token-ttl-seconds <seconds>", "conservative provider token lifetime")
+    .option("--gcloud <path>", "gcloud executable path");
   addCredentialOptions(command);
   if (options.authMode !== false) {
     command.option("--auth <mode>", "client auth mode: password or jwt");
@@ -132,8 +145,14 @@ export function buildProgram(name = "dbx token"): Command {
     )
       .option("--purge", "remove broker state after removing the service")
       .action(async (local: { purge?: boolean }, command: Command) => {
-        const options = resolveOptions(command.optsWithGlobals() as CommonOptions);
+        let options = resolveOptions(command.optsWithGlobals() as CommonOptions);
         if (action === "install") {
+          if (options.providers.includes("google")) {
+            options = {
+              ...options,
+              gcloudPath: resolveServiceExecutable(options.gcloudPath ?? "gcloud"),
+            };
+          }
           if (options.auth === "password" && !options.secret) {
             throw new TypeError("Password service installation requires --secret");
           }
@@ -178,12 +197,12 @@ export function buildProgram(name = "dbx token"): Command {
     program
       .command("client-jwt")
       .description("Create a provider- and scope-constrained client JWT.")
-      .argument("<name>", "client identity"),
-  ).action(async (client: string, options: CommonOptions) => {
+      .argument("[name]", "client identity"),
+  ).action(async (client: string | undefined, options: CommonOptions) => {
     const resolved = resolveOptions({ ...options, auth: "jwt" });
     const credential = await createLocalCredential(
       resolved,
-      client,
+      string.trimToNull(client) ?? resolved.client,
       resolved.scopes.length > 0 ? resolved.scopes : resolved.allowedScopes,
     );
     process.stdout.write(`${credential}\n`);
@@ -199,6 +218,7 @@ async function serve(config: ResolvedTokenConfig, serviceMode: boolean): Promise
   const binds = await resolveBindAddresses(config.bind, config.bindDocker);
   const google = new GoogleTokenProvider({
     accessTokenTtlSeconds: config.accessTokenTtlSeconds,
+    executable: config.gcloudPath,
   });
   const broker = new TokenBroker({
     providers: config.providers.includes("google") ? [google] : [],
@@ -285,10 +305,11 @@ function requireSecret(value: string | undefined, message: string): string {
 }
 
 function resolveOptions(options: CommonOptions): ResolvedTokenConfig {
-  const { clientJwtTtlSeconds, serviceMode: _serviceMode, ...configOptions } = options;
+  const { clientJwtTtlSeconds, gcloud, serviceMode: _serviceMode, ...configOptions } = options;
   const input: TokenConfigInput = {
     ...configOptions,
     clientTokenTtlSeconds: clientJwtTtlSeconds,
+    gcloudPath: gcloud,
     providers: options.provider,
     scopes: [...(options.scope ?? []), ...string.parseList(options.scopes)],
     allowedScopes: [...(options.allowedScope ?? []), ...string.parseList(options.allowedScopes)],
@@ -296,6 +317,27 @@ function resolveOptions(options: CommonOptions): ResolvedTokenConfig {
     bindDocker: normalizeBindDocker(options.bindDocker),
   };
   return resolveTokenConfig(input);
+}
+
+function resolveServiceExecutable(command: string): string {
+  const fromBun = (globalThis as { Bun?: BunRuntime }).Bun?.which(command);
+  if (fromBun) return fromBun;
+  const resolver = process.platform === "win32" ? "where.exe" : "/usr/bin/which";
+  const result = exec.spawnSync(resolver, [command], {
+    stdin: "ignore",
+    stdout: "capture",
+    stderr: "capture",
+    check: false,
+  });
+  const resolved = result.stdout
+    .split(/\r?\n/)
+    .map((path) => string.trimToNull(path))
+    .find((path): path is string => Boolean(path));
+  if (result.exitCode === 0 && resolved) return resolved;
+  const detail = string.trimToNull(result.stderr);
+  throw new TypeError(
+    `Could not resolve ${command} during service installation${detail ? `: ${detail}` : ""}`,
+  );
 }
 
 function normalizeBindDocker(
@@ -343,6 +385,7 @@ function serviceArgs(config: ResolvedTokenConfig): string[] {
     String(config.accessTokenTtlSeconds),
     "--client-jwt-ttl-seconds",
     String(config.clientTokenTtlSeconds),
+    ...(config.gcloudPath ? ["--gcloud", config.gcloudPath] : []),
     ...config.bind.flatMap((bind) => ["--bind", bind]),
     ...(config.bindDocker ? ["--bind-docker", config.bindDocker] : []),
     ...config.scopes.flatMap((scope) => ["--scope", scope]),

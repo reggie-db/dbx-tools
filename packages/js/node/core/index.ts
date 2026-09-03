@@ -12,7 +12,7 @@ export * as file from "./src/file.ts";
 export * as fileLock from "./src/file-lock.ts";
 export * as processLock from "./src/process-lock.ts";
 export * as project from "./src/project.ts";
-export type { BinContext, BinSelectionContext, BinSelector, BinVersionOutput, BinVersionParser, BinOptions, BinWhichOptions, BinUrl } from "./src/bin.ts";
+export type { BinContext, BinSelectionContext, BinSelector, BinVersionOutput, BinVersionParser, BinOptions, BinUrl } from "./src/bin.ts";
 export { BrandContextSchema, defaultBrandContext, parseBrandContext, brandContextJsonSchema, brandContextPrompt } from "./src/brand.ts";
 export type { BrandContext, BrandContextInput } from "./src/brand.ts";
 export { MAX_TCP_PORT, ENV_ONLY, valueSchema, bundleResourceSchema, bundleEnvEntrySchema, bundleAppSchema, appEnvEntrySchema, appSchema } from "./src/config.ts";

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { decodeProtectedHeader } from "jose";
 
 import {
   AuthorizationError,
@@ -45,6 +46,7 @@ describe("client authorization", () => {
       }),
       { client: "container-client", providers: ["google"], scopes: ["scope:a"] },
     );
+    assert.equal(decodeProtectedHeader(token).name, "container-client");
     assert.equal(clientCredentialMode(token), "jwt");
     assert.equal(clientCredentialMode("shared.password.with.dots"), "password");
     assert.equal(clientCredentialMode("not-a-token"), "password");

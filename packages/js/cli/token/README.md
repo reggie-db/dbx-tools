@@ -81,10 +81,11 @@ requires an explicit secret. The running service holds a fail-fast file lock for
 its complete lifetime, so a duplicate process exits instead of waiting.
 Removal keeps the secret; pass `--purge` to remove broker state.
 
-The service resolves `gcloud` to an absolute executable path before its first
-token request. It checks PATH, common operating-system and package-manager
-locations, and Google Cloud SDK install directories, then reuses the resolved
-path for the process lifetime.
+Service installation resolves the current `gcloud` executable with `Bun.which`
+and records its absolute path in the native service command. A Node-hosted CLI
+uses the operating system's executable lookup as a fallback. This keeps service
+startup independent of the restricted PATH available at boot. Pass
+`--gcloud <path>` to select another installed executable.
 
 ## Create a client identity
 
@@ -96,7 +97,9 @@ CLIENT_AUTH="$(dbx token client-jwt container-client \
 
 `client-jwt` signs a provider- and scope-constrained client token. Pass
 `--secret` for a foreground broker. When omitted, the command reads the
-installed service secret without modifying it:
+installed service secret without modifying it. The client name is optional,
+defaults to `local-cli`, and is included in both the JWT subject and signed
+protected header:
 
 ```sh
 CLIENT_AUTH="$(dbx token client-jwt container-client \
@@ -123,7 +126,7 @@ In another terminal:
 
 ```sh
 SECRET=supersecret
-CLIENT_JWT="$(dbx token client-jwt example-client --secret "$SECRET")"
+CLIENT_JWT="$(dbx token client-jwt --secret "$SECRET")"
 dbx token access-token --auth "$CLIENT_JWT"
 ```
 
@@ -192,6 +195,7 @@ Primary variables:
 - `TOKEN_BROKER_ALLOWED_SCOPES`;
 - `TOKEN_BROKER_AUTH`;
 - `TOKEN_BROKER_SECRET`;
+- `TOKEN_BROKER_GCLOUD`;
 - `TOKEN_BROKER_STATE_DIR`;
 - `TOKEN_BROKER_ALLOWED_HOSTS`;
 - `TOKEN_BROKER_REFRESH_SKEW_SECONDS`;

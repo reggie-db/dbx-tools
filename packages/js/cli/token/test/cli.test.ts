@@ -15,9 +15,12 @@ describe("token CLI", () => {
   });
 
   it("exposes only the client-jwt generator command", () => {
-    const names = buildProgram("dbx token").commands.map((command) => command.name());
+    const commands = buildProgram("dbx token").commands;
+    const names = commands.map((command) => command.name());
+    const clientJwt = commands.find((command) => command.name() === "client-jwt");
 
     assert.ok(names.includes("client-jwt"));
     assert.ok(!names.includes("client-token"));
+    assert.equal(clientJwt?.registeredArguments[0]?.required, false);
   });
 });

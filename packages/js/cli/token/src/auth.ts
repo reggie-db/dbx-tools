@@ -49,7 +49,12 @@ export async function createClientToken(options: ClientTokenOptions): Promise<st
     providers: options.providers,
     scopes: options.scopes,
   })
-    .setProtectedHeader({ alg: "HS256", typ: "JWT", kid: keyId(options.secret) })
+    .setProtectedHeader({
+      alg: "HS256",
+      typ: "JWT",
+      kid: keyId(options.secret),
+      name: options.client,
+    })
     .setSubject(options.client)
     .setIssuer(JWT_ISSUER)
     .setAudience(JWT_AUDIENCE)
@@ -100,6 +105,9 @@ export async function authorizeClient(options: AuthorizeOptions): Promise<Client
     });
     const subject = verified.payload.sub;
     if (!subject) throw new AuthorizationError("Client token has no subject");
+    if (verified.protectedHeader.name !== undefined && verified.protectedHeader.name !== subject) {
+      throw new AuthorizationError("Client token header name does not match its subject");
+    }
     const providers = stringArray(verified.payload.providers).filter(
       (provider): provider is TokenProviderName => TOKEN_PROVIDER_SET.has(provider),
     );

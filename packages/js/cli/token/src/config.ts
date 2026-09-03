@@ -73,6 +73,8 @@ interface OptionalTokenConfigFields<Text> {
   serverUrl?: Text;
   /** Shared password or JWT HMAC signing secret. */
   secret?: Text;
+  /** Absolute gcloud executable recorded for service mode. */
+  gcloudPath?: Text;
 }
 
 /** User-supplied token settings before shared config and defaults are applied. */
@@ -146,6 +148,7 @@ export function resolveTokenConfig(input: TokenConfigInput = {}): ResolvedTokenC
       : {}),
     port: config.port(input.port, "PORT", DEFAULT_PORT, TOKEN_CONFIG),
     ...object.optional("serverUrl", config.string(input.serverUrl, "SERVER_URL", TOKEN_CONFIG)),
+    ...object.optional("gcloudPath", config.string(input.gcloudPath, "GCLOUD", TOKEN_CONFIG)),
     providers,
     scopes: scopes.length > 0 ? scopes : [...DEFAULT_GOOGLE_SCOPES],
     allowedScopes:

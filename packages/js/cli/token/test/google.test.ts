@@ -17,7 +17,7 @@ describe("GoogleTokenProvider", () => {
       accessTokenTtlSeconds: 3600,
       now: () => 1_000,
       execute,
-      resolveExecutable: async () => GCLOUD,
+      executable: GCLOUD,
     });
 
     assert.deepEqual(await provider.acquire(["scope:a", "scope:b"]), {
@@ -49,7 +49,7 @@ describe("GoogleTokenProvider", () => {
     const provider = new GoogleTokenProvider({
       accessTokenTtlSeconds: 3600,
       execute,
-      resolveExecutable: async () => GCLOUD,
+      executable: GCLOUD,
     });
 
     await assert.rejects(() => provider.acquire([]), /application-default login/);
@@ -64,7 +64,7 @@ describe("GoogleTokenProvider", () => {
     const provider = new GoogleTokenProvider({
       accessTokenTtlSeconds: 3600,
       execute,
-      resolveExecutable: async () => GCLOUD,
+      executable: GCLOUD,
     });
 
     await provider.acquire([]);
