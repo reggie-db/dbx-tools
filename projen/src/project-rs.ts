@@ -50,6 +50,8 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly scope?: string;
   readonly edition?: string;
   readonly rustVersion?: string;
+  /** Rust toolchain used to compile the host-side UBRN generator. Defaults to `stable`. */
+  readonly ubrnRustVersion?: string;
   readonly license?: string;
   readonly repository?: string;
   readonly workspaceDependencies?: Readonly<Record<string, CargoDependency>>;
@@ -656,6 +658,7 @@ export class DBXToolsRustWorkspace {
     const dispatcherWorkflowName = `${workflowName}-dispatch`;
     const releaseTagPrefix = options.releaseTagPrefix ?? "v";
     const rustVersion = options.rustVersion ?? "1.82";
+    const ubrnRustVersion = options.ubrnRustVersion ?? "stable";
     const releaseBranch = projectReleaseBranch(project);
     const releaseTag =
       "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}";
@@ -814,7 +817,7 @@ export class DBXToolsRustWorkspace {
                 uses: "actions/cache@v5",
                 with: {
                   path: "target/ubrn",
-                  key: `ubrn-\${{ runner.os }}-\${{ runner.arch }}-rust-${rustVersion}-${UBRN_VERSION}`,
+                  key: `ubrn-\${{ runner.os }}-\${{ runner.arch }}-rust-${ubrnRustVersion}-${UBRN_VERSION}`,
                 },
               },
             ]
@@ -827,10 +830,11 @@ export class DBXToolsRustWorkspace {
             'echo "cargo_cache_hit=${{ steps.cargo_cache.outputs.cache-hit }}"',
             'echo "sccache_scope=${{ github.ref }}"',
             'echo "sccache_namespace=${SCCACHE_GHA_VERSION}"',
+            `echo "ubrn_rust_toolchain=${ubrnRustVersion}"`,
             ...(hasNodeBindings
               ? [
                   "echo \"ubrn_target_cache_enabled=${{ vars.CACHE_UBRN_TARGET == 'true' }}\"",
-                  `echo "ubrn_target_cache_key=ubrn-\${{ runner.os }}-\${{ runner.arch }}-rust-${rustVersion}-${UBRN_VERSION}"`,
+                  `echo "ubrn_target_cache_key=ubrn-\${{ runner.os }}-\${{ runner.arch }}-rust-${ubrnRustVersion}-${UBRN_VERSION}"`,
                   'echo "ubrn_target_cache_hit=${{ steps.ubrn_cache.outputs.cache-hit }}"',
                 ]
               : []),
@@ -860,7 +864,7 @@ export class DBXToolsRustWorkspace {
                 shell: "bash",
                 run: timedBash(
                   "ubrn_generator",
-                  "cargo build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml",
+                  `rustup toolchain install ${ubrnRustVersion} --profile minimal\ncargo +${ubrnRustVersion} build --locked --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml`,
                 ),
               },
             ]

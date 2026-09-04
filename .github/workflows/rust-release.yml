@@ -132,7 +132,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: target/ubrn
-          key: ubrn-${{ runner.os }}-${{ runner.arch }}-rust-1.82-0.31.0-5
+          key: ubrn-${{ runner.os }}-${{ runner.arch }}-rust-stable-0.31.0-5
       - name: Log cache configuration
         shell: bash
         run: |-
@@ -140,8 +140,9 @@ jobs:
           echo "cargo_cache_hit=${{ steps.cargo_cache.outputs.cache-hit }}"
           echo "sccache_scope=${{ github.ref }}"
           echo "sccache_namespace=${SCCACHE_GHA_VERSION}"
+          echo "ubrn_rust_toolchain=stable"
           echo "ubrn_target_cache_enabled=${{ vars.CACHE_UBRN_TARGET == 'true' }}"
-          echo "ubrn_target_cache_key=ubrn-${{ runner.os }}-${{ runner.arch }}-rust-1.82-0.31.0-5"
+          echo "ubrn_target_cache_key=ubrn-${{ runner.os }}-${{ runner.arch }}-rust-stable-0.31.0-5"
           echo "ubrn_target_cache_hit=${{ steps.ubrn_cache.outputs.cache-hit }}"
       - name: Install Linux native dependencies
         if: ${{ matrix.target.os == 'linux' }}
@@ -159,7 +160,8 @@ jobs:
         run: |-
           SECONDS=0
           trap 'status=$?; echo "phase=ubrn_generator duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
-          cargo build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml
+          rustup toolchain install stable --profile minimal
+          cargo +stable build --locked --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml
       - name: Build Rust outputs
         shell: bash
         run: |-
