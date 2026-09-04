@@ -429,7 +429,11 @@ export class DBXToolsPythonWorkspace extends Component {
     if (!project.github) return;
     const publications = this.publications(options);
     if (publications.length === 0) return;
-    const workflow = new GithubWorkflow(project.github, options.workflowName ?? "python-release");
+    const workflowName = options.workflowName ?? "python-release";
+    const workflow = new GithubWorkflow(project.github, workflowName, {
+      limitConcurrency: true,
+      concurrencyOptions: { group: workflowName, cancelInProgress: true },
+    });
     workflow.file?.addOverride("permissions", {
       contents: "read",
       ...(options.upstreamWorkflow ? { actions: "read" } : {}),

@@ -352,10 +352,13 @@ Primary package areas:
   and defaults to `stable`, so a newly resolved dependency cannot make current
   Cargo metadata unreadable while the package still advertises its older MSRV.
   `ubrnRustVersion` defaults to that release toolchain and installs another
-  toolchain only when explicitly overridden. Cache UBRN by its pinned version plus runner
-  OS/architecture and Rust version, and prepare it before the workspace build.
-  The `CACHE_UBRN_TARGET=true` repository variable enables that large target
-  archive for comparison; the default relies on the object-level sccache.
+  toolchain only when explicitly overridden. Cache the final host UBRN executable
+  by pinned UBRN version, runner OS/architecture, and Rust toolchain. A hit skips
+  both the workspace `bun install` and UBRN compilation; release generation
+  passes that executable directly and keeps the copied package's existing barrel
+  instead of loading the full projen dependency graph. Save a newly built
+  executable immediately after validation rather than in end-of-job cleanup, so
+  a later packaging failure cannot discard the expensive cache fill.
   Release tags run only the small `release-dispatch` workflow. It resolves the
   annotated tag to a commit and sends a `rust-release` event when a Rust release
   exists, otherwise it sends the downstream `release` event directly. A
@@ -368,6 +371,10 @@ Primary package areas:
   caches use one stable target/toolchain key; `SCCACHE_GHA_VERSION` provides the
   matching compiler-cache namespace. The tag and SHA stay in each dispatch
   payload so a later branch tip cannot change downstream source.
+  Before sending a new release event, the dispatcher cancels in-progress and
+  queued runs for every generated release workflow and docs. Each workflow also
+  uses its own `cancel-in-progress: true` concurrency group as a fallback;
+  partial publication from the superseded run is accepted.
   Packaging must
   execute the target-specific `uniffi-bindgen` binary produced by that workspace
   build, never `cargo run`, so no Rust compilation occurs after the main build.

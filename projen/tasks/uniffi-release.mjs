@@ -26,6 +26,7 @@ const parsed = parseArgs({
     python: { type: "string" },
     "node-package": { type: "string" },
     "node-generator": { type: "string" },
+    ubrn: { type: "string" },
     "python-package": { type: "string" },
     "cargo-target": { type: "string" },
     "node-triple": { type: "string" },
@@ -149,7 +150,10 @@ const packageNode = ({
     required("cargo-target"),
     "--node-package-base",
     `${nodePackage}-`,
+    "--ubrn",
+    required("ubrn"),
     "--skip-build",
+    "--skip-barrels",
   ]);
   mkdirSync(resolve(output, "npm-facade"), { recursive: true });
   run("npm", ["pack", "--pack-destination", resolve(output, "npm-facade")], facadeDirectory);

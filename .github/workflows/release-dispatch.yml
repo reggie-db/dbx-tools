@@ -5,7 +5,11 @@ on:
   push:
     tags:
       - v*
+concurrency:
+  group: release-dispatch
+  cancel-in-progress: true
 permissions:
+  actions: write
   contents: write
 jobs:
   dispatch:
@@ -21,9 +25,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_EVENT: rust-release
+          RELEASE_WORKFLOWS: rust-release,python-release,node-release,projen-release,docs
         run: |-
           case "$RELEASE_TAG" in v*) ;; *) exit 1 ;; esac
           EXPECTED_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"
+          IFS="," read -r -a workflows <<< "$RELEASE_WORKFLOWS"
+          for workflow in "${workflows[@]}"; do
+            for status in in_progress queued requested waiting pending action_required; do
+              while IFS= read -r run_id; do
+                if [ -n "$run_id" ]; then gh run cancel "$run_id"; fi
+              done < <(gh run list --workflow "$workflow.yml" --status "$status" --limit 100 --json databaseId --jq '.[].databaseId')
+            done
+          done
           gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
             --raw-field event_type="$RELEASE_EVENT" \
             --raw-field "client_payload[release_tag]=$RELEASE_TAG" \

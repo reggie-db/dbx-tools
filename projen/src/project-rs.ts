@@ -641,6 +641,10 @@ export class DBXToolsRustWorkspace {
       ubrnRustVersion === releaseRustVersion
         ? ""
         : `rustup toolchain install ${ubrnRustVersion} --profile minimal\n`;
+    const ubrnExecutable =
+      "${{ github.workspace }}/.cache/ubrn/uniffi-bindgen-react-native${{ matrix.target.os == 'win32' && '.exe' || '' }}";
+    const builtUbrnExecutable =
+      "target/ubrn/debug/uniffi-bindgen-react-native${{ matrix.target.os == 'win32' && '.exe' || '' }}";
     const releaseBranch = projectReleaseBranch(project);
     const bindings = this.bindingMappings.map((binding) => ({
       ...binding,
@@ -685,7 +689,7 @@ export class DBXToolsRustWorkspace {
         `--node-package "${binding.nodePackage}"`,
         `--python-package "${binding.pythonPackage}"`,
         ...(binding.node
-          ? ['--node-generator "node_modules/@dbx-tools/projen/tasks/uniffi.ts"']
+          ? ['--node-generator "projen/tasks/uniffi.ts"', '--ubrn "$UBRN_EXECUTABLE"']
           : []),
         '--cargo-target "${{ matrix.target.cargo }}"',
         '--node-triple "${{ matrix.target.node }}"',
@@ -789,13 +793,12 @@ export class DBXToolsRustWorkspace {
         ...(hasNodeBindings
           ? [
               {
-                name: "Cache UBRN generator",
+                name: "Restore UBRN executable",
                 id: "ubrn_cache",
-                if: "${{ vars.CACHE_UBRN_TARGET == 'true' }}",
-                uses: "actions/cache@v5",
+                uses: "actions/cache/restore@v5",
                 with: {
-                  path: "target/ubrn",
-                  key: `ubrn-\${{ runner.os }}-\${{ runner.arch }}-rust-${ubrnRustVersion}-${UBRN_VERSION}`,
+                  path: ".cache/ubrn",
+                  key: `ubrn-executable-\${{ runner.os }}-\${{ runner.arch }}-rust-${ubrnRustVersion}-${UBRN_VERSION}`,
                 },
               },
             ]
@@ -811,9 +814,8 @@ export class DBXToolsRustWorkspace {
             `echo "ubrn_rust_toolchain=${ubrnRustVersion}"`,
             ...(hasNodeBindings
               ? [
-                  "echo \"ubrn_target_cache_enabled=${{ vars.CACHE_UBRN_TARGET == 'true' }}\"",
-                  `echo "ubrn_target_cache_key=ubrn-\${{ runner.os }}-\${{ runner.arch }}-rust-${ubrnRustVersion}-${UBRN_VERSION}"`,
-                  'echo "ubrn_target_cache_hit=${{ steps.ubrn_cache.outputs.cache-hit }}"',
+                  `echo "ubrn_executable_cache_key=ubrn-executable-\${{ runner.os }}-\${{ runner.arch }}-rust-${ubrnRustVersion}-${UBRN_VERSION}"`,
+                  'echo "ubrn_executable_cache_hit=${{ steps.ubrn_cache.outputs.cache-hit }}"',
                 ]
               : []),
           ].join("\n"),
@@ -827,6 +829,7 @@ export class DBXToolsRustWorkspace {
           ? [
               {
                 name: "Install Node tooling",
+                if: "${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}",
                 shell: "bash",
                 run: timedBash("node_tooling", "bun install"),
               },
@@ -836,14 +839,36 @@ export class DBXToolsRustWorkspace {
           ? [
               {
                 name: "Prepare UBRN generator",
+                if: "${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}",
                 env: {
                   CARGO_TARGET_DIR: "${{ github.workspace }}/target/ubrn",
+                  UBRN_EXECUTABLE: ubrnExecutable,
                 },
                 shell: "bash",
                 run: timedBash(
                   "ubrn_generator",
-                  `${ubrnToolchainInstall}cargo +${ubrnRustVersion} build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml`,
+                  [
+                    `${ubrnToolchainInstall}cargo +${ubrnRustVersion} build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml`,
+                    'mkdir -p "$(dirname "$UBRN_EXECUTABLE")"',
+                    `cp "${builtUbrnExecutable}" "$UBRN_EXECUTABLE"`,
+                    'chmod +x "$UBRN_EXECUTABLE"',
+                  ].join("\n"),
                 ),
+              },
+              {
+                name: "Verify UBRN executable",
+                env: { UBRN_EXECUTABLE: ubrnExecutable },
+                shell: "bash",
+                run: 'test -f "$UBRN_EXECUTABLE"',
+              },
+              {
+                name: "Save UBRN executable",
+                if: "${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}",
+                uses: "actions/cache/save@v5",
+                with: {
+                  path: ".cache/ubrn",
+                  key: "${{ steps.ubrn_cache.outputs.cache-primary-key }}",
+                },
               },
             ]
           : []),
@@ -864,7 +889,7 @@ export class DBXToolsRustWorkspace {
                   VERSION: RELEASE_TAG,
                   ...(hasNodeBindings
                     ? {
-                        CARGO_TARGET_DIR: "${{ github.workspace }}/target/ubrn",
+                        UBRN_EXECUTABLE: ubrnExecutable,
                       }
                     : {}),
                 },
@@ -989,6 +1014,10 @@ export class DBXToolsRustWorkspace {
               },
             },
           },
+        },
+        concurrency: {
+          group: workflowName,
+          "cancel-in-progress": true,
         },
         permissions: { contents: "read" },
         jobs: {

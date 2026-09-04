@@ -16,6 +16,9 @@ on:
         description: Commit the release tag must reference
         type: string
         required: true
+concurrency:
+  group: rust-release
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -134,13 +137,12 @@ jobs:
           add-job-id-key: false
           add-rust-environment-hash-key: false
           shared-key: release-${{ matrix.target.cargo }}-rust-stable
-      - name: Cache UBRN generator
+      - name: Restore UBRN executable
         id: ubrn_cache
-        if: ${{ vars.CACHE_UBRN_TARGET == 'true' }}
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
-          path: target/ubrn
-          key: ubrn-${{ runner.os }}-${{ runner.arch }}-rust-stable-0.31.0-5
+          path: .cache/ubrn
+          key: ubrn-executable-${{ runner.os }}-${{ runner.arch }}-rust-stable-0.31.0-5
       - name: Log cache configuration
         shell: bash
         run: |-
@@ -149,26 +151,42 @@ jobs:
           echo "sccache_scope=${{ github.ref }}"
           echo "sccache_namespace=${SCCACHE_GHA_VERSION}"
           echo "ubrn_rust_toolchain=stable"
-          echo "ubrn_target_cache_enabled=${{ vars.CACHE_UBRN_TARGET == 'true' }}"
-          echo "ubrn_target_cache_key=ubrn-${{ runner.os }}-${{ runner.arch }}-rust-stable-0.31.0-5"
-          echo "ubrn_target_cache_hit=${{ steps.ubrn_cache.outputs.cache-hit }}"
+          echo "ubrn_executable_cache_key=ubrn-executable-${{ runner.os }}-${{ runner.arch }}-rust-stable-0.31.0-5"
+          echo "ubrn_executable_cache_hit=${{ steps.ubrn_cache.outputs.cache-hit }}"
       - name: Install Linux native dependencies
         if: ${{ matrix.target.os == 'linux' }}
         run: sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config
       - name: Install Node tooling
+        if: ${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}
         shell: bash
         run: |-
           SECONDS=0
           trap 'status=$?; echo "phase=node_tooling duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
           bun install
       - name: Prepare UBRN generator
+        if: ${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/target/ubrn
+          UBRN_EXECUTABLE: ${{ github.workspace }}/.cache/ubrn/uniffi-bindgen-react-native${{ matrix.target.os == 'win32' && '.exe' || '' }}
         shell: bash
         run: |-
           SECONDS=0
           trap 'status=$?; echo "phase=ubrn_generator duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
           cargo +stable build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml
+          mkdir -p "$(dirname "$UBRN_EXECUTABLE")"
+          cp "target/ubrn/debug/uniffi-bindgen-react-native${{ matrix.target.os == 'win32' && '.exe' || '' }}" "$UBRN_EXECUTABLE"
+          chmod +x "$UBRN_EXECUTABLE"
+      - name: Verify UBRN executable
+        env:
+          UBRN_EXECUTABLE: ${{ github.workspace }}/.cache/ubrn/uniffi-bindgen-react-native${{ matrix.target.os == 'win32' && '.exe' || '' }}
+        shell: bash
+        run: test -f "$UBRN_EXECUTABLE"
+      - name: Save UBRN executable
+        if: ${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: .cache/ubrn
+          key: ${{ steps.ubrn_cache.outputs.cache-primary-key }}
       - name: Build Rust outputs
         shell: bash
         run: |-
@@ -179,7 +197,7 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}
-          CARGO_TARGET_DIR: ${{ github.workspace }}/target/ubrn
+          UBRN_EXECUTABLE: ${{ github.workspace }}/.cache/ubrn/uniffi-bindgen-react-native${{ matrix.target.os == 'win32' && '.exe' || '' }}
         run: |-
           SECONDS=0
           trap 'status=$?; echo "phase=uniffi_packaging duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
@@ -189,7 +207,8 @@ jobs:
             --python "packages/py/auth-u2m" \
             --node-package "@dbx-tools/auth-u2m" \
             --python-package "dbx-tools-auth-u2m" \
-            --node-generator "node_modules/@dbx-tools/projen/tasks/uniffi.ts" \
+            --node-generator "projen/tasks/uniffi.ts" \
+            --ubrn "$UBRN_EXECUTABLE" \
             --cargo-target "${{ matrix.target.cargo }}" \
             --node-triple "${{ matrix.target.node }}" \
             --python-tag "${{ matrix.target.python }}" \

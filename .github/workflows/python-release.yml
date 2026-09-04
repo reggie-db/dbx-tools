@@ -15,6 +15,9 @@ on:
   repository_dispatch:
     types:
       - release
+concurrency:
+  group: python-release
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest

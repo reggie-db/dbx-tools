@@ -4,7 +4,7 @@
  * the project has a GitHub component - authors the tag-driven npm publish
  * workflow that the pushed tag triggers.
  */
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { Component, YamlFile } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
@@ -196,9 +196,23 @@ export class DBXToolsRelease extends Component {
       object.isRecord(rust) && typeof rust.releaseWorkflow === "string"
         ? RUST_RELEASE_EVENT
         : DOWNSTREAM_RELEASE_EVENT;
-    project
-      .tryFindObjectFile(".github/workflows/release-dispatch.yml")
-      ?.addOverride("jobs.dispatch.steps.1.env.RELEASE_EVENT", releaseEvent);
+    const dispatcher = project.tryFindObjectFile(".github/workflows/release-dispatch.yml");
+    dispatcher?.addOverride("jobs.dispatch.steps.1.env.RELEASE_EVENT", releaseEvent);
+    const releaseWorkflows = [
+      ...(object.isRecord(rust) && typeof rust.releaseWorkflow === "string"
+        ? [rust.releaseWorkflow]
+        : []),
+      ...(typeof project.dbxToolsConfig.pythonReleaseWorkflow === "string"
+        ? [project.dbxToolsConfig.pythonReleaseWorkflow]
+        : []),
+      ...(this.workflowName ? [this.workflowName] : []),
+      ...this.standaloneReleases.map(({ name }) => name),
+      ...(existsSync(resolve(project.outdir, ".github/workflows/docs.yml")) ? ["docs"] : []),
+    ];
+    dispatcher?.addOverride(
+      "jobs.dispatch.steps.1.env.RELEASE_WORKFLOWS",
+      [...new Set(releaseWorkflows)].join(","),
+    );
     // Release the standalone projects in the SAME run, at the same version. They
     // are not workspace members, so nothing else would ever bring them along.
     const siblingArgs = this.standaloneReleases
@@ -233,7 +247,11 @@ export class DBXToolsRelease extends Component {
       obj: {
         name: "release-dispatch",
         on: { push: { tags: [`${this.tagPrefix}*`] } },
-        permissions: { contents: "write" },
+        concurrency: {
+          group: "release-dispatch",
+          "cancel-in-progress": true,
+        },
+        permissions: { actions: "write", contents: "write" },
         jobs: {
           dispatch: {
             "runs-on": "ubuntu-latest",
@@ -250,10 +268,19 @@ export class DBXToolsRelease extends Component {
                   GH_TOKEN: "${{ github.token }}",
                   RELEASE_TAG: "${{ github.ref_name }}",
                   RELEASE_EVENT: DOWNSTREAM_RELEASE_EVENT,
+                  RELEASE_WORKFLOWS: "",
                 },
                 run: [
                   `case "$RELEASE_TAG" in ${this.tagPrefix}*) ;; *) exit 1 ;; esac`,
                   'EXPECTED_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
+                  'IFS="," read -r -a workflows <<< "$RELEASE_WORKFLOWS"',
+                  'for workflow in "${workflows[@]}"; do',
+                  "  for status in in_progress queued requested waiting pending action_required; do",
+                  "    while IFS= read -r run_id; do",
+                  '      if [ -n "$run_id" ]; then gh run cancel "$run_id"; fi',
+                  '    done < <(gh run list --workflow "$workflow.yml" --status "$status" --limit 100 --json databaseId --jq \'.[].databaseId\')',
+                  "  done",
+                  "done",
                   [
                     'gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches"',
                     '--raw-field event_type="$RELEASE_EVENT"',
@@ -277,11 +304,10 @@ export class DBXToolsRelease extends Component {
     const setupSteps = publishSetupSteps();
     const branchDispatch = upstreamWorkflow === undefined;
     const workflow = new GithubWorkflow(project.github!, name, {
-      // Serialize publishes so two tags landing together cannot race to the
-      // registry, but never cancel a run already in flight: a half-published
-      // release is worse than a queued one.
+      // A newer release supersedes an older run even when publication has
+      // started; the dispatcher also cancels active ecosystem runs immediately.
       limitConcurrency: true,
-      concurrencyOptions: { group: name, cancelInProgress: false },
+      concurrencyOptions: { group: name, cancelInProgress: true },
     });
     // Read-only floor for any job that does not declare its own permissions;
     // the publish job below overrides it with the `id-token` it needs.

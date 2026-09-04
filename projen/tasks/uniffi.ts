@@ -29,7 +29,9 @@ const { values } = parseArgs({
     python: { type: "string" },
     "cargo-target": { type: "string" },
     "node-package-base": { type: "string" },
+    ubrn: { type: "string" },
     "skip-build": { type: "boolean" },
+    "skip-barrels": { type: "boolean" },
   },
 });
 if (!values.crate || (!values.node && !values.python)) {
@@ -109,7 +111,7 @@ if (!existsSync(library)) throw new Error(`Missing compiled UniFFI library: ${li
 if (values.node) {
   const nodeSource = resolve(root, values.node, "src");
   const nodeOutput = mkdtempSync(join(tmpdir(), `${libraryName}-node-`));
-  run(join(root, "node_modules/.bin/ubrn"), [
+  run(values.ubrn ? resolve(values.ubrn) : join(root, "node_modules/.bin/ubrn"), [
     "generate",
     "napi",
     "bindings",
@@ -187,11 +189,13 @@ if (values.node) {
   }
   rmSync(resolve(root, values.node, "src/generated"), { recursive: true, force: true });
   rmSync(nodeOutput, { recursive: true, force: true });
-  run(process.execPath, [
-    resolve(dirname(fileURLToPath(import.meta.url)), "barrels.ts"),
-    "--dir",
-    resolve(root, values.node),
-  ]);
+  if (!values["skip-barrels"]) {
+    run(process.execPath, [
+      resolve(dirname(fileURLToPath(import.meta.url)), "barrels.ts"),
+      "--dir",
+      resolve(root, values.node),
+    ]);
+  }
 }
 
 if (values.python) {

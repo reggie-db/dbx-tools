@@ -43,6 +43,7 @@ describe("npm release workflow auth", () => {
       assert.match(workflow, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/);
       assert.match(workflow, /workflows:\s+- python-release/);
       assert.match(workflow, /RELEASE_VERSION/);
+      assert.match(workflow, /^  cancel-in-progress: true$/m);
     });
   }
 
@@ -129,9 +130,18 @@ describe("optional Node release stages", () => {
       assert.match(workflow, /^  repository_dispatch:\n    types:\n      - release$/m);
       assert.doesNotMatch(workflow, /workflow_run:/);
       assert.match(workflow, /name: Upload release metadata/);
+      const dispatcher = readFileSync(
+        join(directOutdir, ".github", "workflows", "release-dispatch.yml"),
+        "utf8",
+      );
+      assert.match(dispatcher, /^  push:\n    tags:\n      - v\*$/m);
+      assert.match(dispatcher, /^  cancel-in-progress: true$/m);
+      assert.match(dispatcher, /actions: write/);
+      assert.match(dispatcher, /RELEASE_WORKFLOWS: node-release/);
+      assert.match(dispatcher, /gh run cancel "\$run_id"/);
       assert.match(
-        readFileSync(join(directOutdir, ".github", "workflows", "release-dispatch.yml"), "utf8"),
-        /^  push:\n    tags:\n      - v\*$/m,
+        dispatcher,
+        /for status in in_progress queued requested waiting pending action_required/,
       );
     } finally {
       rmSync(directOutdir, { recursive: true, force: true });

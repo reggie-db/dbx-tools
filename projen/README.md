@@ -115,18 +115,23 @@ Cargo/sccache once,
 builds the Rust workspace once, then packages every discovered output from that
 shared build. Bun and the workspace install are present only when a Node binding
 needs TypeScript generation; uv is present only when a Python wheel is needed.
+A new dispatch cancels queued and in-progress release and docs workflows before
+starting, and each workflow's concurrency group also cancels its previous run.
 A binary-only workspace therefore installs neither. `rustVersion` remains the
 MSRV recorded in package manifests, while `releaseRustVersion` independently
 defaults release compilation to `stable`. UBRN uses that same release toolchain
 unless `ubrnRustVersion` explicitly selects another one.
 
-The Node generator's Rust CLI can be cached under one target directory keyed by
-its pinned UBRN version, Rust version, runner OS, and runner architecture. Set
-the repository variable `CACHE_UBRN_TARGET=true` to enable that archive while
-comparing its transfer cost with the default sccache-only path. Cargo registry
-caches and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain
-across version tags. Cache keys, restore results, sccache statistics, and phase
-timings are written to each build log. Python generation executes the already-built
+The final host UBRN executable is cached by pinned UBRN version, Rust toolchain,
+runner OS, and runner architecture. A hit skips both the workspace `bun install`
+and the UBRN Cargo build. Release packaging passes the cached executable directly
+to the Node binding generator and keeps the package barrel copied from source,
+so it does not need the installed projen dependency graph. A miss saves the
+validated executable immediately, before workspace build and packaging can fail.
+Cargo registry caches
+and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain across
+version tags. Cache keys, restore results, sccache statistics, and phase timings
+are written to each build log. Python generation executes the already-built
 `target/<triple>/release/uniffi-bindgen` directly. Artifact packaging therefore
 does no Rust compilation after the main workspace build.
 

@@ -200,11 +200,12 @@ describe("optional Python release stages", () => {
         "utf8",
       );
       assert.match(workflow, /^  repository_dispatch:\n    types:\n      - release$/m);
+      assert.match(workflow, /^  cancel-in-progress: true$/m);
       assert.doesNotMatch(workflow, /workflow_run:/);
       assert.match(workflow, /name: Upload release metadata/);
       assert.match(
         readFileSync(join(directOutdir, ".github", "workflows", "release-dispatch.yml"), "utf8"),
-        /RELEASE_EVENT: release/,
+        /RELEASE_WORKFLOWS: python-release/,
       );
     } finally {
       rmSync(directOutdir, { recursive: true, force: true });

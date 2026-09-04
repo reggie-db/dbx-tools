@@ -156,6 +156,7 @@ describe("DBXToolsRustWorkspace", () => {
       assert.equal(buildJob.match(/name: Setup sccache/g)?.length, 1);
       assert.equal(buildJob.match(/name: Install Linux native dependencies/g)?.length, 1);
       assert.equal(buildJob.match(/name: Prepare UBRN generator/g)?.length, 1);
+      assert.match(buildJob, /name: Restore UBRN executable/);
     } finally {
       rmSync(multiOutdir, { recursive: true, force: true });
     }
@@ -353,9 +354,12 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(dispatcher, /client_payload\[release_tag\]=\$RELEASE_TAG/);
     assert.match(dispatcher, /client_payload\[expected_sha\]=\$EXPECTED_SHA/);
     assert.match(dispatcher, /RELEASE_EVENT: rust-release/);
+    assert.match(dispatcher, /RELEASE_WORKFLOWS: rust-release,node-release/);
+    assert.match(dispatcher, /gh run cancel "\$run_id"/);
     assert.doesNotMatch(dispatcher, /actions\/cache|cargo build|sccache/);
     assert.match(dispatcher, /fetch-depth: 1/);
     assert.match(release, /^  repository_dispatch:\n    types:\n      - rust-release$/m);
+    assert.match(release, /^  cancel-in-progress: true$/m);
     assert.match(release, /^  workflow_dispatch:$/m);
     assert.doesNotMatch(release, /^  push:$/m);
     assert.match(release, /github\.event\.client_payload\.expected_sha \|\| inputs\.expected_sha/);
@@ -382,12 +386,13 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /cargo build --release --workspace --target/);
     assert.match(release, /node \.projen\/uniffi-release\.mjs build/);
     assert.match(release, /--skip-build/);
-    assert.match(release, /name: Cache UBRN generator/);
+    assert.match(release, /name: Restore UBRN executable/);
+    assert.match(release, /uses: actions\/cache\/restore@v5/);
     assert.match(
       release,
-      /key: ubrn-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}-rust-stable-0\.31\.0-5/,
+      /key: ubrn-executable-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}-rust-stable-0\.31\.0-5/,
     );
-    assert.match(release, /if: \$\{\{ vars\.CACHE_UBRN_TARGET == 'true' \}\}/);
+    assert.match(release, /steps\.ubrn_cache\.outputs\.cache-hit != 'true'/);
     assert.match(
       release,
       /name: Prepare UBRN generator[\s\S]*cargo \+stable build --manifest-path node_modules\/uniffi-bindgen-react-native\/crates\/ubrn_cli\/Cargo\.toml[\s\S]*name: Build Rust outputs/,
@@ -395,6 +400,13 @@ describe("DBXToolsRustWorkspace", () => {
     assert.doesNotMatch(release, /rustup toolchain install stable/);
     assert.match(release, /uses: dtolnay\/rust-toolchain@stable/);
     assert.match(release, /CARGO_TARGET_DIR: \$\{\{ github\.workspace \}\}\/target\/ubrn/);
+    assert.match(release, /path: \.cache\/ubrn/);
+    assert.match(release, /cp "target\/ubrn\/debug\/uniffi-bindgen-react-native/);
+    assert.match(release, /--ubrn "\$UBRN_EXECUTABLE"/);
+    assert.match(release, /name: Verify UBRN executable/);
+    assert.match(release, /name: Save UBRN executable/);
+    assert.match(release, /uses: actions\/cache\/save@v5/);
+    assert.match(release, /key: \$\{\{ steps\.ubrn_cache\.outputs\.cache-primary-key \}\}/);
     assert.match(release, /name: Package release binaries/);
     assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.node \}\}-npm/);
     assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.python \}\}-python-wheel/);
@@ -442,7 +454,7 @@ describe("DBXToolsRustWorkspace", () => {
       /SCCACHE_GHA_VERSION: release-\$\{\{ matrix\.target\.cargo \}\}-rust-stable/,
     );
     assert.match(release, /cargo_cache_hit=/);
-    assert.match(release, /ubrn_target_cache_hit=/);
+    assert.match(release, /ubrn_executable_cache_hit=/);
     assert.match(release, /"\$\{SCCACHE_PATH\}" --show-stats/);
     assert.match(release, /phase=rust_workspace duration_seconds=/);
     assert.doesNotMatch(release, /shared-key: cargo-publish/);
@@ -459,8 +471,16 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`uniffi-bindgen/);
     assert.match(packager, /"node_modules", "npm", "bin", "npm-cli\.js"/);
     assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
+    assert.match(packager, /"--ubrn",\s+required\("ubrn"\)/);
+    assert.match(packager, /"--skip-barrels"/);
     assert.match(packager, /if \(result\.error\) \{\s+throw new Error/);
     assert.doesNotMatch(packager, /"cargo",\s*\[\s*"run"/);
+    const nodeGenerator = readFileSync(
+      join(import.meta.dirname, "..", "tasks", "uniffi.ts"),
+      "utf8",
+    );
+    assert.match(nodeGenerator, /values\.ubrn \? resolve\(values\.ubrn\)/);
+    assert.match(nodeGenerator, /if \(!values\["skip-barrels"\]\)/);
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/exports.ts"), "utf8"),
