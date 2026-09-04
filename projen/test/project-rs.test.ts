@@ -32,7 +32,7 @@ describe("DBXToolsRustWorkspace", () => {
       outdir,
       packageRoots: ["packages/js"],
       defaultTagMixins: false,
-      github: false,
+      github: true,
     });
     const rust = new DBXToolsRustWorkspace(project, {
       scope: "fixture",
@@ -62,8 +62,11 @@ describe("DBXToolsRustWorkspace", () => {
         {
           crate: "fixture-auth-u2m",
           rust: "packages/rs/auth-u2m",
+          publishCargo: true,
           node: "packages/js/node/auth-u2m",
+          nodePackage: "@fixture/auth-u2m",
           python: "packages/py/auth-u2m",
+          pythonPackage: "fixture-auth-u2m",
         },
       ],
     });
@@ -74,11 +77,16 @@ describe("DBXToolsRustWorkspace", () => {
     );
     const node = JSON.parse(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/package.json"), "utf8"),
-    ) as { name: string; private: boolean; dependencies: object; devDependencies: object };
+    ) as { name: string; private: boolean; dependencies: object; devDependencies: object; optionalDependencies: object };
     assert.equal(node.name, "@fixture/auth-u2m");
     assert.equal(node.private, true);
     assert.equal("pg" in node.dependencies, true);
     assert.equal("@types/pg" in node.devDependencies, true);
+    assert.equal("@fixture/auth-u2m-darwin-arm64" in node.optionalDependencies, true);
+    const release = readFileSync(join(outdir, ".github/workflows/rust-release.yml"), "utf8");
+    assert.match(release, /fixture-auth-u2m/);
+    assert.match(release, /linux-x64-gnu/);
+    assert.match(release, /tasks\/uniffi-release\.ts build/);
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/exports.ts"), "utf8"),

@@ -50,6 +50,7 @@ packages/py/graphiti/pyproject.toml
 .github/workflows/build.yml
 .github/workflows/pull-request-lint.yml
 .github/workflows/python-release.yml
+.github/workflows/rust-release.yml
 .gitignore
 .mergify.yml
 .prettierignore

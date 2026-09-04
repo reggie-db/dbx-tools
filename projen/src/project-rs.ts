@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { string } from "@dbx-tools/shared-core";
-import { Project, TextFile, javascript } from "projen";
+import { Project, TextFile, YamlFile, javascript } from "projen";
 import type { DBXToolsProject } from "./project.ts";
 import { DBXToolsTypeScriptProject } from "./project-js.ts";
 import type { PythonPackageOptions } from "./project-py.ts";
@@ -45,7 +45,67 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly nodeRoot?: string;
   readonly pythonRoot?: string;
   readonly pythonModulePrefix?: string;
+  /** Generate tag-driven cross-platform UniFFI package releases. */
+  readonly release?: boolean;
+  /** Native release targets; defaults to the maintained GitHub-hosted matrix. */
+  readonly releaseTargets?: readonly UniFFIReleaseTarget[];
 }
+
+export interface UniFFIReleaseTarget {
+  readonly runner: string;
+  readonly cargo: string;
+  readonly node: string;
+  readonly python: string;
+  readonly os: "darwin" | "linux" | "win32";
+  readonly cpu: "arm64" | "x64";
+  readonly libc?: "glibc";
+}
+
+/** Native targets built on matching GitHub-hosted runners. */
+export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
+  {
+    runner: "ubuntu-22.04",
+    cargo: "x86_64-unknown-linux-gnu",
+    node: "linux-x64-gnu",
+    python: "manylinux_2_35_x86_64",
+    os: "linux",
+    cpu: "x64",
+    libc: "glibc",
+  },
+  {
+    runner: "ubuntu-24.04-arm",
+    cargo: "aarch64-unknown-linux-gnu",
+    node: "linux-arm64-gnu",
+    python: "manylinux_2_39_aarch64",
+    os: "linux",
+    cpu: "arm64",
+    libc: "glibc",
+  },
+  {
+    runner: "macos-15-intel",
+    cargo: "x86_64-apple-darwin",
+    node: "darwin-x64",
+    python: "macosx_13_0_x86_64",
+    os: "darwin",
+    cpu: "x64",
+  },
+  {
+    runner: "macos-14",
+    cargo: "aarch64-apple-darwin",
+    node: "darwin-arm64",
+    python: "macosx_11_0_arm64",
+    os: "darwin",
+    cpu: "arm64",
+  },
+  {
+    runner: "windows-latest",
+    cargo: "x86_64-pc-windows-msvc",
+    node: "win32-x64-msvc",
+    python: "win_amd64",
+    os: "win32",
+    cpu: "x64",
+  },
+] as const;
 
 /** Persisted mapping consumed by the focused Rust source watcher. */
 export interface RustBindingMapping {
@@ -53,6 +113,10 @@ export interface RustBindingMapping {
   readonly rust: string;
   readonly node?: string;
   readonly python?: string;
+  readonly nodePackage?: string;
+  readonly pythonPackage?: string;
+  readonly publishCargo?: boolean;
+  readonly facadeTarget?: boolean;
 }
 
 /** Persisted Rust workspace state consumed by `sync --watch`. */
@@ -239,14 +303,22 @@ export class DBXToolsRustWorkspace {
     const bindings = this.packages.filter((pkg) => pkg.uniffi);
     this.bindingMappings = bindings.map((pkg) => {
       const targets = pkg.packageOptions.bindings ?? ["node", "python"];
+      const packageName = pkg.packageOptions.directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
       return {
         crate: pkg.crateName,
         rust: `${root}/${pkg.packageOptions.directory}`,
+        publishCargo: true,
         ...(targets.includes("node")
-          ? { node: `${nodeRoot}/${pkg.packageOptions.directory}` }
+          ? {
+              node: `${nodeRoot}/${pkg.packageOptions.directory}`,
+              nodePackage: `@${string.toSlug(options.scope)}/${packageName}`,
+            }
           : {}),
         ...(targets.includes("python")
-          ? { python: `${options.pythonRoot ?? "packages/py"}/${pkg.packageOptions.directory}` }
+          ? {
+              python: `${options.pythonRoot ?? "packages/py"}/${pkg.packageOptions.directory}`,
+              pythonPackage: pkg.crateName,
+            }
           : {}),
       };
     });
@@ -295,6 +367,18 @@ export class DBXToolsRustWorkspace {
       node.package.addField("private", true);
       node.package.file.addDeletionOverride("publishConfig");
       node.package.addField("description", `Node bindings for ${binding.crateName}`);
+      const releaseTargets = options.releaseTargets ?? UNIFFI_RELEASE_TARGETS;
+      if (options.release ?? true) {
+        node.package.addField(
+          "optionalDependencies",
+          Object.fromEntries(
+            releaseTargets.map((target) => [
+              `@${string.toSlug(options.scope)}/${directory}-${target.node}`,
+              readWorkspaceVersion(project.outdir),
+            ]),
+          ),
+        );
+      }
       node.addDeps("@ubjs/core@0.31.0-5", "@ubjs/node@0.31.0-5");
       if (binding.packageOptions.nodeDependencies?.length) {
         node.addDeps(...binding.packageOptions.nodeDependencies);
@@ -359,6 +443,178 @@ export class DBXToolsRustWorkspace {
             : []),
         ]),
       ].join(" && "),
+    });
+    if ((options.release ?? true) && this.bindingMappings.length > 0) {
+      this.addReleaseWorkflow(project, options.releaseTargets ?? UNIFFI_RELEASE_TARGETS);
+    }
+  }
+
+  private addReleaseWorkflow(
+    project: javascript.NodeProject,
+    targets: readonly UniFFIReleaseTarget[],
+  ): void {
+    if (!project.github) return;
+    const bindings = this.bindingMappings.map((binding) => ({
+      ...binding,
+      node: binding.node ?? "",
+      python: binding.python ?? "",
+      nodePackage: binding.nodePackage ?? "",
+      pythonPackage: binding.pythonPackage ?? "",
+      publishCargo: binding.publishCargo ?? false,
+    }));
+    const matrix = bindings.flatMap((binding) =>
+      targets.map((target, index) => ({
+        binding,
+        target: { ...target, facade: index === 0 },
+      })),
+    );
+    new YamlFile(project, ".github/workflows/rust-release.yml", {
+      obj: {
+        name: "rust-release",
+        on: {
+          push: { tags: ["v*"] },
+          workflow_dispatch: {
+            inputs: {
+              version: {
+                description: "Version to package during a dry run",
+                type: "string",
+                default: "0.0.0.dev0",
+              },
+            },
+          },
+        },
+        permissions: { contents: "read" },
+        jobs: {
+          build: {
+            name: "${{ matrix.binding.crate }} / ${{ matrix.target.node }}",
+            "runs-on": "${{ matrix.target.runner }}",
+            strategy: {
+              "fail-fast": false,
+              matrix: { include: matrix },
+            },
+            steps: [
+              { name: "Checkout", uses: "actions/checkout@v6" },
+              { name: "Setup Bun", uses: "oven-sh/setup-bun@v2", with: { "bun-version": "1.3.14" } },
+              { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+              {
+                name: "Setup Rust",
+                uses: "dtolnay/rust-toolchain@stable",
+                with: { targets: "${{ matrix.target.cargo }}" },
+              },
+              { name: "Install", run: "bun install" },
+              {
+                name: "Build thin native packages",
+                shell: "bash",
+                env: {
+                  VERSION: "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
+                },
+                run: 'bun node_modules/@dbx-tools/projen/tasks/uniffi-release.ts build --crate "${{ matrix.binding.crate }}" --rust "${{ matrix.binding.rust }}" --node "${{ matrix.binding.node }}" --python "${{ matrix.binding.python }}" --node-package "${{ matrix.binding.nodePackage }}" --python-package "${{ matrix.binding.pythonPackage }}" --cargo-target "${{ matrix.target.cargo }}" --node-triple "${{ matrix.target.node }}" --python-tag "${{ matrix.target.python }}" --os "${{ matrix.target.os }}" --cpu "${{ matrix.target.cpu }}" --libc "${{ matrix.target.libc }}" --facade "${{ matrix.target.facade }}" --version "${VERSION#v}"',
+              },
+              {
+                name: "Upload native packages",
+                uses: "actions/upload-artifact@v7",
+                with: {
+                  name: "${{ matrix.binding.crate }}-${{ matrix.target.node }}",
+                  path: [
+                    "dist/uniffi/npm/*.tgz",
+                    "dist/uniffi/npm-facade/*.tgz",
+                    "dist/uniffi/python/*.whl",
+                  ].join("\n"),
+                },
+              },
+            ],
+          },
+          publish: {
+            if: "${{ github.event_name == 'push' }}",
+            needs: ["build"],
+            "runs-on": "ubuntu-latest",
+            strategy: { matrix: { binding: bindings } },
+            permissions: { contents: "read", "id-token": "write" },
+            environment: { name: "native-${{ matrix.binding.crate }}" },
+            steps: [
+              { name: "Checkout", uses: "actions/checkout@v6" },
+              { name: "Setup Node.js", uses: "actions/setup-node@v6", with: { "registry-url": "https://registry.npmjs.org" } },
+              { name: "Setup Bun", uses: "oven-sh/setup-bun@v2", with: { "bun-version": "1.3.14" } },
+              { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+              { name: "Install", run: "bun install" },
+              {
+                name: "Publish workspace npm dependencies",
+                if: "${{ matrix.binding.node != '' }}",
+                env: {
+                  NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
+                  NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
+                },
+                run: [
+                  'VERSION="${GITHUB_REF_NAME#v}"',
+                  'bun node_modules/@dbx-tools/projen/tasks/publish.ts "$VERSION" --exclude projen --exclude "${{ matrix.binding.node }}"',
+                ].join("\n"),
+              },
+              { name: "Download packages", uses: "actions/download-artifact@v8", with: { pattern: "${{ matrix.binding.crate }}-*", path: "dist/uniffi", "merge-multiple": true } },
+              {
+                name: "Publish npm packages",
+                env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
+                run: "for package in dist/uniffi/npm/*.tgz; do npm publish \"$package\" --access public; done",
+              },
+              {
+                name: "Publish npm facades",
+                if: "${{ matrix.binding.node != '' }}",
+                env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
+                run: "for package in dist/uniffi/npm-facade/*.tgz; do npm publish \"$package\" --access public; done",
+              },
+              {
+                name: "Publish Python wheels",
+                if: "${{ matrix.binding.python != '' }}",
+                run: "uv publish --trusted-publishing always dist/uniffi/python/*.whl",
+              },
+              {
+                name: "Publish Cargo crate",
+                if: "${{ matrix.binding.publishCargo }}",
+                env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
+                run: "cargo publish --package \"${{ matrix.binding.crate }}\"",
+              },
+            ],
+          },
+          "publish-local": {
+            if: "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}",
+            needs: ["build"],
+            "runs-on": ["self-hosted"],
+            strategy: { matrix: { binding: bindings } },
+            permissions: { contents: "read" },
+            steps: [
+              { name: "Checkout", uses: "actions/checkout@v6" },
+              { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+              { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
+              { name: "Download packages", uses: "actions/download-artifact@v8", with: { pattern: "${{ matrix.binding.crate }}-*", path: "dist/uniffi", "merge-multiple": true } },
+              {
+                name: "Publish npm mirror",
+                if: "${{ vars.LOCAL_NPM_REGISTRY != '' && matrix.binding.node != '' }}",
+                env: { NODE_AUTH_TOKEN: "${{ secrets.LOCAL_NPM_TOKEN }}" },
+                run: "for package in dist/uniffi/npm/*.tgz; do npm publish \"$package\" --registry \"${{ vars.LOCAL_NPM_REGISTRY }}\"; done",
+              },
+              {
+                name: "Publish npm facade mirror",
+                if: "${{ vars.LOCAL_NPM_REGISTRY != '' && matrix.binding.node != '' }}",
+                env: { NODE_AUTH_TOKEN: "${{ secrets.LOCAL_NPM_TOKEN }}" },
+                run: "for package in dist/uniffi/npm-facade/*.tgz; do npm publish \"$package\" --registry \"${{ vars.LOCAL_NPM_REGISTRY }}\"; done",
+              },
+              {
+                name: "Publish Python mirror",
+                if: "${{ vars.LOCAL_PYPI_PUBLISH_URL != '' && matrix.binding.python != '' }}",
+                env: {
+                  UV_PUBLISH_USERNAME: "${{ secrets.LOCAL_PYPI_USERNAME }}",
+                  UV_PUBLISH_PASSWORD: "${{ secrets.LOCAL_PYPI_PASSWORD }}",
+                },
+                run: "uv publish --publish-url \"${{ vars.LOCAL_PYPI_PUBLISH_URL }}\" dist/uniffi/python/*.whl",
+              },
+              {
+                name: "Publish Cargo mirror",
+                if: "${{ vars.LOCAL_CARGO_REGISTRY != '' && matrix.binding.publishCargo }}",
+                run: "cargo login --registry \"${{ vars.LOCAL_CARGO_REGISTRY }}\" \"${{ secrets.LOCAL_CARGO_TOKEN }}\" && cargo publish --package \"${{ matrix.binding.crate }}\" --registry \"${{ vars.LOCAL_CARGO_REGISTRY }}\" --allow-dirty",
+              },
+            ],
+          },
+        },
+      },
     });
   }
 }

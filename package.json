@@ -194,8 +194,11 @@
         {
           "crate": "dbx-tools-auth-u2m",
           "rust": "packages/rs/auth-u2m",
+          "publishCargo": true,
           "node": "packages/js/node/auth-u2m",
-          "python": "packages/py/auth-u2m"
+          "nodePackage": "@dbx-tools/auth-u2m",
+          "python": "packages/py/auth-u2m",
+          "pythonPackage": "dbx-tools-auth-u2m"
         }
       ]
     },

@@ -104,6 +104,23 @@ removing a crate or `setup_scaffolding!()` marker triggers a full synth. Repos
 without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
 
+The workspace also generates a `rust-release` workflow from those discovered
+UniFFI crates. It builds Linux x64/arm64, macOS x64/arm64, and Windows x64.
+Node publishes a small facade plus optional OS/CPU packages, so npm installs
+only the matching native library. Python publishes one platform-tagged wheel
+per target, so pip follows the same thin-install model.
+
+Set the repository variable `LOCAL_REPOSITORIES=true` to enable the generated
+self-hosted mirror job. Configure any applicable endpoints with
+`LOCAL_NPM_REGISTRY`, `LOCAL_PYPI_PUBLISH_URL`, and the Cargo registry name in
+`LOCAL_CARGO_REGISTRY`; credentials come from the matching `LOCAL_*` secrets.
+For a private Cargo registry with a crates.io caching proxy, use
+[Kellnr](https://kellnr.io/). It is the closest Rust counterpart to Verdaccio
+and devpi. Register it under the same Cargo registry name supplied through
+`LOCAL_CARGO_REGISTRY`; the self-hosted runner's Cargo config owns that name's
+index URL. Override `releaseTargets` only when a consumer has additional native
+runners; ordinary projects inherit the maintained matrix automatically.
+
 Private Python projects are marked with `[tool.dbx-tools] private = true`. They
 are excluded from the uv workspace, documentation, and Python release workflow
 until their native artifact publishing matrix is enabled.

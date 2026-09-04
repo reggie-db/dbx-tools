@@ -9,6 +9,7 @@
 /.github/workflows/pull-request-lint.yml linguist-generated
 /.github/workflows/python-release.yml linguist-generated
 /.github/workflows/release.yml linguist-generated
+/.github/workflows/rust-release.yml linguist-generated
 /.gitignore linguist-generated
 /.mergify.yml linguist-generated
 /.prettierignore linguist-generated

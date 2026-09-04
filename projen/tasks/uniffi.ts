@@ -26,6 +26,8 @@ const { values } = parseArgs({
     crate: { type: "string" },
     node: { type: "string" },
     python: { type: "string" },
+    "cargo-target": { type: "string" },
+    "node-package-base": { type: "string" },
   },
 });
 if (!values.crate || (!values.node && !values.python)) {
@@ -38,7 +40,10 @@ const libraryName = crate.replaceAll("-", "_");
 const extension =
   process.platform === "darwin" ? "dylib" : process.platform === "win32" ? "dll" : "so";
 const prefix = process.platform === "win32" ? "" : "lib";
-const library = join(root, "target/release", `${prefix}${libraryName}.${extension}`);
+const targetDirectory = values["cargo-target"]
+  ? join(root, "target", values["cargo-target"], "release")
+  : join(root, "target", "release");
+const library = join(targetDirectory, `${prefix}${libraryName}.${extension}`);
 const normalizedOutput = (value: string): string =>
   value
     .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, "")
@@ -79,7 +84,13 @@ const stampGeneratedPython = (file: string): void => {
   makeReadonly(file);
 };
 
-run("cargo", ["build", "--release", "--package", crate]);
+run("cargo", [
+  "build",
+  "--release",
+  "--package",
+  crate,
+  ...(values["cargo-target"] ? ["--target", values["cargo-target"]] : []),
+]);
 if (!existsSync(library)) throw new Error(`Missing compiled UniFFI library: ${library}`);
 
 if (values.node) {
@@ -92,7 +103,9 @@ if (values.node) {
     "--library",
     "--ts-dir",
     nodeOutput,
-    "--lib-colocated",
+    ...(values["node-package-base"]
+      ? ["--lib-package-base", values["node-package-base"], "--lib-node-triple"]
+      : ["--lib-colocated"]),
     library,
   ]);
   const generatedModules = readdirSync(nodeOutput).filter(
@@ -153,10 +166,12 @@ if (values.node) {
       source: `the ${crate} Rust exports`,
     });
   }
-  const nodeLibrary = join(nodeSource, basename(library));
-  makeWritable(nodeLibrary);
-  cpSync(library, nodeLibrary);
-  makeReadonly(nodeLibrary);
+  if (!values["node-package-base"]) {
+    const nodeLibrary = join(nodeSource, basename(library));
+    makeWritable(nodeLibrary);
+    cpSync(library, nodeLibrary);
+    makeReadonly(nodeLibrary);
+  }
   rmSync(resolve(root, values.node, "src/generated"), { recursive: true, force: true });
   rmSync(nodeOutput, { recursive: true, force: true });
   run(process.execPath, [
