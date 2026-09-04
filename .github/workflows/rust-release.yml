@@ -72,6 +72,30 @@ jobs:
               cpu: arm64
               libc: glibc
               facade: false
+          - target:
+              runner: macos-15-intel
+              cargo: x86_64-apple-darwin
+              node: darwin-x64
+              python: macosx_13_0_x86_64
+              os: darwin
+              cpu: x64
+              facade: false
+          - target:
+              runner: macos-14
+              cargo: aarch64-apple-darwin
+              node: darwin-arm64
+              python: macosx_11_0_arm64
+              os: darwin
+              cpu: arm64
+              facade: false
+          - target:
+              runner: windows-latest
+              cargo: x86_64-pc-windows-msvc
+              node: win32-x64-msvc
+              python: win_amd64
+              os: win32
+              cpu: x64
+              facade: false
     steps:
       - name: Checkout release commit
         uses: actions/checkout@v6
