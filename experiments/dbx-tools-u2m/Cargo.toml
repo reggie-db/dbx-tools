@@ -2,7 +2,9 @@
 members = [
     "crates/dbx-tools-u2m",
     "crates/dbx-tools-u2m-cli",
+    "crates/dbx-tools-u2m-node",
     "crates/dbx-tools-u2m-postgres",
+    "crates/dbx-tools-u2m-python",
 ]
 default-members = [
     "crates/dbx-tools-u2m",
@@ -24,8 +26,12 @@ configparser = "3"
 directories = "6"
 fs4 = { version = "0.13", features = ["tokio"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+napi = { version = "2", features = ["async", "napi6"] }
+napi-build = "2"
+napi-derive = "2"
 oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls"] }
 open = "5"
+pyo3 = { version = "0.23", features = ["abi3-py310", "extension-module"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

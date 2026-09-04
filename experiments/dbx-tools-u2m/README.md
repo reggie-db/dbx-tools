@@ -11,6 +11,8 @@ This workspace is not part of the generated `dbx-tools` package workspace and is
 | `dbx-tools-u2m` | OAuth, Databricks profile resolution, token refresh, memory/file/keyring stores, and the generic storage traits |
 | `dbx-tools-u2m-postgres` | Optional Postgres `CredentialStore` implementation with advisory locking |
 | `dbx-tools-u2m-cli` | Standalone `dbx-tools-u2m` executable |
+| `dbx-tools-u2m-node` | Promise-based Node.js N-API bindings |
+| `dbx-tools-u2m-python` | Python PyO3 bindings with GIL-free blocking operations |
 
 Rust does not have Python-style `package[extra]` syntax. The closest equivalents are optional Cargo features and separate adapter crates. Consumers that need Postgres add both libraries:
 
@@ -123,3 +125,29 @@ let client = AuthClient::new(profile, store, AuthOptions::default())?;
 ```
 
 The database role must be able to create and modify `dbx_tools_u2m_tokens` in its current schema and use advisory locks. The Postgres URL is intentionally separate from Databricks profile resolution because this experiment does not assume a particular Lakebase credential source.
+
+## Node.js bindings
+
+Build the native addon from `crates/dbx-tools-u2m-node` with `npm install && npm run build`. The exported `U2mClient.create()` factory and auth methods return promises:
+
+```js
+const { U2mClient } = require("@dbx-tools/u2m-native");
+
+const client = await U2mClient.create({ profile: "DEFAULT" });
+const token = await client.tokenOrLogin();
+```
+
+See `crates/dbx-tools-u2m-node/examples/token.cjs` for executable usage.
+
+## Python bindings
+
+Build the extension from `crates/dbx-tools-u2m-python` with `maturin develop`. Methods are synchronous for normal Python callers and release the GIL while Rust performs network or storage work:
+
+```python
+from dbx_tools_u2m import U2mClient
+
+client = U2mClient(profile="DEFAULT")
+token = client.token_or_login()
+```
+
+See `crates/dbx-tools-u2m-python/examples/token.py` for executable usage.

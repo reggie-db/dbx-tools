@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "dbx-tools-u2m-native"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Python bindings for the dbx-tools-u2m Rust library"
+
+[tool.maturin]
+module-name = "dbx_tools_u2m._native"
+python-source = "python"
+features = ["pyo3/extension-module"]
