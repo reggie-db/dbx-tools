@@ -4,7 +4,7 @@ default-members = ["packages/rs/auth-u2m-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.143"
+version = "0.6.144"
 edition = "2021"
 rust-version = "1.82"
 license = "Apache-2.0"

@@ -48,12 +48,14 @@
  *   - a URL: always publish to that registry.
  */
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec, project } from "@dbx-tools/core";
 import { log, net } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
+import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import {
   type Semver,
   compareSemver,
@@ -142,6 +144,21 @@ function resolveLocalRegistry(value: string): string | undefined {
     return registry && net.isLoopbackHost(registry) ? registry.href : undefined;
   }
   return trimmed;
+}
+
+function localCargoRegistry(): string | undefined {
+  if (process.env.LOCAL_CARGO_REGISTRY) return process.env.LOCAL_CARGO_REGISTRY;
+  const config = join(homedir(), ".cargo", "config.toml");
+  if (!existsSync(config)) return undefined;
+  const source = readFileSync(config, "utf8");
+  const sections = [
+    ...source.matchAll(/^\[registries\.([^\]]+)\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/gm),
+  ];
+  for (const section of sections) {
+    const index = section[2]?.match(/^\s*index\s*=\s*["']([^"']+)["']/m)?.[1];
+    if (index && net.isLoopbackHost(index.replace(/^sparse\+/, ""))) return section[1];
+  }
+  return undefined;
 }
 
 const program = new Command();
@@ -368,6 +385,57 @@ program
         );
       }
       await Promise.all(localPublishes);
+      if (opts.version && (publishToLocalRegistry || localPypi)) {
+        const publishUniFFIScript = fileURLToPath(
+          new URL("./publish-uniffi-local.ts", import.meta.url),
+        );
+        await exec.spawn(
+          "bun",
+          [
+            publishUniFFIScript,
+            "--version",
+            version,
+            ...(publishToLocalRegistry ? ["--registry", localRegistry] : []),
+            ...(localPypi ? ["--pypi-publish-url", localPypi.publishUrl] : []),
+          ],
+          {
+            cwd: process.cwd(),
+            stdout: "inherit",
+            stderr: "inherit",
+            stdin: "ignore",
+            check: true,
+          },
+        );
+        logger.success(`published host-native bindings for ${version}`);
+      }
+      const rust = readDbxToolsConfig(repoRoot)?.rust;
+      const hasRustCrates = Boolean(
+        rust &&
+        typeof rust === "object" &&
+        !Array.isArray(rust) &&
+        Array.isArray((rust as { crates?: unknown }).crates) &&
+        (rust as { crates: unknown[] }).crates.length,
+      );
+      if (opts.version && hasRustCrates) {
+        const cargoRegistry = localCargoRegistry();
+        if (cargoRegistry) {
+          const publishUniFFIScript = fileURLToPath(
+            new URL("./publish-uniffi-local.ts", import.meta.url),
+          );
+          await exec.spawn(
+            "bun",
+            [publishUniFFIScript, "--version", version, "--cargo-registry", cargoRegistry],
+            {
+              cwd: process.cwd(),
+              stdout: "inherit",
+              stderr: "inherit",
+              stdin: "ignore",
+              check: true,
+            },
+          );
+          logger.success(`published Rust ${version} to ${cargoRegistry}`);
+        }
+      }
     },
   );
 

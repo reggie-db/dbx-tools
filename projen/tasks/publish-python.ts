@@ -22,6 +22,11 @@ interface PythonProjectFile {
   readonly source: string;
 }
 
+function isPrivatePythonProject(source: string): boolean {
+  const section = source.match(/^\[tool\.dbx-tools\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
+  return /^\s*private\s*=\s*true\s*$/m.test(section);
+}
+
 export interface StampPythonProjectsOptions {
   readonly rewriteDependencies?: boolean;
 }
@@ -45,7 +50,7 @@ export function stampPythonProjects(
     .map((entry) => resolve(root, entry.name, "pyproject.toml"))
     .filter(existsSync)
     .sort();
-  const projects: PythonProjectFile[] = packageFiles.map((path) => {
+  const allProjects: PythonProjectFile[] = packageFiles.map((path) => {
     const source = readFileSync(path, "utf8");
     const name = /^name = "([^"]+)"$/m.exec(source)?.[1];
     if (!name) throw new Error(`Missing project name in ${path}`);
@@ -57,6 +62,7 @@ export function stampPythonProjects(
       source,
     };
   });
+  const projects = allProjects.filter((project) => !isPrivatePythonProject(project.source));
   if (projects.length === 0) throw new Error(`No Python packages found under ${root}`);
 
   try {
@@ -67,7 +73,7 @@ export function stampPythonProjects(
       }
       let stamped = project.source.replace(versionPattern, `version = "${version}"`);
       if (options.rewriteDependencies ?? true) {
-        for (const sibling of projects) {
+        for (const sibling of allProjects) {
           stamped = stamped.replace(
             new RegExp(
               `${escapeRegExp(sibling.name)} @ git\\+[^" ]+#subdirectory=[^" ]+/${escapeRegExp(sibling.directory)}`,

@@ -16,10 +16,7 @@ before(() => {
     "pub fn value() {}\nuniffi::setup_scaffolding!();\n",
   );
   mkdirSync(join(outdir, "packages/rs/auth-u2m-cli/src"), { recursive: true });
-  writeFileSync(
-    join(outdir, "packages/rs/auth-u2m-cli/src/main.rs"),
-    "fn main() {}\n",
-  );
+  writeFileSync(join(outdir, "packages/rs/auth-u2m-cli/src/main.rs"), "fn main() {}\n");
 });
 
 after(() => rmSync(outdir, { recursive: true, force: true }));
@@ -62,7 +59,6 @@ describe("DBXToolsRustWorkspace", () => {
         {
           crate: "fixture-auth-u2m",
           rust: "packages/rs/auth-u2m",
-          publishCargo: true,
           node: "packages/js/node/auth-u2m",
           nodePackage: "@fixture/auth-u2m",
           python: "packages/py/auth-u2m",
@@ -77,7 +73,13 @@ describe("DBXToolsRustWorkspace", () => {
     );
     const node = JSON.parse(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/package.json"), "utf8"),
-    ) as { name: string; private: boolean; dependencies: object; devDependencies: object; optionalDependencies: object };
+    ) as {
+      name: string;
+      private: boolean;
+      dependencies: object;
+      devDependencies: object;
+      optionalDependencies: object;
+    };
     assert.equal(node.name, "@fixture/auth-u2m");
     assert.equal(node.private, true);
     assert.equal("pg" in node.dependencies, true);
@@ -87,10 +89,35 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /fixture-auth-u2m/);
     assert.match(release, /linux-x64-gnu/);
     assert.match(release, /tasks\/uniffi-release\.ts build/);
+    assert.match(release, /cargo publish --workspace --registry crates-io/);
+    assert.match(release, /tasks\/publish-uniffi-local\.ts/);
+    assert.match(release, /LOCAL_CARGO_REGISTRY/);
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/exports.ts"), "utf8"),
       'export * from "./src/bindings.ts";\n',
+    );
+  });
+
+  it("marks private crates as unpublished", () => {
+    const project = new DBXToolsNodeProject({
+      name: "@fixture/private-root",
+      scope: "fixture",
+      outdir: join(outdir, "private"),
+      packageRoots: ["packages/js"],
+      defaultTagMixins: false,
+      github: false,
+    });
+    mkdirSync(join(project.outdir, "packages/rs/private-cli/src"), { recursive: true });
+    writeFileSync(join(project.outdir, "packages/rs/private-cli/src/main.rs"), "fn main() {}\n");
+    new DBXToolsRustWorkspace(project, {
+      scope: "fixture",
+      packages: { "private-cli": { private: true, binaryName: "private-cli" } },
+    });
+    project.synth();
+    assert.match(
+      readFileSync(join(project.outdir, "packages/rs/private-cli/Cargo.toml"), "utf8"),
+      /^publish = false$/m,
     );
   });
 });

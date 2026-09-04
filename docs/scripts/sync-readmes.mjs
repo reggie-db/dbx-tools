@@ -71,6 +71,8 @@ function groupTitle(group) {
       return "React UI";
     case "python":
       return "Python";
+    case "rust":
+      return "Rust";
     default:
       return group.charAt(0).toUpperCase() + group.slice(1);
   }
@@ -153,6 +155,44 @@ function discoverPythonPackages() {
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Every publishable Cargo package under `packages/rs/`. */
+function discoverRustPackages() {
+  const dir = path.join(root, "packages", "rs");
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((ent) => ent.isDirectory())
+    .map((ent) => path.join(dir, ent.name))
+    .filter((pkgDir) => fs.existsSync(path.join(pkgDir, "Cargo.toml")))
+    .filter((pkgDir) => !rustPrivate(path.join(pkgDir, "Cargo.toml")))
+    .map((pkgDir) => {
+      const manifest = path.join(pkgDir, "Cargo.toml");
+      const readme = path.join(pkgDir, "README.md");
+      const relDir = posix(path.relative(root, pkgDir));
+      if (!fs.existsSync(readme)) throw new Error(`Missing README for ${relDir}`);
+      const name = cargoPackageName(manifest) ?? path.basename(pkgDir);
+      return {
+        name,
+        dir: pkgDir,
+        readme,
+        relDir,
+        group: "rust",
+        slug: `rs-${path.basename(pkgDir)}`,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function cargoPackageName(manifest) {
+  const section = read(manifest).match(/^\[package\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
+  return section.match(/^\s*name\s*=\s*["']([^"']+)["']/m)?.[1];
+}
+
+function rustPrivate(manifest) {
+  const section = read(manifest).match(/^\[package\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
+  return /^\s*publish\s*=\s*false\s*$/m.test(section);
 }
 
 /** The `[project] name` of a `pyproject.toml`, read without a TOML parser. */
@@ -566,7 +606,7 @@ export const collections = {
 }
 
 function main() {
-  const packages = [...discoverPackages(), ...discoverPythonPackages()];
+  const packages = [...discoverPackages(), ...discoverPythonPackages(), ...discoverRustPackages()];
   const guides = discoverGuides();
   const mappings = { byDir: new Map(), byFile: new Map() };
   for (const pkg of packages) {

@@ -22,6 +22,8 @@ export type CargoDependency = string | CargoDependencyOptions;
 export interface RustPackageOptions {
   readonly directory: string;
   readonly description?: string;
+  /** Keep this crate unpublished and out of public docs. */
+  readonly private?: boolean;
   readonly dependencies?: Readonly<Record<string, CargoDependency>>;
   readonly devDependencies?: Readonly<Record<string, CargoDependency>>;
   readonly features?: Readonly<Record<string, readonly string[]>>;
@@ -115,7 +117,6 @@ export interface RustBindingMapping {
   readonly python?: string;
   readonly nodePackage?: string;
   readonly pythonPackage?: string;
-  readonly publishCargo?: boolean;
   readonly facadeTarget?: boolean;
 }
 
@@ -153,10 +154,14 @@ export function discoverRustCrates(root: string): string[] {
     .sort();
 }
 
-function cargoDependency(value: CargoDependency): string | Record<string, unknown> {
+function cargoDependency(
+  value: CargoDependency,
+  workspaceVersion?: string,
+): string | Record<string, unknown> {
   if (typeof value === "string") return value;
   return {
     ...(value.version ? { version: value.version } : {}),
+    ...(!value.version && value.path && workspaceVersion ? { version: workspaceVersion } : {}),
     ...(value.workspace ? { workspace: true } : {}),
     ...(value.path ? { path: value.path } : {}),
     ...(value.optional ? { optional: true } : {}),
@@ -215,6 +220,7 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
         description: options.description ?? crateName,
         license: { workspace: true },
         repository: { workspace: true },
+        ...(options.private ? { publish: false } : {}),
       },
       ...(library
         ? {
@@ -245,7 +251,7 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
             dependencies: Object.fromEntries(
               Object.entries(options.dependencies).map(([name, value]) => [
                 name,
-                cargoDependency(value),
+                cargoDependency(value, readWorkspaceVersion(parent.outdir)),
               ]),
             ),
           }
@@ -255,7 +261,7 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
             "dev-dependencies": Object.fromEntries(
               Object.entries(options.devDependencies).map(([name, value]) => [
                 name,
-                cargoDependency(value),
+                cargoDependency(value, readWorkspaceVersion(parent.outdir)),
               ]),
             ),
           }
@@ -307,7 +313,6 @@ export class DBXToolsRustWorkspace {
       return {
         crate: pkg.crateName,
         rust: `${root}/${pkg.packageOptions.directory}`,
-        publishCargo: true,
         ...(targets.includes("node")
           ? {
               node: `${nodeRoot}/${pkg.packageOptions.directory}`,
@@ -460,7 +465,6 @@ export class DBXToolsRustWorkspace {
       python: binding.python ?? "",
       nodePackage: binding.nodePackage ?? "",
       pythonPackage: binding.pythonPackage ?? "",
-      publishCargo: binding.publishCargo ?? false,
     }));
     const matrix = bindings.flatMap((binding) =>
       targets.map((target, index) => ({
@@ -494,7 +498,11 @@ export class DBXToolsRustWorkspace {
             },
             steps: [
               { name: "Checkout", uses: "actions/checkout@v6" },
-              { name: "Setup Bun", uses: "oven-sh/setup-bun@v2", with: { "bun-version": "1.3.14" } },
+              {
+                name: "Setup Bun",
+                uses: "oven-sh/setup-bun@v2",
+                with: { "bun-version": "1.3.14" },
+              },
               { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
               {
                 name: "Setup Rust",
@@ -506,7 +514,8 @@ export class DBXToolsRustWorkspace {
                 name: "Build thin native packages",
                 shell: "bash",
                 env: {
-                  VERSION: "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
+                  VERSION:
+                    "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
                 },
                 run: 'bun node_modules/@dbx-tools/projen/tasks/uniffi-release.ts build --crate "${{ matrix.binding.crate }}" --rust "${{ matrix.binding.rust }}" --node "${{ matrix.binding.node }}" --python "${{ matrix.binding.python }}" --node-package "${{ matrix.binding.nodePackage }}" --python-package "${{ matrix.binding.pythonPackage }}" --cargo-target "${{ matrix.target.cargo }}" --node-triple "${{ matrix.target.node }}" --python-tag "${{ matrix.target.python }}" --os "${{ matrix.target.os }}" --cpu "${{ matrix.target.cpu }}" --libc "${{ matrix.target.libc }}" --facade "${{ matrix.target.facade }}" --version "${VERSION#v}"',
               },
@@ -533,8 +542,16 @@ export class DBXToolsRustWorkspace {
             environment: { name: "native-${{ matrix.binding.crate }}" },
             steps: [
               { name: "Checkout", uses: "actions/checkout@v6" },
-              { name: "Setup Node.js", uses: "actions/setup-node@v6", with: { "registry-url": "https://registry.npmjs.org" } },
-              { name: "Setup Bun", uses: "oven-sh/setup-bun@v2", with: { "bun-version": "1.3.14" } },
+              {
+                name: "Setup Node.js",
+                uses: "actions/setup-node@v6",
+                with: { "registry-url": "https://registry.npmjs.org" },
+              },
+              {
+                name: "Setup Bun",
+                uses: "oven-sh/setup-bun@v2",
+                with: { "bun-version": "1.3.14" },
+              },
               { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
               { name: "Install", run: "bun install" },
               {
@@ -549,67 +566,74 @@ export class DBXToolsRustWorkspace {
                   'bun node_modules/@dbx-tools/projen/tasks/publish.ts "$VERSION" --exclude projen --exclude "${{ matrix.binding.node }}"',
                 ].join("\n"),
               },
-              { name: "Download packages", uses: "actions/download-artifact@v8", with: { pattern: "${{ matrix.binding.crate }}-*", path: "dist/uniffi", "merge-multiple": true } },
+              {
+                name: "Download packages",
+                uses: "actions/download-artifact@v8",
+                with: {
+                  pattern: "${{ matrix.binding.crate }}-*",
+                  path: "dist/uniffi",
+                  "merge-multiple": true,
+                },
+              },
               {
                 name: "Publish npm packages",
                 env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
-                run: "for package in dist/uniffi/npm/*.tgz; do npm publish \"$package\" --access public; done",
+                run: 'for package in dist/uniffi/npm/*.tgz; do npm publish "$package" --access public; done',
               },
               {
                 name: "Publish npm facades",
                 if: "${{ matrix.binding.node != '' }}",
                 env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" },
-                run: "for package in dist/uniffi/npm-facade/*.tgz; do npm publish \"$package\" --access public; done",
+                run: 'for package in dist/uniffi/npm-facade/*.tgz; do npm publish "$package" --access public; done',
               },
               {
                 name: "Publish Python wheels",
                 if: "${{ matrix.binding.python != '' }}",
                 run: "uv publish --trusted-publishing always dist/uniffi/python/*.whl",
               },
+            ],
+          },
+          "publish-cargo": {
+            if: "${{ github.event_name == 'push' }}",
+            needs: ["build"],
+            "runs-on": "ubuntu-latest",
+            permissions: { contents: "read" },
+            steps: [
+              { name: "Checkout", uses: "actions/checkout@v6" },
+              { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
               {
-                name: "Publish Cargo crate",
-                if: "${{ matrix.binding.publishCargo }}",
+                name: "Publish public crates",
                 env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
-                run: "cargo publish --package \"${{ matrix.binding.crate }}\"",
+                run: "cargo publish --workspace --registry crates-io",
               },
             ],
           },
           "publish-local": {
             if: "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}",
-            needs: ["build"],
             "runs-on": ["self-hosted"],
-            strategy: { matrix: { binding: bindings } },
             permissions: { contents: "read" },
             steps: [
               { name: "Checkout", uses: "actions/checkout@v6" },
+              {
+                name: "Setup Bun",
+                uses: "oven-sh/setup-bun@v2",
+                with: { "bun-version": "1.3.14" },
+              },
               { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
               { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
-              { name: "Download packages", uses: "actions/download-artifact@v8", with: { pattern: "${{ matrix.binding.crate }}-*", path: "dist/uniffi", "merge-multiple": true } },
+              { name: "Install", run: "bun install" },
               {
-                name: "Publish npm mirror",
-                if: "${{ vars.LOCAL_NPM_REGISTRY != '' && matrix.binding.node != '' }}",
-                env: { NODE_AUTH_TOKEN: "${{ secrets.LOCAL_NPM_TOKEN }}" },
-                run: "for package in dist/uniffi/npm/*.tgz; do npm publish \"$package\" --registry \"${{ vars.LOCAL_NPM_REGISTRY }}\"; done",
-              },
-              {
-                name: "Publish npm facade mirror",
-                if: "${{ vars.LOCAL_NPM_REGISTRY != '' && matrix.binding.node != '' }}",
-                env: { NODE_AUTH_TOKEN: "${{ secrets.LOCAL_NPM_TOKEN }}" },
-                run: "for package in dist/uniffi/npm-facade/*.tgz; do npm publish \"$package\" --registry \"${{ vars.LOCAL_NPM_REGISTRY }}\"; done",
-              },
-              {
-                name: "Publish Python mirror",
-                if: "${{ vars.LOCAL_PYPI_PUBLISH_URL != '' && matrix.binding.python != '' }}",
+                name: "Build and publish host-native packages",
+                run: [
+                  'VERSION="${GITHUB_REF_NAME#v}"',
+                  'bun node_modules/@dbx-tools/projen/tasks/publish-uniffi-local.ts --version "$VERSION" --registry "${{ vars.LOCAL_NPM_REGISTRY }}" --pypi-publish-url "${{ vars.LOCAL_PYPI_PUBLISH_URL }}" --cargo-registry "${{ vars.LOCAL_CARGO_REGISTRY }}"',
+                ].join("\n"),
                 env: {
+                  NODE_AUTH_TOKEN: "${{ secrets.LOCAL_NPM_TOKEN }}",
                   UV_PUBLISH_USERNAME: "${{ secrets.LOCAL_PYPI_USERNAME }}",
                   UV_PUBLISH_PASSWORD: "${{ secrets.LOCAL_PYPI_PASSWORD }}",
+                  CARGO_REGISTRY_TOKEN: "${{ secrets.LOCAL_CARGO_TOKEN }}",
                 },
-                run: "uv publish --publish-url \"${{ vars.LOCAL_PYPI_PUBLISH_URL }}\" dist/uniffi/python/*.whl",
-              },
-              {
-                name: "Publish Cargo mirror",
-                if: "${{ vars.LOCAL_CARGO_REGISTRY != '' && matrix.binding.publishCargo }}",
-                run: "cargo login --registry \"${{ vars.LOCAL_CARGO_REGISTRY }}\" \"${{ secrets.LOCAL_CARGO_TOKEN }}\" && cargo publish --package \"${{ matrix.binding.crate }}\" --registry \"${{ vars.LOCAL_CARGO_REGISTRY }}\" --allow-dirty",
               },
             ],
           },

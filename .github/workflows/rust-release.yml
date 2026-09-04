@@ -24,7 +24,6 @@ jobs:
           - binding:
               crate: dbx-tools-auth-u2m
               rust: packages/rs/auth-u2m
-              publishCargo: true
               node: packages/js/node/auth-u2m
               nodePackage: "@dbx-tools/auth-u2m"
               python: packages/py/auth-u2m
@@ -41,7 +40,6 @@ jobs:
           - binding:
               crate: dbx-tools-auth-u2m
               rust: packages/rs/auth-u2m
-              publishCargo: true
               node: packages/js/node/auth-u2m
               nodePackage: "@dbx-tools/auth-u2m"
               python: packages/py/auth-u2m
@@ -58,7 +56,6 @@ jobs:
           - binding:
               crate: dbx-tools-auth-u2m
               rust: packages/rs/auth-u2m
-              publishCargo: true
               node: packages/js/node/auth-u2m
               nodePackage: "@dbx-tools/auth-u2m"
               python: packages/py/auth-u2m
@@ -74,7 +71,6 @@ jobs:
           - binding:
               crate: dbx-tools-auth-u2m
               rust: packages/rs/auth-u2m
-              publishCargo: true
               node: packages/js/node/auth-u2m
               nodePackage: "@dbx-tools/auth-u2m"
               python: packages/py/auth-u2m
@@ -90,7 +86,6 @@ jobs:
           - binding:
               crate: dbx-tools-auth-u2m
               rust: packages/rs/auth-u2m
-              publishCargo: true
               node: packages/js/node/auth-u2m
               nodePackage: "@dbx-tools/auth-u2m"
               python: packages/py/auth-u2m
@@ -141,7 +136,6 @@ jobs:
         binding:
           - crate: dbx-tools-auth-u2m
             rust: packages/rs/auth-u2m
-            publishCargo: true
             node: packages/js/node/auth-u2m
             nodePackage: "@dbx-tools/auth-u2m"
             python: packages/py/auth-u2m
@@ -192,58 +186,47 @@ jobs:
       - name: Publish Python wheels
         if: ${{ matrix.binding.python != '' }}
         run: uv publish --trusted-publishing always dist/uniffi/python/*.whl
-      - name: Publish Cargo crate
-        if: ${{ matrix.binding.publishCargo }}
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --package "${{ matrix.binding.crate }}"
-  publish-local:
-    if: ${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}
+  publish-cargo:
+    if: ${{ github.event_name == 'push' }}
     needs:
       - build
-    runs-on:
-      - self-hosted
-    strategy:
-      matrix:
-        binding:
-          - crate: dbx-tools-auth-u2m
-            rust: packages/rs/auth-u2m
-            publishCargo: true
-            node: packages/js/node/auth-u2m
-            nodePackage: "@dbx-tools/auth-u2m"
-            python: packages/py/auth-u2m
-            pythonPackage: dbx-tools-auth-u2m
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Publish public crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --workspace --registry crates-io
+  publish-local:
+    if: ${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}
+    runs-on:
+      - self-hosted
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Download packages
-        uses: actions/download-artifact@v8
-        with:
-          pattern: ${{ matrix.binding.crate }}-*
-          path: dist/uniffi
-          merge-multiple: true
-      - name: Publish npm mirror
-        if: ${{ vars.LOCAL_NPM_REGISTRY != '' && matrix.binding.node != '' }}
+      - name: Install
+        run: bun install
+      - name: Build and publish host-native packages
+        run: |-
+          VERSION="${GITHUB_REF_NAME#v}"
+          bun node_modules/@dbx-tools/projen/tasks/publish-uniffi-local.ts --version "$VERSION" --registry "${{ vars.LOCAL_NPM_REGISTRY }}" --pypi-publish-url "${{ vars.LOCAL_PYPI_PUBLISH_URL }}" --cargo-registry "${{ vars.LOCAL_CARGO_REGISTRY }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.LOCAL_NPM_TOKEN }}
-        run: for package in dist/uniffi/npm/*.tgz; do npm publish "$package" --registry "${{ vars.LOCAL_NPM_REGISTRY }}"; done
-      - name: Publish npm facade mirror
-        if: ${{ vars.LOCAL_NPM_REGISTRY != '' && matrix.binding.node != '' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.LOCAL_NPM_TOKEN }}
-        run: for package in dist/uniffi/npm-facade/*.tgz; do npm publish "$package" --registry "${{ vars.LOCAL_NPM_REGISTRY }}"; done
-      - name: Publish Python mirror
-        if: ${{ vars.LOCAL_PYPI_PUBLISH_URL != '' && matrix.binding.python != '' }}
-        env:
           UV_PUBLISH_USERNAME: ${{ secrets.LOCAL_PYPI_USERNAME }}
           UV_PUBLISH_PASSWORD: ${{ secrets.LOCAL_PYPI_PASSWORD }}
-        run: uv publish --publish-url "${{ vars.LOCAL_PYPI_PUBLISH_URL }}" dist/uniffi/python/*.whl
-      - name: Publish Cargo mirror
-        if: ${{ vars.LOCAL_CARGO_REGISTRY != '' && matrix.binding.publishCargo }}
-        run: cargo login --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" "${{ secrets.LOCAL_CARGO_TOKEN }}" && cargo publish --package "${{ matrix.binding.crate }}" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --allow-dirty
+          CARGO_REGISTRY_TOKEN: ${{ secrets.LOCAL_CARGO_TOKEN }}
