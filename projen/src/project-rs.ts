@@ -12,6 +12,13 @@ import {
   projectRepositoryUrl,
 } from "./project-js.ts";
 import { pythonModuleName, type PythonPackageOptions } from "./project-py.ts";
+import {
+  DOWNSTREAM_RELEASE_EVENT,
+  RELEASE_SHA,
+  RELEASE_TAG,
+  RUST_RELEASE_EVENT,
+  releaseSourceSteps,
+} from "./release-dispatch.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 
@@ -181,37 +188,6 @@ function timedBash(phase: string, command: string): string {
     `trap 'status=$?; echo "phase=${phase} duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT`,
     command,
   ].join("\n");
-}
-
-function releaseSourceSteps(
-  releaseTag: string,
-  expectedSha: string,
-): readonly Record<string, unknown>[] {
-  return [
-    {
-      name: "Checkout release commit",
-      uses: "actions/checkout@v6",
-      with: {
-        ref: expectedSha,
-        "fetch-depth": 1,
-      },
-    },
-    {
-      name: "Verify release source",
-      shell: "bash",
-      env: {
-        RELEASE_TAG: releaseTag,
-        EXPECTED_SHA: expectedSha,
-      },
-      run: [
-        'test -n "$RELEASE_TAG"',
-        'test -n "$EXPECTED_SHA"',
-        'git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
-        'test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"',
-        'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"',
-      ].join("\n"),
-    },
-  ];
 }
 
 function releaseTargets(options: DBXToolsRustWorkspaceOptions): readonly UniFFIReleaseTarget[] {
@@ -658,7 +634,6 @@ export class DBXToolsRustWorkspace {
   ): void {
     if (!project.github) return;
     const workflowName = options.releaseWorkflowName ?? "rust-release";
-    const dispatcherWorkflowName = `${workflowName}-dispatch`;
     const releaseTagPrefix = options.releaseTagPrefix ?? "v";
     const releaseRustVersion = options.releaseRustVersion ?? "stable";
     const ubrnRustVersion = options.ubrnRustVersion ?? releaseRustVersion;
@@ -667,10 +642,6 @@ export class DBXToolsRustWorkspace {
         ? ""
         : `rustup toolchain install ${ubrnRustVersion} --profile minimal\n`;
     const releaseBranch = projectReleaseBranch(project);
-    const releaseTag =
-      "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}";
-    const expectedSha =
-      "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.expected_sha || inputs.expected_sha }}";
     const bindings = this.bindingMappings.map((binding) => ({
       ...binding,
       node: binding.node ?? "",
@@ -798,7 +769,7 @@ export class DBXToolsRustWorkspace {
         matrix: { include: targetMatrix },
       },
       steps: [
-        ...releaseSourceSteps(releaseTag, expectedSha),
+        ...releaseSourceSteps(),
         ...(hasNodeBindings
           ? [
               {
@@ -890,7 +861,7 @@ export class DBXToolsRustWorkspace {
                 name: "Package UniFFI outputs",
                 shell: "bash",
                 env: {
-                  VERSION: releaseTag,
+                  VERSION: RELEASE_TAG,
                   ...(hasNodeBindings
                     ? {
                         CARGO_TARGET_DIR: "${{ github.workspace }}/target/ubrn",
@@ -990,53 +961,19 @@ export class DBXToolsRustWorkspace {
         },
       ]),
     );
-    new YamlFile(project, `.github/workflows/${dispatcherWorkflowName}.yml`, {
-      obj: {
-        name: dispatcherWorkflowName,
-        on: { push: { tags: [`${releaseTagPrefix}*`] } },
-        permissions: {
-          contents: "write",
-        },
-        jobs: {
-          dispatch: {
-            "runs-on": "ubuntu-latest",
-            steps: [
-              {
-                name: "Checkout release tag",
-                uses: "actions/checkout@v6",
-                with: { "fetch-depth": 1 },
-              },
-              {
-                name: "Dispatch branch-scoped release",
-                shell: "bash",
-                env: {
-                  GH_TOKEN: "${{ github.token }}",
-                  RELEASE_TAG: "${{ github.ref_name }}",
-                  RELEASE_EVENT: workflowName,
-                },
-                run: [
-                  `case "$RELEASE_TAG" in ${releaseTagPrefix}*) ;; *) exit 1 ;; esac`,
-                  'EXPECTED_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
-                  [
-                    'gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches"',
-                    '--raw-field event_type="$RELEASE_EVENT"',
-                    '--raw-field "client_payload[release_tag]=$RELEASE_TAG"',
-                    '--raw-field "client_payload[expected_sha]=$EXPECTED_SHA"',
-                  ].join(" \\\n  "),
-                ].join("\n"),
-              },
-            ],
-          },
-        },
-      },
-    });
+    const releaseCompletionJobs = [
+      "build",
+      ...bindings.map((binding) => `publish-${binding.crate}`),
+      ...(publicCrates.length ? ["publish-cargo"] : []),
+      ...(releaseBinaries.length ? ["publish-github-release"] : []),
+    ];
     new YamlFile(project, `.github/workflows/${workflowName}.yml`, {
       obj: {
         name: workflowName,
-        "run-name": `${workflowName} ${releaseTag}`,
+        "run-name": `${workflowName} ${RELEASE_TAG}`,
         on: {
           repository_dispatch: {
-            types: [workflowName],
+            types: [RUST_RELEASE_EVENT],
           },
           workflow_dispatch: {
             inputs: {
@@ -1070,8 +1007,8 @@ export class DBXToolsRustWorkspace {
                 name: "Write release metadata",
                 shell: "bash",
                 env: {
-                  RELEASE_TAG: releaseTag,
-                  EXPECTED_SHA: expectedSha,
+                  RELEASE_TAG,
+                  EXPECTED_SHA: RELEASE_SHA,
                 },
                 run: [
                   "mkdir -p .release",
@@ -1099,7 +1036,7 @@ export class DBXToolsRustWorkspace {
                   "runs-on": "ubuntu-latest",
                   permissions: { contents: "read" },
                   steps: [
-                    ...releaseSourceSteps(releaseTag, expectedSha),
+                    ...releaseSourceSteps(),
                     {
                       name: "Setup Rust",
                       uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
@@ -1199,7 +1136,7 @@ export class DBXToolsRustWorkspace {
                   "runs-on": ["self-hosted"],
                   permissions: { contents: "read" },
                   steps: [
-                    ...releaseSourceSteps(releaseTag, expectedSha),
+                    ...releaseSourceSteps(),
                     {
                       name: "Setup Rust",
                       uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
@@ -1243,14 +1180,40 @@ export class DBXToolsRustWorkspace {
                       with: {
                         files: "dist/rust-release/*",
                         "generate-release-notes": true,
-                        tag_name: releaseTag,
-                        target_commitish: expectedSha,
+                        tag_name: RELEASE_TAG,
+                        target_commitish: RELEASE_SHA,
                       },
                     },
                   ],
                 },
               }
             : {}),
+          "dispatch-downstream": {
+            if: "${{ github.event_name == 'repository_dispatch' }}",
+            needs: releaseCompletionJobs,
+            "runs-on": "ubuntu-latest",
+            permissions: { contents: "write" },
+            steps: [
+              {
+                name: "Dispatch downstream releases",
+                shell: "bash",
+                env: {
+                  GH_TOKEN: "${{ github.token }}",
+                  RELEASE_TAG,
+                  EXPECTED_SHA: RELEASE_SHA,
+                  RELEASE_EVENT: DOWNSTREAM_RELEASE_EVENT,
+                },
+                run: [
+                  [
+                    'gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches"',
+                    '--raw-field event_type="$RELEASE_EVENT"',
+                    '--raw-field "client_payload[release_tag]=$RELEASE_TAG"',
+                    '--raw-field "client_payload[expected_sha]=$EXPECTED_SHA"',
+                  ].join(" \\\n  "),
+                ].join("\n"),
+              },
+            ],
+          },
         },
       },
     });

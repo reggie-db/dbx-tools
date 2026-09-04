@@ -55,22 +55,6 @@ jobs:
       matrix:
         include:
           - target:
-              runner: macos-15-intel
-              cargo: x86_64-apple-darwin
-              node: darwin-x64
-              python: macosx_13_0_x86_64
-              os: darwin
-              cpu: x64
-              facade: true
-          - target:
-              runner: macos-14
-              cargo: aarch64-apple-darwin
-              node: darwin-arm64
-              python: macosx_11_0_arm64
-              os: darwin
-              cpu: arm64
-              facade: false
-          - target:
               runner: ubuntu-22.04
               cargo: x86_64-unknown-linux-gnu
               node: linux-x64-gnu
@@ -78,7 +62,7 @@ jobs:
               os: linux
               cpu: x64
               libc: glibc
-              facade: false
+              facade: true
           - target:
               runner: ubuntu-24.04-arm
               cargo: aarch64-unknown-linux-gnu
@@ -406,3 +390,26 @@ jobs:
           generate-release-notes: true
           tag_name: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}
           target_commitish: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.expected_sha || inputs.expected_sha }}
+  dispatch-downstream:
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    needs:
+      - build
+      - publish-dbx-tools-auth-u2m
+      - publish-cargo
+      - publish-github-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Dispatch downstream releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}
+          EXPECTED_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.expected_sha || inputs.expected_sha }}
+          RELEASE_EVENT: release
+        run: |-
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            --raw-field event_type="$RELEASE_EVENT" \
+            --raw-field "client_payload[release_tag]=$RELEASE_TAG" \
+            --raw-field "client_payload[expected_sha]=$EXPECTED_SHA"

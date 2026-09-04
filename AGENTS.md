@@ -356,15 +356,18 @@ Primary package areas:
   OS/architecture and Rust version, and prepare it before the workspace build.
   The `CACHE_UBRN_TARGET=true` repository variable enables that large target
   archive for comparison; the default relies on the object-level sccache.
-  Release tags run only a small `<workflow>-dispatch` job. It resolves the
-  annotated tag to a commit and sends a `repository_dispatch` carrying both
-  identities to the release workflow on the configured release branch. Every
+  Release tags run only the small `release-dispatch` workflow. It resolves the
+  annotated tag to a commit and sends a `rust-release` event when a Rust release
+  exists, otherwise it sends the downstream `release` event directly. A
+  successful Rust release sends `release` after its public wrappers, crates, and
+  binaries complete. Python, Node, standalone Node, and docs consume `release`
+  independently and start together on the configured release branch. Every
   source job shallow-checks out that explicit commit, fetches only the requested tag, and requires both
   `tag^{commit}` and `HEAD` to equal the expected SHA. This branch context keeps
   Cargo registry and sccache entries reusable across version tags. Cargo registry
   caches use one stable target/toolchain key; `SCCACHE_GHA_VERSION` provides the
-  matching compiler-cache namespace. Release metadata is passed to Python, Node,
-  and docs as an artifact so a later branch tip cannot change downstream source.
+  matching compiler-cache namespace. The tag and SHA stay in each dispatch
+  payload so a later branch tip cannot change downstream source.
   Packaging must
   execute the target-specific `uniffi-bindgen` binary produced by that workspace
   build, never `cargo run`, so no Rust compilation occurs after the main build.
@@ -377,9 +380,9 @@ Primary package areas:
   `bun run bump --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product; omit both to restore the maintained full
   matrix. Attached Rust and Python workspace components record their generated
-  workflow names in `dbxToolsConfig`; release components derive the available
-  Rust to Python to Node chain from that metadata. Consumers specify an upstream
-  workflow only to override this composition.
+  workflow names in `dbxToolsConfig`; `release-dispatch` uses that metadata to
+  decide whether Rust gates the downstream workflows. Consumers specify an
+  `upstreamWorkflow` only to override this event-based composition.
   GitHub environments referenced by release jobs must permit the configured
   release branch. PyPI trusted publishers keep the generated workflow and
   environment names unchanged even though the initiating event is branch-scoped.

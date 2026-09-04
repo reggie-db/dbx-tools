@@ -113,7 +113,7 @@ describe("generated workflow safety", () => {
 });
 
 describe("optional Node release stages", () => {
-  it("publishes directly from tags when no upstream stage exists", () => {
+  it("publishes from the downstream release event", () => {
     const directOutdir = mkdtempSync(join(tmpdir(), "release-direct-"));
     try {
       const project = new DBXToolsNodeProject({
@@ -126,9 +126,13 @@ describe("optional Node release stages", () => {
         join(directOutdir, ".github", "workflows", "node-release.yml"),
         "utf8",
       );
-      assert.match(workflow, /^  push:\n    tags:\n      - v\*$/m);
+      assert.match(workflow, /^  repository_dispatch:\n    types:\n      - release$/m);
       assert.doesNotMatch(workflow, /workflow_run:/);
       assert.match(workflow, /name: Upload release metadata/);
+      assert.match(
+        readFileSync(join(directOutdir, ".github", "workflows", "release-dispatch.yml"), "utf8"),
+        /^  push:\n    tags:\n      - v\*$/m,
+      );
     } finally {
       rmSync(directOutdir, { recursive: true, force: true });
     }

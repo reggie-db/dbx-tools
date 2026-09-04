@@ -83,6 +83,7 @@ jspm_packages/
 !.env.sample
 .idea/*
 !/.eslintrc.json
+!/.github/workflows/release-dispatch.yml
 .docs-build/
 .astro/
 .worktrees/
@@ -101,7 +102,6 @@ packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py
 packages/py/auth-u2m/src/dbx_tools/auth_u2m/*dbx_tools_auth_u2m.*
 !/Cargo.toml
 !/.projen/uniffi-release.mjs
-!/.github/workflows/rust-release-dispatch.yml
 !/.github/workflows/rust-release.yml
 !/pyproject.toml
 !/packages/py/auth-u2m/pyproject.toml

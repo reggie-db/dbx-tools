@@ -105,9 +105,9 @@ without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
 
 The workspace also generates a `rust-release` workflow from discovered crates,
-UniFFI bindings, and release-enabled binaries. A small tag workflow resolves the
-annotated release tag and sends the tag plus commit SHA to `rust-release` through
-`repository_dispatch`. The release workflow runs in the configured release
+UniFFI bindings, and release-enabled binaries. The root `release-dispatch`
+workflow resolves the annotated release tag and sends the tag plus commit SHA to
+`rust-release` when Rust is present. The Rust workflow runs in the configured release
 branch cache scope, checks out the supplied SHA, fetches the tag, and requires
 both the tag target and `HEAD` to equal that SHA before building. Its matrix has
 one row per target. Each row installs native dependencies and restores
@@ -154,12 +154,13 @@ environment parsing in a consumer.
 Private Python binding projects are marked with `[tool.dbx-tools] private =
 true`. They stay out of the standard uv/Python release and docs surfaces;
 `rust-release` publishes their prebuilt native wheels directly.
-When Rust and Python workspaces are attached, their workflow metadata composes
-the available Rust to Python to Node release chain automatically. A
-`release-metadata` artifact carries the verified tag and SHA across each stage
-and into docs. Configure release GitHub environments to permit the generated
-release branch; the trusted-publisher instructions list that branch with the
-workflow and environment identity PyPI verifies.
+After Rust's public artifacts finish, it dispatches the downstream `release`
+event. Python, Node, standalone Node, and docs consume that event independently
+and start together with the same verified tag and SHA. Without Rust,
+`release-dispatch` sends that event immediately. Configure release GitHub
+environments to permit the generated release branch; the trusted-publisher
+instructions list that branch with the workflow and environment identity PyPI
+verifies.
 
 ## Customize Packages With Mixins
 

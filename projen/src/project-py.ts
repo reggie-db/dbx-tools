@@ -1,6 +1,6 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
 import { project as coreProject } from "@dbx-tools/core";
-import { object, string } from "@dbx-tools/shared-core";
+import { string } from "@dbx-tools/shared-core";
 import { Component, TextFile, type Project, javascript, python, vscode } from "projen";
 import type { IResolver } from "projen/lib/file";
 import { GithubWorkflow } from "projen/lib/github";
@@ -9,6 +9,7 @@ import { parse, stringify } from "smol-toml";
 import { projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
+import { DOWNSTREAM_RELEASE_EVENT, RELEASE_TAG, releaseSourceSteps } from "./release-dispatch.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 /** Git location used by direct `#subdirectory=` package dependencies. */
@@ -310,14 +311,7 @@ export class DBXToolsPythonWorkspace extends Component {
     this.addTasks(project, resolvedOptions);
 
     const configuredReleaseOptions = options.release === true ? {} : options.release || {};
-    const rust = isDBXToolsJavaScriptProject()(project) ? project.dbxToolsConfig.rust : undefined;
-    const rustReleaseWorkflow = object.isRecord(rust)
-      ? (string.trimToNull(rust.releaseWorkflow) ?? undefined)
-      : undefined;
-    const releaseOptions = {
-      ...configuredReleaseOptions,
-      upstreamWorkflow: configuredReleaseOptions.upstreamWorkflow ?? rustReleaseWorkflow,
-    };
+    const releaseOptions = { ...configuredReleaseOptions };
     this.addTrustedPublisherInstructionsTask(project, releaseOptions);
 
     const interpreterPath = options.interpreterPath ?? "${workspaceFolder}/.venv/bin/python";
@@ -441,10 +435,16 @@ export class DBXToolsPythonWorkspace extends Component {
       ...(options.upstreamWorkflow ? { actions: "read" } : {}),
     });
     const upstreamWorkflow = options.upstreamWorkflow;
+    const branchDispatch = upstreamWorkflow === undefined && isDBXToolsJavaScriptProject()(project);
     if (upstreamWorkflow) {
       workflow.file?.addOverride("on.workflow_run", {
         workflows: [upstreamWorkflow],
         types: ["completed"],
+      });
+      workflow.on({ workflowDispatch: {} });
+    } else if (branchDispatch) {
+      workflow.file?.addOverride("on.repository_dispatch", {
+        types: [DOWNSTREAM_RELEASE_EVENT],
       });
       workflow.on({ workflowDispatch: {} });
     } else {
@@ -452,11 +452,26 @@ export class DBXToolsPythonWorkspace extends Component {
     }
     workflow.file?.addOverride("on.workflow_dispatch", {
       inputs: {
-        version: {
-          description: "Python package version to build",
-          type: "string",
-          required: true,
-        },
+        ...(branchDispatch
+          ? {
+              release_tag: {
+                description: "Release tag to package during a dry run",
+                type: "string",
+                required: true,
+              },
+              expected_sha: {
+                description: "Commit the release tag must reference",
+                type: "string",
+                required: true,
+              },
+            }
+          : {
+              version: {
+                description: "Python package version to build",
+                type: "string",
+                required: true,
+              },
+            }),
       },
     });
     workflow.addJob("build", {
@@ -501,18 +516,22 @@ export class DBXToolsPythonWorkspace extends Component {
               },
             ]
           : []),
-        {
-          name: "Checkout",
-          uses: "actions/checkout@v6",
-          with: {
-            "fetch-depth": 0,
-            ...(upstreamWorkflow
-              ? {
-                  ref: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.expected_sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
-                }
-              : {}),
-          },
-        },
+        ...(branchDispatch
+          ? releaseSourceSteps()
+          : [
+              {
+                name: "Checkout",
+                uses: "actions/checkout@v6",
+                with: {
+                  "fetch-depth": 0,
+                  ...(upstreamWorkflow
+                    ? {
+                        ref: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.expected_sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
+                      }
+                    : {}),
+                },
+              },
+            ]),
         ...(upstreamWorkflow
           ? [
               {
@@ -535,8 +554,9 @@ export class DBXToolsPythonWorkspace extends Component {
         {
           name: "Stamp workspace versions",
           env: {
-            VERSION:
-              "${{ github.event_name == 'push' && github.ref_name || github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.release_tag || inputs.version }}",
+            VERSION: branchDispatch
+              ? RELEASE_TAG
+              : "${{ github.event_name == 'push' && github.ref_name || github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.release_tag || inputs.version }}",
           },
           run: upstreamWorkflow
             ? [
@@ -588,7 +608,9 @@ export class DBXToolsPythonWorkspace extends Component {
     });
     for (const publication of publications) {
       workflow.addJob(`publish-${publication.directory}`, {
-        if: "${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}",
+        if: branchDispatch
+          ? "${{ github.event_name == 'repository_dispatch' }}"
+          : "${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}",
         needs: ["build"],
         environment: {
           name: publication.environment,

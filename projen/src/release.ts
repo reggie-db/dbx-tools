@@ -4,11 +4,20 @@
  * the project has a GitHub component - authors the tag-driven npm publish
  * workflow that the pushed tag triggers.
  */
-import { Component } from "projen";
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { Component, YamlFile } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
-import { object, string } from "@dbx-tools/shared-core";
+import { object } from "@dbx-tools/shared-core";
 import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
+import {
+  DOWNSTREAM_RELEASE_EVENT,
+  RELEASE_SHA,
+  RELEASE_TAG,
+  RUST_RELEASE_EVENT,
+  releaseSourceSteps,
+} from "./release-dispatch.ts";
 
 const NODE_VERSION = "lts/*";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
@@ -169,10 +178,27 @@ export class DBXToolsRelease extends Component {
     this.standaloneReleases = options.standaloneReleases ?? [];
     this.upstreamWorkflow = options.upstreamWorkflow;
     this.workflowName = options.workflowName ?? "node-release";
+    if (project.github) this.authorReleaseDispatcher(project);
   }
 
   public override preSynthesize(): void {
     const project = this.project as DBXToolsNodeProject;
+    const rust = project.dbxToolsConfig.rust;
+    if (
+      !this.workflowName &&
+      this.standaloneReleases.length === 0 &&
+      typeof project.dbxToolsConfig.pythonReleaseWorkflow !== "string" &&
+      !(object.isRecord(rust) && typeof rust.releaseWorkflow === "string")
+    ) {
+      project.tryRemoveFile(".github/workflows/release-dispatch.yml");
+    }
+    const releaseEvent =
+      object.isRecord(rust) && typeof rust.releaseWorkflow === "string"
+        ? RUST_RELEASE_EVENT
+        : DOWNSTREAM_RELEASE_EVENT;
+    project
+      .tryFindObjectFile(".github/workflows/release-dispatch.yml")
+      ?.addOverride("jobs.dispatch.steps.1.env.RELEASE_EVENT", releaseEvent);
     // Release the standalone projects in the SAME run, at the same version. They
     // are not workspace members, so nothing else would ever bring them along.
     const siblingArgs = this.standaloneReleases
@@ -196,12 +222,60 @@ export class DBXToolsRelease extends Component {
     }
   }
 
+  public override postSynthesize(): void {
+    rmSync(resolve(this.project.outdir, ".github/workflows/rust-release-dispatch.yml"), {
+      force: true,
+    });
+  }
+
+  private authorReleaseDispatcher(project: DBXToolsNodeProject): void {
+    new YamlFile(project, ".github/workflows/release-dispatch.yml", {
+      obj: {
+        name: "release-dispatch",
+        on: { push: { tags: [`${this.tagPrefix}*`] } },
+        permissions: { contents: "write" },
+        jobs: {
+          dispatch: {
+            "runs-on": "ubuntu-latest",
+            steps: [
+              {
+                name: "Checkout release tag",
+                uses: "actions/checkout@v6",
+                with: { "fetch-depth": 1 },
+              },
+              {
+                name: "Dispatch release",
+                shell: "bash",
+                env: {
+                  GH_TOKEN: "${{ github.token }}",
+                  RELEASE_TAG: "${{ github.ref_name }}",
+                  RELEASE_EVENT: DOWNSTREAM_RELEASE_EVENT,
+                },
+                run: [
+                  `case "$RELEASE_TAG" in ${this.tagPrefix}*) ;; *) exit 1 ;; esac`,
+                  'EXPECTED_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
+                  [
+                    'gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches"',
+                    '--raw-field event_type="$RELEASE_EVENT"',
+                    '--raw-field "client_payload[release_tag]=$RELEASE_TAG"',
+                    '--raw-field "client_payload[expected_sha]=$EXPECTED_SHA"',
+                  ].join(" \\\n  "),
+                ].join("\n"),
+              },
+            ],
+          },
+        },
+      },
+    });
+  }
+
   /** Author the common tag trigger, concurrency policy, permissions, and publish job. */
   private authorPublishWorkflow(
     project: DBXToolsNodeProject,
     { name, tagPrefix, steps, workingDirectory, upstreamWorkflow }: PublishWorkflow,
   ): void {
     const setupSteps = publishSetupSteps();
+    const branchDispatch = upstreamWorkflow === undefined;
     const workflow = new GithubWorkflow(project.github!, name, {
       // Serialize publishes so two tags landing together cannot race to the
       // registry, but never cancel a run already in flight: a half-published
@@ -221,7 +295,9 @@ export class DBXToolsRelease extends Component {
         types: ["completed"],
       });
     } else {
-      workflow.on({ push: { tags: [`${tagPrefix}*`] } });
+      workflow.file?.addOverride("on.repository_dispatch", {
+        types: [DOWNSTREAM_RELEASE_EVENT],
+      });
     }
     // Manual trigger for testing the workflow WITHOUT reaching npm: a
     // `workflow_dispatch` run has no tag, so the publish script forces
@@ -229,6 +305,20 @@ export class DBXToolsRelease extends Component {
     // additionally lets a tag push be dry-run on demand.
     workflow.file?.addOverride("on.workflow_dispatch", {
       inputs: {
+        ...(branchDispatch
+          ? {
+              release_tag: {
+                description: "Release tag to package during a dry run",
+                type: "string",
+                required: true,
+              },
+              expected_sha: {
+                description: "Commit the release tag must reference",
+                type: "string",
+                required: true,
+              },
+            }
+          : {}),
         dry_run: {
           description: "Pack and validate but do not upload to npm",
           type: "boolean",
@@ -245,7 +335,7 @@ export class DBXToolsRelease extends Component {
       runsOn: ["ubuntu-latest"],
       // `id-token: write` lets npm mint the OIDC token for provenance attestation.
       permissions: {
-        actions: JobPermission.READ,
+        ...(upstreamWorkflow ? { actions: JobPermission.READ } : {}),
         contents: JobPermission.READ,
         idToken: JobPermission.WRITE,
       },
@@ -294,7 +384,13 @@ export class DBXToolsRelease extends Component {
                   "fetch-depth": 0,
                 },
               }
-            : {}),
+            : {
+                with: {
+                  ...setupSteps[0]!.with,
+                  ref: RELEASE_SHA,
+                  "fetch-depth": 1,
+                },
+              }),
         },
         ...(upstreamWorkflow
           ? [
@@ -317,20 +413,31 @@ export class DBXToolsRelease extends Component {
               } satisfies JobStep,
             ]
           : []),
-        ...setupSteps.slice(1),
-        ...(!upstreamWorkflow
+        ...(branchDispatch ? releaseSourceSteps().slice(1) : []),
+        ...(branchDispatch
           ? [
               {
-                name: "Write release metadata",
+                name: "Resolve package release tag",
                 shell: "bash",
+                env: {
+                  SOURCE_RELEASE_TAG: RELEASE_TAG,
+                  EXPECTED_SHA: RELEASE_SHA,
+                },
                 run: [
+                  `SOURCE_VERSION="\${SOURCE_RELEASE_TAG#${this.tagPrefix}}"`,
+                  `RELEASE_TAG="${tagPrefix}\${SOURCE_VERSION}"`,
+                  'git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
+                  'test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"',
+                  'echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"',
+                  `echo "RELEASE_VERSION=\${RELEASE_TAG#${tagPrefix}}" >> "$GITHUB_ENV"`,
                   "mkdir -p .release",
-                  'printf "%s\\n" "$GITHUB_REF_NAME" > .release/tag',
-                  "git rev-parse HEAD > .release/sha",
+                  'printf "%s\\n" "$SOURCE_RELEASE_TAG" > .release/tag',
+                  'printf "%s\\n" "$EXPECTED_SHA" > .release/sha',
                 ].join("\n"),
               } satisfies JobStep,
             ]
           : []),
+        ...setupSteps.slice(1),
         {
           name: "Upload release metadata",
           uses: "actions/upload-artifact@v7",
@@ -354,7 +461,7 @@ export class DBXToolsRelease extends Component {
     this.authorPublishWorkflow(project, {
       name: this.workflowName,
       tagPrefix: this.tagPrefix,
-      upstreamWorkflow: this.releaseUpstreamWorkflow(project),
+      upstreamWorkflow: this.upstreamWorkflow,
       steps: [
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Stamp it on
         // every workspace package (manifests are projen-readonly, so unlock
@@ -379,16 +486,6 @@ export class DBXToolsRelease extends Component {
         },
       ],
     });
-  }
-
-  private releaseUpstreamWorkflow(project: DBXToolsNodeProject): string | undefined {
-    if (this.upstreamWorkflow) return this.upstreamWorkflow;
-    const python = string.trimToNull(project.dbxToolsConfig.pythonReleaseWorkflow) ?? undefined;
-    if (python) return python;
-    const rust = project.dbxToolsConfig.rust;
-    return object.isRecord(rust)
-      ? (string.trimToNull(rust.releaseWorkflow) ?? undefined)
-      : undefined;
   }
 
   /**
@@ -416,7 +513,7 @@ export class DBXToolsRelease extends Component {
     this.authorPublishWorkflow(project, {
       name,
       tagPrefix,
-      upstreamWorkflow: this.releaseUpstreamWorkflow(project),
+      upstreamWorkflow: this.upstreamWorkflow,
       steps: [
         {
           name: "Set version from tag and publish",

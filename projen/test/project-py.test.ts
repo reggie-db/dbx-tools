@@ -125,7 +125,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.doesNotMatch(release, /^  publish:$/m);
     assert.doesNotMatch(release, /publish-native/);
     const nodeRelease = readFileSync(join(outdir, ".github/workflows/node-release.yml"), "utf8");
-    assert.match(nodeRelease, /workflows:\s+- publish-python/);
+    assert.match(nodeRelease, /^  repository_dispatch:\n    types:\n      - release$/m);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
     const instructionsCommand = instructionsTask?.steps?.[0]?.exec;
     assert.equal(instructionsCommand, "node .projen/pypi-trusted-publisher-instructions.mjs");
@@ -173,7 +173,7 @@ describe("DBXToolsPythonWorkspace", () => {
 });
 
 describe("optional Python release stages", () => {
-  it("publishes directly from tags when no Rust upstream exists", () => {
+  it("publishes from the downstream release event", () => {
     const directOutdir = mkdtempSync(join(tmpdir(), "project-py-direct-"));
     try {
       const project = new DBXToolsNodeProject({
@@ -199,9 +199,13 @@ describe("optional Python release stages", () => {
         join(directOutdir, ".github", "workflows", "python-release.yml"),
         "utf8",
       );
-      assert.match(workflow, /^  push:\n    tags:\n      - v\*$/m);
+      assert.match(workflow, /^  repository_dispatch:\n    types:\n      - release$/m);
       assert.doesNotMatch(workflow, /workflow_run:/);
       assert.match(workflow, /name: Upload release metadata/);
+      assert.match(
+        readFileSync(join(directOutdir, ".github", "workflows", "release-dispatch.yml"), "utf8"),
+        /RELEASE_EVENT: release/,
+      );
     } finally {
       rmSync(directOutdir, { recursive: true, force: true });
     }

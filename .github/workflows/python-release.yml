@@ -4,56 +4,37 @@ name: python-release
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: Python package version to build
+      release_tag:
+        description: Release tag to package during a dry run
         type: string
         required: true
-  workflow_run:
-    workflows:
-      - rust-release
+      expected_sha:
+        description: Commit the release tag must reference
+        type: string
+        required: true
+  repository_dispatch:
     types:
-      - completed
+      - release
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'repository_dispatch')) }}
     steps:
-      - name: Download release metadata
-        id: download_release_metadata
-        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: release-metadata
-          path: .release
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ github.token }}
-      - name: Read release metadata
-        id: release_metadata
-        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}
-        run: |-
-          RELEASE_TAG="$(cat .release/tag)"
-          EXPECTED_SHA="$(cat .release/sha)"
-          test -n "$RELEASE_TAG"
-          test -n "$EXPECTED_SHA"
-          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-          echo "expected_sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
-        shell: bash
-      - name: Checkout
-        id: checkout
+      - name: Checkout release commit
+        id: checkout_release_commit
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.expected_sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.expected_sha || inputs.expected_sha }}
+          fetch-depth: 1
       - name: Verify release source
         id: verify_release_source
-        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}
         env:
-          RELEASE_TAG: ${{ steps.release_metadata.outputs.release_tag }}
-          EXPECTED_SHA: ${{ steps.release_metadata.outputs.expected_sha }}
+          RELEASE_TAG: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}
+          EXPECTED_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.expected_sha || inputs.expected_sha }}
         run: |-
+          test -n "$RELEASE_TAG"
+          test -n "$EXPECTED_SHA"
           git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
           test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
@@ -64,14 +45,8 @@ jobs:
       - name: Stamp workspace versions
         id: stamp_workspace_versions
         env:
-          VERSION: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.release_tag || inputs.version }}
+          VERSION: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}
         run: |-
-          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
-            if [ "${{ github.event.workflow_run.event }}" != "repository_dispatch" ]; then
-              VERSION="$(git tag --points-at HEAD --list "v*" | sort -V | tail -1)"
-            fi
-            test -n "$VERSION"
-          fi
           chmod -R u+w packages/py
           python - <<'PY'
           from pathlib import Path
@@ -144,7 +119,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-core
       url: https://pypi.org/project/dbx-tools-core/
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
+    if: ${{ github.event_name == 'repository_dispatch' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -166,7 +141,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-postgres
       url: https://pypi.org/project/dbx-tools-postgres/
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
+    if: ${{ github.event_name == 'repository_dispatch' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -188,7 +163,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-model
       url: https://pypi.org/project/dbx-tools-model/
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
+    if: ${{ github.event_name == 'repository_dispatch' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -210,7 +185,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-litellm
       url: https://pypi.org/project/dbx-tools-litellm/
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
+    if: ${{ github.event_name == 'repository_dispatch' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -232,7 +207,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-graphiti
       url: https://pypi.org/project/dbx-tools-graphiti/
-    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
+    if: ${{ github.event_name == 'repository_dispatch' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -248,4 +223,3 @@ jobs:
     timeout-minutes: 10
 permissions:
   contents: read
-  actions: read

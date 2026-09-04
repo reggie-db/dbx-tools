@@ -72,10 +72,7 @@ describe("DBXToolsRustWorkspace", () => {
       new DBXToolsRustWorkspace(project, {});
       project.synth();
       assert.equal(existsSync(join(emptyOutdir, ".github/workflows/rust-release.yml")), false);
-      assert.equal(
-        existsSync(join(emptyOutdir, ".github/workflows/rust-release-dispatch.yml")),
-        false,
-      );
+      assert.equal(existsSync(join(emptyOutdir, ".github/workflows/release-dispatch.yml")), false);
     } finally {
       rmSync(emptyOutdir, { recursive: true, force: true });
     }
@@ -251,8 +248,10 @@ describe("DBXToolsRustWorkspace", () => {
         join(chainOutdir, ".github/workflows/node-release.yml"),
         "utf8",
       );
-      assert.match(pythonRelease, /workflows:\s+- rust-release/);
-      assert.match(nodeRelease, /workflows:\s+- python-release/);
+      assert.match(pythonRelease, /^  repository_dispatch:\n    types:\n      - release$/m);
+      assert.match(nodeRelease, /^  repository_dispatch:\n    types:\n      - release$/m);
+      assert.doesNotMatch(pythonRelease, /workflow_run:/);
+      assert.doesNotMatch(nodeRelease, /workflow_run:/);
       assert.match(
         readFileSync(join(chainOutdir, "Cargo.toml"), "utf8"),
         /repository = "https:\/\/github\.com\/example\/fixture"/,
@@ -346,16 +345,14 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(gitignore, /^packages\/js\/node\/auth-u2m\/src\/bindings\.ts$/m);
     assert.match(gitignore, /^packages\/py\/auth-u2m\/src\/fixture\/auth_u2m\/bindings\.py$/m);
     const release = readFileSync(join(outdir, ".github/workflows/rust-release.yml"), "utf8");
-    const dispatcher = readFileSync(
-      join(outdir, ".github/workflows/rust-release-dispatch.yml"),
-      "utf8",
-    );
+    const dispatcher = readFileSync(join(outdir, ".github/workflows/release-dispatch.yml"), "utf8");
     assert.match(dispatcher, /^  push:\n    tags:\n      - v\*$/m);
     assert.match(dispatcher, /EXPECTED_SHA="\$\(git rev-parse "\$RELEASE_TAG\^\{commit\}"\)"/);
     assert.match(dispatcher, /gh api --method POST "repos\/\$GITHUB_REPOSITORY\/dispatches"/);
     assert.match(dispatcher, /--raw-field event_type="\$RELEASE_EVENT"/);
     assert.match(dispatcher, /client_payload\[release_tag\]=\$RELEASE_TAG/);
     assert.match(dispatcher, /client_payload\[expected_sha\]=\$EXPECTED_SHA/);
+    assert.match(dispatcher, /RELEASE_EVENT: rust-release/);
     assert.doesNotMatch(dispatcher, /actions\/cache|cargo build|sccache/);
     assert.match(dispatcher, /fetch-depth: 1/);
     assert.match(release, /^  repository_dispatch:\n    types:\n      - rust-release$/m);
@@ -376,8 +373,10 @@ describe("DBXToolsRustWorkspace", () => {
     assert.doesNotMatch(release, /win32-x64-msvc/);
     assert.match(
       readFileSync(join(outdir, ".github/workflows/node-release.yml"), "utf8"),
-      /workflows:\s+- rust-release/,
+      /^  repository_dispatch:\n    types:\n      - release$/m,
     );
+    assert.match(release, /^  dispatch-downstream:$/m);
+    assert.match(release, /RELEASE_EVENT: release/);
     assert.equal(release.match(/^          - target:$/gm)?.length, 2);
     assert.doesNotMatch(release, /^  build-binaries:$/m);
     assert.match(release, /cargo build --release --workspace --target/);
