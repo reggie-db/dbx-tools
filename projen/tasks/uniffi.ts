@@ -65,7 +65,13 @@ const replaceGenerated = (source: string, destination: string): void => {
   mkdirSync(dirname(destination), { recursive: true });
   makeWritable(destination);
   rmSync(destination, { force: true });
-  renameSync(source, destination);
+  try {
+    renameSync(source, destination);
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "EXDEV") throw error;
+    cpSync(source, destination);
+    rmSync(source, { force: true });
+  }
 };
 
 const stampGeneratedPython = (file: string): void => {
