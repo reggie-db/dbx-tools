@@ -3,6 +3,5 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth-u2m";
-export * as bindings from "./src/bindings.ts";
 export * as postgres from "./src/postgres.ts";
 export * from "./exports.ts";

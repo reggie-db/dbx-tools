@@ -66,6 +66,7 @@ jobs:
       - name: Build distributions
         id: build_distributions
         run: |-
+          uv build --package dbx-tools-auth-u2m --out-dir dist/auth-u2m
           uv build --package dbx-tools-core --out-dir dist/core
           uv build --package dbx-tools-postgres --out-dir dist/postgres
           uv build --package dbx-tools-model --out-dir dist/model
@@ -74,7 +75,7 @@ jobs:
       - name: Validate distributions
         id: validate_distributions
         run: |-
-          test "$(find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 10
+          test "$(find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 12
           uvx twine check dist/*/*.whl dist/*/*.tar.gz
       - name: Upload distributions
         id: upload_distributions
@@ -83,6 +84,28 @@ jobs:
           name: python-distributions
           path: dist
     timeout-minutes: 20
+  publish-auth-u2m:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-auth-u2m
+      url: https://pypi.org/project/dbx-tools-auth-u2m/
+    if: ${{ github.event_name == 'push' }}
+    steps:
+      - name: Download distributions
+        id: download_distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish dbx-tools-auth-u2m to PyPI
+        id: publish_dbx-tools-auth-u2m_to_pypi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/auth-u2m
+    timeout-minutes: 10
   publish-core:
     needs: build
     runs-on: ubuntu-latest
