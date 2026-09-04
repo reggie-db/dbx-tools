@@ -509,6 +509,11 @@ export class DBXToolsRustWorkspace {
                 uses: "dtolnay/rust-toolchain@stable",
                 with: { targets: "${{ matrix.target.cargo }}" },
               },
+              {
+                name: "Install Linux native dependencies",
+                if: "${{ matrix.target.os == 'linux' }}",
+                run: "sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config",
+              },
               { name: "Install", run: "bun install" },
               {
                 name: "Build thin native packages",

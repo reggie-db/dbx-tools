@@ -92,6 +92,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /cargo publish --workspace --registry crates-io/);
     assert.match(release, /tasks\/publish-uniffi-local\.ts/);
     assert.match(release, /LOCAL_CARGO_REGISTRY/);
+    assert.match(release, /libdbus-1-dev pkg-config/);
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/exports.ts"), "utf8"),
