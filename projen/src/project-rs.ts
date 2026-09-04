@@ -7,6 +7,8 @@ import type { DBXToolsProject } from "./project.ts";
 import { DBXToolsTypeScriptProject } from "./project-js.ts";
 import type { PythonPackageOptions } from "./project-py.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
+import { mixin } from "../index.ts";
+import { isDBXToolsJavaScriptProject, isDBXToolsProject } from "./project-predicate.ts";
 
 export interface CargoDependencyOptions {
   readonly version?: string;
@@ -49,10 +51,13 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly nodeRoot?: string;
   readonly pythonRoot?: string;
   readonly pythonModulePrefix?: string;
+  readonly private?: boolean;
   /** Generate tag-driven cross-platform UniFFI package releases. */
   readonly release?: boolean;
   /** Native release targets; defaults to the maintained GitHub-hosted matrix. */
   readonly releaseTargets?: readonly UniFFIReleaseTarget[];
+  /** Workflow name used by downstream release stages. Defaults to `rust-release`. */
+  readonly releaseWorkflowName?: string;
 }
 
 export interface UniFFIReleaseTarget {
@@ -334,7 +339,9 @@ export class DBXToolsRustWorkspace {
       crates: this.packages.map((pkg) => `${root}/${pkg.packageOptions.directory}`),
       bindings: this.bindingMappings,
     };
-    project.dbxToolsConfig.rust = this.workspaceMapping;
+    if (isDBXToolsJavaScriptProject()(project)) {
+      project.dbxToolsConfig.rust = this.workspaceMapping;
+    }
     this.pythonPackages = bindings
       .filter((pkg) => (pkg.packageOptions.bindings ?? ["node", "python"]).includes("python"))
       .map((pkg) => ({
@@ -347,7 +354,7 @@ export class DBXToolsRustWorkspace {
         description: `Python bindings for ${pkg.crateName}`,
         private: true,
         trustedPublisher: {
-          workflowName: "rust-release",
+          workflowName: options.releaseWorkflowName ?? "rust-release",
           environment: `native-${pkg.crateName}`,
           artifacts: `platform-specific wheels for ${(
             options.releaseTargets ?? UNIFFI_RELEASE_TARGETS
@@ -464,12 +471,13 @@ export class DBXToolsRustWorkspace {
       (options.release ?? true) &&
       (this.bindingMappings.length > 0 || this.packages.some((pkg) => pkg.packageOptions.release))
     ) {
-      this.addReleaseWorkflow(project, options.releaseTargets ?? UNIFFI_RELEASE_TARGETS);
+      this.addReleaseWorkflow(project, options, options.releaseTargets ?? UNIFFI_RELEASE_TARGETS);
     }
   }
 
   private addReleaseWorkflow(
     project: javascript.NodeProject,
+    options: DBXToolsRustWorkspaceOptions,
     targets: readonly UniFFIReleaseTarget[],
   ): void {
     if (!project.github) return;
@@ -580,9 +588,10 @@ export class DBXToolsRustWorkspace {
         },
       ],
     };
-    new YamlFile(project, ".github/workflows/rust-release.yml", {
+    const workflowName = options.releaseWorkflowName ?? "rust-release";
+    new YamlFile(project, `.github/workflows/${workflowName}.yml`, {
       obj: {
-        name: "rust-release",
+        name: workflowName,
         on: {
           push: { tags: ["v*"] },
           workflow_dispatch: {
@@ -659,10 +668,6 @@ export class DBXToolsRustWorkspace {
             steps: [
               { name: "Checkout", uses: "actions/checkout@v6" },
               { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
-              {
-                name: "Install Linux native dependencies",
-                run: "sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config",
-              },
               {
                 name: "Publish public crates",
                 env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },

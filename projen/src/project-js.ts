@@ -515,6 +515,10 @@ export interface DBXToolsJavaScriptProjectOptions
    * `@dbx-tools/projen` engine in `projen/`, tagged `projen-v*`).
    */
   readonly standaloneReleases?: readonly StandaloneRelease[];
+  /** Workflow that must finish successfully before the main Node release runs. */
+  readonly releaseUpstreamWorkflow?: string;
+  /** Main Node release workflow name. Defaults to `node-release`. */
+  readonly releaseWorkflowName?: string | false;
   /**
    * Extra workspace member paths (repo-relative, POSIX) to list in the workspace
    * config ALONGSIDE the discovered `packageRoots` members - for a package that
@@ -1183,6 +1187,8 @@ function initProject(
   new DBXToolsRelease(project as DBXToolsNodeProject, {
     tagPrefix: options.releaseTagPrefix,
     standaloneReleases: options.standaloneReleases,
+    upstreamWorkflow: options.releaseUpstreamWorkflow,
+    workflowName: options.releaseWorkflowName,
   });
 }
 

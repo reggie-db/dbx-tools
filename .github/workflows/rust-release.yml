@@ -245,14 +245,6 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Install
         run: bun install
-      - name: Publish workspace npm dependencies
-        if: ${{ matrix.binding.node != '' }}
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |-
-          VERSION="${GITHUB_REF_NAME#v}"
-          bun node_modules/@dbx-tools/projen/tasks/publish.ts "$VERSION" --exclude projen --exclude "${{ matrix.binding.node }}"
       - name: Download packages
         uses: actions/download-artifact@v8
         with:

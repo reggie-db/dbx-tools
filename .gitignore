@@ -117,5 +117,5 @@ target/
 !/.projen/pypi-trusted-publisher-instructions.mjs
 !/.github/workflows/python-release.yml
 !/.projenrc.ts
-!/.github/workflows/release.yml
+!/.github/workflows/node-release.yml
 !/.github/workflows/projen-release.yml

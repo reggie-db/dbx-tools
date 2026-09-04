@@ -22,6 +22,26 @@ before(() => {
 after(() => rmSync(outdir, { recursive: true, force: true }));
 
 describe("DBXToolsRustWorkspace", () => {
+  it("omits Rust release workflows when no releasable Rust package exists", () => {
+    const emptyOutdir = mkdtempSync(join(tmpdir(), "project-rs-empty-"));
+    try {
+      const project = new DBXToolsNodeProject({
+        name: "@fixture/empty-root",
+        scope: "fixture",
+        outdir: emptyOutdir,
+        packageRoots: ["packages/js"],
+        defaultTagMixins: false,
+        github: true,
+        releaseWorkflowName: false,
+      });
+      new DBXToolsRustWorkspace(project, { scope: "fixture" });
+      project.synth();
+      assert.equal(existsSync(join(emptyOutdir, ".github/workflows/rust-release.yml")), false);
+    } finally {
+      rmSync(emptyOutdir, { recursive: true, force: true });
+    }
+  });
+
   it("discovers crates and derives private UniFFI packages", () => {
     const project = new DBXToolsNodeProject({
       name: "@fixture/root",
@@ -97,11 +117,6 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /linux-x64-gnu/);
     assert.match(release, /tasks\/uniffi-release\.ts build/);
     assert.match(release, /cargo publish --workspace --registry crates-io/);
-    assert.doesNotMatch(release, /Publish workspace npm dependencies/);
-    assert.match(
-      release,
-      /publish-cargo:[\s\S]*Install Linux native dependencies[\s\S]*libdbus-1-dev pkg-config/,
-    );
     assert.match(release, /tasks\/publish-uniffi-local\.ts/);
     assert.match(release, /LOCAL_CARGO_REGISTRY/);
     assert.match(release, /libdbus-1-dev pkg-config/);

@@ -23,6 +23,8 @@ before(() => {
     name: "release-fixture",
     outdir,
     github: true,
+    releaseWorkflowName: "node-release",
+    releaseUpstreamWorkflow: "python-release",
     standaloneReleases: [{ name: "engine-release", directory: "engine", tagPrefix: "engine-v" }],
   });
   project.synth();
@@ -34,7 +36,7 @@ after(() => {
 });
 
 describe("npm release workflow auth", () => {
-  for (const name of ["release", "engine-release"]) {
+  for (const name of ["node-release", "engine-release"]) {
     it(`${name} configures npmjs before publishing`, () => {
       const workflow = readFileSync(join(outdir, ".github", "workflows", `${name}.yml`), "utf8");
       assert.match(workflow, /registry-url: https:\/\/registry\.npmjs\.org/);
@@ -45,8 +47,10 @@ describe("npm release workflow auth", () => {
 
 describe("npm release workflow performance", () => {
   it("delegates workspace compilation and concurrent publishing to the shared driver", () => {
-    const workflow = readFileSync(join(outdir, ".github", "workflows", "release.yml"), "utf8");
+    const workflow = readFileSync(join(outdir, ".github", "workflows", "node-release.yml"), "utf8");
     assert.match(workflow, /tasks\/publish\.ts "\$VERSION"/);
+    assert.match(workflow, /workflows:\s+- python-release/);
+    assert.match(workflow, /github\.event\.workflow_run\.head_sha/);
 
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.match(driver, /"--ignore-scripts"/);
@@ -66,5 +70,49 @@ describe("generated engine task paths", () => {
       tasks.tasks.sync?.steps[0]?.exec,
       "bun node_modules/@dbx-tools/projen/tasks/sync.ts",
     );
+  });
+});
+
+describe("optional Node release stages", () => {
+  it("publishes directly from tags when no upstream stage exists", () => {
+    const directOutdir = mkdtempSync(join(tmpdir(), "release-direct-"));
+    try {
+      const project = new DBXToolsNodeProject({
+        name: "direct-release-fixture",
+        outdir: directOutdir,
+        github: true,
+        releaseWorkflowName: "node-release",
+      });
+      project.synth();
+      const workflow = readFileSync(
+        join(directOutdir, ".github", "workflows", "node-release.yml"),
+        "utf8",
+      );
+      assert.match(workflow, /^  push:\n    tags:\n      - v\*$/m);
+      assert.doesNotMatch(workflow, /workflow_run:/);
+    } finally {
+      rmSync(directOutdir, { recursive: true, force: true });
+    }
+  });
+
+  it("omits the Node release workflow when disabled", () => {
+    const disabledOutdir = mkdtempSync(join(tmpdir(), "release-disabled-"));
+    try {
+      const project = new DBXToolsNodeProject({
+        name: "disabled-release-fixture",
+        outdir: disabledOutdir,
+        github: true,
+        releaseWorkflowName: false,
+      });
+      project.synth();
+      assert.equal(
+        readFileSync(join(disabledOutdir, ".projen", "files.json"), "utf8").includes(
+          ".github/workflows/node-release.yml",
+        ),
+        false,
+      );
+    } finally {
+      rmSync(disabledOutdir, { recursive: true, force: true });
+    }
   });
 });

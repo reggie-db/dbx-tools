@@ -2,24 +2,30 @@
 
 name: python-release
 on:
-  push:
-    tags:
-      - v*
   workflow_dispatch:
     inputs:
       version:
         description: Python package version to build
         type: string
         required: true
+  workflow_run:
+    workflows:
+      - rust-release
+    types:
+      - completed
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     steps:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - name: Setup uv
         id: setup_uv
         uses: astral-sh/setup-uv@v7
@@ -28,6 +34,10 @@ jobs:
         env:
           VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
         run: |-
+          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
+            VERSION="$(git tag --points-at HEAD --list "v*" | sort -V | tail -1)"
+            test -n "$VERSION"
+          fi
           chmod -R u+w packages/py
           python - <<'PY'
           from pathlib import Path
@@ -66,7 +76,6 @@ jobs:
       - name: Build distributions
         id: build_distributions
         run: |-
-          uv build --package dbx-tools-auth-u2m --out-dir dist/auth-u2m
           uv build --package dbx-tools-core --out-dir dist/core
           uv build --package dbx-tools-postgres --out-dir dist/postgres
           uv build --package dbx-tools-model --out-dir dist/model
@@ -75,7 +84,7 @@ jobs:
       - name: Validate distributions
         id: validate_distributions
         run: |-
-          test "$(find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 12
+          test "$(find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 10
           uvx twine check dist/*/*.whl dist/*/*.tar.gz
       - name: Upload distributions
         id: upload_distributions
@@ -84,28 +93,6 @@ jobs:
           name: python-distributions
           path: dist
     timeout-minutes: 20
-  publish-auth-u2m:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: pypi-dbx-tools-auth-u2m
-      url: https://pypi.org/project/dbx-tools-auth-u2m/
-    if: ${{ github.event_name == 'push' }}
-    steps:
-      - name: Download distributions
-        id: download_distributions
-        uses: actions/download-artifact@v8
-        with:
-          name: python-distributions
-          path: dist
-      - name: Publish dbx-tools-auth-u2m to PyPI
-        id: publish_dbx-tools-auth-u2m_to_pypi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/auth-u2m
-    timeout-minutes: 10
   publish-core:
     needs: build
     runs-on: ubuntu-latest
@@ -114,7 +101,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-core
       url: https://pypi.org/project/dbx-tools-core/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -136,7 +123,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-postgres
       url: https://pypi.org/project/dbx-tools-postgres/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -158,7 +145,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-model
       url: https://pypi.org/project/dbx-tools-model/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -180,7 +167,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-litellm
       url: https://pypi.org/project/dbx-tools-litellm/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -202,7 +189,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-graphiti
       url: https://pypi.org/project/dbx-tools-graphiti/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}
     steps:
       - name: Download distributions
         id: download_distributions

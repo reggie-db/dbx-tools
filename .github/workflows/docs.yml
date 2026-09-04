@@ -1,9 +1,11 @@
 name: docs
 
 on:
-  push:
-    tags:
-      - v*
+  workflow_run:
+    workflows:
+      - node-release
+    types:
+      - completed
   workflow_dispatch:
 
 env:
@@ -21,11 +23,14 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_run') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -56,6 +61,7 @@ jobs:
           path: .docs-build/dist
 
   deploy:
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_run') }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

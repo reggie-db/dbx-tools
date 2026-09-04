@@ -41,6 +41,9 @@ function BUN_PUBLISH_SCRIPT(tagPrefix: string, excludeDirs: readonly string[]): 
     // A manual run has no tag: use a throwaway version and never really publish.
     '  VERSION="0.0.0-dry.${GITHUB_RUN_NUMBER}"',
     "  DRY_RUN=--dry-run",
+    'elif [ -n "${RELEASE_VERSION:-}" ]; then',
+    '  VERSION="$RELEASE_VERSION"',
+    "  DRY_RUN=",
     "else",
     `  VERSION="\${GITHUB_REF_NAME#${tagPrefix}}"`,
     // A tag push honors the input too, so a dry-run tag can be tested if wanted.
@@ -56,6 +59,7 @@ interface PublishWorkflow {
   readonly tagPrefix: string;
   readonly steps: readonly JobStep[];
   readonly workingDirectory?: string;
+  readonly upstreamWorkflow?: string;
 }
 
 /** Shared checkout and toolchain setup for every npm publish workflow. */
@@ -120,6 +124,10 @@ export interface DBXToolsReleaseOptions {
    * component. Defaults to none.
    */
   readonly standaloneReleases?: readonly StandaloneRelease[];
+  /** Run the main Node release after this workflow completes successfully. */
+  readonly upstreamWorkflow?: string;
+  /** Main Node release workflow name. Defaults to `node-release`. */
+  readonly workflowName?: string | false;
 }
 
 /**
@@ -151,11 +159,15 @@ export interface DBXToolsReleaseOptions {
 export class DBXToolsRelease extends Component {
   private readonly tagPrefix: string;
   private readonly standaloneReleases: readonly StandaloneRelease[];
+  private readonly upstreamWorkflow?: string;
+  private readonly workflowName: string | false;
 
   constructor(project: DBXToolsNodeProject, options: DBXToolsReleaseOptions = {}) {
     super(project);
     this.tagPrefix = options.tagPrefix ?? "v";
     this.standaloneReleases = options.standaloneReleases ?? [];
+    this.upstreamWorkflow = options.upstreamWorkflow;
+    this.workflowName = options.workflowName ?? "node-release";
   }
 
   public override preSynthesize(): void {
@@ -176,7 +188,7 @@ export class DBXToolsRelease extends Component {
     // Author the tag-driven publish workflows only when GitHub is enabled - they
     // live in `.github/`, which requires projen's GitHub component.
     if (project.github) {
-      this.authorReleaseWorkflow(project);
+      if (this.workflowName) this.authorReleaseWorkflow(project);
       for (const standalone of this.standaloneReleases) {
         this.authorStandaloneReleaseWorkflow(project, standalone);
       }
@@ -186,7 +198,7 @@ export class DBXToolsRelease extends Component {
   /** Author the common tag trigger, concurrency policy, permissions, and publish job. */
   private authorPublishWorkflow(
     project: DBXToolsNodeProject,
-    { name, tagPrefix, steps, workingDirectory }: PublishWorkflow,
+    { name, tagPrefix, steps, workingDirectory, upstreamWorkflow }: PublishWorkflow,
   ): void {
     const workflow = new GithubWorkflow(project.github!, name, {
       // Serialize publishes so two tags landing together cannot race to the
@@ -198,7 +210,14 @@ export class DBXToolsRelease extends Component {
     // Read-only floor for any job that does not declare its own permissions;
     // the publish job below overrides it with the `id-token` it needs.
     workflow.file?.addOverride("permissions", { contents: "read" });
-    workflow.on({ push: { tags: [`${tagPrefix}*`] } });
+    if (upstreamWorkflow) {
+      workflow.file?.addOverride("on.workflow_run", {
+        workflows: [upstreamWorkflow],
+        types: ["completed"],
+      });
+    } else {
+      workflow.on({ push: { tags: [`${tagPrefix}*`] } });
+    }
     // Manual trigger for testing the workflow WITHOUT reaching npm: a
     // `workflow_dispatch` run has no tag, so the publish script forces
     // `--dry-run` (pack + validate only). The `dry_run` input (default true)
@@ -213,6 +232,11 @@ export class DBXToolsRelease extends Component {
       },
     });
     workflow.addJob("publish", {
+      ...(upstreamWorkflow
+        ? {
+            if: "${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_run') }}",
+          }
+        : {}),
       runsOn: ["ubuntu-latest"],
       // `id-token: write` lets npm mint the OIDC token for provenance attestation.
       permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
@@ -223,7 +247,35 @@ export class DBXToolsRelease extends Component {
         CI: "true",
         DRY_RUN_INPUT: "${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}",
       },
-      steps: [...publishSetupSteps(), ...steps],
+      steps: [
+        ...publishSetupSteps().map((step) =>
+          step.name === "Checkout" && upstreamWorkflow
+            ? {
+                ...step,
+                with: {
+                  ...step.with,
+                  ref: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
+                },
+              }
+            : step,
+        ),
+        ...(upstreamWorkflow
+          ? [
+              {
+                name: "Resolve release tag",
+                run: [
+                  'RELEASE_TAG="$(git tag --points-at HEAD --list "' +
+                    tagPrefix +
+                    '*" | sort -V | tail -1)"',
+                  'test -n "$RELEASE_TAG"',
+                  'echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"',
+                  `echo "RELEASE_VERSION=\${RELEASE_TAG#${tagPrefix}}" >> "$GITHUB_ENV"`,
+                ].join("\n"),
+              } satisfies JobStep,
+            ]
+          : []),
+        ...steps,
+      ],
       ...(workingDirectory ? { defaults: { run: { workingDirectory } } } : {}),
     });
   }
@@ -235,9 +287,12 @@ export class DBXToolsRelease extends Component {
    * (no bump math).
    */
   private authorReleaseWorkflow(project: DBXToolsNodeProject): void {
+    if (!this.workflowName) return;
+    if (this.workflowName !== "release") project.tryRemoveFile(".github/workflows/release.yml");
     this.authorPublishWorkflow(project, {
-      name: "release",
+      name: this.workflowName,
       tagPrefix: this.tagPrefix,
+      upstreamWorkflow: this.upstreamWorkflow,
       steps: [
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Stamp it on
         // every workspace package (manifests are projen-readonly, so unlock

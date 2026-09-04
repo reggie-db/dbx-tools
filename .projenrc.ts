@@ -62,6 +62,8 @@ const root = new projenProject.DBXToolsNodeProject({
   // below - the same model as the standalone `projen/` project.
   release: false,
   releaseTagPrefix: "v",
+  releaseWorkflowName: "node-release",
+  releaseUpstreamWorkflow: "python-release",
   // The `@dbx-tools/projen` engine lives in `projen/` and releases on its own
   // `projen-v*` tag prefix; the engine authors its `projen-release` workflow
   // alongside the root's `release`.
@@ -1174,7 +1176,7 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   },
   pyreflyProjectExcludes: ["packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py"],
   interpreterPath: "${workspaceFolder}/.venv/bin/python",
-  release: true,
+  release: { upstreamWorkflow: "rust-release" },
 });
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",
@@ -1214,7 +1216,7 @@ root.addTask("demo", {
 
 // Both tag-driven release workflows are authored by the engine's
 // `DBXToolsRelease` component (see `projen/src/release.ts`):
-//   - `release` (`v*`): publishes every `@dbx-tools/*` package.
+//   - `node-release` (after Python): publishes every `@dbx-tools/*` package.
 //   - `projen-release` (`projen-v*`): publishes the standalone `@dbx-tools/projen`
 //     engine in `projen/`, declared via the `standaloneReleases` root option above.
 

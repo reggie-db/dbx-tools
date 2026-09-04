@@ -49,6 +49,8 @@ export interface DBXToolsPythonProjectOptions extends DBXToolsProjectOptions {
 /** Python release workflow configuration. */
 export interface PythonReleaseOptions {
   readonly workflowName?: string;
+  /** Run after this workflow completes successfully instead of directly on tags. */
+  readonly upstreamWorkflow?: string;
   /** GitHub environment by Python distribution name. Defaults to `pypi-<name>`. */
   readonly environments?: Readonly<Record<string, string>>;
   readonly environmentUrl?: string;
@@ -355,7 +357,16 @@ export class DBXToolsPythonWorkspace extends Component {
     if (publications.length === 0) return;
     const workflow = new GithubWorkflow(project.github, options.workflowName ?? "python-release");
     workflow.file?.addOverride("permissions", { contents: "read" });
-    workflow.on({ push: { tags: ["v*"] }, workflowDispatch: {} });
+    const upstreamWorkflow = options.upstreamWorkflow;
+    if (upstreamWorkflow) {
+      workflow.file?.addOverride("on.workflow_run", {
+        workflows: [upstreamWorkflow],
+        types: ["completed"],
+      });
+      workflow.on({ workflowDispatch: {} });
+    } else {
+      workflow.on({ push: { tags: ["v*"] }, workflowDispatch: {} });
+    }
     workflow.file?.addOverride("on.workflow_dispatch", {
       inputs: {
         version: {
@@ -366,18 +377,42 @@ export class DBXToolsPythonWorkspace extends Component {
       },
     });
     workflow.addJob("build", {
+      ...(upstreamWorkflow
+        ? {
+            if: "${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}",
+          }
+        : {}),
       runsOn: ["ubuntu-latest"],
       permissions: { contents: JobPermission.READ },
       timeoutMinutes: 20,
       steps: [
-        { name: "Checkout", uses: "actions/checkout@v6" },
+        {
+          name: "Checkout",
+          uses: "actions/checkout@v6",
+          with: {
+            "fetch-depth": 0,
+            ...(upstreamWorkflow
+              ? {
+                  ref: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
+                }
+              : {}),
+          },
+        },
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
         {
           name: "Stamp workspace versions",
           env: {
             VERSION: "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
           },
-          run: this.renderVersionStampScript(),
+          run: upstreamWorkflow
+            ? [
+                'if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then',
+                '  VERSION="$(git tag --points-at HEAD --list "v*" | sort -V | tail -1)"',
+                '  test -n "$VERSION"',
+                "fi",
+                this.renderVersionStampScript(),
+              ].join("\n")
+            : this.renderVersionStampScript(),
         },
         {
           name: "Build distributions",
@@ -404,7 +439,7 @@ export class DBXToolsPythonWorkspace extends Component {
     });
     for (const publication of publications) {
       workflow.addJob(`publish-${publication.directory}`, {
-        if: "${{ github.event_name == 'push' }}",
+        if: "${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}",
         needs: ["build"],
         environment: {
           name: publication.environment,
@@ -472,18 +507,50 @@ export class DBXToolsPythonWorkspace extends Component {
     const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",
-      "Use a browser to configure the following PyPI trusted publishers.",
-      "For each project, inspect any existing GitHub publisher and ensure every field is synchronized to the desired values below. Update a mismatched publisher when PyPI permits it; otherwise remove the mismatched publisher and create the correct one. Create the publisher when it does not exist. Do not create duplicates.",
+      "Use a browser to audit and configure the PyPI trusted publishers below.",
       "",
-      "Authentication rules:",
+      "## Audit and confirmation",
+      "",
+      "Before making any changes, complete a read-only audit:",
+      "",
+      `- Confirm that the active PyPI account is ${repository.owner}.`,
+      "- Start at https://pypi.org/manage/projects/ and determine which listed projects exist.",
+      "- Inspect every existing GitHub publisher for each project and compare its repository owner, repository name, workflow filename, and environment with the desired values below.",
+      "- Identify duplicate and mismatched trusted publishers that must be replaced by removing the publisher entry and adding the correct one.",
+      "- For projects that do not exist, identify the pending publisher that must be created.",
+      "- Report the active account and a proposed reconciliation plan grouped by publishers that will be left unchanged, updated, replaced, created, or removed.",
+      "- Ask the user to confirm the complete proposed plan before submitting any change.",
+      "- After confirmation, perform the authorized plan without asking for additional confirmation unless authentication or a CAPTCHA requires user action.",
+      "",
+      "## Authentication",
+      "",
     ];
     const linesAfterAuthentication = [
+      `- If the active account is not ${repository.owner}, pause and ask the user to sign in to the correct account.`,
       "- Pause and ask the user to complete every CAPTCHA. Do not attempt to solve or bypass a CAPTCHA.",
       "- After the user completes an authentication or CAPTCHA step, continue from the current browser session.",
       "",
+      "## Efficient browser workflow",
+      "",
+      "- Reuse or claim an existing PyPI browser tab when available.",
+      "- For an existing project, open its publisher page directly at https://pypi.org/manage/project/<project-name>/settings/publishing/.",
+      "- For a project that does not exist, use the pending-publisher page at https://pypi.org/manage/account/publishing/.",
+      "- Treat the publisher table shown after submission as authoritative confirmation of success, even if the navigation header unexpectedly appears signed out.",
+      "- Platform-specific wheels for different operating systems and CPU architectures do not require separate PyPI projects or trusted publishers.",
+      "",
+      "## Reconciliation rules",
+      "",
+      "- Never delete a PyPI project or package. Every remove or delete action in these instructions applies only to a trusted publisher entry.",
+      "- Treat editing or updating a trusted publisher as replacing that publisher: remove the existing publisher entry, then add the correct one.",
+      "- If exactly one publisher matches, leave it unchanged.",
+      "- If a publisher is mismatched, remove that trusted publisher entry and add the correct one.",
+      "- If no publisher exists, create it.",
+      "- Remove duplicates so exactly one matching publisher remains for each PyPI project and workflow.",
+      "- Use a pending publisher only when the PyPI project does not exist.",
+      "- After every change, verify that the resulting table displays the exact desired configuration.",
+      "- At completion, report which publishers were unchanged, updated, replaced, created, or removed.",
+      "",
       "Publisher type: GitHub Actions",
-      "Pending publisher: use only when the PyPI project does not exist yet",
-      "PyPI publisher scope: configure one trusted publisher per PyPI project and workflow. Platform-specific wheels for different operating systems and CPU architectures do not require separate PyPI projects or trusted publishers.",
       "",
       ...publications.flatMap((publication) => {
         const workflowName = `${publication.workflowName}.yml`;
