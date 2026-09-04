@@ -979,6 +979,16 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   scope: SCOPE,
   repository: "https://github.com/reggie-db/dbx-tools",
   rustVersion: "1.82",
+  releasePlatforms: [
+    {
+      os: projenProject.RustReleaseOs.DARWIN,
+      cpu: projenProject.RustReleaseCpu.ARM64,
+    },
+    {
+      os: projenProject.RustReleaseOs.LINUX,
+      cpu: projenProject.RustReleaseCpu.X64,
+    },
+  ],
   workspaceDependencies: {
     "async-trait": "0.1",
     base64: "0.22",
@@ -1045,7 +1055,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     },
     "auth-u2m-cli": {
       description: "CLI for dbx-tools-auth-u2m",
-      binaryName: "dbx-tools-auth-u2m",
+      binaryName: "dbx-tools-auth",
       release: true,
       defaultFeatures: ["keyring"],
       features: {

@@ -32,6 +32,7 @@ export interface RustPackageOptions {
   readonly devDependencies?: Readonly<Record<string, CargoDependency>>;
   readonly features?: Readonly<Record<string, readonly string[]>>;
   readonly defaultFeatures?: readonly string[];
+  /** Cargo and release executable name. Defaults to the generated package name. */
   readonly binaryName?: string;
   readonly bindings?: readonly ("node" | "python")[];
   readonly nodeDependencies?: readonly string[];
@@ -56,8 +57,26 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly release?: boolean;
   /** Native release targets; defaults to the maintained GitHub-hosted matrix. */
   readonly releaseTargets?: readonly UniFFIReleaseTarget[];
+  /** Maintained OS/CPU combinations to release. Defaults to every supported target. */
+  readonly releasePlatforms?: readonly RustReleasePlatform[];
   /** Workflow name used by downstream release stages. Defaults to `rust-release`. */
   readonly releaseWorkflowName?: string;
+}
+
+export enum RustReleaseOs {
+  DARWIN = "darwin",
+  LINUX = "linux",
+  WINDOWS = "win32",
+}
+
+export enum RustReleaseCpu {
+  ARM64 = "arm64",
+  X64 = "x64",
+}
+
+export interface RustReleasePlatform {
+  readonly os: RustReleaseOs;
+  readonly cpu: RustReleaseCpu;
 }
 
 export interface UniFFIReleaseTarget {
@@ -65,8 +84,8 @@ export interface UniFFIReleaseTarget {
   readonly cargo: string;
   readonly node: string;
   readonly python: string;
-  readonly os: "darwin" | "linux" | "win32";
-  readonly cpu: "arm64" | "x64";
+  readonly os: RustReleaseOs;
+  readonly cpu: RustReleaseCpu;
   readonly libc?: "glibc";
 }
 
@@ -77,8 +96,8 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
     cargo: "x86_64-unknown-linux-gnu",
     node: "linux-x64-gnu",
     python: "manylinux_2_35_x86_64",
-    os: "linux",
-    cpu: "x64",
+    os: RustReleaseOs.LINUX,
+    cpu: RustReleaseCpu.X64,
     libc: "glibc",
   },
   {
@@ -86,8 +105,8 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
     cargo: "aarch64-unknown-linux-gnu",
     node: "linux-arm64-gnu",
     python: "manylinux_2_39_aarch64",
-    os: "linux",
-    cpu: "arm64",
+    os: RustReleaseOs.LINUX,
+    cpu: RustReleaseCpu.ARM64,
     libc: "glibc",
   },
   {
@@ -95,26 +114,58 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
     cargo: "x86_64-apple-darwin",
     node: "darwin-x64",
     python: "macosx_13_0_x86_64",
-    os: "darwin",
-    cpu: "x64",
+    os: RustReleaseOs.DARWIN,
+    cpu: RustReleaseCpu.X64,
   },
   {
     runner: "macos-14",
     cargo: "aarch64-apple-darwin",
     node: "darwin-arm64",
     python: "macosx_11_0_arm64",
-    os: "darwin",
-    cpu: "arm64",
+    os: RustReleaseOs.DARWIN,
+    cpu: RustReleaseCpu.ARM64,
   },
   {
     runner: "windows-latest",
     cargo: "x86_64-pc-windows-msvc",
     node: "win32-x64-msvc",
     python: "win_amd64",
-    os: "win32",
-    cpu: "x64",
+    os: RustReleaseOs.WINDOWS,
+    cpu: RustReleaseCpu.X64,
   },
 ] as const;
+
+const RUST_CACHE_ENV = {
+  RUSTC_WRAPPER: "sccache",
+  SCCACHE_GHA_ENABLED: "true",
+} as const;
+
+function rustCacheSteps(sharedKey: string): readonly Record<string, unknown>[] {
+  return [
+    { name: "Setup sccache", uses: "mozilla-actions/sccache-action@v0.0.9" },
+    {
+      name: "Cache Cargo registry",
+      uses: "Swatinem/rust-cache@v2",
+      with: { "cache-targets": false, "shared-key": sharedKey },
+    },
+  ];
+}
+
+function releaseTargets(options: DBXToolsRustWorkspaceOptions): readonly UniFFIReleaseTarget[] {
+  if (options.releaseTargets && options.releasePlatforms) {
+    throw new Error("releaseTargets and releasePlatforms are mutually exclusive");
+  }
+  if (options.releaseTargets) return options.releaseTargets;
+  if (!options.releasePlatforms) return UNIFFI_RELEASE_TARGETS;
+  return options.releasePlatforms.map((platform) => {
+    const target = UNIFFI_RELEASE_TARGETS.find(
+      (candidate) => candidate.os === platform.os && candidate.cpu === platform.cpu,
+    );
+    if (!target)
+      throw new Error(`Unsupported Rust release platform: ${platform.os}-${platform.cpu}`);
+    return target;
+  });
+}
 
 /** Persisted mapping consumed by the focused Rust source watcher. */
 export interface RustBindingMapping {
@@ -218,6 +269,8 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
     this.packageOptions = options;
     this.uniffi = hasUniFFIBindings(this.outdir);
     const library = existsSync(join(this.outdir, "src/lib.rs"));
+    const binary = existsSync(join(this.outdir, "src/main.rs"));
+    const binaryName = options.binaryName ?? crateName;
     const manifest: Record<string, unknown> = {
       package: {
         name: crateName,
@@ -238,11 +291,11 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
             },
           }
         : {}),
-      ...(this.uniffi || options.binaryName
+      ...(this.uniffi || binary
         ? {
             bin: this.uniffi
               ? { name: "uniffi-bindgen", path: "uniffi-bindgen.rs" }
-              : { name: options.binaryName, path: "src/main.rs" },
+              : { name: binaryName, path: "src/main.rs" },
           }
         : {}),
       ...(options.features || options.defaultFeatures
@@ -356,9 +409,7 @@ export class DBXToolsRustWorkspace {
         trustedPublisher: {
           workflowName: options.releaseWorkflowName ?? "rust-release",
           environment: `native-${pkg.crateName}`,
-          artifacts: `platform-specific wheels for ${(
-            options.releaseTargets ?? UNIFFI_RELEASE_TARGETS
-          )
+          artifacts: `platform-specific wheels for ${releaseTargets(options)
             .map((target) => `${target.os}-${target.cpu}`)
             .join(", ")}; all architectures publish to this one PyPI project`,
         },
@@ -471,7 +522,7 @@ export class DBXToolsRustWorkspace {
       (options.release ?? true) &&
       (this.bindingMappings.length > 0 || this.packages.some((pkg) => pkg.packageOptions.release))
     ) {
-      this.addReleaseWorkflow(project, options, options.releaseTargets ?? UNIFFI_RELEASE_TARGETS);
+      this.addReleaseWorkflow(project, options, releaseTargets(options));
     }
   }
 
@@ -506,6 +557,7 @@ export class DBXToolsRustWorkspace {
     const buildJob = {
       name: "${{ matrix.binding.crate }} / ${{ matrix.target.node }}",
       "runs-on": "${{ matrix.target.runner }}",
+      env: RUST_CACHE_ENV,
       strategy: {
         "fail-fast": false,
         matrix: { include: matrix },
@@ -523,6 +575,7 @@ export class DBXToolsRustWorkspace {
           uses: "dtolnay/rust-toolchain@stable",
           with: { targets: "${{ matrix.target.cargo }}" },
         },
+        ...rustCacheSteps("uniffi-${{ matrix.target.cargo }}"),
         {
           name: "Install Linux native dependencies",
           if: "${{ matrix.target.os == 'linux' }}",
@@ -554,6 +607,7 @@ export class DBXToolsRustWorkspace {
     const binaryBuildJob = {
       name: "${{ matrix.package.crate }} / ${{ matrix.target.node }}",
       "runs-on": "${{ matrix.target.runner }}",
+      env: RUST_CACHE_ENV,
       strategy: { "fail-fast": false, matrix: { include: binaryMatrix } },
       steps: [
         { name: "Checkout", uses: "actions/checkout@v6" },
@@ -562,6 +616,7 @@ export class DBXToolsRustWorkspace {
           uses: "dtolnay/rust-toolchain@stable",
           with: { targets: "${{ matrix.target.cargo }}" },
         },
+        ...rustCacheSteps("binary-${{ matrix.target.cargo }}"),
         {
           name: "Install Linux native dependencies",
           if: "${{ matrix.target.os == 'linux' }}",
@@ -572,10 +627,18 @@ export class DBXToolsRustWorkspace {
           shell: "bash",
           run: [
             'cargo build --release --package "${{ matrix.package.crate }}" --bin "${{ matrix.package.binary }}" --target "${{ matrix.target.cargo }}"',
-            "mkdir -p dist/rust-release",
+            "mkdir -p dist/rust-release/stage",
             "SOURCE=\"target/${{ matrix.target.cargo }}/release/${{ matrix.package.binary }}${{ matrix.target.os == 'win32' && '.exe' || '' }}\"",
-            "DESTINATION=\"dist/rust-release/${{ matrix.package.binary }}-${{ matrix.target.node }}${{ matrix.target.os == 'win32' && '.exe' || '' }}\"",
+            "DESTINATION=\"dist/rust-release/stage/${{ matrix.package.binary }}${{ matrix.target.os == 'win32' && '.exe' || '' }}\"",
             'cp "$SOURCE" "$DESTINATION"',
+            'if [ "${{ matrix.target.os }}" = "win32" ]; then',
+            '  ARCHIVE="dist/rust-release/${{ matrix.package.binary }}-${{ matrix.target.node }}.zip"',
+            '  7z a "$ARCHIVE" "$DESTINATION"',
+            "else",
+            '  ARCHIVE="dist/rust-release/${{ matrix.package.binary }}-${{ matrix.target.node }}.tar.gz"',
+            '  tar -C dist/rust-release/stage -czf "$ARCHIVE" "${{ matrix.package.binary }}"',
+            "fi",
+            "rm -rf dist/rust-release/stage",
           ].join("\n"),
         },
         {
@@ -665,9 +728,15 @@ export class DBXToolsRustWorkspace {
             needs: [matrix.length ? "build" : "build-binaries"],
             "runs-on": "ubuntu-latest",
             permissions: { contents: "read" },
+            env: RUST_CACHE_ENV,
             steps: [
               { name: "Checkout", uses: "actions/checkout@v6" },
               { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
+              ...rustCacheSteps("cargo-publish"),
+              {
+                name: "Install Linux native dependencies",
+                run: "sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config",
+              },
               {
                 name: "Publish public crates",
                 env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
@@ -679,6 +748,7 @@ export class DBXToolsRustWorkspace {
             if: "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}",
             "runs-on": ["self-hosted"],
             permissions: { contents: "read" },
+            env: RUST_CACHE_ENV,
             steps: [
               { name: "Checkout", uses: "actions/checkout@v6" },
               {
@@ -688,6 +758,7 @@ export class DBXToolsRustWorkspace {
               },
               { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
               { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
+              ...rustCacheSteps("local-${{ runner.os }}-${{ runner.arch }}"),
               { name: "Install", run: "bun install" },
               {
                 name: "Build and publish host-native packages",

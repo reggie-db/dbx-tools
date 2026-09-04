@@ -33,7 +33,7 @@
   },
   "main": "index.ts",
   "license": "UNLICENSED",
-  "version": "0.6.148",
+  "version": "0.6.149",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -47,11 +47,11 @@
   ],
   "private": true,
   "optionalDependencies": {
-    "@dbx-tools/auth-u2m-linux-x64-gnu": "0.6.148",
-    "@dbx-tools/auth-u2m-linux-arm64-gnu": "0.6.148",
-    "@dbx-tools/auth-u2m-darwin-x64": "0.6.148",
-    "@dbx-tools/auth-u2m-darwin-arm64": "0.6.148",
-    "@dbx-tools/auth-u2m-win32-x64-msvc": "0.6.148"
+    "@dbx-tools/auth-u2m-linux-x64-gnu": "0.6.149",
+    "@dbx-tools/auth-u2m-linux-arm64-gnu": "0.6.149",
+    "@dbx-tools/auth-u2m-darwin-x64": "0.6.149",
+    "@dbx-tools/auth-u2m-darwin-arm64": "0.6.149",
+    "@dbx-tools/auth-u2m-win32-x64-msvc": "0.6.149"
   },
   "dbxToolsConfig": {
     "tags": [

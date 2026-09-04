@@ -3,7 +3,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsRustWorkspace } from "../src/project.ts";
+import {
+  DBXToolsNodeProject,
+  DBXToolsRustWorkspace,
+  RustReleaseCpu,
+  RustReleaseOs,
+} from "../src/project.ts";
 
 let outdir: string;
 
@@ -54,6 +59,10 @@ describe("DBXToolsRustWorkspace", () => {
     const rust = new DBXToolsRustWorkspace(project, {
       scope: "fixture",
       repository: "https://example.invalid/fixture",
+      releasePlatforms: [
+        { os: RustReleaseOs.DARWIN, cpu: RustReleaseCpu.ARM64 },
+        { os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 },
+      ],
       packages: {
         "auth-u2m": {
           dependencies: { uniffi: "0.31" },
@@ -61,7 +70,6 @@ describe("DBXToolsRustWorkspace", () => {
           nodeDevDependencies: ["@types/pg@^8"],
         },
         "auth-u2m-cli": {
-          binaryName: "fixture-auth-u2m",
           release: true,
         },
       },
@@ -77,7 +85,7 @@ describe("DBXToolsRustWorkspace", () => {
       workflowName: "rust-release",
       environment: "native-fixture-auth-u2m",
       artifacts:
-        "platform-specific wheels for linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64; all architectures publish to this one PyPI project",
+        "platform-specific wheels for darwin-arm64, linux-x64; all architectures publish to this one PyPI project",
     });
     assert.deepEqual(rust.workspaceMapping, {
       root: "packages/rs",
@@ -115,13 +123,37 @@ describe("DBXToolsRustWorkspace", () => {
     const release = readFileSync(join(outdir, ".github/workflows/rust-release.yml"), "utf8");
     assert.match(release, /fixture-auth-u2m/);
     assert.match(release, /linux-x64-gnu/);
+    assert.match(release, /darwin-arm64/);
+    assert.doesNotMatch(release, /linux-arm64-gnu/);
+    assert.doesNotMatch(release, /darwin-x64/);
+    assert.doesNotMatch(release, /win32-x64-msvc/);
     assert.match(release, /tasks\/uniffi-release\.ts build/);
     assert.match(release, /cargo publish --workspace --registry crates-io/);
     assert.match(release, /tasks\/publish-uniffi-local\.ts/);
     assert.match(release, /LOCAL_CARGO_REGISTRY/);
     assert.match(release, /libdbus-1-dev pkg-config/);
+    assert.match(release, /mozilla-actions\/sccache-action@v0\.0\.9/);
+    assert.match(release, /Swatinem\/rust-cache@v2/);
+    assert.match(release, /cache-targets: false/);
+    assert.match(release, /RUSTC_WRAPPER: sccache/);
+    assert.match(release, /shared-key: uniffi-\$\{\{ matrix\.target\.cargo \}\}/);
+    assert.match(release, /shared-key: binary-\$\{\{ matrix\.target\.cargo \}\}/);
+    assert.match(
+      release,
+      /shared-key: cargo-publish[\s\S]*Install Linux native dependencies[\s\S]*libdbus-1-dev pkg-config[\s\S]*Publish public crates/,
+    );
     assert.match(release, /^  build-binaries:$/m);
-    assert.match(release, /binary: fixture-auth-u2m/);
+    assert.match(release, /binary: fixture-auth-u2m-cli/);
+    assert.match(
+      release,
+      /\$\{\{ matrix\.package\.binary \}\}-\$\{\{ matrix\.target\.node \}\}\.tar\.gz/,
+    );
+    assert.match(
+      release,
+      /\$\{\{ matrix\.package\.binary \}\}-\$\{\{ matrix\.target\.node \}\}\.zip/,
+    );
+    assert.match(release, /tar -C dist\/rust-release\/stage/);
+    assert.match(release, /7z a/);
     assert.match(release, /node: linux-x64-gnu/);
     assert.match(release, /^  publish-github-release:$/m);
     assert.match(release, /softprops\/action-gh-release@v2/);
@@ -145,12 +177,14 @@ describe("DBXToolsRustWorkspace", () => {
     writeFileSync(join(project.outdir, "packages/rs/private-cli/src/main.rs"), "fn main() {}\n");
     new DBXToolsRustWorkspace(project, {
       scope: "fixture",
-      packages: { "private-cli": { private: true, binaryName: "private-cli" } },
+      packages: { "private-cli": { private: true } },
     });
     project.synth();
-    assert.match(
-      readFileSync(join(project.outdir, "packages/rs/private-cli/Cargo.toml"), "utf8"),
-      /^publish = false$/m,
+    const manifest = readFileSync(
+      join(project.outdir, "packages/rs/private-cli/Cargo.toml"),
+      "utf8",
     );
+    assert.match(manifest, /^publish = false$/m);
+    assert.match(manifest, /\[\[bin\]\]\nname = "fixture-private-cli"/);
   });
 });
