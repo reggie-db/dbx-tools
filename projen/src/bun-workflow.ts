@@ -86,6 +86,7 @@ function stepCondition(condition: string | undefined, cacheMiss = false): string
 }
 
 export interface BunWorkflowCacheOptions {
+  readonly setupCondition?: string;
   readonly condition?: string;
 }
 
@@ -96,10 +97,11 @@ export function bunCacheRestoreSteps(
 ): readonly Record<string, unknown>[] {
   ensureCacheKeyScript(project);
   const condition = stepCondition(options.condition);
+  const setupCondition = stepCondition(options.setupCondition);
   return [
     {
       name: "Setup Bun",
-      ...(condition ? { if: condition } : {}),
+      ...(setupCondition ? { if: setupCondition } : {}),
       uses: "oven-sh/setup-bun@v2",
       with: { "bun-version": "${{ env.BUN_VERSION }}" },
     },

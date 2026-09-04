@@ -141,7 +141,6 @@ jobs:
           path: .cache/ubrn
           key: ubrn-executable-${{ runner.os }}-${{ runner.arch }}-rust-stable-0.31.0-5
       - name: Setup Bun
-        if: ${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}

@@ -358,7 +358,9 @@ Primary package areas:
   passes that executable directly and keeps the copied package's existing barrel
   instead of loading the full projen dependency graph. Save a newly built
   executable immediately after validation rather than in end-of-job cleanup, so
-  a later packaging failure cannot discard the expensive cache fill.
+  a later packaging failure cannot discard the expensive cache fill. Bun runtime
+  setup remains unconditional because packaging executes the TypeScript binding
+  generator even when the UBRN executable is restored.
   Release tags run only the small `release-dispatch` workflow. It resolves the
   annotated tag to a commit and sends a `rust-release` event when a Rust release
   exists, otherwise it sends the downstream `release` event directly. A

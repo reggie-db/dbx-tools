@@ -133,7 +133,7 @@ and the UBRN Cargo build. Release packaging passes the cached executable directl
 to the Node binding generator and keeps the package barrel copied from source,
 so it does not need the installed projen dependency graph. A miss saves the
 validated executable immediately, before workspace build and packaging can fail.
-Cargo registry caches
+Bun runtime setup still runs because the binding generator is TypeScript. Cargo registry caches
 and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain across
 version tags. Cache keys, restore results, sccache statistics, and phase timings
 are written to each build log. Python generation executes the already-built

@@ -391,6 +391,11 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /name: Restore Bun cache/);
     assert.match(release, /name: Save Bun cache/);
     assert.match(release, /^      BUN_VERSION: 1\.3\.14$/m);
+    assert.match(release, /name: Setup Bun\n        uses: oven-sh\/setup-bun@v2/);
+    assert.match(
+      release,
+      /name: Resolve Bun cache[\s\S]*?if: \$\{\{ steps\.ubrn_cache\.outputs\.cache-hit != 'true' \}\}/,
+    );
     assert.match(
       release,
       /key: ubrn-executable-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}-rust-stable-0\.31\.0-5/,
