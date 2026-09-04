@@ -77,7 +77,7 @@ const packageNode = ({
   cpu,
   version,
   facade,
-    nodeGenerator,
+  nodeGenerator,
 }) => {
   const libraryFile = basename(library);
   const nativePackage = resolve(output, "native-node");
@@ -119,9 +119,7 @@ const packageNode = ({
   manifest.dependencies = Object.fromEntries(
     Object.entries(manifest.dependencies ?? {}).map(([name, dependency]) => [
       name,
-      typeof dependency === "string" && dependency.startsWith("workspace:")
-        ? version
-        : dependency,
+      typeof dependency === "string" && dependency.startsWith("workspace:") ? version : dependency,
     ]),
   );
   delete manifest.scripts;
@@ -142,11 +140,7 @@ const packageNode = ({
     "--skip-build",
   ]);
   mkdirSync(resolve(output, "npm-facade"), { recursive: true });
-  run(
-    "npm",
-    ["pack", "--pack-destination", resolve(output, "npm-facade")],
-    facadeDirectory,
-  );
+  run("npm", ["pack", "--pack-destination", resolve(output, "npm-facade")], facadeDirectory);
 };
 
 const packagePython = ({
@@ -156,6 +150,8 @@ const packagePython = ({
   pythonDirectory,
   pythonTag,
   version,
+  cargoTarget,
+  os,
 }) => {
   const pythonRoot = resolve(output, "python-root");
   cpSync(resolve(root, pythonDirectory), pythonRoot, { recursive: true });
@@ -166,21 +162,15 @@ const packagePython = ({
   const packageName = crate.replace(/^dbx-tools-/, "").replaceAll("-", "_");
   const packageDirectory = resolve(pythonRoot, "src", "dbx_tools", packageName);
   const generatedDirectory = mkdtempSync(join(tmpdir(), `${packageName}-python-`));
-  run("cargo", [
-    "run",
-    "--release",
-    "--package",
-    crate,
-    "--bin",
-    "uniffi-bindgen",
-    "--",
-    "generate",
-    "--language",
-    "python",
-    "--out-dir",
-    generatedDirectory,
-    library,
-  ]);
+  const generator = resolve(
+    root,
+    "target",
+    cargoTarget,
+    "release",
+    `uniffi-bindgen${os === "win32" ? ".exe" : ""}`,
+  );
+  if (!existsSync(generator)) throw new Error(`Missing UniFFI generator ${generator}`);
+  run(generator, ["generate", "--language", "python", "--out-dir", generatedDirectory, library]);
   const bindings = join(packageDirectory, "bindings.py");
   writable(bindings);
   const body = readFileSync(join(generatedDirectory, `${crate.replaceAll("-", "_")}.py`), "utf8");
@@ -259,6 +249,8 @@ const build = () => {
       pythonDirectory,
       pythonTag,
       version,
+      cargoTarget,
+      os,
     });
   }
 };

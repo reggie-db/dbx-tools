@@ -33,7 +33,7 @@
   },
   "main": "index.ts",
   "license": "UNLICENSED",
-  "version": "0.6.152",
+  "version": "0.6.153",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -47,7 +47,7 @@
   ],
   "private": true,
   "optionalDependencies": {
-    "@dbx-tools/auth-u2m-linux-x64-gnu": "0.6.152"
+    "@dbx-tools/auth-u2m-linux-x64-gnu": "0.6.153"
   },
   "dbxToolsConfig": {
     "tags": [

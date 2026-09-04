@@ -139,6 +139,7 @@ const RUST_CACHE_ENV = {
   RUSTC_WRAPPER: "sccache",
   SCCACHE_GHA_ENABLED: "true",
 } as const;
+const UBRN_VERSION = "0.31.0-5";
 
 function rustCacheSteps(sharedKey: string): readonly Record<string, unknown>[] {
   return [
@@ -473,7 +474,7 @@ export class DBXToolsRustWorkspace {
       if (binding.packageOptions.nodeDependencies?.length) {
         node.addDeps(...binding.packageOptions.nodeDependencies);
       }
-      node.addDevDeps("uniffi-bindgen-react-native@0.31.0-5");
+      node.addDevDeps(`uniffi-bindgen-react-native@${UBRN_VERSION}`);
       if (binding.packageOptions.nodeDevDependencies?.length) {
         node.addDevDeps(...binding.packageOptions.nodeDevDependencies);
       }
@@ -537,9 +538,7 @@ export class DBXToolsRustWorkspace {
     if (
       (options.release ?? true) &&
       (this.bindingMappings.length > 0 ||
-        this.packages.some(
-          (pkg) => pkg.packageOptions.release || !pkg.packageOptions.private,
-        ))
+        this.packages.some((pkg) => pkg.packageOptions.release || !pkg.packageOptions.private))
     ) {
       this.addReleaseWorkflow(project, options, releaseTargets(options));
     }
@@ -680,21 +679,42 @@ export class DBXToolsRustWorkspace {
               },
             ]
           : []),
-        ...(hasPythonBindings
-          ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }]
-          : []),
+        ...(hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
         {
           name: "Setup Rust",
           uses: "dtolnay/rust-toolchain@stable",
           with: { targets: "${{ matrix.target.cargo }}" },
         },
         ...rustCacheSteps("release-${{ matrix.target.cargo }}"),
+        ...(hasNodeBindings
+          ? [
+              {
+                name: "Cache UBRN generator",
+                uses: "actions/cache@v5",
+                with: {
+                  path: "target/ubrn",
+                  key: `ubrn-\${{ runner.os }}-\${{ runner.arch }}-${UBRN_VERSION}`,
+                },
+              },
+            ]
+          : []),
         {
           name: "Install Linux native dependencies",
           if: "${{ matrix.target.os == 'linux' }}",
           run: "sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config",
         },
         ...(hasNodeBindings ? [{ name: "Install Node tooling", run: "bun install" }] : []),
+        ...(hasNodeBindings
+          ? [
+              {
+                name: "Prepare UBRN generator",
+                env: {
+                  CARGO_TARGET_DIR: "${{ github.workspace }}/target/ubrn",
+                },
+                run: "cargo build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml",
+              },
+            ]
+          : []),
         {
           name: "Build Rust outputs",
           run: 'cargo build --release --workspace --target "${{ matrix.target.cargo }}"',
@@ -705,7 +725,13 @@ export class DBXToolsRustWorkspace {
                 name: "Package UniFFI outputs",
                 shell: "bash",
                 env: {
-                  VERSION: "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
+                  VERSION:
+                    "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
+                  ...(hasNodeBindings
+                    ? {
+                        CARGO_TARGET_DIR: "${{ github.workspace }}/target/ubrn",
+                      }
+                    : {}),
                 },
                 run: bindingCommands.join("\n"),
               },
@@ -734,9 +760,7 @@ export class DBXToolsRustWorkspace {
             contents: "read",
             ...(binding.python ? { "id-token": "write" } : {}),
           },
-          ...(binding.python
-            ? { environment: { name: `pypi-${binding.crate}` } }
-            : {}),
+          ...(binding.python ? { environment: { name: `pypi-${binding.crate}` } } : {}),
           steps: [
             ...(binding.node
               ? [

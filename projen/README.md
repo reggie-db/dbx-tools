@@ -104,11 +104,26 @@ removing a crate or `setup_scaffolding!()` marker triggers a full synth. Repos
 without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
 
-The workspace also generates a `rust-release` workflow from those discovered
-UniFFI crates. It builds Linux x64/arm64, macOS x64/arm64, and Windows x64.
-Node publishes a small facade plus optional OS/CPU packages, so npm installs
-only the matching native library. Python publishes one platform-tagged wheel
-per target, so pip follows the same thin-install model.
+The workspace also generates a `rust-release` workflow from discovered crates,
+UniFFI bindings, and release-enabled binaries. Its matrix has one row per
+target. Each row installs native dependencies and restores Cargo/sccache once,
+builds the Rust workspace once, then packages every discovered output from that
+shared build. Bun and the workspace install are present only when a Node binding
+needs TypeScript generation; uv is present only when a Python wheel is needed.
+A binary-only workspace therefore installs neither.
+
+The Node generator's Rust CLI is cached under one target directory keyed by its
+pinned UBRN version and runner architecture, then prepared before the workspace
+build. Python generation executes the already-built
+`target/<triple>/release/uniffi-bindgen` directly. Artifact packaging therefore
+does no Rust compilation after the main workspace build.
+
+Artifacts identify their crate, target, and type. Download-only publication
+jobs publish native npm platform archives before the facade and publish
+platform-tagged Python wheels without checkout, Bun, or `bun install`.
+Non-private Cargo crates publish from a source-only job with
+`cargo publish --no-verify`; GitHub Release uploads likewise consume prebuilt
+binary artifacts without reinstalling a toolchain.
 
 Set the repository variable `LOCAL_REPOSITORIES=true` to enable the generated
 self-hosted mirror job. Configure `LOCAL_NPM_REGISTRY` and
@@ -119,11 +134,13 @@ detects its OS, architecture, libc, Rust target, and Python wheel tag and builds
 only that native target. Public Cargo crates also publish directly to crates.io
 with `CARGO_REGISTRY_TOKEN`. Override `releaseTargets` only when a consumer has
 additional native runners; ordinary projects inherit the maintained matrix
-automatically.
+automatically. `bun run bump` also accepts repeatable `--os` and `--arch`
+selectors; every selected operating system is crossed with every selected
+architecture. Omit both filters to regenerate the complete maintained matrix.
 
-Private Python projects are marked with `[tool.dbx-tools] private = true`. They
-are excluded from the uv workspace, documentation, and Python release workflow
-until their native artifact publishing matrix is enabled.
+Private Python binding projects are marked with `[tool.dbx-tools] private =
+true`. They stay out of the standard uv/Python release and docs surfaces;
+`rust-release` publishes their prebuilt native wheels directly.
 
 ## Customize Packages With Mixins
 
@@ -318,10 +335,12 @@ Use `--local-registry false` or `--local-pypi false` to disable either local
 publish. An explicit `--local-pypi http://localhost:3141/user/index/` overrides
 auto-detection; `--python-root` defaults to `packages/py`.
 
-The pushed `v*` tag is also the public release boundary: it triggers npm
-publishing, stamps and publishes every Python distribution to PyPI, and rebuilds
-and deploys the documentation site. Ordinary pushes to `main` publish none of
-those surfaces.
+The pushed `v*` tag is also the public release boundary. Available workflow
+stages form the generated chain Rust -> Python -> Node -> docs: Rust builds and
+publishes native artifacts and Cargo crates, Python publishes standard
+distributions, Node publishes standard workspace packages, and docs deploys
+after publication. A stage with no corresponding outputs is omitted. Ordinary
+pushes to `main` publish none of those surfaces.
 
 Members intentionally keep only the tasks that something OTHER than a human
 invokes, so there is no second place to run the same thing:

@@ -64,7 +64,8 @@ const run = (command: string, args: string[]) => {
 
 const replaceGenerated = (source: string, destination: string): void => {
   const deadline = Date.now() + 5_000;
-  while (!existsSync(source) && Date.now() < deadline) Bun.sleepSync(25);
+  const signal = new Int32Array(new SharedArrayBuffer(4));
+  while (!existsSync(source) && Date.now() < deadline) Atomics.wait(signal, 0, 0, 25);
   if (!existsSync(source)) throw new Error(`Missing generated binding: ${source}`);
   mkdirSync(dirname(destination), { recursive: true });
   makeWritable(destination);

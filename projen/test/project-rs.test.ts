@@ -37,7 +37,7 @@ describe("DBXToolsRustWorkspace", () => {
         packageRoots: ["packages/js"],
         defaultTagMixins: false,
         github: true,
-        releaseWorkflowName: false,
+        nodeReleaseWorkflowName: false,
       });
       new DBXToolsRustWorkspace(project, { scope: "fixture" });
       project.synth();
@@ -59,7 +59,7 @@ describe("DBXToolsRustWorkspace", () => {
         packageRoots: ["packages/js"],
         defaultTagMixins: false,
         github: true,
-        releaseWorkflowName: false,
+        nodeReleaseWorkflowName: false,
       });
       new DBXToolsRustWorkspace(project, {
         scope: "fixture",
@@ -77,9 +77,7 @@ describe("DBXToolsRustWorkspace", () => {
       const buildJob = release.match(/^  build:[\s\S]*?(?=^  publish-cargo:)/m)?.[0];
       assert.ok(buildJob);
       assert.doesNotMatch(buildJob, /Setup Bun|Setup Node\.js|Setup uv|bun install/);
-      const cargoJob = release.match(
-        /^  publish-cargo:[\s\S]*?(?=^  publish-local:)/m,
-      )?.[0];
+      const cargoJob = release.match(/^  publish-cargo:[\s\S]*?(?=^  publish-local:)/m)?.[0];
       assert.ok(cargoJob);
       assert.doesNotMatch(cargoJob, /Setup Bun|Setup Node\.js|Setup uv|bun install/);
       const githubJob = release.match(/^  publish-github-release:[\s\S]*/m)?.[0];
@@ -110,7 +108,7 @@ describe("DBXToolsRustWorkspace", () => {
         packageRoots: ["packages/js"],
         defaultTagMixins: false,
         github: true,
-        releaseWorkflowName: false,
+        nodeReleaseWorkflowName: false,
       });
       new DBXToolsRustWorkspace(project, {
         scope: "fixture",
@@ -118,10 +116,7 @@ describe("DBXToolsRustWorkspace", () => {
       });
       project.synth();
 
-      const release = readFileSync(
-        join(multiOutdir, ".github/workflows/rust-release.yml"),
-        "utf8",
-      );
+      const release = readFileSync(join(multiOutdir, ".github/workflows/rust-release.yml"), "utf8");
       const buildJob = release.match(/^  build:[\s\S]*?(?=^  publish-)/m)?.[0];
       assert.ok(buildJob);
       assert.equal(buildJob.match(/cargo build --release --workspace --target/g)?.length, 1);
@@ -129,6 +124,7 @@ describe("DBXToolsRustWorkspace", () => {
       assert.match(buildJob, /--crate "fixture-beta"/);
       assert.equal(buildJob.match(/name: Setup sccache/g)?.length, 1);
       assert.equal(buildJob.match(/name: Install Linux native dependencies/g)?.length, 1);
+      assert.equal(buildJob.match(/name: Prepare UBRN generator/g)?.length, 1);
     } finally {
       rmSync(multiOutdir, { recursive: true, force: true });
     }
@@ -221,6 +217,13 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /cargo build --release --workspace --target/);
     assert.match(release, /node \.projen\/uniffi-release\.mjs build/);
     assert.match(release, /--skip-build/);
+    assert.match(release, /name: Cache UBRN generator/);
+    assert.match(release, /key: ubrn-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}-0\.31\.0-5/);
+    assert.match(
+      release,
+      /name: Prepare UBRN generator[\s\S]*node_modules\/uniffi-bindgen-react-native\/crates\/ubrn_cli\/Cargo\.toml[\s\S]*name: Build Rust outputs/,
+    );
+    assert.match(release, /CARGO_TARGET_DIR: \$\{\{ github\.workspace \}\}\/target\/ubrn/);
     assert.match(release, /name: Package release binaries/);
     assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.node \}\}-npm/);
     assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.python \}\}-python-wheel/);
@@ -241,9 +244,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.ok(artifactPublisher);
     assert.doesNotMatch(artifactPublisher, /Checkout|Setup Bun|bun install|Setup Rust/);
     assert.match(artifactPublisher, /Publish native npm packages[\s\S]*Publish npm facade/);
-    const cargoPublisher = release.match(
-      /^  publish-cargo:[\s\S]*?(?=^  publish-local:)/m,
-    )?.[0];
+    const cargoPublisher = release.match(/^  publish-cargo:[\s\S]*?(?=^  publish-local:)/m)?.[0];
     assert.ok(cargoPublisher);
     assert.doesNotMatch(cargoPublisher, /Setup Bun|bun install|Setup sccache|libdbus/);
     assert.match(release, /tasks\/publish-uniffi-local\.ts/);
@@ -261,23 +262,17 @@ describe("DBXToolsRustWorkspace", () => {
     );
     assert.doesNotMatch(release, /shared-key: cargo-publish/);
     assert.doesNotMatch(release, /^  build-binaries:$/m);
-    assert.match(
-      release,
-      /fixture-auth-u2m-cli-\$\{\{ matrix\.target\.node \}\}\.tar\.gz/,
-    );
-    assert.match(
-      release,
-      /fixture-auth-u2m-cli-\$\{\{ matrix\.target\.node \}\}\.zip/,
-    );
+    assert.match(release, /fixture-auth-u2m-cli-\$\{\{ matrix\.target\.node \}\}\.tar\.gz/);
+    assert.match(release, /fixture-auth-u2m-cli-\$\{\{ matrix\.target\.node \}\}\.zip/);
     assert.match(release, /name: Package release binaries/);
     assert.match(release, /7z a/);
     assert.match(release, /node: linux-x64-gnu/);
     assert.match(release, /^  publish-github-release:$/m);
     assert.match(release, /softprops\/action-gh-release@v2/);
-    assert.match(
-      readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8"),
-      /#!\/usr\/bin\/env node/,
-    );
+    const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
+    assert.match(packager, /#!\/usr\/bin\/env node/);
+    assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`uniffi-bindgen/);
+    assert.doesNotMatch(packager, /"cargo",\s*\[\s*"run"/);
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/exports.ts"), "utf8"),

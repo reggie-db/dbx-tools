@@ -57,12 +57,6 @@ const root = new projenProject.DBXToolsNodeProject({
   workspaceYaml: { overrides: { glob: "^13.0.0" } },
   github: true,
   buildWorkflow: true,
-  // No projen-managed release component: releasing is a `bump` task (added by
-  // the engine, tag prefix `v`) plus the tag-driven `release` workflow authored
-  // below - the same model as the standalone `projen/` project.
-  release: false,
-  releaseTagPrefix: "v",
-  releaseWorkflowName: "node-release",
   releaseUpstreamWorkflow: "python-release",
   // The `@dbx-tools/projen` engine lives in `projen/` and releases on its own
   // `projen-v*` tag prefix; the engine authors its `projen-release` workflow
@@ -72,11 +66,6 @@ const root = new projenProject.DBXToolsNodeProject({
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:*` sibling deps from local source.
   extraWorkspaceMembers: ["projen"],
-  // Bun manages installs (build.yml uses `oven-sh/setup-bun` + `bun install`), so
-  // projen's `actions/setup-node` package cache - which keys off an npm/pnpm/yarn
-  // lockfile - does not apply. `setup-bun` does its own caching. Leave off.
-  workflowPackageCache: false,
-  depsUpgrade: false,
   // `@dbx-tools/projen` (the engine) lives in `projen/`, a member of the single bun
   // workspace, so it links from source via `workspace:*`. `.projenrc.ts` imports it
   // by source path either way.

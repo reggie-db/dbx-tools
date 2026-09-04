@@ -379,6 +379,7 @@ function defaultProjectOptions(
     // provider. See {@link DBXToolsRelease}.
     ...(isRoot ? {} : { npmAccess: javascript.NpmAccess.PUBLIC }),
     buildWorkflow: false,
+    workflowPackageCache: false,
     release: false,
     // The root build validates the whole workspace and must not also pack every
     // member into unused `dist/js` tarballs. Child projects keep projen's package
@@ -518,7 +519,7 @@ export interface DBXToolsJavaScriptProjectOptions
   /** Workflow that must finish successfully before the main Node release runs. */
   readonly releaseUpstreamWorkflow?: string;
   /** Main Node release workflow name. Defaults to `node-release`. */
-  readonly releaseWorkflowName?: string | false;
+  readonly nodeReleaseWorkflowName?: string | false;
   /**
    * Extra workspace member paths (repo-relative, POSIX) to list in the workspace
    * config ALONGSIDE the discovered `packageRoots` members - for a package that
@@ -1188,7 +1189,7 @@ function initProject(
     tagPrefix: options.releaseTagPrefix,
     standaloneReleases: options.standaloneReleases,
     upstreamWorkflow: options.releaseUpstreamWorkflow,
-    workflowName: options.releaseWorkflowName,
+    workflowName: options.nodeReleaseWorkflowName ?? options.releaseWorkflowName,
   });
 }
 

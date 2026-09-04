@@ -23,7 +23,6 @@ before(() => {
     name: "release-fixture",
     outdir,
     github: true,
-    releaseWorkflowName: "node-release",
     releaseUpstreamWorkflow: "python-release",
     standaloneReleases: [{ name: "engine-release", directory: "engine", tagPrefix: "engine-v" }],
   });
@@ -81,7 +80,6 @@ describe("optional Node release stages", () => {
         name: "direct-release-fixture",
         outdir: directOutdir,
         github: true,
-        releaseWorkflowName: "node-release",
       });
       project.synth();
       const workflow = readFileSync(
@@ -102,7 +100,7 @@ describe("optional Node release stages", () => {
         name: "disabled-release-fixture",
         outdir: disabledOutdir,
         github: true,
-        releaseWorkflowName: false,
+        nodeReleaseWorkflowName: false,
       });
       project.synth();
       assert.equal(

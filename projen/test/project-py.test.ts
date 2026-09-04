@@ -188,7 +188,7 @@ describe("optional Python release stages", () => {
         outdir: directOutdir,
         defaultTagMixins: false,
         github: true,
-        releaseWorkflowName: false,
+        nodeReleaseWorkflowName: false,
       });
       new DBXToolsPythonWorkspace(project, {
         repository: { url: "https://github.com/example/fixture.git", root: "python/packages" },

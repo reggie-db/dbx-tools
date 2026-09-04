@@ -55,17 +55,27 @@ jobs:
           add-job-id-key: false
           add-rust-environment-hash-key: false
           shared-key: release-${{ matrix.target.cargo }}
+      - name: Cache UBRN generator
+        uses: actions/cache@v5
+        with:
+          path: target/ubrn
+          key: ubrn-${{ runner.os }}-${{ runner.arch }}-0.31.0-5
       - name: Install Linux native dependencies
         if: ${{ matrix.target.os == 'linux' }}
         run: sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config
       - name: Install Node tooling
         run: bun install
+      - name: Prepare UBRN generator
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/ubrn
+        run: cargo build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml
       - name: Build Rust outputs
         run: cargo build --release --workspace --target "${{ matrix.target.cargo }}"
       - name: Package UniFFI outputs
         shell: bash
         env:
           VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/ubrn
         run: |-
           node .projen/uniffi-release.mjs build \
             --crate "dbx-tools-auth-u2m" \

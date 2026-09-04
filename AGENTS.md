@@ -336,6 +336,25 @@ Primary package areas:
   fail rather than deleting the only copy.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
+- **`packages/rs/`** - Rust crates are discovered from source-bearing folders
+  and described by `DBXToolsRustWorkspace`. Release generation uses one matrix
+  row per selected target, builds the Cargo workspace once in that row, and
+  packages every discovered UniFFI binding and release-enabled binary from the
+  shared output. Install Bun and run `bun install` only when a discovered
+  binding has a Node facade; Python-only bindings need uv but not Bun, and
+  binary-only targets need neither. Cache UBRN by its pinned version plus runner
+  OS/architecture and prepare it before the workspace build. Packaging must
+  execute the target-specific `uniffi-bindgen` binary produced by that workspace
+  build, never `cargo run`, so no Rust compilation occurs after the main build.
+  Artifact names identify crate, target, and type (`npm`, `npm-facade`,
+  `python-wheel`, or `binary`). The Rust workflow
+  publishes downloaded native npm archives and Python wheels directly without
+  checkout or dependency installation, publishes non-private Cargo crates from
+  a source-only `cargo publish --no-verify` job, and uploads prebuilt binaries
+  to the GitHub release. Native npm packages publish before their facade.
+  `bun run bump --os <os> --arch <arch>` accepts repeatable selectors and
+  generates their Cartesian product; omit both to restore the maintained full
+  matrix.
 - **`packages/py/`** — Python packages in the root uv workspace go here.
   Every package must remain directly pip-installable from this repository with
   `git+https://...@main#subdirectory=packages/py/<name>`. Keep the Git URL,
