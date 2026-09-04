@@ -2,11 +2,16 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Project, TextFile, YamlFile, javascript } from "projen";
 import type { DBXToolsProject } from "./project.ts";
-import { DBXToolsTypeScriptProject } from "./project-js.ts";
-import type { PythonPackageOptions } from "./project-py.ts";
+import {
+  DBXToolsTypeScriptProject,
+  projectReleaseBranch,
+  projectRepositoryUrl,
+} from "./project-js.ts";
+import { pythonModuleName, type PythonPackageOptions } from "./project-py.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 
@@ -42,7 +47,7 @@ export interface RustPackageOptions {
 
 export interface DBXToolsRustWorkspaceOptions {
   readonly root?: string;
-  readonly scope: string;
+  readonly scope?: string;
   readonly edition?: string;
   readonly rustVersion?: string;
   readonly license?: string;
@@ -61,6 +66,8 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly releasePlatforms?: readonly RustReleasePlatform[];
   /** Workflow name used by downstream release stages. Defaults to `rust-release`. */
   readonly releaseWorkflowName?: string;
+  /** Tag prefix dispatched into the branch-scoped release workflow. Defaults to `v`. */
+  readonly releaseTagPrefix?: string;
 }
 
 export enum RustReleaseOs {
@@ -140,12 +147,18 @@ const RUST_CACHE_ENV = {
   SCCACHE_GHA_ENABLED: "true",
 } as const;
 const UBRN_VERSION = "0.31.0-5";
+const RELEASE_PLATFORMS_ENV = "DBX_TOOLS_RELEASE_PLATFORMS";
 
-function rustCacheSteps(sharedKey: string): readonly Record<string, unknown>[] {
+function rustCacheSteps(sharedKey: string, idPrefix = ""): readonly Record<string, unknown>[] {
   return [
-    { name: "Setup sccache", uses: "mozilla-actions/sccache-action@v0.0.11" },
+    {
+      name: "Setup sccache",
+      id: `${idPrefix}sccache`,
+      uses: "mozilla-actions/sccache-action@v0.0.11",
+    },
     {
       name: "Cache Cargo registry",
+      id: `${idPrefix}cargo_cache`,
       uses: "Swatinem/rust-cache@v2.9.2",
       with: {
         "cache-targets": false,
@@ -157,19 +170,77 @@ function rustCacheSteps(sharedKey: string): readonly Record<string, unknown>[] {
   ];
 }
 
+function timedBash(phase: string, command: string): string {
+  return [
+    "SECONDS=0",
+    `trap 'status=$?; echo "phase=${phase} duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT`,
+    command,
+  ].join("\n");
+}
+
+function releaseSourceSteps(
+  releaseTag: string,
+  expectedSha: string,
+): readonly Record<string, unknown>[] {
+  return [
+    {
+      name: "Checkout release commit",
+      uses: "actions/checkout@v6",
+      with: {
+        ref: expectedSha,
+        "fetch-depth": 0,
+      },
+    },
+    {
+      name: "Verify release source",
+      shell: "bash",
+      env: {
+        RELEASE_TAG: releaseTag,
+        EXPECTED_SHA: expectedSha,
+      },
+      run: [
+        'test -n "$RELEASE_TAG"',
+        'test -n "$EXPECTED_SHA"',
+        'git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
+        'test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"',
+        'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"',
+      ].join("\n"),
+    },
+  ];
+}
+
 function releaseTargets(options: DBXToolsRustWorkspaceOptions): readonly UniFFIReleaseTarget[] {
   if (options.releaseTargets && options.releasePlatforms) {
     throw new Error("releaseTargets and releasePlatforms are mutually exclusive");
   }
   if (options.releaseTargets) return options.releaseTargets;
-  if (!options.releasePlatforms) return UNIFFI_RELEASE_TARGETS;
-  return options.releasePlatforms.map((platform) => {
+  const releasePlatforms =
+    options.releasePlatforms ?? releasePlatformsFromEnvironment(process.env[RELEASE_PLATFORMS_ENV]);
+  if (!releasePlatforms) return UNIFFI_RELEASE_TARGETS;
+  return releasePlatforms.map((platform) => {
     const target = UNIFFI_RELEASE_TARGETS.find(
       (candidate) => candidate.os === platform.os && candidate.cpu === platform.cpu,
     );
     if (!target)
       throw new Error(`Unsupported Rust release platform: ${platform.os}-${platform.cpu}`);
     return target;
+  });
+}
+
+function releasePlatformsFromEnvironment(
+  value: string | undefined,
+): RustReleasePlatform[] | undefined {
+  if (!value?.trim()) return undefined;
+  return value.split(",").map((entry) => {
+    const [os, cpu, ...extra] = entry.split(":").map((part) => part.trim());
+    if (
+      extra.length ||
+      !Object.values(RustReleaseOs).includes(os as RustReleaseOs) ||
+      !Object.values(RustReleaseCpu).includes(cpu as RustReleaseCpu)
+    ) {
+      throw new Error(`Invalid ${RELEASE_PLATFORMS_ENV} entry: ${entry}`);
+    }
+    return { os: os as RustReleaseOs, cpu: cpu as RustReleaseCpu };
   });
 }
 
@@ -192,6 +263,7 @@ export interface RustBindingMapping {
   readonly python?: string;
   readonly nodePackage?: string;
   readonly pythonPackage?: string;
+  readonly pythonModule?: string;
   readonly facadeTarget?: boolean;
 }
 
@@ -200,6 +272,7 @@ export interface RustWorkspaceMapping {
   readonly root: string;
   readonly crates: readonly string[];
   readonly bindings: readonly RustBindingMapping[];
+  readonly releaseWorkflow?: string;
 }
 
 function rustSources(directory: string): string[] {
@@ -374,10 +447,18 @@ export class DBXToolsRustWorkspace {
   constructor(project: javascript.NodeProject, options: DBXToolsRustWorkspaceOptions) {
     const root = options.root ?? "packages/rs";
     const nodeRoot = options.nodeRoot ?? "packages/js/node";
+    const dbxToolsProject = isDBXToolsJavaScriptProject()(project) ? project : undefined;
+    const scope = string.toSlug(options.scope ?? dbxToolsProject?.scope ?? project.name);
+    const repository =
+      options.repository ??
+      projectRepositoryUrl(project) ??
+      coreProject.repositoryUrl(project.outdir) ??
+      "";
+    const pythonModulePrefix = options.pythonModulePrefix ?? scope.replaceAll("-", "_");
     const packageOptions = options.packages ?? {};
     this.packages = discoverRustCrates(resolve(project.outdir, root)).map(
       (directory) =>
-        new DBXToolsRustProject(project, root, options.scope, {
+        new DBXToolsRustProject(project, root, scope, {
           directory,
           ...packageOptions[directory],
         }),
@@ -393,44 +474,69 @@ export class DBXToolsRustWorkspace {
         ...(targets.includes("node")
           ? {
               node: `${nodeRoot}/${pkg.packageOptions.directory}`,
-              nodePackage: `@${string.toSlug(options.scope)}/${packageName}`,
+              nodePackage: `@${scope}/${packageName}`,
             }
           : {}),
         ...(targets.includes("python")
           ? {
               python: `${options.pythonRoot ?? "packages/py"}/${pkg.packageOptions.directory}`,
               pythonPackage: pkg.crateName,
+              pythonModule: pythonModuleName(pythonModulePrefix, pkg.packageOptions.directory),
             }
           : {}),
       };
     });
+    const releaseEnabled =
+      (options.release ?? true) &&
+      (this.bindingMappings.length > 0 ||
+        this.packages.some((pkg) => pkg.packageOptions.release || !pkg.packageOptions.private));
     this.workspaceMapping = {
       root,
       crates: this.packages.map((pkg) => `${root}/${pkg.packageOptions.directory}`),
       bindings: this.bindingMappings,
+      ...(releaseEnabled ? { releaseWorkflow: options.releaseWorkflowName ?? "rust-release" } : {}),
     };
-    if (isDBXToolsJavaScriptProject()(project)) {
-      project.dbxToolsConfig.rust = this.workspaceMapping;
+    if (dbxToolsProject) {
+      dbxToolsProject.dbxToolsConfig.rust = this.workspaceMapping;
     }
+    project.gitignore.addPatterns(
+      "target/",
+      ...this.bindingMappings.flatMap((binding) => [
+        ...(binding.node
+          ? [
+              `${binding.node}/src/bindings.ts`,
+              `${binding.node}/src/_bindings*.ts`,
+              `${binding.node}/src/*${binding.crate.replaceAll("-", "_")}.*`,
+            ]
+          : []),
+        ...(binding.python && binding.pythonModule
+          ? [
+              `${binding.python}/src/${binding.pythonModule.replaceAll(".", "/")}/bindings.py`,
+              `${binding.python}/src/${binding.pythonModule.replaceAll(".", "/")}/*${binding.crate.replaceAll("-", "_")}.*`,
+            ]
+          : []),
+      ]),
+    );
     this.pythonPackages = bindings
       .filter((pkg) => (pkg.packageOptions.bindings ?? ["node", "python"]).includes("python"))
-      .map((pkg) => ({
-        directory: `${options.pythonRoot ?? "packages/py"}/${pkg.packageOptions.directory}`.replace(
-          /^packages\/py\//,
-          "",
-        ),
-        name: pkg.crateName,
-        module: `${options.pythonModulePrefix ?? options.scope.replaceAll("-", "_")}.${pkg.packageOptions.directory.replaceAll("-", "_")}`,
-        description: `Python bindings for ${pkg.crateName}`,
-        private: true,
-        trustedPublisher: {
-          workflowName: options.releaseWorkflowName ?? "rust-release",
-          environment: `pypi-${pkg.crateName}`,
-          artifacts: `platform-specific wheels for ${releaseTargets(options)
-            .map((target) => `${target.os}-${target.cpu}`)
-            .join(", ")}; all architectures publish to this one PyPI project`,
-        },
-      }));
+      .map((pkg) => {
+        const module = pythonModuleName(pythonModulePrefix, pkg.packageOptions.directory);
+        return {
+          directory: pkg.packageOptions.directory,
+          name: pkg.crateName,
+          module,
+          description: `Python bindings for ${pkg.crateName}`,
+          private: true,
+          generatedSources: [`src/${module.replaceAll(".", "/")}/bindings.py`],
+          trustedPublisher: {
+            workflowName: options.releaseWorkflowName ?? "rust-release",
+            environment: `pypi-${pkg.crateName}`,
+            artifacts: `platform-specific wheels for ${releaseTargets(options)
+              .map((target) => `${target.os}-${target.cpu}`)
+              .join(", ")}; all architectures publish to this one PyPI project`,
+          },
+        };
+      });
 
     const existing = new Map(
       project.subprojects.map((child) => [relative(project.outdir, child.outdir), child]),
@@ -448,12 +554,12 @@ export class DBXToolsRustWorkspace {
           : new DBXToolsTypeScriptProject({
               parent: project,
               outdir: memberPath,
-              name: `@${string.toSlug(options.scope)}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
+              name: `@${scope}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
               tags: ["node"],
             });
       node.package.addField(
         "name",
-        `@${string.toSlug(options.scope)}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
+        `@${scope}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
       );
       node.package.addField("private", true);
       node.package.file.addDeletionOverride("publishConfig");
@@ -464,7 +570,7 @@ export class DBXToolsRustWorkspace {
           "optionalDependencies",
           Object.fromEntries(
             nativeTargets.map((target) => [
-              `@${string.toSlug(options.scope)}/${directory}-${target.node}`,
+              `@${scope}/${directory}-${target.node}`,
               readWorkspaceVersion(project.outdir),
             ]),
           ),
@@ -499,7 +605,7 @@ export class DBXToolsRustWorkspace {
         edition: options.edition ?? "2021",
         "rust-version": options.rustVersion ?? "1.82",
         license: options.license ?? "Apache-2.0",
-        repository: options.repository ?? "",
+        repository,
       },
       ...(options.workspaceDependencies
         ? {
@@ -535,11 +641,7 @@ export class DBXToolsRustWorkspace {
         ]),
       ].join(" && "),
     });
-    if (
-      (options.release ?? true) &&
-      (this.bindingMappings.length > 0 ||
-        this.packages.some((pkg) => pkg.packageOptions.release || !pkg.packageOptions.private))
-    ) {
+    if (releaseEnabled) {
       this.addReleaseWorkflow(project, options, releaseTargets(options));
     }
   }
@@ -550,6 +652,15 @@ export class DBXToolsRustWorkspace {
     targets: readonly UniFFIReleaseTarget[],
   ): void {
     if (!project.github) return;
+    const workflowName = options.releaseWorkflowName ?? "rust-release";
+    const dispatcherWorkflowName = `${workflowName}-dispatch`;
+    const releaseTagPrefix = options.releaseTagPrefix ?? "v";
+    const rustVersion = options.rustVersion ?? "1.82";
+    const releaseBranch = projectReleaseBranch(project);
+    const releaseTag =
+      "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}";
+    const expectedSha =
+      "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.expected_sha || inputs.expected_sha }}";
     const bindings = this.bindingMappings.map((binding) => ({
       ...binding,
       node: binding.node ?? "",
@@ -571,7 +682,11 @@ export class DBXToolsRustWorkspace {
     }));
     const hasNodeBindings = bindings.some((binding) => binding.node);
     const hasPythonBindings = bindings.some((binding) => binding.python);
-    const hasTargetOutputs = bindings.length > 0 || releaseBinaries.length > 0;
+    const hasTargetOutputs =
+      bindings.length > 0 || releaseBinaries.length > 0 || publicCrates.length > 0;
+    if (hasTargetOutputs && targetMatrix.length === 0) {
+      throw new Error("Rust release requires at least one target");
+    }
     const releaseTask = ".projen/uniffi-release.mjs";
     if (bindings.length) {
       new TextFile(project, releaseTask, {
@@ -598,7 +713,7 @@ export class DBXToolsRustWorkspace {
         '--cpu "${{ matrix.target.cpu }}"',
         '--libc "${{ matrix.target.libc }}"',
         '--facade "${{ matrix.target.facade }}"',
-        '--version "${VERSION#v}"',
+        `--version "\${VERSION#${releaseTagPrefix}}"`,
         `--output "dist/release/${binding.crate}/\${{ matrix.target.node }}"`,
         "--skip-build",
       ].join(" \\\n  "),
@@ -662,14 +777,18 @@ export class DBXToolsRustWorkspace {
     ];
     const buildJob = {
       name: "${{ matrix.target.node }}",
+      needs: ["verify-context"],
       "runs-on": "${{ matrix.target.runner }}",
-      env: RUST_CACHE_ENV,
+      env: {
+        ...RUST_CACHE_ENV,
+        SCCACHE_GHA_VERSION: `release-\${{ matrix.target.cargo }}-rust-${rustVersion}`,
+      },
       strategy: {
         "fail-fast": false,
         matrix: { include: targetMatrix },
       },
       steps: [
-        { name: "Checkout", uses: "actions/checkout@v6" },
+        ...releaseSourceSteps(releaseTag, expectedSha),
         ...(hasNodeBindings
           ? [
               {
@@ -682,28 +801,55 @@ export class DBXToolsRustWorkspace {
         ...(hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
         {
           name: "Setup Rust",
-          uses: "dtolnay/rust-toolchain@stable",
+          uses: `dtolnay/rust-toolchain@${rustVersion}`,
           with: { targets: "${{ matrix.target.cargo }}" },
         },
-        ...rustCacheSteps("release-${{ matrix.target.cargo }}"),
+        ...rustCacheSteps(`release-\${{ matrix.target.cargo }}-rust-${rustVersion}`),
         ...(hasNodeBindings
           ? [
               {
                 name: "Cache UBRN generator",
+                id: "ubrn_cache",
+                if: "${{ vars.CACHE_UBRN_TARGET == 'true' }}",
                 uses: "actions/cache@v5",
                 with: {
                   path: "target/ubrn",
-                  key: `ubrn-\${{ runner.os }}-\${{ runner.arch }}-${UBRN_VERSION}`,
+                  key: `ubrn-\${{ runner.os }}-\${{ runner.arch }}-rust-${rustVersion}-${UBRN_VERSION}`,
                 },
               },
             ]
           : []),
         {
+          name: "Log cache configuration",
+          shell: "bash",
+          run: [
+            `echo "cargo_cache_namespace=release-\${{ matrix.target.cargo }}-rust-${rustVersion}"`,
+            'echo "cargo_cache_hit=${{ steps.cargo_cache.outputs.cache-hit }}"',
+            'echo "sccache_scope=${{ github.ref }}"',
+            'echo "sccache_namespace=${SCCACHE_GHA_VERSION}"',
+            ...(hasNodeBindings
+              ? [
+                  "echo \"ubrn_target_cache_enabled=${{ vars.CACHE_UBRN_TARGET == 'true' }}\"",
+                  `echo "ubrn_target_cache_key=ubrn-\${{ runner.os }}-\${{ runner.arch }}-rust-${rustVersion}-${UBRN_VERSION}"`,
+                  'echo "ubrn_target_cache_hit=${{ steps.ubrn_cache.outputs.cache-hit }}"',
+                ]
+              : []),
+          ].join("\n"),
+        },
+        {
           name: "Install Linux native dependencies",
           if: "${{ matrix.target.os == 'linux' }}",
           run: "sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config",
         },
-        ...(hasNodeBindings ? [{ name: "Install Node tooling", run: "bun install" }] : []),
+        ...(hasNodeBindings
+          ? [
+              {
+                name: "Install Node tooling",
+                shell: "bash",
+                run: timedBash("node_tooling", "bun install"),
+              },
+            ]
+          : []),
         ...(hasNodeBindings
           ? [
               {
@@ -711,13 +857,21 @@ export class DBXToolsRustWorkspace {
                 env: {
                   CARGO_TARGET_DIR: "${{ github.workspace }}/target/ubrn",
                 },
-                run: "cargo build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml",
+                shell: "bash",
+                run: timedBash(
+                  "ubrn_generator",
+                  "cargo build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml",
+                ),
               },
             ]
           : []),
         {
           name: "Build Rust outputs",
-          run: 'cargo build --release --workspace --target "${{ matrix.target.cargo }}"',
+          shell: "bash",
+          run: timedBash(
+            "rust_workspace",
+            'cargo build --release --workspace --target "${{ matrix.target.cargo }}"',
+          ),
         },
         ...(bindingCommands.length
           ? [
@@ -725,15 +879,14 @@ export class DBXToolsRustWorkspace {
                 name: "Package UniFFI outputs",
                 shell: "bash",
                 env: {
-                  VERSION:
-                    "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
+                  VERSION: releaseTag,
                   ...(hasNodeBindings
                     ? {
                         CARGO_TARGET_DIR: "${{ github.workspace }}/target/ubrn",
                       }
                     : {}),
                 },
-                run: bindingCommands.join("\n"),
+                run: timedBash("uniffi_packaging", bindingCommands.join("\n")),
               },
             ]
           : []),
@@ -742,18 +895,24 @@ export class DBXToolsRustWorkspace {
               {
                 name: "Package release binaries",
                 shell: "bash",
-                run: binaryCommands.join("\n"),
+                run: timedBash("binary_packaging", binaryCommands.join("\n")),
               },
             ]
           : []),
         ...artifactSteps,
+        {
+          name: "Log sccache statistics",
+          if: "${{ always() }}",
+          shell: "bash",
+          run: '"${SCCACHE_PATH}" --show-stats',
+        },
       ],
     };
     const bindingPublishJobs = Object.fromEntries(
       bindings.map((binding) => [
         `publish-${binding.crate}`,
         {
-          if: "${{ github.event_name == 'push' }}",
+          if: "${{ github.event_name == 'repository_dispatch' }}",
           needs: ["build"],
           "runs-on": "ubuntu-latest",
           permissions: {
@@ -820,36 +979,117 @@ export class DBXToolsRustWorkspace {
         },
       ]),
     );
-    const workflowName = options.releaseWorkflowName ?? "rust-release";
+    new YamlFile(project, `.github/workflows/${dispatcherWorkflowName}.yml`, {
+      obj: {
+        name: dispatcherWorkflowName,
+        on: { push: { tags: [`${releaseTagPrefix}*`] } },
+        permissions: {
+          contents: "write",
+        },
+        jobs: {
+          dispatch: {
+            "runs-on": "ubuntu-latest",
+            steps: [
+              {
+                name: "Checkout release tag",
+                uses: "actions/checkout@v6",
+                with: { "fetch-depth": 0 },
+              },
+              {
+                name: "Dispatch branch-scoped release",
+                shell: "bash",
+                env: {
+                  GH_TOKEN: "${{ github.token }}",
+                  RELEASE_TAG: "${{ github.ref_name }}",
+                  RELEASE_EVENT: workflowName,
+                },
+                run: [
+                  `case "$RELEASE_TAG" in ${releaseTagPrefix}*) ;; *) exit 1 ;; esac`,
+                  'EXPECTED_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
+                  [
+                    'gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches"',
+                    '--raw-field event_type="$RELEASE_EVENT"',
+                    '--raw-field "client_payload[release_tag]=$RELEASE_TAG"',
+                    '--raw-field "client_payload[expected_sha]=$EXPECTED_SHA"',
+                  ].join(" \\\n  "),
+                ].join("\n"),
+              },
+            ],
+          },
+        },
+      },
+    });
     new YamlFile(project, `.github/workflows/${workflowName}.yml`, {
       obj: {
         name: workflowName,
+        "run-name": `${workflowName} ${releaseTag}`,
         on: {
-          push: { tags: ["v*"] },
+          repository_dispatch: {
+            types: [workflowName],
+          },
           workflow_dispatch: {
             inputs: {
-              version: {
-                description: "Version to package during a dry run",
+              release_tag: {
+                description: "Annotated release tag to build",
                 type: "string",
-                default: "0.0.0.dev0",
+                required: true,
+              },
+              expected_sha: {
+                description: "Commit the release tag must reference",
+                type: "string",
+                required: true,
               },
             },
           },
         },
         permissions: { contents: "read" },
         jobs: {
+          "verify-context": {
+            "runs-on": "ubuntu-latest",
+            steps: [
+              {
+                name: "Require the default branch cache scope",
+                shell: "bash",
+                env: {
+                  RELEASE_BRANCH: releaseBranch,
+                },
+                run: 'test "$GITHUB_REF_NAME" = "$RELEASE_BRANCH"',
+              },
+              {
+                name: "Write release metadata",
+                shell: "bash",
+                env: {
+                  RELEASE_TAG: releaseTag,
+                  EXPECTED_SHA: expectedSha,
+                },
+                run: [
+                  "mkdir -p .release",
+                  'printf "%s\\n" "$RELEASE_TAG" > .release/tag',
+                  'printf "%s\\n" "$EXPECTED_SHA" > .release/sha',
+                ].join("\n"),
+              },
+              {
+                name: "Upload release metadata",
+                uses: "actions/upload-artifact@v7",
+                with: {
+                  name: "release-metadata",
+                  path: ".release",
+                },
+              },
+            ],
+          },
           ...(hasTargetOutputs && targetMatrix.length ? { build: buildJob } : {}),
           ...bindingPublishJobs,
           ...(publicCrates.length
             ? {
                 "publish-cargo": {
-                  if: "${{ github.event_name == 'push' }}",
-                  ...(hasTargetOutputs ? { needs: ["build"] } : {}),
+                  if: "${{ github.event_name == 'repository_dispatch' }}",
+                  needs: ["build"],
                   "runs-on": "ubuntu-latest",
                   permissions: { contents: "read" },
                   steps: [
-                    { name: "Checkout", uses: "actions/checkout@v6" },
-                    { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
+                    ...releaseSourceSteps(releaseTag, expectedSha),
+                    { name: "Setup Rust", uses: `dtolnay/rust-toolchain@${rustVersion}` },
                     {
                       name: "Publish public crates",
                       env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
@@ -864,41 +1104,112 @@ export class DBXToolsRustWorkspace {
                 },
               }
             : {}),
-          "publish-local": {
-            if: "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}",
-            "runs-on": ["self-hosted"],
-            permissions: { contents: "read" },
-            env: RUST_CACHE_ENV,
-            steps: [
-              { name: "Checkout", uses: "actions/checkout@v6" },
-              {
-                name: "Setup Bun",
-                uses: "oven-sh/setup-bun@v2",
-                with: { "bun-version": "1.3.14" },
-              },
-              { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
-              { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
-              ...rustCacheSteps("local-${{ runner.os }}-${{ runner.arch }}"),
-              { name: "Install", run: "bun install" },
-              {
-                name: "Build and publish host-native packages",
-                run: [
-                  'VERSION="${GITHUB_REF_NAME#v}"',
-                  'bun node_modules/@dbx-tools/projen/tasks/publish-uniffi-local.ts --version "$VERSION" --registry "${{ vars.LOCAL_NPM_REGISTRY }}" --pypi-publish-url "${{ vars.LOCAL_PYPI_PUBLISH_URL }}" --cargo-registry "${{ vars.LOCAL_CARGO_REGISTRY }}"',
-                ].join("\n"),
-                env: {
-                  NODE_AUTH_TOKEN: "${{ secrets.LOCAL_NPM_TOKEN }}",
-                  UV_PUBLISH_USERNAME: "${{ secrets.LOCAL_PYPI_USERNAME }}",
-                  UV_PUBLISH_PASSWORD: "${{ secrets.LOCAL_PYPI_PASSWORD }}",
-                  CARGO_REGISTRY_TOKEN: "${{ secrets.LOCAL_CARGO_TOKEN }}",
+          ...(bindings.length
+            ? {
+                "publish-local-bindings": {
+                  if: "${{ github.event_name == 'repository_dispatch' && vars.LOCAL_REPOSITORIES == 'true' }}",
+                  needs: ["build"],
+                  "runs-on": ["self-hosted"],
+                  permissions: { contents: "read" },
+                  steps: [
+                    ...(hasNodeBindings
+                      ? [
+                          {
+                            name: "Setup Node.js",
+                            uses: "actions/setup-node@v6",
+                            with: {
+                              "registry-url": "${{ vars.LOCAL_NPM_REGISTRY }}",
+                            },
+                          },
+                          {
+                            name: "Download native npm packages",
+                            uses: "actions/download-artifact@v8",
+                            with: {
+                              pattern: "*-npm",
+                              path: "dist/npm",
+                              "merge-multiple": true,
+                            },
+                          },
+                          {
+                            name: "Download npm facades",
+                            uses: "actions/download-artifact@v8",
+                            with: {
+                              pattern: "*-npm-facade",
+                              path: "dist/npm-facade",
+                              "merge-multiple": true,
+                            },
+                          },
+                          {
+                            name: "Publish npm packages locally",
+                            env: {
+                              NODE_AUTH_TOKEN: "${{ secrets.LOCAL_NPM_TOKEN }}",
+                            },
+                            run: [
+                              'for package in dist/npm/*.tgz; do npm publish "$package" --access public; done',
+                              'for package in dist/npm-facade/*.tgz; do npm publish "$package" --access public; done',
+                            ].join("\n"),
+                          },
+                        ]
+                      : []),
+                    ...(hasPythonBindings
+                      ? [
+                          { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+                          {
+                            name: "Download Python wheels",
+                            uses: "actions/download-artifact@v8",
+                            with: {
+                              pattern: "*-python-wheel",
+                              path: "dist/python",
+                              "merge-multiple": true,
+                            },
+                          },
+                          {
+                            name: "Publish Python wheels locally",
+                            env: {
+                              UV_PUBLISH_USERNAME: "${{ secrets.LOCAL_PYPI_USERNAME }}",
+                              UV_PUBLISH_PASSWORD: "${{ secrets.LOCAL_PYPI_PASSWORD }}",
+                            },
+                            run: 'uv publish --publish-url "${{ vars.LOCAL_PYPI_PUBLISH_URL }}" dist/python/*.whl',
+                          },
+                        ]
+                      : []),
+                  ],
                 },
-              },
-            ],
-          },
+              }
+            : {}),
+          ...(publicCrates.length
+            ? {
+                "publish-local-cargo": {
+                  if: "${{ github.event_name == 'repository_dispatch' && vars.LOCAL_REPOSITORIES == 'true' }}",
+                  needs: ["build"],
+                  "runs-on": ["self-hosted"],
+                  permissions: { contents: "read" },
+                  steps: [
+                    ...releaseSourceSteps(releaseTag, expectedSha),
+                    {
+                      name: "Setup Rust",
+                      uses: `dtolnay/rust-toolchain@${rustVersion}`,
+                    },
+                    {
+                      name: "Publish Cargo crates locally",
+                      env: {
+                        CARGO_REGISTRY_TOKEN: "${{ secrets.LOCAL_CARGO_TOKEN }}",
+                      },
+                      run: publicCrates
+                        .map(
+                          (crate) =>
+                            `cargo publish --package "${crate}" --registry "\${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify`,
+                        )
+                        .join("\n"),
+                    },
+                  ],
+                },
+              }
+            : {}),
           ...(releaseBinaries.length
             ? {
                 "publish-github-release": {
-                  if: "${{ github.event_name == 'push' }}",
+                  if: "${{ github.event_name == 'repository_dispatch' }}",
                   needs: ["build"],
                   "runs-on": "ubuntu-latest",
                   permissions: { contents: "write" },
@@ -918,6 +1229,8 @@ export class DBXToolsRustWorkspace {
                       with: {
                         files: "dist/rust-release/*",
                         "generate-release-notes": true,
+                        tag_name: releaseTag,
+                        target_commitish: expectedSha,
                       },
                     },
                   ],

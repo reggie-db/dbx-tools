@@ -32,8 +32,6 @@ before(() => {
     name: "pnpm-workspace-fixture",
     outdir,
     defaultTagMixins: false,
-    allowBuilds: { protobufjs: true },
-    workspaceYaml: { overrides: { glob: "^13.0.0" } },
   });
   new DBXToolsTypeScriptProject({
     parent: root,
@@ -82,6 +80,8 @@ describe("pnpm-workspace.yaml", () => {
   it("renders build allowances as the allowBuilds map pnpm reads", () => {
     assert.match(yaml, /^allowBuilds:$/m);
     assert.match(yaml, /^ {2}esbuild: true$/m);
+    assert.match(yaml, /^ {2}"@databricks\/appkit": true$/m);
+    assert.match(yaml, /^ {2}"@databricks\/appkit-ui": true$/m);
     assert.match(yaml, /^ {2}protobufjs: true$/m);
   });
 
@@ -92,7 +92,7 @@ describe("pnpm-workspace.yaml", () => {
     assert.doesNotMatch(yaml, /ignoredBuiltDependencies/);
   });
 
-  it("passes any other pnpm setting through projen's typed schema", () => {
+  it("protects generated workspaces from deprecated glob transitive majors", () => {
     assert.match(yaml, /^overrides:$/m);
     assert.match(yaml, /^ {2}glob: \^13\.0\.0$/m);
   });

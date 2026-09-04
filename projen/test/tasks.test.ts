@@ -23,7 +23,13 @@ interface TaskManifest {
   tasks: Record<string, { steps?: TaskStep[] }>;
 }
 
-function synthTasks(): { root: TaskManifest; child: TaskManifest } {
+function synthTasks(): {
+  root: TaskManifest;
+  child: TaskManifest;
+  packageJson: { devDependencies?: Record<string, string> };
+  prettierIgnore: string;
+  attributes: string;
+} {
   process.env.PROJEN_DISABLE_POST = "1";
   const outdir = mkdtempSync(join(tmpdir(), "workspace-tasks-"));
   const root = new DBXToolsNodeProject({
@@ -44,6 +50,11 @@ function synthTasks(): { root: TaskManifest; child: TaskManifest } {
   return {
     root: read(join(outdir, ".projen/tasks.json")),
     child: read(join(outdir, "packages/member/.projen/tasks.json")),
+    packageJson: JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
+      devDependencies?: Record<string, string>;
+    },
+    prettierIgnore: readFileSync(join(outdir, ".prettierignore"), "utf8"),
+    attributes: readFileSync(join(outdir, ".gitattributes"), "utf8"),
   };
 }
 
@@ -99,6 +110,12 @@ describe("workspace validation tasks", () => {
       steps.some((step) => step.exec?.includes("tooling") || step.cwd === "tooling"),
       false,
     );
+  });
+
+  it("installs the root watcher and tracks generated extra-member barrels", () => {
+    assert.equal(tasks.packageJson.devDependencies?.concurrently, "catalog:");
+    assert.match(tasks.prettierIgnore, /^tooling\/index\.ts$/m);
+    assert.match(tasks.attributes, /^\/tooling\/index\.ts linguist-generated$/m);
   });
 
   // A root build is validation, not a release artifact fan-out. A child build is

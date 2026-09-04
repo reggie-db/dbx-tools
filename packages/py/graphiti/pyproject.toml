@@ -2,11 +2,11 @@
 
 [project]
 name = "dbx-tools-graphiti"
-version = "0.6.153"
+version = "0.6.154"
 description = "Native Graphiti MCP and Neo4j launcher with Databricks models through LiteLLM"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
-dependencies = ["dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core", "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/litellm", "dbx-tools-postgres @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/postgres", "cyclopts>=4.11,<6", "graphiti-core==0.29.3", "honcho>=2,<3"]
+dependencies = ["cyclopts>=4.11,<6", "graphiti-core==0.29.3", "honcho>=2,<3", "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/core", "dbx-tools-litellm @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/litellm", "dbx-tools-postgres @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/postgres"]
 
 [project.urls]
 Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/graphiti"

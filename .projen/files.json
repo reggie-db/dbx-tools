@@ -8,6 +8,7 @@
     ".github/workflows/projen-release.yml",
     ".github/workflows/pull-request-lint.yml",
     ".github/workflows/python-release.yml",
+    ".github/workflows/rust-release-dispatch.yml",
     ".github/workflows/rust-release.yml",
     ".gitignore",
     ".mergify.yml",

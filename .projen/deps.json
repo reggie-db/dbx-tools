@@ -32,6 +32,7 @@
     },
     {
       "name": "concurrently",
+      "version": "catalog:",
       "type": "build"
     },
     {

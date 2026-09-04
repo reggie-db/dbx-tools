@@ -101,7 +101,10 @@ const DEFAULT_CATALOG: Catalog = {
  * workspace with an "Ignored build scripts" warning on its first install.
  */
 const DEFAULT_ALLOW_BUILDS: AllowBuilds = {
+  "@databricks/appkit": true,
+  "@databricks/appkit-ui": true,
   esbuild: true,
+  protobufjs: true,
   "unrs-resolver": true,
   // The `bun` npm package (a peer of `bun-plugin-tailwind`) ships a `bun.exe`
   // placeholder and downloads the real platform binary in its postinstall. Left
@@ -111,6 +114,10 @@ const DEFAULT_ALLOW_BUILDS: AllowBuilds = {
   bun: true,
   // fastembed's native ONNX runtime (via `@mastra/fastembed`).
   "onnxruntime-node": true,
+};
+
+const DEFAULT_OVERRIDES: Readonly<Record<string, string>> = {
+  glob: "^13.0.0",
 };
 
 /**
@@ -173,7 +180,7 @@ export class PnpmWorkspaceState {
     this.allowBuilds = { ...DEFAULT_ALLOW_BUILDS, ...options.allowBuilds };
     // Seeded even when empty so `addOverride` has a reference projen already
     // captured; projen's `omitEmpty` drops the key while it stays empty.
-    this.overrides = { ...options.workspaceYaml?.overrides };
+    this.overrides = { ...DEFAULT_OVERRIDES, ...options.workspaceYaml?.overrides };
     this.options = {
       ...DEFAULT_WORKSPACE_YAML,
       ...options.workspaceYaml,

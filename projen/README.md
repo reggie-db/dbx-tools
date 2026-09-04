@@ -61,38 +61,38 @@ headers.
 import { project, projectPy } from "@dbx-tools/projen";
 
 const root = new project.DBXToolsNodeProject({ name: "my-apps" });
-const repository = {
-  url: "https://github.com/example/my-apps.git",
-  ref: "main",
-  root: "python/packages",
-} as const;
 
 new projectPy.DBXToolsPythonWorkspace(root, {
-  repository,
+  root: "python/packages",
   packages: [
     {
       directory: "core",
-      name: "my-apps-core",
-      module: "my_apps.core",
       description: "Shared Python helpers",
     },
+    {
+      directory: "service",
+      description: "Python service",
+      internalDependencies: ["core"],
+    },
   ],
-  interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
   release: true,
 });
 ```
 
-Use `projectPy.pythonGitDependency(repository, name, directory)` for an internal
-dependency that must also resolve when a package is installed directly through a
-Git `#subdirectory=` URL. `root.vscode` is projen's existing VS Code component;
-dbx-tools reuses it rather than constructing a second `.vscode/settings.json`
-owner.
+Distribution names and modules come from the parent scope plus each package
+directory. The repository comes from the parent project metadata or Git remote.
+`internalDependencies` renders standalone Git `#subdirectory=` requirements
+without repeating repository coordinates. Pass `repository`, `name`, or
+`module` only to override those conventions. `root.vscode` is projen's existing
+VS Code component; dbx-tools reuses it rather than constructing a second
+`.vscode/settings.json` owner.
 
 ## Add A Rust Workspace
 
-`DBXToolsRustWorkspace` discovers every source-bearing folder under
-`packages/rs`, generates its Cargo manifest, and derives the crate name from the
-root scope plus folder name. A crate containing `uniffi::setup_scaffolding!()`
+`DBXToolsRustWorkspace` discovers every source-bearing folder under its
+configurable `root` (default `packages/rs`), generates its Cargo manifest, and
+derives the crate name and repository from the parent project. A crate containing
+`uniffi::setup_scaffolding!()`
 automatically wires matching private Node and Python binding packages using the
 same capability name. Repository-specific dependencies and features remain
 declarative options in `.projenrc.ts`; generated bindings are built separately
@@ -105,16 +105,25 @@ without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
 
 The workspace also generates a `rust-release` workflow from discovered crates,
-UniFFI bindings, and release-enabled binaries. Its matrix has one row per
-target. Each row installs native dependencies and restores Cargo/sccache once,
+UniFFI bindings, and release-enabled binaries. A small tag workflow resolves the
+annotated release tag and sends the tag plus commit SHA to `rust-release` through
+`repository_dispatch`. The release workflow runs in the configured release
+branch cache scope, checks out the supplied SHA, fetches the tag, and requires
+both the tag target and `HEAD` to equal that SHA before building. Its matrix has
+one row per target. Each row installs native dependencies and restores
+Cargo/sccache once,
 builds the Rust workspace once, then packages every discovered output from that
 shared build. Bun and the workspace install are present only when a Node binding
 needs TypeScript generation; uv is present only when a Python wheel is needed.
 A binary-only workspace therefore installs neither.
 
-The Node generator's Rust CLI is cached under one target directory keyed by its
-pinned UBRN version and runner architecture, then prepared before the workspace
-build. Python generation executes the already-built
+The Node generator's Rust CLI can be cached under one target directory keyed by
+its pinned UBRN version, Rust version, runner OS, and runner architecture. Set
+the repository variable `CACHE_UBRN_TARGET=true` to enable that archive while
+comparing its transfer cost with the default sccache-only path. Cargo registry
+caches and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain
+across version tags. Cache keys, restore results, sccache statistics, and phase
+timings are written to each build log. Python generation executes the already-built
 `target/<triple>/release/uniffi-bindgen` directly. Artifact packaging therefore
 does no Rust compilation after the main workspace build.
 
@@ -125,22 +134,29 @@ Non-private Cargo crates publish from a source-only job with
 `cargo publish --no-verify`; GitHub Release uploads likewise consume prebuilt
 binary artifacts without reinstalling a toolchain.
 
-Set the repository variable `LOCAL_REPOSITORIES=true` to enable the generated
-self-hosted mirror job. Configure `LOCAL_NPM_REGISTRY` and
+Set the repository variable `LOCAL_REPOSITORIES=true` to enable generated
+self-hosted publication from the prebuilt artifacts. Configure `LOCAL_NPM_REGISTRY` and
 `LOCAL_PYPI_PUBLISH_URL` with their matching `LOCAL_*` credentials. Set
 `LOCAL_CARGO_REGISTRY` to a named Cargo registry such as a loopback
-[Kellnr](https://kellnr.io/) instance and provide `LOCAL_CARGO_TOKEN`. The runner
-detects its OS, architecture, libc, Rust target, and Python wheel tag and builds
-only that native target. Public Cargo crates also publish directly to crates.io
+[Kellnr](https://kellnr.io/) instance and provide `LOCAL_CARGO_TOKEN`. Public
+Cargo crates also publish directly to crates.io
 with `CARGO_REGISTRY_TOKEN`. Override `releaseTargets` only when a consumer has
 additional native runners; ordinary projects inherit the maintained matrix
 automatically. `bun run bump` also accepts repeatable `--os` and `--arch`
 selectors; every selected operating system is crossed with every selected
 architecture. Omit both filters to regenerate the complete maintained matrix.
+`DBX_TOOLS_RELEASE_PLATFORMS` can select the generated matrix without repeating
+environment parsing in a consumer.
 
 Private Python binding projects are marked with `[tool.dbx-tools] private =
 true`. They stay out of the standard uv/Python release and docs surfaces;
 `rust-release` publishes their prebuilt native wheels directly.
+When Rust and Python workspaces are attached, their workflow metadata composes
+the available Rust to Python to Node release chain automatically. A
+`release-metadata` artifact carries the verified tag and SHA across each stage
+and into docs. Configure release GitHub environments to permit the generated
+release branch; the trusted-publisher instructions list that branch with the
+workflow and environment identity PyPI verifies.
 
 ## Customize Packages With Mixins
 
@@ -155,6 +171,10 @@ projenProject.applyToProjects(project, { tags: "shared" }, (pkg) => {
 
 project.synth();
 ```
+
+Use `projectJs.addOptionalPeer(pkg, specifier)` for an optional peer that must
+also resolve during local development. It writes the peer metadata and matching
+development dependency without turning the peer into a runtime dependency.
 
 `applyToProjects` AND-s its globs (prefix a glob with `!` to negate) into one
 predicate over the DBXTools child packages, then applies it as a `constructs`

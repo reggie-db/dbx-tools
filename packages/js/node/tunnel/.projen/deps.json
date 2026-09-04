@@ -1,6 +1,11 @@
 {
   "dependencies": [
     {
+      "name": "@dbx-tools/email",
+      "version": "workspace:*",
+      "type": "build"
+    },
+    {
       "name": "@types/bun",
       "version": "^1.3.14",
       "type": "build"
@@ -36,11 +41,6 @@
     },
     {
       "name": "@dbx-tools/core",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "@dbx-tools/email",
       "version": "workspace:*",
       "type": "runtime"
     },

@@ -330,6 +330,30 @@ function transformLinks(markdown, fromDir, mappings) {
   );
 }
 
+function assertRustWorkspaceReadmeLinks(packages, mappings) {
+  const rootReadme = path.join(root, "README.md");
+  for (const pkg of packages.filter((candidate) => candidate.group === "rust")) {
+    const source = read(pkg.readme);
+    for (const match of source.matchAll(
+      /\[workspace README\]\(([^)#]+)(#[^)]+)?\)/gi,
+    )) {
+      const target = path.resolve(pkg.dir, match[1].trim());
+      if (target !== rootReadme) {
+        throw new Error(
+          `Rust workspace README link must resolve to README.md: ${pkg.relDir}`,
+        );
+      }
+      const expected = `[workspace README](${withBase("/")}${match[2] ?? ""})`;
+      const generated = transformLinks(match[0], pkg.dir, mappings);
+      if (generated !== expected) {
+        throw new Error(
+          `Rust workspace README link generated ${generated}, expected ${expected}: ${pkg.relDir}`,
+        );
+      }
+    }
+  }
+}
+
 function generatedHeader(sourcePath) {
   return [
     "<!--",
@@ -615,6 +639,7 @@ function main() {
   for (const guide of guides) {
     mappings.byFile.set(path.resolve(guide.source), docsPathForGuide(guide));
   }
+  assertRustWorkspaceReadmeLinks(packages, mappings);
 
   rm(sourceRoot);
   mkdir(docsContentRoot);

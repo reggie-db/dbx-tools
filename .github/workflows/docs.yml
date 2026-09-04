@@ -13,6 +13,7 @@ env:
   DOCS_BASE: /
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -23,14 +24,42 @@ concurrency:
 
 jobs:
   build:
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_run') }}
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'workflow_run' || github.event.workflow_run.event == 'push')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Download release metadata
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: release-metadata
+          path: .release
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Read release metadata
+        id: release_metadata
+        if: ${{ github.event_name == 'workflow_run' }}
+        run: |
+          RELEASE_TAG="$(cat .release/tag)"
+          EXPECTED_SHA="$(cat .release/sha)"
+          test -n "$RELEASE_TAG"
+          test -n "$EXPECTED_SHA"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "expected_sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event_name == 'workflow_run' && steps.release_metadata.outputs.expected_sha || github.sha }}
+          fetch-depth: 0
+      - name: Verify release source
+        if: ${{ github.event_name == 'workflow_run' }}
+        env:
+          RELEASE_TAG: ${{ steps.release_metadata.outputs.release_tag }}
+          EXPECTED_SHA: ${{ steps.release_metadata.outputs.expected_sha }}
+        run: |
+          git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -61,7 +90,7 @@ jobs:
           path: .docs-build/dist
 
   deploy:
-    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_run') }}
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'workflow_run' || github.event.workflow_run.event == 'push')) }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

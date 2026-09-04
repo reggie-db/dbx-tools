@@ -9,6 +9,7 @@
 /.github/workflows/projen-release.yml linguist-generated
 /.github/workflows/pull-request-lint.yml linguist-generated
 /.github/workflows/python-release.yml linguist-generated
+/.github/workflows/rust-release-dispatch.yml linguist-generated
 /.github/workflows/rust-release.yml linguist-generated
 /.gitignore linguist-generated
 /.mergify.yml linguist-generated
@@ -40,6 +41,7 @@
 /packages/test/**/index.ts linguist-generated
 /packages/test/openapi/** linguist-generated
 /pnpm-workspace.yaml linguist-generated
+/projen/index.ts linguist-generated
 /pyproject.toml linguist-generated
 /tsconfig.base.json linguist-generated
 /tsconfig.json linguist-generated

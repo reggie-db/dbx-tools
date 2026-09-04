@@ -4,11 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import {
-  DBXToolsNodeProject,
-  DBXToolsPythonWorkspace,
-  pythonGitDependency,
-} from "../src/project.ts";
+import { DBXToolsNodeProject, DBXToolsPythonWorkspace } from "../src/project.ts";
 
 let outdir: string;
 
@@ -28,36 +24,27 @@ describe("DBXToolsPythonWorkspace", () => {
       outdir,
       defaultTagMixins: false,
       github: true,
+      repository: "https://github.com/example/fixture.git",
     });
     assert.equal(project.vsCode?.vsCode, project.vscode);
 
-    const repository = {
-      url: "https://github.com/example/fixture.git",
-      ref: "main",
-      root: "python/packages",
-    } as const;
     new DBXToolsPythonWorkspace(project, {
-      repository,
+      root: "python/packages",
       packages: [
         {
           directory: "core",
-          name: "fixture-core",
-          module: "fixture.core",
           description: "Fixture core",
         },
         {
           directory: "app",
-          name: "fixture-app",
-          module: "fixture.app",
           description: "Fixture app",
-          dependencies: [pythonGitDependency(repository, "fixture-core", "core")],
+          internalDependencies: ["core"],
         },
         {
           directory: "native",
-          name: "fixture-native",
-          module: "fixture.native",
           description: "Private native package",
           private: true,
+          generatedSources: ["src/fixture/native/bindings.py"],
           trustedPublisher: {
             workflowName: "rust-release",
             environment: "pypi-fixture-native",
@@ -70,7 +57,6 @@ describe("DBXToolsPythonWorkspace", () => {
       indexStrategy: "unsafe-best-match",
       ruffTarget: "py312",
       lintPaths: ["python"],
-      pyreflyProjectExcludes: ["python/packages/native/src/fixture/native/bindings.py"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
       release: {
         workflowName: "publish-python",
@@ -96,6 +82,9 @@ describe("DBXToolsPythonWorkspace", () => {
     );
     assert.doesNotMatch(workspace, /^  \[/m);
     assert.doesNotMatch(workspace, /= \[ /);
+    const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8");
+    assert.match(gitignore, /^\.venv\/$/m);
+    assert.match(gitignore, /^python\/packages\/\*\*\/dist\/$/m);
 
     const app = readFileSync(join(outdir, "python/packages/app/pyproject.toml"), "utf8");
     assert.match(
@@ -120,22 +109,23 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
     const release = readFileSync(join(outdir, ".github/workflows/publish-python.yml"), "utf8");
     assert.match(release, /workflows:\s+- rust-release/);
-    assert.match(
-      release,
-      /VERSION: \$\{\{ github\.event_name == 'push' && github\.ref_name \|\| inputs\.version \}\}/,
-    );
+    assert.match(release, /steps\.release_metadata\.outputs\.release_tag \|\| inputs\.version/);
     assert.match(release, /version = os\.environ\["VERSION"\]\.removeprefix\("v"\)/);
     assert.match(release, /^  publish-core:$/m);
     assert.match(release, /^      name: pypi-fixture-core$/m);
     assert.match(release, /^          packages-dir: dist\/core$/m);
     assert.match(release, /^  publish-app:$/m);
-    assert.match(release, /github\.event\.workflow_run\.head_sha/);
+    assert.match(release, /name: Download release metadata/);
+    assert.match(release, /steps\.release_metadata\.outputs\.expected_sha/);
+    assert.match(release, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
     assert.match(release, /^      name: production-pypi$/m);
     assert.match(release, /^          packages-dir: dist\/app$/m);
     assert.match(release, /github\.event_name == 'workflow_run'/);
     assert.doesNotMatch(release, /inputs\.publish/);
     assert.doesNotMatch(release, /^  publish:$/m);
     assert.doesNotMatch(release, /publish-native/);
+    const nodeRelease = readFileSync(join(outdir, ".github/workflows/node-release.yml"), "utf8");
+    assert.match(nodeRelease, /workflows:\s+- publish-python/);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
     const instructionsCommand = instructionsTask?.steps?.[0]?.exec;
     assert.equal(instructionsCommand, "node .projen/pypi-trusted-publisher-instructions.mjs");
@@ -154,10 +144,13 @@ describe("DBXToolsPythonWorkspace", () => {
       /## fixture-app\n- Owner: example\n- Repository name: fixture\n- Workflow name: publish-python\.yml\n- Environment name: production-pypi/,
     );
     assert.match(instructions, /Before making any changes, complete a read-only audit/);
-    assert.match(instructions, /Confirm that the active PyPI account is example/);
+    assert.match(instructions, /active PyPI account can administer the listed projects/);
+    assert.doesNotMatch(instructions, /active PyPI account is example/);
     assert.match(instructions, /proposed reconciliation plan grouped by publishers/);
     assert.match(instructions, /confirm the complete proposed plan before submitting any change/);
     assert.match(instructions, /without asking for additional confirmation/);
+    assert.match(instructions, /permit deployments from the main branch/);
+    assert.match(instructions, /GitHub environment branch: main/);
     assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
     assert.match(instructions, /Reuse or claim an existing PyPI browser tab/);
@@ -188,15 +181,14 @@ describe("optional Python release stages", () => {
         outdir: directOutdir,
         defaultTagMixins: false,
         github: true,
+        repository: "https://github.com/example/fixture.git",
         nodeReleaseWorkflowName: false,
       });
       new DBXToolsPythonWorkspace(project, {
-        repository: { url: "https://github.com/example/fixture.git", root: "python/packages" },
+        root: "python/packages",
         packages: [
           {
             directory: "core",
-            name: "fixture-core",
-            module: "fixture.core",
             description: "Fixture core",
           },
         ],
@@ -209,6 +201,7 @@ describe("optional Python release stages", () => {
       );
       assert.match(workflow, /^  push:\n    tags:\n      - v\*$/m);
       assert.doesNotMatch(workflow, /workflow_run:/);
+      assert.match(workflow, /name: Upload release metadata/);
     } finally {
       rmSync(directOutdir, { recursive: true, force: true });
     }

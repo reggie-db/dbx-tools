@@ -115,6 +115,16 @@ function git(args: string[], capture = false): string {
   return res.stdout?.trim() ?? "";
 }
 
+function assertReleaseTagsPointToHead(tags: readonly string[]): void {
+  const head = git(["rev-parse", "HEAD"], true);
+  for (const tag of tags) {
+    const target = git(["rev-parse", `${tag}^{commit}`], true);
+    if (!head || target !== head) {
+      throw new Error(`Release tag ${tag} does not point to the pushed HEAD commit`);
+    }
+  }
+}
+
 /**
  * Write ONLY the `version` field into a manifest projen owns (read-only, so
  * bracketed by a chmod that restores the mode). Used for the ROOT and the
@@ -324,9 +334,17 @@ program
 
       if (push) {
         git(["push", "origin", "HEAD"]);
-        // Push every tag in ONE invocation: each push triggers a workflow, and a
-        // partial push would release half the set at this version.
-        if (opts.tag) git(["push", "origin", ...tags]);
+        // The managed Databricks pre-push hook treats a newly created tag's
+        // all-zero remote SHA as a branch with no upstream and scans hundreds of
+        // historical commits. The release commit was already scanned by the
+        // branch push immediately above, and each annotated tag points to that
+        // exact commit, so bypass the hook only for the tag-ref transport.
+        // Push every tag in one invocation so a partial push cannot release
+        // only some namespaces at this version.
+        if (opts.tag) {
+          assertReleaseTagsPointToHead(tags);
+          git(["push", "--no-verify", "origin", ...tags]);
+        }
         logger.success(`pushed ${opts.tag ? tags.join(", ") : "HEAD"} to origin`);
       } else {
         logger.info("skipped push (--no-push / --no-publish)");

@@ -15,27 +15,10 @@
  * `dbx-tools` root task first (see below); a normal consumer constructs,
  * `applyToProjects`es, synths.
  */
-import { existsSync, readFileSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
 import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
-import { Component, DependencyType } from "projen";
+import { DependencyType } from "projen";
 
 const SCOPE = "dbx-tools";
-const PYTHON_VERSION_HOOK_MARKER = "# GENERATED: dbx-tools Python commit versions";
-
-/**
- * Ensures no Python commit-version `pre-commit` hook is installed. Python package
- * versions are the single workspace `VERSION`, copied at synth, so there is no
- * per-commit version stamp. A pre-commit hook this repo previously generated is
- * removed here so an established checkout does not keep running a missing task.
- */
-class PythonVersionHookCleanup extends Component {
-  override postSynthesize(): void {
-    const hook = resolve(this.project.outdir, ".git/hooks/pre-commit");
-    if (!existsSync(hook)) return;
-    if (readFileSync(hook, "utf8").includes(PYTHON_VERSION_HOOK_MARKER)) rmSync(hook);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Root construction
@@ -48,16 +31,8 @@ const root = new projenProject.DBXToolsNodeProject({
   // so it dogfoods the `@dbx-tools/*` packages as `workspace:*` source siblings.
   packageRoots: ["packages/js", "packages/test", "packages/example"],
   packageTagPaths: { polyglot: ["node"] },
-  // Any pnpm-workspace setting the engine does not manage itself, typed by
-  // projen's own `PnpmWorkspaceYamlSchema`. `overrides` forces every transitive
-  // glob onto v13: older majors are deprecated upstream (10.x now ships under
-  // the `legacy-v10` tag), so without this a dependency asking for glob@7/9/10
-  // both re-installs a second copy and prints a deprecation warning on every
-  // install.
-  workspaceYaml: { overrides: { glob: "^13.0.0" } },
   github: true,
   buildWorkflow: true,
-  releaseUpstreamWorkflow: "python-release",
   // The `@dbx-tools/projen` engine lives in `projen/` and releases on its own
   // `projen-v*` tag prefix; the engine authors its `projen-release` workflow
   // alongside the root's `release`.
@@ -70,7 +45,6 @@ const root = new projenProject.DBXToolsNodeProject({
   // workspace, so it links from source via `workspace:*`. `.projenrc.ts` imports it
   // by source path either way.
   devDeps: [
-    "concurrently",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/shared-core@workspace:*",
     "@dbx-tools/projen@workspace:*",
@@ -79,7 +53,6 @@ const root = new projenProject.DBXToolsNodeProject({
     "zod@catalog:",
   ],
 });
-new PythonVersionHookCleanup(root);
 
 const installerTest = root.addTask("test:installer", {
   description:
@@ -87,10 +60,6 @@ const installerTest = root.addTask("test:installer", {
 });
 installerTest.exec("bun test scripts/install.test.ts");
 root.testTask.spawn(installerTest);
-
-// `projen/` is an extra workspace member rather than an attached subproject, so
-// the engine cannot discover its generated barrel for the root formatter.
-root.prettier?.addIgnorePattern("projen/index.ts");
 
 // ---------------------------------------------------------------------------
 // Lockfiles stay UNTRACKED (projen's `*.lock` default ignore)
@@ -119,52 +88,12 @@ root.gitignore.addPatterns(
   ".dev.token",
   ".dev.client.test/",
   "**/.logs/",
-  ".venv/",
-  ".pytest_cache/",
-  ".ruff_cache/",
-  "**/__pycache__/",
-  "**/*.py[cod]",
-  "packages/py/*/dist/",
-  "packages/js/node/auth-u2m/src/bindings.ts",
-  "packages/js/node/auth-u2m/src/_bindings*.ts",
-  "packages/js/node/auth-u2m/src/libdbx_tools_auth_u2m.*",
-  "packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py",
-  "packages/py/auth-u2m/src/dbx_tools/auth_u2m/libdbx_tools_auth_u2m.*",
-  "target/",
 );
-
-// Least privilege at the workflow level: a job that omits its own
-// `permissions:` inherits read-only instead of the repo-wide token default.
-// Jobs that genuinely need more still declare it (self-mutation's
-// `contents: write`), and a job-level block replaces this one outright.
-// The two tag-driven release workflows set their own - the engine authors them
-// during preSynthesize, after this file has finished evaluating.
-for (const name of ["build", "pull-request-lint"]) {
-  root.tryFindObjectFile(`.github/workflows/${name}.yml`)?.addOverride("permissions", {
-    contents: "read",
-  });
-}
-
-// Superseded PR runs are just wasted runner time. Grouping by workflow AND ref
-// keeps a push to one PR from cancelling another PR's build.
-//
-// No `merge_group` trigger is needed on these: merges are gated by Mergify's
-// own queue (`.mergify.yml`), not GitHub's native merge queue, so nothing ever
-// dispatches a `merge_group` event here.
-for (const name of ["build", "pull-request-lint"]) {
-  root.tryFindObjectFile(`.github/workflows/${name}.yml`)?.addOverride("concurrency", {
-    group: "${{ github.workflow }}-${{ github.ref }}",
-    "cancel-in-progress": true,
-  });
-}
 
 // ---------------------------------------------------------------------------
 // pnpm workspace: build-script allowances + version overrides
 // ---------------------------------------------------------------------------
-root.pnpmWorkspace?.allowBuild("@databricks/appkit-ui");
-root.pnpmWorkspace?.allowBuild("@databricks/appkit");
 root.pnpmWorkspace?.allowBuild("@google/genai");
-root.pnpmWorkspace?.allowBuild("protobufjs");
 // Catalog pins for the app add-on runtime deps (not engine toolchain): the
 // email add-on's markdown renderer and the Mastra agent framework the tools
 // build on.
@@ -253,10 +182,10 @@ for (const identifierName of ["shared-core", "appkit", "postgres", "shared-model
   });
 }
 
-// shared-core is the light, browser-safe base: EVERY package (except
-// shared-core itself) gets it automatically, regardless of tag. When in doubt,
-// reach for shared-core - so the per-package rules below never add it.
-project.applyToProjects(root, { path: "packages/js/**", identifierName: "!shared-core" }, (p) => {
+// shared-core is the light, browser-safe base: every package (except
+// shared-core itself) gets it automatically, regardless of root or tag. When in
+// doubt, reach for shared-core so per-package rules never add it.
+project.applyToProjects(root, { identifierName: "!shared-core" }, (p) => {
   p.addDeps("@dbx-tools/shared-core@workspace:*");
 });
 
@@ -292,9 +221,7 @@ project.applyToProjects(root, { identifierName: "appkit", tags: "node" }, (p) =>
     "@databricks/sdk-experimental@catalog:",
     "zod@catalog:",
   );
-  p.addPeerDeps("@databricks/appkit@catalog:");
-  p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
-  p.addDevDeps("@databricks/appkit@catalog:");
+  projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
 });
 
 // cli-appkit-env: the `dbx appkit` command group - run AppKit auto-config
@@ -371,6 +298,7 @@ project.applyToProjects(root, { identifierName: "databricks-zerobus", tags: "nod
 // Mastra are runtime deps.
 project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {
   p.addDeps(
+    "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-email@workspace:*",
     "@dbx-tools/shared-email-template@workspace:*",
@@ -415,7 +343,6 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
     "@databricks/appkit@catalog:",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
-    "@dbx-tools/shared-core@workspace:*",
     "@mastra/core@catalog:",
     "@mastra/mcp@catalog:",
     "concurrently@catalog:",
@@ -427,9 +354,8 @@ project.applyToProjects(root, { identifierName: "appkit-graphiti", tags: "node" 
 // Advisory locks reserve one PoolClient for the full protected callback.
 project.applyToProjects(root, { identifierName: "postgres", tags: "node" }, (p) => {
   p.addDeps("pg@^8.22.0");
-  p.addPeerDeps("@databricks/appkit@catalog:");
-  p.package.addField("peerDependenciesMeta", { "@databricks/appkit": { optional: true } });
-  p.addDevDeps("@databricks/appkit@catalog:", "@types/pg@^8");
+  projectJs.addOptionalPeer(p, "@databricks/appkit@catalog:");
+  p.addDevDeps("@types/pg@^8");
 });
 
 // node-teams: server-side Teams Adaptive Card add-on. A deterministic builder
@@ -522,9 +448,7 @@ project.applyToProjects(root, { identifierName: "appkit-mastra", tags: "node" },
   // CLI `remote-skills.ts` shells out to when present. Left as an optional peer
   // so consumers opt in; the runtime falls back to a direct fetch when it is
   // not installed. Present in devDeps for local typecheck/tests.
-  p.addPeerDeps("skills@^1");
-  p.package.addField("peerDependenciesMeta", { skills: { optional: true } });
-  p.addDevDeps("skills@^1");
+  projectJs.addOptionalPeer(p, "skills@^1");
 });
 
 // node-path: filesystem path helpers - glob find, ignore rules, path
@@ -565,7 +489,6 @@ project.applyToProjects(root, { identifierName: "shared-email", tags: "shared" }
 // only syntax for composing React Email's runtime-agnostic components.
 project.applyToProjects(root, { identifierName: "shared-email-template", tags: "shared" }, (p) => {
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:*",
     "@react-email/components@catalog:",
     "react@catalog:",
   );
@@ -729,13 +652,7 @@ project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) =>
   // `--insecure` mode) needs no mail transport, so it is an optional peer rather
   // than a hard dep; the app that mounts `authGate` provides it. Kept as a devDep
   // so it resolves for this package's own tests.
-  p.addPeerDeps("@dbx-tools/email@workspace:*");
-  p.package.addField("peerDependenciesMeta", { "@dbx-tools/email": { optional: true } });
-  p.addDeps("@dbx-tools/email@workspace:*");
-});
-
-project.applyToProjects(root, { identifierName: "email", tags: "node" }, (p) => {
-  p.addDeps("@dbx-tools/appkit@workspace:*");
+  projectJs.addOptionalPeer(p, "@dbx-tools/email@workspace:*");
 });
 
 // ui-appkit: the shared React UI base for the feature UI packages. Re-exports
@@ -781,11 +698,6 @@ project.applyToProjects(root, { identifierName: "ui-branding", tags: "ui" }, (p)
 // shared-email wire contract and renders through ui-appkit's UI kit + the
 // shared Markdown/Tailwind styling. `ui`-tagged (React + jsx from the ui tag).
 project.applyToProjects(root, { identifierName: "ui-email", tags: "ui" }, (p) => {
-  p.package.addField("exports", {
-    "./react": "./src/react/index.ts",
-    "./styles.css": "./src/styles.css",
-    "./package.json": "./package.json",
-  });
   p.addDeps(
     "@dbx-tools/shared-email@workspace:*",
     "@dbx-tools/shared-email-template@workspace:*",
@@ -914,7 +826,6 @@ project.applyToProjects(root, { identifierName: "server-appkit-demo", tags: "ser
     "@dbx-tools/appkit-web-search@workspace:*",
     "@dbx-tools/teams@workspace:*",
     "@dbx-tools/search@workspace:*",
-    "@dbx-tools/shared-core@workspace:*",
     // The tunnel library: the server registers `tunnelInterceptor()` on its own
     // `createApp` (public portr tunnel + Better Auth gate), so the deployed app.yaml
     // runs the server directly rather than through a wrapper bin.
@@ -944,7 +855,6 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
   p.package.addField("name", "@dbx-tools/demo-appkit-app");
   p.package.addField("private", true);
   p.addDeps(
-    "@dbx-tools/shared-core@workspace:*",
     "@dbx-tools/ui-appkit@workspace:*",
     "@dbx-tools/ui-branding@workspace:*",
     "@dbx-tools/ui-mastra@workspace:*",
@@ -965,16 +875,6 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 // Rust Cargo workspace
 // ---------------------------------------------------------------------------
 const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
-  scope: SCOPE,
-  repository: "https://github.com/reggie-db/dbx-tools",
-  rustVersion: "1.82",
-  releasePlatforms: process.env.DBX_TOOLS_RELEASE_PLATFORMS?.split(",").map((value) => {
-    const [os, cpu] = value.split(":");
-    return {
-      os: os as projenProject.RustReleaseOs,
-      cpu: cpu as projenProject.RustReleaseCpu,
-    };
-  }),
   workspaceDependencies: {
     "async-trait": "0.1",
     base64: "0.22",
@@ -1067,55 +967,41 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
 // ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
-const pythonRepository = {
-  url: "https://github.com/reggie-db/dbx-tools.git",
-  ref: "main",
-  root: "packages/py",
-} as const satisfies projenProject.PythonRepositoryOptions;
-
 const pythonPackages: projenProject.PythonPackageOptions[] = [
   ...rustWorkspace.pythonPackages,
   {
     directory: "core",
-    name: "dbx-tools-core",
-    module: "dbx_tools.core",
     description:
       "Dependency-free configuration, identity, and mise-backed executable helpers for dbx-tools Python packages",
     dependencies: [],
   },
   {
     directory: "postgres",
-    name: "dbx-tools-postgres",
-    module: "dbx_tools.postgres",
     description:
       "WorkspaceClient-backed Lakebase Postgres resolution, SQLAlchemy engines, advisory locks, and LISTEN/NOTIFY topic bus",
+    internalDependencies: ["core"],
     dependencies: [
       "asyncpg>=0.30",
       "databricks-sdk>=0.63.0",
       "greenlet>=3.2",
-      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-core", "core"),
       "psycopg[binary]>=3.2.9",
       "sqlalchemy>=2.0.41",
     ],
   },
   {
     directory: "model",
-    name: "dbx-tools-model",
-    module: "dbx_tools.model",
     description: "Databricks Model Serving invocation, classification, and endpoint resolution",
     dependencies: ["databricks-sdk>=0.63.0", "pydantic>=2.9"],
   },
   {
     directory: "litellm",
-    name: "dbx-tools-litellm",
-    module: "dbx_tools.litellm",
     description:
       "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution",
+    internalDependencies: ["model"],
     dependencies: [
       "cachetools>=5.5,<7",
       "cyclopts>=4.11,<6",
       "databricks-sdk>=0.63.0",
-      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-model", "model"),
       "diskcache>=5.6",
       // LiteLLM 1.96.2 imports `get_flat_dependant`, removed in FastAPI
       // 0.140.7. Keep the cap until LiteLLM ships its `get_flat_params` fix.
@@ -1133,14 +1019,10 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
   },
   {
     directory: "graphiti",
-    name: "dbx-tools-graphiti",
-    module: "dbx_tools.graphiti",
     description:
       "Native Graphiti MCP and Neo4j launcher with Databricks models through LiteLLM",
+    internalDependencies: ["core", "litellm", "postgres"],
     dependencies: [
-      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-core", "core"),
-      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-litellm", "litellm"),
-      projenProject.pythonGitDependency(pythonRepository, "dbx-tools-postgres", "postgres"),
       "cyclopts>=4.11,<6",
       "graphiti-core==0.29.3",
       "honcho>=2,<3",
@@ -1152,7 +1034,6 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
 ];
 
 new projenProject.DBXToolsPythonWorkspace(root, {
-  repository: pythonRepository,
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
   // The exact LiteLLM pin does not support Python 3.14, so an open-ended
@@ -1161,18 +1042,13 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   // This workspace uses two trusted corporate indexes. The first can lag the
   // local devpi index, so uv must consider the pinned version from both.
   indexStrategy: "unsafe-best-match",
-  ruffTarget: "py310",
-  workspaceName: "dbx-tools-python-workspace",
-  testPaths: ["packages/py"],
   lintPaths: ["packages/py", "packages/example/python", "packages/example/notebooks"],
   ruffPerFileIgnores: {
     "packages/py/litellm/src/dbx_tools/litellm/reasoning.py": ["BLE001"],
     "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py": ["BLE001"],
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
   },
-  pyreflyProjectExcludes: ["packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py"],
-  interpreterPath: "${workspaceFolder}/.venv/bin/python",
-  release: { upstreamWorkflow: "rust-release" },
+  release: true,
 });
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",

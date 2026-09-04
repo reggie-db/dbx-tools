@@ -105,11 +105,11 @@ overrides:
   glob: ^13.0.0
 verifyDepsBeforeRun: warn
 allowBuilds:
+  "@databricks/appkit": true
+  "@databricks/appkit-ui": true
   esbuild: true
+  protobufjs: true
   unrs-resolver: true
   bun: true
   onnxruntime-node: true
-  "@databricks/appkit-ui": true
-  "@databricks/appkit": true
   "@google/genai": true
-  protobufjs: true

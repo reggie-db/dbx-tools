@@ -336,14 +336,31 @@ Primary package areas:
   fail rather than deleting the only copy.
 
 - **`packages/js/`** — JavaScript and TypeScript package content goes here.
-- **`packages/rs/`** - Rust crates are discovered from source-bearing folders
-  and described by `DBXToolsRustWorkspace`. Release generation uses one matrix
+- **Rust workspace roots** - Rust crates are discovered from source-bearing
+  folders under `DBXToolsRustWorkspace.root` (default `packages/rs`); package
+  names may change without updating a package list. Scope and repository default
+  from the parent project, while `DBX_TOOLS_RELEASE_PLATFORMS` is parsed by the
+  workspace when no explicit release targets are supplied. Generated Cargo and
+  UniFFI outputs are ignored from discovered binding metadata rather than
+  hardcoded package paths. Release generation uses one matrix
   row per selected target, builds the Cargo workspace once in that row, and
   packages every discovered UniFFI binding and release-enabled binary from the
   shared output. Install Bun and run `bun install` only when a discovered
   binding has a Node facade; Python-only bindings need uv but not Bun, and
   binary-only targets need neither. Cache UBRN by its pinned version plus runner
-  OS/architecture and prepare it before the workspace build. Packaging must
+  OS/architecture and Rust version, and prepare it before the workspace build.
+  The `CACHE_UBRN_TARGET=true` repository variable enables that large target
+  archive for comparison; the default relies on the object-level sccache.
+  Release tags run only a small `<workflow>-dispatch` job. It resolves the
+  annotated tag to a commit and sends a `repository_dispatch` carrying both
+  identities to the release workflow on the configured release branch. Every
+  source job checks out that explicit commit, fetches the tag, and requires both
+  `tag^{commit}` and `HEAD` to equal the expected SHA. This branch context keeps
+  Cargo registry and sccache entries reusable across version tags. Cargo registry
+  caches use one stable target/toolchain key; `SCCACHE_GHA_VERSION` provides the
+  matching compiler-cache namespace. Release metadata is passed to Python, Node,
+  and docs as an artifact so a later branch tip cannot change downstream source.
+  Packaging must
   execute the target-specific `uniffi-bindgen` binary produced by that workspace
   build, never `cargo run`, so no Rust compilation occurs after the main build.
   Artifact names identify crate, target, and type (`npm`, `npm-facade`,
@@ -354,12 +371,23 @@ Primary package areas:
   to the GitHub release. Native npm packages publish before their facade.
   `bun run bump --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product; omit both to restore the maintained full
-  matrix.
-- **`packages/py/`** — Python packages in the root uv workspace go here.
+  matrix. Attached Rust and Python workspace components record their generated
+  workflow names in `dbxToolsConfig`; release components derive the available
+  Rust to Python to Node chain from that metadata. Consumers specify an upstream
+  workflow only to override this composition.
+  GitHub environments referenced by release jobs must permit the configured
+  release branch. PyPI trusted publishers keep the generated workflow and
+  environment names unchanged even though the initiating event is branch-scoped.
+- **Python workspace roots** — `DBXToolsPythonWorkspace.root` defaults to
+  `packages/py`; consumers may place packages elsewhere without changing the
+  engine.
   Every package must remain directly pip-installable from this repository with
-  `git+https://...@main#subdirectory=packages/py/<name>`. Keep the Git URL,
-  branch, and package root centralized in `.projenrc.ts`'s `pythonRepository`;
-  generate package `Source` URLs and internal Python Git dependencies from it.
+  `git+https://...@main#subdirectory=<python-root>/<name>`. Keep the Git URL,
+  branch, and package root centralized in the workspace component. It derives
+  the Git URL from the parent project or remote, and derives distribution/module
+  names from the parent scope plus package directory. Declare sibling packages
+  through `internalDependencies`; the component generates their standalone Git
+  requirements.
   Keep the root and every member's `requires-python` generated from the same
   `pythonRequires` value; the default Databricks serverless notebook runtime is
   part of the supported floor and must be covered by the Python test matrix.
@@ -1114,7 +1142,10 @@ whether the sentence is about the code as it stands or about the act of changing
   **`catalogMode: manual`** (the catalog is generated, so `pnpm add` must never
   write into it) and **`verifyDepsBeforeRun: warn`** (packages resolve siblings
   from source, so a stale `node_modules` after a branch switch warns on the next
-  task instead of surfacing as a confusing type error). Discovery is TWO functions in `packages.ts`:
+  task instead of surfacing as a confusing type error). The engine also pins
+  transitive `glob` to the supported major and permits build scripts required by
+  AppKit, AppKit UI, protobufjs, and the standard native toolchain; consumers add
+  only product-specific allowances. Discovery is TWO functions in `packages.ts`:
   `scanPackages(root, roots)` walks the filesystem (synth time; returns each
   package's path + the tags implied by its path, reading no manifest), while
   `recordedPackages()` reads the recorded members back from `pnpm-workspace.yaml`
@@ -1227,7 +1258,10 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
     (omit = all, `false` = none, or a subset list) - e.g. the `server` mixin adds
     `express`/`tsoa` + `dev`/`start` tasks. Consumers apply their own AFTER
     construction with `applyToProjects(...)` (see `.projenrc.ts`), so user mixins run
-    after the defaults.
+    after the defaults. Use `projectJs.addOptionalPeer(project, specifier)` when
+    a package needs optional peer metadata plus local development resolution; do
+    not duplicate the peer/meta/dev-dependency triplet or add the peer as a
+    runtime dependency.
 - **Names**: `PackageIdentifier.of(scope, relPath)`
   (`project.ts`): normalized, lowercased, the root-relative path dash-joined as
   `@<scope>/<seg-seg-...>` (e.g. `packages/js/shared/core` → `@dbx-tools/shared-core`,

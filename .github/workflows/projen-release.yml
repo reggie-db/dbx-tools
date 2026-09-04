@@ -2,9 +2,11 @@
 
 name: projen-release
 on:
-  push:
-    tags:
-      - projen-v*
+  workflow_run:
+    workflows:
+      - python-release
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       dry_run:
@@ -18,17 +20,52 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       id-token: write
     env:
       CI: "true"
       DRY_RUN_INPUT: ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'workflow_run' || github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'repository_dispatch')) }}
     steps:
+      - name: Download release metadata
+        id: download_release_metadata
+        uses: actions/download-artifact@v8
+        with:
+          name: release-metadata
+          path: .release
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Read release metadata
+        id: release_metadata
+        run: |-
+          RELEASE_TAG="$(cat .release/tag)"
+          EXPECTED_SHA="$(cat .release/sha)"
+          test -n "$RELEASE_TAG"
+          test -n "$EXPECTED_SHA"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "expected_sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
+        shell: bash
       - name: Checkout
         id: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ steps.release_metadata.outputs.expected_sha }}
+      - name: Verify release source
+        id: verify_release_source
+        env:
+          SOURCE_RELEASE_TAG: ${{ steps.release_metadata.outputs.release_tag }}
+          EXPECTED_SHA: ${{ steps.release_metadata.outputs.expected_sha }}
+        run: |-
+          git fetch --force origin "+refs/tags/$SOURCE_RELEASE_TAG:refs/tags/$SOURCE_RELEASE_TAG"
+          test "$(git rev-parse "$SOURCE_RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          RELEASE_TAG="$(git tag --points-at HEAD --list "projen-v*" | sort -V | tail -1)"
+          test -n "$RELEASE_TAG"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=${RELEASE_TAG#projen-v}" >> "$GITHUB_ENV"
+        shell: bash
       - name: Setup Bun
         id: setup_bun
         uses: oven-sh/setup-bun@v2
@@ -43,6 +80,12 @@ jobs:
       - name: Install
         id: install
         run: bun install
+      - name: Upload release metadata
+        id: upload_release_metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-metadata
+          path: .release
       - name: Set version from tag and publish
         id: set_version_from_tag_and_publish
         env:
@@ -54,7 +97,7 @@ jobs:
             VERSION="0.0.0-dry.${GITHUB_RUN_NUMBER}"
             DRY_RUN=--dry-run
           else
-            VERSION="${GITHUB_REF_NAME#projen-v}"
+            VERSION="${RELEASE_VERSION:-${GITHUB_REF_NAME#projen-v}}"
             DRY_RUN="${DRY_RUN_INPUT}"
           fi
           chmod -R u+w . || true
@@ -63,3 +106,4 @@ jobs:
     timeout-minutes: 30
 permissions:
   contents: read
+  actions: read

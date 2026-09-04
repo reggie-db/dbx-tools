@@ -7,6 +7,7 @@
 import { Component } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
+import { object, string } from "@dbx-tools/shared-core";
 import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
 
 const NODE_VERSION = "lts/*";
@@ -200,6 +201,7 @@ export class DBXToolsRelease extends Component {
     project: DBXToolsNodeProject,
     { name, tagPrefix, steps, workingDirectory, upstreamWorkflow }: PublishWorkflow,
   ): void {
+    const setupSteps = publishSetupSteps();
     const workflow = new GithubWorkflow(project.github!, name, {
       // Serialize publishes so two tags landing together cannot race to the
       // registry, but never cancel a run already in flight: a half-published
@@ -209,7 +211,10 @@ export class DBXToolsRelease extends Component {
     });
     // Read-only floor for any job that does not declare its own permissions;
     // the publish job below overrides it with the `id-token` it needs.
-    workflow.file?.addOverride("permissions", { contents: "read" });
+    workflow.file?.addOverride("permissions", {
+      contents: "read",
+      ...(upstreamWorkflow ? { actions: "read" } : {}),
+    });
     if (upstreamWorkflow) {
       workflow.file?.addOverride("on.workflow_run", {
         workflows: [upstreamWorkflow],
@@ -234,12 +239,16 @@ export class DBXToolsRelease extends Component {
     workflow.addJob("publish", {
       ...(upstreamWorkflow
         ? {
-            if: "${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_run') }}",
+            if: "${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'workflow_run' || github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'repository_dispatch')) }}",
           }
         : {}),
       runsOn: ["ubuntu-latest"],
       // `id-token: write` lets npm mint the OIDC token for provenance attestation.
-      permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+      permissions: {
+        actions: JobPermission.READ,
+        contents: JobPermission.READ,
+        idToken: JobPermission.WRITE,
+      },
       timeoutMinutes: 30,
       // `DRY_RUN_INPUT` is `--dry-run` when the dispatch input is true, else empty;
       // the publish script also FORCES it on any `workflow_dispatch` run.
@@ -248,25 +257,59 @@ export class DBXToolsRelease extends Component {
         DRY_RUN_INPUT: "${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}",
       },
       steps: [
-        ...publishSetupSteps().map((step) =>
-          step.name === "Checkout" && upstreamWorkflow
-            ? {
-                ...step,
-                with: {
-                  ...step.with,
-                  ref: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
-                },
-              }
-            : step,
-        ),
         ...(upstreamWorkflow
           ? [
               {
-                name: "Resolve release tag",
+                name: "Download release metadata",
+                uses: "actions/download-artifact@v8",
+                with: {
+                  name: "release-metadata",
+                  path: ".release",
+                  "run-id": "${{ github.event.workflow_run.id }}",
+                  "github-token": "${{ github.token }}",
+                },
+              },
+              {
+                name: "Read release metadata",
+                id: "release_metadata",
+                shell: "bash",
                 run: [
-                  'RELEASE_TAG="$(git tag --points-at HEAD --list "' +
-                    tagPrefix +
-                    '*" | sort -V | tail -1)"',
+                  'RELEASE_TAG="$(cat .release/tag)"',
+                  'EXPECTED_SHA="$(cat .release/sha)"',
+                  'test -n "$RELEASE_TAG"',
+                  'test -n "$EXPECTED_SHA"',
+                  'echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"',
+                  'echo "expected_sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"',
+                ].join("\n"),
+              },
+            ]
+          : []),
+        {
+          ...setupSteps[0]!,
+          ...(upstreamWorkflow
+            ? {
+                with: {
+                  ...setupSteps[0]!.with,
+                  ref: "${{ steps.release_metadata.outputs.expected_sha }}",
+                  "fetch-depth": 0,
+                },
+              }
+            : {}),
+        },
+        ...(upstreamWorkflow
+          ? [
+              {
+                name: "Verify release source",
+                shell: "bash",
+                env: {
+                  SOURCE_RELEASE_TAG: "${{ steps.release_metadata.outputs.release_tag }}",
+                  EXPECTED_SHA: "${{ steps.release_metadata.outputs.expected_sha }}",
+                },
+                run: [
+                  'git fetch --force origin "+refs/tags/$SOURCE_RELEASE_TAG:refs/tags/$SOURCE_RELEASE_TAG"',
+                  'test "$(git rev-parse "$SOURCE_RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"',
+                  'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"',
+                  `RELEASE_TAG="$(git tag --points-at HEAD --list "${tagPrefix}*" | sort -V | tail -1)"`,
                   'test -n "$RELEASE_TAG"',
                   'echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"',
                   `echo "RELEASE_VERSION=\${RELEASE_TAG#${tagPrefix}}" >> "$GITHUB_ENV"`,
@@ -274,6 +317,25 @@ export class DBXToolsRelease extends Component {
               } satisfies JobStep,
             ]
           : []),
+        ...setupSteps.slice(1),
+        ...(!upstreamWorkflow
+          ? [
+              {
+                name: "Write release metadata",
+                shell: "bash",
+                run: [
+                  "mkdir -p .release",
+                  'printf "%s\\n" "$GITHUB_REF_NAME" > .release/tag',
+                  "git rev-parse HEAD > .release/sha",
+                ].join("\n"),
+              } satisfies JobStep,
+            ]
+          : []),
+        {
+          name: "Upload release metadata",
+          uses: "actions/upload-artifact@v7",
+          with: { name: "release-metadata", path: ".release" },
+        },
         ...steps,
       ],
       ...(workingDirectory ? { defaults: { run: { workingDirectory } } } : {}),
@@ -292,7 +354,7 @@ export class DBXToolsRelease extends Component {
     this.authorPublishWorkflow(project, {
       name: this.workflowName,
       tagPrefix: this.tagPrefix,
-      upstreamWorkflow: this.upstreamWorkflow,
+      upstreamWorkflow: this.releaseUpstreamWorkflow(project),
       steps: [
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Stamp it on
         // every workspace package (manifests are projen-readonly, so unlock
@@ -317,6 +379,16 @@ export class DBXToolsRelease extends Component {
         },
       ],
     });
+  }
+
+  private releaseUpstreamWorkflow(project: DBXToolsNodeProject): string | undefined {
+    if (this.upstreamWorkflow) return this.upstreamWorkflow;
+    const python = string.trimToNull(project.dbxToolsConfig.pythonReleaseWorkflow) ?? undefined;
+    if (python) return python;
+    const rust = project.dbxToolsConfig.rust;
+    return object.isRecord(rust)
+      ? (string.trimToNull(rust.releaseWorkflow) ?? undefined)
+      : undefined;
   }
 
   /**
@@ -344,6 +416,7 @@ export class DBXToolsRelease extends Component {
     this.authorPublishWorkflow(project, {
       name,
       tagPrefix,
+      upstreamWorkflow: this.releaseUpstreamWorkflow(project),
       steps: [
         {
           name: "Set version from tag and publish",
@@ -352,7 +425,7 @@ export class DBXToolsRelease extends Component {
             '  VERSION="0.0.0-dry.${GITHUB_RUN_NUMBER}"',
             "  DRY_RUN=--dry-run",
             "else",
-            `  VERSION="\${GITHUB_REF_NAME#${tagPrefix}}"`,
+            `  VERSION="\${RELEASE_VERSION:-\${GITHUB_REF_NAME#${tagPrefix}}}"`,
             '  DRY_RUN="${DRY_RUN_INPUT}"',
             "fi",
             "chmod -R u+w . || true",

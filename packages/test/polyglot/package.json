@@ -24,6 +24,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@dbx-tools/shared-core": "workspace:*",
     "bun_python": "github:codehz/bun_python#3fae2f3e72fa1bbcb998894ad61e72cfd809671b"
   },
   "main": "index.ts",
@@ -48,7 +49,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.153",
+  "version": "0.6.154",
   "types": "index.ts",
   "type": "module",
   "exports": {

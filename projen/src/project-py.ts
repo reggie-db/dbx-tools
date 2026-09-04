@@ -1,11 +1,14 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
-import { string } from "@dbx-tools/shared-core";
+import { project as coreProject } from "@dbx-tools/core";
+import { object, string } from "@dbx-tools/shared-core";
 import { Component, TextFile, type Project, javascript, python, vscode } from "projen";
 import type { IResolver } from "projen/lib/file";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
 import { parse, stringify } from "smol-toml";
+import { projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
+import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 /** Git location used by direct `#subdirectory=` package dependencies. */
@@ -18,15 +21,24 @@ export interface PythonRepositoryOptions {
 /** One independently installable Python package in the uv workspace. */
 export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly directory: string;
-  readonly name: string;
-  readonly module: string;
+  readonly name?: string;
+  readonly module?: string;
   readonly description: string;
   readonly dependencies?: readonly string[];
+  /** Workspace package directories rendered as standalone Git dependencies. */
+  readonly internalDependencies?: readonly string[];
   readonly scripts?: Readonly<Record<string, string>>;
   /** Keep this package unpublished and out of public docs and releases. */
   readonly private?: boolean;
+  /** Generated source files excluded from strict static analysis. Package-relative. */
+  readonly generatedSources?: readonly string[];
   /** Trusted publisher used outside the standard Python release workflow. */
   readonly trustedPublisher?: PythonTrustedPublisherOptions;
+}
+
+interface ResolvedPythonPackageOptions extends PythonPackageOptions {
+  readonly name: string;
+  readonly module: string;
 }
 
 /** GitHub Actions publisher for a Python package released by another workflow. */
@@ -39,7 +51,7 @@ export interface PythonTrustedPublisherOptions {
 /** Options for one projen-native Python workspace member. */
 export interface DBXToolsPythonProjectOptions extends DBXToolsProjectOptions {
   readonly parent: Project;
-  readonly package: PythonPackageOptions;
+  readonly package: ResolvedPythonPackageOptions;
   readonly repository: Required<PythonRepositoryOptions>;
   readonly requiresPython: string;
   /** Workspace version copied onto this package's `pyproject.toml`. */
@@ -67,7 +79,9 @@ interface PythonPublication {
 /** Options for {@link DBXToolsPythonWorkspace}. */
 export interface DBXToolsPythonWorkspaceOptions {
   readonly packages: readonly PythonPackageOptions[];
-  readonly repository: PythonRepositoryOptions;
+  readonly repository?: PythonRepositoryOptions;
+  /** Repository-relative Python package root. Defaults to `packages/py`. */
+  readonly root?: string;
   /** Workspace packages exposed as commands from the repository root. */
   readonly dependencies?: readonly string[];
   readonly requiresPython?: string;
@@ -126,6 +140,11 @@ export function pythonGitDependency(
   return `${name} @ git+${repository.url}@${repository.ref ?? "main"}#subdirectory=${pythonPackagePath(repository, directory)}`;
 }
 
+/** Derive a dotted Python module from an npm-style scope and package directory. */
+export function pythonModuleName(scope: string, directory: string): string {
+  return [scope, ...directory.split("/")].map((part) => part.replaceAll("-", "_")).join(".");
+}
+
 function projectVscode(project: Project): vscode.VsCode | undefined {
   return (project as Project & { readonly vscode?: vscode.VsCode }).vscode;
 }
@@ -133,7 +152,7 @@ function projectVscode(project: Project): vscode.VsCode | undefined {
 /** A Python package implemented with projen's `PythonProject` and uv backend. */
 export class DBXToolsPythonProject extends python.PythonProject implements DBXToolsProject {
   readonly language = "python" as const;
-  readonly packageOptions: PythonPackageOptions;
+  readonly packageOptions: ResolvedPythonPackageOptions;
   readonly uv: python.Uv;
 
   constructor(options: DBXToolsPythonProjectOptions) {
@@ -222,17 +241,49 @@ export class DBXToolsPythonWorkspace extends Component {
 
   constructor(project: javascript.NodeProject, options: DBXToolsPythonWorkspaceOptions) {
     super(project);
+    const scope = isDBXToolsJavaScriptProject()(project)
+      ? string.toSlug(project.scope)
+      : string.toSlug(project.name).replace(/-root$/, "");
+    const repositoryUrl =
+      options.repository?.url ??
+      projectRepositoryUrl(project) ??
+      coreProject.repositoryUrl(project.outdir);
+    if (!repositoryUrl) {
+      throw new Error("Python workspace repository URL was not configured or detected");
+    }
     this.repository = {
-      url: options.repository.url,
-      ref: options.repository.ref ?? "main",
-      root: options.repository.root ?? "packages/py",
+      url: repositoryUrl.endsWith(".git") ? repositoryUrl : `${repositoryUrl}.git`,
+      ref: options.repository?.ref ?? "main",
+      root: options.root ?? options.repository?.root ?? "packages/py",
     };
+    const packageIdentities: ResolvedPythonPackageOptions[] = options.packages.map((pkg) => ({
+      ...pkg,
+      name: pkg.name ?? `${scope}-${string.toSlug(pkg.directory)}`,
+      module: pkg.module ?? pythonModuleName(scope, pkg.directory),
+    }));
+    const packagesByDirectory = new Map(packageIdentities.map((pkg) => [pkg.directory, pkg]));
+    const packages = packageIdentities.map((pkg) => ({
+      ...pkg,
+      dependencies: [
+        ...(pkg.dependencies ?? []),
+        ...(pkg.internalDependencies ?? []).map((directory) => {
+          const dependency = packagesByDirectory.get(directory);
+          if (!dependency) {
+            throw new Error(
+              `Python package ${pkg.directory} references unknown internal package ${directory}`,
+            );
+          }
+          return pythonGitDependency(this.repository, dependency.name, dependency.directory);
+        }),
+      ],
+    }));
+    const resolvedOptions = { ...options, packages };
     this.requiresPython = options.requiresPython ?? ">=3.10";
     // The single workspace version, copied from the root `VERSION` file so Python
     // members carry the same number as their JS siblings.
     this.version = readWorkspaceVersion(project.outdir);
-    this.file = this.emitWorkspace(project, options);
-    this.packages = options.packages.map(
+    this.file = this.emitWorkspace(project, resolvedOptions, scope);
+    this.packages = packages.map(
       (pkg) =>
         new DBXToolsPythonProject({
           parent: project,
@@ -248,9 +299,25 @@ export class DBXToolsPythonWorkspace extends Component {
       project.gitattributes.addAttributes(pyproject, "linguist-generated");
       project.prettier?.addIgnorePattern(pyproject.slice(1));
     }
-    this.addTasks(project, options);
+    project.gitignore.addPatterns(
+      ".venv/",
+      ".pytest_cache/",
+      ".ruff_cache/",
+      "**/__pycache__/",
+      "**/*.py[cod]",
+      `${this.repository.root}/**/dist/`,
+    );
+    this.addTasks(project, resolvedOptions);
 
-    const releaseOptions = options.release === true ? {} : options.release || {};
+    const configuredReleaseOptions = options.release === true ? {} : options.release || {};
+    const rust = isDBXToolsJavaScriptProject()(project) ? project.dbxToolsConfig.rust : undefined;
+    const rustReleaseWorkflow = object.isRecord(rust)
+      ? (string.trimToNull(rust.releaseWorkflow) ?? undefined)
+      : undefined;
+    const releaseOptions = {
+      ...configuredReleaseOptions,
+      upstreamWorkflow: configuredReleaseOptions.upstreamWorkflow ?? rustReleaseWorkflow,
+    };
     this.addTrustedPublisherInstructionsTask(project, releaseOptions);
 
     const interpreterPath = options.interpreterPath ?? "${workspaceFolder}/.venv/bin/python";
@@ -258,7 +325,11 @@ export class DBXToolsPythonWorkspace extends Component {
       projectVscode(project)?.settings.addSetting("python.defaultInterpreterPath", interpreterPath);
     }
 
-    if (options.release) {
+    if (options.release && this.packages.some((pkg) => !pkg.packageOptions.private)) {
+      if (isDBXToolsJavaScriptProject()(project)) {
+        project.dbxToolsConfig.pythonReleaseWorkflow =
+          releaseOptions.workflowName ?? "python-release";
+      }
       this.addReleaseWorkflow(project, releaseOptions);
     }
   }
@@ -276,12 +347,13 @@ export class DBXToolsPythonWorkspace extends Component {
   private emitWorkspace(
     project: javascript.NodeProject,
     options: DBXToolsPythonWorkspaceOptions,
+    scope: string,
   ): python.PyprojectTomlFile {
     const testPaths = options.testPaths ?? [this.repository.root];
     const perFileIgnores = options.ruffPerFileIgnores ?? {};
     const file = new python.PyprojectTomlFile(project, {
       project: {
-        name: options.workspaceName ?? `${string.toSlug(project.name)}-python-workspace`,
+        name: options.workspaceName ?? `${scope}-python-workspace`,
         version: this.version,
         requiresPython: this.requiresPython,
         dependencies: [...(options.dependencies ?? [])],
@@ -315,8 +387,16 @@ export class DBXToolsPythonWorkspace extends Component {
       file.addOverride("tool.uv.index-strategy", options.indexStrategy);
     }
     file.addOverride("tool.pyrefly.ignore-errors-in-generated-code", true);
-    if (options.pyreflyProjectExcludes?.length) {
-      file.addOverride("tool.pyrefly.project-excludes", [...options.pyreflyProjectExcludes]);
+    const projectExcludes = [
+      ...(options.pyreflyProjectExcludes ?? []),
+      ...options.packages.flatMap((pkg) =>
+        (pkg.generatedSources ?? []).map(
+          (source) => `${this.repository.root}/${pkg.directory}/${source}`,
+        ),
+      ),
+    ];
+    if (projectExcludes.length) {
+      file.addOverride("tool.pyrefly.project-excludes", [...new Set(projectExcludes)]);
     }
     file.addOverride(
       "tool.uv.sources",
@@ -356,7 +436,10 @@ export class DBXToolsPythonWorkspace extends Component {
     const publications = this.publications(options);
     if (publications.length === 0) return;
     const workflow = new GithubWorkflow(project.github, options.workflowName ?? "python-release");
-    workflow.file?.addOverride("permissions", { contents: "read" });
+    workflow.file?.addOverride("permissions", {
+      contents: "read",
+      ...(options.upstreamWorkflow ? { actions: "read" } : {}),
+    });
     const upstreamWorkflow = options.upstreamWorkflow;
     if (upstreamWorkflow) {
       workflow.file?.addOverride("on.workflow_run", {
@@ -379,13 +462,45 @@ export class DBXToolsPythonWorkspace extends Component {
     workflow.addJob("build", {
       ...(upstreamWorkflow
         ? {
-            if: "${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}",
+            if: "${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'repository_dispatch')) }}",
           }
         : {}),
       runsOn: ["ubuntu-latest"],
-      permissions: { contents: JobPermission.READ },
+      permissions: {
+        contents: JobPermission.READ,
+        ...(upstreamWorkflow ? { actions: JobPermission.READ } : {}),
+      },
       timeoutMinutes: 20,
       steps: [
+        ...(upstreamWorkflow
+          ? [
+              {
+                name: "Download release metadata",
+                if: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}",
+                uses: "actions/download-artifact@v8",
+                with: {
+                  name: "release-metadata",
+                  path: ".release",
+                  "run-id": "${{ github.event.workflow_run.id }}",
+                  "github-token": "${{ github.token }}",
+                },
+              },
+              {
+                name: "Read release metadata",
+                id: "release_metadata",
+                if: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}",
+                shell: "bash",
+                run: [
+                  'RELEASE_TAG="$(cat .release/tag)"',
+                  'EXPECTED_SHA="$(cat .release/sha)"',
+                  'test -n "$RELEASE_TAG"',
+                  'test -n "$EXPECTED_SHA"',
+                  'echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"',
+                  'echo "expected_sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"',
+                ].join("\n"),
+              },
+            ]
+          : []),
         {
           name: "Checkout",
           uses: "actions/checkout@v6",
@@ -393,26 +508,55 @@ export class DBXToolsPythonWorkspace extends Component {
             "fetch-depth": 0,
             ...(upstreamWorkflow
               ? {
-                  ref: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
+                  ref: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.expected_sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
                 }
               : {}),
           },
         },
+        ...(upstreamWorkflow
+          ? [
+              {
+                name: "Verify release source",
+                if: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}",
+                shell: "bash",
+                env: {
+                  RELEASE_TAG: "${{ steps.release_metadata.outputs.release_tag }}",
+                  EXPECTED_SHA: "${{ steps.release_metadata.outputs.expected_sha }}",
+                },
+                run: [
+                  'git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
+                  'test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"',
+                  'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"',
+                ].join("\n"),
+              },
+            ]
+          : []),
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
         {
           name: "Stamp workspace versions",
           env: {
-            VERSION: "${{ github.event_name == 'push' && github.ref_name || inputs.version }}",
+            VERSION:
+              "${{ github.event_name == 'push' && github.ref_name || github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.release_tag || inputs.version }}",
           },
           run: upstreamWorkflow
             ? [
                 'if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then',
-                '  VERSION="$(git tag --points-at HEAD --list "v*" | sort -V | tail -1)"',
+                '  if [ "${{ github.event.workflow_run.event }}" != "repository_dispatch" ]; then',
+                '    VERSION="$(git tag --points-at HEAD --list "v*" | sort -V | tail -1)"',
+                "  fi",
                 '  test -n "$VERSION"',
                 "fi",
                 this.renderVersionStampScript(),
+                "mkdir -p .release",
+                'printf "%s\\n" "$VERSION" > .release/tag',
+                "git rev-parse HEAD > .release/sha",
               ].join("\n")
-            : this.renderVersionStampScript(),
+            : [
+                this.renderVersionStampScript(),
+                "mkdir -p .release",
+                'printf "%s\\n" "$VERSION" > .release/tag',
+                "git rev-parse HEAD > .release/sha",
+              ].join("\n"),
         },
         {
           name: "Build distributions",
@@ -434,6 +578,11 @@ export class DBXToolsPythonWorkspace extends Component {
           name: "Upload distributions",
           uses: "actions/upload-artifact@v7",
           with: { name: "python-distributions", path: "dist" },
+        },
+        {
+          name: "Upload release metadata",
+          uses: "actions/upload-artifact@v7",
+          with: { name: "release-metadata", path: ".release" },
         },
       ],
     });
@@ -504,6 +653,7 @@ export class DBXToolsPythonWorkspace extends Component {
   ): void {
     const repository = this.githubRepository();
     const publications = this.trustedPublisherPublications(options);
+    const releaseBranch = projectReleaseBranch(project);
     const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",
@@ -513,7 +663,7 @@ export class DBXToolsPythonWorkspace extends Component {
       "",
       "Before making any changes, complete a read-only audit:",
       "",
-      `- Confirm that the active PyPI account is ${repository.owner}.`,
+      "- Confirm that the active PyPI account can administer the listed projects and pending publishers.",
       "- Start at https://pypi.org/manage/projects/ and determine which listed projects exist.",
       "- Inspect every existing GitHub publisher for each project and compare its owner, repository name, workflow name, and environment name with the desired values below.",
       "- Identify duplicate and mismatched trusted publishers that must be replaced by removing the publisher entry and adding the correct one.",
@@ -522,11 +672,17 @@ export class DBXToolsPythonWorkspace extends Component {
       "- Ask the user to confirm the complete proposed plan before submitting any change.",
       "- After confirmation, perform the authorized plan without asking for additional confirmation unless authentication or a CAPTCHA requires user action.",
       "",
+      "## GitHub environment policy",
+      "",
+      `- Configure every environment listed below to permit deployments from the ${releaseBranch} branch.`,
+      "- Branch-scoped release workflows use the environment names below; tag-only deployment policies reject their trusted-publishing jobs.",
+      "- Keep the GitHub environment name synchronized with the PyPI trusted publisher environment.",
+      "",
       "## Authentication",
       "",
     ];
     const linesAfterAuthentication = [
-      `- If the active account is not ${repository.owner}, pause and ask the user to sign in to the correct account.`,
+      "- If the active account cannot administer the listed projects or pending publishers, pause and ask the user to sign in to an authorized account.",
       "- Pause and ask the user to complete every CAPTCHA. Do not attempt to solve or bypass a CAPTCHA.",
       "- After the user completes an authentication or CAPTCHA step, continue from the current browser session.",
       "",
@@ -560,6 +716,7 @@ export class DBXToolsPythonWorkspace extends Component {
           `- Repository name: ${repository.name}`,
           `- Workflow name: ${workflowName}`,
           `- Environment name: ${publication.environment}`,
+          `- GitHub environment branch: ${releaseBranch}`,
           ...(publication.artifacts ? [`- Artifacts: ${publication.artifacts}`] : []),
           "",
         ];

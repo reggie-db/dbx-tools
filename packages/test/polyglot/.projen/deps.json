@@ -15,6 +15,11 @@
       "type": "build"
     },
     {
+      "name": "@dbx-tools/shared-core",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "bun_python",
       "version": "github:codehz/bun_python#3fae2f3e72fa1bbcb998894ad61e72cfd809671b",
       "type": "runtime"

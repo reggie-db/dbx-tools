@@ -236,6 +236,46 @@ export function addExports(pkg: javascript.NodeProject, exports: Record<string, 
   });
 }
 
+function dependencyName(spec: string): string {
+  if (!spec.startsWith("@")) return spec.split("@", 1)[0]!;
+  const versionSeparator = spec.indexOf("@", spec.indexOf("/") + 1);
+  return versionSeparator < 0 ? spec : spec.slice(0, versionSeparator);
+}
+
+/** Add an optional peer and make it available while developing the package. */
+export function addOptionalPeer(pkg: javascript.NodeProject, spec: string): void {
+  const name = dependencyName(spec);
+  const current = object.isRecord(pkg.package.manifest.peerDependenciesMeta)
+    ? pkg.package.manifest.peerDependenciesMeta
+    : {};
+  pkg.addPeerDeps(spec);
+  pkg.package.addField("peerDependenciesMeta", {
+    ...current,
+    [name]: { optional: true },
+  });
+  pkg.addDevDeps(spec);
+}
+
+/** Resolve repository metadata already configured on a Node project. */
+export function projectRepositoryUrl(project: javascript.NodeProject): string | undefined {
+  const repository = project.package.manifest.repository;
+  const configured =
+    typeof repository === "string"
+      ? repository
+      : object.isRecord(repository)
+        ? (string.trimToNull(repository.url) ?? undefined)
+        : undefined;
+  return configured?.replace(/^git\+/, "").replace(/\.git$/, "");
+}
+
+/** Resolve the branch release workflows use for a generated project. */
+export function projectReleaseBranch(project: javascript.NodeProject): string {
+  return (
+    (project as javascript.NodeProject & { readonly releaseBranch?: string }).releaseBranch ??
+    "main"
+  );
+}
+
 /**
  * MERGE entries onto a package's npm `files` allowlist - the only paths that
  * ship in the published tarball. npm always includes `package.json`, `README`,
@@ -559,7 +599,8 @@ export class DBXToolsNodeProject
   pnpmWorkspace?: PnpmWorkspaceState;
   rootTsconfig?: DBXToolsRootTsconfig;
   vsCode?: DBXToolsVsCode;
-  private readonly extraWorkspaceMembers: readonly string[];
+  readonly extraWorkspaceMembers: readonly string[];
+  readonly releaseBranch: string;
   private readonly rootInstallOnly: boolean;
 
   constructor(options: DBXToolsJavaScriptProjectOptions = {}) {
@@ -595,6 +636,7 @@ export class DBXToolsNodeProject
     this.package.addField("version", readWorkspaceVersion(this.outdir));
     this.scope = scope;
     this.extraWorkspaceMembers = options.extraWorkspaceMembers ?? [];
+    this.releaseBranch = options.defaultReleaseBranch ?? "main";
     this.rootInstallOnly = options.rootInstallOnly !== false;
     this.dbxToolsConfig = new DBXToolsConfig(this, options);
     initProject(this, options);
@@ -773,13 +815,13 @@ class WorkspaceValidationTasks extends Component {
 }
 
 /**
- * Bound the default validation workflows when a root opts into them.
+ * Apply bounded, read-only, supersedable defaults to validation workflows.
  *
  * Projen otherwise leaves jobs at GitHub's six-hour ceiling. Missing workflows
  * are a no-op, so roots that keep the engine defaults (`github`/build workflow
  * off) do not gain new files.
  */
-class WorkflowTimeouts extends Component {
+class WorkflowDefaults extends Component {
   public override preSynthesize(): void {
     const build = this.project.tryFindObjectFile(".github/workflows/build.yml");
     for (const job of ["build", "self-mutation"]) {
@@ -788,6 +830,14 @@ class WorkflowTimeouts extends Component {
     this.project
       .tryFindObjectFile(".github/workflows/pull-request-lint.yml")
       ?.addOverride("jobs.validate.timeout-minutes", 10);
+    for (const name of ["build", "pull-request-lint"]) {
+      const workflow = this.project.tryFindObjectFile(`.github/workflows/${name}.yml`);
+      workflow?.addOverride("permissions", { contents: "read" });
+      workflow?.addOverride("concurrency", {
+        group: "${{ github.workflow }}-${{ github.ref }}",
+        "cancel-in-progress": true,
+      });
+    }
   }
 }
 
@@ -838,6 +888,10 @@ class PrettierIgnoreGenerated extends Component {
       for (const module of codegenModulePaths(codegen?.inputs ?? [])) {
         prettier.addIgnorePattern(`${rel}/${module}`);
       }
+    }
+    const extraMembers = (this.project as DBXToolsNodeProject).extraWorkspaceMembers ?? [];
+    for (const member of extraMembers) {
+      prettier.addIgnorePattern(`${member}/index.ts`);
     }
   }
 }
@@ -1021,7 +1075,7 @@ function initProject(
   // always apply; the self-dep is added only when the engine is an installed pkg.
   const selfDep = engineSelfDependency(project);
   if (selfDep) project.addDevDeps(selfDep);
-  project.addDevDeps(...DEV_DEPS_ROOT);
+  project.addDevDeps(...DEV_DEPS_ROOT, "concurrently@catalog:");
   configureRootPackage(project);
   // Root carries the bare `repository` (no `directory`); children add their subpath.
   applyRepository(project, options.repository);
@@ -1057,6 +1111,11 @@ function initProject(
   for (const root of roots) {
     project.annotateGenerated(`/${root}/**/index.ts`);
     project.annotateGenerated(`/${root}/openapi/**`);
+  }
+  const extraWorkspaceMembers =
+    project instanceof DBXToolsNodeProject ? project.extraWorkspaceMembers : [];
+  for (const member of extraWorkspaceMembers) {
+    project.annotateGenerated(`/${member}/index.ts`);
   }
 
   // ESLint lives ONLY on the root and lints every package. `projectService` resolves
@@ -1178,7 +1237,7 @@ function initProject(
   }
 
   new WorkspaceValidationTasks(project);
-  new WorkflowTimeouts(project);
+  new WorkflowDefaults(project);
   new PrettierIgnoreGenerated(project);
 
   new GeneratedSource(project);
