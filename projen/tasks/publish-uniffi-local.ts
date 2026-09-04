@@ -188,7 +188,16 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
   if (includePython) {
     const wheels = artifacts(join(output, "python"), ".whl");
     if (wheels.length === 0) throw new Error(`No wheel produced for ${binding.crate}`);
-    for (const wheel of wheels) run("uv", ["publish", "--publish-url", pypiPublishUrl!, wheel]);
+    run("uvx", [
+      "--from",
+      "devpi-client",
+      "devpi",
+      "upload",
+      "--index",
+      pypiPublishUrl!,
+      "--from-dir",
+      join(output, "python"),
+    ]);
   }
 }
 
