@@ -19,6 +19,7 @@
 /.projen/files.json linguist-generated
 /.projen/pypi-trusted-publisher-instructions.mjs linguist-generated
 /.projen/tasks.json linguist-generated
+/.projen/uniffi-release.mjs linguist-generated
 /.vscode/extensions.json linguist-generated linguist-language=JSON-with-Comments
 /.vscode/settings.json linguist-generated
 /.vscode/tasks.json linguist-generated

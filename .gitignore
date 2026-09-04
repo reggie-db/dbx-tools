@@ -106,6 +106,7 @@ packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py
 packages/py/auth-u2m/src/dbx_tools/auth_u2m/libdbx_tools_auth_u2m.*
 target/
 !/Cargo.toml
+!/.projen/uniffi-release.mjs
 !/.github/workflows/rust-release.yml
 !/pyproject.toml
 !/packages/py/auth-u2m/pyproject.toml

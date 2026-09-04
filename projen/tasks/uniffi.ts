@@ -23,18 +23,22 @@ import {
 
 const { values } = parseArgs({
   options: {
+    root: { type: "string" },
     crate: { type: "string" },
     node: { type: "string" },
     python: { type: "string" },
     "cargo-target": { type: "string" },
     "node-package-base": { type: "string" },
+    "skip-build": { type: "boolean" },
   },
 });
 if (!values.crate || (!values.node && !values.python)) {
   throw new Error("Expected --crate and at least one of --node or --python");
 }
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const root = values.root
+  ? resolve(values.root)
+  : resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const crate = values.crate;
 const libraryName = crate.replaceAll("-", "_");
 const extension =
@@ -90,13 +94,15 @@ const stampGeneratedPython = (file: string): void => {
   makeReadonly(file);
 };
 
-run("cargo", [
-  "build",
-  "--release",
-  "--package",
-  crate,
-  ...(values["cargo-target"] ? ["--target", values["cargo-target"]] : []),
-]);
+if (!values["skip-build"]) {
+  run("cargo", [
+    "build",
+    "--release",
+    "--package",
+    crate,
+    ...(values["cargo-target"] ? ["--target", values["cargo-target"]] : []),
+  ]);
+}
 if (!existsSync(library)) throw new Error(`Missing compiled UniFFI library: ${library}`);
 
 if (values.node) {

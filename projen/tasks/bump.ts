@@ -56,6 +56,7 @@ import { log, net } from "@dbx-tools/shared-core";
 import { Command, Option } from "commander";
 import { activePythonIndexes, resolveLocalPypi } from "./python-registry.ts";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
+import { releasePlatformFilter } from "../src/_release-platform.ts";
 import {
   type Semver,
   compareSemver,
@@ -234,9 +235,7 @@ program
     }) => {
       const pkgPath = resolve(process.cwd(), "package.json");
       if (!existsSync(pkgPath)) throw new Error(`no package.json in ${process.cwd()}`);
-      if ((opts.os.length === 0) !== (opts.arch.length === 0)) {
-        throw new Error("--os and --arch must be used together");
-      }
+      const releasePlatforms = releasePlatformFilter(opts.os, opts.arch);
 
       const siblings = opts.sibling.map((s) => ({ ...s, pkgPath: resolve(s.dir, "package.json") }));
       for (const s of siblings) {
@@ -285,9 +284,6 @@ program
 
       if (opts.synth) {
         logger.info("synthesizing (projen)");
-        const releasePlatforms = opts.os
-          .flatMap((os) => opts.arch.map((arch) => `${os}:${arch}`))
-          .join(",");
         exec.spawnSync("bun", [".projenrc.ts"], {
           cwd: process.cwd(),
           stdout: "inherit",

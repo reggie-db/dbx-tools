@@ -144,19 +144,19 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
 
   const target = nativeTarget();
   const output = resolve(repoRoot, "dist/uniffi");
-  run("bun", [
-    resolve(dirname(fileURLToPath(import.meta.url)), "uniffi-release.ts"),
+  run("node", [
+    resolve(dirname(fileURLToPath(import.meta.url)), "uniffi-release.mjs"),
     "build",
     "--crate",
     binding.crate,
-    "--rust",
-    binding.rust,
     "--node",
     includeNode ? binding.node! : "",
     "--python",
     includePython ? binding.python! : "",
     "--node-package",
     includeNode ? binding.nodePackage! : "",
+    "--node-generator",
+    "projen/tasks/uniffi.ts",
     "--python-package",
     includePython ? binding.pythonPackage! : "",
     "--cargo-target",
@@ -175,6 +175,8 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
     "true",
     "--version",
     version,
+    "--output",
+    "dist/uniffi",
   ]);
 
   if (includeNode) {

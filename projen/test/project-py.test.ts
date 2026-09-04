@@ -60,7 +60,7 @@ describe("DBXToolsPythonWorkspace", () => {
           private: true,
           trustedPublisher: {
             workflowName: "rust-release",
-            environment: "native-fixture-native",
+            environment: "pypi-fixture-native",
             artifacts: "platform-specific wheels for all supported architectures",
           },
         },
@@ -145,13 +145,14 @@ describe("DBXToolsPythonWorkspace", () => {
     });
     assert.equal(result.status, 0, result.stderr);
     const instructions = result.stdout;
-    assert.match(instructions, /PyPI project: fixture-core/);
-    assert.match(instructions, /GitHub repository: example\/fixture/);
-    assert.match(instructions, /GitHub environment: pypi-fixture-core/);
-    assert.match(instructions, /PyPI project: fixture-app/);
-    assert.match(instructions, /GitHub environment: production-pypi/);
-    assert.match(instructions, /Workflow filename: publish-python\.yml/);
-    assert.match(instructions, /Workflow path: \.github\/workflows\/publish-python\.yml/);
+    assert.match(
+      instructions,
+      /## fixture-core\n- Owner: example\n- Repository name: fixture\n- Workflow name: publish-python\.yml\n- Environment name: pypi-fixture-core/,
+    );
+    assert.match(
+      instructions,
+      /## fixture-app\n- Owner: example\n- Repository name: fixture\n- Workflow name: publish-python\.yml\n- Environment name: production-pypi/,
+    );
     assert.match(instructions, /Before making any changes, complete a read-only audit/);
     assert.match(instructions, /Confirm that the active PyPI account is example/);
     assert.match(instructions, /proposed reconciliation plan grouped by publishers/);
@@ -166,9 +167,11 @@ describe("DBXToolsPythonWorkspace", () => {
       /editing or updating a trusted publisher as replacing that publisher/,
     );
     assert.match(instructions, /Remove duplicates so exactly one matching publisher remains/);
-    assert.match(instructions, /PyPI project: fixture-native/);
-    assert.match(instructions, /GitHub environment: native-fixture-native/);
-    assert.match(instructions, /Workflow filename: rust-release\.yml/);
+    assert.match(
+      instructions,
+      /## fixture-native\n- Owner: example\n- Repository name: fixture\n- Workflow name: rust-release\.yml\n- Environment name: pypi-fixture-native/,
+    );
+    assert.doesNotMatch(instructions, /PyPI project:|GitHub repository:|Workflow path:/);
     assert.match(instructions, /Artifacts: platform-specific wheels/);
     assert.match(instructions, /do not require separate PyPI projects or trusted publishers/);
     assert.ok(project.tasks.tryFind("py:sync"));
