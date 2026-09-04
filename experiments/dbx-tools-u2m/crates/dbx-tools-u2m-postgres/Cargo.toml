@@ -1,0 +1,20 @@
+[package]
+name = "dbx-tools-u2m-postgres"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Postgres credential store and advisory locking for dbx-tools-u2m"
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "dbx_tools_u2m_postgres"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+dbx-tools-u2m = { path = "../dbx-tools-u2m", default-features = false }
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
