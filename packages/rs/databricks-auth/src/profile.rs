@@ -601,6 +601,21 @@ mod tests {
     }
 
     #[test]
+    fn equivalent_hosts_match_after_normalization() {
+        let mut config = mixed_auth_config();
+        config.set("DEFAULT", "host", Some("workspace.example/".into()));
+        config.set(
+            "FEVM-AWS",
+            "host",
+            Some("https://workspace.example".into()),
+        );
+        assert_eq!(
+            resolve_auth_profile_name(None, false, Some(&config), true).unwrap(),
+            "FEVM-AWS"
+        );
+    }
+
+    #[test]
     fn different_account_does_not_remap() {
         let mut config = mixed_auth_config();
         config.set("DEFAULT", "account_id", Some("account-a".into()));

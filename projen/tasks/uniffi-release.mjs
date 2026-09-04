@@ -220,11 +220,30 @@ const packageNode = ({
     "--skip-build",
   ]);
   // Node loads the facade from node_modules, so every TypeScript entry point
-  // must be emitted and advertised as JavaScript.
-  run("bun", [resolve(root, "node_modules/typescript/bin/tsc"), "--build"], facadeDirectory);
+  // must be emitted and advertised as JavaScript. Bun is always available in
+  // the facade row, including when the UBRN cache skips the workspace install.
+  rmSync(join(facadeDirectory, "lib"), { recursive: true, force: true });
+  run(
+    "bun",
+    [
+      "build",
+      "index.ts",
+      "--outdir",
+      "lib",
+      "--target",
+      "node",
+      "--format",
+      "esm",
+      "--packages",
+      "external",
+    ],
+    facadeDirectory,
+  );
   const compiledPublish = { ...(manifest.publishConfig ?? {}) };
   delete compiledPublish.access;
   Object.assign(manifest, compiledPublish);
+  manifest.types = "./index.ts";
+  manifest.exports["."].types = "./index.ts";
   delete manifest.publishConfig;
   delete manifest.scripts;
   delete manifest.devDependencies;

@@ -65,30 +65,11 @@ mod tests {
 
     #[tokio::test]
     async fn mints_and_caches_an_account_token_with_cli_request_semantics() {
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .unwrap();
-        let address = listener.local_addr().unwrap();
-        let server = tokio::spawn(async move {
-            let (mut stream, _) = listener.accept().await.unwrap();
-            let request = read_request(&mut stream).await;
-            let body = r#"{"access_token":"access","token_type":"Bearer","expires_in":3600}"#;
-            stream
-                .write_all(
-                    format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                        body.len()
-                    )
-                    .as_bytes(),
-                )
-                .await
-                .unwrap();
-            request
-        });
+        let (host, server) = start_server(1).await;
         let directory = tempfile::tempdir().unwrap();
         let profile = Profile {
             name: "service".into(),
-            host: Url::parse(&format!("http://{address}")).unwrap(),
+            host: Url::parse(&host).unwrap(),
             account_id: Some("account".into()),
             workspace_id: None,
             client_id: "client".into(),
@@ -115,7 +96,8 @@ mod tests {
         assert_eq!(second.access_token, "access");
         assert_eq!(second.scopes, ["files:read", "jobs"]);
 
-        let request = server.await.unwrap();
+        let requests = server.await.unwrap();
+        let request = &requests[0];
         assert!(request.starts_with("POST /oidc/accounts/account/v1/token HTTP/1.1\r\n"));
         assert!(request.to_ascii_lowercase().contains(
             "authorization: basic y2xpzw50onnly3jldA=="
@@ -143,6 +125,87 @@ mod tests {
             parameters.get("assume_group").map(String::as_str),
             Some("group")
         );
+    }
+
+    #[tokio::test]
+    async fn force_refresh_discovers_a_workspace_token_without_a_cached_credential() {
+        let (host, server) = start_server(2).await;
+        let directory = tempfile::tempdir().unwrap();
+        let profile = Profile {
+            name: "service".into(),
+            host: Url::parse(&host).unwrap(),
+            account_id: None,
+            workspace_id: None,
+            client_id: "client".into(),
+            group_id: None,
+            scopes: Vec::new(),
+            target: TargetKind::Workspace,
+            auth_kind: AuthKind::MachineToMachine,
+            client_secret: Some("secret".into()),
+        };
+        let client = AuthClient::new(
+            profile,
+            Arc::new(MemoryStore::new(directory.path().join("locks")).unwrap()),
+            AuthOptions::default(),
+        )
+        .unwrap();
+
+        let token = client.force_refresh().await.unwrap();
+
+        assert_eq!(token.access_token, "access");
+        assert_eq!(token.scopes, ["all-apis"]);
+        let requests = server.await.unwrap();
+        assert!(requests[0].starts_with(
+            "GET /oidc/.well-known/oauth-authorization-server HTTP/1.1\r\n"
+        ));
+        assert!(requests[1].starts_with("POST /token HTTP/1.1\r\n"));
+        let body = requests[1]
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body)
+            .unwrap_or_default();
+        assert!(body.contains("grant_type=client_credentials"));
+        assert!(body.contains("scope=all-apis"));
+        assert!(!body.contains("offline_access"));
+    }
+
+    async fn start_server(
+        request_count: usize,
+    ) -> (
+        String,
+        tokio::task::JoinHandle<Vec<String>>,
+    ) {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let host = format!("http://{}", listener.local_addr().unwrap());
+        let token_endpoint = format!("{host}/token");
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::with_capacity(request_count);
+            for _ in 0..request_count {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let request = read_request(&mut stream).await;
+                let body = if request.starts_with("GET ") {
+                    format!(
+                        r#"{{"authorization_endpoint":"{token_endpoint}/authorize","token_endpoint":"{token_endpoint}"}}"#
+                    )
+                } else {
+                    r#"{"access_token":"access","token_type":"Bearer","expires_in":3600}"#.into()
+                };
+                stream
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .unwrap();
+                requests.push(request);
+            }
+            requests
+        });
+        (host, server)
     }
 
     async fn read_request(stream: &mut tokio::net::TcpStream) -> String {

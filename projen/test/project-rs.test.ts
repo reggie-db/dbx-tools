@@ -516,8 +516,9 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`uniffi-bindgen/);
     assert.match(packager, /"node_modules", "npm", "bin", "npm-cli\.js"/);
     assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
-    assert.match(packager, /resolve\(root, "node_modules\/typescript\/bin\/tsc"\)/);
+    assert.match(packager, /"build",\s+"index\.ts",[\s\S]*?"--packages",\s+"external"/);
     assert.match(packager, /Object\.assign\(manifest, compiledPublish\)/);
+    assert.match(packager, /manifest\.exports\["\."\]\.types = "\.\/index\.ts"/);
     assert.match(packager, /uniffi-facade-install-/);
     assert.match(packager, /facadePackage: singlePackage\(facadeOutput\)/);
     assert.match(
