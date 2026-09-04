@@ -115,7 +115,10 @@ Cargo/sccache once,
 builds the Rust workspace once, then packages every discovered output from that
 shared build. Bun and the workspace install are present only when a Node binding
 needs TypeScript generation; uv is present only when a Python wheel is needed.
-A binary-only workspace therefore installs neither.
+A binary-only workspace therefore installs neither. `rustVersion` remains the
+MSRV recorded in package manifests, while `releaseRustVersion` independently
+defaults release compilation to `stable`. UBRN uses that same release toolchain
+unless `ubrnRustVersion` explicitly selects another one.
 
 The Node generator's Rust CLI can be cached under one target directory keyed by
 its pinned UBRN version, Rust version, runner OS, and runner architecture. Set

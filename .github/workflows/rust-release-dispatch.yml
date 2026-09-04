@@ -14,7 +14,7 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
       - name: Dispatch branch-scoped release
         shell: bash
         env:

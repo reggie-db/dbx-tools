@@ -324,6 +324,7 @@ describe("DBXToolsRustWorkspace", () => {
       readFileSync(join(outdir, "packages/rs/auth-u2m/Cargo.toml"), "utf8"),
       /crate-type = \["lib", "cdylib"\]/,
     );
+    assert.match(readFileSync(join(outdir, "Cargo.toml"), "utf8"), /rust-version = "1\.82"/);
     const node = JSON.parse(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/package.json"), "utf8"),
     ) as {
@@ -356,10 +357,12 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(dispatcher, /client_payload\[release_tag\]=\$RELEASE_TAG/);
     assert.match(dispatcher, /client_payload\[expected_sha\]=\$EXPECTED_SHA/);
     assert.doesNotMatch(dispatcher, /actions\/cache|cargo build|sccache/);
+    assert.match(dispatcher, /fetch-depth: 1/);
     assert.match(release, /^  repository_dispatch:\n    types:\n      - rust-release$/m);
     assert.match(release, /^  workflow_dispatch:$/m);
     assert.doesNotMatch(release, /^  push:$/m);
     assert.match(release, /github\.event\.client_payload\.expected_sha \|\| inputs\.expected_sha/);
+    assert.doesNotMatch(release, /fetch-depth: 0/);
     assert.match(
       release,
       /test "\$\(git rev-parse "\$RELEASE_TAG\^\{commit\}"\)" = "\$EXPECTED_SHA"/,
@@ -388,8 +391,10 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /if: \$\{\{ vars\.CACHE_UBRN_TARGET == 'true' \}\}/);
     assert.match(
       release,
-      /name: Prepare UBRN generator[\s\S]*rustup toolchain install stable --profile minimal[\s\S]*cargo \+stable build --manifest-path node_modules\/uniffi-bindgen-react-native\/crates\/ubrn_cli\/Cargo\.toml[\s\S]*name: Build Rust outputs/,
+      /name: Prepare UBRN generator[\s\S]*cargo \+stable build --manifest-path node_modules\/uniffi-bindgen-react-native\/crates\/ubrn_cli\/Cargo\.toml[\s\S]*name: Build Rust outputs/,
     );
+    assert.doesNotMatch(release, /rustup toolchain install stable/);
+    assert.match(release, /uses: dtolnay\/rust-toolchain@stable/);
     assert.match(release, /CARGO_TARGET_DIR: \$\{\{ github\.workspace \}\}\/target\/ubrn/);
     assert.match(release, /name: Package release binaries/);
     assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.node \}\}-npm/);
@@ -430,12 +435,12 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /add-rust-environment-hash-key: false/);
     assert.match(release, /RUSTC_WRAPPER: sccache/);
     assert.equal(
-      release.match(/shared-key: release-\$\{\{ matrix\.target\.cargo \}\}-rust-1\.82/g)?.length,
+      release.match(/shared-key: release-\$\{\{ matrix\.target\.cargo \}\}-rust-stable/g)?.length,
       1,
     );
     assert.match(
       release,
-      /SCCACHE_GHA_VERSION: release-\$\{\{ matrix\.target\.cargo \}\}-rust-1\.82/,
+      /SCCACHE_GHA_VERSION: release-\$\{\{ matrix\.target\.cargo \}\}-rust-stable/,
     );
     assert.match(release, /cargo_cache_hit=/);
     assert.match(release, /ubrn_target_cache_hit=/);

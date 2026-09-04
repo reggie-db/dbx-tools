@@ -347,14 +347,19 @@ Primary package areas:
   packages every discovered UniFFI binding and release-enabled binary from the
   shared output. Install Bun and run `bun install` only when a discovered
   binding has a Node facade; Python-only bindings need uv but not Bun, and
-  binary-only targets need neither. Cache UBRN by its pinned version plus runner
+  binary-only targets need neither. `rustVersion` is the package compatibility
+  floor written to Cargo manifests; `releaseRustVersion` is the build toolchain
+  and defaults to `stable`, so a newly resolved dependency cannot make current
+  Cargo metadata unreadable while the package still advertises its older MSRV.
+  `ubrnRustVersion` defaults to that release toolchain and installs another
+  toolchain only when explicitly overridden. Cache UBRN by its pinned version plus runner
   OS/architecture and Rust version, and prepare it before the workspace build.
   The `CACHE_UBRN_TARGET=true` repository variable enables that large target
   archive for comparison; the default relies on the object-level sccache.
   Release tags run only a small `<workflow>-dispatch` job. It resolves the
   annotated tag to a commit and sends a `repository_dispatch` carrying both
   identities to the release workflow on the configured release branch. Every
-  source job checks out that explicit commit, fetches the tag, and requires both
+  source job shallow-checks out that explicit commit, fetches only the requested tag, and requires both
   `tag^{commit}` and `HEAD` to equal the expected SHA. This branch context keeps
   Cargo registry and sccache entries reusable across version tags. Cargo registry
   caches use one stable target/toolchain key; `SCCACHE_GHA_VERSION` provides the

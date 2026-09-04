@@ -49,8 +49,11 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly root?: string;
   readonly scope?: string;
   readonly edition?: string;
+  /** Minimum supported Rust version recorded in Cargo manifests. */
   readonly rustVersion?: string;
-  /** Rust toolchain used to compile the host-side UBRN generator. Defaults to `stable`. */
+  /** Rust toolchain used by release builds. Defaults to `stable`. */
+  readonly releaseRustVersion?: string;
+  /** Rust toolchain used to compile the host-side UBRN generator. Defaults to releaseRustVersion. */
   readonly ubrnRustVersion?: string;
   readonly license?: string;
   readonly repository?: string;
@@ -190,7 +193,7 @@ function releaseSourceSteps(
       uses: "actions/checkout@v6",
       with: {
         ref: expectedSha,
-        "fetch-depth": 0,
+        "fetch-depth": 1,
       },
     },
     {
@@ -657,8 +660,12 @@ export class DBXToolsRustWorkspace {
     const workflowName = options.releaseWorkflowName ?? "rust-release";
     const dispatcherWorkflowName = `${workflowName}-dispatch`;
     const releaseTagPrefix = options.releaseTagPrefix ?? "v";
-    const rustVersion = options.rustVersion ?? "1.82";
-    const ubrnRustVersion = options.ubrnRustVersion ?? "stable";
+    const releaseRustVersion = options.releaseRustVersion ?? "stable";
+    const ubrnRustVersion = options.ubrnRustVersion ?? releaseRustVersion;
+    const ubrnToolchainInstall =
+      ubrnRustVersion === releaseRustVersion
+        ? ""
+        : `rustup toolchain install ${ubrnRustVersion} --profile minimal\n`;
     const releaseBranch = projectReleaseBranch(project);
     const releaseTag =
       "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.release_tag || inputs.release_tag }}";
@@ -784,7 +791,7 @@ export class DBXToolsRustWorkspace {
       "runs-on": "${{ matrix.target.runner }}",
       env: {
         ...RUST_CACHE_ENV,
-        SCCACHE_GHA_VERSION: `release-\${{ matrix.target.cargo }}-rust-${rustVersion}`,
+        SCCACHE_GHA_VERSION: `release-\${{ matrix.target.cargo }}-rust-${releaseRustVersion}`,
       },
       strategy: {
         "fail-fast": false,
@@ -804,10 +811,10 @@ export class DBXToolsRustWorkspace {
         ...(hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
         {
           name: "Setup Rust",
-          uses: `dtolnay/rust-toolchain@${rustVersion}`,
+          uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
           with: { targets: "${{ matrix.target.cargo }}" },
         },
-        ...rustCacheSteps(`release-\${{ matrix.target.cargo }}-rust-${rustVersion}`),
+        ...rustCacheSteps(`release-\${{ matrix.target.cargo }}-rust-${releaseRustVersion}`),
         ...(hasNodeBindings
           ? [
               {
@@ -826,7 +833,7 @@ export class DBXToolsRustWorkspace {
           name: "Log cache configuration",
           shell: "bash",
           run: [
-            `echo "cargo_cache_namespace=release-\${{ matrix.target.cargo }}-rust-${rustVersion}"`,
+            `echo "cargo_cache_namespace=release-\${{ matrix.target.cargo }}-rust-${releaseRustVersion}"`,
             'echo "cargo_cache_hit=${{ steps.cargo_cache.outputs.cache-hit }}"',
             'echo "sccache_scope=${{ github.ref }}"',
             'echo "sccache_namespace=${SCCACHE_GHA_VERSION}"',
@@ -864,7 +871,7 @@ export class DBXToolsRustWorkspace {
                 shell: "bash",
                 run: timedBash(
                   "ubrn_generator",
-                  `rustup toolchain install ${ubrnRustVersion} --profile minimal\ncargo +${ubrnRustVersion} build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml`,
+                  `${ubrnToolchainInstall}cargo +${ubrnRustVersion} build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml`,
                 ),
               },
             ]
@@ -997,7 +1004,7 @@ export class DBXToolsRustWorkspace {
               {
                 name: "Checkout release tag",
                 uses: "actions/checkout@v6",
-                with: { "fetch-depth": 0 },
+                with: { "fetch-depth": 1 },
               },
               {
                 name: "Dispatch branch-scoped release",
@@ -1093,7 +1100,10 @@ export class DBXToolsRustWorkspace {
                   permissions: { contents: "read" },
                   steps: [
                     ...releaseSourceSteps(releaseTag, expectedSha),
-                    { name: "Setup Rust", uses: `dtolnay/rust-toolchain@${rustVersion}` },
+                    {
+                      name: "Setup Rust",
+                      uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
+                    },
                     {
                       name: "Publish public crates",
                       env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
@@ -1192,7 +1202,7 @@ export class DBXToolsRustWorkspace {
                     ...releaseSourceSteps(releaseTag, expectedSha),
                     {
                       name: "Setup Rust",
-                      uses: `dtolnay/rust-toolchain@${rustVersion}`,
+                      uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
                     },
                     {
                       name: "Publish Cargo crates locally",
