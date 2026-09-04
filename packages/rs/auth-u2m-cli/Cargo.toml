@@ -19,7 +19,7 @@ postgres = ["dep:async-trait", "dep:sha2", "dep:sqlx"]
 [dependencies]
 async-trait = { workspace = true, optional = true }
 clap = { workspace = true }
-dbx-tools-auth-u2m = { version = "0.6.144", path = "../auth-u2m", default-features = false }
+dbx-tools-auth-u2m = { version = "0.6.145", path = "../auth-u2m", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, optional = true }
