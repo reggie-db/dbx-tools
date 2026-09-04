@@ -623,18 +623,6 @@ export class DBXToolsRustWorkspace {
                     { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
                     { name: "Install", run: "bun install" },
                     {
-                      name: "Publish workspace npm dependencies",
-                      if: "${{ matrix.binding.node != '' }}",
-                      env: {
-                        NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
-                        NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
-                      },
-                      run: [
-                        'VERSION="${GITHUB_REF_NAME#v}"',
-                        'bun node_modules/@dbx-tools/projen/tasks/publish.ts "$VERSION" --exclude projen --exclude "${{ matrix.binding.node }}"',
-                      ].join("\n"),
-                    },
-                    {
                       name: "Download packages",
                       uses: "actions/download-artifact@v8",
                       with: {
@@ -671,6 +659,10 @@ export class DBXToolsRustWorkspace {
             steps: [
               { name: "Checkout", uses: "actions/checkout@v6" },
               { name: "Setup Rust", uses: "dtolnay/rust-toolchain@stable" },
+              {
+                name: "Install Linux native dependencies",
+                run: "sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config",
+              },
               {
                 name: "Publish public crates",
                 env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },

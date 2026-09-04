@@ -97,6 +97,11 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /linux-x64-gnu/);
     assert.match(release, /tasks\/uniffi-release\.ts build/);
     assert.match(release, /cargo publish --workspace --registry crates-io/);
+    assert.doesNotMatch(release, /Publish workspace npm dependencies/);
+    assert.match(
+      release,
+      /publish-cargo:[\s\S]*Install Linux native dependencies[\s\S]*libdbus-1-dev pkg-config/,
+    );
     assert.match(release, /tasks\/publish-uniffi-local\.ts/);
     assert.match(release, /LOCAL_CARGO_REGISTRY/);
     assert.match(release, /libdbus-1-dev pkg-config/);
