@@ -1,9 +1,9 @@
 {
-  "name": "@dbx-tools/auth",
+  "name": "@dbx-tools/auth-gate",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
-    "directory": "packages/js/node/auth"
+    "directory": "packages/js/node/auth-gate"
   },
   "scripts": {
     "build": "projen build",

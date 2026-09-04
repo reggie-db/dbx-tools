@@ -1,6 +1,6 @@
 # `@dbx-tools/ui-auth`
 
-React passwordless authentication surfaces for `@dbx-tools/auth`.
+React passwordless authentication surfaces for `@dbx-tools/auth-gate`.
 
 Key features:
 
@@ -15,7 +15,7 @@ Key features:
 ## Relationship To Native AppKit
 
 The native AppKit UI is sufficient when the Databricks Apps front door owns
-identity. Use this package with `@dbx-tools/auth` when a public tunnel bypasses
+identity. Use this package with `@dbx-tools/auth-gate` when a public tunnel bypasses
 that front door and needs passkey-first login plus email OTP recovery.
 
 ```tsx

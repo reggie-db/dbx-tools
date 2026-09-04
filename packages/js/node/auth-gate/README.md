@@ -1,4 +1,4 @@
-# `@dbx-tools/auth`
+# `@dbx-tools/auth-gate`
 
 Passwordless authentication runtime built on Better Auth, email OTP, passkeys,
 and caller-provided identity policy and delivery.
@@ -23,7 +23,7 @@ passwordless session. A passkey session proves the configured identity only; it
 does not mint a Databricks OBO access token.
 
 ```ts
-import { auth, storage } from "@dbx-tools/auth";
+import { auth, storage } from "@dbx-tools/auth-gate";
 
 const database = await storage.createAuthStorage({ storage: "sqlite" });
 const runtime = await auth.createPasswordlessAuth({

@@ -43,12 +43,15 @@ async fn file_store_round_trips_tokens() {
 }
 
 #[tokio::test]
-async fn profile_locks_are_exclusive() {
+async fn file_refresh_locks_are_exclusive_across_profiles() {
     let directory = tempdir().unwrap();
     let first = Arc::new(FileStore::new(directory.path().to_path_buf()).unwrap());
     let second = Arc::new(FileStore::new(directory.path().to_path_buf()).unwrap());
     let held = first.lock("profile", Duration::from_secs(1)).await.unwrap();
-    let error = match second.lock("profile", Duration::from_millis(100)).await {
+    let error = match second
+        .lock("other-profile", Duration::from_millis(100))
+        .await
+    {
         Ok(_) => panic!("second store unexpectedly acquired the profile lock"),
         Err(error) => error,
     };
@@ -58,4 +61,26 @@ async fn profile_locks_are_exclusive() {
         .lock("profile", Duration::from_secs(1))
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn file_store_preserves_other_cli_entries() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("token-cache.json");
+    let existing = serde_json::json!({"access_token": "cli", "custom": {"future": true}});
+    std::fs::write(
+        &path,
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1, "tokens": {"other": existing}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let store = FileStore::new(directory.path().to_path_buf()).unwrap();
+    let held = store.lock("profile", Duration::from_secs(1)).await.unwrap();
+    store.save("profile", &token("access")).await.unwrap();
+    store.delete("profile").await.unwrap();
+    drop(held);
+    let actual: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(actual["tokens"]["other"], existing);
 }

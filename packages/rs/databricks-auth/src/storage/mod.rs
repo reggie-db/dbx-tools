@@ -52,7 +52,10 @@ pub enum StoreBackend {
 }
 
 pub async fn open_store(options: StoreOptions) -> Result<Arc<dyn CredentialStore>> {
-    let cache_dir = options.cache_dir.unwrap_or_else(default_cache_dir);
+    let cache_dir = match options.cache_dir {
+        Some(directory) => directory,
+        None => default_cache_dir()?,
+    };
     let backend = resolve_backend(options.backend, options.config_file.as_deref())?;
     match backend {
         StoreBackend::Memory => Ok(Arc::new(MemoryStore::new(cache_dir.join("memory-locks"))?)),
@@ -70,10 +73,10 @@ pub async fn open_store(options: StoreOptions) -> Result<Arc<dyn CredentialStore
     }
 }
 
-fn default_cache_dir() -> PathBuf {
+fn default_cache_dir() -> Result<PathBuf> {
     UserDirs::new()
         .map(|dirs| dirs.home_dir().join(".databricks"))
-        .unwrap_or_else(|| PathBuf::from(".dbx-tools-auth-u2m"))
+        .ok_or_else(|| Error::Config("could not resolve the user home directory".into()))
 }
 
 fn resolve_backend(

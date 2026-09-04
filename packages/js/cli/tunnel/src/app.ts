@@ -17,7 +17,7 @@
 
 import { lakebase } from "@databricks/appkit";
 import { appkit } from "@dbx-tools/appkit";
-import { storage as authStorage } from "@dbx-tools/auth";
+import { storage as authStorage } from "@dbx-tools/auth-gate";
 import { email } from "@dbx-tools/email";
 import { object } from "@dbx-tools/shared-core";
 import { authGate, type AuthGateApi, type AuthGateConfig } from "@dbx-tools/tunnel";

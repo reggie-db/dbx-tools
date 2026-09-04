@@ -1,5 +1,5 @@
 /**
- * `authGate()` - the AppKit adapter around `@dbx-tools/auth`.
+ * `authGate()` - the AppKit adapter around `@dbx-tools/auth-gate`.
  *
  * It has NO routes of its own: the tunnel PROXY (not an HTTP server) calls the
  * handlers this plugin exposes via {@link AuthGatePlugin.exports}. The plugin
@@ -32,7 +32,7 @@ import {
   type AuthStorageConfig,
   type AuthStorageMode,
   type PasswordlessAuthRuntime,
-} from "@dbx-tools/auth";
+} from "@dbx-tools/auth-gate";
 import { config as coreConfig } from "@dbx-tools/core";
 import type { AuthStatus } from "@dbx-tools/shared-auth";
 import { brand, log, string } from "@dbx-tools/shared-core";
@@ -323,7 +323,7 @@ export interface AuthGateApi {
 }
 
 /**
- * AppKit plugin adapting `@dbx-tools/auth` to tunnel traffic. On `setup()` it registers the login
+ * AppKit plugin adapting `@dbx-tools/auth-gate` to tunnel traffic. On `setup()` it registers the login
  * routes (`/api/email/auth/*`) and a gating middleware on the app's OWN Express
  * server via `this.context`, so a public portr caller must prove an email before
  * reaching the app's `/api/*` - see `./gate`. Front-door (platform) traffic and

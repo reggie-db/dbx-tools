@@ -20,7 +20,7 @@ const TOKEN_CACHE_VERSION: u8 = 1;
 struct TokenCache {
     version: u8,
     #[serde(default)]
-    tokens: HashMap<String, Token>,
+    tokens: HashMap<String, serde_json::Value>,
 }
 
 impl Default for TokenCache {
@@ -96,11 +96,11 @@ impl FileStore {
             .root
             .join(format!(".token-cache-{}.tmp", uuid::Uuid::new_v4()));
         let raw = serde_json::to_vec_pretty(cache)?;
-        let mut file = tokio::fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temporary)
-            .await?;
+        let mut options = tokio::fs::OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&temporary).await?;
         file.write_all(&raw).await?;
         file.sync_all().await?;
         drop(file);
@@ -150,13 +150,20 @@ impl Drop for FileLock {
 impl CredentialStore for FileStore {
     async fn load(&self, profile: &str) -> Result<Option<Token>> {
         let _lock = self.acquire_cache_lock().await?;
-        Ok(self.read_cache().await?.tokens.remove(profile))
+        self.read_cache()
+            .await?
+            .tokens
+            .remove(profile)
+            .map(|value| serde_json::from_value(value).map_err(Into::into))
+            .transpose()
     }
 
     async fn save(&self, profile: &str, token: &Token) -> Result<()> {
         let _lock = self.acquire_cache_lock().await?;
         let mut cache = self.read_cache().await?;
-        cache.tokens.insert(profile.to_owned(), token.clone());
+        cache
+            .tokens
+            .insert(profile.to_owned(), serde_json::to_value(token)?);
         self.write_cache(&cache).await
     }
 
@@ -167,8 +174,15 @@ impl CredentialStore for FileStore {
         self.write_cache(&cache).await
     }
 
-    async fn lock(&self, profile: &str, timeout: Duration) -> Result<Box<dyn StorageLock>> {
-        Ok(Box::new(self.acquire_file_lock(profile, timeout).await?))
+    async fn lock(&self, _profile: &str, timeout: Duration) -> Result<Box<dyn StorageLock>> {
+        Ok(Box::new(
+            acquire_lock(
+                self.root.join("token-cache.refresh.lock"),
+                "token-cache.json".to_owned(),
+                timeout,
+            )
+            .await?,
+        ))
     }
 
     fn name(&self) -> &'static str {

@@ -35,7 +35,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/auth",
+      "name": "@dbx-tools/auth-gate",
       "version": "workspace:*",
       "type": "runtime"
     },

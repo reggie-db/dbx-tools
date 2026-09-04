@@ -2,7 +2,7 @@
 // Regenerated from the exporting modules in ./src.
 // Hand edits are overwritten on the next watch; this file is read-only.
 
-export const PACKAGE_IDENTIFIER = "@dbx-tools/auth";
+export const PACKAGE_IDENTIFIER = "@dbx-tools/auth-gate";
 export * as auth from "./src/auth.ts";
 export * as storage from "./src/storage.ts";
 export type { AuthorizeIdentity, AuthEmailOptions, PasswordlessAuthOptions, PasswordlessAuthRuntime } from "./src/auth.ts";

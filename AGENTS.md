@@ -97,6 +97,13 @@ Primary package areas:
   sorted scopes, optional group assumption, persistent token storage, and the
   same check-lock-check refresh path. The CLI delegates OAuth, profile
   resolution, refresh, locking, and storage to the Node binding package.
+  Built-in storage shares the Databricks CLI's `~/.databricks/token-cache.json`
+  and `databricks-cli` keyring service. File-backed refresh locks cover the
+  whole store, not individual profiles; read-modify-write uses a separate
+  short-held file lock. CLI processes do not honor these Rust locks, so this
+  does not promise cross-tool refresh serialization. Preserve other entries
+  when updating the shared file. Only the incoming Node package is named
+  `auth-gate`; `shared-auth` and `ui-auth` keep their existing names.
   Rust and UniFFI own the complete cross-language contract. Never hand-maintain
   TypeScript or Python copies of generated records, enums, interfaces, or module
   shapes. Commit the target-independent generated Node TypeScript and import it
@@ -117,7 +124,7 @@ Primary package areas:
   schemas, and matching React approval/compose surfaces. Outbound HTML and
   browser previews share the same React Email components, with the repository
   brand applied unless a consumer supplies its own `EmailBrand`.
-- `packages/js/node/auth`, `packages/js/shared/auth`, and
+- `packages/js/node/auth-gate`, `packages/js/shared/auth`, and
   `packages/js/ui/auth` - Better Auth passwordless runtime, browser-safe status
   contracts, and passkey-first React UI. Better Auth owns users, email OTP
   lifecycle, sessions, built-in rate limits, and passkeys. Callers supply
@@ -128,7 +135,7 @@ Primary package areas:
   derive WebAuthn RP ID or expected origin from a request header.
 - `packages/js/node/tunnel` and `packages/js/cli/tunnel` - tunnel Host
   detection, protected-header stripping, branded email delivery, identity
-  injection, and AppKit/CLI transport adapters over `@dbx-tools/auth`. Both
+  injection, and AppKit/CLI transport adapters over `@dbx-tools/auth-gate`. Both
   modes construct the same `authGate` plugin through `@dbx-tools/appkit`'s
   `createApp` lifecycle; CLI mode needs no `server()` plugin and can still add
   native `lakebase()`. Authentication UI imports directly from
@@ -676,7 +683,7 @@ why to use this package anyway:
   Both `channel` and the advisory-lock key take one value OR an array of parts, and
   neither needs to be identifier-shaped - the package sanitizes and hashes. Do not
   add a caller-side slugifier for either.
-- `@dbx-tools/auth`: use the Databricks Apps front door and AppKit identity
+- `@dbx-tools/auth-gate`: use the Databricks Apps front door and AppKit identity
   context when requests arrive through the platform. Use this package when a
   public tunnel or another route bypasses that identity-aware proxy and needs
   Better Auth email OTP recovery plus passkeys. The resulting session proves

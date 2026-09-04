@@ -29,7 +29,7 @@
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
-    "@dbx-tools/auth": "workspace:*",
+    "@dbx-tools/auth-gate": "workspace:*",
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-auth": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",

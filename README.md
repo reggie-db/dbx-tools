@@ -169,7 +169,7 @@ export function App() {
 | Local model proxy              | [`dbx-tools-litellm`](packages/py/litellm)                                                                                                                                                                                  |
 | Databricks OAuth tokens        | [`@dbx-tools/cli-auth`](packages/js/cli/auth)                                                                                                                                                                               |
 | Public tunnel + access gate    | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
-| Passwordless authentication    | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/shared-auth`](packages/js/shared/auth), [`@dbx-tools/ui-auth`](packages/js/ui/auth)                                                                                |
+| Passwordless authentication    | [`@dbx-tools/auth-gate`](packages/js/node/auth-gate), [`@dbx-tools/shared-auth`](packages/js/shared/auth), [`@dbx-tools/ui-auth`](packages/js/ui/auth)                                                                      |
 | Configuration and local locks  | [`@dbx-tools/core`](packages/js/node/core), [`dbx-tools-core`](packages/py/core)                                                                                                                                            |
 | Email workflows                | [`@dbx-tools/email`](packages/js/node/email), [`@dbx-tools/shared-email-template`](packages/js/shared/email-template), [`@dbx-tools/shared-email`](packages/js/shared/email), [`@dbx-tools/ui-email`](packages/js/ui/email) |
 | Web search and fetch           | [`@dbx-tools/appkit-web-search`](packages/js/node/appkit-web-search)                                                                                                                                                        |
@@ -301,7 +301,7 @@ await createApp({
 ### Put A Gated Public URL In Front Of A Command
 
 Use [`@dbx-tools/tunnel`](packages/js/node/tunnel) inside an AppKit app, where the
-portr tunnel and the [`@dbx-tools/auth`](packages/js/node/auth) passwordless gate
+portr tunnel and the [`@dbx-tools/auth-gate`](packages/js/node/auth-gate) passwordless gate
 run in-process through `tunnelInterceptor()` and the `authGate` plugin. The gate
 supports Better Auth email OTP recovery and passkeys with Lakebase or SQLite
 persistence.

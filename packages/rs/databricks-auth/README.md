@@ -20,7 +20,15 @@ M2M follows the Databricks OAuth request shape: HTTP Basic client
 authentication, `grant_type=client_credentials`, sorted scopes with `all-apis`
 as the default, account/workspace token endpoint resolution, and optional
 `assume_group`. Access tokens use the same persistent stores,
-check-lock-check refresh, and profile-scoped advisory/file locks as U2M.
+check-lock-check refresh, and storage-adapter locks as U2M.
+
+The built-in stores use the Databricks CLI locations and token format:
+`~/.databricks/token-cache.json` or the OS keyring's `databricks-cli` service.
+U2M uses the CLI profile key; M2M uses a distinct identity-and-scope key in
+the same store. File refresh is serialized across all profiles, with a
+separate short-held lock for atomic read-modify-write. Keyring refresh locks
+remain per credential. The Databricks CLI does not participate in Rust's
+file locks, so simultaneous CLI and library refreshes are not serialized.
 
 The browser callback uses `OAuthTemplate` to build a self-contained HTML page
 with dbx tools colors and typography. Its image source accepts a URL or data

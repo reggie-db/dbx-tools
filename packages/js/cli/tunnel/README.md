@@ -2,7 +2,7 @@
 
 Wrap any command in a public [Portr](https://github.com/amalshaji/portr),
 [FRP](https://github.com/fatedier/frp), or combined tunnel fronted by
-[`@dbx-tools/auth`](../../node/auth) email OTP and passkeys.
+[`@dbx-tools/auth-gate`](../../node/auth-gate) email OTP and passkeys.
 
 Run `dbx tunnel -- <command>` when a local or self-hosted process needs a public
 URL that only approved email addresses can reach. The wrapper claims the public

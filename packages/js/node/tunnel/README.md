@@ -1,7 +1,7 @@
 # @dbx-tools/tunnel
 
 Front an app with a public Portr and/or FRP tunnel and the passwordless
-[`@dbx-tools/auth`](../auth) gate, in-process.
+[`@dbx-tools/auth-gate`](../auth-gate) gate, in-process.
 
 Supports the [SSE-enabled Portr fork](https://github.com/reggie-db/portr/releases/tag/v1.0.15-sse.2),
 based on [upstream Portr](https://github.com/amalshaji/portr), plus

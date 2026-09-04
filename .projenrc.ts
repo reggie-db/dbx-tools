@@ -572,7 +572,7 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
 project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p) => {
   p.addDeps(
     "@databricks/appkit@catalog:",
-    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/auth-gate@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/email@workspace:*",
@@ -582,9 +582,9 @@ project.applyToProjects(root, { identifierName: "cli-tunnel", tags: "cli" }, (p)
   );
 });
 
-// node-auth: Better Auth runtime with email OTP, passkeys, caller-provided
+// node-auth-gate: Better Auth runtime with email OTP, passkeys, caller-provided
 // authorization/delivery, and Lakebase or SQLite persistence.
-project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
+project.applyToProjects(root, { identifierName: "auth-gate", tags: "node" }, (p) => {
   p.addDeps(
     "@better-auth/passkey@catalog:",
     "@dbx-tools/core@workspace:*",
@@ -596,7 +596,7 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
 });
 
 // node-tunnel (`@dbx-tools/tunnel`): fronts a Databricks App with Portr and/or FRP
-// tunnel + @dbx-tools/auth passwordless gate, consumed IN-PROCESS through
+// tunnel + @dbx-tools/auth-gate passwordless gate, consumed IN-PROCESS through
 // `@dbx-tools/appkit`'s `createApp` interceptor context.
 // `tunnelInterceptor` sets DATABRICKS_HOST, installs/runs selected clients pointed
 // at the app's public port, and `bindProcess`es them so app and tunnels live/die as one
@@ -605,7 +605,7 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
 // handler + gating middleware on the app's OWN Express server.
 project.applyToProjects(root, { identifierName: "tunnel", tags: "node" }, (p) => {
   p.addDeps(
-    "@dbx-tools/auth@workspace:*",
+    "@dbx-tools/auth-gate@workspace:*",
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
     "@dbx-tools/shared-auth@workspace:*",
