@@ -864,7 +864,7 @@ export class DBXToolsRustWorkspace {
                 shell: "bash",
                 run: timedBash(
                   "ubrn_generator",
-                  `rustup toolchain install ${ubrnRustVersion} --profile minimal\ncargo +${ubrnRustVersion} build --locked --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml`,
+                  `rustup toolchain install ${ubrnRustVersion} --profile minimal\ncargo +${ubrnRustVersion} build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml`,
                 ),
               },
             ]

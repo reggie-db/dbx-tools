@@ -161,7 +161,7 @@ jobs:
           SECONDS=0
           trap 'status=$?; echo "phase=ubrn_generator duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml
+          cargo +stable build --manifest-path node_modules/uniffi-bindgen-react-native/crates/ubrn_cli/Cargo.toml
       - name: Build Rust outputs
         shell: bash
         run: |-

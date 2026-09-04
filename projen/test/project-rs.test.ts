@@ -388,7 +388,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /if: \$\{\{ vars\.CACHE_UBRN_TARGET == 'true' \}\}/);
     assert.match(
       release,
-      /name: Prepare UBRN generator[\s\S]*rustup toolchain install stable --profile minimal[\s\S]*cargo \+stable build --locked --manifest-path node_modules\/uniffi-bindgen-react-native\/crates\/ubrn_cli\/Cargo\.toml[\s\S]*name: Build Rust outputs/,
+      /name: Prepare UBRN generator[\s\S]*rustup toolchain install stable --profile minimal[\s\S]*cargo \+stable build --manifest-path node_modules\/uniffi-bindgen-react-native\/crates\/ubrn_cli\/Cargo\.toml[\s\S]*name: Build Rust outputs/,
     );
     assert.match(release, /CARGO_TARGET_DIR: \$\{\{ github\.workspace \}\}\/target\/ubrn/);
     assert.match(release, /name: Package release binaries/);
