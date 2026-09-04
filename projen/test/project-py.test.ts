@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -130,10 +131,13 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.doesNotMatch(release, /publish-native/);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
     const instructionsCommand = instructionsTask?.steps?.[0]?.exec;
-    assert.ok(instructionsCommand);
-    const encodedInstructions = instructionsCommand.match(/Buffer\.from\('([^']+)'/)?.[1];
-    assert.ok(encodedInstructions);
-    const instructions = Buffer.from(encodedInstructions, "base64").toString();
+    assert.equal(instructionsCommand, "node .projen/pypi-trusted-publisher-instructions.mjs");
+    const helper = join(outdir, ".projen/pypi-trusted-publisher-instructions.mjs");
+    const result = spawnSync(process.execPath, [helper, "--secretFile", "/run/secrets/pypi.json"], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const instructions = result.stdout;
     assert.match(instructions, /PyPI project: fixture-core/);
     assert.match(instructions, /GitHub repository: example\/fixture/);
     assert.match(instructions, /GitHub environment: pypi-fixture-core/);
@@ -141,7 +145,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /GitHub environment: production-pypi/);
     assert.match(instructions, /Workflow filename: publish-python\.yml/);
     assert.match(instructions, /Workflow path: \.github\/workflows\/publish-python\.yml/);
-    assert.match(instructions, /~\/\.config\/pypi\/auth\.json/);
+    assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
     assert.doesNotMatch(instructions, /fixture-native/);
     assert.ok(project.tasks.tryFind("py:sync"));

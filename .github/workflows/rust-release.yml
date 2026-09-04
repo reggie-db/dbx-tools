@@ -129,6 +129,88 @@ jobs:
             dist/uniffi/npm/*.tgz
             dist/uniffi/npm-facade/*.tgz
             dist/uniffi/python/*.whl
+  build-binaries:
+    name: ${{ matrix.package.crate }} / ${{ matrix.target.node }}
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package:
+              crate: dbx-tools-auth-u2m-cli
+              binary: dbx-tools-auth-u2m
+            target:
+              runner: ubuntu-22.04
+              cargo: x86_64-unknown-linux-gnu
+              node: linux-x64-gnu
+              python: manylinux_2_35_x86_64
+              os: linux
+              cpu: x64
+              libc: glibc
+          - package:
+              crate: dbx-tools-auth-u2m-cli
+              binary: dbx-tools-auth-u2m
+            target:
+              runner: ubuntu-24.04-arm
+              cargo: aarch64-unknown-linux-gnu
+              node: linux-arm64-gnu
+              python: manylinux_2_39_aarch64
+              os: linux
+              cpu: arm64
+              libc: glibc
+          - package:
+              crate: dbx-tools-auth-u2m-cli
+              binary: dbx-tools-auth-u2m
+            target:
+              runner: macos-15-intel
+              cargo: x86_64-apple-darwin
+              node: darwin-x64
+              python: macosx_13_0_x86_64
+              os: darwin
+              cpu: x64
+          - package:
+              crate: dbx-tools-auth-u2m-cli
+              binary: dbx-tools-auth-u2m
+            target:
+              runner: macos-14
+              cargo: aarch64-apple-darwin
+              node: darwin-arm64
+              python: macosx_11_0_arm64
+              os: darwin
+              cpu: arm64
+          - package:
+              crate: dbx-tools-auth-u2m-cli
+              binary: dbx-tools-auth-u2m
+            target:
+              runner: windows-latest
+              cargo: x86_64-pc-windows-msvc
+              node: win32-x64-msvc
+              python: win_amd64
+              os: win32
+              cpu: x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target.cargo }}
+      - name: Install Linux native dependencies
+        if: ${{ matrix.target.os == 'linux' }}
+        run: sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config
+      - name: Build release binary
+        shell: bash
+        run: |-
+          cargo build --release --package "${{ matrix.package.crate }}" --bin "${{ matrix.package.binary }}" --target "${{ matrix.target.cargo }}"
+          mkdir -p dist/rust-release
+          SOURCE="target/${{ matrix.target.cargo }}/release/${{ matrix.package.binary }}${{ matrix.target.os == 'win32' && '.exe' || '' }}"
+          DESTINATION="dist/rust-release/${{ matrix.package.binary }}-${{ matrix.target.node }}${{ matrix.target.os == 'win32' && '.exe' || '' }}"
+          cp "$SOURCE" "$DESTINATION"
+      - name: Upload release binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.package.crate }}-${{ matrix.target.node }}
+          path: dist/rust-release/*
   publish:
     if: ${{ github.event_name == 'push' }}
     needs:
@@ -233,3 +315,22 @@ jobs:
           UV_PUBLISH_USERNAME: ${{ secrets.LOCAL_PYPI_USERNAME }}
           UV_PUBLISH_PASSWORD: ${{ secrets.LOCAL_PYPI_PASSWORD }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.LOCAL_CARGO_TOKEN }}
+  publish-github-release:
+    if: ${{ github.event_name == 'push' }}
+    needs:
+      - build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release binaries
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist/rust-release
+          merge-multiple: true
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/rust-release/*
+          generate-release-notes: true

@@ -1044,6 +1044,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     "auth-u2m-cli": {
       description: "CLI for dbx-tools-auth-u2m",
       binaryName: "dbx-tools-auth-u2m",
+      release: true,
       defaultFeatures: ["keyring"],
       features: {
         keyring: ["dbx-tools-auth-u2m/keyring"],

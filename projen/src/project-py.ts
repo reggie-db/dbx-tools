@@ -1,6 +1,6 @@
 /** Reusable uv workspace generation for Python packages hosted in a projen tree. */
 import { string } from "@dbx-tools/shared-core";
-import { Component, type Project, javascript, python, vscode } from "projen";
+import { Component, TextFile, type Project, javascript, python, vscode } from "projen";
 import type { IResolver } from "projen/lib/file";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
@@ -439,15 +439,15 @@ export class DBXToolsPythonWorkspace extends Component {
     const workflowPath = `.github/workflows/${workflowName}`;
     const repository = this.githubRepository();
     const publications = this.publications(options);
-    const lines = [
+    const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",
       "Use a browser to configure the following PyPI trusted publishers.",
       "For each project, inspect any existing GitHub publisher and ensure every field is synchronized to the desired values below. Update a mismatched publisher when PyPI permits it; otherwise remove the mismatched publisher and create the correct one. Create the publisher when it does not exist. Do not create duplicates.",
       "",
       "Authentication rules:",
-      "- If browser authentication is required, first check for ~/.config/pypi/auth.json. When present, read its username and password fields directly into the browser without printing, logging, or exposing either value.",
-      "- If ~/.config/pypi/auth.json is absent, invalid, or insufficient for authentication, pause and ask the user to complete authentication.",
+    ];
+    const linesAfterAuthentication = [
       "- Pause and ask the user to complete every CAPTCHA. Do not attempt to solve or bypass a CAPTCHA.",
       "- After the user completes an authentication or CAPTCHA step, continue from the current browser session.",
       "",
@@ -466,11 +466,30 @@ export class DBXToolsPythonWorkspace extends Component {
         "",
       ]),
     ];
-    const instructions = `${lines.join("\n").trimEnd()}\n`;
-    const encoded = Buffer.from(instructions).toString("base64");
+    const helper = ".projen/pypi-trusted-publisher-instructions.mjs";
+    new TextFile(project.root, helper, {
+      lines: [
+        "#!/usr/bin/env node",
+        'import { parseArgs } from "node:util";',
+        "",
+        "const { values } = parseArgs({",
+        '  options: { secretFile: { type: "string" } },',
+        "});",
+        `const beforeAuthentication = ${JSON.stringify(linesBeforeAuthentication)};`,
+        `const afterAuthentication = ${JSON.stringify(linesAfterAuthentication)};`,
+        "const authentication = values.secretFile",
+        "  ? [",
+        "      `- If browser authentication is required, read credentials from ${values.secretFile} directly into the browser without printing, logging, or exposing secret values.`,",
+        "      `- If ${values.secretFile} is absent, invalid, or insufficient for authentication, pause and ask the user to complete authentication.`,",
+        "    ]",
+        '  : ["- If browser authentication is required, pause and ask the user to complete authentication."];',
+        'process.stdout.write(`${[...beforeAuthentication, ...authentication, ...afterAuthentication].join("\\n").trimEnd()}\\n`);',
+      ],
+    });
     project.root.addTask("pypiTrustedPublisherInstructions", {
       description: "Print browser-agent instructions for PyPI trusted publishers",
-      exec: `node -e "process.stdout.write(Buffer.from('${encoded}','base64').toString())"`,
+      exec: `node ${helper}`,
+      receiveArgs: true,
     });
   }
 

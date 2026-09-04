@@ -114,6 +114,7 @@ target/
 !/packages/py/model/pyproject.toml
 !/packages/py/litellm/pyproject.toml
 !/packages/py/graphiti/pyproject.toml
+!/.projen/pypi-trusted-publisher-instructions.mjs
 !/.github/workflows/python-release.yml
 !/.projenrc.ts
 !/.github/workflows/release.yml

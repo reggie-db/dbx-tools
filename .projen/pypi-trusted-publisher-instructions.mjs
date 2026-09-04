@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+import { parseArgs } from "node:util";
+
+const { values } = parseArgs({
+  options: { secretFile: { type: "string" } },
+});
+const beforeAuthentication = ["# PyPI Trusted Publisher Setup Instructions","","Use a browser to configure the following PyPI trusted publishers.","For each project, inspect any existing GitHub publisher and ensure every field is synchronized to the desired values below. Update a mismatched publisher when PyPI permits it; otherwise remove the mismatched publisher and create the correct one. Create the publisher when it does not exist. Do not create duplicates.","","Authentication rules:"];
+const afterAuthentication = ["- Pause and ask the user to complete every CAPTCHA. Do not attempt to solve or bypass a CAPTCHA.","- After the user completes an authentication or CAPTCHA step, continue from the current browser session.","","Publisher type: GitHub Actions","Pending publisher: use only when the PyPI project does not exist yet","","## dbx-tools-core","- PyPI project: dbx-tools-core","- GitHub repository: reggie-db/dbx-tools","- Repository owner: reggie-db","- Repository name: dbx-tools","- GitHub environment: pypi-dbx-tools-core","- Workflow filename: python-release.yml","- Workflow path: .github/workflows/python-release.yml","","## dbx-tools-postgres","- PyPI project: dbx-tools-postgres","- GitHub repository: reggie-db/dbx-tools","- Repository owner: reggie-db","- Repository name: dbx-tools","- GitHub environment: pypi-dbx-tools-postgres","- Workflow filename: python-release.yml","- Workflow path: .github/workflows/python-release.yml","","## dbx-tools-model","- PyPI project: dbx-tools-model","- GitHub repository: reggie-db/dbx-tools","- Repository owner: reggie-db","- Repository name: dbx-tools","- GitHub environment: pypi-dbx-tools-model","- Workflow filename: python-release.yml","- Workflow path: .github/workflows/python-release.yml","","## dbx-tools-litellm","- PyPI project: dbx-tools-litellm","- GitHub repository: reggie-db/dbx-tools","- Repository owner: reggie-db","- Repository name: dbx-tools","- GitHub environment: pypi-dbx-tools-litellm","- Workflow filename: python-release.yml","- Workflow path: .github/workflows/python-release.yml","","## dbx-tools-graphiti","- PyPI project: dbx-tools-graphiti","- GitHub repository: reggie-db/dbx-tools","- Repository owner: reggie-db","- Repository name: dbx-tools","- GitHub environment: pypi-dbx-tools-graphiti","- Workflow filename: python-release.yml","- Workflow path: .github/workflows/python-release.yml",""];
+const authentication = values.secretFile
+  ? [
+      `- If browser authentication is required, read credentials from ${values.secretFile} directly into the browser without printing, logging, or exposing secret values.`,
+      `- If ${values.secretFile} is absent, invalid, or insufficient for authentication, pause and ask the user to complete authentication.`,
+    ]
+  : ["- If browser authentication is required, pause and ask the user to complete authentication."];
+process.stdout.write(`${[...beforeAuthentication, ...authentication, ...afterAuthentication].join("\n").trimEnd()}\n`);

@@ -42,6 +42,7 @@ describe("DBXToolsRustWorkspace", () => {
         },
         "auth-u2m-cli": {
           binaryName: "fixture-auth-u2m",
+          release: true,
         },
       },
     });
@@ -93,6 +94,11 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /tasks\/publish-uniffi-local\.ts/);
     assert.match(release, /LOCAL_CARGO_REGISTRY/);
     assert.match(release, /libdbus-1-dev pkg-config/);
+    assert.match(release, /^  build-binaries:$/m);
+    assert.match(release, /binary: fixture-auth-u2m/);
+    assert.match(release, /node: linux-x64-gnu/);
+    assert.match(release, /^  publish-github-release:$/m);
+    assert.match(release, /softprops\/action-gh-release@v2/);
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(
       readFileSync(join(outdir, "packages/js/node/auth-u2m/exports.ts"), "utf8"),
