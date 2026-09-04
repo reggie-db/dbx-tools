@@ -290,6 +290,17 @@ impl PersistentAuth {
             .map_err(binding_error)
     }
 
+    pub async fn refresh_rejected_token(
+        &self,
+        stale_access_token: String,
+    ) -> BindingResult<AccessToken> {
+        self.inner
+            .refresh_rejected_token(&stale_access_token)
+            .await
+            .map(Into::into)
+            .map_err(binding_error)
+    }
+
     pub async fn logout(&self) -> BindingResult<()> {
         self.inner.logout().await.map_err(binding_error)
     }

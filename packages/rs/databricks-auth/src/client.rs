@@ -135,6 +135,15 @@ impl AuthClient {
     }
 
     pub async fn force_refresh(&self) -> Result<Token> {
+        self.refresh_rejected(None).await
+    }
+
+    /// Refresh a rejected token unless another process already replaced it.
+    pub async fn refresh_rejected_token(&self, stale_access_token: &str) -> Result<Token> {
+        self.refresh_rejected(Some(stale_access_token)).await
+    }
+
+    async fn refresh_rejected(&self, stale_access_token: Option<&str>) -> Result<Token> {
         let cache_key = self.profile.cache_key();
         let lock = self
             .store
@@ -142,6 +151,11 @@ impl AuthClient {
             .await?;
         let result = async {
             let token = self.store.load(&cache_key).await?;
+            if let (Some(stale), Some(current)) = (stale_access_token, token.as_ref()) {
+                if current.access_token != stale {
+                    return Ok(public_token(current.clone()));
+                }
+            }
             let loaded = match token {
                 Some(token) => {
                     self.store.prepare_write().await?;

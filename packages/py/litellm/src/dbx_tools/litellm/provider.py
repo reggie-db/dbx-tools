@@ -540,7 +540,7 @@ class _RequestCredentials:
 
     ``current`` is read fresh on every call attempt (through ``_delegated_params``)
     so a retry after ``refresh`` runs against the new token. ``refresh`` delegates
-    to the backend's compare-and-swap re-mint, so concurrent requests that all hit
+    to Rust's rejected-token comparison, so concurrent requests that all hit
     the same 401/403 coalesce into a single re-mint rather than a refresh storm.
     """
 

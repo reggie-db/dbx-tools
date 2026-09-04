@@ -133,9 +133,9 @@ const FfiConverterTypeAccessToken = (() => {
     class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
         readFromCursor(c: Cursor): TypeName {
             return {
-                accessToken: FfiConverterString.readFromCursor(c), 
-                tokenType: FfiConverterString.readFromCursor(c), 
-                expiry: FfiConverterOptionalString.readFromCursor(c), 
+                accessToken: FfiConverterString.readFromCursor(c),
+                tokenType: FfiConverterString.readFromCursor(c),
+                expiry: FfiConverterOptionalString.readFromCursor(c),
                 scopes: FfiConverterSequenceString.readFromCursor(c)
             };
         }
@@ -150,7 +150,7 @@ const FfiConverterTypeAccessToken = (() => {
              FfiConverterString.allocationSize(value.tokenType) +
              FfiConverterOptionalString.allocationSize(value.expiry) +
              FfiConverterSequenceString.allocationSize(value.scopes);
-            
+
         }
     };
     return new FFIConverter();
@@ -227,21 +227,21 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
     class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
         readFromCursor(c: Cursor): TypeName {
             return {
-                profile: FfiConverterOptionalString.readFromCursor(c), 
-                host: FfiConverterOptionalString.readFromCursor(c), 
-                accountId: FfiConverterOptionalString.readFromCursor(c), 
-                workspaceId: FfiConverterOptionalString.readFromCursor(c), 
-                configFile: FfiConverterOptionalString.readFromCursor(c), 
-                clientId: FfiConverterOptionalString.readFromCursor(c), 
-                groupId: FfiConverterOptionalString.readFromCursor(c), 
-                authType: FfiConverterOptionalString.readFromCursor(c), 
-                scopes: FfiConverterOptionalSequenceString.readFromCursor(c), 
-                target: FfiConverterOptionalString.readFromCursor(c), 
-                cacheDir: FfiConverterOptionalString.readFromCursor(c), 
-                callbackImageSrc: FfiConverterOptionalString.readFromCursor(c), 
-                lockTimeoutSeconds: FfiConverterUInt64.readFromCursor(c), 
-                loginTimeoutSeconds: FfiConverterUInt64.readFromCursor(c), 
-                refreshBufferSeconds: FfiConverterInt64.readFromCursor(c), 
+                profile: FfiConverterOptionalString.readFromCursor(c),
+                host: FfiConverterOptionalString.readFromCursor(c),
+                accountId: FfiConverterOptionalString.readFromCursor(c),
+                workspaceId: FfiConverterOptionalString.readFromCursor(c),
+                configFile: FfiConverterOptionalString.readFromCursor(c),
+                clientId: FfiConverterOptionalString.readFromCursor(c),
+                groupId: FfiConverterOptionalString.readFromCursor(c),
+                authType: FfiConverterOptionalString.readFromCursor(c),
+                scopes: FfiConverterOptionalSequenceString.readFromCursor(c),
+                target: FfiConverterOptionalString.readFromCursor(c),
+                cacheDir: FfiConverterOptionalString.readFromCursor(c),
+                callbackImageSrc: FfiConverterOptionalString.readFromCursor(c),
+                lockTimeoutSeconds: FfiConverterUInt64.readFromCursor(c),
+                loginTimeoutSeconds: FfiConverterUInt64.readFromCursor(c),
+                refreshBufferSeconds: FfiConverterInt64.readFromCursor(c),
                 preferUserToMachine: FfiConverterBool.readFromCursor(c)
             };
         }
@@ -280,7 +280,7 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
              FfiConverterUInt64.allocationSize(value.loginTimeoutSeconds) +
              FfiConverterInt64.allocationSize(value.refreshBufferSeconds) +
              FfiConverterBool.allocationSize(value.preferUserToMachine);
-            
+
         }
     };
     return new FFIConverter();
@@ -347,8 +347,8 @@ const FfiConverterTypeDatabricksAuthStatus = (() => {
     class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
         readFromCursor(c: Cursor): TypeName {
             return {
-                profile: FfiConverterString.readFromCursor(c), 
-                host: FfiConverterString.readFromCursor(c), 
+                profile: FfiConverterString.readFromCursor(c),
+                host: FfiConverterString.readFromCursor(c),
                 storage: FfiConverterTypeStorage.readFromCursor(c)
             };
         }
@@ -361,7 +361,7 @@ const FfiConverterTypeDatabricksAuthStatus = (() => {
             return FfiConverterString.allocationSize(value.profile) +
              FfiConverterString.allocationSize(value.host) +
              FfiConverterTypeStorage.allocationSize(value.storage);
-            
+
         }
     };
     return new FFIConverter();
@@ -376,7 +376,7 @@ export const DatabricksAuthError = (() => {
 
     type Failure__interface = {
         tag: DatabricksAuthError_Tags.Failure;
-        inner: 
+        inner:
 Readonly<{message: string}>
     };
     class Failure_ extends UniffiError implements Failure__interface {
@@ -386,7 +386,7 @@ Readonly<{message: string}>
          */
         readonly [uniffiTypeNameSymbol] = "DatabricksAuthError";
         readonly tag = DatabricksAuthError_Tags.Failure;
-        readonly inner: 
+        readonly inner:
 Readonly<{message: string}>;
         constructor(
 inner: {message: string }) {
@@ -406,7 +406,7 @@ inner: {message: string }): Failure_ {
             return Failure_.instanceOf(obj);
         }
 
-        static getInner(obj: Failure_): 
+        static getInner(obj: Failure_):
 Readonly<{message: string}> {
             return obj.inner;
         }
@@ -466,10 +466,11 @@ const FfiConverterTypeDatabricksAuthError = (() => {
 })();
 
 export interface PersistentAuthLike {
-    
+
     challenge(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
     forceRefreshToken(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
     logout(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
+    refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
     status(): DatabricksAuthStatus;
     token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
@@ -491,9 +492,9 @@ private constructor(pointer: UniffiHandle) {
     this[destructorGuardSymbol] = uniffiTypePersistentAuthObjectFactory.bless(pointer);
 }
 
-    
 
-    
+
+
     async challenge(asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -520,7 +521,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
     async forceRefreshToken(asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -561,7 +562,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
     async logout(asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -588,7 +589,48 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
+    async refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
+    const __stack = uniffiIsDebug ? new Error().stack : undefined;
+    try {
+        return await uniffiRustCallAsync(
+            /*rustCaller:*/ uniffiCaller,
+            /*rustFutureFunc:*/ () => {
+                return nativeModule().uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_refresh_rejected_token(
+                    uniffiTypePersistentAuthObjectFactory.clonePointer(this),FfiConverterString.lower(staleAccessToken, nativeModule().rustbuffer_alloc)
+                );
+            },
+            /*pollFunc:*/ nativeModule().ffi_dbx_tools_databricks_auth_rust_future_poll_rust_buffer,
+            /*cancelFunc:*/ nativeModule().ffi_dbx_tools_databricks_auth_rust_future_cancel_rust_buffer,
+            /*completeFunc:*/ nativeModule().ffi_dbx_tools_databricks_auth_rust_future_complete_rust_buffer,
+            /*freeFunc:*/ nativeModule().ffi_dbx_tools_databricks_auth_rust_future_free_rust_buffer,
+            // Async returns always go through the JS-side converter: the
+            // FFI symbol returns the future handle (u64), and the user-level
+            // RustBuffer comes back via the shared `rust_future_complete_*`
+            // export. The bytes the runtime hands back must be deserialized
+            // here using the per-callable return-type converter.
+            // Borrowed view over foreign memory: the call site owns the free,
+            // as on the sync paths. Unconditional — a no-op where buffers are
+            // already JS-owned.
+            /*liftFunc:*/ (__rb) => {
+                try {
+                    return FfiConverterTypeAccessToken.lift(__rb);
+                } finally {
+                    nativeModule().rustbuffer_free(__rb);
+                }
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+            /*asyncOpts:*/ asyncOpts_,
+            /*errorHandler:*/ FfiConverterTypeDatabricksAuthError.lift.bind(FfiConverterTypeDatabricksAuthError)
+        );
+    } catch (__error: any) {
+        if (uniffiIsDebug && __error instanceof Error) {
+            __error.stack = __stack;
+        }
+        throw __error;
+    }
+    }
+
     status(): DatabricksAuthStatus {
     const __rb: Uint8Array = uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
@@ -604,7 +646,7 @@ private constructor(pointer: UniffiHandle) {
         nativeModule().rustbuffer_free(__rb);
     }
     }
-    
+
     async token(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -645,7 +687,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
 
     uniffiDestroy(): void {
         const ptr = (this as any)[destructorGuardSymbol];
@@ -661,16 +703,16 @@ private constructor(pointer: UniffiHandle) {
         return uniffiTypePersistentAuthObjectFactory.isConcreteType(obj_);
     }
 
-    
+
 }
 
 const uniffiTypePersistentAuthObjectFactory: UniffiObjectFactory<PersistentAuthLike> = (() => {
-    
+
     /// <reference lib="es2021" />
     const registry = typeof FinalizationRegistry !== 'undefined' ? new FinalizationRegistry<UniffiHandle>((heldValue: UniffiHandle) => {
         uniffiTypePersistentAuthObjectFactory.freePointer(heldValue);
     }) : null;
-    
+
     return {
     create(pointer: UniffiHandle): PersistentAuthLike {
         const instance = Object.create(PersistentAuth.prototype);
@@ -680,7 +722,7 @@ const uniffiTypePersistentAuthObjectFactory: UniffiObjectFactory<PersistentAuthL
         return instance;
     },
 
-    
+
     bless(p: UniffiHandle): UniffiGcObject {
         const ptr = {
             p, // make sure this object doesn't get optimized away.
@@ -727,7 +769,7 @@ const uniffiTypePersistentAuthObjectFactory: UniffiObjectFactory<PersistentAuthL
 const FfiConverterTypePersistentAuth = new FfiConverterObject(uniffiTypePersistentAuthObjectFactory);
 
 export interface StorageAdapter {
-    
+
     load(profile: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<string | undefined>;
     prepareWrite(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
     save(profile: string, token: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
@@ -750,9 +792,9 @@ private constructor(pointer: UniffiHandle) {
     this[destructorGuardSymbol] = uniffiTypeStorageAdapterImplObjectFactory.bless(pointer);
 }
 
-    
 
-    
+
+
     async load(profile: string, asyncOpts_?: { signal: AbortSignal }): Promise<string | undefined> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -793,7 +835,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
     async prepareWrite(asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -820,7 +862,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
     async save(profile: string, token: string, asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -847,7 +889,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
     async remove(profile: string, asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -874,7 +916,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
     async acquireLock(profile: string, timeoutMillis: bigint, asyncOpts_?: { signal: AbortSignal }): Promise<string> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -915,7 +957,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
     async releaseLock(lease: string, asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -942,7 +984,7 @@ private constructor(pointer: UniffiHandle) {
         throw __error;
     }
     }
-    
+
     name(): string {
     const __rb: Uint8Array = uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
@@ -958,7 +1000,7 @@ private constructor(pointer: UniffiHandle) {
         nativeModule().rustbuffer_free(__rb);
     }
     }
-    
+
 
     uniffiDestroy(): void {
         const ptr = (this as any)[destructorGuardSymbol];
@@ -974,16 +1016,16 @@ private constructor(pointer: UniffiHandle) {
         return uniffiTypeStorageAdapterImplObjectFactory.isConcreteType(obj_);
     }
 
-    
+
 }
 
 const uniffiTypeStorageAdapterImplObjectFactory: UniffiObjectFactory<StorageAdapter> = (() => {
-    
+
     /// <reference lib="es2021" />
     const registry = typeof FinalizationRegistry !== 'undefined' ? new FinalizationRegistry<UniffiHandle>((heldValue: UniffiHandle) => {
         uniffiTypeStorageAdapterImplObjectFactory.freePointer(heldValue);
     }) : null;
-    
+
     return {
     create(pointer: UniffiHandle): StorageAdapter {
         const instance = Object.create(StorageAdapterImpl.prototype);
@@ -993,7 +1035,7 @@ const uniffiTypeStorageAdapterImplObjectFactory: UniffiObjectFactory<StorageAdap
         return instance;
     },
 
-    
+
     bless(p: UniffiHandle): UniffiGcObject {
         const ptr = {
             p, // make sure this object doesn't get optimized away.
@@ -1051,7 +1093,7 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
             profile: Uint8Array,
             uniffiFutureCallback: UniffiForeignFutureCompleterustBuffer,
             uniffiCallbackData: bigint) => {
-            const uniffiMakeCall = 
+            const uniffiMakeCall =
             async (signal: AbortSignal)
             : Promise<string | undefined> => {
                 const jsCallback = FfiConverterTypeStorageAdapter.lift(uniffiHandle);
@@ -1095,7 +1137,7 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
             uniffiHandle: bigint,
             uniffiFutureCallback: UniffiForeignFutureCompletevoid,
             uniffiCallbackData: bigint) => {
-            const uniffiMakeCall = 
+            const uniffiMakeCall =
             async (signal: AbortSignal)
             : Promise<void> => {
                 const jsCallback = FfiConverterTypeStorageAdapter.lift(uniffiHandle);
@@ -1138,12 +1180,12 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
             token: Uint8Array,
             uniffiFutureCallback: UniffiForeignFutureCompletevoid,
             uniffiCallbackData: bigint) => {
-            const uniffiMakeCall = 
+            const uniffiMakeCall =
             async (signal: AbortSignal)
             : Promise<void> => {
                 const jsCallback = FfiConverterTypeStorageAdapter.lift(uniffiHandle);
                 return await jsCallback.save(
-                    FfiConverterString.lift(profile), 
+                    FfiConverterString.lift(profile),
                     FfiConverterString.lift(token), { signal }
                 )
             };
@@ -1182,7 +1224,7 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
             profile: Uint8Array,
             uniffiFutureCallback: UniffiForeignFutureCompletevoid,
             uniffiCallbackData: bigint) => {
-            const uniffiMakeCall = 
+            const uniffiMakeCall =
             async (signal: AbortSignal)
             : Promise<void> => {
                 const jsCallback = FfiConverterTypeStorageAdapter.lift(uniffiHandle);
@@ -1226,12 +1268,12 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
             timeoutMillis: bigint,
             uniffiFutureCallback: UniffiForeignFutureCompleterustBuffer,
             uniffiCallbackData: bigint) => {
-            const uniffiMakeCall = 
+            const uniffiMakeCall =
             async (signal: AbortSignal)
             : Promise<string> => {
                 const jsCallback = FfiConverterTypeStorageAdapter.lift(uniffiHandle);
                 return await jsCallback.acquireLock(
-                    FfiConverterString.lift(profile), 
+                    FfiConverterString.lift(profile),
                     FfiConverterUInt64.lift(timeoutMillis), { signal }
                 )
             };
@@ -1272,7 +1314,7 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
             lease: Uint8Array,
             uniffiFutureCallback: UniffiForeignFutureCompletevoid,
             uniffiCallbackData: bigint) => {
-            const uniffiMakeCall = 
+            const uniffiMakeCall =
             async (signal: AbortSignal)
             : Promise<void> => {
                 const jsCallback = FfiConverterTypeStorageAdapter.lift(uniffiHandle);
@@ -1312,7 +1354,7 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
         },
         name: (
             uniffiHandle: bigint,) => {
-            const uniffiMakeCall = 
+            const uniffiMakeCall =
             ()
             : string => {
                 const jsCallback = FfiConverterTypeStorageAdapter.lift(uniffiHandle);
@@ -1397,6 +1439,9 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_logout() !== 12456) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_logout");
+    }
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_refresh_rejected_token() !== 49293) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_refresh_rejected_token");
     }
     if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_status() !== 24573) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_status");

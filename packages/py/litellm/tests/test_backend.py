@@ -21,7 +21,7 @@ def _backend(
     backend.profile = None
     backend.threshold = backend_module.DEFAULT_FUZZY_THRESHOLD
     backend.cache_ttl_seconds = DEFAULT_MODEL_CACHE_TTL_SECONDS
-    backend.client = SimpleNamespace()
+    backend._credentials = SimpleNamespace(client=lambda: SimpleNamespace())
     backend._catalogue_cache = TTLCache(
         maxsize=1,
         ttl=backend.cache_ttl_seconds,

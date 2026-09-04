@@ -297,9 +297,10 @@ Primary package areas:
   parameters. Do not add general provider conversion here. The Responses
   pre-call hook may change only the resolved
   model identifier so Responses-only endpoints reach LiteLLM's native
-  Databricks Responses provider. Its process-wide credential cache is the sole
-  refresh owner: SDK background refresh stays disabled and `current()` uses a
-  check-lock-check load so parallel requests cannot pile up token mints.
+  Databricks Responses provider. `dbx_tools.databricks_auth` owns credentials
+  with `prefer_user_to_machine=false`; Rust handles U2M/M2M selection,
+  persistence, check-lock-check refresh, and rejected-token comparison. Endpoint
+  discovery creates an SDK client with the current Rust-managed token.
   LiteLLM is exact-pinned because the remaining narrow monkey-patches touch
   private APIs. Keep the FastAPI upper bound until LiteLLM includes its
   `get_flat_params` compatibility fix.
@@ -363,7 +364,10 @@ Primary package areas:
   executable immediately after validation rather than in end-of-job cleanup, so
   a later packaging failure cannot discard the expensive cache fill. Within the
   facade row, Bun runtime setup remains unconditional because packaging executes
-  the TypeScript binding generator even when the UBRN executable is restored.
+  the TypeScript binding generator and bundles the Node facade even when the
+  UBRN executable is restored. The bundle keeps type declarations pointed at
+  the committed Rust-generated TypeScript, so a UBRN cache hit needs no
+  workspace install or standalone TypeScript compiler.
   The complete Bun/UBRN path runs only in that single row. Other rows
   package native libraries and Python wheels without touching UBRN.
   Stable Windows release rows use the toolchain already installed on the hosted

@@ -179,10 +179,11 @@ if (values.node) {
   for (const file of [nodeBindings, ...generatedFiles]) {
     // Consumers type-check these files through workspace source exports, while
     // the generated runtime internals are validated by UniFFI's own build.
-    writeFileSync(
-      file,
-      `/* eslint-disable */\n// @ts-nocheck\n${addTypeScriptExtensionsToBindingImports(readFileSync(file, "utf8"))}`,
+    const source = addTypeScriptExtensionsToBindingImports(readFileSync(file, "utf8")).replace(
+      /[ \t]+$/gm,
+      "",
     );
+    writeFileSync(file, `/* eslint-disable */\n// @ts-nocheck\n${source}`);
     stampGenerated(file, {
       tool: "UniFFI binding generation",
       source: `the ${crate} Rust exports`,

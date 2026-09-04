@@ -932,7 +932,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     directory: "litellm",
     description:
       "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution",
-    internalDependencies: ["model"],
+    internalDependencies: ["databricks-auth", "model"],
     dependencies: [
       "cachetools>=5.5,<7",
       "cyclopts>=4.11,<6",

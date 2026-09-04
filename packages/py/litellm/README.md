@@ -98,10 +98,10 @@ Completions and embeddings, but does not expose a native Responses hook:
    images. Delegated Chat requests repair unsupported trailing assistant turns,
    add the required JSON-mode prompt nudge when needed, and mark Claude prompt
    cache breakpoints. Function tools are never rewritten.
-6. **Inject cached credentials.** The package supplies an explicit bearer token
-   and serving base URL from its process-wide credential cache. This keeps
-   LiteLLM from constructing a new `WorkspaceClient` and authenticating again
-   for every request.
+6. **Inject Rust-managed credentials.** `dbx-tools-databricks-auth` resolves the
+   selected profile with `prefer_user_to_machine=false`, then supplies a U2M or
+   M2M bearer token through its persistent check-lock-check cache. LiteLLM
+   receives the explicit token and serving base URL.
 7. **Delegate to LiteLLM.** LiteLLM owns HTTP transport, OpenAI parameter
    mapping, streaming, retries, embeddings, and Chat↔Responses conversion. The
    response streams back in LiteLLM's normal OpenAI-compatible shape.
@@ -124,17 +124,12 @@ Profile selection happens once, at proxy startup, in this order:
 
 Startup fails rather than guessing when multiple unmarked, non-`DEFAULT`
 profiles remain.
-The same selected profile or ambient environment creates one process-wide `WorkspaceClient`
-used for both endpoint discovery and authentication, so model names cannot be
-pulled from one workspace while requests are sent to another.
-
-The package does not introduce another authentication scheme. The Databricks
-SDK resolves the selected profile's configured authentication, including OAuth
-machine-to-machine credentials, and `authenticate()` supplies its bearer token.
-That token and the workspace's `/serving-endpoints` base URL are passed directly
-to LiteLLM's built-in Databricks provider. SDK background token refresh is
-disabled because this package's guarded credential cache is the sole refresh
-owner.
+The same selected profile or ambient environment configures
+`dbx-tools-databricks-auth` for both endpoint discovery and inference.
+Endpoint discovery creates an SDK client with the current Rust-managed token,
+so model names and requests use the same workspace. The token and the
+workspace's `/serving-endpoints` base URL are passed directly to LiteLLM's
+built-in Databricks provider.
 
 To override the Databricks CLI default for a process, set the environment:
 
@@ -171,27 +166,28 @@ native `databricks/*` provider. Other loose names remain accepted.
 There is no single "LiteLLM cache" in this integration. Four independent caches
 serve different purposes:
 
-| Cache                        | Storage and scope                                                                                 | Filled when                                                   | Refresh or expiry                                                                                                      | Purpose                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Endpoint catalogue           | Memory, one proxy process                                                                         | First resolution or `/v1/models`                              | Five-minute TTL; forced once after a resolution miss                                                                   | Avoid listing Serving Endpoints on every request                                                           |
-| Databricks bearer token      | Memory, one proxy process/profile                                                                 | First delegated request needing credentials                   | OAuth expiry minus 10 minutes; 30-minute fallback when no expiry is exposed; check-lock-check makes one caller refresh | Avoid a new SDK client and token mint per request                                                          |
-| Reasoning context and scores | `diskcache`, default `~/.cache/dbx-tools/litellm`, shared by local processes using that directory | Only for `reasoning_effort: auto` or `reasoning.effort: auto` | TTL, default 86,400 seconds; bounded to 64 MiB, eight turns, and 6,000 sampled characters                              | Reuse follow-up context and avoid classifying the same sample again                                        |
-| Provider prompt cache        | Databricks/model-provider managed                                                                 | Repeated prompt prefixes                                      | Provider-defined lifetime and eviction                                                                                 | Reduce billed/counted repeated input tokens; GPT is automatic, Claude uses explicit breakpoints added here |
+| Cache                        | Storage and scope                                                                                 | Filled when                                                   | Refresh or expiry                                                                                             | Purpose                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Endpoint catalogue           | Memory, one proxy process                                                                         | First resolution or `/v1/models`                              | Five-minute TTL; forced once after a resolution miss                                                          | Avoid listing Serving Endpoints on every request                                                           |
+| Databricks bearer token      | Rust credential store and process-safe profile lock                                               | First endpoint or inference request needing credentials       | Five-minute refresh buffer; U2M refreshes and M2M repeats the client-credentials grant under check-lock-check | Share valid tokens across requests and processes without duplicate refreshes                               |
+| Reasoning context and scores | `diskcache`, default `~/.cache/dbx-tools/litellm`, shared by local processes using that directory | Only for `reasoning_effort: auto` or `reasoning.effort: auto` | TTL, default 86,400 seconds; bounded to 64 MiB, eight turns, and 6,000 sampled characters                     | Reuse follow-up context and avoid classifying the same sample again                                        |
+| Provider prompt cache        | Databricks/model-provider managed                                                                 | Repeated prompt prefixes                                      | Provider-defined lifetime and eviction                                                                        | Reduce billed/counted repeated input tokens; GPT is automatic, Claude uses explicit breakpoints added here |
 
-The endpoint and credential caches are not written to disk. Restarting the
-proxy clears both. The reasoning cache is the only package-owned persistent
-cache and can be moved or assigned a shorter TTL with the environment variables
+The endpoint catalogue is process memory. Databricks credentials use the Rust
+package's secure keyring/file storage and cross-process locks. The reasoning
+cache can be moved or assigned a shorter TTL with the environment variables
 under [Automatic reasoning effort](#automatic-reasoning-effort). Prompt-cache
-contents remain provider-side; this package only supplies Claude's cache
-markers and reports the usage fields returned by the provider.
+contents remain provider-side; this package only supplies Claude's cache markers
+and reports the usage fields returned by the provider.
 
 ## Relationship to LiteLLM
 
-LiteLLM remains the proxy and provider implementation. It owns the
+LiteLLM is the proxy and provider implementation. It owns the
 OpenAI-compatible routes, Databricks transport, parameter mapping, streaming
-semantics, retries, embeddings, and Chat↔Responses conversion. The Databricks
-SDK owns authentication; this package caches its bearer result and passes it to
-LiteLLM explicitly so the provider does not construct a client per request.
+semantics, retries, embeddings, and Chat↔Responses conversion.
+`dbx-tools-databricks-auth` owns authentication and passes its bearer token to
+LiteLLM explicitly. The Databricks SDK uses that token only for endpoint
+discovery.
 
 This package supplies only the workspace-specific layer LiteLLM does not have:
 deterministic profile selection, live endpoint discovery, fuzzy names, and

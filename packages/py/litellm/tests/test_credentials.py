@@ -1,233 +1,113 @@
 from __future__ import annotations
 
-import datetime as dt
-import threading
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
+from collections.abc import Coroutine
+from types import SimpleNamespace
+from typing import Any
 
+import dbx_tools.litellm.credentials as credentials_module
 import pytest
-from dbx_tools.litellm.credentials import (
-    DEFAULT_LIFETIME,
-    REFRESH_LEAD,
-    DatabricksCredentials,
-)
+from dbx_tools.litellm.credentials import Credentials, DatabricksCredentials
 
-UTC = dt.timezone.utc
+"""Tests for the Rust-backed LiteLLM credential adapter."""
+
 HOST = "https://example.cloud.databricks.com"
 
 
-class FakeToken:
-    def __init__(self, expiry: dt.datetime | None) -> None:
-        self.expiry = expiry
+class FakeAuth:
+    """Record calls made through the generated persistent-auth surface."""
+
+    def __init__(self) -> None:
+        self.token_calls: list[bool | None] = []
+        self.rejected_tokens: list[str] = []
+
+    def status(self) -> SimpleNamespace:
+        """Return the resolved host."""
+        return SimpleNamespace(host=HOST)
+
+    async def token(self, login: bool | None = None) -> SimpleNamespace:
+        """Return one access token."""
+        self.token_calls.append(login)
+        return SimpleNamespace(access_token="current-token")
+
+    async def refresh_rejected_token(self, stale: str) -> SimpleNamespace:
+        """Return a token for a rejected credential."""
+        self.rejected_tokens.append(stale)
+        return SimpleNamespace(access_token="refreshed-token")
 
 
-class FakeConfig:
-    """Stand in for databricks.sdk Config, counting authenticate() calls."""
+class FakeBridge:
+    """Run generated async calls in the current test thread."""
 
-    def __init__(self, *, expiry: dt.datetime | None, oauth_error: Exception | None = None) -> None:
-        self.host = HOST
-        self.authenticate_count = 0
-        self._expiry = expiry
-        self._oauth_error = oauth_error
-
-    def authenticate(self) -> dict[str, str]:
-        self.authenticate_count += 1
-        return {"Authorization": f"Bearer token-{self.authenticate_count}"}
-
-    def oauth_token(self) -> FakeToken:
-        if self._oauth_error is not None:
-            raise self._oauth_error
-        return FakeToken(self._expiry)
+    def run(self, coroutine: Coroutine[Any, Any, Any]) -> Any:
+        """Complete one coroutine."""
+        return asyncio.run(coroutine)
 
 
-class FakeClient:
-    def __init__(self, config: FakeConfig) -> None:
-        self.config = config
-
-
-def build(config: FakeConfig) -> DatabricksCredentials:
-    """Construct the cache around a fake client, bypassing SDK/network setup."""
+def build(auth: FakeAuth) -> DatabricksCredentials:
+    """Construct the adapter around a fake generated auth object."""
     credentials = DatabricksCredentials.__new__(DatabricksCredentials)
     credentials.profile = "TEST"
-    credentials._client = FakeClient(config)
+    credentials._bridge = FakeBridge()
+    credentials._auth = auth
+    credentials._host = HOST
     credentials._api_base = f"{HOST}/serving-endpoints"
-    credentials._lock = threading.RLock()
-    credentials._cached = None
-    credentials._renew_at = dt.datetime.min.replace(tzinfo=UTC)
     return credentials
 
 
-def naive_local_expiry(delta: dt.timedelta) -> dt.datetime:
-    """Mimic the SDK, which reports a timezone-naive expiry in local time."""
-    return (dt.datetime.now(tz=UTC) + delta).astimezone().replace(tzinfo=None)
+def test_constructor_disables_u2m_preference(monkeypatch: pytest.MonkeyPatch) -> None:
+    auth = FakeAuth()
+    captured = []
+
+    async def create(options):
+        captured.append(options)
+        return auth
+
+    monkeypatch.setattr(credentials_module, "_AsyncBridge", FakeBridge)
+    monkeypatch.setattr(credentials_module, "create_persistent_auth", create)
+
+    credentials = DatabricksCredentials(profile="TEST")
+
+    assert credentials.profile == "TEST"
+    assert captured[0].profile == "TEST"
+    assert captured[0].prefer_user_to_machine is False
 
 
-def test_token_is_minted_once_and_reused() -> None:
-    config = FakeConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
-    credentials = build(config)
+def test_current_uses_rust_token_cache() -> None:
+    auth = FakeAuth()
+    credentials = build(auth)
 
-    tokens = {credentials.current().token for _ in range(10)}
+    current = credentials.current()
 
-    assert tokens == {"token-1"}
-    assert config.authenticate_count == 1
-
-
-def test_api_base_targets_serving_endpoints() -> None:
-    credentials = build(FakeConfig(expiry=naive_local_expiry(dt.timedelta(hours=1))))
-
-    assert credentials.current().api_base == f"{HOST}/serving-endpoints"
+    assert current == Credentials(
+        token="current-token",
+        api_base=f"{HOST}/serving-endpoints",
+    )
+    assert auth.token_calls == [False]
 
 
-def test_renewal_is_scheduled_ahead_of_expiry() -> None:
-    expiry = naive_local_expiry(dt.timedelta(hours=1))
-    credentials = build(FakeConfig(expiry=expiry))
+def test_refresh_delegates_rejected_token_comparison_to_rust() -> None:
+    auth = FakeAuth()
+    credentials = build(auth)
+    stale = Credentials(token="stale-token", api_base=f"{HOST}/serving-endpoints")
 
-    credentials.current()
+    current = credentials.refresh(stale)
 
-    # The naive local expiry must be read as local time, not stamped as UTC;
-    # doing the latter would place renewal in the past and re-mint every call.
-    aware_expiry = expiry.astimezone()
-    assert credentials._renew_at == aware_expiry - REFRESH_LEAD
-    assert credentials._renew_at > dt.datetime.now(tz=UTC)
+    assert current.token == "refreshed-token"
+    assert auth.rejected_tokens == ["stale-token"]
 
 
-def test_stale_token_is_reminted() -> None:
-    config = FakeConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
-    credentials = build(config)
+def test_workspace_client_uses_rust_managed_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    auth = FakeAuth()
+    credentials = build(auth)
+    captured = []
 
-    first = credentials.current().token
-    credentials._renew_at = dt.datetime.now(tz=UTC) - dt.timedelta(seconds=1)
-    second = credentials.current().token
+    def client(**options):
+        captured.append(options)
+        return SimpleNamespace()
 
-    assert first != second
-    assert config.authenticate_count == 2
+    monkeypatch.setattr(credentials_module, "WorkspaceClient", client)
 
+    credentials.client()
 
-def test_concurrent_stale_reads_share_one_refresh() -> None:
-    started = threading.Event()
-    release = threading.Event()
-    second_entered = threading.Event()
-
-    class SlowConfig(FakeConfig):
-        def authenticate(self) -> dict[str, str]:
-            started.set()
-            assert release.wait(timeout=5)
-            return super().authenticate()
-
-    config = SlowConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
-    credentials = build(config)
-
-    def second_read() -> str:
-        second_entered.set()
-        return credentials.current().token
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        first = executor.submit(lambda: credentials.current().token)
-        assert started.wait(timeout=5)
-        second = executor.submit(second_read)
-        assert second_entered.wait(timeout=5)
-        release.set()
-
-    assert first.result() == "token-1"
-    assert second.result() == "token-1"
-    assert config.authenticate_count == 1
-
-
-def test_expiry_inside_lead_window_still_renews_in_future() -> None:
-    # A token already within the refresh lead must not pin renewal to the past.
-    config = FakeConfig(expiry=naive_local_expiry(dt.timedelta(minutes=2)))
-    credentials = build(config)
-
-    credentials.current()
-
-    assert credentials._renew_at > dt.datetime.now(tz=UTC)
-
-
-def test_missing_oauth_expiry_falls_back_to_default_lifetime() -> None:
-    # PAT profiles raise instead of exposing an expiry.
-    error = ValueError("OAuth tokens are not available for pat authentication.")
-    credentials = build(FakeConfig(expiry=None, oauth_error=error))
-
-    credentials.current()
-
-    expected = dt.datetime.now(tz=UTC) + DEFAULT_LIFETIME
-    assert abs((credentials._renew_at - expected).total_seconds()) < 5
-
-
-def test_invalidate_forces_reauthentication() -> None:
-    config = FakeConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
-    credentials = build(config)
-
-    credentials.current()
-    credentials.invalidate()
-    credentials.current()
-
-    assert config.authenticate_count == 2
-
-
-def test_refresh_reauthenticates_a_rejected_token() -> None:
-    config = FakeConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
-    credentials = build(config)
-
-    stale = credentials.current()
-    fresh = credentials.refresh(stale)
-
-    assert fresh.token != stale.token
-    assert config.authenticate_count == 2
-
-
-def test_refresh_returns_the_current_token_when_it_already_advanced() -> None:
-    # A caller carrying an already-replaced token must NOT trigger another mint:
-    # the cache advanced past it, so refresh returns the current token as-is. This
-    # is the compare-and-swap that keeps a burst of 401s from re-minting per call.
-    config = FakeConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
-    credentials = build(config)
-
-    stale = credentials.current()  # token-1
-    current = credentials.refresh(stale)  # token-2, one re-mint
-    again = credentials.refresh(stale)  # stale is still token-1; cache holds token-2
-
-    assert current.token == again.token == "token-2"
-    assert config.authenticate_count == 2  # not 3 — the second refresh coalesced
-
-
-def test_concurrent_refreshes_of_one_rejected_token_share_a_single_remint() -> None:
-    # The reactive-path storm guard: many in-flight requests all carrying the same
-    # rejected token must coalesce into exactly one re-mint, not one per request.
-    started = threading.Event()
-    release = threading.Event()
-    second_entered = threading.Event()
-
-    class SlowConfig(FakeConfig):
-        def authenticate(self) -> dict[str, str]:
-            if self.authenticate_count >= 1:  # block only the reactive re-mint
-                started.set()
-                assert release.wait(timeout=5)
-            return super().authenticate()
-
-    config = SlowConfig(expiry=naive_local_expiry(dt.timedelta(hours=1)))
-    credentials = build(config)
-    stale = credentials.current()  # token-1, fast
-
-    def refresh_stale() -> str:
-        second_entered.set()
-        return credentials.refresh(stale).token
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        first = executor.submit(lambda: credentials.refresh(stale).token)
-        assert started.wait(timeout=5)  # first holds the lock inside the blocked mint
-        second = executor.submit(refresh_stale)
-        assert second_entered.wait(timeout=5)
-        release.set()
-
-    assert first.result() == "token-2"
-    assert second.result() == "token-2"
-    assert config.authenticate_count == 2  # one re-mint, coalesced
-
-
-def test_non_bearer_authorization_is_rejected() -> None:
-    config = FakeConfig(expiry=None)
-    config.authenticate = lambda: {"Authorization": "Basic abc123"}  # type: ignore[method-assign]
-    credentials = build(config)
-
-    with pytest.raises(RuntimeError, match="non-bearer"):
-        credentials.current()
+    assert captured == [{"host": HOST, "token": "current-token"}]

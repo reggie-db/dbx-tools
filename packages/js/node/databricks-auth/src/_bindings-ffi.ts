@@ -315,6 +315,11 @@ const DEFINITIONS = {
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
+    "uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_refresh_rejected_token": {
+      args: [FfiType.Handle, FfiType.RustBuffer],
+      ret: FfiType.Handle,
+      hasRustCallStatus: false,
+    },
     "uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_status": {
       args: [FfiType.Handle],
       ret: FfiType.RustBuffer,
@@ -386,6 +391,11 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_logout": {
+      args: [],
+      ret: FfiType.UInt16,
+      hasRustCallStatus: false,
+    },
+    "uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_refresh_rejected_token": {
       args: [],
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
@@ -595,6 +605,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_challenge(uniffiSelf: bigint): bigint;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_force_refresh_token(uniffiSelf: bigint): bigint;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_logout(uniffiSelf: bigint): bigint;
+    uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_refresh_rejected_token(uniffiSelf: bigint, staleAccessToken: Uint8Array): bigint;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_status(uniffiSelf: bigint, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_token(uniffiSelf: bigint, login: Uint8Array): bigint;
     uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_load(uniffiSelf: bigint, profile: Uint8Array): bigint;
@@ -610,6 +621,7 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_challenge(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_force_refresh_token(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_logout(): number;
+    uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_refresh_rejected_token(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_status(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_token(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_load(): number;

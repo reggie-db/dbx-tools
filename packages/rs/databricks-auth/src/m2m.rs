@@ -95,6 +95,14 @@ mod tests {
         assert_eq!(first.scopes, ["files:read", "jobs"]);
         assert_eq!(second.access_token, "access");
         assert_eq!(second.scopes, ["files:read", "jobs"]);
+        assert_eq!(
+            client
+                .refresh_rejected_token("older-rejected-token")
+                .await
+                .unwrap()
+                .access_token,
+            "access"
+        );
 
         let requests = server.await.unwrap();
         let request = &requests[0];
@@ -155,9 +163,8 @@ mod tests {
         assert_eq!(token.access_token, "access");
         assert_eq!(token.scopes, ["all-apis"]);
         let requests = server.await.unwrap();
-        assert!(requests[0].starts_with(
-            "GET /oidc/.well-known/oauth-authorization-server HTTP/1.1\r\n"
-        ));
+        assert!(requests[0]
+            .starts_with("GET /oidc/.well-known/oauth-authorization-server HTTP/1.1\r\n"));
         assert!(requests[1].starts_with("POST /token HTTP/1.1\r\n"));
         let body = requests[1]
             .split_once("\r\n\r\n")
@@ -168,12 +175,7 @@ mod tests {
         assert!(!body.contains("offline_access"));
     }
 
-    async fn start_server(
-        request_count: usize,
-    ) -> (
-        String,
-        tokio::task::JoinHandle<Vec<String>>,
-    ) {
+    async fn start_server(request_count: usize) -> (String, tokio::task::JoinHandle<Vec<String>>) {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
             .unwrap();

@@ -116,14 +116,12 @@ class DatabricksLiteLLMBackend:
         self.threshold = threshold
         self.cache_ttl_seconds = cache_ttl_seconds
 
-        # LiteLLM's built-in Databricks provider constructs WorkspaceClient()
-        # itself. Pin its unified-auth lookup to the same resolved profile used
-        # by this resolver, for any path that still falls back to SDK auth.
+        # Pin any LiteLLM SDK fallback to the same profile resolved for Rust
+        # authentication and endpoint discovery.
         if self.profile:
             os.environ[DATABRICKS_PROFILE_ENV] = self.profile
 
         self._credentials = DatabricksCredentials(profile=self.profile)
-        self.client = self._credentials.client
         self._catalogue_cache: TTLCache[tuple[object, ...], ModelCatalogue] = TTLCache(
             maxsize=1,
             ttl=self.cache_ttl_seconds,
@@ -134,23 +132,13 @@ class DatabricksLiteLLMBackend:
         return self._credentials.current()
 
     def refresh_credentials(self, stale: Credentials) -> Credentials:
-        """Re-mint the bearer token after the workspace rejected ``stale``.
-
-        The proactive refresh in DatabricksCredentials only re-mints on a
-        schedule (10 minutes before expiry). A token the workspace rejects
-        EARLY — revocation, server-side rotation, or clock skew — would
-        otherwise keep being served from cache until its next scheduled renewal,
-        turning one rejection into a storm of identical 401/403s. Callers invoke
-        this after an upstream auth failure; the compare-and-swap in
-        DatabricksCredentials.refresh coalesces concurrent callers so a rejected
-        token drives exactly one re-mint, not one per in-flight request.
-        """
+        """Ask Rust to refresh ``stale`` unless another caller advanced it."""
         return self._credentials.refresh(stale)
 
     @cachedmethod(lambda self: self._catalogue_cache)
     def catalogue(self) -> ModelCatalogue:
         """Return one TTL-cached endpoint snapshot."""
-        endpoints = tuple(list_serving_endpoints(self.client))
+        endpoints = tuple(list_serving_endpoints(self._credentials.client()))
         return ModelCatalogue(endpoints=endpoints)
 
     def refresh_catalogue(self) -> ModelCatalogue:
