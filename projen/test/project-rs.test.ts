@@ -120,6 +120,8 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal("pg" in node.dependencies, true);
     assert.equal("@types/pg" in node.devDependencies, true);
     assert.equal("@fixture/auth-u2m-darwin-arm64" in node.optionalDependencies, true);
+    assert.equal("@fixture/auth-u2m-linux-x64-gnu" in node.optionalDependencies, true);
+    assert.equal("@fixture/auth-u2m-darwin-x64" in node.optionalDependencies, false);
     const release = readFileSync(join(outdir, ".github/workflows/rust-release.yml"), "utf8");
     assert.match(release, /fixture-auth-u2m/);
     assert.match(release, /linux-x64-gnu/);
@@ -132,12 +134,16 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /tasks\/publish-uniffi-local\.ts/);
     assert.match(release, /LOCAL_CARGO_REGISTRY/);
     assert.match(release, /libdbus-1-dev pkg-config/);
-    assert.match(release, /mozilla-actions\/sccache-action@v0\.0\.9/);
-    assert.match(release, /Swatinem\/rust-cache@v2/);
+    assert.match(release, /mozilla-actions\/sccache-action@v0\.0\.11/);
+    assert.match(release, /Swatinem\/rust-cache@v2\.9\.2/);
     assert.match(release, /cache-targets: false/);
+    assert.match(release, /add-job-id-key: false/);
+    assert.match(release, /add-rust-environment-hash-key: false/);
     assert.match(release, /RUSTC_WRAPPER: sccache/);
-    assert.match(release, /shared-key: uniffi-\$\{\{ matrix\.target\.cargo \}\}/);
-    assert.match(release, /shared-key: binary-\$\{\{ matrix\.target\.cargo \}\}/);
+    assert.equal(
+      release.match(/shared-key: release-\$\{\{ matrix\.target\.cargo \}\}/g)?.length,
+      2,
+    );
     assert.match(
       release,
       /shared-key: cargo-publish[\s\S]*Install Linux native dependencies[\s\S]*libdbus-1-dev pkg-config[\s\S]*Publish public crates/,

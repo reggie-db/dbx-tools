@@ -67,7 +67,11 @@ import {
 
 const logger = log.logger("projen:bump");
 const LEVELS = ["patch", "minor", "major"] as const;
+const RELEASE_OSES = ["darwin", "linux", "win32"] as const;
+const RELEASE_ARCHES = ["arm64", "x64"] as const;
 type Level = (typeof LEVELS)[number];
+type ReleaseOs = (typeof RELEASE_OSES)[number];
+type ReleaseArch = (typeof RELEASE_ARCHES)[number];
 
 /** A standalone in-repo project released alongside the root, on its own tag prefix. */
 interface Sibling {
@@ -87,6 +91,10 @@ function parseSibling(value: string, previous: Sibling[]): Sibling[] {
     throw new Error(`--sibling expects <dir>:<tagPrefix>, got "${value}"`);
   }
   return [...previous, { dir: value.slice(0, at), prefix: value.slice(at + 1) }];
+}
+
+function collectValue<T extends string>(value: T, previous: T[]): T[] {
+  return [...previous, value];
 }
 
 function increment(v: Semver, level: Level): Semver {
@@ -174,6 +182,18 @@ program
     parseSibling,
     [] as Sibling[],
   )
+  .addOption(
+    new Option("--os <os>", "release operating system, repeatable; crossed with every --arch")
+      .choices([...RELEASE_OSES])
+      .argParser((value, previous: ReleaseOs[]) => collectValue(value as ReleaseOs, previous))
+      .default([] as ReleaseOs[]),
+  )
+  .addOption(
+    new Option("--arch <arch>", "release CPU architecture, repeatable; crossed with every --os")
+      .choices([...RELEASE_ARCHES])
+      .argParser((value, previous: ReleaseArch[]) => collectValue(value as ReleaseArch, previous))
+      .default([] as ReleaseArch[]),
+  )
   // Declared in the `--no-` form so commander creates a boolean that defaults to
   // `true` and is turned off by `--no-synth` / `--no-version` / ... (the
   // positive `--synth` etc. also work and are no-ops on the default).
@@ -200,6 +220,8 @@ program
       level: Level;
       prefix: string;
       sibling: Sibling[];
+      os: ReleaseOs[];
+      arch: ReleaseArch[];
       synth: boolean;
       version: boolean;
       commit: boolean;
@@ -212,6 +234,9 @@ program
     }) => {
       const pkgPath = resolve(process.cwd(), "package.json");
       if (!existsSync(pkgPath)) throw new Error(`no package.json in ${process.cwd()}`);
+      if ((opts.os.length === 0) !== (opts.arch.length === 0)) {
+        throw new Error("--os and --arch must be used together");
+      }
 
       const siblings = opts.sibling.map((s) => ({ ...s, pkgPath: resolve(s.dir, "package.json") }));
       for (const s of siblings) {
@@ -260,12 +285,19 @@ program
 
       if (opts.synth) {
         logger.info("synthesizing (projen)");
+        const releasePlatforms = opts.os
+          .flatMap((os) => opts.arch.map((arch) => `${os}:${arch}`))
+          .join(",");
         exec.spawnSync("bun", [".projenrc.ts"], {
           cwd: process.cwd(),
           stdout: "inherit",
           stderr: "inherit",
           stdin: "ignore",
           check: true,
+          env: {
+            ...process.env,
+            ...(releasePlatforms ? { DBX_TOOLS_RELEASE_PLATFORMS: releasePlatforms } : {}),
+          },
         });
       }
 

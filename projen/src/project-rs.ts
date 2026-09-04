@@ -142,11 +142,16 @@ const RUST_CACHE_ENV = {
 
 function rustCacheSteps(sharedKey: string): readonly Record<string, unknown>[] {
   return [
-    { name: "Setup sccache", uses: "mozilla-actions/sccache-action@v0.0.9" },
+    { name: "Setup sccache", uses: "mozilla-actions/sccache-action@v0.0.11" },
     {
       name: "Cache Cargo registry",
-      uses: "Swatinem/rust-cache@v2",
-      with: { "cache-targets": false, "shared-key": sharedKey },
+      uses: "Swatinem/rust-cache@v2.9.2",
+      with: {
+        "cache-targets": false,
+        "add-job-id-key": false,
+        "add-rust-environment-hash-key": false,
+        "shared-key": sharedKey,
+      },
     },
   ];
 }
@@ -441,12 +446,12 @@ export class DBXToolsRustWorkspace {
       node.package.addField("private", true);
       node.package.file.addDeletionOverride("publishConfig");
       node.package.addField("description", `Node bindings for ${binding.crateName}`);
-      const releaseTargets = options.releaseTargets ?? UNIFFI_RELEASE_TARGETS;
+      const nativeTargets = releaseTargets(options);
       if (options.release ?? true) {
         node.package.addField(
           "optionalDependencies",
           Object.fromEntries(
-            releaseTargets.map((target) => [
+            nativeTargets.map((target) => [
               `@${string.toSlug(options.scope)}/${directory}-${target.node}`,
               readWorkspaceVersion(project.outdir),
             ]),
@@ -575,7 +580,7 @@ export class DBXToolsRustWorkspace {
           uses: "dtolnay/rust-toolchain@stable",
           with: { targets: "${{ matrix.target.cargo }}" },
         },
-        ...rustCacheSteps("uniffi-${{ matrix.target.cargo }}"),
+        ...rustCacheSteps("release-${{ matrix.target.cargo }}"),
         {
           name: "Install Linux native dependencies",
           if: "${{ matrix.target.os == 'linux' }}",
@@ -616,7 +621,7 @@ export class DBXToolsRustWorkspace {
           uses: "dtolnay/rust-toolchain@stable",
           with: { targets: "${{ matrix.target.cargo }}" },
         },
-        ...rustCacheSteps("binary-${{ matrix.target.cargo }}"),
+        ...rustCacheSteps("release-${{ matrix.target.cargo }}"),
         {
           name: "Install Linux native dependencies",
           if: "${{ matrix.target.os == 'linux' }}",
