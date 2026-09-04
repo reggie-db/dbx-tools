@@ -1,14 +1,13 @@
 /**
- * `dbx auth` Commander program for Databricks user-to-machine OAuth.
+ * `dbx auth` Commander program for Databricks OAuth.
  *
  * The command delegates profile resolution, browser OAuth, token refresh,
- * locking, and credential storage to `@dbx-tools/auth-u2m`.
+ * locking, and credential storage to `@dbx-tools/databricks-auth`.
  *
  * @module
  */
 
-import * as authPostgres from "@dbx-tools/auth-u2m/postgres";
-import * as authRuntime from "@dbx-tools/auth-u2m/runtime";
+import { bindings as authBindings, postgres as authPostgres } from "@dbx-tools/databricks-auth";
 import { string as sharedString } from "@dbx-tools/shared-core";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 import { Pool } from "pg";
@@ -22,6 +21,8 @@ interface AuthCliOptions {
   workspaceId?: string;
   configFile?: string;
   clientId?: string;
+  groupId?: string;
+  authType?: string;
   scopes?: string[];
   target?: string;
   storage: StorageName;
@@ -31,6 +32,7 @@ interface AuthCliOptions {
   lockTimeoutSeconds: string;
   loginTimeoutSeconds: string;
   refreshBufferSeconds: string;
+  preferUserToMachine: boolean;
 }
 
 interface TokenCommandOptions {
@@ -39,23 +41,24 @@ interface TokenCommandOptions {
 }
 
 interface AuthContext {
-  auth: authRuntime.PersistentAuthLike;
-  bindings: authRuntime.U2mBindings;
+  auth: authBindings.PersistentAuthLike;
   close(): Promise<void>;
   storage?: StorageName;
 }
 
 interface AuthCliDependencies {
+  createPersistentAuth: typeof authBindings.createPersistentAuth;
+  createPersistentAuthWithStorage: typeof authBindings.createPersistentAuthWithStorage;
   createPostgresPool(connectionString: string): Pool;
   createPostgresStorage: typeof authPostgres.createStorage;
-  loadBindings: typeof authRuntime.loadBindings;
   writeJson(value: unknown): void;
 }
 
 const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
+  createPersistentAuth: authBindings.createPersistentAuth,
+  createPersistentAuthWithStorage: authBindings.createPersistentAuthWithStorage,
   createPostgresPool: (connectionString) => new Pool({ connectionString }),
   createPostgresStorage: authPostgres.createStorage,
-  loadBindings: authRuntime.loadBindings,
   writeJson: (value) => {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   },
@@ -77,53 +80,46 @@ function parseInteger(value: string | bigint, name: string, signed: boolean): bi
 }
 
 /** Translate the CLI storage name to the generated UniFFI enum. */
-function bindingStorage(
-  bindings: authRuntime.U2mBindings,
-  storage: Exclude<StorageName, "postgres">,
-): number {
+function bindingStorage(storage: Exclude<StorageName, "postgres">): authBindings.Storage {
   switch (storage) {
     case "auto":
-      return bindings.Storage.Auto;
+      return authBindings.Storage.Auto;
     case "memory":
-      return bindings.Storage.Memory;
+      return authBindings.Storage.Memory;
     case "file":
-      return bindings.Storage.File;
+      return authBindings.Storage.File;
     case "keyring":
-      return bindings.Storage.Keyring;
+      return authBindings.Storage.Keyring;
   }
 }
 
 /** Translate the generated UniFFI enum to the CLI status value. */
-function storageName(
-  bindings: authRuntime.U2mBindings,
-  storage: number,
-): Exclude<StorageName, "postgres"> {
+function storageName(storage: authBindings.Storage): Exclude<StorageName, "postgres"> {
   switch (storage) {
-    case bindings.Storage.Auto:
+    case authBindings.Storage.Auto:
       return "auto";
-    case bindings.Storage.Memory:
+    case authBindings.Storage.Memory:
       return "memory";
-    case bindings.Storage.File:
+    case authBindings.Storage.File:
       return "file";
-    case bindings.Storage.Keyring:
+    case authBindings.Storage.Keyring:
       return "keyring";
     default:
-      throw new Error(`Unknown U2M storage value: ${storage}`);
+      throw new Error(`Unknown Databricks auth storage value: ${storage}`);
   }
 }
 
 /** Build the generated options record from parsed Commander values. */
-function bindingOptions(
-  bindings: authRuntime.U2mBindings,
-  options: AuthCliOptions,
-): authRuntime.U2mOptions {
-  return bindings.U2mOptions.create({
+function bindingOptions(options: AuthCliOptions): authBindings.DatabricksAuthOptions {
+  return authBindings.DatabricksAuthOptions.create({
     profile: options.profile,
     host: options.host,
     accountId: options.accountId,
     workspaceId: options.workspaceId,
     configFile: options.configFile,
     clientId: options.clientId,
+    groupId: options.groupId,
+    authType: options.authType,
     scopes: options.scopes?.length ? options.scopes : undefined,
     target: options.target,
     cacheDir: options.cacheDir,
@@ -139,6 +135,7 @@ function bindingOptions(
       "--refresh-buffer-seconds",
       true,
     ),
+    preferUserToMachine: options.preferUserToMachine,
   });
 }
 
@@ -147,15 +144,10 @@ async function openAuth(
   options: AuthCliOptions,
   dependencies: AuthCliDependencies,
 ): Promise<AuthContext> {
-  const bindings = await dependencies.loadBindings();
-  const u2mOptions = bindingOptions(bindings, options);
+  const authOptions = bindingOptions(options);
   if (options.storage !== "postgres" && options.postgresUrl === undefined) {
     return {
-      auth: await bindings.createPersistentAuth(
-        u2mOptions,
-        bindingStorage(bindings, options.storage),
-      ),
-      bindings,
+      auth: await dependencies.createPersistentAuth(authOptions, bindingStorage(options.storage)),
       close: async () => {},
     };
   }
@@ -167,13 +159,12 @@ async function openAuth(
 
   const pool = dependencies.createPostgresPool(options.postgresUrl);
   try {
-    const auth = await bindings.createPersistentAuthWithStorage(
-      u2mOptions,
+    const auth = await dependencies.createPersistentAuthWithStorage(
+      authOptions,
       dependencies.createPostgresStorage(pool),
     );
     return {
       auth,
-      bindings,
       storage: "postgres",
       close: async () => {
         await pool.end();
@@ -200,7 +191,7 @@ async function withAuth(
 }
 
 /** Shape a generated token record for stable CLI JSON output. */
-function tokenJson(token: authRuntime.AccessToken): Record<string, unknown> {
+function tokenJson(token: authBindings.AccessToken): Record<string, unknown> {
   return {
     access_token: token.accessToken,
     token_type: token.tokenType,
@@ -226,6 +217,14 @@ function addCommonOptions(program: Command): Command {
       new Option("--config-file <path>", "Databricks config file").env("DATABRICKS_CONFIG_FILE"),
     )
     .addOption(new Option("--client-id <id>", "OAuth client id").env("DATABRICKS_CLIENT_ID"))
+    .addOption(
+      new Option("--group-id <id>", "Assumed Databricks group id").env("DATABRICKS_GROUP_ID"),
+    )
+    .addOption(
+      new Option("--auth-type <type>", "Databricks authentication type")
+        .choices(["databricks-cli", "oauth-m2m"])
+        .env("DATABRICKS_AUTH_TYPE"),
+    )
     .addOption(
       new Option("--scopes <scopes>", "OAuth scopes, repeatable or comma-separated").argParser(
         collectScopes,
@@ -270,6 +269,10 @@ function addCommonOptions(program: Command): Command {
       new Option("--refresh-buffer-seconds <seconds>", "Token refresh buffer")
         .default("300")
         .env("DBX_TOOLS_U2M_REFRESH_BUFFER_SECONDS"),
+    )
+    .option(
+      "--no-prefer-user-to-machine",
+      "Use selected M2M credentials without preferring a matching user profile",
     );
 }
 
@@ -282,14 +285,14 @@ export function buildProgram(
   const program = addCommonOptions(
     new Command()
       .name(name)
-      .description("Authenticate to Databricks with browser-based user OAuth")
+      .description("Authenticate to Databricks with user or machine OAuth")
       .showHelpAfterError(),
   );
   const options = (): AuthCliOptions => program.opts<AuthCliOptions>();
 
   program
     .command("login")
-    .description("Run browser OAuth and return an access token")
+    .description("Authenticate and return an access token")
     .action(async () => {
       await withAuth(options(), dependencies, async ({ auth }) => {
         dependencies.writeJson(tokenJson(await auth.token(true)));
@@ -330,7 +333,7 @@ export function buildProgram(
         dependencies.writeJson({
           profile: status.profile,
           host: status.host,
-          storage: context.storage ?? storageName(context.bindings, status.storage),
+          storage: context.storage ?? storageName(status.storage),
         });
       });
     });

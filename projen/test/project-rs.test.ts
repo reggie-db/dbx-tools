@@ -16,9 +16,9 @@ let outdir: string;
 before(() => {
   process.env.PROJEN_DISABLE_POST = "1";
   outdir = mkdtempSync(join(tmpdir(), "project-rs-"));
-  mkdirSync(join(outdir, "packages/rs/auth-u2m/src"), { recursive: true });
+  mkdirSync(join(outdir, "packages/rs/databricks-auth/src"), { recursive: true });
   writeFileSync(
-    join(outdir, "packages/rs/auth-u2m/src/lib.rs"),
+    join(outdir, "packages/rs/databricks-auth/src/lib.rs"),
     "pub fn value() {}\nuniffi::setup_scaffolding!();\n",
   );
   mkdirSync(join(outdir, "packages/rs/tool/src"), { recursive: true });
@@ -277,11 +277,10 @@ describe("DBXToolsRustWorkspace", () => {
         { os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 },
       ],
       packages: {
-        "auth-u2m": {
+        "databricks-auth": {
           dependencies: { uniffi: "0.31" },
           nodeDependencies: ["pg@^8"],
           nodeDevDependencies: ["@types/pg@^8"],
-          nodeExports: { "./runtime": "./src/runtime.ts" },
         },
         tool: {
           release: true,
@@ -290,44 +289,44 @@ describe("DBXToolsRustWorkspace", () => {
     });
     project.synth();
 
-    assert.equal(rust.packages[0]?.crateName, "fixture-auth-u2m");
+    assert.equal(rust.packages[0]?.crateName, "fixture-databricks-auth");
     assert.equal(rust.pythonPackages.length, 1);
-    assert.equal(rust.pythonPackages[0]?.name, "fixture-auth-u2m");
-    assert.equal(rust.pythonPackages[0]?.module, "fixture.auth_u2m");
+    assert.equal(rust.pythonPackages[0]?.name, "fixture-databricks-auth");
+    assert.equal(rust.pythonPackages[0]?.module, "fixture.databricks_auth");
     assert.equal(rust.pythonPackages[0]?.private, true);
     assert.deepEqual(rust.pythonPackages[0]?.generatedSources, [
-      "src/fixture/auth_u2m/bindings.py",
+      "src/fixture/databricks_auth/bindings.py",
     ]);
     assert.deepEqual(rust.pythonPackages[0]?.trustedPublisher, {
       workflowName: "rust-release",
-      environment: "pypi-fixture-auth-u2m",
+      environment: "pypi-fixture-databricks-auth",
       artifacts:
         "platform-specific wheels for darwin-arm64, linux-x64; all architectures publish to this one PyPI project",
     });
     assert.deepEqual(rust.workspaceMapping, {
       root: "packages/rs",
-      crates: ["packages/rs/auth-u2m", "packages/rs/tool"],
+      crates: ["packages/rs/databricks-auth", "packages/rs/tool"],
       bindings: [
         {
-          crate: "fixture-auth-u2m",
-          rust: "packages/rs/auth-u2m",
-          node: "packages/js/node/auth-u2m",
-          nodePackage: "@fixture/auth-u2m",
-          python: "packages/py/auth-u2m",
-          pythonPackage: "fixture-auth-u2m",
-          pythonModule: "fixture.auth_u2m",
+          crate: "fixture-databricks-auth",
+          rust: "packages/rs/databricks-auth",
+          node: "packages/js/node/databricks-auth",
+          nodePackage: "@fixture/databricks-auth",
+          python: "packages/py/databricks-auth",
+          pythonPackage: "fixture-databricks-auth",
+          pythonModule: "fixture.databricks_auth",
         },
       ],
       releaseWorkflow: "rust-release",
     });
     assert.deepEqual(project.dbxToolsConfig.rust, rust.workspaceMapping);
     assert.match(
-      readFileSync(join(outdir, "packages/rs/auth-u2m/Cargo.toml"), "utf8"),
+      readFileSync(join(outdir, "packages/rs/databricks-auth/Cargo.toml"), "utf8"),
       /crate-type = \["lib", "cdylib"\]/,
     );
     assert.match(readFileSync(join(outdir, "Cargo.toml"), "utf8"), /rust-version = "1\.82"/);
     const node = JSON.parse(
-      readFileSync(join(outdir, "packages/js/node/auth-u2m/package.json"), "utf8"),
+      readFileSync(join(outdir, "packages/js/node/databricks-auth/package.json"), "utf8"),
     ) as {
       name: string;
       private: boolean;
@@ -339,19 +338,29 @@ describe("DBXToolsRustWorkspace", () => {
         exports: Record<string, { types: string; default: string }>;
       };
     };
-    assert.equal(node.name, "@fixture/auth-u2m");
+    assert.equal(node.name, "@fixture/databricks-auth");
     assert.equal(node.private, true);
     assert.equal("pg" in node.dependencies, true);
     assert.equal("@types/pg" in node.devDependencies, true);
-    assert.equal("@fixture/auth-u2m-darwin-arm64" in node.optionalDependencies, true);
-    assert.equal("@fixture/auth-u2m-linux-x64-gnu" in node.optionalDependencies, true);
-    assert.equal("@fixture/auth-u2m-darwin-x64" in node.optionalDependencies, false);
-    assert.equal(node.exports["./runtime"], "./src/runtime.ts");
-    assert.equal(node.publishConfig.exports["./runtime"]?.default, "./lib/src/runtime.js");
+    assert.equal("@fixture/databricks-auth-darwin-arm64" in node.optionalDependencies, true);
+    assert.equal("@fixture/databricks-auth-linux-x64-gnu" in node.optionalDependencies, true);
+    assert.equal("@fixture/databricks-auth-darwin-x64" in node.optionalDependencies, false);
+    assert.deepEqual(node.exports, { ".": "./index.ts", "./package.json": "./package.json" });
+    assert.deepEqual(Object.keys(node.publishConfig.exports), [".", "./package.json"]);
     const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8");
+    const prettierignore = readFileSync(join(outdir, ".prettierignore"), "utf8");
     assert.match(gitignore, /^target\/$/m);
-    assert.match(gitignore, /^packages\/js\/node\/auth-u2m\/src\/bindings\.ts$/m);
-    assert.match(gitignore, /^packages\/py\/auth-u2m\/src\/fixture\/auth_u2m\/bindings\.py$/m);
+    assert.doesNotMatch(gitignore, /^packages\/js\/node\/databricks-auth\/src\/bindings\.ts$/m);
+    assert.match(
+      gitignore,
+      /^packages\/js\/node\/databricks-auth\/src\/\*fixture_databricks_auth\.\*$/m,
+    );
+    assert.match(prettierignore, /^packages\/js\/node\/databricks-auth\/src\/bindings\.ts$/m);
+    assert.match(prettierignore, /^packages\/js\/node\/databricks-auth\/src\/_bindings\*\.ts$/m);
+    assert.match(
+      gitignore,
+      /^packages\/py\/databricks-auth\/src\/fixture\/databricks_auth\/bindings\.py$/m,
+    );
     const release = readFileSync(join(outdir, ".github/workflows/rust-release.yml"), "utf8");
     const dispatcher = readFileSync(join(outdir, ".github/workflows/release-dispatch.yml"), "utf8");
     const tasks = readFileSync(join(outdir, ".projen/tasks.json"), "utf8");
@@ -378,7 +387,7 @@ describe("DBXToolsRustWorkspace", () => {
       /test "\$\(git rev-parse "\$RELEASE_TAG\^\{commit\}"\)" = "\$EXPECTED_SHA"/,
     );
     assert.match(release, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
-    assert.match(release, /fixture-auth-u2m/);
+    assert.match(release, /fixture-databricks-auth/);
     assert.match(release, /linux-x64-gnu/);
     assert.match(release, /darwin-arm64/);
     assert.doesNotMatch(release, /linux-arm64-gnu/);
@@ -441,21 +450,24 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /uses: actions\/cache\/save@v5/);
     assert.match(release, /key: \$\{\{ steps\.ubrn_cache\.outputs\.cache-primary-key \}\}/);
     assert.match(release, /name: Package release binaries/);
-    assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.node \}\}-npm/);
-    assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.python \}\}-python-wheel/);
-    assert.match(release, /name: fixture-tool-\$\{\{ matrix\.target\.node \}\}-binary/);
-    assert.match(release, /Publish Python wheels/);
-    assert.match(release, /name: pypi-fixture-auth-u2m/);
+    assert.match(release, /name: fixture-databricks-auth-\$\{\{ matrix\.target\.node \}\}-npm/);
     assert.match(
       release,
-      /cargo publish --package "fixture-auth-u2m" --registry crates-io --no-verify/,
+      /name: fixture-databricks-auth-\$\{\{ matrix\.target\.python \}\}-python-wheel/,
+    );
+    assert.match(release, /name: fixture-tool-\$\{\{ matrix\.target\.node \}\}-binary/);
+    assert.match(release, /Publish Python wheels/);
+    assert.match(release, /name: pypi-fixture-databricks-auth/);
+    assert.match(
+      release,
+      /cargo publish --package "fixture-databricks-auth" --registry crates-io --no-verify/,
     );
     assert.match(
       release,
       /cargo publish --package "fixture-tool" --registry crates-io --no-verify/,
     );
     const artifactPublisher = release.match(
-      /^  publish-fixture-auth-u2m:[\s\S]*?(?=^  publish-cargo:)/m,
+      /^  publish-fixture-databricks-auth:[\s\S]*?(?=^  publish-cargo:)/m,
     )?.[0];
     assert.ok(artifactPublisher);
     assert.doesNotMatch(artifactPublisher, /Checkout|Setup Bun|bun install|Setup Rust/);
@@ -506,6 +518,12 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
     assert.match(packager, /resolve\(root, "node_modules\/typescript\/bin\/tsc"\)/);
     assert.match(packager, /Object\.assign\(manifest, compiledPublish\)/);
+    assert.match(packager, /uniffi-facade-install-/);
+    assert.match(packager, /facadePackage: singlePackage\(facadeOutput\)/);
+    assert.match(
+      packager,
+      /run\("node", \["-e", `import\(\$\{JSON\.stringify\(nodePackage\)\}\)`\]/,
+    );
     assert.match(
       packager,
       /parsed\.values\.ubrn \? \["--ubrn", parsed\.values\.ubrn, "--skip-barrels"\] : \[\]/,
@@ -521,7 +539,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(nodeGenerator, /if \(!values\["skip-barrels"\]\)/);
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(
-      readFileSync(join(outdir, "packages/js/node/auth-u2m/exports.ts"), "utf8"),
+      readFileSync(join(outdir, "packages/js/node/databricks-auth/exports.ts"), "utf8"),
       'export * from "./src/bindings.ts";\n',
     );
   });

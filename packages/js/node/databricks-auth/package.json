@@ -1,10 +1,10 @@
 {
-  "name": "@dbx-tools/auth-u2m",
-  "description": "Node bindings for dbx-tools-auth-u2m",
+  "name": "@dbx-tools/databricks-auth",
+  "description": "Node bindings for dbx-tools-databricks-auth",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
-    "directory": "packages/js/node/auth-u2m"
+    "directory": "packages/js/node/databricks-auth"
   },
   "scripts": {
     "build": "projen build",
@@ -42,24 +42,14 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       },
-      "./postgres": {
-        "types": "./lib/src/postgres.d.ts",
-        "default": "./lib/src/postgres.js"
-      },
-      "./runtime": {
-        "types": "./lib/src/runtime.d.ts",
-        "default": "./lib/src/runtime.js"
-      },
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.164",
+  "version": "0.6.165",
   "types": "index.ts",
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./postgres": "./src/postgres.ts",
-    "./runtime": "./src/runtime.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -69,11 +59,11 @@
   ],
   "private": true,
   "optionalDependencies": {
-    "@dbx-tools/auth-u2m-linux-x64-gnu": "0.6.164",
-    "@dbx-tools/auth-u2m-linux-arm64-gnu": "0.6.164",
-    "@dbx-tools/auth-u2m-darwin-x64": "0.6.164",
-    "@dbx-tools/auth-u2m-darwin-arm64": "0.6.164",
-    "@dbx-tools/auth-u2m-win32-x64-msvc": "0.6.164"
+    "@dbx-tools/databricks-auth-linux-x64-gnu": "0.6.165",
+    "@dbx-tools/databricks-auth-linux-arm64-gnu": "0.6.165",
+    "@dbx-tools/databricks-auth-darwin-x64": "0.6.165",
+    "@dbx-tools/databricks-auth-darwin-arm64": "0.6.165",
+    "@dbx-tools/databricks-auth-win32-x64-msvc": "0.6.165"
   },
   "dbxToolsConfig": {
     "tags": [

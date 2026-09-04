@@ -1,23 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type {
-  AccessToken,
-  PersistentAuthLike,
-  StorageAdapter,
-  U2mBindings,
-  U2mOptions,
-} from "@dbx-tools/auth-u2m/runtime";
+import {
+  Storage,
+  type AccessToken,
+  type DatabricksAuthOptions,
+  type PersistentAuthLike,
+  type StorageAdapter,
+} from "@dbx-tools/databricks-auth";
 import type { Pool } from "pg";
 
 import { buildProgram } from "../src/cli.ts";
-
-const STORAGE = {
-  Auto: 1,
-  Memory: 2,
-  File: 3,
-  Keyring: 4,
-} as const;
 
 const TOKEN: AccessToken = {
   accessToken: "access",
@@ -43,38 +36,12 @@ function fakeAuth(calls: string[]): PersistentAuthLike {
       return {
         profile: "TEST",
         host: "https://example.cloud.databricks.com",
-        storage: STORAGE.Keyring,
+        storage: Storage.Keyring,
       };
     },
     async token(login) {
       calls.push(`token:${String(login)}`);
       return TOKEN;
-    },
-  };
-}
-
-function fakeBindings(
-  calls: string[],
-  createPersistentAuth?: (options: U2mOptions, storage?: number) => void,
-  createPersistentAuthWithStorage?: (options: U2mOptions, storage: StorageAdapter) => void,
-): U2mBindings {
-  return {
-    U2mOptions: {
-      create: (options = {}) => ({
-        lockTimeoutSeconds: 30n,
-        loginTimeoutSeconds: 3600n,
-        refreshBufferSeconds: 300n,
-        ...options,
-      }),
-    },
-    Storage: STORAGE,
-    async createPersistentAuth(options, storage) {
-      createPersistentAuth?.(options, storage);
-      return fakeAuth(calls);
-    },
-    async createPersistentAuthWithStorage(options, storage) {
-      createPersistentAuthWithStorage?.(options, storage);
-      return fakeAuth(calls);
     },
   };
 }
@@ -92,7 +59,7 @@ describe("auth CLI", () => {
       const calls: string[] = [];
       const output: unknown[] = [];
       await buildProgram("dbx auth", {
-        loadBindings: async () => fakeBindings(calls),
+        createPersistentAuth: async () => fakeAuth(calls),
         writeJson: (value) => output.push(value),
       }).parseAsync(testCase.args, { from: "user" });
 
@@ -111,14 +78,14 @@ describe("auth CLI", () => {
   it("routes logout and status through PersistentAuth", async () => {
     const logoutCalls: string[] = [];
     await buildProgram("dbx auth", {
-      loadBindings: async () => fakeBindings(logoutCalls),
+      createPersistentAuth: async () => fakeAuth(logoutCalls),
     }).parseAsync(["logout"], { from: "user" });
     assert.deepEqual(logoutCalls, ["logout"]);
 
     const statusCalls: string[] = [];
     const output: unknown[] = [];
     await buildProgram("dbx auth", {
-      loadBindings: async () => fakeBindings(statusCalls),
+      createPersistentAuth: async () => fakeAuth(statusCalls),
       writeJson: (value) => output.push(value),
     }).parseAsync(["status"], { from: "user" });
     assert.deepEqual(statusCalls, ["status"]);
@@ -132,15 +99,15 @@ describe("auth CLI", () => {
   });
 
   it("translates common options to the generated binding record", async () => {
-    let capturedOptions: U2mOptions | undefined;
-    let capturedStorage: number | undefined;
+    let capturedOptions: DatabricksAuthOptions | undefined;
+    let capturedStorage: Storage | undefined;
 
     await buildProgram("dbx auth", {
-      loadBindings: async () =>
-        fakeBindings([], (options, storage) => {
-          capturedOptions = options;
-          capturedStorage = storage;
-        }),
+      createPersistentAuth: async (options, storage) => {
+        capturedOptions = options;
+        capturedStorage = storage;
+        return fakeAuth([]);
+      },
       writeJson: () => {},
     }).parseAsync(
       [
@@ -148,6 +115,11 @@ describe("auth CLI", () => {
         "TEST",
         "--target",
         "workspace",
+        "--auth-type",
+        "oauth-m2m",
+        "--group-id",
+        "group",
+        "--no-prefer-user-to-machine",
         "--storage",
         "memory",
         "--callback-image-src",
@@ -169,12 +141,15 @@ describe("auth CLI", () => {
 
     assert.equal(capturedOptions?.profile, "TEST");
     assert.equal(capturedOptions?.target, "workspace");
+    assert.equal(capturedOptions?.authType, "oauth-m2m");
+    assert.equal(capturedOptions?.groupId, "group");
+    assert.equal(capturedOptions?.preferUserToMachine, false);
     assert.equal(capturedOptions?.callbackImageSrc, "data:image/svg+xml,logo");
     assert.deepEqual(capturedOptions?.scopes, ["scope-a", "scope-b", "scope-c"]);
     assert.equal(capturedOptions?.lockTimeoutSeconds, 12n);
     assert.equal(capturedOptions?.loginTimeoutSeconds, 34n);
     assert.equal(capturedOptions?.refreshBufferSeconds, -5n);
-    assert.equal(capturedStorage, STORAGE.Memory);
+    assert.equal(capturedStorage, Storage.Memory);
   });
 
   it("uses the Node Postgres adapter and closes the owned pool", async () => {
@@ -195,10 +170,10 @@ describe("auth CLI", () => {
         calls.push("storage:create");
         return {} as StorageAdapter;
       },
-      loadBindings: async () =>
-        fakeBindings(calls, undefined, () => {
-          calls.push("auth:create-postgres");
-        }),
+      createPersistentAuthWithStorage: async () => {
+        calls.push("auth:create-postgres");
+        return fakeAuth(calls);
+      },
       writeJson: (value) => output.push(value),
     }).parseAsync(
       ["--postgres-url", "postgresql://localhost/auth", "--storage", "postgres", "status"],

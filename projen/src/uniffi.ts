@@ -36,6 +36,14 @@ export interface TypeScriptBindingModule {
   readonly source: string;
 }
 
+/** Add source extensions to UBRN's generated relative binding imports. */
+export const addTypeScriptExtensionsToBindingImports = (source: string): string =>
+  source.replace(
+    /(["'])\.\/_bindings(-ffi)?\1/g,
+    (_specifier, quote: string, suffix: string | undefined) =>
+      `${quote}./_bindings${suffix ?? ""}.ts${quote}`,
+  );
+
 /** Add explicit type exports for interfaces that TypeScript misses through UBRN's star exports. */
 export const addExplicitInterfaceReexports = (
   facade: string,

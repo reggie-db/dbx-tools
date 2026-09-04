@@ -2,10 +2,10 @@ import asyncio
 import json
 import sys
 
-from dbx_tools.auth_u2m import U2mOptions, create_persistent_auth
+from dbx_tools.databricks_auth.bindings import DatabricksAuthOptions, create_persistent_auth
 
 profile = sys.argv[1] if len(sys.argv) > 1 else None
-options = U2mOptions(profile=profile)
+options = DatabricksAuthOptions(profile=profile)
 
 print(
     json.dumps(

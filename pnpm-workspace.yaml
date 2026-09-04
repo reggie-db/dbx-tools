@@ -12,9 +12,9 @@ packages:
   - packages/js/node/appkit-mastra
   - packages/js/node/appkit-web-search
   - packages/js/node/auth
-  - packages/js/node/auth-u2m
   - packages/js/node/core
   - packages/js/node/databricks
+  - packages/js/node/databricks-auth
   - packages/js/node/databricks-zerobus
   - packages/js/node/email
   - packages/js/node/fs

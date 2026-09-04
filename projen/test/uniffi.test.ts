@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   addExplicitInterfaceReexports,
+  addTypeScriptExtensionsToBindingImports,
   makeDefaultedInterfaceParametersOptional,
 } from "../src/uniffi.ts";
 
@@ -17,6 +18,25 @@ export class Auth implements AuthLike {
     assert.match(
       makeDefaultedInterfaceParametersOptional(source),
       /token\(login\?: boolean \| undefined, asyncOpts_\?:/,
+    );
+  });
+
+  it("adds TypeScript extensions to generated relative binding imports", () => {
+    const source = [
+      "export * from './_bindings';",
+      'import bindings from "./_bindings";',
+      "import ffi from './_bindings-ffi';",
+      "import existing from './_bindings.ts';",
+    ].join("\n");
+
+    assert.equal(
+      addTypeScriptExtensionsToBindingImports(source),
+      [
+        "export * from './_bindings.ts';",
+        'import bindings from "./_bindings.ts";',
+        "import ffi from './_bindings-ffi.ts';",
+        "import existing from './_bindings.ts';",
+      ].join("\n"),
     );
   });
 

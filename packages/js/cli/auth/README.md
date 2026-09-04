@@ -1,14 +1,18 @@
 # `@dbx-tools/cli-auth`
 
-Databricks browser OAuth commands mounted under `dbx auth`.
+Databricks OAuth commands mounted under `dbx auth`.
 
-The package uses the generated [`@dbx-tools/auth-u2m`](../../node/auth-u2m)
-bindings for profile resolution, browser authorization, token refresh, locking,
-and credential storage.
+The package uses the generated
+[`@dbx-tools/databricks-auth`](../../node/databricks-auth) bindings for profile
+resolution, U2M browser authorization, M2M client credentials, token refresh,
+locking, and credential storage.
 
 Key features:
 
 - browser login for workspace, account, and unified OAuth targets;
+- M2M client-credentials tokens with HTTP Basic client authentication;
+- U2M preference by default, with standard M2M resolution available through
+  `--no-prefer-user-to-machine`;
 - secure keyring storage by default, with file, memory, and Postgres options;
 - access-token lookup, optional login, and forced refresh;
 - profile and host resolution compatible with Databricks configuration;
@@ -28,7 +32,8 @@ dbx auth logout --profile DEFAULT
 
 `login` and `token` write access-token JSON to stdout. `status` writes the
 resolved profile, host, and storage name. `logout` produces no output when it
-succeeds.
+succeeds. `token` mints an M2M token when no cached token exists; U2M requires
+`login` or `--login-if-missing`.
 
 ## Common options
 
@@ -37,6 +42,9 @@ succeeds.
 - `--account-id <id>` and `--workspace-id <id>` provide target identifiers.
 - `--config-file <path>` selects the Databricks configuration file.
 - `--client-id <id>` selects the OAuth client.
+- `--group-id <id>` requests an assumed group role for M2M.
+- `--auth-type databricks-cli|oauth-m2m` selects the auth strategy.
+- `--no-prefer-user-to-machine` keeps an implicitly selected M2M profile.
 - `--scopes <scopes>` accepts a comma-separated value and may be repeated.
 - `--target workspace|account|unified` selects the OAuth target.
 - `--storage auto|memory|file|keyring|postgres` selects credential storage.
@@ -49,6 +57,9 @@ succeeds.
 The Databricks options also read their standard `DATABRICKS_*` environment
 variables. U2M storage and timeout options read the matching
 `DBX_TOOLS_U2M_*` variables shown by `dbx auth --help`.
+M2M reads `client_id` and `client_secret` from the selected profile or their
+standard Databricks environment variables. The secret is not accepted as a CLI
+argument or included in generated binding records.
 
 ## Postgres storage
 
@@ -61,9 +72,9 @@ dbx auth \
 ```
 
 The CLI creates a `pg.Pool`, passes it to
-`@dbx-tools/auth-u2m`'s `postgres.createStorage`, and closes the pool after the
-command. The database role needs permission to create and modify the
-`dbx_tools_auth_u2m_tokens` table and use advisory locks.
+`@dbx-tools/databricks-auth`'s `postgres.createStorage`, and closes the pool
+after the command. The database role needs permission to create and modify the
+credential table and use advisory locks.
 
 ## Package use
 
@@ -77,11 +88,9 @@ await cli.buildProgram().parseAsync(["status"], { from: "user" });
 ```
 
 Applications that need programmatic OAuth should import
-[`@dbx-tools/auth-u2m`](../../node/auth-u2m) directly.
+[`@dbx-tools/databricks-auth`](../../node/databricks-auth) directly.
 
 ## Modules
 
 - `cli` - Commander program, option translation, command routing, and JSON
   output.
-
-# replace this

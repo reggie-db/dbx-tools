@@ -74,7 +74,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.164",
+  "version": "0.6.165",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -89,9 +89,9 @@
     "packages/js/node/appkit-mastra",
     "packages/js/node/appkit-web-search",
     "packages/js/node/auth",
-    "packages/js/node/auth-u2m",
     "packages/js/node/core",
     "packages/js/node/databricks",
+    "packages/js/node/databricks-auth",
     "packages/js/node/databricks-zerobus",
     "packages/js/node/email",
     "packages/js/node/fs",
@@ -184,17 +184,17 @@
     "rust": {
       "root": "packages/rs",
       "crates": [
-        "packages/rs/auth-u2m"
+        "packages/rs/databricks-auth"
       ],
       "bindings": [
         {
-          "crate": "dbx-tools-auth-u2m",
-          "rust": "packages/rs/auth-u2m",
-          "node": "packages/js/node/auth-u2m",
-          "nodePackage": "@dbx-tools/auth-u2m",
-          "python": "packages/py/auth-u2m",
-          "pythonPackage": "dbx-tools-auth-u2m",
-          "pythonModule": "dbx_tools.auth_u2m"
+          "crate": "dbx-tools-databricks-auth",
+          "rust": "packages/rs/databricks-auth",
+          "node": "packages/js/node/databricks-auth",
+          "nodePackage": "@dbx-tools/databricks-auth",
+          "python": "packages/py/databricks-auth",
+          "pythonPackage": "dbx-tools-databricks-auth",
+          "pythonModule": "dbx_tools.databricks_auth"
         }
       ],
       "releaseWorkflow": "rust-release"

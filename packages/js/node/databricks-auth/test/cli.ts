@@ -4,7 +4,7 @@ import { bindings, postgres } from "../index.ts";
 
 const address = process.argv[2];
 if (!address || process.argv.length > 3) {
-  console.error("usage: bun run packages/js/node/auth-u2m/test/cli.ts <postgres-host:port>");
+  console.error("usage: bun run packages/js/node/databricks-auth/test/cli.ts <postgres-host:port>");
   process.exit(2);
 }
 
@@ -16,7 +16,7 @@ if (!host || separator < 1 || !Number.isInteger(port) || port < 1 || port > 6553
   process.exit(2);
 }
 
-const options = bindings.U2mOptions.create({});
+const options = bindings.DatabricksAuthOptions.create({});
 const pool = new Pool({
   host,
   port,

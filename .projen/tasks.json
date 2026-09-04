@@ -301,7 +301,7 @@
       "description": "Generate and run UniFFI Node and Python example CLIs",
       "steps": [
         {
-          "exec": "bun run rs:bindings && bun packages/js/node/auth-u2m/test/cli.ts && uv run --project packages/py/auth-u2m packages/py/auth-u2m/test/cli.py"
+          "exec": "bun run rs:bindings && bun packages/js/node/databricks-auth/test/cli.ts && uv run --project packages/py/databricks-auth packages/py/databricks-auth/test/cli.py"
         }
       ]
     },

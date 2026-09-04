@@ -20,7 +20,7 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/auth-u2m",
+      "name": "@dbx-tools/databricks-auth",
       "version": "workspace:*",
       "type": "runtime"
     },

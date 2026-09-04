@@ -76,15 +76,22 @@ Primary package areas:
   to be a separate `shared-sdk-model` package with exactly one consumer.
 - `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
   Serving endpoint selection and shared schemas/classification.
-- `packages/rs/auth-u2m`, `packages/js/node/auth-u2m`,
-  `packages/py/auth-u2m`, and `packages/js/cli/auth` - Databricks browser OAuth,
-  secure refresh-token storage, generated Node/Python bindings, and the
-  `dbx auth` Commander interface. The CLI delegates OAuth, profile resolution,
-  refresh, locking, and storage to the Node binding package. It must not
-  reproduce that behavior in TypeScript. Node consumers load the generated
-  native module through `@dbx-tools/auth-u2m/runtime`; the stable subpath keeps
-  generated source out of consumer type-checking and resolves `.ts` in a
-  workspace or compiled `.js` from an installed package. `OAuthTemplate`
+- `packages/rs/databricks-auth`, `packages/js/node/databricks-auth`,
+  `packages/py/databricks-auth`, and `packages/js/cli/auth` - Databricks U2M and
+  M2M OAuth, secure token storage, generated Node/Python bindings, and the
+  `dbx auth` Commander interface. U2M is preferred by default. A profile
+  selected by option or `DATABRICKS_CONFIG_PROFILE` is never remapped. Profiles
+  containing both client ID and secret remain M2M even when `auth_type` is
+  absent; the preference only selects a unique matching U2M profile for an
+  implicit M2M default. M2M uses HTTP Basic client credentials,
+  sorted scopes, optional group assumption, persistent token storage, and the
+  same check-lock-check refresh path. The CLI delegates OAuth, profile
+  resolution, refresh, locking, and storage to the Node binding package.
+  Rust and UniFFI own the complete cross-language contract. Never hand-maintain
+  TypeScript or Python copies of generated records, enums, interfaces, or module
+  shapes. Commit the target-independent generated Node TypeScript and import it
+  from the standard `@dbx-tools/databricks-auth` package root; only native
+  libraries stay ignored. `OAuthTemplate`
   renders the browser callback from a Rust string with dbx tools colors and a
   configurable image source. The crate copies the root brand YAML and light
   logo, embeds the logo as a data URI, and reads fallback styling from the YAML.

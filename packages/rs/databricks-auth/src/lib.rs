@@ -1,6 +1,8 @@
 mod client;
 mod error;
+mod m2m;
 mod oauth;
+mod oauth_endpoints;
 mod oauth_template;
 mod profile;
 mod storage;
@@ -8,10 +10,11 @@ mod token;
 
 pub use client::{AuthClient, AuthOptions};
 pub use error::{Error, Result};
+pub use m2m::MachineToMachineFlow;
 pub use oauth::OAuthFlow;
 pub use oauth_template::{default_callback_image_src, OAuthTemplate, OAuthTemplateContext};
 pub use profile::{
-    resolve_config_file, Profile, ProfileOptions, TargetKind, DEFAULT_ACCOUNTS_HOST,
+    resolve_config_file, AuthKind, Profile, ProfileOptions, TargetKind, DEFAULT_ACCOUNTS_HOST,
     DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE,
 };
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -36,8 +39,9 @@ pub trait StorageAdapter: Send + Sync {
     fn name(&self) -> String;
 }
 
-#[derive(Clone, Default, uniffi::Record)]
-pub struct U2mOptions {
+/// Configuration shared by the generated Node and Python auth bindings.
+#[derive(Clone, uniffi::Record)]
+pub struct DatabricksAuthOptions {
     #[uniffi(default = None)]
     pub profile: Option<String>,
     #[uniffi(default = None)]
@@ -50,6 +54,12 @@ pub struct U2mOptions {
     pub config_file: Option<String>,
     #[uniffi(default = None)]
     pub client_id: Option<String>,
+    /// Optional group role requested by M2M token generation.
+    #[uniffi(default = None)]
+    pub group_id: Option<String>,
+    /// Explicit Databricks authentication strategy.
+    #[uniffi(default = None)]
+    pub auth_type: Option<String>,
     #[uniffi(default = None)]
     pub scopes: Option<Vec<String>>,
     #[uniffi(default = None)]
@@ -65,6 +75,32 @@ pub struct U2mOptions {
     pub login_timeout_seconds: u64,
     #[uniffi(default = 300)]
     pub refresh_buffer_seconds: i64,
+    /// Whether implicit M2M defaults should select one matching U2M profile.
+    #[uniffi(default = true)]
+    pub prefer_user_to_machine: bool,
+}
+
+impl Default for DatabricksAuthOptions {
+    fn default() -> Self {
+        Self {
+            profile: None,
+            host: None,
+            account_id: None,
+            workspace_id: None,
+            config_file: None,
+            client_id: None,
+            group_id: None,
+            auth_type: None,
+            scopes: None,
+            target: None,
+            cache_dir: None,
+            callback_image_src: None,
+            lock_timeout_seconds: 30,
+            login_timeout_seconds: 3600,
+            refresh_buffer_seconds: 300,
+            prefer_user_to_machine: true,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
@@ -84,19 +120,19 @@ pub struct AccessToken {
 }
 
 #[derive(Clone, uniffi::Record)]
-pub struct U2mStatus {
+pub struct DatabricksAuthStatus {
     pub profile: String,
     pub host: String,
     pub storage: Storage,
 }
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
-pub enum U2mError {
+pub enum DatabricksAuthError {
     #[error("{message}")]
     Failure { message: String },
 }
 
-impl From<uniffi::UnexpectedUniFFICallbackError> for U2mError {
+impl From<uniffi::UnexpectedUniFFICallbackError> for DatabricksAuthError {
     fn from(error: uniffi::UnexpectedUniFFICallbackError) -> Self {
         Self::Failure {
             message: error.to_string(),
@@ -104,7 +140,7 @@ impl From<uniffi::UnexpectedUniFFICallbackError> for U2mError {
     }
 }
 
-type BindingResult<T> = std::result::Result<T, U2mError>;
+type BindingResult<T> = std::result::Result<T, DatabricksAuthError>;
 
 #[derive(uniffi::Object)]
 pub struct PersistentAuth {
@@ -113,7 +149,7 @@ pub struct PersistentAuth {
 
 #[uniffi::export(async_runtime = "tokio", default(storage = None))]
 pub async fn create_persistent_auth(
-    options: U2mOptions,
+    options: DatabricksAuthOptions,
     storage: Option<Storage>,
 ) -> BindingResult<Arc<PersistentAuth>> {
     let store = open_binding_store(&options, storage).await?;
@@ -122,14 +158,14 @@ pub async fn create_persistent_auth(
 
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn create_persistent_auth_with_storage(
-    options: U2mOptions,
+    options: DatabricksAuthOptions,
     storage: Arc<dyn StorageAdapter>,
 ) -> BindingResult<Arc<PersistentAuth>> {
     create_persistent_auth_with_store(options, Arc::new(ForeignStore { storage })).await
 }
 
 async fn create_persistent_auth_with_store(
-    options: U2mOptions,
+    options: DatabricksAuthOptions,
     store: Arc<dyn CredentialStore>,
 ) -> BindingResult<Arc<PersistentAuth>> {
     let profile = Profile::from_sources(ProfileOptions {
@@ -138,9 +174,13 @@ async fn create_persistent_auth_with_store(
         account_id: options.account_id.clone(),
         workspace_id: options.workspace_id.clone(),
         client_id: options.client_id.clone(),
+        client_secret: None,
+        group_id: options.group_id.clone(),
+        auth_type: options.auth_type.clone(),
         scopes: options.scopes.clone(),
         target: options.target.as_deref().map(parse_target).transpose()?,
         config_file: options.config_file.as_deref().map(PathBuf::from),
+        prefer_user_to_machine: options.prefer_user_to_machine,
     })
     .map_err(binding_error)?;
     let inner = AuthClient::new(
@@ -254,8 +294,8 @@ impl PersistentAuth {
         self.inner.logout().await.map_err(binding_error)
     }
 
-    pub fn status(&self) -> U2mStatus {
-        U2mStatus {
+    pub fn status(&self) -> DatabricksAuthStatus {
+        DatabricksAuthStatus {
             profile: self.inner.profile().name.clone(),
             host: self.inner.profile().host.to_string(),
             storage: storage_from_name(self.inner.store_name()),
@@ -275,7 +315,7 @@ impl From<Token> for AccessToken {
 }
 
 async fn open_binding_store(
-    options: &U2mOptions,
+    options: &DatabricksAuthOptions,
     storage: Option<Storage>,
 ) -> BindingResult<Arc<dyn CredentialStore>> {
     open_store(StoreOptions {
@@ -292,7 +332,7 @@ fn parse_target(value: &str) -> BindingResult<TargetKind> {
         "workspace" => Ok(TargetKind::Workspace),
         "account" => Ok(TargetKind::Account),
         "unified" => Ok(TargetKind::Unified),
-        _ => Err(U2mError::Failure {
+        _ => Err(DatabricksAuthError::Failure {
             message: "target must be workspace, account, or unified".into(),
         }),
     }
@@ -317,8 +357,8 @@ fn storage_from_name(name: &str) -> Storage {
     }
 }
 
-fn binding_error(error: impl std::fmt::Display) -> U2mError {
-    U2mError::Failure {
+fn binding_error(error: impl std::fmt::Display) -> DatabricksAuthError {
+    DatabricksAuthError::Failure {
         message: error.to_string(),
     }
 }

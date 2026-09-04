@@ -1,7 +1,7 @@
 # @dbx-tools/cli
 
-The single `dbx` CLI for workspace lifecycle, AppKit env, Databricks browser
-OAuth, and a gated public tunnel.
+The `dbx` CLI for workspace lifecycle, AppKit env, Databricks OAuth, and a
+gated public tunnel.
 
 Available commands:
 
@@ -9,7 +9,7 @@ Available commands:
 | ---------------- | ------------------------------------------------------------------------ |
 | `dbx dev`        | Bootstrap or repair a dbx-tools workspace, then forward to projen.       |
 | `dbx appkit env` | Print the environment an AppKit app resolves, as eval-able shell output. |
-| `dbx auth`       | Run Databricks browser OAuth and manage stored user credentials.         |
+| `dbx auth`       | Generate U2M or M2M OAuth tokens with secure credential storage.         |
 | `dbx tunnel`     | Front any command with a public portr tunnel and an email-OTP gate.      |
 
 Key features:
@@ -89,9 +89,10 @@ dbx auth token --profile my-workspace
 dbx auth status --profile my-workspace
 ```
 
-The auth command uses the generated U2M bindings for profile resolution,
-browser OAuth, refresh, locking, and keyring, file, memory, or Postgres storage.
-See [`@dbx-tools/cli-auth`](../auth) for the complete command and option surface.
+The auth command uses the generated Databricks auth bindings for preferred U2M
+browser OAuth, M2M client credentials, refresh, locking, and keyring, file,
+memory, or Postgres storage. See [`@dbx-tools/cli-auth`](../auth) for the
+complete command and option surface.
 
 ## Put A Gated Public URL In Front Of A Command
 

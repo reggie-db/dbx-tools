@@ -18,6 +18,7 @@ import { spawnSync } from "node:child_process";
 import { makeReadonly, makeWritable, stampGenerated } from "../src/generated.ts";
 import {
   addExplicitInterfaceReexports,
+  addTypeScriptExtensionsToBindingImports,
   makeDefaultedInterfaceParametersOptional,
 } from "../src/uniffi.ts";
 
@@ -178,7 +179,10 @@ if (values.node) {
   for (const file of [nodeBindings, ...generatedFiles]) {
     // Consumers type-check these files through workspace source exports, while
     // the generated runtime internals are validated by UniFFI's own build.
-    writeFileSync(file, `// @ts-nocheck\n${readFileSync(file, "utf8")}`);
+    writeFileSync(
+      file,
+      `/* eslint-disable */\n// @ts-nocheck\n${addTypeScriptExtensionsToBindingImports(readFileSync(file, "utf8"))}`,
+    );
     stampGenerated(file, {
       tool: "UniFFI binding generation",
       source: `the ${crate} Rust exports`,

@@ -58,7 +58,7 @@ export { DOWNSTREAM_RELEASE_EVENT, RUST_RELEASE_EVENT, RELEASE_TAG, RELEASE_SHA 
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
 export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";
-export { makeDefaultedInterfaceParametersOptional, addExplicitInterfaceReexports } from "./src/uniffi.ts";
+export { makeDefaultedInterfaceParametersOptional, addTypeScriptExtensionsToBindingImports, addExplicitInterfaceReexports } from "./src/uniffi.ts";
 export type { TypeScriptBindingModule } from "./src/uniffi.ts";
 export { DBXToolsVsCode } from "./src/vscode.ts";
 export type { IgnoreGroupOptions } from "./src/watch.ts";

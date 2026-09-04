@@ -230,12 +230,11 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
   p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
 });
 
-// cli-auth: the `dbx auth` user OAuth command group. Commander comes from the
-// cli tag, and the native OAuth implementation stays in the generated U2M
-// binding package.
+// cli-auth: the `dbx auth` OAuth command group. Commander comes from the cli
+// tag, and the native OAuth implementation stays in the generated auth binding.
 project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
-  p.package.addField("description", "Commander CLI for Databricks browser OAuth");
-  p.addDeps("@dbx-tools/auth-u2m@workspace:*", "pg@^8.22.0");
+  p.package.addField("description", "Commander CLI for Databricks OAuth");
+  p.addDeps("@dbx-tools/databricks-auth@workspace:*", "pg@^8.22.0");
   p.addDevDeps("@types/pg@^8");
 });
 
@@ -869,14 +868,10 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     uuid: { version: "1", features: ["v4"] },
   },
   packages: {
-    "auth-u2m": {
-      description: "Databricks user-to-machine OAuth with secure credential storage",
+    "databricks-auth": {
+      description: "Databricks OAuth with secure credential storage",
       nodeDependencies: ["pg@^8.22.0"],
       nodeDevDependencies: ["@types/pg@^8"],
-      nodeExports: {
-        "./postgres": "./src/postgres.ts",
-        "./runtime": "./src/runtime.ts",
-      },
       defaultFeatures: ["keyring"],
       features: { keyring: ["dep:keyring"] },
       dependencies: {

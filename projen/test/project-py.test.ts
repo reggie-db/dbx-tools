@@ -149,7 +149,10 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /proposed reconciliation plan grouped by publishers/);
     assert.match(instructions, /confirm the complete proposed plan before submitting any change/);
     assert.match(instructions, /without asking for additional confirmation/);
-    assert.match(instructions, /permit deployments from the main branch/);
+    assert.match(instructions, /Do not visit GitHub or use the GitHub API or CLI/);
+    assert.match(instructions, /Every required GitHub owner, repository, workflow, environment/);
+    assert.match(instructions, /supplied branch policy value is main/);
+    assert.doesNotMatch(instructions, /permit deployments from the main branch/);
     assert.match(instructions, /GitHub environment branch: main/);
     assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);

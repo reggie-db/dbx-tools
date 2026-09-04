@@ -8,7 +8,6 @@ import { Project, TextFile, YamlFile, javascript } from "projen";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import type { DBXToolsProject } from "./project.ts";
 import {
-  addExports,
   DBXToolsTypeScriptProject,
   projectReleaseBranch,
   projectRepositoryUrl,
@@ -51,8 +50,6 @@ export interface RustPackageOptions {
   readonly bindings?: readonly ("node" | "python")[];
   readonly nodeDependencies?: readonly string[];
   readonly nodeDevDependencies?: readonly string[];
-  /** Hand-authored Node subpaths exposed beside generated bindings. */
-  readonly nodeExports?: Readonly<Record<string, string>>;
   readonly uniffiConfig?: Readonly<Record<string, unknown>>;
 }
 
@@ -490,13 +487,7 @@ export class DBXToolsRustWorkspace {
     project.gitignore.addPatterns(
       "target/",
       ...this.bindingMappings.flatMap((binding) => [
-        ...(binding.node
-          ? [
-              `${binding.node}/src/bindings.ts`,
-              `${binding.node}/src/_bindings*.ts`,
-              `${binding.node}/src/*${binding.crate.replaceAll("-", "_")}.*`,
-            ]
-          : []),
+        ...(binding.node ? [`${binding.node}/src/*${binding.crate.replaceAll("-", "_")}.*`] : []),
         ...(binding.python && binding.pythonModule
           ? [
               `${binding.python}/src/${binding.pythonModule.replaceAll(".", "/")}/bindings.py`,
@@ -505,6 +496,13 @@ export class DBXToolsRustWorkspace {
           : []),
       ]),
     );
+    for (const binding of this.bindingMappings) {
+      if (!binding.node) {
+        continue;
+      }
+      project.prettier?.addIgnorePattern(`${binding.node}/src/bindings.ts`);
+      project.prettier?.addIgnorePattern(`${binding.node}/src/_bindings*.ts`);
+    }
     this.pythonPackages = bindings
       .filter((pkg) => (pkg.packageOptions.bindings ?? ["node", "python"]).includes("python"))
       .map((pkg) => {
@@ -570,9 +568,6 @@ export class DBXToolsRustWorkspace {
       node.addDevDeps(`uniffi-bindgen-react-native@${UBRN_VERSION}`);
       if (binding.packageOptions.nodeDevDependencies?.length) {
         node.addDevDeps(...binding.packageOptions.nodeDevDependencies);
-      }
-      if (binding.packageOptions.nodeExports) {
-        addExports(node, { ...binding.packageOptions.nodeExports });
       }
       new TextFile(node, "exports.ts", {
         lines: ['export * from "./src/bindings.ts";', ""],

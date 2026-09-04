@@ -3,7 +3,7 @@
  *
  * `dev` bootstraps or repairs a workspace and forwards to projen.
  * `appkit` provides AppKit environment helpers.
- * `auth` manages Databricks browser OAuth and access tokens.
+ * `auth` manages Databricks OAuth and access tokens.
  * `tunnel` runs a public portr tunnel with passwordless access gating.
  *
  * Feature commands load their sibling packages only when selected and forward
@@ -110,7 +110,7 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   addForwardedCommand(
     program,
     "auth",
-    "Authenticate to Databricks with browser-based user OAuth",
+    "Authenticate to Databricks and manage OAuth tokens",
     async () => (await import("@dbx-tools/cli-auth/cli")).buildProgram,
   );
 

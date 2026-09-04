@@ -167,7 +167,7 @@ export function App() {
 | Genie streaming and schemas    | [`@dbx-tools/genie`](packages/js/node/genie), [`@dbx-tools/shared-genie`](packages/js/shared/genie)                                                                                                                         |
 | Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model)                                                                                                                         |
 | Local model proxy              | [`dbx-tools-litellm`](packages/py/litellm)                                                                                                                                                                                  |
-| Databricks browser OAuth       | [`@dbx-tools/cli-auth`](packages/js/cli/auth)                                                                                                                                                                               |
+| Databricks OAuth tokens        | [`@dbx-tools/cli-auth`](packages/js/cli/auth)                                                                                                                                                                               |
 | Public tunnel + access gate    | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
 | Passwordless authentication    | [`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/shared-auth`](packages/js/shared/auth), [`@dbx-tools/ui-auth`](packages/js/ui/auth)                                                                                |
 | Configuration and local locks  | [`@dbx-tools/core`](packages/js/node/core), [`dbx-tools-core`](packages/py/core)                                                                                                                                            |
@@ -268,10 +268,10 @@ uv run dbx-litellm --profile my-workspace --port 4000
 
 Then point the client at `http://127.0.0.1:4000/v1`.
 
-### Authenticate With Browser OAuth
+### Authenticate With Databricks OAuth
 
-Use [`@dbx-tools/cli-auth`](packages/js/cli/auth) for Databricks user OAuth,
-secure credential storage, and access-token refresh.
+Use [`@dbx-tools/cli-auth`](packages/js/cli/auth) for preferred U2M browser
+OAuth, M2M client credentials, secure token storage, and refresh.
 
 ```sh
 dbx auth login --profile my-workspace

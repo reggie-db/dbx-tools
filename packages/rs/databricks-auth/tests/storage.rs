@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use dbx_tools_auth_u2m::{CredentialStore, FileStore, MemoryStore, Token};
+use dbx_tools_databricks_auth::{CredentialStore, FileStore, MemoryStore, Token};
 use tempfile::tempdir;
 use time::OffsetDateTime;
 

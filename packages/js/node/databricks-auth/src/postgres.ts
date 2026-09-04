@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient, QueryResultRow } from "pg";
-import type { StorageAdapter } from "./runtime.ts";
+import type { StorageAdapter } from "./bindings.ts";
 
 const TABLE = "dbx_tools_auth_u2m_tokens";
 const LOCK_RETRY_MILLIS = 50;
@@ -21,7 +21,7 @@ function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-/** Create a U2M storage adapter backed by a caller-owned `pg.Pool`. */
+/** Create a Databricks auth storage adapter backed by a caller-owned `pg.Pool`. */
 export function createStorage(pool: PgPoolLike): StorageAdapter {
   const leases = new Map<string, { client: PoolClient; lockId: bigint }>();
 

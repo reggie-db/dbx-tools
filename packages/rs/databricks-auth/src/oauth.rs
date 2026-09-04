@@ -4,7 +4,6 @@ use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, CsrfToken, EndpointNotSet,
     EndpointSet, PkceCodeChallenge, RedirectUrl, RefreshToken, Scope, TokenUrl,
 };
-use serde::Deserialize;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
@@ -12,8 +11,8 @@ use tokio::{
 use url::Url;
 
 use crate::{
-    token::OAuthTokenResponse, Error, OAuthTemplate, OAuthTemplateContext, Profile, Result,
-    TargetKind, Token,
+    oauth_endpoints, token::OAuthTokenResponse, Error, OAuthTemplate, OAuthTemplateContext,
+    Profile, Result, Token,
 };
 
 const DEFAULT_PORT: u16 = 8020;
@@ -21,12 +20,6 @@ const MAX_PORT: u16 = 8040;
 
 type OAuthClient =
     BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
-
-#[derive(Clone, Debug, Deserialize)]
-struct AuthorizationServer {
-    authorization_endpoint: String,
-    token_endpoint: String,
-}
 
 pub struct OAuthFlow {
     profile: Profile,
@@ -53,7 +46,7 @@ impl OAuthFlow {
     }
 
     pub async fn login(&self, timeout: Duration) -> Result<Token> {
-        let endpoints = self.endpoints().await?;
+        let endpoints = oauth_endpoints::resolve(&self.profile, &self.http).await?;
         let (listener, address) = bind_callback().await?;
         let redirect = format!("http://localhost:{}", address.port());
         let client = self.client(&endpoints, &redirect)?;
@@ -104,7 +97,7 @@ impl OAuthFlow {
     }
 
     pub async fn refresh(&self, token: &Token) -> Result<Token> {
-        let endpoints = self.endpoints().await?;
+        let endpoints = oauth_endpoints::resolve(&self.profile, &self.http).await?;
         let client = self.client(&endpoints, "http://localhost:8020")?;
         let refresh = token
             .refresh_token()
@@ -117,58 +110,11 @@ impl OAuthFlow {
         Token::from_response(&response, time::OffsetDateTime::now_utc(), Some(token))
     }
 
-    async fn endpoints(&self) -> Result<AuthorizationServer> {
-        match self.profile.target {
-            TargetKind::Workspace => {
-                self.discover(format!(
-                    "{}/oidc/.well-known/oauth-authorization-server",
-                    self.profile.host
-                ))
-                .await
-            }
-            TargetKind::Account => {
-                let account_id =
-                    self.profile.account_id.as_ref().ok_or_else(|| {
-                        Error::Config("account target requires account_id".into())
-                    })?;
-                Ok(AuthorizationServer {
-                    authorization_endpoint: format!(
-                        "{}/oidc/accounts/{account_id}/v1/authorize",
-                        self.profile.host
-                    ),
-                    token_endpoint: format!(
-                        "{}/oidc/accounts/{account_id}/v1/token",
-                        self.profile.host
-                    ),
-                })
-            }
-            TargetKind::Unified => {
-                let account_id =
-                    self.profile.account_id.as_ref().ok_or_else(|| {
-                        Error::Config("unified target requires account_id".into())
-                    })?;
-                self.discover(format!(
-                    "{}/oidc/accounts/{account_id}/.well-known/oauth-authorization-server",
-                    self.profile.host
-                ))
-                .await
-            }
-        }
-    }
-
-    async fn discover(&self, url: String) -> Result<AuthorizationServer> {
-        let response = self.http.get(&url).send().await?;
-        if response.status() == reqwest::StatusCode::NOT_FOUND {
-            return Err(Error::OAuthNotSupported(url));
-        }
-        response
-            .error_for_status()?
-            .json()
-            .await
-            .map_err(Into::into)
-    }
-
-    fn client(&self, endpoints: &AuthorizationServer, redirect: &str) -> Result<OAuthClient> {
+    fn client(
+        &self,
+        endpoints: &oauth_endpoints::AuthorizationServer,
+        redirect: &str,
+    ) -> Result<OAuthClient> {
         Ok(
             BasicClient::new(ClientId::new(self.profile.client_id.clone()))
                 .set_auth_uri(

@@ -1,10 +1,10 @@
 [workspace]
-members = ["packages/rs/auth-u2m"]
+members = ["packages/rs/databricks-auth"]
 default-members = []
 resolver = "2"
 
 [workspace.package]
-version = "0.6.164"
+version = "0.6.165"
 edition = "2021"
 rust-version = "1.82"
 license = "Apache-2.0"

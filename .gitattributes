@@ -33,8 +33,8 @@
 /packages/example/openapi/** linguist-generated
 /packages/js/**/index.ts linguist-generated
 /packages/js/openapi/** linguist-generated
-/packages/py/auth-u2m/pyproject.toml linguist-generated
 /packages/py/core/pyproject.toml linguist-generated
+/packages/py/databricks-auth/pyproject.toml linguist-generated
 /packages/py/graphiti/pyproject.toml linguist-generated
 /packages/py/litellm/pyproject.toml linguist-generated
 /packages/py/model/pyproject.toml linguist-generated

@@ -96,10 +96,11 @@ derives the crate name and repository from the parent project. A crate containin
 automatically wires matching private Node and Python binding packages using the
 same capability name. Repository-specific dependencies and features remain
 declarative options in `.projenrc.ts`; generated bindings are built separately
-from projen synthesis. Node facades compile to `lib/` and publish JavaScript
-entry points that plain Node can load from `node_modules`. Use a crate's
-`nodeExports` option for hand-authored Node subpaths beside the generated
-bindings.
+from projen synthesis. Target-independent Node binding TypeScript is committed
+and remains generated/read-only, while native libraries stay ignored. Node
+facades compile to `lib/` and publish JavaScript entry points that plain Node
+can load from `node_modules`. The generated barrel exports the binding API from
+the package root.
 
 `sync --watch` runs a focused Rust watcher beside the OpenAPI watcher. Changes
 inside an existing UniFFI crate regenerate only that crate's bindings; adding or

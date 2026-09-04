@@ -1,5 +1,5 @@
 [bindings.python]
-cdylib_name = "dbx_tools_auth_u2m"
+cdylib_name = "dbx_tools_databricks_auth"
 
 [bindings.typescript]
 strictTypeChecking = true

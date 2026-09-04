@@ -240,11 +240,11 @@ jobs:
           SECONDS=0
           trap 'status=$?; echo "phase=uniffi_packaging duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
           node .projen/uniffi-release.mjs build \
-            --crate "dbx-tools-auth-u2m" \
-            --node "packages/js/node/auth-u2m" \
-            --python "packages/py/auth-u2m" \
-            --node-package "@dbx-tools/auth-u2m" \
-            --python-package "dbx-tools-auth-u2m" \
+            --crate "dbx-tools-databricks-auth" \
+            --node "packages/js/node/databricks-auth" \
+            --python "packages/py/databricks-auth" \
+            --node-package "@dbx-tools/databricks-auth" \
+            --python-package "dbx-tools-databricks-auth" \
             --node-generator "projen/tasks/uniffi.ts" \
             --ubrn "$UBRN_EXECUTABLE" \
             --cargo-target "${{ matrix.target.cargo }}" \
@@ -255,29 +255,29 @@ jobs:
             --libc "${{ matrix.target.libc }}" \
             --facade "${{ matrix.target.facade }}" \
             --version "${VERSION#v}" \
-            --output "dist/release/dbx-tools-auth-u2m/${{ matrix.target.node }}" \
+            --output "dist/release/dbx-tools-databricks-auth/${{ matrix.target.node }}" \
             --skip-build
-      - name: Upload dbx-tools-auth-u2m native npm package
+      - name: Upload dbx-tools-databricks-auth native npm package
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-auth-u2m-${{ matrix.target.node }}-npm
-          path: dist/release/dbx-tools-auth-u2m/${{ matrix.target.node }}/npm/*.tgz
-      - name: Upload dbx-tools-auth-u2m npm facade
+          name: dbx-tools-databricks-auth-${{ matrix.target.node }}-npm
+          path: dist/release/dbx-tools-databricks-auth/${{ matrix.target.node }}/npm/*.tgz
+      - name: Upload dbx-tools-databricks-auth npm facade
         if: ${{ matrix.target.facade }}
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-auth-u2m-npm-facade
-          path: dist/release/dbx-tools-auth-u2m/${{ matrix.target.node }}/npm-facade/*.tgz
-      - name: Upload dbx-tools-auth-u2m Python wheel
+          name: dbx-tools-databricks-auth-npm-facade
+          path: dist/release/dbx-tools-databricks-auth/${{ matrix.target.node }}/npm-facade/*.tgz
+      - name: Upload dbx-tools-databricks-auth Python wheel
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-auth-u2m-${{ matrix.target.python }}-python-wheel
-          path: dist/release/dbx-tools-auth-u2m/${{ matrix.target.node }}/python/*.whl
+          name: dbx-tools-databricks-auth-${{ matrix.target.python }}-python-wheel
+          path: dist/release/dbx-tools-databricks-auth/${{ matrix.target.node }}/python/*.whl
       - name: Log sccache statistics
         if: ${{ always() }}
         shell: bash
         run: '"${SCCACHE_PATH}" --show-stats'
-  publish-dbx-tools-auth-u2m:
+  publish-dbx-tools-databricks-auth:
     if: ${{ github.event_name == 'repository_dispatch' }}
     needs:
       - build
@@ -286,7 +286,7 @@ jobs:
       contents: read
       id-token: write
     environment:
-      name: pypi-dbx-tools-auth-u2m
+      name: pypi-dbx-tools-databricks-auth
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -295,13 +295,13 @@ jobs:
       - name: Download native npm packages
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-auth-u2m-*-npm
+          pattern: dbx-tools-databricks-auth-*-npm
           path: dist/npm
           merge-multiple: true
       - name: Download npm facade
         uses: actions/download-artifact@v8
         with:
-          name: dbx-tools-auth-u2m-npm-facade
+          name: dbx-tools-databricks-auth-npm-facade
           path: dist/npm-facade
       - name: Publish native npm packages
         env:
@@ -316,7 +316,7 @@ jobs:
       - name: Download Python wheels
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-auth-u2m-*-python-wheel
+          pattern: dbx-tools-databricks-auth-*-python-wheel
           path: dist/python
           merge-multiple: true
       - name: Publish Python wheels
@@ -350,7 +350,7 @@ jobs:
       - name: Publish public crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --package "dbx-tools-auth-u2m" --registry crates-io --no-verify
+        run: cargo publish --package "dbx-tools-databricks-auth" --registry crates-io --no-verify
   publish-local-bindings:
     if: ${{ github.event_name == 'repository_dispatch' && vars.LOCAL_REPOSITORIES == 'true' }}
     needs:
@@ -425,12 +425,12 @@ jobs:
       - name: Publish Cargo crates locally
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.LOCAL_CARGO_TOKEN }}
-        run: cargo publish --package "dbx-tools-auth-u2m" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+        run: cargo publish --package "dbx-tools-databricks-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
   dispatch-downstream:
     if: ${{ github.event_name == 'repository_dispatch' }}
     needs:
       - build
-      - publish-dbx-tools-auth-u2m
+      - publish-dbx-tools-databricks-auth
       - publish-cargo
     runs-on: ubuntu-latest
     permissions:

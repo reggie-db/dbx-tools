@@ -1,6 +1,6 @@
 {
   "name": "@dbx-tools/cli-auth",
-  "description": "Commander CLI for Databricks browser OAuth",
+  "description": "Commander CLI for Databricks OAuth",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -25,7 +25,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/auth-u2m": "workspace:*",
+    "@dbx-tools/databricks-auth": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:",
     "pg": "^8.22.0"
@@ -48,7 +48,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.164",
+  "version": "0.6.165",
   "types": "index.ts",
   "type": "module",
   "exports": {

@@ -65,6 +65,74 @@ const run = (command, args, cwd = root) => {
   if (result.status !== 0) throw new Error(`${invocation.command} exited with ${result.status}`);
 };
 
+const singlePackage = (directory) => {
+  const packages = readdirSync(directory)
+    .filter((file) => file.endsWith(".tgz"))
+    .map((file) => resolve(directory, file));
+  if (packages.length !== 1) {
+    throw new Error(`Expected one npm package in ${directory}, found ${packages.length}`);
+  }
+  return packages[0];
+};
+
+const localWorkspacePackages = () => {
+  const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+  const workspaces = Array.isArray(manifest.workspaces) ? manifest.workspaces : [];
+  return new Map(
+    workspaces.flatMap((directory) => {
+      const manifestPath = resolve(root, directory, "package.json");
+      if (!existsSync(manifestPath)) return [];
+      const workspaceManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      return workspaceManifest.name ? [[workspaceManifest.name, workspaceManifest.version]] : [];
+    }),
+  );
+};
+
+const testNodeFacade = ({ facadePackage, manifest, nativePackage, nodePackage }) => {
+  const installDirectory = mkdtempSync(join(tmpdir(), "uniffi-facade-install-"));
+  try {
+    const workspacePackages = localWorkspacePackages();
+    const localDependencies = Object.keys(manifest.dependencies ?? {}).flatMap((name, index) => {
+      const workspaceVersion = workspacePackages.get(name);
+      if (!workspaceVersion) return [];
+      const directory = join(installDirectory, "local-dependencies", String(index));
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(
+        join(directory, "package.json"),
+        `${JSON.stringify({
+          name,
+          version: workspaceVersion,
+          type: "module",
+          exports: "./index.js",
+        })}\n`,
+      );
+      writeFileSync(join(directory, "index.js"), "export {};\n");
+      return [directory];
+    });
+    writeFileSync(
+      join(installDirectory, "package.json"),
+      `${JSON.stringify({ private: true, type: "module" })}\n`,
+    );
+    run(
+      "npm",
+      [
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--package-lock=false",
+        facadePackage,
+        nativePackage,
+        ...localDependencies,
+      ],
+      installDirectory,
+    );
+    run("node", ["-e", `import(${JSON.stringify(nodePackage)})`], installDirectory);
+  } finally {
+    rmSync(installDirectory, { recursive: true, force: true });
+  }
+};
+
 const replaceVersion = (source, version) =>
   source.replace(/^version = "[^"]+"$/m, `version = "${version}"`);
 
@@ -161,8 +229,15 @@ const packageNode = ({
   delete manifest.scripts;
   delete manifest.devDependencies;
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  mkdirSync(resolve(output, "npm-facade"), { recursive: true });
-  run("npm", ["pack", "--pack-destination", resolve(output, "npm-facade")], facadeDirectory);
+  const facadeOutput = resolve(output, "npm-facade");
+  mkdirSync(facadeOutput, { recursive: true });
+  run("npm", ["pack", "--pack-destination", facadeOutput], facadeDirectory);
+  testNodeFacade({
+    facadePackage: singlePackage(facadeOutput),
+    manifest,
+    nativePackage: singlePackage(resolve(output, "npm")),
+    nodePackage,
+  });
 };
 
 const packagePython = ({

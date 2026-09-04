@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-python-workspace"
-version = "0.6.164"
+version = "0.6.165"
 requires-python = ">=3.10,<3.14"
 dependencies = ["dbx-tools-graphiti"]
 
@@ -29,7 +29,7 @@ index-strategy = "unsafe-best-match"
 [tool.uv.workspace]
 members = ["packages/py/*"]
 
-[tool.uv.sources.dbx-tools-auth-u2m]
+[tool.uv.sources.dbx-tools-databricks-auth]
 workspace = true
 
 [tool.uv.sources.dbx-tools-core]
@@ -49,4 +49,4 @@ workspace = true
 
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
-project-excludes = ["packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py"]
+project-excludes = ["packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py"]
