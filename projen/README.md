@@ -100,7 +100,8 @@ from projen synthesis. Target-independent Node binding TypeScript is committed
 and remains generated/read-only, while native libraries stay ignored. Node
 facades compile to `lib/` and publish JavaScript entry points that plain Node
 can load from `node_modules`. The generated barrel exports the binding API from
-the package root.
+the package root. Do not create a `nodeExports` binding subpath or a
+handwritten type facade.
 
 `sync --watch` runs a focused Rust watcher beside the OpenAPI watcher. Changes
 inside an existing UniFFI crate regenerate only that crate's bindings; adding or

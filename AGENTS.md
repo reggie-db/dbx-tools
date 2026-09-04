@@ -46,6 +46,16 @@ When you update docs, README positioning, or agent instructions:
   leveled console logger for browser and server runtimes; do not add an optional
   bare import such as `consola` because Vite can retain it in optimized browser
   chunks and force downstream apps to install an otherwise optional package.
+- Types, records, enums, interfaces, and module shapes have one source of truth.
+  Never copy or manually redefine them in another language or package unless
+  the user explicitly requests a separate contract. Import the owning package's
+  types directly. When generated types are inconvenient, fix the generator or
+  generated export surface instead of adding a handwritten wrapper, mirror,
+  `Pick`, or compatibility interface.
+- Never expose generated bindings through a `nodeExports` subpath. Generated
+  bindings use the standard package-root barrel and export map. Keep the
+  target-independent generated source committed and read-only; ignore only the
+  platform-native library.
 
 ## What this repo is
 
