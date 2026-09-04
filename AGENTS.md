@@ -371,6 +371,11 @@ Primary package areas:
   Packaging must
   execute the target-specific `uniffi-bindgen` binary produced by that workspace
   build, never `cargo run`, so no Rust compilation occurs after the main build.
+  Node archive packaging invokes npm's JavaScript CLI through `node.exe` on
+  Windows. Current Node security releases reject direct `.cmd` process spawning,
+  while enabling a command shell would lose argv boundaries. Process-launch
+  errors must report `spawnSync.error` instead of presenting a meaningless null
+  exit status.
   Artifact names identify crate, target, and type (`npm`, `npm-facade`,
   `python-wheel`, or `binary`). The Rust workflow
   publishes downloaded native npm archives and Python wheels directly without

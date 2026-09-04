@@ -457,6 +457,9 @@ describe("DBXToolsRustWorkspace", () => {
     const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
     assert.match(packager, /#!\/usr\/bin\/env node/);
     assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`uniffi-bindgen/);
+    assert.match(packager, /"node_modules", "npm", "bin", "npm-cli\.js"/);
+    assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
+    assert.match(packager, /if \(result\.error\) \{\s+throw new Error/);
     assert.doesNotMatch(packager, /"cargo",\s*\[\s*"run"/);
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(

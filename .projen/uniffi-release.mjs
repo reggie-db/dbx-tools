@@ -47,9 +47,21 @@ const required = (name) => {
 };
 
 const root = resolve(parsed.values.root ?? process.cwd());
+const commandInvocation = (command, args) => {
+  if (process.platform !== "win32" || command !== "npm") return { command, args };
+  const npmCli = resolve(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+  if (!existsSync(npmCli)) throw new Error(`Missing npm CLI ${npmCli}`);
+  return { command: process.execPath, args: [npmCli, ...args] };
+};
 const run = (command, args, cwd = root) => {
-  const result = spawnSync(command, args, { cwd, stdio: "inherit" });
-  if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
+  const invocation = commandInvocation(command, args);
+  const result = spawnSync(invocation.command, invocation.args, { cwd, stdio: "inherit" });
+  if (result.error) {
+    throw new Error(`${invocation.command} failed: ${result.error.message}`, {
+      cause: result.error,
+    });
+  }
+  if (result.status !== 0) throw new Error(`${invocation.command} exited with ${result.status}`);
 };
 
 const replaceVersion = (source, version) =>
