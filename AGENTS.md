@@ -1930,10 +1930,14 @@ publish` in `projen/` strips `workspace:*` to those versions. Do not
   and `uv sync`; do not commit them. The release publish task also deletes
   `bun.lock` and reinstalls to re-resolve `workspace:*` after a version stamp
   (see the release gotcha below). CI installs are plain `bun install` / `uv sync`.
-- **Do NOT set `workflowPackageCache: true`, and do not add `cache: bun` to a
-  hand-written workflow** without understanding the implications. `bun.lock` is not
-  tracked, so a lockfile-keyed cache has no stable key to hash - keep caching off to
-  match the existing posture.
+- **Do not set projen's `workflowPackageCache: true`.** `bun.lock` is not tracked,
+  so a lockfile-keyed cache has no stable input. Generated workflows instead use
+  the helpers in `bun-workflow.ts`: one `BUN_VERSION` environment value drives
+  setup and cache names, `.projen/bun-cache-key.mjs` hashes only dependency
+  fields from every manifest, and `actions/cache` persists Bun's global package
+  cache rather than `node_modules`. A release version bump therefore preserves
+  the dependency key, while a dependency change restores the latest compatible
+  prefix and saves the updated cache immediately after install.
 - **There is no Dependabot, and third-party actions are on major tags.** Both
   were tried and removed: SHA pins with no updater just rot, and Dependabot PRs
   edit projen-GENERATED workflows, which the next synth reverts and the build's

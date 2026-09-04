@@ -13,6 +13,7 @@ import { ignore, match } from "@dbx-tools/path";
 import { object, string, type OneOrMany } from "@dbx-tools/shared-core";
 import { type IConstruct } from "constructs";
 import { Component, IgnoreFile, Project, type TaskOptions, javascript, typescript } from "projen";
+import type { JobStep } from "projen/lib/github/workflows-model";
 import { ReleaseTrigger } from "projen/lib/release";
 import { mixin } from "..";
 import { generateBarrels } from "./barrels.ts";
@@ -23,6 +24,7 @@ import {
   BunfigFile,
   RootBunfigFile,
 } from "./bun-app.ts";
+import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import { codegenModulePaths, generateCodegen } from "./codegen.ts";
 import { DBXToolsConfig, type DBXToolsConfigOptions } from "./dbx-tools-config.ts";
 import { resolvePkgRoot } from "./engine-root.ts";
@@ -642,6 +644,24 @@ export class DBXToolsNodeProject
     initProject(this, options);
   }
 
+  public override renderWorkflowSetup(options?: javascript.RenderWorkflowSetupOptions): JobStep[] {
+    const steps = super.renderWorkflowSetup(options);
+    if (this.parent) return steps;
+    return steps.flatMap((step) => {
+      if (step.uses === "oven-sh/setup-bun@v2") return [...bunCacheRestoreSteps(this)];
+      if (step.run === "bun install") {
+        return [
+          step,
+          bunCacheSaveStep({
+            condition:
+              "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository",
+          }),
+        ];
+      }
+      return [step];
+    }) as JobStep[];
+  }
+
   public override preSynthesize(): void {
     if (this.rootInstallOnly) this.with(ROOT_INSTALL_ONLY_MIXIN);
     super.preSynthesize();
@@ -1066,6 +1086,7 @@ function initProject(
   // a plain `bun` exec rather than any wrapper: the default task is spawned by
   // nested installs/synths, and a wrapper that exported `npm_config_*` broke them.
   project.defaultTask?.reset("bun .projenrc.ts");
+  project.buildWorkflow?.workflow.file?.addOverride("jobs.build.env.BUN_VERSION", BUN_VERSION);
 
   // Pin bun's hoisted linker workspace-wide (see RootBunfigFile) so a peer dep
   // resolves to one copy and singletons/types stay coherent.

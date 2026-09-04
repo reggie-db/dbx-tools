@@ -10,6 +10,7 @@ import { Component, YamlFile } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { object } from "@dbx-tools/shared-core";
+import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
 import {
   DOWNSTREAM_RELEASE_EVENT,
@@ -21,7 +22,6 @@ import {
 
 const NODE_VERSION = "lts/*";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
-const BUN_VERSION = "1.3.14";
 
 /**
  * The `release` workflow's version-stamp + publish step, as a shell script.
@@ -73,10 +73,10 @@ interface PublishWorkflow {
 }
 
 /** Shared checkout and toolchain setup for every npm publish workflow. */
-function publishSetupSteps(): JobStep[] {
+function publishSetupSteps(project: DBXToolsNodeProject): JobStep[] {
   return [
     { name: "Checkout", uses: "actions/checkout@v6", with: { "fetch-depth": 0 } },
-    { name: "Setup Bun", uses: "oven-sh/setup-bun@v2", with: { "bun-version": BUN_VERSION } },
+    ...bunCacheRestoreSteps(project),
     {
       name: "Setup Node.js",
       uses: "actions/setup-node@v6",
@@ -88,6 +88,7 @@ function publishSetupSteps(): JobStep[] {
     },
     // Bun's install; the lockfile may be absent or stale in CI so it is not frozen.
     { name: "Install", run: "bun install" },
+    bunCacheSaveStep(),
   ];
 }
 
@@ -301,7 +302,7 @@ export class DBXToolsRelease extends Component {
     project: DBXToolsNodeProject,
     { name, tagPrefix, steps, workingDirectory, upstreamWorkflow }: PublishWorkflow,
   ): void {
-    const setupSteps = publishSetupSteps();
+    const setupSteps = publishSetupSteps(project);
     const branchDispatch = upstreamWorkflow === undefined;
     const workflow = new GithubWorkflow(project.github!, name, {
       // A newer release supersedes an older run even when publication has
@@ -369,6 +370,7 @@ export class DBXToolsRelease extends Component {
       // `DRY_RUN_INPUT` is `--dry-run` when the dispatch input is true, else empty;
       // the publish script also FORCES it on any `workflow_dispatch` run.
       env: {
+        BUN_VERSION,
         CI: "true",
         DRY_RUN_INPUT: "${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}",
       },

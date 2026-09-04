@@ -150,10 +150,8 @@ const packageNode = ({
     required("cargo-target"),
     "--node-package-base",
     `${nodePackage}-`,
-    "--ubrn",
-    required("ubrn"),
+    ...(parsed.values.ubrn ? ["--ubrn", parsed.values.ubrn, "--skip-barrels"] : []),
     "--skip-build",
-    "--skip-barrels",
   ]);
   mkdirSync(resolve(output, "npm-facade"), { recursive: true });
   run("npm", ["pack", "--pack-destination", resolve(output, "npm-facade")], facadeDirectory);

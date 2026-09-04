@@ -388,6 +388,9 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /--skip-build/);
     assert.match(release, /name: Restore UBRN executable/);
     assert.match(release, /uses: actions\/cache\/restore@v5/);
+    assert.match(release, /name: Restore Bun cache/);
+    assert.match(release, /name: Save Bun cache/);
+    assert.match(release, /^      BUN_VERSION: 1\.3\.14$/m);
     assert.match(
       release,
       /key: ubrn-executable-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}-rust-stable-0\.31\.0-5/,
@@ -471,8 +474,11 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`uniffi-bindgen/);
     assert.match(packager, /"node_modules", "npm", "bin", "npm-cli\.js"/);
     assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
-    assert.match(packager, /"--ubrn",\s+required\("ubrn"\)/);
-    assert.match(packager, /"--skip-barrels"/);
+    assert.match(
+      packager,
+      /parsed\.values\.ubrn \? \["--ubrn", parsed\.values\.ubrn, "--skip-barrels"\] : \[\]/,
+    );
+    assert.doesNotMatch(packager, /required\("ubrn"\)/);
     assert.match(packager, /if \(result\.error\) \{\s+throw new Error/);
     assert.doesNotMatch(packager, /"cargo",\s*\[\s*"run"/);
     const nodeGenerator = readFileSync(

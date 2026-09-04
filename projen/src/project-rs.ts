@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Project, TextFile, YamlFile, javascript } from "projen";
+import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import type { DBXToolsProject } from "./project.ts";
 import {
   DBXToolsTypeScriptProject,
@@ -766,6 +767,7 @@ export class DBXToolsRustWorkspace {
       "runs-on": "${{ matrix.target.runner }}",
       env: {
         ...RUST_CACHE_ENV,
+        BUN_VERSION,
         SCCACHE_GHA_VERSION: `release-\${{ matrix.target.cargo }}-rust-${releaseRustVersion}`,
       },
       strategy: {
@@ -774,15 +776,6 @@ export class DBXToolsRustWorkspace {
       },
       steps: [
         ...releaseSourceSteps(),
-        ...(hasNodeBindings
-          ? [
-              {
-                name: "Setup Bun",
-                uses: "oven-sh/setup-bun@v2",
-                with: { "bun-version": "1.3.14" },
-              },
-            ]
-          : []),
         ...(hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
         {
           name: "Setup Rust",
@@ -802,6 +795,11 @@ export class DBXToolsRustWorkspace {
                 },
               },
             ]
+          : []),
+        ...(hasNodeBindings
+          ? bunCacheRestoreSteps(project, {
+              condition: "steps.ubrn_cache.outputs.cache-hit != 'true'",
+            })
           : []),
         {
           name: "Log cache configuration",
@@ -833,6 +831,9 @@ export class DBXToolsRustWorkspace {
                 shell: "bash",
                 run: timedBash("node_tooling", "bun install"),
               },
+              bunCacheSaveStep({
+                condition: "steps.ubrn_cache.outputs.cache-hit != 'true'",
+              }),
             ]
           : []),
         ...(hasNodeBindings

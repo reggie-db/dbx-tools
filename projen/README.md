@@ -122,6 +122,11 @@ MSRV recorded in package manifests, while `releaseRustVersion` independently
 defaults release compilation to `stable`. UBRN uses that same release toolchain
 unless `ubrnRustVersion` explicitly selects another one.
 
+Generated build and release workflows share the Bun cache helpers from
+`bun-workflow.ts`. One `BUN_VERSION` value drives setup and cache keys, while a
+generated dependency-only fingerprint keeps release version bumps from
+invalidating Bun's global package cache. `node_modules` remains uncached.
+
 The final host UBRN executable is cached by pinned UBRN version, Rust toolchain,
 runner OS, and runner architecture. A hit skips both the workspace `bun install`
 and the UBRN Cargo build. Release packaging passes the cached executable directly

@@ -55,6 +55,7 @@ packages/py/graphiti/pyproject.toml
 .mergify.yml
 .prettierignore
 .prettierrc.json
+.projen/bun-cache-key.mjs
 .projen/deps.json
 .projen/files.json
 .projen/pypi-trusted-publisher-instructions.mjs

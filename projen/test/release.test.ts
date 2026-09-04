@@ -44,6 +44,9 @@ describe("npm release workflow auth", () => {
       assert.match(workflow, /workflows:\s+- python-release/);
       assert.match(workflow, /RELEASE_VERSION/);
       assert.match(workflow, /^  cancel-in-progress: true$/m);
+      assert.match(workflow, /^      BUN_VERSION: 1\.3\.14$/m);
+      assert.match(workflow, /uses: actions\/cache\/restore@v5/);
+      assert.match(workflow, /uses: actions\/cache\/save@v5/);
     });
   }
 
@@ -111,6 +114,21 @@ describe("generated workflow safety", () => {
       assert.match(workflow, /^  cancel-in-progress: true$/m);
     });
   }
+
+  it("restores and saves Bun's dependency-only package cache", () => {
+    const workflow = readFileSync(join(outdir, ".github", "workflows", "build.yml"), "utf8");
+    assert.match(workflow, /^      BUN_VERSION: 1\.3\.14$/m);
+    assert.match(workflow, /name: Resolve Bun cache/);
+    assert.match(workflow, /uses: actions\/cache\/restore@v5/);
+    assert.match(workflow, /uses: actions\/cache\/save@v5/);
+    assert.match(
+      workflow,
+      /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/,
+    );
+    const cacheKey = readFileSync(join(outdir, ".projen", "bun-cache-key.mjs"), "utf8");
+    assert.match(cacheKey, /const dependencyFields =/);
+    assert.doesNotMatch(cacheKey, /dependencyFields = \[[\s\S]*"version"/);
+  });
 });
 
 describe("optional Node release stages", () => {

@@ -16,6 +16,7 @@ on:
         required: true
 
 env:
+  BUN_VERSION: 1.3.14
   DOCS_SITE_URL: https://docs.dbx.tools
   DOCS_BASE: /
 
@@ -49,7 +50,20 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Resolve Bun cache
+        id: bun_cache_metadata
+        run: |
+          echo "path=$(bun pm cache)" >> "$GITHUB_OUTPUT"
+          echo "dependency_hash=$(node .projen/bun-cache-key.mjs)" >> "$GITHUB_OUTPUT"
+      - name: Restore Bun cache
+        id: bun_cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ steps.bun_cache_metadata.outputs.path }}
+          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ env.BUN_VERSION }}-${{ steps.bun_cache_metadata.outputs.dependency_hash }}
+          restore-keys: |
+            bun-${{ runner.os }}-${{ runner.arch }}-${{ env.BUN_VERSION }}-
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -64,6 +78,12 @@ jobs:
         run: bun docs/scripts/check-generated-titles.mjs
       - name: Install docs dependencies
         run: bun install --cwd .docs-build/site
+      - name: Save Bun cache
+        if: ${{ steps.bun_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.bun_cache_metadata.outputs.path }}
+          key: ${{ steps.bun_cache.outputs.cache-primary-key }}
       - name: Generate TypeScript API docs
         run: bun docs/scripts/generate-api-docs.mjs
       - name: Build docs
