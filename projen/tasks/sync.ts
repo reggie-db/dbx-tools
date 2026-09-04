@@ -2,6 +2,7 @@
 import { fileURLToPath } from "node:url";
 import { log } from "@dbx-tools/shared-core";
 import concurrently from "concurrently";
+import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import { runSynth } from "../src/scaffold.ts";
 
 const logger = log.logger("projen:sync");
@@ -22,6 +23,16 @@ const STOP_GRACE_MS = 2_000;
 /** Absolute path to a sibling task script, so `concurrently`'s cwd doesn't matter. */
 function taskPath(script: string): string {
   return fileURLToPath(new URL(`./${script}`, import.meta.url));
+}
+
+/** Whether synth recorded at least one Rust crate for the focused watcher. */
+function hasRustProjects(): boolean {
+  const rust = readDbxToolsConfig(repoRoot)?.rust;
+  if (!rust || typeof rust !== "object" || Array.isArray(rust)) return false;
+  return (
+    Array.isArray((rust as { crates?: unknown }).crates) &&
+    (rust as { crates: unknown[] }).crates.length > 0
+  );
 }
 
 if (!process.argv.includes("--watch")) {
@@ -52,21 +63,26 @@ if (!process.argv.includes("--watch")) {
     );
   }
 
-  const { result } = concurrently(
-    [
-      { command: `bun "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
-      { command: `bun "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
-      { command: `bun "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
-    ],
-    {
-      prefix: "name",
-      // No `killOthersOn`: one watcher falling over is no reason to tear the other two
-      // down. `-1` is concurrently's spelling for "restart forever", so a crashed
-      // watcher comes back instead of silently leaving its outputs stale.
-      restartTries: -1,
-      restartDelay: RESTART_DELAY_MS,
-    },
-  );
+  const watchers = [
+    { command: `bun "${taskPath("projenrc.ts")}"`, name: "projenrc", prefixColor: "magenta" },
+    { command: `bun "${taskPath("barrels.ts")}" --watch`, name: "barrels", prefixColor: "cyan" },
+    { command: `bun "${taskPath("openapi.ts")}" --watch`, name: "openapi", prefixColor: "green" },
+  ];
+  if (hasRustProjects()) {
+    watchers.push({
+      command: `bun "${taskPath("rust.ts")}" --watch`,
+      name: "rust",
+      prefixColor: "yellow",
+    });
+  }
+  const { result } = concurrently(watchers, {
+    prefix: "name",
+    // No `killOthersOn`: one watcher falling over is no reason to tear the other two
+    // down. `-1` is concurrently's spelling for "restart forever", so a crashed
+    // watcher comes back instead of silently leaving its outputs stale.
+    restartTries: -1,
+    restartDelay: RESTART_DELAY_MS,
+  });
 
   let stopping = false;
 

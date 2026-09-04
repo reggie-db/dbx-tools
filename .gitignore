@@ -99,7 +99,15 @@ jspm_packages/
 **/__pycache__/
 **/*.py[cod]
 packages/py/*/dist/
+packages/js/node/auth-u2m/src/bindings.ts
+packages/js/node/auth-u2m/src/_bindings*.ts
+packages/js/node/auth-u2m/src/libdbx_tools_auth_u2m.*
+packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py
+packages/py/auth-u2m/src/dbx_tools/auth_u2m/libdbx_tools_auth_u2m.*
+target/
+!/Cargo.toml
 !/pyproject.toml
+!/packages/py/auth-u2m/pyproject.toml
 !/packages/py/core/pyproject.toml
 !/packages/py/postgres/pyproject.toml
 !/packages/py/model/pyproject.toml

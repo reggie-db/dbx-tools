@@ -269,7 +269,7 @@ export function readPackageManifest(dir: string): Record<string, unknown> | unde
 }
 
 /** A package's `dbxToolsConfig` object, or `undefined` when absent. */
-function readDbxToolsConfig(dir: string): Record<string, unknown> | undefined {
+export function readDbxToolsConfig(dir: string): Record<string, unknown> | undefined {
   const config = readPackageManifest(dir)?.dbxToolsConfig;
   return object.isRecord(config) ? config : undefined;
 }

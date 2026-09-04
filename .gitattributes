@@ -22,11 +22,13 @@
 /.vscode/tasks.json linguist-generated
 /bun.lockb linguist-generated
 /bunfig.toml linguist-generated
+/Cargo.toml linguist-generated
 /package.json linguist-generated
 /packages/example/**/index.ts linguist-generated
 /packages/example/openapi/** linguist-generated
 /packages/js/**/index.ts linguist-generated
 /packages/js/openapi/** linguist-generated
+/packages/py/auth-u2m/pyproject.toml linguist-generated
 /packages/py/core/pyproject.toml linguist-generated
 /packages/py/graphiti/pyproject.toml linguist-generated
 /packages/py/litellm/pyproject.toml linguist-generated

@@ -6,7 +6,8 @@
  * rules (see {@link isExcluded}):
  *   1. a file/folder whose name starts with `_` is private and never barrelled;
  *   2. test / `.d.ts` files are skipped;
- *   3. a `src/**​/index.ts` is a hand-authored subpath entry, not a module;
+ *   3. a hand-authored `src/**​/index.ts` is a subpath entry, while a generated
+ *      nested index is the facade for its generated folder;
  *   4. only files that actually contain an `export` are re-exported.
  *
  * A hand-authored `exports.ts` sitting next to the generated `index.ts` (a Vite-style
@@ -62,15 +63,16 @@ import { isModuleFile, toPosix, recordedPackages, repoRoot } from "./packages.ts
  *   1. any path segment starting with `_` (private module or folder);
  *   2. a test / spec file;
  *   3. a `.d.ts` declaration;
- *   4. a `src/**​/index.ts` - a hand-authored subpath entry (e.g. `src/react/index.ts`
+ *   4. a hand-authored `src/**​/index.ts` - a subpath entry (e.g. `src/react/index.ts`
  *      behind a package's `./react` export), not a module to namespace into the barrel.
+ *      Generated nested indexes are retained as the generated folder's facade.
  */
-function isExcluded(relPath: string): boolean {
+function isExcluded(relPath: string, srcDir: string): boolean {
   return (
     /(^|\/)_/.test(relPath) ||
     /\.(test|spec)\./.test(relPath) ||
     /\.d\.ts$/.test(relPath) ||
-    /(^|\/)index\.ts$/.test(relPath)
+    (/(^|\/)index\.ts$/.test(relPath) && !isGenerated(join(srcDir, relPath)))
   );
 }
 
@@ -128,12 +130,14 @@ function kebabToCamel(segment: string): string {
 /** Derive a valid namespace identifier from a relocated barrel module path. */
 function modulePathToNamespace(modulePath: string): string {
   const rel = modulePath.replace(/^\.\/src\//, "").replace(/\.(tsx?|jsx?|mjs|cjs)$/, "");
-  const segments = rel.split("/").map(kebabToCamel);
+  const segments = rel.split("/");
+  if (segments.at(-1) === "index" && segments.length > 1) segments.pop();
+  const names = segments.map(kebabToCamel);
   let name =
-    segments.length === 1
-      ? segments[0]!
-      : segments[0]! +
-        segments
+    names.length === 1
+      ? names[0]!
+      : names[0]! +
+        names
           .slice(1)
           .map((s) => string.capitalize(s))
           .join("");
@@ -315,23 +319,36 @@ function generateForPackage(pkgDir: string): number {
   const before = existsSync(rootBarrel) ? readFileSync(rootBarrel, "utf8") : undefined;
 
   // The re-exportable module set under `src/`: every source file that actually
-  // exports something, minus the private / test / declaration files and any
-  // `src/**/index.ts` (those are hand-authored subpath entries behind a package's
-  // `./sub` export, not modules to namespace into the root barrel). `findFiles`
+  // exports something, minus private / test / declaration files and hand-authored
+  // `src/**/index.ts` subpath entries. A generated nested index is retained as
+  // that generated folder's public facade. `findFiles`
   // yields posix paths relative to `srcDir`; `hasExport` parses each via
   // `moduleStatements` and needs the absolute path.
   const candidates = [...find.findFiles("**/*", { cwd: srcDir })]
     .map(toPosix)
-    .filter(isModuleFile)
-    .filter((f) => !isExcluded(f))
+    .filter(
+      (file) =>
+        isModuleFile(file) || (/(^|\/)index\.ts$/.test(file) && isGenerated(join(srcDir, file))),
+    )
+    .filter((f) => !isExcluded(f, srcDir))
     .filter((f) => hasExport(join(srcDir, f)));
+
+  const generatedIndexDirs = new Set(
+    candidates
+      .filter((file) => /(^|\/)index\.ts$/.test(file) && isGenerated(join(srcDir, file)))
+      .map((file) => file.replace(/(^|\/)index\.ts$/, "")),
+  );
+  const publicCandidates = candidates.filter((file) => {
+    if (/(^|\/)index\.ts$/.test(file)) return true;
+    return ![...generatedIndexDirs].some((dir) => dir && file.startsWith(`${dir}/`));
+  });
 
   // Collapse each extensionless module path to one entry, preferring a TypeScript
   // source over a sibling compiled artifact (`math.ts` wins over a committed
   // `math.js`), so a module is barrelled exactly once. Then sort by module path.
   const byModulePath = new Map<string, string>();
-  for (const f of candidates) {
-    const stem = f.replace(MODULE_EXT_RE, "");
+  for (const f of publicCandidates) {
+    const stem = f.replace(/(^|\/)index\.ts$/, "").replace(MODULE_EXT_RE, "");
     const existing = byModulePath.get(stem);
     if (!existing || (!isSourceExt(existing) && isSourceExt(f))) byModulePath.set(stem, f);
   }

@@ -134,6 +134,12 @@ root.gitignore.addPatterns(
   "**/__pycache__/",
   "**/*.py[cod]",
   "packages/py/*/dist/",
+  "packages/js/node/auth-u2m/src/bindings.ts",
+  "packages/js/node/auth-u2m/src/_bindings*.ts",
+  "packages/js/node/auth-u2m/src/libdbx_tools_auth_u2m.*",
+  "packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py",
+  "packages/py/auth-u2m/src/dbx_tools/auth_u2m/libdbx_tools_auth_u2m.*",
+  "target/",
 );
 
 // Least privilege at the workflow level: a job that omits its own
@@ -965,6 +971,101 @@ project.applyToProjects(root, { identifierName: "app-appkit-demo", tags: "app" }
 });
 
 // ---------------------------------------------------------------------------
+// Rust Cargo workspace
+// ---------------------------------------------------------------------------
+const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
+  scope: SCOPE,
+  repository: "https://github.com/reggie-db/dbx-tools",
+  rustVersion: "1.82",
+  workspaceDependencies: {
+    "async-trait": "0.1",
+    base64: "0.22",
+    clap: { version: "4.5", features: ["derive", "env"] },
+    configparser: "3",
+    directories: "6",
+    fs4: { version: "0.13", features: ["tokio"] },
+    keyring: {
+      version: "3",
+      features: ["apple-native", "windows-native", "sync-secret-service"],
+    },
+    oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
+    open: "5",
+    reqwest: { version: "0.12", defaultFeatures: false, features: ["json", "rustls-tls"] },
+    serde: { version: "1", features: ["derive"] },
+    "serde_json": "1",
+    sha2: "0.10",
+    sqlx: {
+      version: "0.8",
+      defaultFeatures: false,
+      features: ["runtime-tokio-rustls", "postgres"],
+    },
+    tempfile: "3",
+    thiserror: "2",
+    time: { version: "0.3", features: ["serde", "formatting", "parsing"] },
+    tokio: {
+      version: "1",
+      features: ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"],
+    },
+    tracing: "0.1",
+    "tracing-subscriber": { version: "0.3", features: ["env-filter"] },
+    uniffi: { version: "=0.31", features: ["cli", "tokio"] },
+    url: { version: "2", features: ["serde"] },
+    uuid: { version: "1", features: ["v4"] },
+  },
+  packages: {
+    "auth-u2m": {
+      description: "Databricks user-to-machine OAuth with secure credential storage",
+      nodeDependencies: ["pg@^8.22.0"],
+      nodeDevDependencies: ["@types/pg@^8"],
+      defaultFeatures: ["keyring"],
+      features: { keyring: ["dep:keyring"] },
+      dependencies: {
+        "async-trait": { workspace: true },
+        base64: { workspace: true },
+        configparser: { workspace: true },
+        directories: { workspace: true },
+        fs4: { workspace: true },
+        keyring: { workspace: true, optional: true },
+        oauth2: { workspace: true },
+        open: { workspace: true },
+        reqwest: { workspace: true },
+        serde: { workspace: true },
+        "serde_json": { workspace: true },
+        sha2: { workspace: true },
+        thiserror: { workspace: true },
+        time: { workspace: true },
+        tokio: { workspace: true },
+        uniffi: { workspace: true },
+        url: { workspace: true },
+        uuid: { workspace: true },
+      },
+      devDependencies: { tempfile: { workspace: true } },
+    },
+    "auth-u2m-cli": {
+      description: "CLI for dbx-tools-auth-u2m",
+      binaryName: "dbx-tools-auth-u2m",
+      defaultFeatures: ["keyring"],
+      features: {
+        keyring: ["dbx-tools-auth-u2m/keyring"],
+        postgres: ["dep:async-trait", "dep:sha2", "dep:sqlx"],
+      },
+      dependencies: {
+        "async-trait": { workspace: true, optional: true },
+        clap: { workspace: true },
+        "dbx-tools-auth-u2m": { path: "../auth-u2m", defaultFeatures: false },
+        serde: { workspace: true },
+        "serde_json": { workspace: true },
+        sha2: { workspace: true, optional: true },
+        sqlx: { workspace: true, optional: true },
+        time: { workspace: true },
+        tokio: { workspace: true },
+        "tracing-subscriber": { workspace: true },
+      },
+    },
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Python uv workspace
 // ---------------------------------------------------------------------------
 const pythonRepository = {
@@ -974,6 +1075,7 @@ const pythonRepository = {
 } as const satisfies projenProject.PythonRepositoryOptions;
 
 const pythonPackages: projenProject.PythonPackageOptions[] = [
+  ...rustWorkspace.pythonPackages,
   {
     directory: "core",
     name: "dbx-tools-core",
@@ -1069,6 +1171,7 @@ new projenProject.DBXToolsPythonWorkspace(root, {
     "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py": ["BLE001"],
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
   },
+  pyreflyProjectExcludes: ["packages/py/auth-u2m/src/dbx_tools/auth_u2m/bindings.py"],
   interpreterPath: "${workspaceFolder}/.venv/bin/python",
   release: true,
 });

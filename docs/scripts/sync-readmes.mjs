@@ -135,6 +135,7 @@ function discoverPythonPackages() {
     .filter((ent) => ent.isDirectory())
     .map((ent) => path.join(dir, ent.name))
     .filter((pkgDir) => fs.existsSync(path.join(pkgDir, "pyproject.toml")))
+    .filter((pkgDir) => !pythonPrivate(path.join(pkgDir, "pyproject.toml")))
     .map((pkgDir) => {
       const readme = path.join(pkgDir, "README.md");
       const relDir = posix(path.relative(root, pkgDir));
@@ -158,6 +159,13 @@ function discoverPythonPackages() {
 function pythonDistribution(pyproject) {
   const match = read(pyproject).match(/^\s*name\s*=\s*["']([^"']+)["']/m);
   return match?.[1];
+}
+
+/** Whether `[tool.dbx-tools] private = true` marks a Python package unpublished. */
+function pythonPrivate(pyproject) {
+  const source = read(pyproject);
+  const section = source.match(/^\[tool\.dbx-tools\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
+  return /^\s*private\s*=\s*true\s*$/m.test(section);
 }
 
 /**

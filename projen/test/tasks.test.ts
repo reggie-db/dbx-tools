@@ -3,7 +3,11 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsTypeScriptProject } from "../src/project.ts";
+import {
+  DBXToolsNodeProject,
+  DBXToolsRustWorkspace,
+  DBXToolsTypeScriptProject,
+} from "../src/project.ts";
 
 interface TaskStep {
   spawn?: string;
@@ -117,5 +121,25 @@ describe("workspace validation tasks", () => {
     const condition = tasks.child.tasks.test.steps?.find((step) => step.exec)?.condition ?? "";
     assert.equal(command, "bun test test");
     assert.match(condition, /^find test /);
+  });
+});
+
+describe("Rust sync tasks", () => {
+  it("records no Rust watcher state when no crates exist", () => {
+    process.env.PROJEN_DISABLE_POST = "1";
+    const outdir = mkdtempSync(join(tmpdir(), "workspace-no-rust-"));
+    const root = new DBXToolsNodeProject({
+      name: "workspace-no-rust",
+      outdir,
+      defaultTagMixins: false,
+      github: false,
+    });
+    const rust = new DBXToolsRustWorkspace(root, { scope: "fixture" });
+    root.dbxToolsConfig.rust = rust.workspaceMapping;
+    root.synth();
+    const manifest = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8")) as {
+      dbxToolsConfig?: { rust?: { crates?: string[] } };
+    };
+    assert.deepEqual(manifest.dbxToolsConfig?.rust?.crates, []);
   });
 });

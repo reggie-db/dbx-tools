@@ -1,18 +1,27 @@
 #!/usr/bin/env -S bun
 import { sep } from "node:path";
+import { parseArgs } from "node:util";
 import { log, string } from "@dbx-tools/shared-core";
 import { generateBarrels } from "../src/barrels.ts";
 import { recordedPackages } from "../src/packages.ts";
 import { watchLoop, watchRoots } from "../src/watch.ts";
 
 const logger = log.logger("projen:barrels");
+const { values } = parseArgs({
+  args: process.argv.slice(2),
+  options: {
+    watch: { type: "boolean" },
+    dir: { type: "string", multiple: true },
+  },
+  strict: false,
+});
 
 /** The recorded package dir that owns `abs`, if any (for a targeted barrel rebuild). */
 function ownerPackageDir(abs: string, pkgDirs: string[]): string | undefined {
   return pkgDirs.find((dir) => abs === dir || abs.startsWith(dir + sep));
 }
 
-if (process.argv.includes("--watch")) {
+if (values.watch) {
   // Watch the package roots; a source edit inside a package rebuilds just that
   // package's `index.ts` barrel (no re-synth - the projenrc watcher owns that).
   // watchLoop already drops generated paths, so a barrel write never re-triggers us.
@@ -44,7 +53,10 @@ if (process.argv.includes("--watch")) {
     if (n) logger.success(`rebuilt ${string.pluralize(n, "barrel")}`);
   });
 } else {
-  const n = generateBarrels();
+  const dirs = Array.isArray(values.dir)
+    ? values.dir.filter((value): value is string => typeof value === "string")
+    : [];
+  const n = generateBarrels(dirs.length ? { dirs } : undefined);
   logger.success(
     n === 0 ? "barrels already up to date" : `updated ${string.pluralize(n, "barrel")}`,
   );

@@ -272,6 +272,56 @@
         }
       ]
     },
+    "rs:bindings": {
+      "name": "rs:bindings",
+      "description": "Generate language bindings for UniFFI-enabled Rust crates",
+      "steps": [
+        {
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/rust.ts"
+        }
+      ]
+    },
+    "rs:bindings:demo": {
+      "name": "rs:bindings:demo",
+      "description": "Generate and run UniFFI Node and Python example CLIs",
+      "steps": [
+        {
+          "exec": "bun run rs:bindings && bun packages/js/node/auth-u2m/test/cli.ts && uv run --project packages/py/auth-u2m packages/py/auth-u2m/test/cli.py"
+        }
+      ]
+    },
+    "rs:build": {
+      "name": "rs:build",
+      "steps": [
+        {
+          "exec": "cargo build --workspace"
+        }
+      ]
+    },
+    "rs:format": {
+      "name": "rs:format",
+      "steps": [
+        {
+          "exec": "cargo fmt --all"
+        }
+      ]
+    },
+    "rs:lint": {
+      "name": "rs:lint",
+      "steps": [
+        {
+          "exec": "cargo clippy --workspace --all-targets --all-features"
+        }
+      ]
+    },
+    "rs:test": {
+      "name": "rs:test",
+      "steps": [
+        {
+          "exec": "cargo test --workspace"
+        }
+      ]
+    },
     "sync": {
       "name": "sync",
       "steps": [

@@ -12,9 +12,10 @@ import * as projectPredicate from "./project-predicate.ts";
 
 export * from "./project-js.ts";
 export * from "./project-py.ts";
+export * from "./project-rs.ts";
 
 /** Runtime family implemented by a dbx-tools project. */
-export type DBXToolsProjectLanguage = "javascript" | "python";
+export type DBXToolsProjectLanguage = "javascript" | "python" | "rust";
 
 /** Options shared by every dbx-tools project implementation. */
 export interface DBXToolsProjectOptions extends Partial<

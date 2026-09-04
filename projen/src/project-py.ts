@@ -23,6 +23,8 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly description: string;
   readonly dependencies?: readonly string[];
   readonly scripts?: Readonly<Record<string, string>>;
+  /** Keep this package unpublished and out of public docs and releases. */
+  readonly private?: boolean;
 }
 
 /** Options for one projen-native Python workspace member. */
@@ -58,6 +60,8 @@ export interface DBXToolsPythonWorkspaceOptions {
   readonly testPaths?: readonly string[];
   readonly lintPaths?: readonly string[];
   readonly ruffPerFileIgnores?: Readonly<Record<string, readonly string[]>>;
+  /** Generated Python implementation files Pyrefly should resolve but not type-check. */
+  readonly pyreflyProjectExcludes?: readonly string[];
   readonly interpreterPath?: string | false;
   readonly release?: boolean | PythonReleaseOptions;
 }
@@ -171,6 +175,9 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     if (pkg.scripts) {
       this.uv.file.addOverride("project.scripts", pkg.scripts);
     }
+    if (pkg.private) {
+      this.uv.file.addOverride("tool.dbx-tools.private", true);
+    }
     formatPyproject(this.uv.file);
     this.uv.file.readonly = true;
 
@@ -263,7 +270,9 @@ export class DBXToolsPythonWorkspace extends Component {
       tool: {
         uv: python.uvConfig.toJson_UvConfiguration({
           package: false,
-          workspace: { members: [`${this.repository.root}/*`] },
+          workspace: {
+            members: [`${this.repository.root}/*`],
+          },
         }),
         pytest: {
           ini_options: {
@@ -282,6 +291,10 @@ export class DBXToolsPythonWorkspace extends Component {
     });
     if (options.indexStrategy) {
       file.addOverride("tool.uv.index-strategy", options.indexStrategy);
+    }
+    file.addOverride("tool.pyrefly.ignore-errors-in-generated-code", true);
+    if (options.pyreflyProjectExcludes?.length) {
+      file.addOverride("tool.pyrefly.project-excludes", [...options.pyreflyProjectExcludes]);
     }
     file.addOverride(
       "tool.uv.sources",
@@ -318,6 +331,8 @@ export class DBXToolsPythonWorkspace extends Component {
 
   private addReleaseWorkflow(project: javascript.NodeProject, options: PythonReleaseOptions): void {
     if (!project.github) return;
+    const publishablePackages = this.packages.filter((pkg) => !pkg.packageOptions.private);
+    if (publishablePackages.length === 0) return;
     const workflow = new GithubWorkflow(project.github, options.workflowName ?? "python-release");
     workflow.file?.addOverride("permissions", { contents: "read" });
     workflow.on({ push: { tags: ["v*"] }, workflowDispatch: {} });
@@ -346,7 +361,7 @@ export class DBXToolsPythonWorkspace extends Component {
         },
         {
           name: "Build distributions",
-          run: this.packages
+          run: publishablePackages
             .map(
               (pkg) =>
                 `uv build --package ${pkg.packageOptions.name} --out-dir dist/${pkg.packageOptions.directory}`,
@@ -356,7 +371,7 @@ export class DBXToolsPythonWorkspace extends Component {
         {
           name: "Validate distributions",
           run: [
-            `test "$(find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) | wc -l | tr -d ' ')" -eq ${this.packages.length * 2}`,
+            `test "$(find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) | wc -l | tr -d ' ')" -eq ${publishablePackages.length * 2}`,
             "uvx twine check dist/*/*.whl dist/*/*.tar.gz",
           ].join("\n"),
         },
@@ -367,7 +382,7 @@ export class DBXToolsPythonWorkspace extends Component {
         },
       ],
     });
-    for (const pkg of this.packages) {
+    for (const pkg of publishablePackages) {
       workflow.addJob(`publish-${pkg.packageOptions.directory}`, {
         if: "${{ github.event_name == 'push' }}",
         needs: ["build"],

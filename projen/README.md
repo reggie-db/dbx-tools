@@ -88,6 +88,26 @@ Git `#subdirectory=` URL. `root.vscode` is projen's existing VS Code component;
 dbx-tools reuses it rather than constructing a second `.vscode/settings.json`
 owner.
 
+## Add A Rust Workspace
+
+`DBXToolsRustWorkspace` discovers every source-bearing folder under
+`packages/rs`, generates its Cargo manifest, and derives the crate name from the
+root scope plus folder name. A crate containing `uniffi::setup_scaffolding!()`
+automatically wires matching private Node and Python binding packages using the
+same capability name. Repository-specific dependencies and features remain
+declarative options in `.projenrc.ts`; generated bindings are built separately
+from projen synthesis.
+
+`sync --watch` runs a focused Rust watcher beside the OpenAPI watcher. Changes
+inside an existing UniFFI crate regenerate only that crate's bindings; adding or
+removing a crate or `setup_scaffolding!()` marker triggers a full synth. Repos
+without Rust crates start no Rust watcher. When Rust projects are detected,
+Cargo is required and the focused task fails immediately if it is unavailable.
+
+Private Python projects are marked with `[tool.dbx-tools] private = true`. They
+are excluded from the uv workspace, documentation, and Python release workflow
+until their native artifact publishing matrix is enabled.
+
 ## Customize Packages With Mixins
 
 ```ts

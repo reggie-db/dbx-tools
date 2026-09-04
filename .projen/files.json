@@ -19,6 +19,7 @@
     ".vscode/settings.json",
     ".vscode/tasks.json",
     "bunfig.toml",
+    "Cargo.toml",
     "pyproject.toml",
     "tsconfig.base.json",
     "tsconfig.json",

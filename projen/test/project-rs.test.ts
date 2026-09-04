@@ -1,0 +1,88 @@
+import assert from "node:assert/strict";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, before, describe, it } from "node:test";
+import { DBXToolsNodeProject, DBXToolsRustWorkspace } from "../src/project.ts";
+
+let outdir: string;
+
+before(() => {
+  process.env.PROJEN_DISABLE_POST = "1";
+  outdir = mkdtempSync(join(tmpdir(), "project-rs-"));
+  mkdirSync(join(outdir, "packages/rs/auth-u2m/src"), { recursive: true });
+  writeFileSync(
+    join(outdir, "packages/rs/auth-u2m/src/lib.rs"),
+    "pub fn value() {}\nuniffi::setup_scaffolding!();\n",
+  );
+  mkdirSync(join(outdir, "packages/rs/auth-u2m-cli/src"), { recursive: true });
+  writeFileSync(
+    join(outdir, "packages/rs/auth-u2m-cli/src/main.rs"),
+    "fn main() {}\n",
+  );
+});
+
+after(() => rmSync(outdir, { recursive: true, force: true }));
+
+describe("DBXToolsRustWorkspace", () => {
+  it("discovers crates and derives private UniFFI packages", () => {
+    const project = new DBXToolsNodeProject({
+      name: "@fixture/root",
+      scope: "fixture",
+      outdir,
+      packageRoots: ["packages/js"],
+      defaultTagMixins: false,
+      github: false,
+    });
+    const rust = new DBXToolsRustWorkspace(project, {
+      scope: "fixture",
+      repository: "https://example.invalid/fixture",
+      packages: {
+        "auth-u2m": {
+          dependencies: { uniffi: "0.31" },
+          nodeDependencies: ["pg@^8"],
+          nodeDevDependencies: ["@types/pg@^8"],
+        },
+        "auth-u2m-cli": {
+          binaryName: "fixture-auth-u2m",
+        },
+      },
+    });
+    project.synth();
+
+    assert.equal(rust.packages[0]?.crateName, "fixture-auth-u2m");
+    assert.equal(rust.pythonPackages.length, 1);
+    assert.equal(rust.pythonPackages[0]?.name, "fixture-auth-u2m");
+    assert.equal(rust.pythonPackages[0]?.module, "fixture.auth_u2m");
+    assert.equal(rust.pythonPackages[0]?.private, true);
+    assert.deepEqual(rust.workspaceMapping, {
+      root: "packages/rs",
+      crates: ["packages/rs/auth-u2m", "packages/rs/auth-u2m-cli"],
+      bindings: [
+        {
+          crate: "fixture-auth-u2m",
+          rust: "packages/rs/auth-u2m",
+          node: "packages/js/node/auth-u2m",
+          python: "packages/py/auth-u2m",
+        },
+      ],
+    });
+    assert.deepEqual(project.dbxToolsConfig.rust, rust.workspaceMapping);
+    assert.match(
+      readFileSync(join(outdir, "packages/rs/auth-u2m/Cargo.toml"), "utf8"),
+      /crate-type = \["lib", "cdylib"\]/,
+    );
+    const node = JSON.parse(
+      readFileSync(join(outdir, "packages/js/node/auth-u2m/package.json"), "utf8"),
+    ) as { name: string; private: boolean; dependencies: object; devDependencies: object };
+    assert.equal(node.name, "@fixture/auth-u2m");
+    assert.equal(node.private, true);
+    assert.equal("pg" in node.dependencies, true);
+    assert.equal("@types/pg" in node.devDependencies, true);
+    assert.equal(rust.pythonPackages.length, 1);
+    assert.equal(
+      readFileSync(join(outdir, "packages/js/node/auth-u2m/exports.ts"), "utf8"),
+      'export * from "./src/bindings.ts";\n',
+    );
+  });
+});

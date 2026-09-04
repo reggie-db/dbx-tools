@@ -51,12 +51,20 @@ describe("DBXToolsPythonWorkspace", () => {
           description: "Fixture app",
           dependencies: [pythonGitDependency(repository, "fixture-core", "core")],
         },
+        {
+          directory: "native",
+          name: "fixture-native",
+          module: "fixture.native",
+          description: "Private native package",
+          private: true,
+        },
       ],
       dependencies: ["fixture-app"],
       requiresPython: ">=3.12",
       indexStrategy: "unsafe-best-match",
       ruffTarget: "py312",
       lintPaths: ["python"],
+      pyreflyProjectExcludes: ["python/packages/native/src/fixture/native/bindings.py"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
       release: true,
     });
@@ -65,10 +73,17 @@ describe("DBXToolsPythonWorkspace", () => {
 
     const workspace = readFileSync(join(outdir, "pyproject.toml"), "utf8");
     assert.match(workspace, /members = \[\s*"python\/packages\/\*"\s*\]/);
+    assert.doesNotMatch(workspace, /exclude =/);
+    assert.match(workspace, /\[tool\.uv\.sources\.fixture-native\]\s+workspace = true/);
     assert.match(workspace, /dependencies = \[\s*"fixture-app"\s*\]/);
     assert.match(workspace, /requires-python = ">=3\.12"/);
     assert.match(workspace, /index-strategy = "unsafe-best-match"/);
     assert.match(workspace, /target[_-]version = "py312"/);
+    assert.match(workspace, /\[tool\.pyrefly\]\s+ignore-errors-in-generated-code = true/);
+    assert.match(
+      workspace,
+      /project-excludes = \["python\/packages\/native\/src\/fixture\/native\/bindings\.py"\]/,
+    );
     assert.doesNotMatch(workspace, /^  \[/m);
     assert.doesNotMatch(workspace, /= \[ /);
 
@@ -80,6 +95,8 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.doesNotMatch(app, /\[dependency-groups\]/);
     assert.doesNotMatch(app, /^  \[/m);
     assert.doesNotMatch(app, /= \[ /);
+    const native = readFileSync(join(outdir, "python/packages/native/pyproject.toml"), "utf8");
+    assert.match(native, /\[tool\.dbx-tools\]\s+private = true/);
 
     const settings = readFileSync(join(outdir, ".vscode/settings.json"), "utf8");
     assert.match(settings, /python\/\.venv\/bin\/python/);
@@ -107,6 +124,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(release, /if: \$\{\{ github\.event_name == 'push' \}\}/);
     assert.doesNotMatch(release, /inputs\.publish/);
     assert.doesNotMatch(release, /^  publish:$/m);
+    assert.doesNotMatch(release, /publish-native/);
     assert.ok(project.tasks.tryFind("py:sync"));
     assert.ok(project.tasks.tryFind("py:build"));
   });
