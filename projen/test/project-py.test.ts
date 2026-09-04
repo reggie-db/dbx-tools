@@ -66,7 +66,10 @@ describe("DBXToolsPythonWorkspace", () => {
       lintPaths: ["python"],
       pyreflyProjectExcludes: ["python/packages/native/src/fixture/native/bindings.py"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
-      release: true,
+      release: {
+        workflowName: "publish-python",
+        environments: { "fixture-app": "production-pypi" },
+      },
     });
 
     project.synth();
@@ -108,7 +111,7 @@ describe("DBXToolsPythonWorkspace", () => {
       /python\/packages/,
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
-    const release = readFileSync(join(outdir, ".github/workflows/python-release.yml"), "utf8");
+    const release = readFileSync(join(outdir, ".github/workflows/publish-python.yml"), "utf8");
     assert.match(release, /^    tags:\n      - v\*$/m);
     assert.match(
       release,
@@ -119,12 +122,28 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(release, /^      name: pypi-fixture-core$/m);
     assert.match(release, /^          packages-dir: dist\/core$/m);
     assert.match(release, /^  publish-app:$/m);
-    assert.match(release, /^      name: pypi-fixture-app$/m);
+    assert.match(release, /^      name: production-pypi$/m);
     assert.match(release, /^          packages-dir: dist\/app$/m);
     assert.match(release, /if: \$\{\{ github\.event_name == 'push' \}\}/);
     assert.doesNotMatch(release, /inputs\.publish/);
     assert.doesNotMatch(release, /^  publish:$/m);
     assert.doesNotMatch(release, /publish-native/);
+    const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
+    const instructionsCommand = instructionsTask?.steps?.[0]?.exec;
+    assert.ok(instructionsCommand);
+    const encodedInstructions = instructionsCommand.match(/Buffer\.from\('([^']+)'/)?.[1];
+    assert.ok(encodedInstructions);
+    const instructions = Buffer.from(encodedInstructions, "base64").toString();
+    assert.match(instructions, /PyPI project: fixture-core/);
+    assert.match(instructions, /GitHub repository: example\/fixture/);
+    assert.match(instructions, /GitHub environment: pypi-fixture-core/);
+    assert.match(instructions, /PyPI project: fixture-app/);
+    assert.match(instructions, /GitHub environment: production-pypi/);
+    assert.match(instructions, /Workflow filename: publish-python\.yml/);
+    assert.match(instructions, /Workflow path: \.github\/workflows\/publish-python\.yml/);
+    assert.match(instructions, /~\/\.config\/pypi\/auth\.json/);
+    assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
+    assert.doesNotMatch(instructions, /fixture-native/);
     assert.ok(project.tasks.tryFind("py:sync"));
     assert.ok(project.tasks.tryFind("py:build"));
   });

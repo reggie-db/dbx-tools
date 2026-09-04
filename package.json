@@ -29,6 +29,7 @@
     "py:lint": "projen py:lint",
     "py:sync": "projen py:sync",
     "py:test": "projen py:test",
+    "pypiTrustedPublisherInstructions": "projen pypiTrustedPublisherInstructions",
     "rs:bindings": "projen rs:bindings",
     "rs:bindings:demo": "projen rs:bindings:demo",
     "rs:build": "projen rs:build",

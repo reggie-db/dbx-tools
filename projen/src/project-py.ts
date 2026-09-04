@@ -45,6 +45,12 @@ export interface PythonReleaseOptions {
   readonly environmentUrl?: string;
 }
 
+interface PythonPublication {
+  readonly directory: string;
+  readonly distribution: string;
+  readonly environment: string;
+}
+
 /** Options for {@link DBXToolsPythonWorkspace}. */
 export interface DBXToolsPythonWorkspaceOptions {
   readonly packages: readonly PythonPackageOptions[];
@@ -231,13 +237,16 @@ export class DBXToolsPythonWorkspace extends Component {
     }
     this.addTasks(project, options);
 
+    const releaseOptions = options.release === true ? {} : options.release || {};
+    this.addTrustedPublisherInstructionsTask(project, releaseOptions);
+
     const interpreterPath = options.interpreterPath ?? "${workspaceFolder}/.venv/bin/python";
     if (interpreterPath !== false) {
       projectVscode(project)?.settings.addSetting("python.defaultInterpreterPath", interpreterPath);
     }
 
     if (options.release) {
-      this.addReleaseWorkflow(project, options.release === true ? {} : options.release);
+      this.addReleaseWorkflow(project, releaseOptions);
     }
   }
 
@@ -331,8 +340,8 @@ export class DBXToolsPythonWorkspace extends Component {
 
   private addReleaseWorkflow(project: javascript.NodeProject, options: PythonReleaseOptions): void {
     if (!project.github) return;
-    const publishablePackages = this.packages.filter((pkg) => !pkg.packageOptions.private);
-    if (publishablePackages.length === 0) return;
+    const publications = this.publications(options);
+    if (publications.length === 0) return;
     const workflow = new GithubWorkflow(project.github, options.workflowName ?? "python-release");
     workflow.file?.addOverride("permissions", { contents: "read" });
     workflow.on({ push: { tags: ["v*"] }, workflowDispatch: {} });
@@ -361,17 +370,17 @@ export class DBXToolsPythonWorkspace extends Component {
         },
         {
           name: "Build distributions",
-          run: publishablePackages
+          run: publications
             .map(
-              (pkg) =>
-                `uv build --package ${pkg.packageOptions.name} --out-dir dist/${pkg.packageOptions.directory}`,
+              (publication) =>
+                `uv build --package ${publication.distribution} --out-dir dist/${publication.directory}`,
             )
             .join("\n"),
         },
         {
           name: "Validate distributions",
           run: [
-            `test "$(find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) | wc -l | tr -d ' ')" -eq ${publishablePackages.length * 2}`,
+            `test "$(find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) | wc -l | tr -d ' ')" -eq ${publications.length * 2}`,
             "uvx twine check dist/*/*.whl dist/*/*.tar.gz",
           ].join("\n"),
         },
@@ -382,16 +391,15 @@ export class DBXToolsPythonWorkspace extends Component {
         },
       ],
     });
-    for (const pkg of publishablePackages) {
-      workflow.addJob(`publish-${pkg.packageOptions.directory}`, {
+    for (const publication of publications) {
+      workflow.addJob(`publish-${publication.directory}`, {
         if: "${{ github.event_name == 'push' }}",
         needs: ["build"],
         environment: {
-          name:
-            options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
+          name: publication.environment,
           url:
             options.environmentUrl ??
-            `https://pypi.org/project/${pkg.packageOptions.name.replaceAll("_", "-")}/`,
+            `https://pypi.org/project/${publication.distribution.replaceAll("_", "-")}/`,
         },
         runsOn: ["ubuntu-latest"],
         permissions: { idToken: JobPermission.WRITE },
@@ -403,13 +411,77 @@ export class DBXToolsPythonWorkspace extends Component {
             with: { name: "python-distributions", path: "dist" },
           },
           {
-            name: `Publish ${pkg.packageOptions.name} to PyPI`,
+            name: `Publish ${publication.distribution} to PyPI`,
             uses: "pypa/gh-action-pypi-publish@release/v1",
-            with: { "packages-dir": `dist/${pkg.packageOptions.directory}` },
+            with: { "packages-dir": `dist/${publication.directory}` },
           },
         ],
       });
     }
+  }
+
+  private publications(options: PythonReleaseOptions): readonly PythonPublication[] {
+    return this.packages
+      .filter((pkg) => !pkg.packageOptions.private)
+      .map((pkg) => ({
+        directory: pkg.packageOptions.directory,
+        distribution: pkg.packageOptions.name,
+        environment:
+          options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
+      }));
+  }
+
+  private addTrustedPublisherInstructionsTask(
+    project: javascript.NodeProject,
+    options: PythonReleaseOptions,
+  ): void {
+    const workflowName = `${options.workflowName ?? "python-release"}.yml`;
+    const workflowPath = `.github/workflows/${workflowName}`;
+    const repository = this.githubRepository();
+    const publications = this.publications(options);
+    const lines = [
+      "# PyPI Trusted Publisher Setup Instructions",
+      "",
+      "Use a browser to configure the following PyPI trusted publishers.",
+      "For each project, inspect any existing GitHub publisher and ensure every field is synchronized to the desired values below. Update a mismatched publisher when PyPI permits it; otherwise remove the mismatched publisher and create the correct one. Create the publisher when it does not exist. Do not create duplicates.",
+      "",
+      "Authentication rules:",
+      "- If browser authentication is required, first check for ~/.config/pypi/auth.json. When present, read its username and password fields directly into the browser without printing, logging, or exposing either value.",
+      "- If ~/.config/pypi/auth.json is absent, invalid, or insufficient for authentication, pause and ask the user to complete authentication.",
+      "- Pause and ask the user to complete every CAPTCHA. Do not attempt to solve or bypass a CAPTCHA.",
+      "- After the user completes an authentication or CAPTCHA step, continue from the current browser session.",
+      "",
+      "Publisher type: GitHub Actions",
+      "Pending publisher: use only when the PyPI project does not exist yet",
+      "",
+      ...publications.flatMap((publication) => [
+        `## ${publication.distribution}`,
+        `- PyPI project: ${publication.distribution}`,
+        `- GitHub repository: ${repository.owner}/${repository.name}`,
+        `- Repository owner: ${repository.owner}`,
+        `- Repository name: ${repository.name}`,
+        `- GitHub environment: ${publication.environment}`,
+        `- Workflow filename: ${workflowName}`,
+        `- Workflow path: ${workflowPath}`,
+        "",
+      ]),
+    ];
+    const instructions = `${lines.join("\n").trimEnd()}\n`;
+    const encoded = Buffer.from(instructions).toString("base64");
+    project.root.addTask("pypiTrustedPublisherInstructions", {
+      description: "Print browser-agent instructions for PyPI trusted publishers",
+      exec: `node -e "process.stdout.write(Buffer.from('${encoded}','base64').toString())"`,
+    });
+  }
+
+  private githubRepository(): { readonly owner: string; readonly name: string } {
+    const match = this.repository.url
+      .replace(/\.git$/, "")
+      .match(/github\.com(?:[/:])([^/]+)\/([^/]+)$/);
+    if (!match?.[1] || !match[2]) {
+      throw new Error(`Python repository must be hosted on GitHub: ${this.repository.url}`);
+    }
+    return { owner: match[1], name: match[2] };
   }
 
   private renderVersionStampScript(): string {
