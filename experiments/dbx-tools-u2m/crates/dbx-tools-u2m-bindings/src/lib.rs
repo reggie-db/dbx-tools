@@ -4,30 +4,41 @@ use dbx_tools_u2m::{
     open_store, AuthClient, AuthOptions, CredentialStore, Profile, ProfileOptions, StoreBackend,
     StoreOptions, TargetKind,
 };
-use napi::{bindgen_prelude::*, Error as NapiError, Status};
-use napi_derive::napi;
 use time::Duration as TimeDuration;
 
-#[napi(object)]
-#[derive(Default)]
+#[derive(Clone, Default, uniffi::Record)]
 pub struct U2mOptions {
+    #[uniffi(default = None)]
     pub profile: Option<String>,
+    #[uniffi(default = None)]
     pub host: Option<String>,
+    #[uniffi(default = None)]
     pub account_id: Option<String>,
+    #[uniffi(default = None)]
     pub workspace_id: Option<String>,
+    #[uniffi(default = None)]
     pub config_file: Option<String>,
+    #[uniffi(default = None)]
     pub client_id: Option<String>,
+    #[uniffi(default = None)]
     pub scopes: Option<Vec<String>>,
+    #[uniffi(default = None)]
     pub target: Option<String>,
+    #[uniffi(default = None)]
     pub storage: Option<String>,
+    #[uniffi(default = None)]
     pub cache_dir: Option<String>,
+    #[uniffi(default = None)]
     pub postgres_url: Option<String>,
-    pub lock_timeout_seconds: Option<u32>,
-    pub login_timeout_seconds: Option<u32>,
-    pub refresh_buffer_seconds: Option<i64>,
+    #[uniffi(default = 30)]
+    pub lock_timeout_seconds: u64,
+    #[uniffi(default = 3600)]
+    pub login_timeout_seconds: u64,
+    #[uniffi(default = 300)]
+    pub refresh_buffer_seconds: i64,
 }
 
-#[napi(object)]
+#[derive(Clone, uniffi::Record)]
 pub struct AccessToken {
     pub access_token: String,
     pub token_type: String,
@@ -35,23 +46,33 @@ pub struct AccessToken {
     pub scopes: Vec<String>,
 }
 
-#[napi(object)]
+#[derive(Clone, uniffi::Record)]
 pub struct U2mStatus {
     pub profile: String,
     pub host: String,
     pub storage: String,
 }
 
-#[napi(js_name = "U2mClient")]
-pub struct U2mClient {
-    inner: Arc<AuthClient>,
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum U2mError {
+    #[error("{message}")]
+    Failure { message: String },
 }
 
-#[napi]
-impl U2mClient {
-    #[napi(factory)]
-    pub async fn create(options: Option<U2mOptions>) -> Result<Self> {
-        let options = options.unwrap_or_default();
+type Result<T> = std::result::Result<T, U2mError>;
+
+#[derive(uniffi::Object)]
+pub struct PersistentAuth {
+    inner: AuthClient,
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn create_persistent_auth(options: U2mOptions) -> Result<Arc<PersistentAuth>> {
+    PersistentAuth::new(options).await
+}
+
+impl PersistentAuth {
+    async fn new(options: U2mOptions) -> Result<Arc<Self>> {
         let profile = Profile::from_sources(ProfileOptions {
             profile: options.profile.clone(),
             host: options.host.clone(),
@@ -64,30 +85,26 @@ impl U2mClient {
         })
         .map_err(binding_error)?;
         let store = open_binding_store(&options).await?;
-        let auth_options = AuthOptions {
-            refresh_buffer: TimeDuration::seconds(options.refresh_buffer_seconds.unwrap_or(300)),
-            lock_timeout: Duration::from_secs(u64::from(
-                options.lock_timeout_seconds.unwrap_or(30),
-            )),
-            login_timeout: Duration::from_secs(u64::from(
-                options.login_timeout_seconds.unwrap_or(3600),
-            )),
-        };
-        Ok(Self {
-            inner: Arc::new(AuthClient::new(profile, store, auth_options).map_err(binding_error)?),
-        })
+        let inner = AuthClient::new(
+            profile,
+            store,
+            AuthOptions {
+                refresh_buffer: TimeDuration::seconds(options.refresh_buffer_seconds),
+                lock_timeout: Duration::from_secs(options.lock_timeout_seconds),
+                login_timeout: Duration::from_secs(options.login_timeout_seconds),
+            },
+        )
+        .map_err(binding_error)?;
+        Ok(Arc::new(Self { inner }))
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl PersistentAuth {
+    pub async fn challenge(&self) -> Result<()> {
+        self.inner.login().await.map(|_| ()).map_err(binding_error)
     }
 
-    #[napi]
-    pub async fn login(&self) -> Result<AccessToken> {
-        self.inner
-            .login()
-            .await
-            .map(Into::into)
-            .map_err(binding_error)
-    }
-
-    #[napi]
     pub async fn token(&self) -> Result<AccessToken> {
         self.inner
             .token()
@@ -96,17 +113,7 @@ impl U2mClient {
             .map_err(binding_error)
     }
 
-    #[napi]
-    pub async fn token_or_login(&self) -> Result<AccessToken> {
-        self.inner
-            .token_or_login()
-            .await
-            .map(Into::into)
-            .map_err(binding_error)
-    }
-
-    #[napi]
-    pub async fn force_refresh(&self) -> Result<AccessToken> {
+    pub async fn force_refresh_token(&self) -> Result<AccessToken> {
         self.inner
             .force_refresh()
             .await
@@ -114,12 +121,10 @@ impl U2mClient {
             .map_err(binding_error)
     }
 
-    #[napi]
     pub async fn logout(&self) -> Result<()> {
         self.inner.logout().await.map_err(binding_error)
     }
 
-    #[napi(getter)]
     pub fn status(&self) -> U2mStatus {
         U2mStatus {
             profile: self.inner.profile().name.clone(),
@@ -151,10 +156,9 @@ async fn open_binding_store(options: &U2mOptions) -> Result<Arc<dyn CredentialSt
     }
     #[cfg(not(feature = "postgres"))]
     if options.postgres_url.is_some() {
-        return Err(NapiError::new(
-            Status::InvalidArg,
-            "Postgres support was not compiled in",
-        ));
+        return Err(U2mError::Failure {
+            message: "Postgres support was not compiled in".into(),
+        });
     }
 
     open_store(StoreOptions {
@@ -171,10 +175,9 @@ fn parse_target(value: &str) -> Result<TargetKind> {
         "workspace" => Ok(TargetKind::Workspace),
         "account" => Ok(TargetKind::Account),
         "unified" => Ok(TargetKind::Unified),
-        _ => Err(NapiError::new(
-            Status::InvalidArg,
-            "target must be workspace, account, or unified",
-        )),
+        _ => Err(U2mError::Failure {
+            message: "target must be workspace, account, or unified".into(),
+        }),
     }
 }
 
@@ -184,13 +187,16 @@ fn parse_storage(value: &str) -> Result<StoreBackend> {
         "memory" => Ok(StoreBackend::Memory),
         "file" | "plaintext" => Ok(StoreBackend::File),
         "keyring" | "secure" => Ok(StoreBackend::Keyring),
-        _ => Err(NapiError::new(
-            Status::InvalidArg,
-            "storage must be auto, memory, file, or keyring",
-        )),
+        _ => Err(U2mError::Failure {
+            message: "storage must be auto, memory, file, or keyring".into(),
+        }),
     }
 }
 
-fn binding_error(error: impl std::fmt::Display) -> NapiError {
-    NapiError::new(Status::GenericFailure, error.to_string())
+fn binding_error(error: impl std::fmt::Display) -> U2mError {
+    U2mError::Failure {
+        message: error.to_string(),
+    }
 }
+
+uniffi::setup_scaffolding!();

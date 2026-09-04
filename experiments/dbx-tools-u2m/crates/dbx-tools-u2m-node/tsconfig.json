@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "esModuleInterop": true,
+    "emitDeclarationOnly": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noCheck": true,
+    "outDir": "dist",
+    "rootDir": "generated",
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022"
+  },
+  "include": ["generated/**/*.ts"]
+}

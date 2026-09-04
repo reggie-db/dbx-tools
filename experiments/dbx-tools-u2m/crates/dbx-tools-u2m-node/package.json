@@ -2,17 +2,20 @@
   "name": "@dbx-tools/u2m-native",
   "version": "0.1.0",
   "private": true,
-  "type": "commonjs",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "napi build --platform --release",
-    "example": "node examples/token.cjs"
+    "build": "sh ./scripts/build.sh",
+    "example": "node examples/token.mjs"
+  },
+  "dependencies": {
+    "@ubjs/core": "0.31.0-5",
+    "@ubjs/node": "0.31.0-5"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^2.18.4"
-  },
-  "napi": {
-    "name": "dbx_tools_u2m_node"
+    "esbuild": "^0.25.9",
+    "typescript": "^5.9.3",
+    "uniffi-bindgen-react-native": "0.31.0-5"
   }
 }

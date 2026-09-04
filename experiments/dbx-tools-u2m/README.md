@@ -11,8 +11,9 @@ This workspace is not part of the generated `dbx-tools` package workspace and is
 | `dbx-tools-u2m` | OAuth, Databricks profile resolution, token refresh, memory/file/keyring stores, and the generic storage traits |
 | `dbx-tools-u2m-postgres` | Optional Postgres `CredentialStore` implementation with advisory locking |
 | `dbx-tools-u2m-cli` | Standalone `dbx-tools-u2m` executable |
-| `dbx-tools-u2m-node` | Promise-based Node.js N-API bindings |
-| `dbx-tools-u2m-python` | Python PyO3 bindings with GIL-free blocking operations |
+| `dbx-tools-u2m-bindings` | Single UniFFI-annotated foreign-language facade |
+| `dbx-tools-u2m-node` | Generated TypeScript over the new `@ubjs/node` N-API runtime |
+| `dbx-tools-u2m-python` | Official UniFFI-generated async Python bindings |
 
 Rust does not have Python-style `package[extra]` syntax. The closest equivalents are optional Cargo features and separate adapter crates. Consumers that need Postgres add both libraries:
 
@@ -128,26 +129,36 @@ The database role must be able to create and modify `dbx_tools_u2m_tokens` in it
 
 ## Node.js bindings
 
-Build the native addon from `crates/dbx-tools-u2m-node` with `npm install && npm run build`. The exported `U2mClient.create()` factory and auth methods return promises:
+Build from `crates/dbx-tools-u2m-node` with `npm install && npm run build`. The generator reads UniFFI metadata from the shared binding component and emits TypeScript for the new `@ubjs/node` N-API runtime:
 
 ```js
-const { U2mClient } = require("@dbx-tools/u2m-native");
+import { createPersistentAuth, U2mOptions } from "@dbx-tools/u2m-native";
 
-const client = await U2mClient.create({ profile: "DEFAULT" });
-const token = await client.tokenOrLogin();
+const auth = await createPersistentAuth(U2mOptions.create({ profile: "DEFAULT" }));
+await auth.challenge();
+const token = await auth.token();
+const refreshed = await auth.forceRefreshToken();
 ```
 
 See `crates/dbx-tools-u2m-node/examples/token.cjs` for executable usage.
 
 ## Python bindings
 
-Build the extension from `crates/dbx-tools-u2m-python` with `maturin develop`. Methods are synchronous for normal Python callers and release the GIL while Rust performs network or storage work:
+Build the package from `crates/dbx-tools-u2m-python` with `sh scripts/build.sh`. Mozilla UniFFI generates the async Python API from the same annotated Rust component:
 
 ```python
-from dbx_tools_u2m import U2mClient
+import asyncio
+from dbx_tools_u2m_bindings import U2mOptions, create_persistent_auth
 
-client = U2mClient(profile="DEFAULT")
-token = client.token_or_login()
+async def main():
+    auth = await create_persistent_auth(U2mOptions(profile="DEFAULT"))
+    await auth.challenge()
+    token = await auth.token()
+    refreshed = await auth.force_refresh_token()
+
+asyncio.run(main())
 ```
 
 See `crates/dbx-tools-u2m-python/examples/token.py` for executable usage.
+
+The foreign API mirrors Go's `credentials/u2m.PersistentAuth`: `Challenge`, `Token`, and `ForceRefreshToken`. The shared Rust names are `challenge`, `token`, and `force_refresh_token`; UniFFI renders lower camel case for TypeScript and snake case for Python. There is no Go `TokenOrLogin` method, so the bindings do not expose one.

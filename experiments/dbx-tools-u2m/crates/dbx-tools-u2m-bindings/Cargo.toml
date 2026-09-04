@@ -1,14 +1,19 @@
 [package]
-name = "dbx-tools-u2m-node"
+name = "dbx-tools-u2m-bindings"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-description = "Node.js N-API bindings for dbx-tools-u2m"
+description = "UniFFI language bindings for dbx-tools-u2m"
 license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+name = "dbx_tools_u2m_bindings"
+crate-type = ["lib", "cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
 
 [features]
 default = ["keyring"]
@@ -18,10 +23,9 @@ postgres = ["dep:dbx-tools-u2m-postgres"]
 [dependencies]
 dbx-tools-u2m = { path = "../dbx-tools-u2m", default-features = false }
 dbx-tools-u2m-postgres = { path = "../dbx-tools-u2m-postgres", optional = true }
-napi.workspace = true
-napi-derive.workspace = true
+thiserror.workspace = true
 time.workspace = true
-tokio.workspace = true
+uniffi.workspace = true
 
-[build-dependencies]
-napi-build.workspace = true
+[dev-dependencies]
+tokio.workspace = true
