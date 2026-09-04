@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-auth-u2m"
-version = "0.6.146"
+version = "0.6.147"
 description = "Python bindings for dbx-tools-auth-u2m"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -19,6 +19,3 @@ build-backend = "uv_build"
 module-name = "dbx_tools.auth_u2m"
 module-root = "src"
 namespace = true
-
-[tool.dbx-tools]
-private = true
