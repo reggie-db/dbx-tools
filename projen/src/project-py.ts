@@ -25,6 +25,15 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   readonly scripts?: Readonly<Record<string, string>>;
   /** Keep this package unpublished and out of public docs and releases. */
   readonly private?: boolean;
+  /** Trusted publisher used outside the standard Python release workflow. */
+  readonly trustedPublisher?: PythonTrustedPublisherOptions;
+}
+
+/** GitHub Actions publisher for a Python package released by another workflow. */
+export interface PythonTrustedPublisherOptions {
+  readonly workflowName: string;
+  readonly environment: string;
+  readonly artifacts?: string;
 }
 
 /** Options for one projen-native Python workspace member. */
@@ -49,6 +58,8 @@ interface PythonPublication {
   readonly directory: string;
   readonly distribution: string;
   readonly environment: string;
+  readonly workflowName: string;
+  readonly artifacts?: string;
 }
 
 /** Options for {@link DBXToolsPythonWorkspace}. */
@@ -428,17 +439,36 @@ export class DBXToolsPythonWorkspace extends Component {
         distribution: pkg.packageOptions.name,
         environment:
           options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
+        workflowName: options.workflowName ?? "python-release",
       }));
+  }
+
+  private trustedPublisherPublications(
+    options: PythonReleaseOptions,
+  ): readonly PythonPublication[] {
+    const standard = new Map(
+      this.publications(options).map((publication) => [publication.distribution, publication]),
+    );
+    for (const pkg of this.packages) {
+      const publisher = pkg.packageOptions.trustedPublisher;
+      if (!publisher || standard.has(pkg.packageOptions.name)) continue;
+      standard.set(pkg.packageOptions.name, {
+        directory: pkg.packageOptions.directory,
+        distribution: pkg.packageOptions.name,
+        environment: publisher.environment,
+        workflowName: publisher.workflowName,
+        artifacts: publisher.artifacts,
+      });
+    }
+    return [...standard.values()];
   }
 
   private addTrustedPublisherInstructionsTask(
     project: javascript.NodeProject,
     options: PythonReleaseOptions,
   ): void {
-    const workflowName = `${options.workflowName ?? "python-release"}.yml`;
-    const workflowPath = `.github/workflows/${workflowName}`;
     const repository = this.githubRepository();
-    const publications = this.publications(options);
+    const publications = this.trustedPublisherPublications(options);
     const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",
@@ -453,18 +483,23 @@ export class DBXToolsPythonWorkspace extends Component {
       "",
       "Publisher type: GitHub Actions",
       "Pending publisher: use only when the PyPI project does not exist yet",
+      "PyPI publisher scope: configure one trusted publisher per PyPI project and workflow. Platform-specific wheels for different operating systems and CPU architectures do not require separate PyPI projects or trusted publishers.",
       "",
-      ...publications.flatMap((publication) => [
-        `## ${publication.distribution}`,
-        `- PyPI project: ${publication.distribution}`,
-        `- GitHub repository: ${repository.owner}/${repository.name}`,
-        `- Repository owner: ${repository.owner}`,
-        `- Repository name: ${repository.name}`,
-        `- GitHub environment: ${publication.environment}`,
-        `- Workflow filename: ${workflowName}`,
-        `- Workflow path: ${workflowPath}`,
-        "",
-      ]),
+      ...publications.flatMap((publication) => {
+        const workflowName = `${publication.workflowName}.yml`;
+        return [
+          `## ${publication.distribution}`,
+          `- PyPI project: ${publication.distribution}`,
+          `- GitHub repository: ${repository.owner}/${repository.name}`,
+          `- Repository owner: ${repository.owner}`,
+          `- Repository name: ${repository.name}`,
+          `- GitHub environment: ${publication.environment}`,
+          `- Workflow filename: ${workflowName}`,
+          `- Workflow path: .github/workflows/${workflowName}`,
+          ...(publication.artifacts ? [`- Artifacts: ${publication.artifacts}`] : []),
+          "",
+        ];
+      }),
     ];
     const helper = ".projen/pypi-trusted-publisher-instructions.mjs";
     new TextFile(project.root, helper, {

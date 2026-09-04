@@ -346,6 +346,15 @@ export class DBXToolsRustWorkspace {
         module: `${options.pythonModulePrefix ?? options.scope.replaceAll("-", "_")}.${pkg.packageOptions.directory.replaceAll("-", "_")}`,
         description: `Python bindings for ${pkg.crateName}`,
         private: true,
+        trustedPublisher: {
+          workflowName: "rust-release",
+          environment: `native-${pkg.crateName}`,
+          artifacts: `platform-specific wheels for ${(
+            options.releaseTargets ?? UNIFFI_RELEASE_TARGETS
+          )
+            .map((target) => `${target.os}-${target.cpu}`)
+            .join(", ")}; all architectures publish to this one PyPI project`,
+        },
       }));
 
     const existing = new Map(

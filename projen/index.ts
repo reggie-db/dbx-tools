@@ -44,7 +44,7 @@ export type { DBXToolsProjectLanguage, DBXToolsProjectOptions, DBXToolsProject, 
 export { PackageIdentifier, PROJEN_VERSION, DBXToolsNodeProject, ROOT_INSTALL_ONLY_MIXIN, DBXToolsTypeScriptProject } from "./src/project-js.ts";
 export type { DBXToolsJavaScriptProject, DBXToolsJavaScriptProjectOptions, DBXToolsTypeScriptProjectOptions } from "./src/project-js.ts";
 export { DBXToolsPythonProject, DBXToolsPythonWorkspace } from "./src/project-py.ts";
-export type { PythonRepositoryOptions, PythonPackageOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
+export type { PythonRepositoryOptions, PythonPackageOptions, PythonTrustedPublisherOptions, DBXToolsPythonProjectOptions, PythonReleaseOptions, DBXToolsPythonWorkspaceOptions } from "./src/project-py.ts";
 export { UNIFFI_RELEASE_TARGETS, DBXToolsRustProject, DBXToolsRustWorkspace } from "./src/project-rs.ts";
 export type { CargoDependencyOptions, CargoDependency, RustPackageOptions, DBXToolsRustWorkspaceOptions, UniFFIReleaseTarget, RustBindingMapping, RustWorkspaceMapping } from "./src/project-rs.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";

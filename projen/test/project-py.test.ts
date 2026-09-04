@@ -58,6 +58,11 @@ describe("DBXToolsPythonWorkspace", () => {
           module: "fixture.native",
           description: "Private native package",
           private: true,
+          trustedPublisher: {
+            workflowName: "rust-release",
+            environment: "native-fixture-native",
+            artifacts: "platform-specific wheels for all supported architectures",
+          },
         },
       ],
       dependencies: ["fixture-app"],
@@ -147,7 +152,11 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /Workflow path: \.github\/workflows\/publish-python\.yml/);
     assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
-    assert.doesNotMatch(instructions, /fixture-native/);
+    assert.match(instructions, /PyPI project: fixture-native/);
+    assert.match(instructions, /GitHub environment: native-fixture-native/);
+    assert.match(instructions, /Workflow filename: rust-release\.yml/);
+    assert.match(instructions, /Artifacts: platform-specific wheels/);
+    assert.match(instructions, /do not require separate PyPI projects or trusted publishers/);
     assert.ok(project.tasks.tryFind("py:sync"));
     assert.ok(project.tasks.tryFind("py:build"));
   });

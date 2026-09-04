@@ -53,6 +53,12 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal(rust.pythonPackages[0]?.name, "fixture-auth-u2m");
     assert.equal(rust.pythonPackages[0]?.module, "fixture.auth_u2m");
     assert.equal(rust.pythonPackages[0]?.private, true);
+    assert.deepEqual(rust.pythonPackages[0]?.trustedPublisher, {
+      workflowName: "rust-release",
+      environment: "native-fixture-auth-u2m",
+      artifacts:
+        "platform-specific wheels for linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64; all architectures publish to this one PyPI project",
+    });
     assert.deepEqual(rust.workspaceMapping, {
       root: "packages/rs",
       crates: ["packages/rs/auth-u2m", "packages/rs/auth-u2m-cli"],
