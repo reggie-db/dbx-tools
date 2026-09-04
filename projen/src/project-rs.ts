@@ -413,7 +413,7 @@ export class DBXToolsRustWorkspace {
         private: true,
         trustedPublisher: {
           workflowName: options.releaseWorkflowName ?? "rust-release",
-          environment: `native-${pkg.crateName}`,
+          environment: `pypi-${pkg.crateName}`,
           artifacts: `platform-specific wheels for ${releaseTargets(options)
             .map((target) => `${target.os}-${target.cpu}`)
             .join(", ")}; all architectures publish to this one PyPI project`,
@@ -684,7 +684,7 @@ export class DBXToolsRustWorkspace {
                   "runs-on": "ubuntu-latest",
                   strategy: { matrix: { binding: bindings } },
                   permissions: { contents: "read", "id-token": "write" },
-                  environment: { name: "native-${{ matrix.binding.crate }}" },
+                  environment: { name: "pypi-${{ matrix.binding.crate }}" },
                   steps: [
                     { name: "Checkout", uses: "actions/checkout@v6" },
                     {

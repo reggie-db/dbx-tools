@@ -159,7 +159,7 @@ jobs:
       contents: read
       id-token: write
     environment:
-      name: native-${{ matrix.binding.crate }}
+      name: pypi-${{ matrix.binding.crate }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6

@@ -61,7 +61,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.150",
+  "version": "0.6.151",
   "types": "index.ts",
   "type": "module",
   "exports": {

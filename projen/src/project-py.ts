@@ -515,7 +515,7 @@ export class DBXToolsPythonWorkspace extends Component {
       "",
       `- Confirm that the active PyPI account is ${repository.owner}.`,
       "- Start at https://pypi.org/manage/projects/ and determine which listed projects exist.",
-      "- Inspect every existing GitHub publisher for each project and compare its repository owner, repository name, workflow filename, and environment with the desired values below.",
+      "- Inspect every existing GitHub publisher for each project and compare its owner, repository name, workflow name, and environment name with the desired values below.",
       "- Identify duplicate and mismatched trusted publishers that must be replaced by removing the publisher entry and adding the correct one.",
       "- For projects that do not exist, identify the pending publisher that must be created.",
       "- Report the active account and a proposed reconciliation plan grouped by publishers that will be left unchanged, updated, replaced, created, or removed.",
@@ -556,13 +556,10 @@ export class DBXToolsPythonWorkspace extends Component {
         const workflowName = `${publication.workflowName}.yml`;
         return [
           `## ${publication.distribution}`,
-          `- PyPI project: ${publication.distribution}`,
-          `- GitHub repository: ${repository.owner}/${repository.name}`,
-          `- Repository owner: ${repository.owner}`,
+          `- Owner: ${repository.owner}`,
           `- Repository name: ${repository.name}`,
-          `- GitHub environment: ${publication.environment}`,
-          `- Workflow filename: ${workflowName}`,
-          `- Workflow path: .github/workflows/${workflowName}`,
+          `- Workflow name: ${workflowName}`,
+          `- Environment name: ${publication.environment}`,
           ...(publication.artifacts ? [`- Artifacts: ${publication.artifacts}`] : []),
           "",
         ];
