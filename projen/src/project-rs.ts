@@ -8,6 +8,7 @@ import { Project, TextFile, YamlFile, javascript } from "projen";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import type { DBXToolsProject } from "./project.ts";
 import {
+  addExports,
   DBXToolsTypeScriptProject,
   projectReleaseBranch,
   projectRepositoryUrl,
@@ -50,6 +51,8 @@ export interface RustPackageOptions {
   readonly bindings?: readonly ("node" | "python")[];
   readonly nodeDependencies?: readonly string[];
   readonly nodeDevDependencies?: readonly string[];
+  /** Hand-authored Node subpaths exposed beside generated bindings. */
+  readonly nodeExports?: Readonly<Record<string, string>>;
   readonly uniffiConfig?: Readonly<Record<string, unknown>>;
 }
 
@@ -156,6 +159,8 @@ export const UNIFFI_RELEASE_TARGETS: readonly UniFFIReleaseTarget[] = [
 ] as const;
 
 const RUST_CACHE_ENV = {
+  CARGO_INCREMENTAL: "0",
+  CARGO_TERM_COLOR: "always",
   RUSTC_WRAPPER: "sccache",
   SCCACHE_GHA_ENABLED: "true",
 } as const;
@@ -203,8 +208,9 @@ function releaseTargets(options: DBXToolsRustWorkspaceOptions): readonly UniFFIR
     const target = UNIFFI_RELEASE_TARGETS.find(
       (candidate) => candidate.os === platform.os && candidate.cpu === platform.cpu,
     );
-    if (!target)
+    if (!target) {
       throw new Error(`Unsupported Rust release platform: ${platform.os}-${platform.cpu}`);
+    }
     return target;
   });
 }
@@ -544,7 +550,6 @@ export class DBXToolsRustWorkspace {
         `@${scope}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
       );
       node.package.addField("private", true);
-      node.package.file.addDeletionOverride("publishConfig");
       node.package.addField("description", `Node bindings for ${binding.crateName}`);
       const nativeTargets = releaseTargets(options);
       if (options.release ?? true) {
@@ -566,7 +571,9 @@ export class DBXToolsRustWorkspace {
       if (binding.packageOptions.nodeDevDependencies?.length) {
         node.addDevDeps(...binding.packageOptions.nodeDevDependencies);
       }
-      node.compileTask.reset();
+      if (binding.packageOptions.nodeExports) {
+        addExports(node, { ...binding.packageOptions.nodeExports });
+      }
       new TextFile(node, "exports.ts", {
         lines: ['export * from "./src/bindings.ts";', ""],
       });
@@ -607,10 +614,13 @@ export class DBXToolsRustWorkspace {
     project.addTask("rs:lint", { exec: "cargo clippy --workspace --all-targets --all-features" });
     project.addTask("rs:test", { exec: "cargo test --workspace" });
     project.addTask("rs:build", { exec: "cargo build --workspace" });
-    project.addTask("rs:bindings", {
+    const bindingsTask = project.addTask("rs:bindings", {
       exec: "bun node_modules/@dbx-tools/projen/tasks/rust.ts",
       description: "Generate language bindings for UniFFI-enabled Rust crates",
     });
+    if (this.bindingMappings.some((binding) => binding.node)) {
+      project.tasks.tryFind("pre-compile")?.spawn(bindingsTask);
+    }
     project.addTask("rs:bindings:demo", {
       description: "Generate and run UniFFI Node and Python example CLIs",
       exec: [
@@ -668,6 +678,10 @@ export class DBXToolsRustWorkspace {
     }));
     const hasNodeBindings = bindings.some((binding) => binding.node);
     const hasPythonBindings = bindings.some((binding) => binding.python);
+    const facadeCondition = "matrix.target.facade";
+    const facadeCacheMissCondition =
+      "matrix.target.facade && steps.ubrn_cache.outputs.cache-hit != 'true'";
+    const usePreinstalledWindowsRust = releaseRustVersion === "stable";
     const hasTargetOutputs =
       bindings.length > 0 || releaseBinaries.length > 0 || publicCrates.length > 0;
     if (hasTargetOutputs && targetMatrix.length === 0) {
@@ -779,15 +793,32 @@ export class DBXToolsRustWorkspace {
         ...(hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
         {
           name: "Setup Rust",
+          ...(usePreinstalledWindowsRust ? { if: "${{ matrix.target.os != 'win32' }}" } : {}),
           uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
           with: { targets: "${{ matrix.target.cargo }}" },
         },
+        ...(usePreinstalledWindowsRust
+          ? [
+              {
+                name: "Verify preinstalled Windows Rust",
+                if: "${{ matrix.target.os == 'win32' }}",
+                shell: "bash",
+                run: [
+                  "rustc --version --verbose",
+                  "cargo --version",
+                  'rustup target list --installed | grep -Fx "${{ matrix.target.cargo }}"',
+                  'test -f "$(rustc --print sysroot)/lib/rustlib/${{ matrix.target.cargo }}/bin/rust-lld.exe"',
+                ].join("\n"),
+              },
+            ]
+          : []),
         ...rustCacheSteps(`release-\${{ matrix.target.cargo }}-rust-${releaseRustVersion}`),
         ...(hasNodeBindings
           ? [
               {
                 name: "Restore UBRN executable",
                 id: "ubrn_cache",
+                if: "${{ matrix.target.facade }}",
                 uses: "actions/cache/restore@v5",
                 with: {
                   path: ".cache/ubrn",
@@ -798,7 +829,8 @@ export class DBXToolsRustWorkspace {
           : []),
         ...(hasNodeBindings
           ? bunCacheRestoreSteps(project, {
-              condition: "steps.ubrn_cache.outputs.cache-hit != 'true'",
+              setupCondition: facadeCondition,
+              condition: facadeCacheMissCondition,
             })
           : []),
         {
@@ -827,12 +859,12 @@ export class DBXToolsRustWorkspace {
           ? [
               {
                 name: "Install Node tooling",
-                if: "${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}",
+                if: "${{ matrix.target.facade && steps.ubrn_cache.outputs.cache-hit != 'true' }}",
                 shell: "bash",
                 run: timedBash("node_tooling", "bun install"),
               },
               bunCacheSaveStep({
-                condition: "steps.ubrn_cache.outputs.cache-hit != 'true'",
+                condition: facadeCacheMissCondition,
               }),
             ]
           : []),
@@ -840,7 +872,7 @@ export class DBXToolsRustWorkspace {
           ? [
               {
                 name: "Prepare UBRN generator",
-                if: "${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}",
+                if: "${{ matrix.target.facade && steps.ubrn_cache.outputs.cache-hit != 'true' }}",
                 env: {
                   CARGO_TARGET_DIR: "${{ github.workspace }}/target/ubrn",
                   UBRN_EXECUTABLE: ubrnExecutable,
@@ -858,13 +890,14 @@ export class DBXToolsRustWorkspace {
               },
               {
                 name: "Verify UBRN executable",
+                if: "${{ matrix.target.facade }}",
                 env: { UBRN_EXECUTABLE: ubrnExecutable },
                 shell: "bash",
                 run: 'test -f "$UBRN_EXECUTABLE"',
               },
               {
                 name: "Save UBRN executable",
-                if: "${{ steps.ubrn_cache.outputs.cache-hit != 'true' }}",
+                if: "${{ matrix.target.facade && steps.ubrn_cache.outputs.cache-hit != 'true' }}",
                 uses: "actions/cache/save@v5",
                 with: {
                   path: ".cache/ubrn",
@@ -876,6 +909,10 @@ export class DBXToolsRustWorkspace {
         {
           name: "Build Rust outputs",
           shell: "bash",
+          env: {
+            CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER:
+              "${{ matrix.target.os == 'win32' && 'rust-lld' || '' }}",
+          },
           run: timedBash(
             "rust_workspace",
             'cargo build --release --workspace --target "${{ matrix.target.cargo }}"',

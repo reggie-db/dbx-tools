@@ -2,7 +2,7 @@
   "dependencies": [
     {
       "name": "@types/bun",
-      "version": "^1.3.14",
+      "version": "1.3.14",
       "type": "build"
     },
     {
@@ -25,12 +25,7 @@
       "type": "runtime"
     },
     {
-      "name": "@dbx-tools/cli-model-proxy",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "@dbx-tools/cli-token",
+      "name": "@dbx-tools/cli-auth",
       "version": "workspace:*",
       "type": "runtime"
     },

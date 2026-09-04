@@ -2,13 +2,15 @@ use std::{sync::Arc, time::Duration};
 
 use time::{Duration as TimeDuration, OffsetDateTime};
 
-use crate::{CredentialStore, Error, OAuthFlow, Profile, Result, Token};
+use crate::{CredentialStore, Error, OAuthFlow, OAuthTemplate, Profile, Result, Token};
 
 #[derive(Clone, Debug)]
 pub struct AuthOptions {
     pub refresh_buffer: TimeDuration,
     pub lock_timeout: Duration,
     pub login_timeout: Duration,
+    /// Logo URL or data URI displayed by the browser callback page.
+    pub callback_image_src: Option<String>,
 }
 
 impl Default for AuthOptions {
@@ -17,6 +19,7 @@ impl Default for AuthOptions {
             refresh_buffer: TimeDuration::minutes(5),
             lock_timeout: Duration::from_secs(30),
             login_timeout: Duration::from_secs(3600),
+            callback_image_src: None,
         }
     }
 }
@@ -34,7 +37,8 @@ impl AuthClient {
         store: Arc<dyn CredentialStore>,
         options: AuthOptions,
     ) -> Result<Self> {
-        let flow = OAuthFlow::new(profile.clone())?;
+        let flow = OAuthFlow::new(profile.clone())?
+            .with_template(OAuthTemplate::new(options.callback_image_src.clone()));
         Ok(Self {
             profile,
             flow,

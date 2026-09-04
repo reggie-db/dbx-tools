@@ -21,7 +21,7 @@ Key features:
   endpoint id.
 - Supports class ceilings so callers can ask for a capability band without
   accidentally escalating to a larger model.
-- Supports `requiresTools` filtering so agent/model-proxy callers select only
+- Supports `requiresTools` filtering so callers select only
   endpoints verified for a complete function-call and result-replay round-trip.
 - Caches enriched catalogues per workspace host through AppKit cache utilities,
   and re-lists once on a resolve miss so a newly deployed model still resolves.
@@ -212,5 +212,4 @@ policy decisions; fallbacks are a last resort.
 - `fallback` - static fallback model ids per class.
 
 The AppKit-Mastra integration uses this package through
-[`@dbx-tools/appkit-mastra`](../appkit-mastra); the local OpenAI-compatible
-gateway uses it through [`@dbx-tools/cli-model-proxy`](../../cli/model-proxy).
+[`@dbx-tools/appkit-mastra`](../appkit-mastra).

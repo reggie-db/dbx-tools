@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient, QueryResultRow } from "pg";
-import type { StorageAdapter } from "./bindings.ts";
+import type { StorageAdapter } from "./runtime.ts";
 
 const TABLE = "dbx_tools_auth_u2m_tokens";
 const LOCK_RETRY_MILLIS = 50;
@@ -10,10 +10,7 @@ type LockRow = QueryResultRow & { acquired: boolean };
 type UnlockRow = QueryResultRow & { released: boolean };
 
 function advisoryLockId(profile: string): bigint {
-  return createHash("sha256")
-    .update(`dbx-tools-auth-u2m:${profile}`)
-    .digest()
-    .readBigInt64BE(0);
+  return createHash("sha256").update(`dbx-tools-auth-u2m:${profile}`).digest().readBigInt64BE(0);
 }
 
 function isUndefinedTable(error: unknown): boolean {

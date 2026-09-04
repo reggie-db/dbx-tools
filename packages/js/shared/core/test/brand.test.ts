@@ -8,7 +8,7 @@ describe("brand context", () => {
 
     assert.equal(context.name, "dbx tools");
     assert.equal(context.assets.icon.light, brand.DEFAULT_BRAND_ASSETS.icon.light);
-    assert.equal(context.colors.primary, "#FF3621");
+    assert.equal(context.colors.primary, "#1B3139");
   });
 
   it("validates nested overrides and preserves defaults", () => {

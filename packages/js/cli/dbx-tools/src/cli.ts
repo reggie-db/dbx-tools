@@ -1,22 +1,13 @@
 /**
- * The single `dbx` (alias `dbx-tools`) commander entry.
+ * Commander entry for `dbx` and its `dbx-tools` alias.
  *
- * One bin, five command groups:
- *   - `dev` - workspace lifecycle: detect the root, bootstrap or repair, then
- *     forward whatever follows to projen. This is the passthrough, and it is an
- *     EXPLICIT subcommand rather than the bare root action so a projen task
- *     name can never shadow (or be shadowed by) a sibling command.
- *   - `model-proxy` - the local OpenAI-compatible Model Serving proxy.
- *   - `appkit` - AppKit environment helpers (`appkit env`).
- *   - `tunnel` - public portr tunnel with passwordless access gating.
- *   - `token` - local provider access-token broker.
+ * `dev` bootstraps or repairs a workspace and forwards to projen.
+ * `appkit` provides AppKit environment helpers.
+ * `auth` manages Databricks browser OAuth and access tokens.
+ * `tunnel` runs a public portr tunnel with passwordless access gating.
  *
- * The four feature groups stay in sibling packages and are `await import()`ed
- * only once their name is matched, so `dbx dev` never loads the Databricks SDK,
- * AppKit, tunnel, or token-broker dependencies. That lazy hop is also why they
- * are mounted as ARG-FORWARDING commands instead of
- * `addCommand()`: building a child program eagerly to register it would defeat
- * the point. Each forwards its own `--help`, so the child prints its real help.
+ * Feature commands load their sibling packages only when selected and forward
+ * their complete argument list, including `--help`.
  *
  * @module
  */
@@ -94,9 +85,7 @@ function addForwardedCommand(
 export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
   const program = new Command()
     .name(name)
-    .description(
-      "Databricks developer tools: workspace lifecycle, model proxy, AppKit env, tunnel, and token broker",
-    )
+    .description("Databricks developer tools: workspace lifecycle, AppKit env, auth, and tunnel")
     .showHelpAfterError()
     .helpOption("-h, --help", `Show ${name} help`);
 
@@ -113,13 +102,6 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
 
   addForwardedCommand(
     program,
-    "model-proxy",
-    "Serve a local OpenAI-compatible proxy in front of Databricks Model Serving",
-    async () => (await import("@dbx-tools/cli-model-proxy/cli")).buildProgram,
-  );
-
-  addForwardedCommand(
-    program,
     "appkit",
     "AppKit helpers (env: print the environment an AppKit app resolves)",
     async () => (await import("@dbx-tools/cli-appkit-env/cli")).buildProgram,
@@ -127,16 +109,16 @@ export function buildProgram(name: string = PROGRAM_NAMES[0]): Command {
 
   addForwardedCommand(
     program,
-    "tunnel",
-    "Run a public portr tunnel with an email-OTP gate",
-    async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
+    "auth",
+    "Authenticate to Databricks with browser-based user OAuth",
+    async () => (await import("@dbx-tools/cli-auth/cli")).buildProgram,
   );
 
   addForwardedCommand(
     program,
-    "token",
-    "Broker short-lived provider access tokens for local development",
-    async () => (await import("@dbx-tools/cli-token/cli")).buildProgram,
+    "tunnel",
+    "Run a public portr tunnel with an email-OTP gate",
+    async () => (await import("@dbx-tools/cli-tunnel/cli")).buildProgram,
   );
 
   return program;

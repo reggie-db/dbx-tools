@@ -11,7 +11,6 @@ import { find } from "@dbx-tools/path";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const ALLOWED = new Set([
-  "packages/js/cli/model-proxy/src/backend.ts",
   "packages/js/node/appkit/src/databricks.ts",
   "packages/js/node/search/src/client.ts",
 ]);

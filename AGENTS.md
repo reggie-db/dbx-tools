@@ -74,34 +74,20 @@ Primary package areas:
   contracts. `shared/genie` also owns the codegen'd `src/dashboards.ts` (zod
   schemas from the upstream SDK `.d.ts`) that its Genie schemas widen; that used
   to be a separate `shared-sdk-model` package with exactly one consumer.
-- `packages/js/node/model`, `packages/js/shared/model`, and
-  `packages/js/cli/model-proxy` — intent-based Model Serving endpoint selection,
-  shared schemas/classification, and local OpenAI-compatible proxying.
-- `packages/js/cli/token` - the `dbx token` local credential broker. It delegates
-  Google login and refresh credentials to gcloud ADC, caches only short-lived
-  access tokens in memory by canonical scope set, and authenticates local HTTP
-  clients with a shared password or a client JWT signed by the broker secret.
-  JWT is the default. Foreground `serve` requires an explicit secret;
-  `client-jwt` uses that explicit secret or an existing installed-service
-  secret. Its optional client name defaults to `local-cli` and is signed into
-  both the JWT subject and protected header. Native service mode owns the common secret store: installation
-  synchronizes a supplied secret or generates one with check-lock-check, and the
-  service process holds one fail-fast file lock for its complete lifetime so a
-  duplicate cannot start. Docker and Podman gateway binds are discovered
-  by default alongside `127.0.0.1`; the broker never silently widens to every
-  interface. Native services have a restricted PATH, so service installation
-  resolves the current `gcloud` with `Bun.which` (with a system lookup fallback
-  when the CLI runs under Node) and records its absolute path in the service
-  command. An omitted broker allow-list and an omitted client-JWT scope claim
-  both mean unrestricted; explicit scope lists remain exact allow-lists. List
-  configuration uses singular repeatable CLI flags and plural comma-separated
-  environment variables. A gcloud invalid-scope response enters one
-  process-wide check-lock-check authorization flow in foreground and service
-  modes: inspect the current ADC token scopes, return that token when it already
-  covers the request, otherwise combine current and requested scopes, launch the
-  browser through `gcloud auth application-default login`, and retry.
-  JWT-shaped access tokens use an unverified local `scope`/`scp` parse only for
-  that comparison; opaque tokens fall back to Google's tokeninfo endpoint.
+- `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
+  Serving endpoint selection and shared schemas/classification.
+- `packages/rs/auth-u2m`, `packages/js/node/auth-u2m`,
+  `packages/py/auth-u2m`, and `packages/js/cli/auth` - Databricks browser OAuth,
+  secure refresh-token storage, generated Node/Python bindings, and the
+  `dbx auth` Commander interface. The CLI delegates OAuth, profile resolution,
+  refresh, locking, and storage to the Node binding package. It must not
+  reproduce that behavior in TypeScript. Node consumers load the generated
+  native module through `@dbx-tools/auth-u2m/runtime`; the stable subpath keeps
+  generated source out of consumer type-checking and resolves `.ts` in a
+  workspace or compiled `.js` from an installed package. `OAuthTemplate`
+  renders the browser callback from a Rust string with dbx tools colors and a
+  configurable image source. The crate copies the root brand YAML and light
+  logo, embeds the logo as a data URI, and reads fallback styling from the YAML.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search
@@ -358,9 +344,15 @@ Primary package areas:
   passes that executable directly and keeps the copied package's existing barrel
   instead of loading the full projen dependency graph. Save a newly built
   executable immediately after validation rather than in end-of-job cleanup, so
-  a later packaging failure cannot discard the expensive cache fill. Bun runtime
-  setup remains unconditional because packaging executes the TypeScript binding
-  generator even when the UBRN executable is restored.
+  a later packaging failure cannot discard the expensive cache fill. Within the
+  facade row, Bun runtime setup remains unconditional because packaging executes
+  the TypeScript binding generator even when the UBRN executable is restored.
+  The complete Bun/UBRN path runs only in that single row. Other rows
+  package native libraries and Python wheels without touching UBRN.
+  Stable Windows release rows use the toolchain already installed on the hosted
+  runner after verifying the compiler, Cargo, target, and bundled `rust-lld`.
+  Their workspace build selects `rust-lld`; an explicitly pinned
+  `releaseRustVersion` still uses the setup action on Windows.
   Release tags run only the small `release-dispatch` workflow. It resolves the
   annotated tag to a commit and sends a `rust-release` event when a Rust release
   exists, otherwise it sends the downstream `release` event directly. A
@@ -562,10 +554,9 @@ AppKit's public `WorkspaceClient` is the SDK migration seam. In the installed
 `@databricks/sdk-experimental`; it is not a completed modular-SDK migration.
 Use `WorkspaceClient` / `createWorkspaceClient` and
 `toLegacyWorkspaceClient()` at compatibility handoffs. Direct experimental-SDK
-imports are ratcheted to `node/appkit/src/databricks.ts` (cancellation),
-`node/search/src/client.ts` (Vector Search lifecycle), and
-`cli/model-proxy/src/backend.ts` (explicit profile support). The Genie
-declaration is also the synth-time input for `shared/genie/src/dashboards.ts`.
+imports are ratcheted to `node/appkit/src/databricks.ts` (cancellation) and
+`node/search/src/client.ts` (Vector Search lifecycle). The Genie declaration is
+also the synth-time input for `shared/genie/src/dashboards.ts`.
 Do not add another direct import, and do not replace generated Genie Zod schemas
 with hand-maintained copies unless AppKit publishes browser-safe runtime schemas.
 
@@ -601,9 +592,6 @@ why to use this package anyway:
   names, capability classes (`chat-thinking`, `chat-balanced`, `chat-fast`,
   `embedding`), class ceilings, cached enriched catalogues, model pickers, and
   fallbacks. Native AppKit Serving is best when the endpoint alias is known.
-- `@dbx-tools/cli-model-proxy`: use for local OpenAI-compatible clients and
-  tools that know `OPENAI_BASE_URL` but not AppKit. Ships no bin - it is the
-  `dbx model-proxy` command group of the single `dbx` CLI (`@dbx-tools/cli`).
 - `@dbx-tools/ui-appkit`: use as a stable foundation/re-export for dbx-tools UI
   packages and hosts, not as a replacement for `@databricks/appkit-ui` in simple
   app code.
@@ -1298,8 +1286,8 @@ set`. That is exactly what happened when `shared/email-template` was extracted:
 ```
 .projenrc.ts                              # new DBXToolsNodeProject({...}) + user mixins + the dbx-tools root task
 packages/js/
-  cli/dbx-tools/                          # the ONLY bin (`@dbx-tools/cli`, `dbx` + `dbx-tools`)
-    bin/dbx-tools.ts                      # commander entry: dev | model-proxy | appkit
+  cli/dbx-tools/                          # published `dbx` CLI and `dbx-tools` alias
+    bin/dbx-tools.ts                      # commander entry: dev | appkit | auth | tunnel
     index.ts                              # generated barrel (public API surface)
     src/
       bootstrap.ts                        # bootstraps a COMPLETELY EMPTY folder (see Commands)
@@ -1599,17 +1587,15 @@ error source:
 
 ## The `dbx` CLI
 
-`@dbx-tools/cli` ships the repo's ONLY bin, `dbx` (aliased `dbx-tools`), with
-five command groups: `dev` (workspace lifecycle -> projen), `model-proxy`,
-`appkit`, `tunnel`, and `token`. The latter four live in sibling CLI packages
-and are mounted as
-ARG-FORWARDING commands that `await import()` the sibling's `buildProgram(name)`
-only once the name is matched - so `dbx dev` never loads the Databricks SDK or
-AppKit. Those packages therefore declare NO bin; adding one back re-splits a
-surface a user should only have to install once. Each forwarding command sets
+`@dbx-tools/cli` ships `dbx` with the `dbx-tools` alias. `dev` handles workspace
+lifecycle through projen, `appkit` resolves AppKit environments, `auth` handles
+browser OAuth, and `tunnel` runs the gated public tunnel. The feature commands
+live in sibling CLI packages and are mounted as ARG-FORWARDING commands that
+`await import()` the sibling's `buildProgram(name)` only once the name is
+matched. Those packages declare NO bin. Each forwarding command sets
 `helpOption(false)` so `--help` reaches the child and the child prints its own
-help; `buildProgram` takes the display name (`dbx model-proxy`) so help output
-names the real invocation rather than a bin that no longer exists.
+help; `buildProgram` takes the display name (`dbx auth`) so help output
+names the real invocation.
 
 `dev` exists for the one thing projen cannot do for itself: a folder with no
 `.projenrc.ts` or toolchain installed yet, where there are no tasks to run.
@@ -1964,7 +1950,7 @@ publish` in `projen/` strips `workspace:*` to those versions. Do not
   come from the `cli` tag, so a CLI needs no per-package config for either.
   It is the ONLY package in the repo that overrides its name: every other one,
   CLIs included, keeps what discovery derives from its path
-  (`packages/js/cli/model-proxy` -> `@dbx-tools/cli-model-proxy`,
+  (`packages/js/cli/auth` -> `@dbx-tools/cli-auth`,
   `packages/js/cli/appkit-env` -> `@dbx-tools/cli-appkit-env`). To rename a
   package, MOVE ITS FOLDER - do not add a name override.
   The projen engine itself lives in `projen`
@@ -2009,7 +1995,9 @@ publish` in `projen/` strips `workspace:*` to those versions. Do not
   `link:` install with a version range would silently repoint it at the
   registry. If the path does NOT pass through `node_modules` (this repo's own
   dogfooding - relative-imported, no package resolution involved), it returns
-  `undefined` and adds nothing. The root also adds `typescript` and `@types/bun`.
+  `undefined` and adds nothing. The root also adds `typescript` and pins
+  `@types/bun` to the configured Bun runtime version so native pointer types stay
+  coherent across source dependencies.
 - **`DBXToolsNodeProject` defaults `packageManager: BUN`** (projen's
   `packageManager` is readonly after construction); pass a different one only if
   you know what you're doing, since the whole toolchain assumes bun workspaces.
@@ -2173,14 +2161,12 @@ api`'s controllers generate `packages/example/openapi/api`), not a hardcoded
 - **Model tool capability means a complete Responses round-trip, not merely a
   chat endpoint accepting `tools`.** Databricks endpoint list/OpenAPI metadata
   currently exposes no tools bit, so `ServingEndpointSummary.supportsTools` and
-  `classify.endpointCapabilities().tools` use a conservative policy verified
-  through the local model proxy: GPT except GPT-OSS, Claude, Qwen, GLM, and
-  Llama. Gemini is excluded because its replayed function call requires a
+  `classify.endpointCapabilities().tools` use a conservative policy: GPT except
+  GPT-OSS, Claude, Qwen, GLM, and Llama. Gemini is excluded because its replayed function call requires a
   thought signature Open Responses does not currently accept; GPT-OSS rejects
   Responses passthrough. `requiresTools` must filter candidates BEFORE fuzzy
-  ranking/fallback, and model-proxy rejects tool-bearing requests whose resolved
-  endpoint is not capable. Update the policy only after testing both the initial
-  function call and stateless `function_call_output` replay.
+  ranking/fallback. Update the policy only after testing both the initial
+  function call and stateless `function_call_output` replay through LiteLLM.
 - **Responses-only endpoint policy is shared across Node and Python.**
   `@dbx-tools/model` `invoke.isResponsesOnly` and
   `dbx_tools.model.is_responses_only` classify Codex and GPT 5.4+ as native

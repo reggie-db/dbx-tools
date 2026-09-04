@@ -11,7 +11,10 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{token::OAuthTokenResponse, Error, Profile, Result, TargetKind, Token};
+use crate::{
+    token::OAuthTokenResponse, Error, OAuthTemplate, OAuthTemplateContext, Profile, Result,
+    TargetKind, Token,
+};
 
 const DEFAULT_PORT: u16 = 8020;
 const MAX_PORT: u16 = 8040;
@@ -28,6 +31,7 @@ struct AuthorizationServer {
 pub struct OAuthFlow {
     profile: Profile,
     http: reqwest::Client,
+    template: OAuthTemplate,
 }
 
 impl OAuthFlow {
@@ -35,7 +39,17 @@ impl OAuthFlow {
         let http = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
-        Ok(Self { profile, http })
+        Ok(Self {
+            profile,
+            http,
+            template: OAuthTemplate::default(),
+        })
+    }
+
+    /// Set the branding used by the browser callback page.
+    pub fn with_template(mut self, template: OAuthTemplate) -> Self {
+        self.template = template;
+        self
     }
 
     pub async fn login(&self, timeout: Duration) -> Result<Token> {
@@ -55,9 +69,17 @@ impl OAuthFlow {
             eprintln!("Open this URL in a browser:\n{authorization_url}");
         }
 
-        let callback = tokio::time::timeout(timeout, receive_callback(listener, &redirect))
-            .await
-            .map_err(|_| Error::OAuth("timed out waiting for browser authorization".into()))??;
+        let callback = tokio::time::timeout(
+            timeout,
+            receive_callback(
+                listener,
+                &redirect,
+                &self.template,
+                Some(self.profile.host.as_str()),
+            ),
+        )
+        .await
+        .map_err(|_| Error::OAuth("timed out waiting for browser authorization".into()))??;
         if callback.state.as_deref() != Some(csrf.secret()) {
             return Err(Error::OAuth("OAuth state did not match".into()));
         }
@@ -185,7 +207,12 @@ async fn bind_callback() -> Result<(TcpListener, SocketAddr)> {
     )))
 }
 
-async fn receive_callback(listener: TcpListener, redirect: &str) -> Result<Callback> {
+async fn receive_callback(
+    listener: TcpListener,
+    redirect: &str,
+    template: &OAuthTemplate,
+    host: Option<&str>,
+) -> Result<Callback> {
     let (mut stream, _) = listener.accept().await?;
     let mut buffer = vec![0; 16 * 1024];
     let read = stream.read(&mut buffer).await?;
@@ -208,7 +235,7 @@ async fn receive_callback(listener: TcpListener, redirect: &str) -> Result<Callb
         error_description: values.get("error_description").cloned(),
     };
     let successful = callback.error.is_none() && callback.code.is_some();
-    let body = callback_response(successful);
+    let body = callback_response(template, host, &callback, successful);
     let status = if successful {
         "200 OK"
     } else {
@@ -216,28 +243,23 @@ async fn receive_callback(listener: TcpListener, redirect: &str) -> Result<Callb
     };
     let response = format!(
         "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
+        body.len(),
     );
     stream.write_all(response.as_bytes()).await?;
     Ok(callback)
 }
 
-fn callback_response(successful: bool) -> &'static str {
-    if successful {
-        r#"<!doctype html><html><head><meta charset="utf-8"><title>Authentication completed</title></head><body><p>Authentication completed. You may close this window.</p></body></html>"#
-    } else {
-        r#"<!doctype html><html><head><meta charset="utf-8"><title>Authentication failed</title></head><body><p>Authentication failed. Return to the terminal for details.</p></body></html>"#
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::callback_response;
-
-    #[test]
-    fn successful_callback_reports_completion_without_blocked_script() {
-        assert!(callback_response(true).contains("Authentication completed"));
-        assert!(!callback_response(true).contains("window.close()"));
-        assert!(!callback_response(false).contains("window.close()"));
-    }
+fn callback_response(
+    template: &OAuthTemplate,
+    host: Option<&str>,
+    callback: &Callback,
+    successful: bool,
+) -> String {
+    let default_error = (!successful && callback.error.is_none()).then_some("authorization_failed");
+    let error = callback.error.as_deref().or(default_error);
+    template.render(OAuthTemplateContext {
+        host,
+        error,
+        error_description: callback.error_description.as_deref(),
+    })
 }

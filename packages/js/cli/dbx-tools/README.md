@@ -1,23 +1,19 @@
 # @dbx-tools/cli
 
-The single `dbx` CLI: workspace lifecycle, Model Serving proxy, AppKit env,
-local token brokering, and a gated public tunnel.
+The single `dbx` CLI for workspace lifecycle, AppKit env, Databricks browser
+OAuth, and a gated public tunnel.
 
-This package installs one command, `dbx` (aliased `dbx-tools`), with five
-groups:
+Available commands:
 
-| Command           | What it does                                                             |
-| ----------------- | ------------------------------------------------------------------------ |
-| `dbx dev`         | Bootstrap or repair a dbx-tools workspace, then forward to projen.       |
-| `dbx model-proxy` | Local OpenAI-compatible proxy in front of Databricks Model Serving.      |
-| `dbx appkit env`  | Print the environment an AppKit app resolves, as eval-able shell output. |
-| `dbx tunnel`      | Front any command with a public portr tunnel and an email-OTP gate.      |
-| `dbx token`       | Broker short-lived provider tokens for host and container clients.       |
+| Command          | What it does                                                             |
+| ---------------- | ------------------------------------------------------------------------ |
+| `dbx dev`        | Bootstrap or repair a dbx-tools workspace, then forward to projen.       |
+| `dbx appkit env` | Print the environment an AppKit app resolves, as eval-able shell output. |
+| `dbx auth`       | Run Databricks browser OAuth and manage stored user credentials.         |
+| `dbx tunnel`     | Front any command with a public portr tunnel and an email-OTP gate.      |
 
 Key features:
 
-- One installed command for every dbx-tools CLI surface, so there is a single
-  thing to install and a single `--help` to discover.
 - Bootstrap path that scaffolds bun/projen into an empty or partially-set-up
   folder, including the initial install and synth.
 - Toolchain repair for a cloned repo whose generated files and `node_modules`
@@ -27,12 +23,12 @@ Key features:
   when the effective registry is not npmjs.
 - Importable CLI/root/bun helpers for tests and thin wrapper commands.
 
-Every feature group lives in its own package -
-[`@dbx-tools/cli-model-proxy`](../model-proxy),
-[`@dbx-tools/cli-appkit-env`](../appkit-env), and
-[`@dbx-tools/cli-tunnel`](../tunnel), and [`@dbx-tools/cli-token`](../token) -
-and is imported LAZILY, only once its name is matched, so `dbx dev` never pays
-to load the Databricks SDK, AppKit, SMTP, keychain, or X.509 stack. Run
+Every feature group lives in its own package:
+[`@dbx-tools/cli-appkit-env`](../appkit-env),
+[`@dbx-tools/cli-auth`](../auth), and
+[`@dbx-tools/cli-tunnel`](../tunnel). Each package is imported LAZILY, only once
+its name is matched, so `dbx dev` never pays to load AppKit, native OAuth,
+SMTP, or X.509 code. Run
 `dbx <group> --help` for a group's own flags; each forwards `--help` to the child
 program rather than answering it at the root.
 
@@ -76,29 +72,26 @@ bun run clean            # remove generated (read-only) files; -y to skip the pi
 `dbx dev <task>` still works and forwards to the same projen task, but the
 `bun run` form is the documented one for an established workspace.
 
-## Proxy Model Serving And Resolve AppKit Env
+## Resolve AppKit Env
 
 ```sh
-dbx model-proxy --profile my-workspace --port 4000
 eval "$(dbx appkit env --quiet)"
 ```
 
-See [`@dbx-tools/cli-model-proxy`](../model-proxy) and
-[`@dbx-tools/cli-appkit-env`](../appkit-env) for the full flag surface, auth
-resolution, and output formats.
+See [`@dbx-tools/cli-appkit-env`](../appkit-env) for output formats and
+configuration behavior.
 
-## Broker Local Provider Tokens
+## Authenticate With Databricks User OAuth
 
 ```sh
-dbx token serve --secret "$TOKEN_BROKER_SECRET"
-CLIENT_AUTH="$(dbx token client-jwt container-client --secret "$TOKEN_BROKER_SECRET")"
-dbx token access-token --auth "$CLIENT_AUTH"
+dbx auth login --profile my-workspace
+dbx auth token --profile my-workspace
+dbx auth status --profile my-workspace
 ```
 
-The broker keeps Google ADC under gcloud, caches access tokens only in memory,
-and defaults to signed JWT client authentication. See
-[`@dbx-tools/cli-token`](../token) for service
-installation, client authorization, Docker, Podman, and configuration.
+The auth command uses the generated U2M bindings for profile resolution,
+browser OAuth, refresh, locking, and keyring, file, memory, or Postgres storage.
+See [`@dbx-tools/cli-auth`](../auth) for the complete command and option surface.
 
 ## Put A Gated Public URL In Front Of A Command
 

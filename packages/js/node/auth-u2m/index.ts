@@ -5,4 +5,6 @@
 export const PACKAGE_IDENTIFIER = "@dbx-tools/auth-u2m";
 export * as bindings from "./src/bindings.ts";
 export * as postgres from "./src/postgres.ts";
+export * as runtime from "./src/runtime.ts";
+export type { AccessToken, U2mOptions, U2mStatus, StorageAdapter, PersistentAuthLike, U2mBindings } from "./src/runtime.ts";
 export * from "./exports.ts";

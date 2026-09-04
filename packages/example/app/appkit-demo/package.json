@@ -19,7 +19,7 @@
     "projen": "projen"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.14",
+    "@types/bun": "1.3.14",
     "@types/node": "^24.6.0",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -56,7 +56,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.163",
+  "version": "0.6.164",
   "types": "index.ts",
   "type": "module",
   "exports": {

@@ -96,7 +96,10 @@ derives the crate name and repository from the parent project. A crate containin
 automatically wires matching private Node and Python binding packages using the
 same capability name. Repository-specific dependencies and features remain
 declarative options in `.projenrc.ts`; generated bindings are built separately
-from projen synthesis.
+from projen synthesis. Node facades compile to `lib/` and publish JavaScript
+entry points that plain Node can load from `node_modules`. Use a crate's
+`nodeExports` option for hand-authored Node subpaths beside the generated
+bindings.
 
 `sync --watch` runs a focused Rust watcher beside the OpenAPI watcher. Changes
 inside an existing UniFFI crate regenerate only that crate's bindings; adding or
@@ -133,7 +136,10 @@ and the UBRN Cargo build. Release packaging passes the cached executable directl
 to the Node binding generator and keeps the package barrel copied from source,
 so it does not need the installed projen dependency graph. A miss saves the
 validated executable immediately, before workspace build and packaging can fail.
-Bun runtime setup still runs because the binding generator is TypeScript. Cargo registry caches
+Bun runtime setup still runs in the single facade row because the binding
+generator is TypeScript; non-facade rows skip the complete Bun/UBRN path.
+Stable Windows rows verify and use the hosted runner's installed Rust toolchain
+and select `rust-lld` for the workspace build. Cargo registry caches
 and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain across
 version tags. Cache keys, restore results, sccache statistics, and phase timings
 are written to each build log. Python generation executes the already-built

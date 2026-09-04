@@ -1,10 +1,10 @@
 [workspace]
-members = ["packages/rs/auth-u2m", "packages/rs/auth-u2m-cli"]
-default-members = ["packages/rs/auth-u2m-cli"]
+members = ["packages/rs/auth-u2m"]
+default-members = []
 resolver = "2"
 
 [workspace.package]
-version = "0.6.163"
+version = "0.6.164"
 edition = "2021"
 rust-version = "1.82"
 license = "Apache-2.0"
@@ -13,10 +13,9 @@ repository = "https://github.com/reggie-db/dbx-tools"
 [workspace.dependencies]
 async-trait = "0.1"
 base64 = "0.22"
-clap = { version = "4.5", features = ["derive", "env"] }
 configparser = "3"
 directories = "6"
-fs4 = { version = "0.13", features = ["tokio"] }
+fs4 = "0.13"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls"] }
 open = "5"
@@ -24,13 +23,10 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres"] }
 tempfile = "3"
 thiserror = "2"
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
-tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 uniffi = { version = "=0.31", features = ["cli", "tokio"] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }

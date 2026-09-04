@@ -135,8 +135,6 @@ const packageNode = ({
       typeof dependency === "string" && dependency.startsWith("workspace:") ? version : dependency,
     ]),
   );
-  delete manifest.scripts;
-  delete manifest.devDependencies;
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   run("bun", [
     resolve(root, nodeGenerator),
@@ -153,6 +151,16 @@ const packageNode = ({
     ...(parsed.values.ubrn ? ["--ubrn", parsed.values.ubrn, "--skip-barrels"] : []),
     "--skip-build",
   ]);
+  // Node loads the facade from node_modules, so every TypeScript entry point
+  // must be emitted and advertised as JavaScript.
+  run("bun", [resolve(root, "node_modules/typescript/bin/tsc"), "--build"], facadeDirectory);
+  const compiledPublish = { ...(manifest.publishConfig ?? {}) };
+  delete compiledPublish.access;
+  Object.assign(manifest, compiledPublish);
+  delete manifest.publishConfig;
+  delete manifest.scripts;
+  delete manifest.devDependencies;
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   mkdirSync(resolve(output, "npm-facade"), { recursive: true });
   run("npm", ["pack", "--pack-destination", resolve(output, "npm-facade")], facadeDirectory);
 };

@@ -27,7 +27,15 @@
     },
     "compile": {
       "name": "compile",
-      "description": "Only compile"
+      "description": "Only compile",
+      "steps": [
+        {
+          "execArgs": [
+            "tsc",
+            "--build"
+          ]
+        }
+      ]
     },
     "default": {
       "name": "default",

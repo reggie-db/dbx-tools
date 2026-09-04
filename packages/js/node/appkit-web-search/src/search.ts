@@ -206,9 +206,8 @@ async function postServing(
 /* --------------------------- response extraction --------------------------- */
 
 /**
- * Extract answer text + citations from an OpenAI Responses API payload, via the
- * shared reader in `@dbx-tools/shared-model` (the same module the model-proxy
- * uses to translate the Responses wire format in the other direction).
+ * Extract answer text and citations from an OpenAI Responses API payload through
+ * the shared reader in `@dbx-tools/shared-model`.
  */
 function fromResponsesPayload(payload: Record<string, unknown>): {
   answer: string;

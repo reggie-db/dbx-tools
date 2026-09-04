@@ -1,6 +1,7 @@
 mod client;
 mod error;
 mod oauth;
+mod oauth_template;
 mod profile;
 mod storage;
 mod token;
@@ -8,6 +9,7 @@ mod token;
 pub use client::{AuthClient, AuthOptions};
 pub use error::{Error, Result};
 pub use oauth::OAuthFlow;
+pub use oauth_template::{default_callback_image_src, OAuthTemplate, OAuthTemplateContext};
 pub use profile::{
     resolve_config_file, Profile, ProfileOptions, TargetKind, DEFAULT_ACCOUNTS_HOST,
     DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE,
@@ -54,6 +56,9 @@ pub struct U2mOptions {
     pub target: Option<String>,
     #[uniffi(default = None)]
     pub cache_dir: Option<String>,
+    /// Logo URL or data URI displayed by the browser callback page.
+    #[uniffi(default = None)]
+    pub callback_image_src: Option<String>,
     #[uniffi(default = 30)]
     pub lock_timeout_seconds: u64,
     #[uniffi(default = 3600)]
@@ -145,6 +150,7 @@ async fn create_persistent_auth_with_store(
             refresh_buffer: TimeDuration::seconds(options.refresh_buffer_seconds),
             lock_timeout: Duration::from_secs(options.lock_timeout_seconds),
             login_timeout: Duration::from_secs(options.login_timeout_seconds),
+            callback_image_src: options.callback_image_src.clone(),
         },
     )
     .map_err(binding_error)?;

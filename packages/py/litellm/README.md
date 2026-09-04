@@ -173,7 +173,7 @@ serve different purposes:
 
 | Cache                        | Storage and scope                                                                                 | Filled when                                                   | Refresh or expiry                                                                                                      | Purpose                                                                                                    |
 | ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Endpoint catalogue           | Memory, one proxy process                                                                         | First resolution or `/v1/models`                              | Five-minute TTL; forced once after a resolution miss                                                                    | Avoid listing Serving Endpoints on every request                                                            |
+| Endpoint catalogue           | Memory, one proxy process                                                                         | First resolution or `/v1/models`                              | Five-minute TTL; forced once after a resolution miss                                                                   | Avoid listing Serving Endpoints on every request                                                           |
 | Databricks bearer token      | Memory, one proxy process/profile                                                                 | First delegated request needing credentials                   | OAuth expiry minus 10 minutes; 30-minute fallback when no expiry is exposed; check-lock-check makes one caller refresh | Avoid a new SDK client and token mint per request                                                          |
 | Reasoning context and scores | `diskcache`, default `~/.cache/dbx-tools/litellm`, shared by local processes using that directory | Only for `reasoning_effort: auto` or `reasoning.effort: auto` | TTL, default 86,400 seconds; bounded to 64 MiB, eight turns, and 6,000 sampled characters                              | Reuse follow-up context and avoid classifying the same sample again                                        |
 | Provider prompt cache        | Databricks/model-provider managed                                                                 | Repeated prompt prefixes                                      | Provider-defined lifetime and eviction                                                                                 | Reduce billed/counted repeated input tokens; GPT is automatic, Claude uses explicit breakpoints added here |
@@ -493,7 +493,6 @@ chat endpoint.
 - `cli` - profile-resolving launcher plus complete cached model inspection.
 
 For standalone Python endpoint resolution and invocation helpers, use
-[`dbx-tools-model`](../model). For the TypeScript local proxy, use
-[`@dbx-tools/cli-model-proxy`](../../js/cli/model-proxy).
+[`dbx-tools-model`](../model).
 [`dbx-tools-graphiti`](../graphiti) launches this proxy in managed mode and
 supplies its private host and port to upstream Graphiti.

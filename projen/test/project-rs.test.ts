@@ -21,8 +21,8 @@ before(() => {
     join(outdir, "packages/rs/auth-u2m/src/lib.rs"),
     "pub fn value() {}\nuniffi::setup_scaffolding!();\n",
   );
-  mkdirSync(join(outdir, "packages/rs/auth-u2m-cli/src"), { recursive: true });
-  writeFileSync(join(outdir, "packages/rs/auth-u2m-cli/src/main.rs"), "fn main() {}\n");
+  mkdirSync(join(outdir, "packages/rs/tool/src"), { recursive: true });
+  writeFileSync(join(outdir, "packages/rs/tool/src/main.rs"), "fn main() {}\n");
 });
 
 after(() => rmSync(outdir, { recursive: true, force: true }));
@@ -281,8 +281,9 @@ describe("DBXToolsRustWorkspace", () => {
           dependencies: { uniffi: "0.31" },
           nodeDependencies: ["pg@^8"],
           nodeDevDependencies: ["@types/pg@^8"],
+          nodeExports: { "./runtime": "./src/runtime.ts" },
         },
-        "auth-u2m-cli": {
+        tool: {
           release: true,
         },
       },
@@ -305,7 +306,7 @@ describe("DBXToolsRustWorkspace", () => {
     });
     assert.deepEqual(rust.workspaceMapping, {
       root: "packages/rs",
-      crates: ["packages/rs/auth-u2m", "packages/rs/auth-u2m-cli"],
+      crates: ["packages/rs/auth-u2m", "packages/rs/tool"],
       bindings: [
         {
           crate: "fixture-auth-u2m",
@@ -333,6 +334,10 @@ describe("DBXToolsRustWorkspace", () => {
       dependencies: object;
       devDependencies: object;
       optionalDependencies: object;
+      exports: Record<string, string>;
+      publishConfig: {
+        exports: Record<string, { types: string; default: string }>;
+      };
     };
     assert.equal(node.name, "@fixture/auth-u2m");
     assert.equal(node.private, true);
@@ -341,12 +346,16 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal("@fixture/auth-u2m-darwin-arm64" in node.optionalDependencies, true);
     assert.equal("@fixture/auth-u2m-linux-x64-gnu" in node.optionalDependencies, true);
     assert.equal("@fixture/auth-u2m-darwin-x64" in node.optionalDependencies, false);
+    assert.equal(node.exports["./runtime"], "./src/runtime.ts");
+    assert.equal(node.publishConfig.exports["./runtime"]?.default, "./lib/src/runtime.js");
     const gitignore = readFileSync(join(outdir, ".gitignore"), "utf8");
     assert.match(gitignore, /^target\/$/m);
     assert.match(gitignore, /^packages\/js\/node\/auth-u2m\/src\/bindings\.ts$/m);
     assert.match(gitignore, /^packages\/py\/auth-u2m\/src\/fixture\/auth_u2m\/bindings\.py$/m);
     const release = readFileSync(join(outdir, ".github/workflows/rust-release.yml"), "utf8");
     const dispatcher = readFileSync(join(outdir, ".github/workflows/release-dispatch.yml"), "utf8");
+    const tasks = readFileSync(join(outdir, ".projen/tasks.json"), "utf8");
+    assert.match(tasks, /"pre-compile": \{[\s\S]*?"spawn": "rs:bindings"[\s\S]*?\n    \}/);
     assert.match(dispatcher, /^  push:\n    tags:\n      - v\*$/m);
     assert.match(dispatcher, /EXPECTED_SHA="\$\(git rev-parse "\$RELEASE_TAG\^\{commit\}"\)"/);
     assert.match(dispatcher, /gh api --method POST "repos\/\$GITHUB_REPOSITORY\/dispatches"/);
@@ -391,10 +400,17 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /name: Restore Bun cache/);
     assert.match(release, /name: Save Bun cache/);
     assert.match(release, /^      BUN_VERSION: 1\.3\.14$/m);
-    assert.match(release, /name: Setup Bun\n        uses: oven-sh\/setup-bun@v2/);
     assert.match(
       release,
-      /name: Resolve Bun cache[\s\S]*?if: \$\{\{ steps\.ubrn_cache\.outputs\.cache-hit != 'true' \}\}/,
+      /name: Setup Bun\n        if: \$\{\{ matrix\.target\.facade \}\}\n        uses: oven-sh\/setup-bun@v2/,
+    );
+    assert.match(
+      release,
+      /name: Resolve Bun cache[\s\S]*?if: \$\{\{ matrix\.target\.facade && steps\.ubrn_cache\.outputs\.cache-hit != 'true' \}\}/,
+    );
+    assert.match(
+      release,
+      /name: Restore UBRN executable[\s\S]*?if: \$\{\{ matrix\.target\.facade \}\}/,
     );
     assert.match(
       release,
@@ -407,6 +423,15 @@ describe("DBXToolsRustWorkspace", () => {
     );
     assert.doesNotMatch(release, /rustup toolchain install stable/);
     assert.match(release, /uses: dtolnay\/rust-toolchain@stable/);
+    assert.match(release, /name: Setup Rust[\s\S]*?if: \$\{\{ matrix\.target\.os != 'win32' \}\}/);
+    assert.match(release, /name: Verify preinstalled Windows Rust/);
+    assert.match(release, /rustup target list --installed/);
+    assert.match(release, /rust-lld\.exe/);
+    assert.match(
+      release,
+      /CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: \$\{\{ matrix\.target\.os == 'win32' && 'rust-lld' \|\| '' \}\}/,
+    );
+    assert.match(release, /CARGO_INCREMENTAL: "0"/);
     assert.match(release, /CARGO_TARGET_DIR: \$\{\{ github\.workspace \}\}\/target\/ubrn/);
     assert.match(release, /path: \.cache\/ubrn/);
     assert.match(release, /cp "target\/ubrn\/debug\/uniffi-bindgen-react-native/);
@@ -418,7 +443,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /name: Package release binaries/);
     assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.node \}\}-npm/);
     assert.match(release, /name: fixture-auth-u2m-\$\{\{ matrix\.target\.python \}\}-python-wheel/);
-    assert.match(release, /name: fixture-auth-u2m-cli-\$\{\{ matrix\.target\.node \}\}-binary/);
+    assert.match(release, /name: fixture-tool-\$\{\{ matrix\.target\.node \}\}-binary/);
     assert.match(release, /Publish Python wheels/);
     assert.match(release, /name: pypi-fixture-auth-u2m/);
     assert.match(
@@ -427,7 +452,7 @@ describe("DBXToolsRustWorkspace", () => {
     );
     assert.match(
       release,
-      /cargo publish --package "fixture-auth-u2m-cli" --registry crates-io --no-verify/,
+      /cargo publish --package "fixture-tool" --registry crates-io --no-verify/,
     );
     const artifactPublisher = release.match(
       /^  publish-fixture-auth-u2m:[\s\S]*?(?=^  publish-cargo:)/m,
@@ -467,8 +492,8 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /phase=rust_workspace duration_seconds=/);
     assert.doesNotMatch(release, /shared-key: cargo-publish/);
     assert.doesNotMatch(release, /^  build-binaries:$/m);
-    assert.match(release, /fixture-auth-u2m-cli-\$\{\{ matrix\.target\.node \}\}\.tar\.gz/);
-    assert.match(release, /fixture-auth-u2m-cli-\$\{\{ matrix\.target\.node \}\}\.zip/);
+    assert.match(release, /fixture-tool-\$\{\{ matrix\.target\.node \}\}\.tar\.gz/);
+    assert.match(release, /fixture-tool-\$\{\{ matrix\.target\.node \}\}\.zip/);
     assert.match(release, /name: Package release binaries/);
     assert.match(release, /7z a/);
     assert.match(release, /node: linux-x64-gnu/);
@@ -479,6 +504,8 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`uniffi-bindgen/);
     assert.match(packager, /"node_modules", "npm", "bin", "npm-cli\.js"/);
     assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
+    assert.match(packager, /resolve\(root, "node_modules\/typescript\/bin\/tsc"\)/);
+    assert.match(packager, /Object\.assign\(manifest, compiledPublish\)/);
     assert.match(
       packager,
       /parsed\.values\.ubrn \? \["--ubrn", parsed\.values\.ubrn, "--skip-barrels"\] : \[\]/,

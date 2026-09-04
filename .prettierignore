@@ -80,9 +80,8 @@ uniffi.toml
 packages/example/app/appkit-demo/index.ts
 packages/example/server/appkit-demo/index.ts
 packages/js/cli/appkit-env/index.ts
+packages/js/cli/auth/index.ts
 packages/js/cli/dbx-tools/index.ts
-packages/js/cli/model-proxy/index.ts
-packages/js/cli/token/index.ts
 packages/js/cli/tunnel/index.ts
 packages/js/node/appkit/index.ts
 packages/js/node/appkit-graphiti/index.ts

@@ -111,15 +111,12 @@ root.pnpmWorkspace?.addCatalog("@mastra/observability", "1.15.2");
 root.pnpmWorkspace?.addCatalog("@mastra/otel-bridge", "1.4.0");
 root.pnpmWorkspace?.addCatalog("@mastra/pg", "1.14.2");
 root.pnpmWorkspace?.addCatalog("@opentelemetry/api", "^1.9.1");
-root.pnpmWorkspace?.addCatalog("undici", "^7.17.0");
 // The wrapper tunnel CLI's reverse proxy (`dbx tunnel`). Only that one package
 // pulls it, but the pin belongs with the other add-on runtime deps.
 root.pnpmWorkspace?.addCatalog("http-proxy-3", "^1.23.1");
 root.pnpmWorkspace?.addCatalog("better-auth", "^1.6.25");
 root.pnpmWorkspace?.addCatalog("@better-auth/passkey", "^1.6.25");
 root.pnpmWorkspace?.addCatalog("env-paths", "^4.0.0");
-root.pnpmWorkspace?.addCatalog("@napi-rs/keyring", "^1.2.0");
-root.pnpmWorkspace?.addCatalog("jose", "^6.2.3");
 
 // Catalog pins for the React `ui`/`app` add-on stack (AppKit UI kit + Tailwind
 // v4 + the Mastra chat-UI deps). These only load in ui/app-tagged (browser)
@@ -233,16 +230,13 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
   p.addDeps("@dbx-tools/appkit@workspace:*", "@databricks/appkit@catalog:");
 });
 
-// cli-token: the `dbx token` local credential broker. Commander comes from the
-// cli tag; runtime dependencies are isolated here so unrelated dbx commands do
-// not load keychain or JWT code.
-project.applyToProjects(root, { identifierName: "cli-token", tags: "cli" }, (p) => {
-  p.addDeps(
-    "@dbx-tools/core@workspace:*",
-    "@napi-rs/keyring@catalog:",
-    "env-paths@catalog:",
-    "jose@catalog:",
-  );
+// cli-auth: the `dbx auth` user OAuth command group. Commander comes from the
+// cli tag, and the native OAuth implementation stays in the generated U2M
+// binding package.
+project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
+  p.package.addField("description", "Commander CLI for Databricks browser OAuth");
+  p.addDeps("@dbx-tools/auth-u2m@workspace:*", "pg@^8.22.0");
+  p.addDevDeps("@types/pg@^8");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -546,13 +540,11 @@ project.applyToProjects(root, { identifierName: "shared-genie", tags: "shared" }
 // the single bun workspace (added via `extraWorkspaceMembers`). It synthesizes
 // itself, so there is no engine rule here.
 
-// cli-dbx-tools: the published CLI, and the repo's ONLY bin. The ONLY package
-// that overrides its auto-discovered name (`@dbx-tools/cli-dbx-tools` -> the bare
-// `@dbx-tools/cli`); every other package keeps whatever discovery derives from its
-// path. Ships the `dbx-tools` bin plus the short `dbx` alias (npm exposes every
-// `bin` key as its own command). The sibling CLI packages contribute COMMANDS
-// rather than bins - `dbx model-proxy`, `dbx appkit`, `dbx tunnel`, and
-// `dbx token` - and stay separate packages so their heavy dependencies are
+// cli-dbx-tools: the published CLI package. It uses the concise
+// `@dbx-tools/cli` package name and ships the `dbx-tools` command plus the short
+// `dbx` alias. The sibling CLI packages contribute commands
+// rather than bins - `dbx appkit`, `dbx auth`, and `dbx tunnel` - and stay
+// separate packages so their heavy dependencies are
 // `await import()`ed only when named; see `src/cli.ts`. They are workspace deps
 // here because the installed `dbx` has to be able to reach them.
 // Tsconfig/exports come from the `cli` tag.
@@ -565,9 +557,8 @@ project.applyToProjects(root, { identifierName: "cli-dbx-tools", tags: "cli" }, 
   p.addDeps(
     "@clack/prompts@catalog:",
     "@dbx-tools/core@workspace:*",
-    "@dbx-tools/cli-model-proxy@workspace:*",
     "@dbx-tools/cli-appkit-env@workspace:*",
-    "@dbx-tools/cli-token@workspace:*",
+    "@dbx-tools/cli-auth@workspace:*",
     "@dbx-tools/cli-tunnel@workspace:*",
   );
 });
@@ -604,31 +595,6 @@ project.applyToProjects(root, { identifierName: "auth", tags: "node" }, (p) => {
     "env-paths@catalog:",
   );
 });
-
-// cli-model-proxy: the `dbx model-proxy` command group - a local
-// OpenAI-compatible proxy in front of Databricks Model Serving. `cli`-tagged
-// (commander comes from the cli tag). Reuses node-model's resolver +
-// shared-model contracts; the SDK is a runtime dep for auth/host. Ships NO bin:
-// `@dbx-tools/cli` mounts its `buildProgram()` as `dbx model-proxy`, lazily, so
-// the SDK only loads when that command is named.
-project.applyToProjects(
-  root,
-  { identifierName: "cli-model-proxy", tags: "cli" },
-  (p) => {
-    p.addDeps(
-      "@dbx-tools/core@workspace:*",
-      "@dbx-tools/model@workspace:*",
-      "@dbx-tools/shared-model@workspace:*",
-      "@databricks/sdk-experimental@catalog:",
-      // Node bundles undici as its `fetch` implementation but exports no
-      // `Agent` from a `node:` specifier, and the default 300s
-      // `headersTimeout`/`bodyTimeout` kill a long or bursty model stream.
-      // The package dependency is what lets the proxy hand `fetch` a
-      // no-timeout dispatcher.
-      "undici@catalog:",
-    );
-  },
-);
 
 // node-tunnel (`@dbx-tools/tunnel`): fronts a Databricks App with Portr and/or FRP
 // tunnel + @dbx-tools/auth passwordless gate, consumed IN-PROCESS through
@@ -878,10 +844,9 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   workspaceDependencies: {
     "async-trait": "0.1",
     base64: "0.22",
-    clap: { version: "4.5", features: ["derive", "env"] },
     configparser: "3",
     directories: "6",
-    fs4: { version: "0.13", features: ["tokio"] },
+    fs4: "0.13",
     keyring: {
       version: "3",
       features: ["apple-native", "windows-native", "sync-secret-service"],
@@ -892,20 +857,13 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     serde: { version: "1", features: ["derive"] },
     "serde_json": "1",
     sha2: "0.10",
-    sqlx: {
-      version: "0.8",
-      defaultFeatures: false,
-      features: ["runtime-tokio-rustls", "postgres"],
-    },
     tempfile: "3",
     thiserror: "2",
     time: { version: "0.3", features: ["serde", "formatting", "parsing"] },
     tokio: {
       version: "1",
-      features: ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"],
+      features: ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"],
     },
-    tracing: "0.1",
-    "tracing-subscriber": { version: "0.3", features: ["env-filter"] },
     uniffi: { version: "=0.31", features: ["cli", "tokio"] },
     url: { version: "2", features: ["serde"] },
     uuid: { version: "1", features: ["v4"] },
@@ -915,6 +873,10 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       description: "Databricks user-to-machine OAuth with secure credential storage",
       nodeDependencies: ["pg@^8.22.0"],
       nodeDevDependencies: ["@types/pg@^8"],
+      nodeExports: {
+        "./postgres": "./src/postgres.ts",
+        "./runtime": "./src/runtime.ts",
+      },
       defaultFeatures: ["keyring"],
       features: { keyring: ["dep:keyring"] },
       dependencies: {
@@ -938,28 +900,6 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         uuid: { workspace: true },
       },
       devDependencies: { tempfile: { workspace: true } },
-    },
-    "auth-u2m-cli": {
-      description: "CLI for dbx-tools-auth-u2m",
-      binaryName: "dbx-tools-auth",
-      release: true,
-      defaultFeatures: ["keyring"],
-      features: {
-        keyring: ["dbx-tools-auth-u2m/keyring"],
-        postgres: ["dep:async-trait", "dep:sha2", "dep:sqlx"],
-      },
-      dependencies: {
-        "async-trait": { workspace: true, optional: true },
-        clap: { workspace: true },
-        "dbx-tools-auth-u2m": { path: "../auth-u2m", defaultFeatures: false },
-        serde: { workspace: true },
-        "serde_json": { workspace: true },
-        sha2: { workspace: true, optional: true },
-        sqlx: { workspace: true, optional: true },
-        time: { workspace: true },
-        tokio: { workspace: true },
-        "tracing-subscriber": { workspace: true },
-      },
     },
   },
 });
