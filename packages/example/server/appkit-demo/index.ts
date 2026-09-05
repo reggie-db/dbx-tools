@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/demo-appkit-server";
-export const PACKAGE_VERSION = "0.6.170";
+export const PACKAGE_VERSION = "0.6.171";
 export * as busDemo from "./src/bus-demo.ts";
 export * as dependencies from "./src/dependencies.ts";
 export * as launch from "./src/launch.ts";

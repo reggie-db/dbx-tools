@@ -1836,6 +1836,9 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   During a local root bump, the npm/Verdaccio and Python/devpi publishers run in
   parallel because they mutate disjoint JS and Python package trees; each still
   completes its own build before uploading.
+  GitHub's `node-release` enables npm provenance for public npmjs publication,
+  including native archives and UniFFI facades. Local Verdaccio publication
+  must not enable provenance because Verdaccio does not support it.
 - **Release workflows are testable without touching npm.** `node-release`
   triggers on `workflow_dispatch` with a `dry_run` boolean input (default true).
   A manual run has no tag, so it uses a throwaway

@@ -220,6 +220,9 @@ const packageNode = ({
   facade,
 }) => {
   const libraryFile = basename(library);
+  const sourceManifest = JSON.parse(
+    readFileSync(resolve(root, nodeDirectory, "package.json"), "utf8"),
+  );
   const nativePackage = resolve(output, "native-node");
   mkdirSync(nativePackage, { recursive: true });
   cpSync(library, join(nativePackage, libraryFile));
@@ -230,6 +233,7 @@ const packageNode = ({
         name: `${nodePackage}-${nodeTriple}`,
         version,
         description: `Native ${nodeTriple} library for ${nodePackage}`,
+        repository: sourceManifest.repository,
         license: "Apache-2.0",
         os: [os],
         cpu: [cpu],

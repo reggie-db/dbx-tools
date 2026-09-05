@@ -43,7 +43,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.170",
+  "version": "0.6.171",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -56,11 +56,11 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@dbx-tools/google-auth-linux-x64-gnu": "0.6.170",
-    "@dbx-tools/google-auth-linux-arm64-gnu": "0.6.170",
-    "@dbx-tools/google-auth-darwin-x64": "0.6.170",
-    "@dbx-tools/google-auth-darwin-arm64": "0.6.170",
-    "@dbx-tools/google-auth-win32-x64-msvc": "0.6.170"
+    "@dbx-tools/google-auth-linux-x64-gnu": "0.6.171",
+    "@dbx-tools/google-auth-linux-arm64-gnu": "0.6.171",
+    "@dbx-tools/google-auth-darwin-x64": "0.6.171",
+    "@dbx-tools/google-auth-darwin-arm64": "0.6.171",
+    "@dbx-tools/google-auth-win32-x64-msvc": "0.6.171"
   },
   "dbxToolsConfig": {
     "uniffi": true,
