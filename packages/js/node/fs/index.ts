@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/fs";
-export const PACKAGE_VERSION = "0.6.176";
+export const PACKAGE_VERSION = "0.6.177";
 export * as localFS from "./src/local-fs.ts";
 export * as localPath from "./src/local-path.ts";
 export * as osPath from "./src/os-path.ts";

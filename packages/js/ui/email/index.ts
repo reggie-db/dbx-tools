@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-email";
-export const PACKAGE_VERSION = "0.6.176";
+export const PACKAGE_VERSION = "0.6.177";
 export * as reactEmailApprovalCard from "./src/react/email-approval-card.tsx";
 export * as reactEmailBody from "./src/react/email-body.tsx";
 export * as reactEmailCompose from "./src/react/email-compose.tsx";

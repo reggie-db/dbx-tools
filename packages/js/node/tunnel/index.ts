@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/tunnel";
-export const PACKAGE_VERSION = "0.6.176";
+export const PACKAGE_VERSION = "0.6.177";
 export * as allowlist from "./src/allowlist.ts";
 export * as codeEmail from "./src/code-email.ts";
 export * as frp from "./src/frp.ts";

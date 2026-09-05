@@ -446,6 +446,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(nodeRelease, /^  repository_dispatch:\n    types:\n      - release$/m);
     assert.match(nodeRelease, /run-id: \$\{\{ github\.event\.client_payload\.rust_run_id \}\}/);
     assert.match(nodeRelease, /node \.projen\/uniffi-release\.mjs facade/);
+    assert.doesNotMatch(nodeRelease, /--native-package/);
     assert.doesNotMatch(nodeRelease, /--exclude projen/);
     assert.ok(
       nodeRelease.indexOf("Publish native npm packages") <

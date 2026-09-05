@@ -175,37 +175,13 @@ jobs:
             VERSION="$RELEASE_VERSION"
             DRY_RUN=
           fi
-          NATIVE_ARG=""
-          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
-            NATIVE_PACKAGE="$(find dist/uniffi/native -name 'dbx-tools-auth-linux-x64-gnu-*.tgz' -print -quit)"
-            test -n "$NATIVE_PACKAGE"
-            NATIVE_ARG="--native-package $NATIVE_PACKAGE"
-          fi
-          node .projen/uniffi-release.mjs facade --node "packages/js/node/auth" --node-package "@dbx-tools/auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-auth" $NATIVE_ARG
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/auth" --node-package "@dbx-tools/auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-auth"
           for package in dist/uniffi/facades/dbx-tools-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
-          NATIVE_ARG=""
-          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
-            NATIVE_PACKAGE="$(find dist/uniffi/native -name 'dbx-tools-databricks-linux-x64-gnu-*.tgz' -print -quit)"
-            test -n "$NATIVE_PACKAGE"
-            NATIVE_ARG="--native-package $NATIVE_PACKAGE"
-          fi
-          node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks" --node-package "@dbx-tools/databricks" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-databricks" $NATIVE_ARG
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks" --node-package "@dbx-tools/databricks" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-databricks"
           for package in dist/uniffi/facades/dbx-tools-databricks/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
-          NATIVE_ARG=""
-          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
-            NATIVE_PACKAGE="$(find dist/uniffi/native -name 'dbx-tools-databricks-auth-linux-x64-gnu-*.tgz' -print -quit)"
-            test -n "$NATIVE_PACKAGE"
-            NATIVE_ARG="--native-package $NATIVE_PACKAGE"
-          fi
-          node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks-auth" --node-package "@dbx-tools/databricks-auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-databricks-auth" $NATIVE_ARG
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks-auth" --node-package "@dbx-tools/databricks-auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-databricks-auth"
           for package in dist/uniffi/facades/dbx-tools-databricks-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
-          NATIVE_ARG=""
-          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
-            NATIVE_PACKAGE="$(find dist/uniffi/native -name 'dbx-tools-google-auth-linux-x64-gnu-*.tgz' -print -quit)"
-            test -n "$NATIVE_PACKAGE"
-            NATIVE_ARG="--native-package $NATIVE_PACKAGE"
-          fi
-          node .projen/uniffi-release.mjs facade --node "packages/js/node/google-auth" --node-package "@dbx-tools/google-auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-google-auth" $NATIVE_ARG
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/google-auth" --node-package "@dbx-tools/google-auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-google-auth"
           for package in dist/uniffi/facades/dbx-tools-google-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
     timeout-minutes: 30
 permissions:

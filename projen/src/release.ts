@@ -557,13 +557,7 @@ export class DBXToolsRelease extends Component {
       ...bindings.flatMap((binding) => {
         const output = `dist/uniffi/facades/${binding.crate}`;
         return [
-          `NATIVE_ARG=""`,
-          'if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then',
-          `  NATIVE_PACKAGE="$(find dist/uniffi/native -name '${binding.crate}-linux-x64-gnu-*.tgz' -print -quit)"`,
-          '  test -n "$NATIVE_PACKAGE"',
-          '  NATIVE_ARG="--native-package $NATIVE_PACKAGE"',
-          "fi",
-          `node .projen/uniffi-release.mjs facade --node "${binding.node}" --node-package "${binding.nodePackage}" --node-triple "linux-x64-gnu" --version "$VERSION" --output "${output}" $NATIVE_ARG`,
+          `node .projen/uniffi-release.mjs facade --node "${binding.node}" --node-package "${binding.nodePackage}" --node-triple "linux-x64-gnu" --version "$VERSION" --output "${output}"`,
           `for package in ${output}/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done`,
         ];
       }),

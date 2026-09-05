@@ -42,7 +42,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.176",
+  "version": "0.6.177",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -55,11 +55,11 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@dbx-tools/auth-linux-x64-gnu": "0.6.176",
-    "@dbx-tools/auth-linux-arm64-gnu": "0.6.176",
-    "@dbx-tools/auth-darwin-x64": "0.6.176",
-    "@dbx-tools/auth-darwin-arm64": "0.6.176",
-    "@dbx-tools/auth-win32-x64-msvc": "0.6.176"
+    "@dbx-tools/auth-linux-x64-gnu": "0.6.177",
+    "@dbx-tools/auth-linux-arm64-gnu": "0.6.177",
+    "@dbx-tools/auth-darwin-x64": "0.6.177",
+    "@dbx-tools/auth-darwin-arm64": "0.6.177",
+    "@dbx-tools/auth-win32-x64-msvc": "0.6.177"
   },
   "dbxToolsConfig": {
     "uniffi": true,
