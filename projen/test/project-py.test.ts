@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { DBXToolsNodeProject, DBXToolsPythonWorkspace } from "../src/project.ts";
+import {
+  DBXToolsNodeProject,
+  DBXToolsPythonWorkspace,
+  DBXToolsRustWorkspace,
+  RustReleaseCpu,
+  RustReleaseOs,
+} from "../src/project.ts";
 
 let outdir: string;
 
@@ -28,6 +34,15 @@ describe("DBXToolsPythonWorkspace", () => {
     });
     assert.equal(project.vsCode?.vsCode, project.vscode);
 
+    mkdirSync(join(outdir, "native-rust/native/src"), { recursive: true });
+    writeFileSync(join(outdir, "native-rust/native/src/lib.rs"), "uniffi::setup_scaffolding!();\n");
+    const rust = new DBXToolsRustWorkspace(project, {
+      root: "native-rust",
+      nodeRoot: "node/packages",
+      pythonRoot: "python/packages",
+      releasePlatforms: [{ os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 }],
+      packages: { native: { bindings: ["python"] } },
+    });
     new DBXToolsPythonWorkspace(project, {
       root: "python/packages",
       packages: [
@@ -45,17 +60,7 @@ describe("DBXToolsPythonWorkspace", () => {
           description: "Explicit standard publisher package",
           uniffi: false,
         },
-        {
-          directory: "native",
-          description: "Native binding package",
-          uniffi: true,
-          generatedSources: ["src/fixture/native/bindings.py"],
-          trustedPublisher: {
-            workflowName: "rust-release",
-            environment: "pypi-fixture-native",
-            artifacts: "platform-specific wheels for all supported architectures",
-          },
-        },
+        ...rust.pythonPackages,
       ],
       dependencies: ["fixture-app"],
       requiresPython: ">=3.12",
@@ -63,11 +68,7 @@ describe("DBXToolsPythonWorkspace", () => {
       ruffTarget: "py312",
       lintPaths: ["python"],
       interpreterPath: "${workspaceFolder}/python/.venv/bin/python",
-      release: {
-        workflowName: "publish-python",
-        upstreamWorkflow: "rust-release",
-        environments: { "fixture-app": "production-pypi" },
-      },
+      release: { environments: { "fixture-app": "production-pypi" } },
     });
 
     project.synth();
@@ -83,7 +84,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(workspace, /\[tool\.pyrefly\]\s+ignore-errors-in-generated-code = true/);
     assert.match(
       workspace,
-      /project-excludes = \["python\/packages\/native\/src\/fixture\/native\/bindings\.py"\]/,
+      /project-excludes = \[[^\]]*"python\/packages\/native\/src\/fixture\/native\/bindings\.py"/,
     );
     assert.doesNotMatch(workspace, /^  \[/m);
     assert.doesNotMatch(workspace, /= \[ /);
@@ -114,31 +115,26 @@ describe("DBXToolsPythonWorkspace", () => {
       /python\/packages/,
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
-    const release = readFileSync(join(outdir, ".github/workflows/publish-python.yml"), "utf8");
-    assert.match(release, /workflows:\s+- rust-release/);
-    assert.match(release, /steps\.release_metadata\.outputs\.release_tag \|\| inputs\.version/);
+    const release = readFileSync(join(outdir, ".github/workflows/release.yml"), "utf8");
+    assert.match(release, /^  rust-build:$/m);
+    assert.match(
+      release,
+      /^  build-python:\n    needs:\n      - verify-context\n      - rust-build$/m,
+    );
     assert.match(release, /version = os\.environ\["VERSION"\]\.removeprefix\("v"\)/);
-    assert.match(release, /^  publish-core:$/m);
-    assert.match(release, /^  publish-standard:$/m);
+    assert.match(release, /^  publish-pypi-core:$/m);
+    assert.match(release, /^  publish-pypi-standard:$/m);
     assert.match(release, /^      name: pypi-fixture-core$/m);
     assert.match(release, /^          packages-dir: dist\/core$/m);
-    assert.match(release, /^  publish-app:$/m);
-    assert.match(release, /name: Download release metadata/);
-    assert.match(release, /steps\.release_metadata\.outputs\.expected_sha/);
+    assert.match(release, /^  publish-pypi-app:$/m);
     assert.match(release, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
     assert.match(release, /^      name: production-pypi$/m);
     assert.match(release, /^          packages-dir: dist\/app$/m);
-    assert.match(release, /github\.event_name == 'workflow_run'/);
-    assert.doesNotMatch(release, /inputs\.publish/);
-    assert.doesNotMatch(release, /^  publish:$/m);
-    assert.match(release, /^  publish-native:$/m);
+    assert.doesNotMatch(release, /repository_dispatch|workflow_run|run-id|inputs\.publish/);
+    assert.match(release, /^  publish-pypi-native:$/m);
     assert.match(release, /pattern: fixture-native--\*--python-wheel/);
-    assert.match(
-      release,
-      /run-id: \$\{\{ github\.event_name == 'repository_dispatch' && github\.event\.client_payload\.rust_run_id \|\| github\.event\.workflow_run\.id \}\}/,
-    );
-    const nodeRelease = readFileSync(join(outdir, ".github/workflows/node-release.yml"), "utf8");
-    assert.match(nodeRelease, /^  repository_dispatch:\n    types:\n      - release$/m);
+    assert.match(release, /retention-days: 7/);
+    assert.match(release, /^    if: \$\{\{ github\.event_name == 'push' \}\}$/m);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
     const instructionsCommand = instructionsTask?.steps?.[0]?.exec;
     assert.equal(instructionsCommand, "node .projen/pypi-trusted-publisher-instructions.mjs");
@@ -150,11 +146,11 @@ describe("DBXToolsPythonWorkspace", () => {
     const instructions = result.stdout;
     assert.match(
       instructions,
-      /## fixture-core\n- Owner: example\n- Repository name: fixture\n- Workflow name: publish-python\.yml\n- Environment name: pypi-fixture-core/,
+      /## fixture-core\n- Owner: example\n- Repository name: fixture\n- Workflow name: release\.yml\n- Environment name: pypi-fixture-core/,
     );
     assert.match(
       instructions,
-      /## fixture-app\n- Owner: example\n- Repository name: fixture\n- Workflow name: publish-python\.yml\n- Environment name: production-pypi/,
+      /## fixture-app\n- Owner: example\n- Repository name: fixture\n- Workflow name: release\.yml\n- Environment name: production-pypi/,
     );
     assert.match(instructions, /Before making any changes, complete a read-only audit/);
     assert.match(instructions, /active PyPI account can administer the listed projects/);
@@ -166,9 +162,8 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /Do not use an in-app browser or embedded webview/);
     assert.match(instructions, /Do not visit GitHub or use the GitHub API or CLI/);
     assert.match(instructions, /Every required GitHub owner, repository, workflow, environment/);
-    assert.match(instructions, /supplied branch policy value is main/);
-    assert.doesNotMatch(instructions, /permit deployments from the main branch/);
-    assert.match(instructions, /GitHub environment branch: main/);
+    assert.match(instructions, /supplied tag policy value is v\*/);
+    assert.match(instructions, /GitHub environment tag: v\*/);
     assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
     assert.match(instructions, /Reuse an existing PyPI tab in the system browser/);
@@ -180,7 +175,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /Remove duplicates so exactly one matching publisher remains/);
     assert.match(
       instructions,
-      /## fixture-native\n- Owner: example\n- Repository name: fixture\n- Workflow name: rust-release\.yml\n- Environment name: pypi-fixture-native/,
+      /## fixture-native\n- Owner: example\n- Repository name: fixture\n- Workflow name: release\.yml\n- Environment name: pypi-fixture-native/,
     );
     assert.doesNotMatch(instructions, /PyPI project:|GitHub repository:|Workflow path:/);
     assert.match(instructions, /Artifacts: platform-specific wheels/);
@@ -191,7 +186,7 @@ describe("DBXToolsPythonWorkspace", () => {
 });
 
 describe("optional Python release stages", () => {
-  it("publishes from the downstream release event", () => {
+  it("adds Python publication to the unified workflow without Node publication", () => {
     const directOutdir = mkdtempSync(join(tmpdir(), "project-py-direct-"));
     try {
       const project = new DBXToolsNodeProject({
@@ -200,7 +195,7 @@ describe("optional Python release stages", () => {
         defaultTagMixins: false,
         github: true,
         repository: "https://github.com/example/fixture.git",
-        nodeReleaseWorkflowName: false,
+        nodeRelease: false,
       });
       new DBXToolsPythonWorkspace(project, {
         root: "python/packages",
@@ -214,17 +209,15 @@ describe("optional Python release stages", () => {
       });
       project.synth();
       const workflow = readFileSync(
-        join(directOutdir, ".github", "workflows", "python-release.yml"),
+        join(directOutdir, ".github", "workflows", "release.yml"),
         "utf8",
       );
-      assert.match(workflow, /^  repository_dispatch:\n    types:\n      - release$/m);
+      assert.match(workflow, /^  push:\n    tags:\n      - v\*$/m);
       assert.match(workflow, /^  cancel-in-progress: true$/m);
-      assert.doesNotMatch(workflow, /workflow_run:/);
-      assert.match(workflow, /name: Upload release metadata/);
-      assert.match(
-        readFileSync(join(directOutdir, ".github", "workflows", "release-dispatch.yml"), "utf8"),
-        /RELEASE_WORKFLOWS: python-release/,
-      );
+      assert.match(workflow, /^  build-python:$/m);
+      assert.match(workflow, /^  publish-pypi-core:$/m);
+      assert.doesNotMatch(workflow, /^  publish-node:$/m);
+      assert.doesNotMatch(workflow, /repository_dispatch|workflow_run|run-id/);
     } finally {
       rmSync(directOutdir, { recursive: true, force: true });
     }

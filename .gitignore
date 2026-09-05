@@ -84,7 +84,7 @@ jspm_packages/
 !.env.sample
 .idea/*
 !/.eslintrc.json
-!/.github/workflows/release-dispatch.yml
+!/.github/workflows/release.yml
 .docs-build/
 .astro/
 .worktrees/
@@ -110,7 +110,6 @@ packages/py/google-auth/src/dbx_tools/google_auth/bindings.py
 packages/py/google-auth/src/dbx_tools/google_auth/*dbx_tools_google_auth.*
 !/Cargo.toml
 !/.projen/uniffi-release.mjs
-!/.github/workflows/rust-release.yml
 !/pyproject.toml
 !/packages/py/auth/pyproject.toml
 !/packages/py/databricks/pyproject.toml
@@ -128,6 +127,4 @@ packages/py/google-auth/src/dbx_tools/google_auth/*dbx_tools_google_auth.*
 **/*.py[cod]
 packages/py/**/dist/
 !/.projen/pypi-trusted-publisher-instructions.mjs
-!/.github/workflows/python-release.yml
 !/.projenrc.ts
-!/.github/workflows/node-release.yml

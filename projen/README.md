@@ -128,22 +128,21 @@ removing a crate or `setup_scaffolding!()` marker triggers a full synth. Repos
 without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
 
-The workspace also generates a `rust-release` workflow from discovered crates,
-UniFFI bindings, and release-enabled binaries. The root `release-dispatch`
-workflow resolves the annotated release tag and sends the tag plus commit SHA to
-`rust-release` when Rust is present. The Rust workflow runs in the configured release
-branch cache scope, checks out the supplied SHA, fetches the tag, and requires
-both the tag target and `HEAD` to equal that SHA before building. Its matrix has
-one row per target. Each row installs native dependencies and restores
-Cargo/sccache once,
-builds the Rust workspace once, then packages every discovered output from that
-shared build. Rust rows package native npm archives and Python wheels; they do
-not install Bun or UBRN and do not build Node facades.
-A new dispatch cancels queued and in-progress release and docs workflows before
-starting, and each workflow's concurrency group also cancels its previous run.
-A binary-only workspace therefore installs no language package tool. `rustVersion` remains the
-MSRV recorded in package manifests, while `releaseRustVersion` independently
-defaults release compilation to `stable`.
+The workspace generates one `release.yml` workflow for every ecosystem. An
+annotated `v*` tag starts it directly. The context job resolves the tag to a
+commit, requires the tag object to be annotated, and exposes the verified tag,
+commit, and version to every source job. A manual run accepts that same tag and
+commit but requires dry-run mode, so it builds and validates without publishing
+packages or deploying documentation. One `release` concurrency group cancels a
+superseded run.
+
+The Rust matrix has one row per target. Each row installs native dependencies,
+restores Cargo and sccache once, builds the Cargo workspace once, then packages
+every discovered output from that shared build. Rust rows prepare native npm
+archives and Python wheels; they do not install Bun or UBRN and do not build
+Node facades. A binary-only row therefore installs no language package tool.
+`rustVersion` remains the MSRV recorded in package manifests, while
+`releaseRustVersion` independently defaults release compilation to `stable`.
 Stable Windows rows verify and use the hosted runner's installed Rust toolchain
 and select `rust-lld` for the workspace build. Cargo registry caches
 and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain across
@@ -152,10 +151,9 @@ are written to each build log. Python generation executes the already-built
 `target/<triple>/release/<crate>-uniffi-bindgen` directly. Artifact packaging therefore
 does no Rust compilation after the main workspace build.
 
-Artifacts identify their crate, target, and type. `rust-release` publishes
-non-private Cargo crates with `cargo publish --no-verify`, uploads requested
-binary assets to the GitHub release, then dispatches the verified Rust run id
-with the tag and SHA. It never publishes npm or PyPI packages.
+Artifacts identify their crate, target, and type. Rust jobs publish non-private
+Cargo crates with `cargo publish --no-verify` and upload requested binary assets
+to the GitHub release. Rust jobs never publish npm or PyPI packages.
 
 Set `LOCAL_CARGO_REGISTRY` to a named Cargo registry such as a loopback
 [Kellnr](https://kellnr.io/) instance and provide `LOCAL_CARGO_TOKEN`. Public
@@ -170,21 +168,20 @@ environment parsing in a consumer.
 
 Public UniFFI facades are marked with `dbxToolsConfig.uniffi = true` in Node
 manifests and `[tool.dbx_tools.config] uniffi = true` in Python manifests. The
-Node release downloads and publishes native archives first, publishes normal
-workspace packages, then builds and publishes facades from the committed
-generated TypeScript in dependency order. The Python release downloads every
-platform wheel and publishes them from one trusted-publisher job per
-distribution. The docs generators include them because they are publicly installable.
-When a conventional Node binding path already belongs to a root subproject,
-Rust mapping reuses that project and adds binding dependencies and metadata to
-its existing manifest.
-After Rust's artifacts finish, it dispatches the downstream `release` event
-with its run id and attempt. Python, Node, and docs consume that event
-independently with the same verified tag and SHA. Without Rust,
-`release-dispatch` sends that event immediately. Configure release GitHub
-environments to permit the generated release branch; the trusted-publisher
-instructions list that branch with the workflow and environment identity PyPI
-verifies.
+Node jobs consume same-run artifacts, publish native archives first with npm
+provenance, compile and publish normal workspace packages including the Projen
+engine, then build facades from committed generated TypeScript without UBRN and
+publish them in binding dependency order. Local Verdaccio publication does not
+enable provenance. Set the `UNIFFI_FACADE_SMOKE` repository variable to `true`
+to run the optional nonblocking registry install and import check after facade
+publication. Python combines same-run platform wheels with standard wheel and
+source builds, then publishes each distribution through its own PyPI
+trusted-publisher environment. Binding publishers wait for their dependencies.
+Trusted-publisher instructions name `release.yml` and the release tag policy.
+The docs jobs generate README and TypeScript API content and deploy GitHub Pages
+from the same workflow. When a conventional Node binding path already belongs
+to a root subproject, Rust mapping reuses that project and adds binding
+dependencies and metadata to its existing manifest.
 
 ## Customize Packages With Mixins
 

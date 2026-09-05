@@ -40,7 +40,7 @@ import {
 import { PnpmWorkspaceState, type DBXToolsPNPMWorkspaceOptions } from "./pnpm-workspace.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions as CommonProjectOptions } from "./project.ts";
 import { applyCompiledPublish } from "./publish.ts";
-import { DBXToolsRelease, type StandaloneRelease } from "./release.ts";
+import { DBXToolsRelease, type ReleaseDocsOptions } from "./release.ts";
 import { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS, type PackageTag } from "./tags.ts";
 import { DBXToolsRootTsconfig } from "./tsconfig.ts";
 import { DBXToolsVsCode } from "./vscode.ts";
@@ -549,18 +549,10 @@ export interface DBXToolsJavaScriptProjectOptions
    * (alongside `.projenrc.ts`). Repo-relative, e.g. `".example.projenrc.ts"`.
    */
   readonly syncResynthPaths?: readonly string[];
-  /**
-   * Standalone in-repo projects (NOT workspace members) that each get their own
-   * tag-driven release workflow authored alongside the root's `release`
-   * workflow - see {@link StandaloneRelease}. Use for a project that lives in a
-   * repo subdirectory but releases on its own tag prefix (e.g. the
-   * `@dbx-tools/projen` engine in `projen/`, tagged `projen-v*`).
-   */
-  readonly standaloneReleases?: readonly StandaloneRelease[];
-  /** Workflow that must finish successfully before the main Node release runs. */
-  readonly releaseUpstreamWorkflow?: string;
-  /** Main Node release workflow name. Defaults to `node-release`. */
-  readonly nodeReleaseWorkflowName?: string | false;
+  /** GitHub Pages documentation included in the unified release workflow. */
+  readonly releaseDocs?: ReleaseDocsOptions;
+  /** Set to `false` to omit normal npm workspace publication. */
+  readonly nodeRelease?: boolean;
   /**
    * Extra workspace member paths (repo-relative, POSIX) to list in the workspace
    * config ALONGSIDE the discovered `packageRoots` members - for a package that
@@ -1264,9 +1256,8 @@ function initProject(
   // authors. Independent of projen's own `release` component.
   new DBXToolsRelease(project as DBXToolsNodeProject, {
     tagPrefix: options.releaseTagPrefix,
-    standaloneReleases: options.standaloneReleases,
-    upstreamWorkflow: options.releaseUpstreamWorkflow,
-    workflowName: options.nodeReleaseWorkflowName ?? options.releaseWorkflowName,
+    nodeRelease: options.nodeRelease,
+    docs: options.releaseDocs,
   });
 }
 

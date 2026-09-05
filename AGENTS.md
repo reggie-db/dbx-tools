@@ -411,8 +411,8 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   packages every discovered UniFFI binding and release-enabled binary from the
   shared output. Generated Node facades carry `dbxToolsConfig.uniffi = true`;
   generated Python facades carry `[tool.dbx_tools.config] uniffi = true`.
-  These are public packages prepared by Rust and published by their ecosystem
-  workflows. Do not mark them private. Rust release rows need uv only when a
+  These are public packages prepared by Rust and published by the Node and Python
+  jobs in `release.yml`. Do not mark them private. Rust release rows need uv only when a
   Python binding exists; they do not install Bun or UBRN because Node facades
   compile later from committed generated TypeScript. `rustVersion` is the package compatibility
   floor written to Cargo manifests; `releaseRustVersion` is the build toolchain
@@ -429,25 +429,24 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   runner after verifying the compiler, Cargo, target, and bundled `rust-lld`.
   Their workspace build selects `rust-lld`; an explicitly pinned
   `releaseRustVersion` still uses the setup action on Windows.
-  Release tags run only the small `release-dispatch` workflow. It resolves the
-  annotated tag to a commit and sends a `rust-release` event when a Rust release
-  exists, otherwise it sends the downstream `release` event directly. A
-  successful Rust release sends `release` after native npm archives, Python
-  wheels, Cargo crates, and GitHub binaries are ready. The dispatch includes the
-  Rust run id and attempt. Node downloads that exact run, publishes native npm
-  archives, publishes normal workspace packages, then builds and publishes
-  facades in binding dependency order. Python downloads every platform wheel
-  and publishes it alongside the standard distributions. Every
-  source job shallow-checks out that explicit commit, fetches only the requested tag, and requires both
-  `tag^{commit}` and `HEAD` to equal the expected SHA. This branch context keeps
-  Cargo registry and sccache entries reusable across version tags. Cargo registry
-  caches use one stable target/toolchain key; `SCCACHE_GHA_VERSION` provides the
-  matching compiler-cache namespace. The tag and SHA stay in each dispatch
-  payload so a later branch tip cannot change downstream source.
-  Before sending a new release event, the dispatcher cancels in-progress and
-  queued runs for every generated release workflow and docs. Each workflow also
-  uses its own `cancel-in-progress: true` concurrency group as a fallback;
-  partial publication from the superseded run is accepted.
+  One generated `.github/workflows/release.yml` owns Rust, npm, PyPI, GitHub
+  binary, and documentation publication. An annotated `v*` tag starts it
+  directly. Its context job resolves the tag to a commit and requires both the
+  tag target and checked-out `HEAD` to equal that SHA. Every source job repeats
+  the shallow checkout and tag verification. A manual run requires the same tag
+  and commit plus dry-run mode, so it builds and validates without publishing
+  packages or deploying documentation. The workflow uses one `release`
+  concurrency group with `cancel-in-progress: true`.
+  The Rust matrix uploads native npm archives, Python wheels, and explicit
+  binaries as same-run artifacts. Node publishes native packages first with npm
+  provenance, publishes normal workspace packages including Projen next, then
+  builds facades from committed generated TypeScript and publishes them in
+  binding dependency order. Python combines every platform wheel with standard
+  wheel and source builds, and publishes each distribution through its own PyPI
+  trusted-publisher environment. Cargo registry caches use one stable
+  target/toolchain key; `SCCACHE_GHA_VERSION` provides the matching compiler-cache
+  namespace. Set `UNIFFI_FACADE_SMOKE=true` as a repository variable to run the
+  optional nonblocking registry install and import check after facade publication.
   Packaging must
   execute the target-specific `<crate>-uniffi-bindgen` binary produced by that workspace
   build, never `cargo run`, so no Rust compilation occurs after the main build.
@@ -457,18 +456,14 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   errors must report `spawnSync.error` instead of presenting a meaningless null
   exit status.
   Artifact names identify crate, target, and type (`npm`, `python-wheel`, or
-  `binary`). The Rust workflow publishes non-private Cargo crates from a
-  source-only `cargo publish --no-verify` job and uploads prebuilt binaries to
-  the GitHub release. It never publishes npm or PyPI packages.
+  `binary`). Rust jobs publish non-private Cargo crates from a source-only
+  `cargo publish --no-verify` job and upload prebuilt binaries to the GitHub
+  release. They never publish npm or PyPI packages.
   `bun run bump --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product; omit both to restore the maintained full
-  matrix. Attached Rust and Python workspace components record their generated
-  workflow names in `dbxToolsConfig`; `release-dispatch` uses that metadata to
-  decide whether Rust gates the downstream workflows. Consumers specify an
-  `upstreamWorkflow` only to override this event-based composition.
-  GitHub environments referenced by release jobs must permit the configured
-  release branch. Every PyPI trusted publisher, including UniFFI wheels, uses
-  the Python release workflow.
+  matrix. GitHub environments referenced by release jobs must permit the
+  release tag pattern. Every PyPI trusted publisher, including UniFFI wheels,
+  uses `release.yml`.
 - **Python workspace roots** — `DBXToolsPythonWorkspace.root` defaults to
   `packages/py`; consumers may place packages elsewhere without changing the
   engine.
@@ -600,8 +595,8 @@ Docs site rules:
   `.docs-build/site`.
 - `docs/scripts/generate-api-docs.mjs` generates TypeDoc Markdown into the same
   Starlight content tree from package `index.ts` exports.
-- `.github/workflows/docs.yml` builds and deploys GitHub Pages from generated
-  README and API content.
+- `.github/workflows/release.yml` builds and deploys GitHub Pages from generated
+  README and API content as part of the complete release.
 - Generated files under `.docs-build/` are build artifacts; never commit them.
 - The generated Linkinator command uses bounded concurrency, request timeouts,
   and error retries. Its default concurrency can exhaust the local static
@@ -1609,8 +1604,8 @@ What is configured, and why:
   launchd/watchdog setup points pip and uv at devpi only while it is healthy and
   restores the corporate index when it is unavailable.
 
-`bun run bump` publishes the complete release: its `v*` tag triggers the npm,
-PyPI, and docs workflows; `--local-registry auto` also publishes npm packages to
+`bun run bump` publishes the complete release: its `v*` tag triggers the unified
+release workflow; `--local-registry auto` also publishes npm packages to
 loopback Verdaccio, and `--local-pypi auto` publishes Python packages when uv's
 default index is a loopback devpi `+simple` URL. A proxpi-style `/index/` cache
 is read-only and is not treated as a publish target.
@@ -1802,13 +1797,13 @@ the platform's pnpm build phase reads.
   `.gitattributes` (`annotateGenerated`).
 - **openapi** (`<root>/openapi/<name>/`): fully generated from tsoa
   controllers - spec, types, and client.
-- **`.github/workflows/*.yml` except `docs.yml`**: projen-owned. `docs.yml` is
-  the one hand-written workflow, so it is the only one to edit directly.
+- **`.github/workflows/*.yml`**: projen-owned, including the unified release and
+  GitHub Pages jobs.
 
 Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated files.
 
 - **The engine is a normal member of the Node release.** `@dbx-tools/projen`
-  shares the root `VERSION`, `v*` tag, and `node-release` workflow with every
+  shares the root `VERSION`, `v*` tag, and `release.yml` workflow with every
   other npm workspace member. One `bun run bump` commits and pushes that tag;
   there is no separate Projen tag or workflow.
 - **Publishing leans on NATIVE bun - do not re-hand-roll what bun already does.**
@@ -1840,15 +1835,14 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   During a local root bump, the npm/Verdaccio and Python/devpi publishers run in
   parallel because they mutate disjoint JS and Python package trees; each still
   completes its own build before uploading.
-  GitHub's `node-release` enables npm provenance for public npmjs publication,
+  GitHub's `release.yml` enables npm provenance for public npmjs publication,
   including native archives and UniFFI facades. Local Verdaccio publication
   must not enable provenance because Verdaccio does not support it.
-- **Release workflows are testable without touching npm.** `node-release`
-  triggers on `workflow_dispatch` with a `dry_run` boolean input (default true).
-  A manual run has no tag, so it uses a throwaway
-  `0.0.0-dry.<run>` version and FORCES `bun publish --dry-run` (compile + pack +
-  validate, upload skipped). Run it from the Actions tab to exercise the whole
-  pipeline - setup-bun, install, stamp, compile, pack - with nothing reaching npm.
+- **The release workflow is testable without publication.** `release.yml`
+  accepts a verified annotated tag and commit through `workflow_dispatch` and
+  requires `dry_run: true`. It exercises Rust packaging, npm packing, Python
+  distribution validation, and docs generation while package publication,
+  GitHub binary upload, and Pages deployment remain disabled.
 - **`bootstrap.ts` pins the engine version explicitly.** `bootstrap.ts` asks for
   `@dbx-tools/projen@^<this CLI's own version>` (see `defaultProjenSpecifier`)
   rather than `@latest`, so the installed engine matches the CLI. That is only sound

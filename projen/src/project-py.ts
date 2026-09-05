@@ -3,13 +3,16 @@ import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Component, TextFile, type Project, javascript, python, vscode } from "projen";
 import type { IResolver } from "projen/lib/file";
-import { GithubWorkflow } from "projen/lib/github";
-import { JobPermission } from "projen/lib/github/workflows-model";
 import { parse, stringify } from "smol-toml";
-import { projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
+import { projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
-import { DOWNSTREAM_RELEASE_EVENT, RELEASE_TAG, releaseSourceSteps } from "./release-dispatch.ts";
+import {
+  RELEASE_VERSION,
+  releaseSourceSteps,
+  releaseTagPattern,
+  releaseWorkflow,
+} from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 /** Git location used by direct `#subdirectory=` package dependencies. */
@@ -44,7 +47,6 @@ interface ResolvedPythonPackageOptions extends PythonPackageOptions {
 
 /** GitHub Actions publisher for a Python package released by another workflow. */
 export interface PythonTrustedPublisherOptions {
-  readonly workflowName: string;
   readonly environment: string;
   readonly artifacts?: string;
 }
@@ -61,9 +63,6 @@ export interface DBXToolsPythonProjectOptions extends DBXToolsProjectOptions {
 
 /** Python release workflow configuration. */
 export interface PythonReleaseOptions {
-  readonly workflowName?: string;
-  /** Run after this workflow completes successfully instead of directly on tags. */
-  readonly upstreamWorkflow?: string;
   /** GitHub environment by Python distribution name. Defaults to `pypi-<name>`. */
   readonly environments?: Readonly<Record<string, string>>;
   readonly environmentUrl?: string;
@@ -73,7 +72,6 @@ interface PythonPublication {
   readonly directory: string;
   readonly distribution: string;
   readonly environment: string;
-  readonly workflowName: string;
   readonly artifacts?: string;
   readonly dependencies?: readonly string[];
 }
@@ -321,10 +319,6 @@ export class DBXToolsPythonWorkspace extends Component {
     }
 
     if (options.release && this.packages.length > 0) {
-      if (isDBXToolsJavaScriptProject()(project)) {
-        project.dbxToolsConfig.pythonReleaseWorkflow =
-          releaseOptions.workflowName ?? "python-release";
-      }
       this.addReleaseWorkflow(project, releaseOptions);
     }
   }
@@ -427,193 +421,34 @@ export class DBXToolsPythonWorkspace extends Component {
   }
 
   private addReleaseWorkflow(project: javascript.NodeProject, options: PythonReleaseOptions): void {
-    if (!project.github) return;
+    if (!project.github || !isDBXToolsJavaScriptProject()(project)) return;
     const publications = this.publications(options);
     const uniffiPublications = this.uniffiPublications(options);
     const allPublications = [...publications, ...uniffiPublications];
     if (allPublications.length === 0) return;
     const usesRustArtifacts = uniffiPublications.length > 0;
-    const workflowName = options.workflowName ?? "python-release";
-    const workflow = new GithubWorkflow(project.github, workflowName, {
-      limitConcurrency: true,
-      concurrencyOptions: { group: workflowName, cancelInProgress: true },
-    });
-    workflow.file?.addOverride("permissions", {
-      contents: "read",
-      ...(options.upstreamWorkflow || usesRustArtifacts ? { actions: "read" } : {}),
-    });
-    const upstreamWorkflow = options.upstreamWorkflow;
-    const branchDispatch = upstreamWorkflow === undefined && isDBXToolsJavaScriptProject()(project);
-    if (upstreamWorkflow) {
-      workflow.file?.addOverride("on.workflow_run", {
-        workflows: [upstreamWorkflow],
-        types: ["completed"],
-      });
-      workflow.on({ workflowDispatch: {} });
-    } else if (branchDispatch) {
-      workflow.file?.addOverride("on.repository_dispatch", {
-        types: [DOWNSTREAM_RELEASE_EVENT],
-      });
-      workflow.on({ workflowDispatch: {} });
-    } else {
-      workflow.on({ push: { tags: ["v*"] }, workflowDispatch: {} });
-    }
-    workflow.file?.addOverride("on.workflow_dispatch", {
-      inputs: {
-        ...(branchDispatch
-          ? {
-              release_tag: {
-                description: "Release tag to package during a dry run",
-                type: "string",
-                required: true,
-              },
-              expected_sha: {
-                description: "Commit the release tag must reference",
-                type: "string",
-                required: true,
-              },
-            }
-          : {
-              version: {
-                description: "Python package version to build",
-                type: "string",
-                required: true,
-              },
-            }),
-      },
-    });
-    workflow.addJob("build", {
-      ...(upstreamWorkflow
-        ? {
-            if: "${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'repository_dispatch')) }}",
-          }
-        : {}),
-      runsOn: ["ubuntu-latest"],
-      permissions: {
-        contents: JobPermission.READ,
-        ...(upstreamWorkflow || usesRustArtifacts ? { actions: JobPermission.READ } : {}),
-      },
-      timeoutMinutes: 20,
+    const workflow = releaseWorkflow(project);
+    workflow.addOverride("jobs.build-python", {
+      needs: ["verify-context", ...(usesRustArtifacts ? ["rust-build"] : [])],
+      "runs-on": "ubuntu-latest",
+      permissions: { contents: "read" },
+      "timeout-minutes": 20,
       steps: [
-        ...(upstreamWorkflow
-          ? [
-              {
-                name: "Download release metadata",
-                if: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}",
-                uses: "actions/download-artifact@v8",
-                with: {
-                  name: "release-metadata",
-                  path: ".release",
-                  "run-id": "${{ github.event.workflow_run.id }}",
-                  "github-token": "${{ github.token }}",
-                },
-              },
-              {
-                name: "Read release metadata",
-                id: "release_metadata",
-                if: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}",
-                shell: "bash",
-                run: [
-                  'RELEASE_TAG="$(cat .release/tag)"',
-                  'EXPECTED_SHA="$(cat .release/sha)"',
-                  'test -n "$RELEASE_TAG"',
-                  'test -n "$EXPECTED_SHA"',
-                  'echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"',
-                  'echo "expected_sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"',
-                ].join("\n"),
-              },
-            ]
-          : []),
-        ...(branchDispatch
-          ? releaseSourceSteps()
-          : [
-              {
-                name: "Checkout",
-                uses: "actions/checkout@v6",
-                with: {
-                  "fetch-depth": 0,
-                  ...(upstreamWorkflow
-                    ? {
-                        ref: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.expected_sha || github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
-                      }
-                    : {}),
-                },
-              },
-            ]),
-        ...(upstreamWorkflow
-          ? [
-              {
-                name: "Verify release source",
-                if: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' }}",
-                shell: "bash",
-                env: {
-                  RELEASE_TAG: "${{ steps.release_metadata.outputs.release_tag }}",
-                  EXPECTED_SHA: "${{ steps.release_metadata.outputs.expected_sha }}",
-                },
-                run: [
-                  'git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
-                  'test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"',
-                  'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"',
-                ].join("\n"),
-              },
-            ]
-          : []),
+        ...releaseSourceSteps(),
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
-        ...(usesRustArtifacts
-          ? [
-              {
-                name: "Require Rust artifact handoff",
-                if: "${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}",
-                shell: "bash",
-                env: {
-                  RUST_RUN_ID:
-                    "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}",
-                  RUST_RUN_ATTEMPT:
-                    "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_attempt || github.event.workflow_run.run_attempt }}",
-                },
-                run: ['test -n "$RUST_RUN_ID"', 'test -n "$RUST_RUN_ATTEMPT"'].join("\n"),
-              },
-            ]
-          : []),
         ...uniffiPublications.map((publication) => ({
           name: `Download ${publication.distribution} native wheels`,
-          if: "${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}",
           uses: "actions/download-artifact@v8",
           with: {
             pattern: `${publication.distribution}--*--python-wheel`,
             path: `dist/${publication.directory}`,
             "merge-multiple": true,
-            "run-id":
-              "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}",
-            "github-token": "${{ github.token }}",
           },
         })),
         {
           name: "Stamp workspace versions",
-          env: {
-            VERSION: branchDispatch
-              ? RELEASE_TAG
-              : "${{ github.event_name == 'push' && github.ref_name || github.event_name == 'workflow_run' && github.event.workflow_run.event == 'repository_dispatch' && steps.release_metadata.outputs.release_tag || inputs.version }}",
-          },
-          run: upstreamWorkflow
-            ? [
-                'if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then',
-                '  if [ "${{ github.event.workflow_run.event }}" != "repository_dispatch" ]; then',
-                '    VERSION="$(git tag --points-at HEAD --list "v*" | sort -V | tail -1)"',
-                "  fi",
-                '  test -n "$VERSION"',
-                "fi",
-                this.renderVersionStampScript(),
-                "mkdir -p .release",
-                'printf "%s\\n" "$VERSION" > .release/tag',
-                "git rev-parse HEAD > .release/sha",
-              ].join("\n")
-            : [
-                this.renderVersionStampScript(),
-                "mkdir -p .release",
-                'printf "%s\\n" "$VERSION" > .release/tag',
-                "git rev-parse HEAD > .release/sha",
-              ].join("\n"),
+          env: { VERSION: RELEASE_VERSION },
+          run: this.renderVersionStampScript(),
         },
         {
           name: "Build distributions",
@@ -633,7 +468,7 @@ export class DBXToolsPythonWorkspace extends Component {
             ),
             ...uniffiPublications.map(
               (publication) =>
-                `if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then find dist/${publication.directory} -maxdepth 1 -name '*.whl' -print -quit | grep -q .; fi`,
+                `find dist/${publication.directory} -maxdepth 1 -name '*.whl' -print -quit | grep -q .`,
             ),
             "find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) -print0 | xargs -0 uvx twine check",
           ].join("\n"),
@@ -641,23 +476,16 @@ export class DBXToolsPythonWorkspace extends Component {
         {
           name: "Upload distributions",
           uses: "actions/upload-artifact@v7",
-          with: { name: "python-distributions", path: "dist" },
-        },
-        {
-          name: "Upload release metadata",
-          uses: "actions/upload-artifact@v7",
-          with: { name: "release-metadata", path: ".release" },
+          with: { name: "python-distributions", path: "dist", "retention-days": 7 },
         },
       ],
     });
     for (const publication of allPublications) {
-      workflow.addJob(`publish-${publication.directory}`, {
-        if: branchDispatch
-          ? "${{ github.event_name == 'repository_dispatch' }}"
-          : "${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}",
+      workflow.addOverride(`jobs.publish-pypi-${publication.directory}`, {
+        if: "${{ github.event_name == 'push' }}",
         needs: [
-          "build",
-          ...(publication.dependencies ?? []).map((dependency) => `publish-${dependency}`),
+          "build-python",
+          ...(publication.dependencies ?? []).map((dependency) => `publish-pypi-${dependency}`),
         ],
         environment: {
           name: publication.environment,
@@ -665,9 +493,9 @@ export class DBXToolsPythonWorkspace extends Component {
             options.environmentUrl ??
             `https://pypi.org/project/${publication.distribution.replaceAll("_", "-")}/`,
         },
-        runsOn: ["ubuntu-latest"],
-        permissions: { idToken: JobPermission.WRITE },
-        timeoutMinutes: 10,
+        "runs-on": "ubuntu-latest",
+        permissions: { "id-token": "write" },
+        "timeout-minutes": 10,
         steps: [
           {
             name: "Download distributions",
@@ -692,7 +520,6 @@ export class DBXToolsPythonWorkspace extends Component {
         distribution: pkg.packageOptions.name,
         environment:
           options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
-        workflowName: options.workflowName ?? "python-release",
       }));
   }
 
@@ -706,7 +533,6 @@ export class DBXToolsPythonWorkspace extends Component {
           pkg.packageOptions.trustedPublisher?.environment ??
           options.environments?.[pkg.packageOptions.name] ??
           `pypi-${pkg.packageOptions.name}`,
-        workflowName: options.workflowName ?? "python-release",
         artifacts: pkg.packageOptions.trustedPublisher?.artifacts,
         dependencies: pkg.packageOptions.internalDependencies,
       }));
@@ -725,7 +551,6 @@ export class DBXToolsPythonWorkspace extends Component {
         directory: pkg.packageOptions.directory,
         distribution: pkg.packageOptions.name,
         environment: publisher.environment,
-        workflowName: publisher.workflowName,
         artifacts: publisher.artifacts,
       });
     }
@@ -738,13 +563,13 @@ export class DBXToolsPythonWorkspace extends Component {
   ): void {
     const repository = this.githubRepository();
     const publications = this.trustedPublisherPublications(options);
-    const releaseBranch = projectReleaseBranch(project);
+    const releaseTags = isDBXToolsJavaScriptProject()(project) ? releaseTagPattern(project) : "v*";
     const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",
       "Use the system browser to audit and configure the PyPI trusted publishers below.",
       "Do not use an in-app browser or embedded webview.",
-      "Do not visit GitHub or use the GitHub API or CLI. Every required GitHub owner, repository, workflow, environment, and branch value is provided below and is authoritative.",
+      "Do not visit GitHub or use the GitHub API or CLI. Every required GitHub owner, repository, workflow, environment, and tag value is provided below and is authoritative.",
       "Use only PyPI pages for this task.",
       "",
       "## Audit and confirmation",
@@ -762,7 +587,7 @@ export class DBXToolsPythonWorkspace extends Component {
       "",
       "## GitHub environment policy",
       "",
-      `- The supplied branch policy value is ${releaseBranch}.`,
+      `- The supplied tag policy value is ${releaseTags}.`,
       "- Do not inspect or configure GitHub environments during this task.",
       "- GitHub environment administration is a separate task; use the supplied values only when comparing PyPI publisher entries.",
       "",
@@ -797,14 +622,13 @@ export class DBXToolsPythonWorkspace extends Component {
       "Publisher type: GitHub Actions",
       "",
       ...publications.flatMap((publication) => {
-        const workflowName = `${publication.workflowName}.yml`;
         return [
           `## ${publication.distribution}`,
           `- Owner: ${repository.owner}`,
           `- Repository name: ${repository.name}`,
-          `- Workflow name: ${workflowName}`,
+          "- Workflow name: release.yml",
           `- Environment name: ${publication.environment}`,
-          `- GitHub environment branch: ${releaseBranch}`,
+          `- GitHub environment tag: ${releaseTags}`,
           ...(publication.artifacts ? [`- Artifacts: ${publication.artifacts}`] : []),
           "",
         ];

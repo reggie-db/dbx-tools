@@ -4,22 +4,21 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
-import { Project, TextFile, YamlFile, javascript } from "projen";
-import {
-  DBXToolsTypeScriptProject,
-  projectReleaseBranch,
-  projectRepositoryUrl,
-} from "./project-js.ts";
+import { Project, TextFile, javascript } from "projen";
+import { BUN_VERSION } from "./bun-workflow.ts";
+import { DBXToolsTypeScriptProject, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import { pythonModuleName, type PythonPackageOptions } from "./project-py.ts";
 import type { DBXToolsProject } from "./project.ts";
 import {
-  DOWNSTREAM_RELEASE_EVENT,
   RELEASE_SHA,
   RELEASE_TAG,
-  RUST_RELEASE_EVENT,
+  RELEASE_VERSION,
+  hasNodeRelease,
+  nodeReleaseSetupSteps,
   releaseSourceSteps,
-} from "./release-dispatch.ts";
+  releaseWorkflow,
+} from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 export interface CargoDependencyOptions {
@@ -75,12 +74,6 @@ export interface DBXToolsRustWorkspaceOptions {
   readonly releaseTargets?: readonly UniFFIReleaseTarget[];
   /** Maintained OS/CPU combinations to release. Defaults to every supported target. */
   readonly releasePlatforms?: readonly RustReleasePlatform[];
-  /** Workflow name used by downstream release stages. Defaults to `rust-release`. */
-  readonly releaseWorkflowName?: string;
-  /** Workflow that publishes generated Python wheels. Defaults to `python-release`. */
-  readonly pythonReleaseWorkflowName?: string;
-  /** Tag prefix dispatched into the branch-scoped release workflow. Defaults to `v`. */
-  readonly releaseTagPrefix?: string;
 }
 
 export enum RustReleaseOs {
@@ -258,7 +251,6 @@ export interface RustWorkspaceMapping {
   readonly root: string;
   readonly crates: readonly string[];
   readonly bindings: readonly RustBindingMapping[];
-  readonly releaseWorkflow?: string;
 }
 
 export function orderRustBindings(bindings: readonly RustBindingMapping[]): RustBindingMapping[] {
@@ -552,7 +544,6 @@ export class DBXToolsRustWorkspace {
       root,
       crates: this.packages.map((pkg) => `${root}/${pkg.packageOptions.directory}`),
       bindings: this.bindingMappings,
-      ...(releaseEnabled ? { releaseWorkflow: options.releaseWorkflowName ?? "rust-release" } : {}),
     };
     if (dbxToolsProject) {
       dbxToolsProject.dbxToolsConfig.rust = this.workspaceMapping;
@@ -594,7 +585,6 @@ export class DBXToolsRustWorkspace {
             `src/${module.replaceAll(".", "/")}/__init__.py`,
           ],
           trustedPublisher: {
-            workflowName: options.pythonReleaseWorkflowName ?? "python-release",
             environment: `pypi-${pkg.crateName}`,
             artifacts: `platform-specific wheels for ${releaseTargets(options)
               .map((target) => `${target.os}-${target.cpu}`)
@@ -721,11 +711,8 @@ export class DBXToolsRustWorkspace {
     options: DBXToolsRustWorkspaceOptions,
     targets: readonly UniFFIReleaseTarget[],
   ): void {
-    if (!project.github) return;
-    const workflowName = options.releaseWorkflowName ?? "rust-release";
-    const releaseTagPrefix = options.releaseTagPrefix ?? "v";
+    if (!project.github || !isDBXToolsJavaScriptProject()(project)) return;
     const releaseRustVersion = options.releaseRustVersion ?? "stable";
-    const releaseBranch = projectReleaseBranch(project);
     const bindings = this.bindingMappings.map((binding) => ({
       ...binding,
       node: binding.node ?? "",
@@ -776,7 +763,7 @@ export class DBXToolsRustWorkspace {
         '--os "${{ matrix.target.os }}"',
         '--cpu "${{ matrix.target.cpu }}"',
         '--libc "${{ matrix.target.libc }}"',
-        `--version "\${VERSION#${releaseTagPrefix}}"`,
+        '--version "$VERSION"',
         `--output "dist/release/${binding.crate}/\${{ matrix.target.node }}"`,
         "--skip-build",
       ].join(" \\\n  "),
@@ -901,7 +888,7 @@ export class DBXToolsRustWorkspace {
               {
                 name: "Package UniFFI outputs",
                 shell: "bash",
-                env: { VERSION: RELEASE_TAG },
+                env: { VERSION: RELEASE_VERSION },
                 run: timedBash("uniffi_packaging", bindingCommands.join("\n")),
               },
             ]
@@ -924,194 +911,168 @@ export class DBXToolsRustWorkspace {
         },
       ],
     };
-    const releaseCompletionJobs = [
-      "build",
-      ...(publicCrates.length ? ["publish-cargo"] : []),
-      ...(releaseBinaries.length ? ["publish-github-release"] : []),
-    ];
-    new YamlFile(project, `.github/workflows/${workflowName}.yml`, {
-      obj: {
-        name: workflowName,
-        "run-name": `${workflowName} ${RELEASE_TAG}`,
-        on: {
-          repository_dispatch: {
-            types: [RUST_RELEASE_EVENT],
+    const workflow = releaseWorkflow(project);
+    if (hasTargetOutputs && targetMatrix.length) {
+      workflow.addOverride("jobs.rust-build", buildJob);
+    }
+    if (publicCrates.length) {
+      workflow.addOverride("jobs.publish-cargo", {
+        if: "${{ github.event_name == 'push' }}",
+        needs: ["verify-context", "rust-build"],
+        "runs-on": "ubuntu-latest",
+        permissions: { contents: "read" },
+        steps: [
+          ...releaseSourceSteps(),
+          {
+            name: "Setup Rust",
+            uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
           },
-          workflow_dispatch: {
-            inputs: {
-              release_tag: {
-                description: "Annotated release tag to build",
-                type: "string",
-                required: true,
-              },
-              expected_sha: {
-                description: "Commit the release tag must reference",
-                type: "string",
-                required: true,
-              },
+          {
+            name: "Publish public crates",
+            env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
+            run: publicCrates
+              .map((crate) => `cargo publish --package "${crate}" --registry crates-io --no-verify`)
+              .join("\n"),
+          },
+        ],
+      });
+      workflow.addOverride("jobs.publish-local-cargo", {
+        if: "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}",
+        needs: ["verify-context", "rust-build"],
+        "runs-on": ["self-hosted"],
+        permissions: { contents: "read" },
+        steps: [
+          ...releaseSourceSteps(),
+          {
+            name: "Setup Rust",
+            uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
+          },
+          {
+            name: "Publish Cargo crates locally",
+            env: { CARGO_REGISTRY_TOKEN: "${{ secrets.LOCAL_CARGO_TOKEN }}" },
+            run: publicCrates
+              .map(
+                (crate) =>
+                  `cargo publish --package "${crate}" --registry "\${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify`,
+              )
+              .join("\n"),
+          },
+        ],
+      });
+    }
+    if (releaseBinaries.length) {
+      workflow.addOverride("jobs.publish-github-release", {
+        if: "${{ github.event_name == 'push' }}",
+        needs: ["verify-context", "rust-build"],
+        "runs-on": "ubuntu-latest",
+        permissions: { contents: "write" },
+        steps: [
+          {
+            name: "Download release binaries",
+            uses: "actions/download-artifact@v8",
+            with: {
+              pattern: "*-binary",
+              path: "dist/rust-release",
+              "merge-multiple": true,
             },
           },
-        },
-        concurrency: {
-          group: workflowName,
-          "cancel-in-progress": true,
-        },
-        permissions: { contents: "read" },
-        jobs: {
-          "verify-context": {
-            "runs-on": "ubuntu-latest",
-            steps: [
-              {
-                name: "Require the default branch cache scope",
-                shell: "bash",
-                env: {
-                  RELEASE_BRANCH: releaseBranch,
-                },
-                run: 'test "$GITHUB_REF_NAME" = "$RELEASE_BRANCH"',
-              },
-              {
-                name: "Write release metadata",
-                shell: "bash",
-                env: {
-                  RELEASE_TAG,
-                  EXPECTED_SHA: RELEASE_SHA,
-                },
-                run: [
-                  "mkdir -p .release",
-                  'printf "%s\\n" "$RELEASE_TAG" > .release/tag',
-                  'printf "%s\\n" "$EXPECTED_SHA" > .release/sha',
-                ].join("\n"),
-              },
-              {
-                name: "Upload release metadata",
-                uses: "actions/upload-artifact@v7",
-                with: {
-                  name: "release-metadata",
-                  path: ".release",
-                },
-              },
-            ],
+          {
+            name: "Publish GitHub release assets",
+            uses: "softprops/action-gh-release@v2",
+            with: {
+              files: "dist/rust-release/*",
+              "generate-release-notes": true,
+              tag_name: RELEASE_TAG,
+              target_commitish: RELEASE_SHA,
+            },
           },
-          ...(hasTargetOutputs && targetMatrix.length ? { build: buildJob } : {}),
-          ...(publicCrates.length
-            ? {
-                "publish-cargo": {
-                  if: "${{ github.event_name == 'repository_dispatch' }}",
-                  needs: ["build"],
-                  "runs-on": "ubuntu-latest",
-                  permissions: { contents: "read" },
-                  steps: [
-                    ...releaseSourceSteps(),
-                    {
-                      name: "Setup Rust",
-                      uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
-                    },
-                    {
-                      name: "Publish public crates",
-                      env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" },
-                      run: publicCrates
-                        .map(
-                          (crate) =>
-                            `cargo publish --package "${crate}" --registry crates-io --no-verify`,
-                        )
-                        .join("\n"),
-                    },
-                  ],
-                },
-              }
-            : {}),
-          ...(publicCrates.length
-            ? {
-                "publish-local-cargo": {
-                  if: "${{ github.event_name == 'repository_dispatch' && vars.LOCAL_REPOSITORIES == 'true' }}",
-                  needs: ["build"],
-                  "runs-on": ["self-hosted"],
-                  permissions: { contents: "read" },
-                  steps: [
-                    ...releaseSourceSteps(),
-                    {
-                      name: "Setup Rust",
-                      uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
-                    },
-                    {
-                      name: "Publish Cargo crates locally",
-                      env: {
-                        CARGO_REGISTRY_TOKEN: "${{ secrets.LOCAL_CARGO_TOKEN }}",
-                      },
-                      run: publicCrates
-                        .map(
-                          (crate) =>
-                            `cargo publish --package "${crate}" --registry "\${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify`,
-                        )
-                        .join("\n"),
-                    },
-                  ],
-                },
-              }
-            : {}),
-          ...(releaseBinaries.length
-            ? {
-                "publish-github-release": {
-                  if: "${{ github.event_name == 'repository_dispatch' }}",
-                  needs: ["build"],
-                  "runs-on": "ubuntu-latest",
-                  permissions: { contents: "write" },
-                  steps: [
-                    {
-                      name: "Download release binaries",
-                      uses: "actions/download-artifact@v8",
-                      with: {
-                        pattern: "*-binary",
-                        path: "dist/rust-release",
-                        "merge-multiple": true,
-                      },
-                    },
-                    {
-                      name: "Publish GitHub release assets",
-                      uses: "softprops/action-gh-release@v2",
-                      with: {
-                        files: "dist/rust-release/*",
-                        "generate-release-notes": true,
-                        tag_name: RELEASE_TAG,
-                        target_commitish: RELEASE_SHA,
-                      },
-                    },
-                  ],
-                },
-              }
-            : {}),
-          "dispatch-downstream": {
-            if: "${{ github.event_name == 'repository_dispatch' }}",
-            needs: releaseCompletionJobs,
-            "runs-on": "ubuntu-latest",
-            permissions: { contents: "write" },
-            steps: [
-              {
-                name: "Dispatch downstream releases",
-                shell: "bash",
-                env: {
-                  GH_TOKEN: "${{ github.token }}",
-                  RELEASE_TAG,
-                  EXPECTED_SHA: RELEASE_SHA,
-                  RELEASE_EVENT: DOWNSTREAM_RELEASE_EVENT,
-                  RUST_RUN_ID: "${{ github.run_id }}",
-                  RUST_RUN_ATTEMPT: "${{ github.run_attempt }}",
-                },
-                run: [
-                  [
-                    'gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches"',
-                    '--raw-field event_type="$RELEASE_EVENT"',
-                    '--raw-field "client_payload[release_tag]=$RELEASE_TAG"',
-                    '--raw-field "client_payload[expected_sha]=$EXPECTED_SHA"',
-                    '--raw-field "client_payload[rust_run_id]=$RUST_RUN_ID"',
-                    '--raw-field "client_payload[rust_run_attempt]=$RUST_RUN_ATTEMPT"',
-                  ].join(" \\\n  "),
-                ].join("\n"),
-              },
-            ],
+        ],
+      });
+    }
+
+    const nodeBindings = bindings.filter((binding) => Boolean(binding.node && binding.nodePackage));
+    if (nodeBindings.length && hasNodeRelease(project)) {
+      workflow.addOverride("jobs.publish-native-npm", {
+        needs: ["rust-build"],
+        "runs-on": "ubuntu-latest",
+        permissions: { contents: "read", "id-token": "write" },
+        "timeout-minutes": 15,
+        steps: [
+          {
+            name: "Setup Node.js",
+            uses: "actions/setup-node@v6",
+            with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
           },
-        },
-      },
-    });
+          {
+            name: "Download native npm packages",
+            uses: "actions/download-artifact@v8",
+            with: {
+              pattern: "*-npm",
+              path: "dist/uniffi/native",
+              "merge-multiple": true,
+            },
+          },
+          {
+            name: "Publish native npm packages",
+            env: {
+              NPM_CONFIG_PROVENANCE: "${{ github.event_name == 'push' && 'true' || 'false' }}",
+              NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
+              NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
+              DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
+            },
+            run: [
+              "test \"$(find dist/uniffi/native -name '*.tgz' | wc -l | tr -d ' ')\" -gt 0",
+              'for package in dist/uniffi/native/*.tgz; do npm publish "$package" --access public $DRY_RUN; done',
+            ].join("\n"),
+          },
+        ],
+      });
+      workflow.addOverride("jobs.publish-node.needs", ["verify-context", "publish-native-npm"]);
+      workflow.addOverride("jobs.publish-node-facades", {
+        needs: ["verify-context", "publish-node"],
+        "runs-on": "ubuntu-latest",
+        permissions: { contents: "read", "id-token": "write" },
+        "timeout-minutes": 30,
+        env: { BUN_VERSION, CI: "true" },
+        steps: [
+          ...nodeReleaseSetupSteps(project),
+          {
+            name: "Build and publish UniFFI npm facades",
+            env: {
+              RELEASE_VERSION,
+              NPM_CONFIG_PROVENANCE: "${{ github.event_name == 'push' && 'true' || 'false' }}",
+              NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
+              NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
+              DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
+            },
+            run: nodeBindings
+              .flatMap((binding) => {
+                const output = `dist/uniffi/facades/${binding.crate}`;
+                return [
+                  `node .projen/uniffi-release.mjs facade --node "${binding.node}" --node-package "${binding.nodePackage}" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "${output}"`,
+                  `for package in ${output}/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done`,
+                ];
+              })
+              .join("\n"),
+          },
+          {
+            name: "Smoke test published UniFFI npm facades",
+            if: "${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}",
+            "continue-on-error": true,
+            env: { RELEASE_VERSION },
+            run: [
+              'SMOKE_DIR="$(mktemp -d)"',
+              "trap 'rm -rf \"$SMOKE_DIR\"' EXIT",
+              'cd "$SMOKE_DIR"',
+              "npm init --yes >/dev/null",
+              ...nodeBindings.flatMap((binding) => [
+                `npm install --ignore-scripts --no-audit --no-fund --package-lock=false "${binding.nodePackage}@$RELEASE_VERSION"`,
+                `node -e 'import("${binding.nodePackage}")'`,
+              ]),
+            ].join("\n"),
+          },
+        ],
+      });
+    }
   }
 }

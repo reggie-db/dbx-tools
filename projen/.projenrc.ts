@@ -40,7 +40,7 @@ const project = new typescript.TypeScriptProject({
   eslint: false,
   // No GitHub component (a workflow under `projen/.github/` would never run -
   // GitHub Actions only executes workflows from the REPO-ROOT `.github/`).
-  // The root node-release workflow publishes this workspace member.
+  // The root release workflow publishes this workspace member.
   github: false,
   buildWorkflow: false,
   release: false,

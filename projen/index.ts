@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/projen";
-export const PACKAGE_VERSION = "0.6.176";
+export const PACKAGE_VERSION = "0.6.177";
 export * as barrels from "./src/barrels.ts";
 export * as bunApp from "./src/bun-app.ts";
 export * as bunWorkflow from "./src/bun-workflow.ts";
@@ -24,7 +24,6 @@ export * as projectPy from "./src/project-py.ts";
 export * as projectRs from "./src/project-rs.ts";
 export * as publish from "./src/publish.ts";
 export * as release from "./src/release.ts";
-export * as releaseDispatch from "./src/release-dispatch.ts";
 export * as scaffold from "./src/scaffold.ts";
 export * as tags from "./src/tags.ts";
 export * as tsconfig from "./src/tsconfig.ts";
@@ -53,9 +52,8 @@ export type { PythonRepositoryOptions, PythonPackageOptions, PythonTrustedPublis
 export { RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARGETS, DBXToolsRustProject, DBXToolsRustWorkspace } from "./src/project-rs.ts";
 export type { CargoDependencyOptions, CargoDependency, RustPackageOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustWorkspaceMapping } from "./src/project-rs.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
-export { DBXToolsRelease } from "./src/release.ts";
-export type { StandaloneRelease, DBXToolsReleaseOptions } from "./src/release.ts";
-export { DOWNSTREAM_RELEASE_EVENT, RUST_RELEASE_EVENT, RELEASE_TAG, RELEASE_SHA } from "./src/release-dispatch.ts";
+export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION, DBXToolsRelease } from "./src/release.ts";
+export type { ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
 export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";

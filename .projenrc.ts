@@ -33,6 +33,10 @@ const root = new projenProject.DBXToolsNodeProject({
   packageTagPaths: { polyglot: ["node"] },
   github: true,
   buildWorkflow: true,
+  releaseDocs: {
+    siteUrl: "https://docs.dbx.tools",
+    base: "/",
+  },
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:*` sibling deps from local source.
@@ -1053,7 +1057,7 @@ root.addTask("demo", {
   description: "Run the local demo server, client, and Python bus emitter",
 });
 
-// The generated `node-release` workflow publishes every npm workspace member,
+// The generated release workflow publishes every npm workspace member,
 // including `@dbx-tools/projen`.
 
 root.synth();

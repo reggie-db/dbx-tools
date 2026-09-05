@@ -1,13 +1,5 @@
-/**
- * Release workflow authentication.
- *
- * `NODE_AUTH_TOKEN` alone does not authenticate npm. `actions/setup-node`
- * writes the temporary registry-scoped npmrc only when `registry-url` is set;
- * dropping that field leaves the secret present but every publish fails with
- * ENEEDAUTH. Both package and standalone release workflows share this setup.
- */
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -15,19 +7,24 @@ import { after, before, describe, it } from "node:test";
 import { DBXToolsNodeProject } from "../src/project.ts";
 
 let outdir: string;
+let release: string;
 
 before(() => {
   process.env.PROJEN_DISABLE_POST = "1";
   outdir = mkdtempSync(join(tmpdir(), "release-"));
+  const workflows = join(outdir, ".github", "workflows");
   const project = new DBXToolsNodeProject({
     name: "release-fixture",
     outdir,
     github: true,
     buildWorkflow: true,
-    releaseUpstreamWorkflow: "python-release",
-    standaloneReleases: [{ name: "engine-release", directory: "engine", tagPrefix: "engine-v" }],
+    releaseDocs: {
+      siteUrl: "https://docs.example.com",
+      base: "/fixture/",
+    },
   });
   project.synth();
+  release = readFileSync(join(workflows, "release.yml"), "utf8");
 });
 
 after(() => {
@@ -35,42 +32,71 @@ after(() => {
   rmSync(outdir, { recursive: true, force: true });
 });
 
-describe("npm release workflow auth", () => {
-  for (const name of ["node-release", "engine-release"]) {
-    it(`${name} configures npmjs before publishing`, () => {
-      const workflow = readFileSync(join(outdir, ".github", "workflows", `${name}.yml`), "utf8");
-      assert.match(workflow, /registry-url: https:\/\/registry\.npmjs\.org/);
-      assert.match(workflow, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/);
-      assert.match(workflow, /workflows:\s+- python-release/);
-      assert.match(workflow, /RELEASE_VERSION/);
-      assert.match(workflow, /^  cancel-in-progress: true$/m);
-      assert.match(workflow, /^      BUN_VERSION: 1\.3\.14$/m);
-      assert.match(workflow, /uses: actions\/cache\/restore@v5/);
-      assert.match(workflow, /uses: actions\/cache\/save@v5/);
-    });
-  }
+describe("unified release workflow", () => {
+  it("triggers directly from annotated tags and safe manual dry runs", () => {
+    assert.match(release, /^name: release$/m);
+    assert.match(release, /^  push:\n    tags:\n      - v\*$/m);
+    assert.match(release, /^  workflow_dispatch:$/m);
+    assert.match(release, /dry_run:[\s\S]*?default: true[\s\S]*?required: true/);
+    assert.match(release, /test "\$DRY_RUN" = "true"/);
+    assert.match(release, /git cat-file -t "\$RELEASE_TAG"/);
+    assert.match(release, /git rev-parse "\$RELEASE_TAG\^\{commit\}"/);
+    assert.match(release, /test "\$\(git rev-parse HEAD\)" = "\$RELEASE_SHA"/);
+    assert.match(release, /^  group: release$/m);
+    assert.match(release, /^  cancel-in-progress: true$/m);
+  });
 
-  it("uses the resolved upstream tag for standalone publication", () => {
-    const workflow = readFileSync(
-      join(outdir, ".github", "workflows", "engine-release.yml"),
-      "utf8",
+  it("publishes npm with npmjs authentication and push-only provenance", () => {
+    assert.match(release, /^  publish-node:$/m);
+    assert.match(release, /registry-url: https:\/\/registry\.npmjs\.org/);
+    assert.match(release, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/);
+    assert.match(
+      release,
+      /NPM_CONFIG_PROVENANCE: \$\{\{ github\.event_name == 'push' && 'true' \|\| 'false' \}\}/,
     );
-    assert.match(workflow, /\$\{RELEASE_VERSION:-\$\{GITHUB_REF_NAME#engine-v\}\}/);
-    assert.match(workflow, /git tag --points-at HEAD --list "engine-v\*"/);
+    assert.match(
+      release,
+      /DRY_RUN: \$\{\{ github\.event_name == 'workflow_dispatch' && '--dry-run' \|\| '' \}\}/,
+    );
+    assert.match(release, /tasks\/publish\.ts "\$RELEASE_VERSION" \$DRY_RUN/);
+    assert.match(release, /^      BUN_VERSION: 1\.3\.14$/m);
+    assert.match(release, /uses: actions\/cache\/restore@v5/);
+    assert.match(release, /uses: actions\/cache\/save@v5/);
+  });
+
+  it("builds and deploys docs in the same release workflow", () => {
+    assert.match(release, /^  build-docs:$/m);
+    assert.match(release, /^  deploy-docs:$/m);
+    assert.match(release, /DOCS_SITE_URL: https:\/\/docs\.example\.com/);
+    assert.match(release, /DOCS_BASE: \/fixture\//);
+    assert.match(release, /bun docs\/scripts\/sync-readmes\.mjs/);
+    assert.match(release, /bun docs\/scripts\/generate-api-docs\.mjs/);
+    assert.match(release, /uses: actions\/upload-pages-artifact@v4/);
+    assert.match(release, /uses: actions\/deploy-pages@v4/);
+    const deploy = release.match(/^  deploy-docs:[\s\S]*$/m)?.[0];
+    assert.ok(deploy);
+    assert.match(deploy, /if: \$\{\{ github\.event_name == 'push' \}\}/);
+    assert.match(deploy, /name: github-pages/);
+    assert.match(deploy, /pages: write/);
+    assert.match(deploy, /id-token: write/);
+  });
+
+  it("contains no cross-workflow handoff machinery", () => {
+    assert.doesNotMatch(release, /repository_dispatch|workflow_run|run-id|run_attempt/);
+    for (const file of [
+      "release-dispatch.yml",
+      "rust-release.yml",
+      "node-release.yml",
+      "python-release.yml",
+      "docs.yml",
+    ]) {
+      assert.equal(existsSync(join(outdir, ".github", "workflows", file)), false);
+    }
   });
 });
 
 describe("npm release workflow performance", () => {
   it("delegates workspace compilation and concurrent publishing to the shared driver", () => {
-    const workflow = readFileSync(join(outdir, ".github", "workflows", "node-release.yml"), "utf8");
-    assert.match(workflow, /tasks\/publish\.ts "\$VERSION"/);
-    assert.match(workflow, /workflows:\s+- python-release/);
-    assert.match(workflow, /name: Download release metadata/);
-    assert.match(workflow, /run-id: \$\{\{ github\.event\.workflow_run\.id \}\}/);
-    assert.match(workflow, /ref: \$\{\{ steps\.release_metadata\.outputs\.expected_sha \}\}/);
-    assert.match(workflow, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
-    assert.doesNotMatch(workflow, /github\.event\.workflow_run\.head_sha/);
-
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.match(driver, /"--ignore-scripts"/);
     assert.match(driver, /compiled\.flatMap\(\(pkg\) => \["--filter", pkg\.name\]\)/);
@@ -96,11 +122,10 @@ describe("release tag push performance", () => {
 });
 
 describe("generated engine task paths", () => {
-  it("uses the stable package symlink rather than pnpm's physical store path", () => {
+  it("uses the stable package symlink", () => {
     const tasks = JSON.parse(readFileSync(join(outdir, ".projen", "tasks.json"), "utf8")) as {
       tasks: Record<string, { steps: Array<{ exec?: string }> }>;
     };
-
     assert.equal(
       tasks.tasks.sync?.steps[0]?.exec,
       "bun node_modules/@dbx-tools/projen/tasks/sync.ts",
@@ -121,6 +146,13 @@ describe("generated workflow safety", () => {
     });
   }
 
+  it("keeps the CI build separate from release", () => {
+    const workflow = readFileSync(join(outdir, ".github", "workflows", "build.yml"), "utf8");
+    assert.match(workflow, /^name: build$/m);
+    assert.match(workflow, /^  pull_request: \{\}$/m);
+    assert.doesNotMatch(workflow, /tags:\n\s+- v\*/);
+  });
+
   it("restores and saves Bun's dependency-only package cache", () => {
     const workflow = readFileSync(join(outdir, ".github", "workflows", "build.yml"), "utf8");
     assert.match(workflow, /^      BUN_VERSION: 1\.3\.14$/m);
@@ -137,57 +169,23 @@ describe("generated workflow safety", () => {
   });
 });
 
-describe("optional Node release stages", () => {
-  it("publishes from the downstream release event", () => {
-    const directOutdir = mkdtempSync(join(tmpdir(), "release-direct-"));
-    try {
-      const project = new DBXToolsNodeProject({
-        name: "direct-release-fixture",
-        outdir: directOutdir,
-        github: true,
-      });
-      project.synth();
-      const workflow = readFileSync(
-        join(directOutdir, ".github", "workflows", "node-release.yml"),
-        "utf8",
-      );
-      assert.match(workflow, /^  repository_dispatch:\n    types:\n      - release$/m);
-      assert.doesNotMatch(workflow, /workflow_run:/);
-      assert.match(workflow, /name: Upload release metadata/);
-      const dispatcher = readFileSync(
-        join(directOutdir, ".github", "workflows", "release-dispatch.yml"),
-        "utf8",
-      );
-      assert.match(dispatcher, /^  push:\n    tags:\n      - v\*$/m);
-      assert.match(dispatcher, /^  cancel-in-progress: true$/m);
-      assert.match(dispatcher, /actions: write/);
-      assert.match(dispatcher, /RELEASE_WORKFLOWS: node-release/);
-      assert.match(dispatcher, /gh run cancel "\$run_id"/);
-      assert.match(
-        dispatcher,
-        /for status in in_progress queued requested waiting pending action_required/,
-      );
-    } finally {
-      rmSync(directOutdir, { recursive: true, force: true });
-    }
-  });
-
-  it("omits the Node release workflow when disabled", () => {
+describe("optional Node release stage", () => {
+  it("can be omitted while retaining the verified release workflow", () => {
     const disabledOutdir = mkdtempSync(join(tmpdir(), "release-disabled-"));
     try {
       const project = new DBXToolsNodeProject({
         name: "disabled-release-fixture",
         outdir: disabledOutdir,
         github: true,
-        nodeReleaseWorkflowName: false,
+        nodeRelease: false,
       });
       project.synth();
-      assert.equal(
-        readFileSync(join(disabledOutdir, ".projen", "files.json"), "utf8").includes(
-          ".github/workflows/node-release.yml",
-        ),
-        false,
+      const workflow = readFileSync(
+        join(disabledOutdir, ".github", "workflows", "release.yml"),
+        "utf8",
       );
+      assert.match(workflow, /^  verify-context:$/m);
+      assert.doesNotMatch(workflow, /^  publish-node:$/m);
     } finally {
       rmSync(disabledOutdir, { recursive: true, force: true });
     }
