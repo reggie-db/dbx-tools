@@ -452,6 +452,14 @@ describe("DBXToolsRustWorkspace", () => {
         nodeRelease.indexOf("Set version from tag and publish"),
     );
     assert.ok(
+      nodeRelease.indexOf("Publish native npm packages") <
+        nodeRelease.indexOf("Refresh workspace after native publication"),
+    );
+    assert.ok(
+      nodeRelease.indexOf("Refresh workspace after native publication") <
+        nodeRelease.indexOf("Set version from tag and publish"),
+    );
+    assert.ok(
       nodeRelease.indexOf("Set version from tag and publish") <
         nodeRelease.indexOf("Build and publish UniFFI npm facades"),
     );

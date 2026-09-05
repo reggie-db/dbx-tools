@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-google-auth"
-version = "0.6.172"
+version = "0.6.173"
 description = "Python bindings for dbx-tools-google-auth"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"

@@ -539,6 +539,11 @@ export class DBXToolsRelease extends Component {
           'for package in dist/uniffi/native/*.tgz; do npm publish "$package" --access public; done',
         ].join("\n"),
       },
+      {
+        name: "Refresh workspace after native publication",
+        if: "${{ github.event_name == 'repository_dispatch' }}",
+        run: "bun install --force",
+      },
     ];
 
     const facadeCommands = [
