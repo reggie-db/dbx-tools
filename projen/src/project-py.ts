@@ -7,8 +7,8 @@ import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission } from "projen/lib/github/workflows-model";
 import { parse, stringify } from "smol-toml";
 import { projectReleaseBranch, projectRepositoryUrl } from "./project-js.ts";
-import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
+import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { DOWNSTREAM_RELEASE_EVENT, RELEASE_TAG, releaseSourceSteps } from "./release-dispatch.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
@@ -75,6 +75,7 @@ interface PythonPublication {
   readonly environment: string;
   readonly workflowName: string;
   readonly artifacts?: string;
+  readonly dependencies?: readonly string[];
 }
 
 /** Options for {@link DBXToolsPythonWorkspace}. */
@@ -319,7 +320,7 @@ export class DBXToolsPythonWorkspace extends Component {
       projectVscode(project)?.settings.addSetting("python.defaultInterpreterPath", interpreterPath);
     }
 
-    if (options.release && this.packages.some((pkg) => pkg.packageOptions.uniffi !== true)) {
+    if (options.release && this.packages.length > 0) {
       if (isDBXToolsJavaScriptProject()(project)) {
         project.dbxToolsConfig.pythonReleaseWorkflow =
           releaseOptions.workflowName ?? "python-release";
@@ -428,7 +429,10 @@ export class DBXToolsPythonWorkspace extends Component {
   private addReleaseWorkflow(project: javascript.NodeProject, options: PythonReleaseOptions): void {
     if (!project.github) return;
     const publications = this.publications(options);
-    if (publications.length === 0) return;
+    const uniffiPublications = this.uniffiPublications(options);
+    const allPublications = [...publications, ...uniffiPublications];
+    if (allPublications.length === 0) return;
+    const usesRustArtifacts = uniffiPublications.length > 0;
     const workflowName = options.workflowName ?? "python-release";
     const workflow = new GithubWorkflow(project.github, workflowName, {
       limitConcurrency: true,
@@ -436,7 +440,7 @@ export class DBXToolsPythonWorkspace extends Component {
     });
     workflow.file?.addOverride("permissions", {
       contents: "read",
-      ...(options.upstreamWorkflow ? { actions: "read" } : {}),
+      ...(options.upstreamWorkflow || usesRustArtifacts ? { actions: "read" } : {}),
     });
     const upstreamWorkflow = options.upstreamWorkflow;
     const branchDispatch = upstreamWorkflow === undefined && isDBXToolsJavaScriptProject()(project);
@@ -487,7 +491,7 @@ export class DBXToolsPythonWorkspace extends Component {
       runsOn: ["ubuntu-latest"],
       permissions: {
         contents: JobPermission.READ,
-        ...(upstreamWorkflow ? { actions: JobPermission.READ } : {}),
+        ...(upstreamWorkflow || usesRustArtifacts ? { actions: JobPermission.READ } : {}),
       },
       timeoutMinutes: 20,
       steps: [
@@ -555,6 +559,35 @@ export class DBXToolsPythonWorkspace extends Component {
             ]
           : []),
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+        ...(usesRustArtifacts
+          ? [
+              {
+                name: "Require Rust artifact handoff",
+                if: "${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}",
+                shell: "bash",
+                env: {
+                  RUST_RUN_ID:
+                    "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}",
+                  RUST_RUN_ATTEMPT:
+                    "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_attempt || github.event.workflow_run.run_attempt }}",
+                },
+                run: ['test -n "$RUST_RUN_ID"', 'test -n "$RUST_RUN_ATTEMPT"'].join("\n"),
+              },
+            ]
+          : []),
+        ...uniffiPublications.map((publication) => ({
+          name: `Download ${publication.distribution} native wheels`,
+          if: "${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}",
+          uses: "actions/download-artifact@v8",
+          with: {
+            pattern: `${publication.distribution}-*-python-wheel`,
+            path: `dist/${publication.directory}`,
+            "merge-multiple": true,
+            "run-id":
+              "${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}",
+            "github-token": "${{ github.token }}",
+          },
+        })),
         {
           name: "Stamp workspace versions",
           env: {
@@ -594,8 +627,15 @@ export class DBXToolsPythonWorkspace extends Component {
         {
           name: "Validate distributions",
           run: [
-            `test "$(find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) | wc -l | tr -d ' ')" -eq ${publications.length * 2}`,
-            "uvx twine check dist/*/*.whl dist/*/*.tar.gz",
+            ...publications.map(
+              (publication) =>
+                `test "$(find dist/${publication.directory} -maxdepth 1 -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) | wc -l | tr -d ' ')" -eq 2`,
+            ),
+            ...uniffiPublications.map(
+              (publication) =>
+                `if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then find dist/${publication.directory} -maxdepth 1 -name '*.whl' -print -quit | grep -q .; fi`,
+            ),
+            "find dist -type f \\( -name '*.whl' -o -name '*.tar.gz' \\) -print0 | xargs -0 uvx twine check",
           ].join("\n"),
         },
         {
@@ -610,12 +650,15 @@ export class DBXToolsPythonWorkspace extends Component {
         },
       ],
     });
-    for (const publication of publications) {
+    for (const publication of allPublications) {
       workflow.addJob(`publish-${publication.directory}`, {
         if: branchDispatch
           ? "${{ github.event_name == 'repository_dispatch' }}"
           : "${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}",
-        needs: ["build"],
+        needs: [
+          "build",
+          ...(publication.dependencies ?? []).map((dependency) => `publish-${dependency}`),
+        ],
         environment: {
           name: publication.environment,
           url:
@@ -650,6 +693,22 @@ export class DBXToolsPythonWorkspace extends Component {
         environment:
           options.environments?.[pkg.packageOptions.name] ?? `pypi-${pkg.packageOptions.name}`,
         workflowName: options.workflowName ?? "python-release",
+      }));
+  }
+
+  private uniffiPublications(options: PythonReleaseOptions): readonly PythonPublication[] {
+    return this.packages
+      .filter((pkg) => pkg.packageOptions.uniffi === true)
+      .map((pkg) => ({
+        directory: pkg.packageOptions.directory,
+        distribution: pkg.packageOptions.name,
+        environment:
+          pkg.packageOptions.trustedPublisher?.environment ??
+          options.environments?.[pkg.packageOptions.name] ??
+          `pypi-${pkg.packageOptions.name}`,
+        workflowName: options.workflowName ?? "python-release",
+        artifacts: pkg.packageOptions.trustedPublisher?.artifacts,
+        dependencies: pkg.packageOptions.internalDependencies,
       }));
   }
 

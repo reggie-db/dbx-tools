@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     steps:
       - name: Checkout release commit
         id: checkout_release_commit
@@ -45,6 +46,56 @@ jobs:
       - name: Setup uv
         id: setup_uv
         uses: astral-sh/setup-uv@v7
+      - name: Require Rust artifact handoff
+        id: require_rust_artifact_handoff
+        if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
+        env:
+          RUST_RUN_ID: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}
+          RUST_RUN_ATTEMPT: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_attempt || github.event.workflow_run.run_attempt }}
+        run: |-
+          test -n "$RUST_RUN_ID"
+          test -n "$RUST_RUN_ATTEMPT"
+        shell: bash
+      - name: Download dbx-tools-auth native wheels
+        id: download_dbx-tools-auth_native_wheels
+        if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-auth-*-python-wheel
+          path: dist/auth
+          merge-multiple: true
+          run-id: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Download dbx-tools-databricks native wheels
+        id: download_dbx-tools-databricks_native_wheels
+        if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-databricks-*-python-wheel
+          path: dist/databricks
+          merge-multiple: true
+          run-id: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Download dbx-tools-databricks-auth native wheels
+        id: download_dbx-tools-databricks-auth_native_wheels
+        if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-databricks-auth-*-python-wheel
+          path: dist/databricks-auth
+          merge-multiple: true
+          run-id: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Download dbx-tools-google-auth native wheels
+        id: download_dbx-tools-google-auth_native_wheels
+        if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-google-auth-*-python-wheel
+          path: dist/google-auth
+          merge-multiple: true
+          run-id: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
       - name: Stamp workspace versions
         id: stamp_workspace_versions
         env:
@@ -99,8 +150,16 @@ jobs:
       - name: Validate distributions
         id: validate_distributions
         run: |-
-          test "$(find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 10
-          uvx twine check dist/*/*.whl dist/*/*.tar.gz
+          test "$(find dist/core -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
+          test "$(find dist/postgres -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
+          test "$(find dist/model -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
+          test "$(find dist/litellm -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
+          test "$(find dist/graphiti -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then find dist/auth -maxdepth 1 -name '*.whl' -print -quit | grep -q .; fi
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then find dist/databricks -maxdepth 1 -name '*.whl' -print -quit | grep -q .; fi
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then find dist/databricks-auth -maxdepth 1 -name '*.whl' -print -quit | grep -q .; fi
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then find dist/google-auth -maxdepth 1 -name '*.whl' -print -quit | grep -q .; fi
+          find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) -print0 | xargs -0 uvx twine check
       - name: Upload distributions
         id: upload_distributions
         uses: actions/upload-artifact@v7
@@ -224,5 +283,99 @@ jobs:
         with:
           packages-dir: dist/graphiti
     timeout-minutes: 10
+  publish-auth:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-auth
+      url: https://pypi.org/project/dbx-tools-auth/
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    steps:
+      - name: Download distributions
+        id: download_distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish dbx-tools-auth to PyPI
+        id: publish_dbx-tools-auth_to_pypi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/auth
+    timeout-minutes: 10
+  publish-databricks:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-databricks
+      url: https://pypi.org/project/dbx-tools-databricks/
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    steps:
+      - name: Download distributions
+        id: download_distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish dbx-tools-databricks to PyPI
+        id: publish_dbx-tools-databricks_to_pypi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/databricks
+    timeout-minutes: 10
+  publish-databricks-auth:
+    needs:
+      - build
+      - publish-auth
+      - publish-databricks
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-databricks-auth
+      url: https://pypi.org/project/dbx-tools-databricks-auth/
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    steps:
+      - name: Download distributions
+        id: download_distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish dbx-tools-databricks-auth to PyPI
+        id: publish_dbx-tools-databricks-auth_to_pypi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/databricks-auth
+    timeout-minutes: 10
+  publish-google-auth:
+    needs:
+      - build
+      - publish-auth
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-google-auth
+      url: https://pypi.org/project/dbx-tools-google-auth/
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    steps:
+      - name: Download distributions
+        id: download_distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-distributions
+          path: dist
+      - name: Publish dbx-tools-google-auth to PyPI
+        id: publish_dbx-tools-google-auth_to_pypi
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/google-auth
+    timeout-minutes: 10
 permissions:
   contents: read
+  actions: read

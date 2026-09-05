@@ -334,9 +334,11 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   filtering; then delegates to LiteLLM's built-in Databricks provider.
   `/v1/models` keeps exact ids in the OpenAI-standard `data` envelope plus the
   Codex `models` extension. Inference `dbx-access` records include the client
-  requested model, resolved endpoint, and requesting IP. `/v1/models` records
-  include the requesting IP and a family-count summary derived with the model
-  package's canonical parser. `GET /v1/models/lookup` is part of the LiteLLM
+  requested model, resolved endpoint, and requesting IP. Non-streaming Chat and
+  Responses JSON responses return the resolved endpoint as `model` and the
+  client's value as `requestedModel`. `/v1/models` records include the requesting IP and
+  a family-count summary derived with the model package's canonical parser.
+  `GET /v1/models/lookup` is part of the LiteLLM
   OpenAPI surface, exposes the owning `ModelQuery` fields as query parameters,
   and returns the same complete `RankedModel` payload as
   `dbx-litellm lookup --output json`. Both call `lookup_models` directly; an
@@ -409,10 +411,10 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   packages every discovered UniFFI binding and release-enabled binary from the
   shared output. Generated Node facades carry `dbxToolsConfig.uniffi = true`;
   generated Python facades carry `[tool.dbx_tools.config] uniffi = true`.
-  These are public packages skipped by the standard Node/Python publishers so
-  the Rust flow publishes them exactly once. Do not mark them private. Install
-  Bun and run `bun install` only when a discovered binding has a Node facade; Python-only bindings need uv but not Bun, and
-  binary-only targets need neither. `rustVersion` is the package compatibility
+  These are public packages prepared by Rust and published by their ecosystem
+  workflows. Do not mark them private. Rust release rows need uv only when a
+  Python binding exists; they do not install Bun or UBRN because Node facades
+  compile later from committed generated TypeScript. `rustVersion` is the package compatibility
   floor written to Cargo manifests; `releaseRustVersion` is the build toolchain
   and defaults to `stable`, so a newly resolved dependency cannot make current
   Cargo metadata unreadable while the package still advertises its older MSRV.
@@ -423,21 +425,6 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   blocks. Node generation fails on binding-name conflicts, and Python generation
   refuses to overwrite a non-generated package root. Consumers import from the
   package root.
-  `ubrnRustVersion` defaults to that release toolchain and installs another
-  toolchain only when explicitly overridden. Cache the final host UBRN executable
-  by pinned UBRN version, runner OS/architecture, and Rust toolchain. A hit skips
-  both the workspace `bun install` and UBRN compilation; release generation
-  passes that executable directly and keeps the copied package's existing barrel
-  instead of loading the full projen dependency graph. Save a newly built
-  executable immediately after validation rather than in end-of-job cleanup, so
-  a later packaging failure cannot discard the expensive cache fill. Within the
-  facade row, Bun runtime setup remains unconditional because packaging executes
-  the TypeScript binding generator and bundles the Node facade even when the
-  UBRN executable is restored. The bundle keeps type declarations pointed at
-  the committed Rust-generated TypeScript, so a UBRN cache hit needs no
-  workspace install or standalone TypeScript compiler.
-  The complete Bun/UBRN path runs only in that single row. Other rows
-  package native libraries and Python wheels without touching UBRN.
   Stable Windows release rows use the toolchain already installed on the hosted
   runner after verifying the compiler, Cargo, target, and bundled `rust-lld`.
   Their workspace build selects `rust-lld`; an explicitly pinned
@@ -445,9 +432,12 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   Release tags run only the small `release-dispatch` workflow. It resolves the
   annotated tag to a commit and sends a `rust-release` event when a Rust release
   exists, otherwise it sends the downstream `release` event directly. A
-  successful Rust release sends `release` after its public wrappers, crates, and
-  binaries complete. Python, Node, standalone Node, and docs consume `release`
-  independently and start together on the configured release branch. Every
+  successful Rust release sends `release` after native npm archives, Python
+  wheels, Cargo crates, and GitHub binaries are ready. The dispatch includes the
+  Rust run id and attempt. Node downloads that exact run, publishes native npm
+  archives, publishes normal workspace packages, then builds and publishes
+  facades in binding dependency order. Python downloads every platform wheel
+  and publishes it alongside the standard distributions. Every
   source job shallow-checks out that explicit commit, fetches only the requested tag, and requires both
   `tag^{commit}` and `HEAD` to equal the expected SHA. This branch context keeps
   Cargo registry and sccache entries reusable across version tags. Cargo registry
@@ -466,12 +456,10 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   while enabling a command shell would lose argv boundaries. Process-launch
   errors must report `spawnSync.error` instead of presenting a meaningless null
   exit status.
-  Artifact names identify crate, target, and type (`npm`, `npm-facade`,
-  `python-wheel`, or `binary`). The Rust workflow
-  publishes downloaded native npm archives and Python wheels directly without
-  checkout or dependency installation, publishes non-private Cargo crates from
-  a source-only `cargo publish --no-verify` job, and uploads prebuilt binaries
-  to the GitHub release. Native npm packages publish before their facade.
+  Artifact names identify crate, target, and type (`npm`, `python-wheel`, or
+  `binary`). The Rust workflow publishes non-private Cargo crates from a
+  source-only `cargo publish --no-verify` job and uploads prebuilt binaries to
+  the GitHub release. It never publishes npm or PyPI packages.
   `bun run bump --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product; omit both to restore the maintained full
   matrix. Attached Rust and Python workspace components record their generated
@@ -479,8 +467,8 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   decide whether Rust gates the downstream workflows. Consumers specify an
   `upstreamWorkflow` only to override this event-based composition.
   GitHub environments referenced by release jobs must permit the configured
-  release branch. PyPI trusted publishers keep the generated workflow and
-  environment names unchanged even though the initiating event is branch-scoped.
+  release branch. Every PyPI trusted publisher, including UniFFI wheels, uses
+  the Python release workflow.
 - **Python workspace roots** — `DBXToolsPythonWorkspace.root` defaults to
   `packages/py`; consumers may place packages elsewhere without changing the
   engine.
@@ -1663,8 +1651,8 @@ error source:
   so every manifest copies it. Nothing else (no publish restore, no lifecycle
   hook, no commit hook) moves a package version.
 - **Remote is consulted only on bump and one-time bootstrap.** `bump` runs a
-  single `git fetch --tags` and takes the highest tag across `v*` and every
-  sibling prefix (e.g. `projen-v*`) as its base, so a release cut elsewhere wins.
+  single `git fetch --tags` and takes the highest `v*` tag as its base, so a
+  release cut elsewhere wins.
   When the remote is unreachable or has no matching tag it falls back to the local
   `VERSION` file. A local file that is ahead does NOT override an existing remote
   tag. Creating a missing `VERSION` file uses the same remote-or-`0.0.1` rule.
@@ -1819,28 +1807,10 @@ the platform's pnpm build phase reads.
 
 Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated files.
 
-- **The engine ships on its own tag but at the SAME version, and one `bump` cuts
-  both.** `bun run bump` at the root publishes the `packages/js/**` members via the
-  `v*` tag -> `release` workflow -> `bun publish`es each non-private one, which by
-  definition cannot exclude `projen/` now that it is a workspace member. So the
-  engine's separate publication uses a second namespace: tag `projen-v*` ->
-  `projen-release` workflow -> `bun publish` (from `projen/`), versioned from the
-  pushed tag. The two namespaces stay separate because `@dbx-tools/projen` is
-  consumable on its own, by a repo that wants the monorepo generator and none of
-  the Databricks packages.
-  What links them is the root's bump task, generated as `--prefix v --exclude
-projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
-  the base version from the highest tag across EVERY listed prefix (falling back
-  to the shared root `VERSION` file), writes the next version to `VERSION`, synths
-  so every manifest copies it, and pushes all the tags together, so both release
-  at one version. The `--exclude projen` keeps it out of the packages publish
-  pass, and the separate projen release workflow publishes it on its own tag.
-  Consulting every prefix at once is what keeps them lockstep: when each namespace
-  only consulted its own tags the engine went stale in silence - it sat at 0.1.24
-  while the packages reached 0.3.41, so a consumer's `@dbx-tools/projen@latest`
-  was months behind the CLI that installed it.
-  Releasing the engine alone is still `cd projen && bun run bump`; nothing about
-  the version numbers being equal means a package change implies an engine change.
+- **The engine is a normal member of the Node release.** `@dbx-tools/projen`
+  shares the root `VERSION`, `v*` tag, and `node-release` workflow with every
+  other npm workspace member. One `bun run bump` commits and pushes that tag;
+  there is no separate Projen tag or workflow.
 - **Publishing leans on NATIVE bun - do not re-hand-roll what bun already does.**
   `tasks/publish.ts` sets each member's version with `bun pm pkg set version=<v>`
   (not a hand-written JSON edit; `bun pm version` is for bumping and errors on an
@@ -1866,9 +1836,9 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   During a local root bump, the npm/Verdaccio and Python/devpi publishers run in
   parallel because they mutate disjoint JS and Python package trees; each still
   completes its own build before uploading.
-- **Release workflows are testable without touching npm.** Both `release` and
-  `projen-release` also trigger on `workflow_dispatch` with a `dry_run` boolean
-  input (default true). A manual run has no tag, so it uses a throwaway
+- **Release workflows are testable without touching npm.** `node-release`
+  triggers on `workflow_dispatch` with a `dry_run` boolean input (default true).
+  A manual run has no tag, so it uses a throwaway
   `0.0.0-dry.<run>` version and FORCES `bun publish --dry-run` (compile + pack +
   validate, upload skipped). Run it from the Actions tab to exercise the whole
   pipeline - setup-bun, install, stamp, compile, pack - with nothing reaching npm.
@@ -1893,9 +1863,8 @@ projen --sibling projen:projen-v` from the `standaloneReleases` option: it takes
   in the published tarball.** In-repo, `workspace:*` resolves siblings from source.
   The committed manifest keeps `workspace:*` (baking a `^<version>` for a
   not-yet-published version would break the release workflow's initial `bun
-install`); `projen-release` resolves them transiently at publish via
-  `tasks/publish.ts --stamp-only` (set versions + refresh lockfile), then `bun
-publish` in `projen/` strips `workspace:*` to those versions. Do not
+install`); the Node release stamps the workspace once, then native Bun publish
+  resolution pins those sibling dependencies in the packed engine. Do not
   hand-maintain those ranges.
 - **A generator tool the WORKSPACE already provides is a devDep, not a dep.** Every
   engine dependency is installed by every consumer, including ones that never reach

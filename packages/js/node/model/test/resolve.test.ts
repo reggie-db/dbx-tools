@@ -5,7 +5,7 @@ import { model, type ServingEndpointSummary } from "@dbx-tools/shared-model";
 import { polygotTest } from "@dbx-tools/test-polyglot/polyglot";
 
 import { FALLBACK_MODEL_IDS, modelsForClass } from "../src/fallback.ts";
-import { rankModels, resolveModel, selectModel } from "../src/resolve.ts";
+import { lookupModels, resolveModel, selectModel } from "../src/resolve.ts";
 import {
   listServingEndpointsUncached,
   resolveModelId,
@@ -100,8 +100,8 @@ await polygotTest(
   () => import("../index.ts"),
   "resolve",
   (implementation, language) => {
-    const rankModels = (...args: Parameters<typeof implementation.rankModels>) =>
-      implementation.rankModels(...args).map(({ endpoint, ...ranked }) => ({
+    const lookupModels = (...args: Parameters<typeof implementation.lookupModels>) =>
+      implementation.lookupModels(...args).map(({ endpoint, ...ranked }) => ({
         ...ranked,
         endpoint: { name: endpoint.name, task: endpoint.task },
       }));
@@ -111,7 +111,7 @@ await polygotTest(
     describe(`model resolution parity (${language})`, () => {
       it("ranks by a class ceiling without search", () => {
         assert.deepEqual(
-          rankModels([chat(OPUS_8), chat(SONNET), chat(HAIKU_5), embedding(BGE)], {
+          lookupModels([chat(OPUS_8), chat(SONNET), chat(HAIKU_5), embedding(BGE)], {
             modelClass: ModelClass.ChatBalanced,
           }),
           [
@@ -123,7 +123,7 @@ await polygotTest(
 
       it("returns an exact search with score zero", () => {
         assert.deepEqual(
-          rankModels([chat(OPUS_8), chat(SONNET)], {
+          lookupModels([chat(OPUS_8), chat(SONNET)], {
             search: SONNET,
             limit: 1,
           }),
@@ -132,7 +132,7 @@ await polygotTest(
       });
 
       it("prefers the newest deployed version for a family alias", () => {
-        const [selected] = rankModels(
+        const [selected] = lookupModels(
           [
             chat("databricks-gemini-2-5-pro"),
             chat("databricks-gemini-3-5-flash"),
@@ -193,16 +193,16 @@ await polygotTest(
   },
 );
 
-describe("rankModels", () => {
+describe("lookupModels", () => {
   it("ranks a search match-then-class, version breaking the tie", () => {
-    const ranked = rankModels([chat(OPUS_6), chat(OPUS_8), chat(OPUS_7)], {
+    const ranked = lookupModels([chat(OPUS_6), chat(OPUS_8), chat(OPUS_7)], {
       search: "opus",
     });
     assert.deepEqual(names(ranked), [OPUS_8, OPUS_7, OPUS_6]);
   });
 
   it("with no search, orders by class then within-class rank", () => {
-    const ranked = rankModels(TIERED);
+    const ranked = lookupModels(TIERED);
     assert.deepEqual(names(ranked), [OPUS_8, SONNET, HAIKU_5]);
     assert.deepEqual(
       ranked.map((m) => m.modelClass),
@@ -211,26 +211,26 @@ describe("rankModels", () => {
   });
 
   it("excludes embeddings from the default (chat-only) ranking", () => {
-    const ranked = rankModels([chat(OPUS_8), embedding(GTE), embedding(BGE)]);
+    const ranked = lookupModels([chat(OPUS_8), embedding(GTE), embedding(BGE)]);
     assert.deepEqual(names(ranked), [OPUS_8]);
   });
 
   it("ranks embeddings only when ModelClass.Embedding is requested", () => {
-    const ranked = rankModels([chat(OPUS_8), embedding(GTE), embedding(BGE)], {
+    const ranked = lookupModels([chat(OPUS_8), embedding(GTE), embedding(BGE)], {
       modelClass: ModelClass.Embedding,
     });
     assert.deepEqual(names(ranked), [GTE, BGE]); // no chat model leaks in
   });
 
   it("treats a chat class as a ceiling: that band and below, never above", () => {
-    const ranked = rankModels(TIERED, { modelClass: ModelClass.ChatBalanced });
+    const ranked = lookupModels(TIERED, { modelClass: ModelClass.ChatBalanced });
     assert.deepEqual(names(ranked), [SONNET, HAIKU_5]); // no opus (ChatThinking)
   });
 
   it("degrades to a lower band when the requested band is empty", () => {
     // "medium" requested but only "small" exists -> the highest small is
     // returned, never a "large".
-    const ranked = rankModels([chat(OPUS_8), chat(HAIKU_5), chat(HAIKU_3)], {
+    const ranked = lookupModels([chat(OPUS_8), chat(HAIKU_5), chat(HAIKU_3)], {
       modelClass: ModelClass.ChatBalanced,
       limit: 1,
     });
@@ -238,7 +238,7 @@ describe("rankModels", () => {
   });
 
   it("scopes a search to the class ceiling", () => {
-    const ranked = rankModels(TIERED, {
+    const ranked = lookupModels(TIERED, {
       search: "claude",
       modelClass: ModelClass.ChatFast,
     });
@@ -246,11 +246,11 @@ describe("rankModels", () => {
   });
 
   it("applies a limit", () => {
-    assert.equal(rankModels(TIERED, { limit: 2 }).length, 2);
+    assert.equal(lookupModels(TIERED, { limit: 2 }).length, 2);
   });
 
   it("filters out chat models without a complete tool round-trip", () => {
-    const ranked = rankModels(
+    const ranked = lookupModels(
       [
         chat("databricks-gpt-5-6-sol"),
         chat("databricks-gemini-3-5-flash"),

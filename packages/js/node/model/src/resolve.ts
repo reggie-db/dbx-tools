@@ -129,7 +129,7 @@ function matchBucket(score: number | undefined): number {
  * A `limit` truncates the result. Returns `[]` when nothing is eligible or
  * matches - callers layer their own fallback.
  */
-export function rankModels(
+export function lookupModels(
   endpoints: readonly ServingEndpointSummary[],
   query: ModelQuery = {},
 ): RankedModel[] {
@@ -189,7 +189,7 @@ export function rankModels(
 }
 
 /**
- * Collapse {@link rankModels} to a single id: the closest endpoint to `search`
+ * Collapse {@link lookupModels} to a single id: the closest endpoint to `search`
  * in a catalogue snapshot, or the input verbatim when nothing scores within the
  * threshold.
  *
@@ -205,7 +205,7 @@ export function rankModelId(
   search: string,
   options: ResolveModelOptions = {},
 ): ResolvedModel {
-  const [top] = rankModels(endpoints, {
+  const [top] = lookupModels(endpoints, {
     search,
     limit: 1,
     ...(options.threshold !== undefined ? { threshold: options.threshold } : {}),
@@ -241,7 +241,7 @@ export async function rankModelIdLive(
 
 /**
  * Rank a workspace's catalogue in one call: list its `/serving-endpoints`
- * (cached) and run {@link rankModels} over the result. The list counterpart to
+ * (cached) and run {@link lookupModels} over the result. The list counterpart to
  * {@link selectModel}, for a consumer that wants the full ranked set (a model
  * picker, a CLI) rather than a single id. Catalogue fetches fail loud: network
  * / auth errors propagate so the caller sees the real SDK message.
@@ -259,7 +259,7 @@ export async function searchModels(
     host,
     input.ttlMs !== undefined ? { ttlMs: input.ttlMs } : {},
   );
-  return rankModels(endpoints, input);
+  return lookupModels(endpoints, input);
 }
 
 /**
@@ -292,7 +292,7 @@ export async function selectModel(
 
 /**
  * Resolve a single model id from the live catalogue and caller intent,
- * delegating the live selection to {@link rankModels} with `limit: 1`.
+ * delegating the live selection to {@link lookupModels} with `limit: 1`.
  *
  * 1. **Explicit ask**: with `fuzzy` off, returned verbatim; otherwise
  *    fuzzy-ranked within the (optional) class ceiling and the best taken,
@@ -311,7 +311,7 @@ export function resolveModel(
       if (input.requiresTools) assertToolSupport(endpoints, input.explicit);
       return { modelId: input.explicit, source: "explicit" };
     }
-    const [top] = rankModels(endpoints, buildQuery(input, input.explicit));
+    const [top] = lookupModels(endpoints, buildQuery(input, input.explicit));
     if (input.requiresTools && !top) {
       throw new Error(`No tool-capable model matches "${input.explicit}"`);
     }
@@ -331,7 +331,7 @@ export function resolveModel(
   }
 
   const source = input.modelClass !== undefined ? "class" : "fallback";
-  const [top] = rankModels(endpoints, buildQuery(input, undefined));
+  const [top] = lookupModels(endpoints, buildQuery(input, undefined));
   if (top) return { modelId: top.endpoint.name, source };
 
   // Live catalogue yielded nothing in range: walk the static floor.

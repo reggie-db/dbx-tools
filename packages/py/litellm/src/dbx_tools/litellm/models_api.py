@@ -33,6 +33,14 @@ _EFFORT_DESCRIPTIONS = {
     "xhigh": "Maximum reasoning for the hardest tasks",
 }
 _ROUTE_MODEL_IDS = frozenset({"*", "databricks/*", "dbx/*"})
+_MODEL_RESPONSE_PATHS = frozenset(
+    {
+        "/chat/completions",
+        "/responses",
+        "/v1/chat/completions",
+        "/v1/responses",
+    }
+)
 logger = logging.getLogger(__name__)
 
 
@@ -113,9 +121,17 @@ def install_models_compatibility_middleware() -> None:
     app.router.routes.insert(model_route_index, lookup_route)
 
     @app.middleware("http")
-    async def models_envelope(request: Request, call_next: Any) -> Response:
+    async def response_envelope(request: Request, call_next: Any) -> Response:
+        path = request.scope.get("path")
+        request_payload = await _request_json(request) if path in _MODEL_RESPONSE_PATHS else None
         response = await call_next(request)
-        if request.scope.get("path") != "/v1/models":
+        if request_payload is not None and response.status_code == 200:
+            return await _model_identity_response(
+                response,
+                request_payload,
+                dbx_provider,
+            )
+        if path != "/v1/models":
             return response
         request_ip = _request_ip(request)
         if response.status_code != 200:
@@ -197,6 +213,70 @@ def model_summary(payload: Any) -> str:
         return f"{total} {noun}"
     counts = ", ".join(f"{count} {family}" for family, count in sorted(families.items()))
     return f"{total} {noun} ({counts})"
+
+
+async def _request_json(request: Request) -> Mapping[str, Any] | None:
+    try:
+        payload = json.loads(await request.body())
+    except (TypeError, ValueError):
+        return None
+    return payload if isinstance(payload, Mapping) else None
+
+
+async def _model_identity_response(
+    response: Response,
+    request_payload: Mapping[str, Any],
+    provider: Any,
+) -> Response:
+    content_type = response.headers.get("content-type", "")
+    requested = request_payload.get("model")
+    if "application/json" not in content_type or not isinstance(requested, str) or not requested:
+        return response
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError):
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=_response_headers(response),
+            media_type=response.media_type,
+        )
+    if not isinstance(payload, Mapping):
+        return JSONResponse(
+            content=payload,
+            status_code=response.status_code,
+            headers=_response_headers(response),
+        )
+    actual = _qualified_endpoint(requested)
+    if actual is None:
+        tools = request_payload.get("tools")
+        try:
+            actual = await asyncio.to_thread(
+                provider.backend.resolve,
+                requested,
+                requires_tools=isinstance(tools, list) and bool(tools),
+            )
+        except (DatabricksError, OSError, RuntimeError, ValueError) as error:
+            logger.warning("Response model annotation failed: %s", error)
+    annotated = dict(payload)
+    annotated["requestedModel"] = requested
+    if actual is not None:
+        annotated["model"] = actual
+    return JSONResponse(
+        content=annotated,
+        status_code=response.status_code,
+        headers=_response_headers(response),
+    )
+
+
+def _qualified_endpoint(requested: str) -> str | None:
+    normalized = requested.removeprefix("dbx/")
+    if normalized.startswith("databricks/"):
+        return normalized.removeprefix("databricks/").removeprefix("responses/")
+    if normalized.startswith(("databricks-", "system.ai.")):
+        return normalized
+    return None
 
 
 def _request_ip(request: Request) -> str:

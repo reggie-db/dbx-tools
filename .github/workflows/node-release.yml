@@ -26,6 +26,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       id-token: write
     env:
@@ -107,6 +108,36 @@ jobs:
         with:
           name: release-metadata
           path: .release
+      - name: Require Rust artifact handoff
+        id: require_rust_artifact_handoff
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          RUST_RUN_ID: ${{ github.event.client_payload.rust_run_id }}
+          RUST_RUN_ATTEMPT: ${{ github.event.client_payload.rust_run_attempt }}
+        run: |-
+          test -n "$RUST_RUN_ID"
+          test -n "$RUST_RUN_ATTEMPT"
+        shell: bash
+      - name: Download native npm packages
+        id: download_native_npm_packages
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*-npm"
+          path: dist/uniffi/native
+          merge-multiple: true
+          run-id: ${{ github.event.client_payload.rust_run_id }}
+          github-token: ${{ github.token }}
+      - name: Publish native npm packages
+        id: publish_native_npm_packages
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |-
+          test "$(find dist/uniffi/native -name '*.tgz' | wc -l | tr -d ' ')" -gt 0
+          for package in dist/uniffi/native/*.tgz; do npm publish "$package" --access public; done
       - name: Set version from tag and publish
         id: set_version_from_tag_and_publish
         env:
@@ -125,7 +156,54 @@ jobs:
             DRY_RUN="${DRY_RUN_INPUT}"
           fi
           chmod -R u+w . || true
-          bun node_modules/@dbx-tools/projen/tasks/publish.ts "$VERSION" --exclude projen $DRY_RUN
+          bun node_modules/@dbx-tools/projen/tasks/publish.ts "$VERSION" $DRY_RUN
+      - name: Build and publish UniFFI npm facades
+        id: build_and_publish_uniffi_npm_facades
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |-
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="0.0.0-dry.${GITHUB_RUN_NUMBER}"
+            DRY_RUN=--dry-run
+          else
+            VERSION="$RELEASE_VERSION"
+            DRY_RUN=
+          fi
+          NATIVE_ARG=""
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
+            NATIVE_PACKAGE="$(find dist/uniffi/native -name 'dbx-tools-auth-linux-x64-gnu-*.tgz' -print -quit)"
+            test -n "$NATIVE_PACKAGE"
+            NATIVE_ARG="--native-package $NATIVE_PACKAGE"
+          fi
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/auth" --node-package "@dbx-tools/auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-auth" $NATIVE_ARG
+          for package in dist/uniffi/facades/dbx-tools-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
+          NATIVE_ARG=""
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
+            NATIVE_PACKAGE="$(find dist/uniffi/native -name 'dbx-tools-databricks-linux-x64-gnu-*.tgz' -print -quit)"
+            test -n "$NATIVE_PACKAGE"
+            NATIVE_ARG="--native-package $NATIVE_PACKAGE"
+          fi
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks" --node-package "@dbx-tools/databricks" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-databricks" $NATIVE_ARG
+          for package in dist/uniffi/facades/dbx-tools-databricks/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
+          NATIVE_ARG=""
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
+            NATIVE_PACKAGE="$(find dist/uniffi/native -name 'dbx-tools-databricks-auth-linux-x64-gnu-*.tgz' -print -quit)"
+            test -n "$NATIVE_PACKAGE"
+            NATIVE_ARG="--native-package $NATIVE_PACKAGE"
+          fi
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks-auth" --node-package "@dbx-tools/databricks-auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-databricks-auth" $NATIVE_ARG
+          for package in dist/uniffi/facades/dbx-tools-databricks-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
+          NATIVE_ARG=""
+          if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then
+            NATIVE_PACKAGE="$(find dist/uniffi/native -name 'dbx-tools-google-auth-linux-x64-gnu-*.tgz' -print -quit)"
+            test -n "$NATIVE_PACKAGE"
+            NATIVE_ARG="--native-package $NATIVE_PACKAGE"
+          fi
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/google-auth" --node-package "@dbx-tools/google-auth" --node-triple "linux-x64-gnu" --version "$VERSION" --output "dist/uniffi/facades/dbx-tools-google-auth" $NATIVE_ARG
+          for package in dist/uniffi/facades/dbx-tools-google-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
     timeout-minutes: 30
 permissions:
   contents: read
+  actions: read

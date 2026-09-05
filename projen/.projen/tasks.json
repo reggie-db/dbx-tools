@@ -28,16 +28,6 @@
         }
       ]
     },
-    "bump": {
-      "name": "bump",
-      "description": "Bump the release version (default patch), then commit, tag, and push it",
-      "steps": [
-        {
-          "exec": "bun tasks/bump.ts --prefix projen-v",
-          "receiveArgs": true
-        }
-      ]
-    },
     "clobber": {
       "name": "clobber",
       "description": "hard resets to HEAD of origin and cleans the local repo",

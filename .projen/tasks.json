@@ -41,7 +41,7 @@
       "description": "Bump the release version (default patch), then commit, tag, and push it",
       "steps": [
         {
-          "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v --sibling projen:projen-v",
+          "exec": "bun node_modules/@dbx-tools/projen/tasks/bump.ts --prefix v",
           "receiveArgs": true
         }
       ]

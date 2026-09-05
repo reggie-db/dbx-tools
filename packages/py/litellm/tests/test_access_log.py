@@ -8,6 +8,7 @@ from dbx_tools.litellm.access_log import (
     LOGGER_NAME,
     DbxAccessLogger,
     _format,
+    record_model_log_state,
     record_reasoning_log_state,
 )
 
@@ -74,6 +75,20 @@ def test_requesting_ip_uses_first_forwarded_address() -> None:
 
     assert "requested_model=gpt" in line
     assert "ip=198.51.100.7" in line
+
+
+def test_resolved_model_state_overrides_mutated_litellm_names() -> None:
+    kwargs = {**payload(model="dbx/databricks-gemini-3-8-flash"), "litellm_call_id": "model-call"}
+    record_model_log_state(
+        kwargs,
+        requested="gemini",
+        resolved="databricks-gemini-3-8-flash",
+    )
+
+    line = _format(kwargs, status="ok")
+
+    assert "requested_model=gemini" in line
+    assert "model=databricks-gemini-3-8-flash" in line
 
 
 def test_reports_explicit_requested_thinking_level() -> None:

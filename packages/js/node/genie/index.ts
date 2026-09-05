@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/genie";
-export const PACKAGE_VERSION = "0.6.169";
+export const PACKAGE_VERSION = "0.6.170";
 export * as chat from "./src/chat.ts";
 export * as space from "./src/space.ts";
 export type { GenieChatOptions } from "./src/chat.ts";

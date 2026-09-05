@@ -131,4 +131,3 @@ packages/py/**/dist/
 !/.github/workflows/python-release.yml
 !/.projenrc.ts
 !/.github/workflows/node-release.yml
-!/.github/workflows/projen-release.yml

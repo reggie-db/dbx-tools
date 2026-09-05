@@ -333,7 +333,7 @@ export interface ScoredEndpoint {
  * Returns `[]` for an empty endpoint list or when `input` tokenizes to nothing,
  * so callers fall back to the raw input and let Databricks surface a clean 404.
  * This multi-result core is shared by {@link resolveModelId} (single best) and
- * the ranked `rankModels` selector.
+ * the ranked `lookupModels` selector.
  */
 export function searchServingEndpoints(
   input: string,

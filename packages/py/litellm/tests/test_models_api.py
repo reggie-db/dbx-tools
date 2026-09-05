@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
+from types import SimpleNamespace
+from typing import Any
+
 from dbx_tools.litellm.models_api import (
+    _model_identity_response,
     _request_ip,
     _route_contains_path,
     augment_models_payload,
@@ -216,3 +222,35 @@ def test_lookup_endpoint_is_in_litellm_openapi() -> None:
         if _route_contains_path(route, "/v1/models/{model_id}")
     )
     assert lookup_index < model_index
+
+
+async def test_response_includes_requested_and_resolved_models() -> None:
+    class Response:
+        status_code = 200
+        media_type = "application/json"
+
+        def __init__(self) -> None:
+            self.headers = {"content-type": "application/json"}
+            self.body_iterator = self._body()
+
+        async def _body(self) -> AsyncIterator[bytes]:
+            yield json.dumps({"model": "gemini", "choices": []}).encode()
+
+    class Backend:
+        def resolve(self, requested: str, *, requires_tools: bool = False) -> str:
+            assert requested == "gemini"
+            assert requires_tools is False
+            return "databricks-gemini-3-8-flash"
+
+    response_source: Any = Response()
+    response = await _model_identity_response(
+        response_source,
+        {"model": "gemini"},
+        SimpleNamespace(backend=Backend()),
+    )
+
+    assert json.loads(bytes(response.body)) == {
+        "model": "databricks-gemini-3-8-flash",
+        "requestedModel": "gemini",
+        "choices": [],
+    }

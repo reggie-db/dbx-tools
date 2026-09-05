@@ -2,7 +2,6 @@
   "name": "@dbx-tools/projen",
   "scripts": {
     "build": "projen build",
-    "bump": "projen bump",
     "clobber": "projen clobber",
     "compile": "projen compile",
     "default": "projen default",

@@ -1,10 +1,10 @@
 #!/usr/bin/env -S bun
+import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { arch, platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { spawnSync } from "node:child_process";
 import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import type { RustBindingMapping, RustWorkspaceMapping } from "../src/project-rs.ts";
 
@@ -155,8 +155,6 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
     includePython ? binding.python! : "",
     "--node-package",
     includeNode ? binding.nodePackage! : "",
-    "--node-generator",
-    "projen/tasks/uniffi.ts",
     "--python-package",
     includePython ? binding.pythonPackage! : "",
     "--cargo-target",
@@ -184,8 +182,9 @@ function buildAndPublish(binding: RustBindingMapping, version: string): void {
       ...artifacts(join(output, "npm"), ".tgz"),
       ...artifacts(join(output, "npm-facade"), ".tgz"),
     ];
-    for (const packageFile of packages)
+    for (const packageFile of packages) {
       run("npm", ["publish", packageFile, "--registry", registry!]);
+    }
   }
   if (includePython) {
     const wheels = artifacts(join(output, "python"), ".whl");

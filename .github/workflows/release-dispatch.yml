@@ -25,7 +25,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_EVENT: rust-release
-          RELEASE_WORKFLOWS: rust-release,python-release,node-release,projen-release,docs
+          RELEASE_WORKFLOWS: rust-release,python-release,node-release,docs
         run: |-
           case "$RELEASE_TAG" in v*) ;; *) exit 1 ;; esac
           EXPECTED_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"

@@ -131,7 +131,12 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(release, /github\.event_name == 'workflow_run'/);
     assert.doesNotMatch(release, /inputs\.publish/);
     assert.doesNotMatch(release, /^  publish:$/m);
-    assert.doesNotMatch(release, /publish-native/);
+    assert.match(release, /^  publish-native:$/m);
+    assert.match(release, /pattern: fixture-native-\*-python-wheel/);
+    assert.match(
+      release,
+      /run-id: \$\{\{ github\.event_name == 'repository_dispatch' && github\.event\.client_payload\.rust_run_id \|\| github\.event\.workflow_run\.id \}\}/,
+    );
     const nodeRelease = readFileSync(join(outdir, ".github/workflows/node-release.yml"), "utf8");
     assert.match(nodeRelease, /^  repository_dispatch:\n    types:\n      - release$/m);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");

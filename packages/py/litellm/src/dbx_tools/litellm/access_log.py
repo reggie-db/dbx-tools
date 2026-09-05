@@ -26,7 +26,7 @@ LEVEL_ENV = "DBX_LITELLM_ACCESS_LOG_LEVEL"
 # its first token lands with the final one. Real streams separate the two by the
 # generation time, far above any plausible scheduling jitter.
 FAKE_STREAM_EPSILON = 0.01
-MAX_REASONING_LOG_ENTRIES = 4096
+MAX_LOG_ENTRIES = 4096
 
 
 @dataclass(frozen=True)
@@ -35,8 +35,16 @@ class ReasoningLogState:
     selected: str | None = None
 
 
+@dataclass(frozen=True)
+class ModelLogState:
+    requested: str
+    resolved: str
+
+
 _reasoning_log_state: OrderedDict[str, ReasoningLogState] = OrderedDict()
+_model_log_state: OrderedDict[str, ModelLogState] = OrderedDict()
 _reasoning_log_lock = Lock()
+_model_log_lock = Lock()
 
 
 def record_reasoning_log_state(
@@ -54,7 +62,7 @@ def record_reasoning_log_state(
             selected=selected if selected is not None else current.selected if current else None,
         )
         _reasoning_log_state.move_to_end(call_id)
-        while len(_reasoning_log_state) > MAX_REASONING_LOG_ENTRIES:
+        while len(_reasoning_log_state) > MAX_LOG_ENTRIES:
             _reasoning_log_state.popitem(last=False)
 
 
@@ -64,6 +72,30 @@ def reasoning_log_state(kwargs: dict[str, Any]) -> ReasoningLogState | None:
         return None
     with _reasoning_log_lock:
         return _reasoning_log_state.get(call_id)
+
+
+def record_model_log_state(
+    kwargs: dict[str, Any],
+    *,
+    requested: str,
+    resolved: str,
+) -> None:
+    call_id = _call_id(kwargs)
+    if call_id is None:
+        return
+    with _model_log_lock:
+        _model_log_state[call_id] = ModelLogState(requested=requested, resolved=resolved)
+        _model_log_state.move_to_end(call_id)
+        while len(_model_log_state) > MAX_LOG_ENTRIES:
+            _model_log_state.popitem(last=False)
+
+
+def model_log_state(kwargs: dict[str, Any]) -> ModelLogState | None:
+    call_id = _call_id(kwargs)
+    if call_id is None:
+        return None
+    with _model_log_lock:
+        return _model_log_state.get(call_id)
 
 
 def _build_logger() -> logging.Logger:
@@ -111,11 +143,12 @@ class DbxAccessLogger(CustomLogger):
 
 def _format(kwargs: dict[str, Any], *, status: str, response_obj: Any = None) -> str:
     payload = kwargs.get("standard_logging_object") or {}
+    model_route = model_log_state(kwargs)
     fields: list[str] = [
         f"status={status}",
         f"ip={_request_ip(kwargs, payload) or 'unknown'}",
-        f"requested_model={_requested_model(kwargs, payload) or 'unknown'}",
-        f"model={payload.get('model') or kwargs.get('model')}",
+        f"requested_model={model_route.requested if model_route else _requested_model(kwargs, payload) or 'unknown'}",
+        f"model={model_route.resolved if model_route else payload.get('model') or kwargs.get('model')}",
         f"call={payload.get('call_type') or kwargs.get('call_type')}",
     ]
 

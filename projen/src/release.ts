@@ -6,11 +6,16 @@
  */
 import { existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
+import { object } from "@dbx-tools/shared-core";
 import { Component, YamlFile } from "projen";
 import { GithubWorkflow } from "projen/lib/github";
 import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
-import { object } from "@dbx-tools/shared-core";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
+import {
+  orderRustBindings,
+  type RustBindingMapping,
+  type RustWorkspaceMapping,
+} from "./project-rs.ts";
 import { applyTasks, taskScript, type DBXToolsNodeProject } from "./project.ts";
 import {
   DOWNSTREAM_RELEASE_EVENT,
@@ -70,6 +75,7 @@ interface PublishWorkflow {
   readonly steps: readonly JobStep[];
   readonly workingDirectory?: string;
   readonly upstreamWorkflow?: string;
+  readonly rustArtifacts?: boolean;
 }
 
 /** Shared checkout and toolchain setup for every npm publish workflow. */
@@ -300,7 +306,7 @@ export class DBXToolsRelease extends Component {
   /** Author the common tag trigger, concurrency policy, permissions, and publish job. */
   private authorPublishWorkflow(
     project: DBXToolsNodeProject,
-    { name, tagPrefix, steps, workingDirectory, upstreamWorkflow }: PublishWorkflow,
+    { name, tagPrefix, steps, workingDirectory, upstreamWorkflow, rustArtifacts }: PublishWorkflow,
   ): void {
     const setupSteps = publishSetupSteps(project);
     const branchDispatch = upstreamWorkflow === undefined;
@@ -314,7 +320,7 @@ export class DBXToolsRelease extends Component {
     // the publish job below overrides it with the `id-token` it needs.
     workflow.file?.addOverride("permissions", {
       contents: "read",
-      ...(upstreamWorkflow ? { actions: "read" } : {}),
+      ...(upstreamWorkflow || rustArtifacts ? { actions: "read" } : {}),
     });
     if (upstreamWorkflow) {
       workflow.file?.addOverride("on.workflow_run", {
@@ -362,7 +368,7 @@ export class DBXToolsRelease extends Component {
       runsOn: ["ubuntu-latest"],
       // `id-token: write` lets npm mint the OIDC token for provenance attestation.
       permissions: {
-        ...(upstreamWorkflow ? { actions: JobPermission.READ } : {}),
+        ...(upstreamWorkflow || rustArtifacts ? { actions: JobPermission.READ } : {}),
         contents: JobPermission.READ,
         idToken: JobPermission.WRITE,
       },
@@ -483,14 +489,107 @@ export class DBXToolsRelease extends Component {
    * version on every package first makes the pushed tag the published version
    * (no bump math).
    */
+  private nodeBindingReleaseSteps(project: DBXToolsNodeProject): {
+    before: JobStep[];
+    after: JobStep[];
+  } {
+    const config = project.dbxToolsConfig.rust;
+    if (!object.isRecord(config) || !Array.isArray(config.bindings)) {
+      return { before: [], after: [] };
+    }
+    const bindings = orderRustBindings(config.bindings as RustWorkspaceMapping["bindings"]).filter(
+      (binding): binding is RustBindingMapping & { node: string; nodePackage: string } =>
+        Boolean(binding.node && binding.nodePackage),
+    );
+    if (bindings.length === 0) return { before: [], after: [] };
+
+    const before: JobStep[] = [
+      {
+        name: "Require Rust artifact handoff",
+        if: "${{ github.event_name == 'repository_dispatch' }}",
+        shell: "bash",
+        env: {
+          RUST_RUN_ID: "${{ github.event.client_payload.rust_run_id }}",
+          RUST_RUN_ATTEMPT: "${{ github.event.client_payload.rust_run_attempt }}",
+        },
+        run: ['test -n "$RUST_RUN_ID"', 'test -n "$RUST_RUN_ATTEMPT"'].join("\n"),
+      },
+      {
+        name: "Download native npm packages",
+        if: "${{ github.event_name == 'repository_dispatch' }}",
+        uses: "actions/download-artifact@v8",
+        with: {
+          pattern: "*-npm",
+          path: "dist/uniffi/native",
+          "merge-multiple": true,
+          "run-id": "${{ github.event.client_payload.rust_run_id }}",
+          "github-token": "${{ github.token }}",
+        },
+      },
+      {
+        name: "Publish native npm packages",
+        if: "${{ github.event_name == 'repository_dispatch' }}",
+        env: {
+          NPM_CONFIG_PROVENANCE: "true",
+          NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
+          NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
+        },
+        run: [
+          "test \"$(find dist/uniffi/native -name '*.tgz' | wc -l | tr -d ' ')\" -gt 0",
+          'for package in dist/uniffi/native/*.tgz; do npm publish "$package" --access public; done',
+        ].join("\n"),
+      },
+    ];
+
+    const facadeCommands = [
+      'if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then',
+      '  VERSION="0.0.0-dry.${GITHUB_RUN_NUMBER}"',
+      "  DRY_RUN=--dry-run",
+      "else",
+      '  VERSION="$RELEASE_VERSION"',
+      "  DRY_RUN=",
+      "fi",
+      ...bindings.flatMap((binding) => {
+        const output = `dist/uniffi/facades/${binding.crate}`;
+        return [
+          `NATIVE_ARG=""`,
+          'if [ "$GITHUB_EVENT_NAME" = "repository_dispatch" ]; then',
+          `  NATIVE_PACKAGE="$(find dist/uniffi/native -name '${binding.crate}-linux-x64-gnu-*.tgz' -print -quit)"`,
+          '  test -n "$NATIVE_PACKAGE"',
+          '  NATIVE_ARG="--native-package $NATIVE_PACKAGE"',
+          "fi",
+          `node .projen/uniffi-release.mjs facade --node "${binding.node}" --node-package "${binding.nodePackage}" --node-triple "linux-x64-gnu" --version "$VERSION" --output "${output}" $NATIVE_ARG`,
+          `for package in ${output}/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done`,
+        ];
+      }),
+    ];
+    return {
+      before,
+      after: [
+        {
+          name: "Build and publish UniFFI npm facades",
+          env: {
+            NPM_CONFIG_PROVENANCE: "true",
+            NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
+            NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
+          },
+          run: facadeCommands.join("\n"),
+        },
+      ],
+    };
+  }
+
   private authorReleaseWorkflow(project: DBXToolsNodeProject): void {
     if (!this.workflowName) return;
     if (this.workflowName !== "release") project.tryRemoveFile(".github/workflows/release.yml");
+    const bindingSteps = this.nodeBindingReleaseSteps(project);
     this.authorPublishWorkflow(project, {
       name: this.workflowName,
       tagPrefix: this.tagPrefix,
       upstreamWorkflow: this.upstreamWorkflow,
+      rustArtifacts: bindingSteps.before.length > 0,
       steps: [
+        ...bindingSteps.before,
         // The pushed tag is the version: `<prefix>1.2.3` -> `1.2.3`. Stamp it on
         // every workspace package (manifests are projen-readonly, so unlock
         // first), rewriting `workspace:*` sibling deps to `^<version>` so the
@@ -512,6 +611,7 @@ export class DBXToolsRelease extends Component {
             NPM_CONFIG_PROVENANCE: "true",
           },
         },
+        ...bindingSteps.after,
       ],
     });
   }

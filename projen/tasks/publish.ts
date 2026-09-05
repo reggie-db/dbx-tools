@@ -41,8 +41,7 @@
  * but uploads nothing, so the `release` workflow is testable end-to-end via a
  * `workflow_dispatch` run without anything reaching npm. `--registry` targets a
  * non-default registry (a local verdaccio); `--exclude <dir>` (repeatable,
- * repo-relative) skips a member that releases on its OWN tag namespace (e.g.
- * `projen`, published by `projen-release`, not the main `release`).
+ * repo-relative) skips a member owned by another publication flow.
  *
  * `--no-restore` keeps the edits on disk instead of undoing them at exit. Only
  * needed when a LATER process must still see them - `--stamp-only` implies it,
@@ -274,9 +273,8 @@ if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
 }
 const concurrency = parsedConcurrency;
 // `--stamp-only`: set versions + refresh the lockfile, then STOP (no publish).
-// The standalone `projen-release` uses this to version-stamp the workspace so its
-// own `bun publish` (run separately, in `projen/`) resolves `workspace:*` siblings
-// to the release version; publishing every member here would double-publish them.
+// A separate package command can use this when its own publish process needs
+// workspace sibling versions resolved before it starts.
 const stampOnly = rest.includes("--stamp-only");
 // Undo the manifest edits at exit unless a later process still needs them. Implied
 // off by `--stamp-only`, whose stamps exist precisely for a subsequent `bun publish`.

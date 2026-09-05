@@ -137,31 +137,13 @@ both the tag target and `HEAD` to equal that SHA before building. Its matrix has
 one row per target. Each row installs native dependencies and restores
 Cargo/sccache once,
 builds the Rust workspace once, then packages every discovered output from that
-shared build. Bun and the workspace install are present only when a Node binding
-needs TypeScript generation; uv is present only when a Python wheel is needed.
+shared build. Rust rows package native npm archives and Python wheels; they do
+not install Bun or UBRN and do not build Node facades.
 A new dispatch cancels queued and in-progress release and docs workflows before
 starting, and each workflow's concurrency group also cancels its previous run.
-A binary-only workspace therefore installs neither. `rustVersion` remains the
+A binary-only workspace therefore installs no language package tool. `rustVersion` remains the
 MSRV recorded in package manifests, while `releaseRustVersion` independently
-defaults release compilation to `stable`. UBRN uses that same release toolchain
-unless `ubrnRustVersion` explicitly selects another one.
-
-Generated build and release workflows share the Bun cache helpers from
-`bun-workflow.ts`. One `BUN_VERSION` value drives setup and cache keys, while a
-generated dependency-only fingerprint keeps release version bumps from
-invalidating Bun's global package cache. `node_modules` remains uncached.
-
-The final host UBRN executable is cached by pinned UBRN version, Rust toolchain,
-runner OS, and runner architecture. A hit skips both the workspace `bun install`
-and the UBRN Cargo build. Release packaging passes the cached executable directly
-to the Node binding generator and keeps the package barrel copied from source,
-so it does not need the installed projen dependency graph. A miss saves the
-validated executable immediately, before workspace build and packaging can fail.
-Bun runtime setup still runs in the single facade row because the binding
-generator and facade bundle are TypeScript. The bundle points its type surface
-at the committed generated source and needs no standalone TypeScript compiler
-or workspace install on a UBRN cache hit. Non-facade rows skip the complete
-Bun/UBRN path.
+defaults release compilation to `stable`.
 Stable Windows rows verify and use the hosted runner's installed Rust toolchain
 and select `rust-lld` for the workspace build. Cargo registry caches
 and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain across
@@ -170,17 +152,12 @@ are written to each build log. Python generation executes the already-built
 `target/<triple>/release/<crate>-uniffi-bindgen` directly. Artifact packaging therefore
 does no Rust compilation after the main workspace build.
 
-Artifacts identify their crate, target, and type. Download-only publication
-jobs publish native npm platform archives before the facade and publish
-platform-tagged Python wheels without checkout, Bun, or `bun install`.
-Non-private Cargo crates publish from a source-only job with
-`cargo publish --no-verify`; GitHub Release uploads likewise consume prebuilt
-binary artifacts without reinstalling a toolchain.
+Artifacts identify their crate, target, and type. `rust-release` publishes
+non-private Cargo crates with `cargo publish --no-verify`, uploads requested
+binary assets to the GitHub release, then dispatches the verified Rust run id
+with the tag and SHA. It never publishes npm or PyPI packages.
 
-Set the repository variable `LOCAL_REPOSITORIES=true` to enable generated
-self-hosted publication from the prebuilt artifacts. Configure `LOCAL_NPM_REGISTRY` and
-`LOCAL_PYPI_PUBLISH_URL` with their matching `LOCAL_*` credentials. Set
-`LOCAL_CARGO_REGISTRY` to a named Cargo registry such as a loopback
+Set `LOCAL_CARGO_REGISTRY` to a named Cargo registry such as a loopback
 [Kellnr](https://kellnr.io/) instance and provide `LOCAL_CARGO_TOKEN`. Public
 Cargo crates also publish directly to crates.io
 with `CARGO_REGISTRY_TOKEN`. Override `releaseTargets` only when a consumer has
@@ -193,15 +170,17 @@ environment parsing in a consumer.
 
 Public UniFFI facades are marked with `dbxToolsConfig.uniffi = true` in Node
 manifests and `[tool.dbx_tools.config] uniffi = true` in Python manifests. The
-standard Node and Python publishers skip those packages, while `rust-release`
-publishes their native npm archives, Node facades, and platform-tagged Python
-wheels. The docs generators include them because they are publicly installable.
+Node release downloads and publishes native archives first, publishes normal
+workspace packages, then builds and publishes facades from the committed
+generated TypeScript in dependency order. The Python release downloads every
+platform wheel and publishes them from one trusted-publisher job per
+distribution. The docs generators include them because they are publicly installable.
 When a conventional Node binding path already belongs to a root subproject,
 Rust mapping reuses that project and adds binding dependencies and metadata to
 its existing manifest.
-After Rust's public artifacts finish, it dispatches the downstream `release`
-event. Python, Node, standalone Node, and docs consume that event independently
-and start together with the same verified tag and SHA. Without Rust,
+After Rust's artifacts finish, it dispatches the downstream `release` event
+with its run id and attempt. Python, Node, and docs consume that event
+independently with the same verified tag and SHA. Without Rust,
 `release-dispatch` sends that event immediately. Configure release GitHub
 environments to permit the generated release branch; the trusted-publisher
 instructions list that branch with the workflow and environment identity PyPI

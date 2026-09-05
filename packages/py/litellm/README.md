@@ -357,6 +357,9 @@ reported by the provider, not the selected effort level.
 Each inference access line includes `requested_model=<client value>`,
 `model=<resolved endpoint>`, and `ip=<requesting address>`. The IP is the first
 address in `X-Forwarded-For` when present, then the direct client address.
+Non-streaming Chat Completions and Responses JSON use the same distinction:
+`model` is the resolved Databricks endpoint and `requestedModel` is the value
+sent by the client.
 `GET /v1/models` emits its own access line with the requesting IP, HTTP status,
 and a family summary such as `8 models (3 claude, 2 gpt, 3 other)`.
 

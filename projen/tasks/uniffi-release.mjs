@@ -25,8 +25,7 @@ const parsed = parseArgs({
     node: { type: "string" },
     python: { type: "string" },
     "node-package": { type: "string" },
-    "node-generator": { type: "string" },
-    ubrn: { type: "string" },
+    "native-package": { type: "string" },
     "python-package": { type: "string" },
     "cargo-target": { type: "string" },
     "node-triple": { type: "string" },
@@ -133,7 +132,10 @@ const testNodeFacade = ({
       const binding = bindings.find((binding) => binding.nodePackage === name);
       if (binding) {
         const output = resolve(root, "dist/release", binding.crate, required("node-triple"));
-        return [singlePackage(join(output, "npm-facade")), singlePackage(join(output, "npm"))];
+        if (existsSync(join(output, "npm-facade")) && existsSync(join(output, "npm"))) {
+          return [singlePackage(join(output, "npm-facade")), singlePackage(join(output, "npm"))];
+        }
+        return [];
       }
       const directory = join(installDirectory, "local-dependencies", String(index));
       mkdirSync(directory, { recursive: true });
@@ -207,7 +209,6 @@ const libraryPath = (crate, cargoTarget, os) => {
 };
 
 const packageNode = ({
-  crate,
   library,
   output,
   nodeDirectory,
@@ -217,7 +218,6 @@ const packageNode = ({
   cpu,
   version,
   facade,
-  nodeGenerator,
 }) => {
   const libraryFile = basename(library);
   const nativePackage = resolve(output, "native-node");
@@ -244,9 +244,35 @@ const packageNode = ({
   run("npm", ["pack", "--pack-destination", resolve(output, "npm")], nativePackage);
 
   if (!facade) return;
+  packageNodeFacade({
+    output,
+    nodeDirectory,
+    nodePackage,
+    version,
+    nativePackage: singlePackage(resolve(output, "npm")),
+  });
+};
+
+const packageNodeFacade = ({ output, nodeDirectory, nodePackage, version, nativePackage }) => {
   const facadeDirectory = resolve(output, "facade-node");
+  rmSync(facadeDirectory, { recursive: true, force: true });
+  rmSync(resolve(output, "npm-facade"), { recursive: true, force: true });
+  mkdirSync(output, { recursive: true });
   cpSync(resolve(root, nodeDirectory), facadeDirectory, { recursive: true });
-  rmSync(join(facadeDirectory, "src", libraryFile), { force: true });
+  const barrel = join(facadeDirectory, "index.ts");
+  writable(barrel);
+  writeFileSync(
+    barrel,
+    readFileSync(barrel, "utf8").replace(
+      /^export const PACKAGE_VERSION = .*;$/m,
+      `export const PACKAGE_VERSION = ${JSON.stringify(version)};`,
+    ),
+  );
+  for (const file of readdirSync(join(facadeDirectory, "src"))) {
+    if (/\.(dll|dylib|so)$/.test(file)) {
+      rmSync(join(facadeDirectory, "src", file), { force: true });
+    }
+  }
   const manifestPath = join(facadeDirectory, "package.json");
   writable(manifestPath);
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -265,24 +291,8 @@ const packageNode = ({
     ]),
   );
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  run("bun", [
-    resolve(root, nodeGenerator),
-    "--root",
-    root,
-    "--crate",
-    crate,
-    "--node",
-    facadeDirectory,
-    "--cargo-target",
-    required("cargo-target"),
-    "--node-package-base",
-    `${nodePackage}-`,
-    ...(parsed.values.ubrn ? ["--ubrn", parsed.values.ubrn, "--skip-barrels"] : []),
-    "--skip-build",
-  ]);
   // Node loads the facade from node_modules, so every TypeScript entry point
-  // must be emitted and advertised as JavaScript. Bun is always available in
-  // the facade row, including when the UBRN cache skips the workspace install.
+  // must be emitted and advertised as JavaScript.
   rmSync(join(facadeDirectory, "lib"), { recursive: true, force: true });
   run(
     "bun",
@@ -312,13 +322,15 @@ const packageNode = ({
   const facadeOutput = resolve(output, "npm-facade");
   mkdirSync(facadeOutput, { recursive: true });
   run("npm", ["pack", "--pack-destination", facadeOutput], facadeDirectory);
-  testNodeFacade({
-    facadeDirectory,
-    facadePackage: singlePackage(facadeOutput),
-    manifest,
-    nativePackage: singlePackage(resolve(output, "npm")),
-    nodePackage,
-  });
+  if (nativePackage) {
+    testNodeFacade({
+      facadeDirectory,
+      facadePackage: singlePackage(facadeOutput),
+      manifest,
+      nativePackage,
+      nodePackage,
+    });
+  }
 };
 
 const packagePython = ({
@@ -426,7 +438,6 @@ const build = () => {
   const nodePackage = parsed.values["node-package"];
   if (nodeDirectory && nodePackage) {
     packageNode({
-      crate,
       library,
       output,
       nodeDirectory,
@@ -436,7 +447,6 @@ const build = () => {
       cpu,
       version,
       facade: parsed.values.facade === "true",
-      nodeGenerator: required("node-generator"),
     });
   }
 
@@ -455,5 +465,18 @@ const build = () => {
   }
 };
 
-if (parsed.positionals[0] !== "build") throw new Error("Expected build command");
-build();
+if (parsed.positionals[0] === "build") {
+  build();
+} else if (parsed.positionals[0] === "facade") {
+  packageNodeFacade({
+    output: resolve(root, required("output")),
+    nodeDirectory: required("node"),
+    nodePackage: required("node-package"),
+    version: required("version"),
+    nativePackage: parsed.values["native-package"]
+      ? resolve(root, parsed.values["native-package"])
+      : undefined,
+  });
+} else {
+  throw new Error("Expected build or facade command");
+}

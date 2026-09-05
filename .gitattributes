@@ -6,7 +6,6 @@
 /.github/pull_request_template.md linguist-generated
 /.github/workflows/build.yml linguist-generated
 /.github/workflows/node-release.yml linguist-generated
-/.github/workflows/projen-release.yml linguist-generated
 /.github/workflows/pull-request-lint.yml linguist-generated
 /.github/workflows/python-release.yml linguist-generated
 /.github/workflows/release-dispatch.yml linguist-generated

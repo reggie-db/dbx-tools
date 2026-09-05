@@ -7,6 +7,7 @@ from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
 
+from .access_log import record_model_log_state
 from .models import register_streaming_support, requires_responses_api
 from .provider import dbx_provider
 
@@ -32,6 +33,7 @@ class DbxResponsesRouter(CustomLogger):
         routed = dict(data)
         if call_type in _CHAT_CALL_TYPES and model.startswith("databricks/"):
             resolved = model.removeprefix("databricks/").removeprefix("responses/")
+            record_model_log_state(data, requested=model, resolved=resolved)
             register_streaming_support(resolved)
             if requires_responses_api(resolved):
                 routed["model"] = f"databricks/responses/{resolved}"
@@ -42,6 +44,7 @@ class DbxResponsesRouter(CustomLogger):
             # An already-qualified model skips resolution, so declare its
             # streaming support here instead.
             register_streaming_support(model)
+            resolved = model.removeprefix("databricks/").removeprefix("responses/")
         else:
             tools = data.get("tools")
             resolved = await asyncio.to_thread(
@@ -53,6 +56,7 @@ class DbxResponsesRouter(CustomLogger):
                 f"databricks/{resolved}" if requires_responses_api(resolved) else resolved
             )
 
+        record_model_log_state(data, requested=model, resolved=resolved)
         return await _with_credentials(routed)
 
 

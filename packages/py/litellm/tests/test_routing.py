@@ -4,6 +4,7 @@ from typing import Any
 
 import dbx_tools.litellm.routing as routing_module
 import pytest
+from dbx_tools.litellm.access_log import model_log_state
 from dbx_tools.litellm.routing import DbxResponsesRouter
 
 
@@ -50,3 +51,25 @@ async def test_keeps_chat_capable_qualified_models_on_chat_completions() -> None
     )
 
     assert routed is data
+
+
+async def test_records_requested_and_resolved_model_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Backend:
+        def resolve(self, requested: str, *, requires_tools: bool = False) -> str:
+            assert requested == "gemini"
+            assert requires_tools is False
+            return "databricks-gemini-3-8-flash"
+
+    monkeypatch.setattr(routing_module.dbx_provider, "_backend", Backend())
+    data = {"model": "gemini", "litellm_call_id": "routing-model-call"}
+
+    routed = await DbxResponsesRouter().async_pre_call_hook(
+        data=data,
+        call_type="acompletion",
+    )
+
+    assert routed["model"] == "databricks-gemini-3-8-flash"
+    state = model_log_state(data)
+    assert state is not None
+    assert state.requested == "gemini"
+    assert state.resolved == "databricks-gemini-3-8-flash"

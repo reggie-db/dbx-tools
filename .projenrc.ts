@@ -33,10 +33,6 @@ const root = new projenProject.DBXToolsNodeProject({
   packageTagPaths: { polyglot: ["node"] },
   github: true,
   buildWorkflow: true,
-  // The `@dbx-tools/projen` engine lives in `projen/` and releases on its own
-  // `projen-v*` tag prefix; the engine authors its `projen-release` workflow
-  // alongside the root's `release`.
-  standaloneReleases: [{ name: "projen-release", directory: "projen", tagPrefix: "projen-v" }],
   // `projen/` synthesizes ITSELF (avoiding a dogfooding cycle) so it is not a
   // root subproject, but it IS a member of the single bun workspace - listed here
   // so bun links it + its `workspace:*` sibling deps from local source.
@@ -1057,10 +1053,7 @@ root.addTask("demo", {
   description: "Run the local demo server, client, and Python bus emitter",
 });
 
-// Both tag-driven release workflows are authored by the engine's
-// `DBXToolsRelease` component (see `projen/src/release.ts`):
-//   - `node-release` (after Python): publishes every `@dbx-tools/*` package.
-//   - `projen-release` (`projen-v*`): publishes the standalone `@dbx-tools/projen`
-//     engine in `projen/`, declared via the `standaloneReleases` root option above.
+// The generated `node-release` workflow publishes every npm workspace member,
+// including `@dbx-tools/projen`.
 
 root.synth();
