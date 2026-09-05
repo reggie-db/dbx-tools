@@ -1,0 +1,2737 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "dbx/inspire-logo-detector",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Inspire Logo Detector"
+    },
+    {
+      "id": "dbx/lensiq-detector",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Lensiq Detector"
+    },
+    {
+      "id": "dbx/lensiq-face-recognition",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Lensiq Face Recognition"
+    },
+    {
+      "id": "dbx/lensiq-fog-detector",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Lensiq Fog Detector"
+    },
+    {
+      "id": "dbx/lensiq-license-plate",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Lensiq License Plate"
+    },
+    {
+      "id": "dbx/lensiq-slip-fall",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Lensiq Slip Fall"
+    },
+    {
+      "id": "dbx/mas-4d09a812-endpoint",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Mas 4d09a812 Endpoint"
+    },
+    {
+      "id": "dbx/mas-574ded22-endpoint",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Mas 574ded22 Endpoint"
+    },
+    {
+      "id": "dbx/mas-ea4653b7-endpoint",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Mas Ea4653b7 Endpoint"
+    },
+    {
+      "id": "dbx/databricks-gpt-5-6-sol",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.6 Sol"
+    },
+    {
+      "id": "dbx/databricks-gpt-6-astra",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 6 Astra"
+    },
+    {
+      "id": "dbx/databricks-grok-4-6",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Grok 4.6"
+    },
+    {
+      "id": "dbx/databricks-gpt-5-5",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.5"
+    },
+    {
+      "id": "dbx/databricks-gpt-5-6-luna",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.6 Luna"
+    },
+    {
+      "id": "dbx/databricks-gpt-5-6-terra",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.6 Terra"
+    },
+    {
+      "id": "dbx/databricks-glm-5-3-flash",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Glm 5.3 Flash",
+      "context_window": 1048576,
+      "max_input_tokens": 1048576
+    },
+    {
+      "id": "dbx/databricks-glm-5-2",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Glm 5.2",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-glm-5-3",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Glm 5.3"
+    },
+    {
+      "id": "dbx/databricks-kimi-k3",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Kimi K3",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-inkling",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Inkling"
+    },
+    {
+      "id": "dbx/databricks-claude-opus-4-7",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Opus 4.7",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-claude-opus-4-8",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Opus 4.8",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-claude-opus-5",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Opus 5",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-gemini-3-5-flash",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Gemini 3.5 Flash"
+    },
+    {
+      "id": "dbx/databricks-gemini-3-7-flash",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Gemini 3.7 Flash"
+    },
+    {
+      "id": "dbx/databricks-gemini-3-8-flash",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Gemini 3.8 Flash"
+    },
+    {
+      "id": "dbx/databricks-gpt-5-4",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.4",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-gpt-5-5-pro",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.5 Pro"
+    },
+    {
+      "id": "dbx/databricks-gpt-5-4-mini",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.4 Mini",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-gpt-5-4-nano",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.4 Nano",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-gpt-5-2",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.2",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-claude-opus-4-6",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Opus 4.6",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-gemini-3-1-flash-lite",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Gemini 3.1 Flash Lite",
+      "context_window": 1048576,
+      "max_input_tokens": 1048576
+    },
+    {
+      "id": "dbx/databricks-gpt-oss-120b",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT OSS 120B",
+      "context_window": 131072,
+      "max_input_tokens": 131072
+    },
+    {
+      "id": "dbx/databricks-claude-sonnet-5",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Sonnet 5",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-claude-sonnet-4-6",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Sonnet 4.6",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-claude-sonnet-4-5",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Sonnet 4.5",
+      "context_window": 200000,
+      "max_input_tokens": 200000
+    },
+    {
+      "id": "dbx/databricks-claude-haiku-4-5",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Haiku 4.5",
+      "context_window": 200000,
+      "max_input_tokens": 200000
+    },
+    {
+      "id": "dbx/databricks-gpt-5-3-codex",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.3 Codex",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-gpt-5-mini",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5 Mini",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-gpt-oss-20b",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT OSS 20B",
+      "context_window": 131072,
+      "max_input_tokens": 131072
+    },
+    {
+      "id": "dbx/databricks-gpt-5-nano",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5 Nano",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-qwen3-next-80b-a3b-instruct",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Qwen3 Next 80B A3b Instruct"
+    },
+    {
+      "id": "dbx/databricks-qwen35-122b-a10b",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Qwen35 122B A10b"
+    },
+    {
+      "id": "dbx/databricks-llama-4-maverick",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Llama 4 Maverick",
+      "context_window": 128000,
+      "max_input_tokens": 128000
+    },
+    {
+      "id": "dbx/databricks-gemma-3-12b",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Gemma 3 12B",
+      "context_window": 128000,
+      "max_input_tokens": 128000
+    },
+    {
+      "id": "dbx/databricks-gte-large-en",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GTE Large En",
+      "context_window": 8192,
+      "max_input_tokens": 8192
+    },
+    {
+      "id": "dbx/databricks-bge-large-en",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "BGE Large En",
+      "context_window": 512,
+      "max_input_tokens": 512
+    },
+    {
+      "id": "dbx/databricks-gpt-5-1",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5.1",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-gpt-5",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "GPT 5",
+      "context_window": 272000,
+      "max_input_tokens": 272000
+    },
+    {
+      "id": "dbx/databricks-meta-llama-3-1-8b-instruct",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Meta Llama 3.1 8B Instruct",
+      "context_window": 200000,
+      "max_input_tokens": 200000
+    },
+    {
+      "id": "dbx/databricks-meta-llama-3-3-70b-instruct",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Meta Llama 3.3 70B Instruct",
+      "context_window": 128000,
+      "max_input_tokens": 128000
+    },
+    {
+      "id": "dbx/databricks-gemini-2-5-flash",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Gemini 2.5 Flash",
+      "context_window": 1048576,
+      "max_input_tokens": 1048576
+    },
+    {
+      "id": "dbx/databricks-gemini-2-5-pro",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Gemini 2.5 Pro",
+      "context_window": 1048576,
+      "max_input_tokens": 1048576
+    },
+    {
+      "id": "dbx/databricks-claude-opus-4-5",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Opus 4.5",
+      "context_window": 200000,
+      "max_input_tokens": 200000
+    },
+    {
+      "id": "dbx/databricks-claude-opus-4-1",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Opus 4.1",
+      "context_window": 200000,
+      "max_input_tokens": 200000
+    },
+    {
+      "id": "dbx/databricks-claude-sonnet-4",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Claude Sonnet 4",
+      "context_window": 200000,
+      "max_input_tokens": 200000
+    },
+    {
+      "id": "dbx/databricks-qwen3-embedding-0-6b",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Qwen3 Embedding 0 6B"
+    },
+    {
+      "id": "dbx/databricks-deepseek-v4-flash-0731",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Deepseek V4 Flash 0731",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    },
+    {
+      "id": "dbx/databricks-deepseek-v4-pro-0813",
+      "object": "model",
+      "owned_by": "dbx",
+      "name": "Deepseek V4 Pro 0813",
+      "context_window": 1000000,
+      "max_input_tokens": 1000000
+    }
+  ],
+  "models": [
+    {
+      "slug": "dbx/inspire-logo-detector",
+      "display_name": "Inspire Logo Detector",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 10000,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/lensiq-detector",
+      "display_name": "Lensiq Detector",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9999,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/lensiq-face-recognition",
+      "display_name": "Lensiq Face Recognition",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9998,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/lensiq-fog-detector",
+      "display_name": "Lensiq Fog Detector",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9997,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/lensiq-license-plate",
+      "display_name": "Lensiq License Plate",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9996,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/lensiq-slip-fall",
+      "display_name": "Lensiq Slip Fall",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9995,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/mas-4d09a812-endpoint",
+      "display_name": "Mas 4d09a812 Endpoint",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9994,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/mas-574ded22-endpoint",
+      "display_name": "Mas 574ded22 Endpoint",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9993,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/mas-ea4653b7-endpoint",
+      "display_name": "Mas Ea4653b7 Endpoint",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9992,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-6-sol",
+      "display_name": "GPT 5.6 Sol",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9991,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-6-astra",
+      "display_name": "GPT 6 Astra",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9990,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-grok-4-6",
+      "display_name": "Grok 4.6",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9989,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-5",
+      "display_name": "GPT 5.5",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9988,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-6-luna",
+      "display_name": "GPT 5.6 Luna",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9987,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-6-terra",
+      "display_name": "GPT 5.6 Terra",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9986,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-glm-5-3-flash",
+      "display_name": "Glm 5.3 Flash",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9985,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1048576
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1048576,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-glm-5-2",
+      "display_name": "Glm 5.2",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9984,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-glm-5-3",
+      "display_name": "Glm 5.3",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9983,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-kimi-k3",
+      "display_name": "Kimi K3",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9982,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-inkling",
+      "display_name": "Inkling",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9981,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-opus-4-7",
+      "display_name": "Claude Opus 4.7",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9980,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-opus-4-8",
+      "display_name": "Claude Opus 4.8",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9979,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-opus-5",
+      "display_name": "Claude Opus 5",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9978,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gemini-3-5-flash",
+      "display_name": "Gemini 3.5 Flash",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9977,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gemini-3-7-flash",
+      "display_name": "Gemini 3.7 Flash",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9976,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gemini-3-8-flash",
+      "display_name": "Gemini 3.8 Flash",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9975,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-4",
+      "display_name": "GPT 5.4",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9974,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-5-pro",
+      "display_name": "GPT 5.5 Pro",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9973,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-4-mini",
+      "display_name": "GPT 5.4 Mini",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9972,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-4-nano",
+      "display_name": "GPT 5.4 Nano",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9971,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-2",
+      "display_name": "GPT 5.2",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9970,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-opus-4-6",
+      "display_name": "Claude Opus 4.6",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9969,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gemini-3-1-flash-lite",
+      "display_name": "Gemini 3.1 Flash Lite",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9968,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1048576
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1048576,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-oss-120b",
+      "display_name": "GPT OSS 120B",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9967,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 131072
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 131072,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-sonnet-5",
+      "display_name": "Claude Sonnet 5",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9966,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-sonnet-4-6",
+      "display_name": "Claude Sonnet 4.6",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9965,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-sonnet-4-5",
+      "display_name": "Claude Sonnet 4.5",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9964,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 200000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 200000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-haiku-4-5",
+      "display_name": "Claude Haiku 4.5",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9963,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 200000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 200000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-3-codex",
+      "display_name": "GPT 5.3 Codex",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9962,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-mini",
+      "display_name": "GPT 5 Mini",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9961,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-oss-20b",
+      "display_name": "GPT OSS 20B",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9960,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 131072
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 131072,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-nano",
+      "display_name": "GPT 5 Nano",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9959,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-qwen3-next-80b-a3b-instruct",
+      "display_name": "Qwen3 Next 80B A3b Instruct",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9958,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-qwen35-122b-a10b",
+      "display_name": "Qwen35 122B A10b",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9957,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-llama-4-maverick",
+      "display_name": "Llama 4 Maverick",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9956,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 128000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gemma-3-12b",
+      "display_name": "Gemma 3 12B",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9955,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 128000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gte-large-en",
+      "display_name": "GTE Large En",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9954,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 8192
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 8192,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-bge-large-en",
+      "display_name": "BGE Large En",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9953,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 512
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 512,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5-1",
+      "display_name": "GPT 5.1",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9952,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gpt-5",
+      "display_name": "GPT 5",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9951,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 272000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 272000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-meta-llama-3-1-8b-instruct",
+      "display_name": "Meta Llama 3.1 8B Instruct",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9950,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 200000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 200000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-meta-llama-3-3-70b-instruct",
+      "display_name": "Meta Llama 3.3 70B Instruct",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9949,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 128000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gemini-2-5-flash",
+      "display_name": "Gemini 2.5 Flash",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9948,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1048576
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1048576,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-gemini-2-5-pro",
+      "display_name": "Gemini 2.5 Pro",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9947,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1048576
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1048576,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-opus-4-5",
+      "display_name": "Claude Opus 4.5",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9946,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 200000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 200000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-opus-4-1",
+      "display_name": "Claude Opus 4.1",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9945,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 200000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 200000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-claude-sonnet-4",
+      "display_name": "Claude Sonnet 4",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        {
+          "effort": "none",
+          "description": "none reasoning effort"
+        },
+        {
+          "effort": "minimal",
+          "description": "minimal reasoning effort"
+        },
+        {
+          "effort": "low",
+          "description": "Faster responses with lighter reasoning"
+        },
+        {
+          "effort": "medium",
+          "description": "Balanced reasoning for general tasks"
+        },
+        {
+          "effort": "high",
+          "description": "Deeper reasoning for complex tasks"
+        },
+        {
+          "effort": "xhigh",
+          "description": "Maximum reasoning for the hardest tasks"
+        },
+        {
+          "effort": "max",
+          "description": "max reasoning effort"
+        }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9944,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": false,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 200000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 200000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-qwen3-embedding-0-6b",
+      "display_name": "Qwen3 Embedding 0 6B",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9943,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 128000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": null,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-deepseek-v4-flash-0731",
+      "display_name": "Deepseek V4 Flash 0731",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9942,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    },
+    {
+      "slug": "dbx/databricks-deepseek-v4-pro-0813",
+      "display_name": "Deepseek V4 Pro 0813",
+      "description": "Databricks Model Serving endpoint",
+      "default_reasoning_level": null,
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 9941,
+      "availability_nux": null,
+      "upgrade": null,
+      "supports_reasoning_summary_parameter": true,
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": null,
+      "truncation_policy": {
+        "mode": "tokens",
+        "limit": 1000000
+      },
+      "supports_parallel_tool_calls": true,
+      "context_window": 1000000,
+      "experimental_supported_tools": [],
+      "input_modalities": [
+        "text"
+      ]
+    }
+  ]
+}

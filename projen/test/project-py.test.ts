@@ -149,6 +149,8 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /proposed reconciliation plan grouped by publishers/);
     assert.match(instructions, /confirm the complete proposed plan before submitting any change/);
     assert.match(instructions, /without asking for additional confirmation/);
+    assert.match(instructions, /Use the system browser/);
+    assert.match(instructions, /Do not use an in-app browser or embedded webview/);
     assert.match(instructions, /Do not visit GitHub or use the GitHub API or CLI/);
     assert.match(instructions, /Every required GitHub owner, repository, workflow, environment/);
     assert.match(instructions, /supplied branch policy value is main/);
@@ -156,7 +158,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(instructions, /GitHub environment branch: main/);
     assert.match(instructions, /read credentials from \/run\/secrets\/pypi\.json/);
     assert.match(instructions, /pause and ask the user to complete every CAPTCHA/i);
-    assert.match(instructions, /Reuse or claim an existing PyPI browser tab/);
+    assert.match(instructions, /Reuse an existing PyPI tab in the system browser/);
     assert.match(instructions, /Never delete a PyPI project or package/);
     assert.match(
       instructions,

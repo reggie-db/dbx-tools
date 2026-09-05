@@ -279,7 +279,7 @@
     },
     "pypiTrustedPublisherInstructions": {
       "name": "pypiTrustedPublisherInstructions",
-      "description": "Print browser-agent instructions for PyPI trusted publishers",
+      "description": "Print system-browser instructions for PyPI trusted publishers",
       "steps": [
         {
           "exec": "node .projen/pypi-trusted-publisher-instructions.mjs",

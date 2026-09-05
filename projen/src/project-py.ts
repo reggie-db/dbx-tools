@@ -683,7 +683,8 @@ export class DBXToolsPythonWorkspace extends Component {
     const linesBeforeAuthentication = [
       "# PyPI Trusted Publisher Setup Instructions",
       "",
-      "Use a browser to audit and configure the PyPI trusted publishers below.",
+      "Use the system browser to audit and configure the PyPI trusted publishers below.",
+      "Do not use an in-app browser or embedded webview.",
       "Do not visit GitHub or use the GitHub API or CLI. Every required GitHub owner, repository, workflow, environment, and branch value is provided below and is authoritative.",
       "Use only PyPI pages for this task.",
       "",
@@ -716,7 +717,7 @@ export class DBXToolsPythonWorkspace extends Component {
       "",
       "## Efficient browser workflow",
       "",
-      "- Reuse or claim an existing PyPI browser tab when available.",
+      "- Reuse an existing PyPI tab in the system browser when available.",
       "- For an existing project, open its publisher page directly at https://pypi.org/manage/project/<project-name>/settings/publishing/.",
       "- For a project that does not exist, use the pending-publisher page at https://pypi.org/manage/account/publishing/.",
       "- Treat the publisher table shown after submission as authoritative confirmation of success, even if the navigation header unexpectedly appears signed out.",
@@ -771,7 +772,7 @@ export class DBXToolsPythonWorkspace extends Component {
       ],
     });
     project.root.addTask("pypiTrustedPublisherInstructions", {
-      description: "Print browser-agent instructions for PyPI trusted publishers",
+      description: "Print system-browser instructions for PyPI trusted publishers",
       exec: `node ${helper}`,
       receiveArgs: true,
     });

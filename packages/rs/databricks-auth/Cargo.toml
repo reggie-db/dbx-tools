@@ -17,7 +17,7 @@ name = "dbx-tools-databricks-auth-uniffi-bindgen"
 path = "uniffi-bindgen.rs"
 
 [dependencies]
-dbx-tools-auth = { version = "0.6.167", path = "../auth", default-features = false }
+dbx-tools-auth = { version = "0.6.168", path = "../auth", default-features = false }
 async-trait = { workspace = true }
 configparser = { workspace = true }
 directories = { workspace = true }
