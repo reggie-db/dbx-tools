@@ -1,7 +1,7 @@
 import json
 import sys
 
-from dbx_tools.auth.bindings import canonical_scopes, credential_key
+from dbx_tools.auth import canonical_scopes, credential_key
 
 scopes = canonical_scopes(sys.argv[1:])
 print(

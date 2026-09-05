@@ -7,6 +7,9 @@ The [Rust package](../../rs/databricks-auth/README.md) owns U2M and M2M OAuth,
 profile resolution and endpoint policy. Shared `dbx_tools.auth` owns OAuth,
 refresh, locking, and built-in credential storage.
 
+Automatic storage uses memory inside a Databricks App and file storage
+elsewhere. Explicit file, memory, and custom storage selections are preserved.
+
 ```python
 from dbx_tools.databricks_auth import (
     DatabricksAuthOptions,

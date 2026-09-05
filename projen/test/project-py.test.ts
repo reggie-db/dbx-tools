@@ -41,9 +41,14 @@ describe("DBXToolsPythonWorkspace", () => {
           internalDependencies: ["core"],
         },
         {
+          directory: "standard",
+          description: "Explicit standard publisher package",
+          uniffi: false,
+        },
+        {
           directory: "native",
-          description: "Private native package",
-          private: true,
+          description: "Native binding package",
+          uniffi: true,
           generatedSources: ["src/fixture/native/bindings.py"],
           trustedPublisher: {
             workflowName: "rust-release",
@@ -95,7 +100,9 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.doesNotMatch(app, /^  \[/m);
     assert.doesNotMatch(app, /= \[ /);
     const native = readFileSync(join(outdir, "python/packages/native/pyproject.toml"), "utf8");
-    assert.match(native, /\[tool\.dbx-tools\]\s+private = true/);
+    assert.match(native, /\[tool\.dbx_tools\.config\]\s+uniffi = true/);
+    const standard = readFileSync(join(outdir, "python/packages/standard/pyproject.toml"), "utf8");
+    assert.match(standard, /\[tool\.dbx_tools\.config\]\s+uniffi = false/);
 
     const settings = readFileSync(join(outdir, ".vscode/settings.json"), "utf8");
     assert.match(settings, /python\/\.venv\/bin\/python/);
@@ -112,6 +119,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.match(release, /steps\.release_metadata\.outputs\.release_tag \|\| inputs\.version/);
     assert.match(release, /version = os\.environ\["VERSION"\]\.removeprefix\("v"\)/);
     assert.match(release, /^  publish-core:$/m);
+    assert.match(release, /^  publish-standard:$/m);
     assert.match(release, /^      name: pypi-fixture-core$/m);
     assert.match(release, /^          packages-dir: dist\/core$/m);
     assert.match(release, /^  publish-app:$/m);

@@ -88,10 +88,42 @@ const localWorkspacePackages = () => {
   );
 };
 
-const testNodeFacade = ({ facadePackage, manifest, nativePackage, nodePackage }) => {
+/**
+ * Read one bundled facade's static imports so local workspace dependency stubs
+ * expose every requested ESM name. Callable proxy values support module helpers
+ * and base classes that execute while the facade is imported.
+ */
+const importedNames = (source, packageName) => {
+  const escaped = packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`(?:^|\\n)import\\s+([^;]+?)\\s+from\\s+["']${escaped}["'];`, "g");
+  const names = new Set();
+  let hasDefault = false;
+  for (const match of source.matchAll(pattern)) {
+    const clause = match[1].trim();
+    const named = /\{([\s\S]*?)\}/.exec(clause)?.[1];
+    if (named) {
+      for (const specifier of named.split(",")) {
+        const name = specifier.trim().split(/\s+as\s+/)[0];
+        if (name) names.add(name);
+      }
+    }
+    const beforeNamed = clause.split(/[,{\s]/, 1)[0];
+    if (beforeNamed && beforeNamed !== "*" && !clause.startsWith("{")) hasDefault = true;
+  }
+  return { names: [...names].sort(), hasDefault };
+};
+
+const testNodeFacade = ({
+  facadeDirectory,
+  facadePackage,
+  manifest,
+  nativePackage,
+  nodePackage,
+}) => {
   const installDirectory = mkdtempSync(join(tmpdir(), "uniffi-facade-install-"));
   try {
     const workspacePackages = localWorkspacePackages();
+    const facadeSource = readFileSync(join(facadeDirectory, "lib", "index.js"), "utf8");
     const bindings =
       JSON.parse(readFileSync(join(root, "package.json"), "utf8")).dbxToolsConfig?.rust?.bindings ??
       [];
@@ -114,7 +146,16 @@ const testNodeFacade = ({ facadePackage, manifest, nativePackage, nodePackage })
           exports: "./index.js",
         })}\n`,
       );
-      writeFileSync(join(directory, "index.js"), "export {};\n");
+      const imports = importedNames(facadeSource, name);
+      writeFileSync(
+        join(directory, "index.js"),
+        [
+          "const stub = new Proxy(function () {}, { get: () => stub, apply: () => stub });",
+          ...imports.names.map((name) => `export const ${name} = stub;`),
+          ...(imports.hasDefault ? ["export default stub;"] : []),
+          "",
+        ].join("\n"),
+      );
       return [directory];
     });
     writeFileSync(
@@ -143,6 +184,16 @@ const testNodeFacade = ({ facadePackage, manifest, nativePackage, nodePackage })
 
 const replaceVersion = (source, version) =>
   source.replace(/^version = "[^"]+"$/m, `version = "${version}"`);
+
+/** Resolve workspace and generated catalog protocols for a publishable facade. */
+const facadeDependency = (name, dependency, version, catalog) => {
+  if (typeof dependency !== "string") return dependency;
+  if (dependency.startsWith("workspace:")) return version;
+  if (!dependency.startsWith("catalog:")) return dependency;
+  const resolved = catalog[name];
+  if (!resolved) throw new Error(`Missing root catalog entry for ${name}`);
+  return resolved;
+};
 
 const writable = (path) => {
   if (existsSync(path)) chmodSync(path, statSync(path).mode | 0o200);
@@ -199,6 +250,8 @@ const packageNode = ({
   const manifestPath = join(facadeDirectory, "package.json");
   writable(manifestPath);
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const workspaceManifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  const catalog = workspaceManifest.catalog ?? {};
   manifest.version = version;
   manifest.private = false;
   manifest.license = manifest.license === "UNLICENSED" ? "Apache-2.0" : manifest.license;
@@ -208,7 +261,7 @@ const packageNode = ({
   manifest.dependencies = Object.fromEntries(
     Object.entries(manifest.dependencies ?? {}).map(([name, dependency]) => [
       name,
-      typeof dependency === "string" && dependency.startsWith("workspace:") ? version : dependency,
+      facadeDependency(name, dependency, version, catalog),
     ]),
   );
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -260,6 +313,7 @@ const packageNode = ({
   mkdirSync(facadeOutput, { recursive: true });
   run("npm", ["pack", "--pack-destination", facadeOutput], facadeDirectory);
   testNodeFacade({
+    facadeDirectory,
     facadePackage: singlePackage(facadeOutput),
     manifest,
     nativePackage: singlePackage(resolve(output, "npm")),

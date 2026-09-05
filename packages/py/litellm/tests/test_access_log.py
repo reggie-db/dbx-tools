@@ -45,6 +45,37 @@ def test_reports_latency_tokens_and_cache() -> None:
     assert "tok/s=5.0" in line
 
 
+def test_reports_requested_model_and_requesting_ip() -> None:
+    line = _format(
+        payload(
+            model="databricks-claude-sonnet-4-6",
+            model_group="claude",
+            requester_ip_address="203.0.113.8",
+        ),
+        status="ok",
+    )
+
+    assert "requested_model=claude" in line
+    assert "model=databricks-claude-sonnet-4-6" in line
+    assert "ip=203.0.113.8" in line
+
+
+def test_requesting_ip_uses_first_forwarded_address() -> None:
+    line = _format(
+        {
+            **payload(),
+            "litellm_metadata": {
+                "model_group": "gpt",
+                "requester_ip_address": "198.51.100.7, 10.0.0.5",
+            },
+        },
+        status="ok",
+    )
+
+    assert "requested_model=gpt" in line
+    assert "ip=198.51.100.7" in line
+
+
 def test_reports_explicit_requested_thinking_level() -> None:
     record_reasoning_log_state("explicit-call", requested="high")
 

@@ -6,3 +6,4 @@ strictTypeChecking = true
 
 [bindings.python.external_packages]
 dbx_tools_auth = "dbx_tools.auth.bindings"
+dbx_tools_databricks = "dbx_tools.databricks.bindings"

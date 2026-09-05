@@ -3,7 +3,7 @@
 Rust-generated Python bindings for Google Application Default Credentials.
 
 ```python
-from dbx_tools.google_auth.bindings import (
+from dbx_tools.google_auth import (
     GoogleAuthOptions,
     create_google_auth,
 )

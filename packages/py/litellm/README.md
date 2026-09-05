@@ -65,7 +65,9 @@ Text output puts the display name first, followed by the exact model id.
 `--extended` or `--all` adds owner, context window, and reasoning levels.
 `--output json` prints the OpenAI `data` list plus the Codex `models` envelope.
 `lookup` uses the same standard ranking as model resolution and prints matching
-models in rank order with their scores. It also accepts `--output json`.
+models in rank order with their scores. `lookup --output json` and
+`GET /v1/models/lookup?search=<keyword>` return the same
+`[{"score": ..., "modelClass": ..., "endpoint": {...}}]` ranked-model payload.
 
 The equivalent module invocation is:
 
@@ -170,8 +172,12 @@ from a static list in this package:
 requests and publishes each exact endpoint as `dbx/<endpoint>`.
 The response preserves the OpenAI-standard `data` list and the additional Codex
 `models` envelope. `dbx-litellm models` builds that payload from the same
-catalogue and seed routes. Library-only service names from `dbx-tools-model`
-are not projected into this HTTP or CLI response.
+catalogue and seed routes. `GET /v1/models/lookup` accepts every `ModelQuery`
+field as a query parameter, ranks the catalogue with the same `lookup_models`
+function as `dbx-litellm lookup`, and is included in the LiteLLM OpenAPI schema.
+Omitting `search` returns every eligible model.
+Library-only service names from `dbx-tools-model` are not projected into the
+model-list HTTP or CLI response.
 
 The packaged proxy keeps exact workspace endpoint ids in the `dbx/*` namespace
 so callers can distinguish this discovery-and-routing layer from LiteLLM's
@@ -348,6 +354,12 @@ classifier maps the score through the resolved model's capabilities. The
 existing `reasoning=<tokens>` field remains the number of reasoning tokens
 reported by the provider, not the selected effort level.
 
+Each inference access line includes `requested_model=<client value>`,
+`model=<resolved endpoint>`, and `ip=<requesting address>`. The IP is the first
+address in `X-Forwarded-For` when present, then the direct client address.
+`GET /v1/models` emits its own access line with the requesting IP, HTTP status,
+and a family summary such as `8 models (3 claude, 2 gpt, 3 other)`.
+
 ## Request processing
 
 Every delegated Chat Completions request runs through a small, ordered pipeline
@@ -479,6 +491,7 @@ Then start the proxy and exercise live discovery before inference:
 uv run dbx-litellm --port 4000
 curl -fsS http://127.0.0.1:4000/health/readiness
 curl -fsS http://127.0.0.1:4000/v1/models
+curl -fsS 'http://127.0.0.1:4000/v1/models/lookup?search=gpt'
 ```
 
 Release validation also covers non-streaming Chat, streaming Chat, Responses,

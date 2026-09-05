@@ -268,6 +268,10 @@ project.applyToProjects(root, { identifierName: "model", tags: "node" }, (p) => 
 // stat. AppKit's facade owns client construction; workspace/DBFS calls cross
 // its explicit `toLegacyWorkspaceClient()` compatibility handoff.
 project.applyToProjects(root, { identifierName: "databricks", tags: "node" }, (p) => {
+  p.package.addField(
+    "description",
+    "Databricks workspace, filesystem, cloud, runtime, and CLI utilities",
+  );
   p.addDeps(
     "@dbx-tools/appkit@workspace:*",
     "@dbx-tools/core@workspace:*",
@@ -864,6 +868,14 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     uuid: { version: "1", features: ["v4"] },
   },
   packages: {
+    databricks: {
+      description: "Shared Databricks runtime and CLI utilities",
+      dependencies: {
+        thiserror: { workspace: true },
+        uniffi: { workspace: true },
+        url: { workspace: true },
+      },
+    },
     auth: {
       description: "Provider-neutral OAuth, credential storage, and locking",
       dependencies: {
@@ -890,6 +902,11 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       description: "Databricks OAuth with secure credential storage",
       dependencies: {
         "dbx-tools-auth": { path: "../auth", version: root.version, defaultFeatures: false },
+        "dbx-tools-databricks": {
+          path: "../databricks",
+          version: root.version,
+          defaultFeatures: false,
+        },
         "async-trait": { workspace: true },
         configparser: { workspace: true },
         directories: { workspace: true },

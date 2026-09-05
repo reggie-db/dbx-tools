@@ -1,6 +1,5 @@
 {
   "name": "@dbx-tools/databricks-auth",
-  "description": "Node bindings for dbx-tools-databricks-auth",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reggie-db/dbx-tools.git",
@@ -26,6 +25,7 @@
   },
   "dependencies": {
     "@dbx-tools/auth": "workspace:*",
+    "@dbx-tools/databricks": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@ubjs/core": "0.31.0-5",
     "@ubjs/node": "0.31.0-5"
@@ -44,7 +44,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.168",
+  "version": "0.6.169",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -56,15 +56,15 @@
     "src",
     "lib"
   ],
-  "private": true,
   "optionalDependencies": {
-    "@dbx-tools/databricks-auth-linux-x64-gnu": "0.6.168",
-    "@dbx-tools/databricks-auth-linux-arm64-gnu": "0.6.168",
-    "@dbx-tools/databricks-auth-darwin-x64": "0.6.168",
-    "@dbx-tools/databricks-auth-darwin-arm64": "0.6.168",
-    "@dbx-tools/databricks-auth-win32-x64-msvc": "0.6.168"
+    "@dbx-tools/databricks-auth-linux-x64-gnu": "0.6.169",
+    "@dbx-tools/databricks-auth-linux-arm64-gnu": "0.6.169",
+    "@dbx-tools/databricks-auth-darwin-x64": "0.6.169",
+    "@dbx-tools/databricks-auth-darwin-arm64": "0.6.169",
+    "@dbx-tools/databricks-auth-win32-x64-msvc": "0.6.169"
   },
   "dbxToolsConfig": {
+    "uniffi": true,
     "tags": [
       "node"
     ]

@@ -93,15 +93,20 @@ VS Code component; dbx-tools reuses it rather than constructing a second
 configurable `root` (default `packages/rs`), generates its Cargo manifest, and
 derives the crate name and repository from the parent project. A crate containing
 `uniffi::setup_scaffolding!()`
-automatically wires matching private Node and Python binding packages using the
+automatically wires matching public Node and Python binding packages using the
 same capability name. Repository-specific dependencies and features remain
 declarative options in `.projenrc.ts`; generated bindings are built separately
 from projen synthesis. Target-independent Node binding TypeScript is committed
 and remains generated/read-only, while native libraries stay ignored. Node
 facades compile to `lib/` and publish JavaScript entry points that plain Node
-can load from `node_modules`. The generated barrel exports the binding API from
-the package root. Do not create a `nodeExports` binding subpath or a
-handwritten type facade.
+can load from `node_modules`. A complete `bindings.ts` / `_bindings.ts` /
+`_bindings-ffi.ts` triplet is exported directly from the generated package
+barrel. Python keeps `bindings.py` as the generated implementation and exports
+its public names from a fully generated `__init__.py` with no editable marker
+blocks. Node generation fails when direct binding names conflict with another
+package-root export; Python generation refuses to overwrite a non-generated
+package root. Do not create a `nodeExports` binding subpath or a handwritten
+type facade.
 
 Rust dependencies between binding-enabled workspace crates become Node
 `workspace:*` and Python `internalDependencies` automatically. Python generation
@@ -186,9 +191,14 @@ architecture. Omit both filters to regenerate the complete maintained matrix.
 `DBX_TOOLS_RELEASE_PLATFORMS` can select the generated matrix without repeating
 environment parsing in a consumer.
 
-Private Python binding projects are marked with `[tool.dbx-tools] private =
-true`. They stay out of the standard uv/Python release and docs surfaces;
-`rust-release` publishes their prebuilt native wheels directly.
+Public UniFFI facades are marked with `dbxToolsConfig.uniffi = true` in Node
+manifests and `[tool.dbx_tools.config] uniffi = true` in Python manifests. The
+standard Node and Python publishers skip those packages, while `rust-release`
+publishes their native npm archives, Node facades, and platform-tagged Python
+wheels. The docs generators include them because they are publicly installable.
+When a conventional Node binding path already belongs to a root subproject,
+Rust mapping reuses that project and adds binding dependencies and metadata to
+its existing manifest.
 After Rust's public artifacts finish, it dispatches the downstream `release`
 event. Python, Node, standalone Node, and docs consume that event independently
 and start together with the same verified tag and SHA. Without Rust,
@@ -274,8 +284,9 @@ never as a blanket `<package>/src/**`. A codegen package may hold hand-written
 modules beside its generated ones, and those must stay linted.
 
 `generateBarrels()` writes package-root `index.ts` barrels with module
-namespaces and flat unique type exports, returning the number that actually
-changed. A name two modules both declare is ambiguous and stays namespace-only —
+namespaces, flat unique type exports, `PACKAGE_IDENTIFIER`, and
+`PACKAGE_VERSION`, returning the number that actually changed. A name two
+modules both declare is ambiguous and stays namespace-only —
 except when one of them is generated: the hand-written module is the curated view
 of the generated shape (`shared-genie`'s `genie-model.ts` extends its own
 codegen'd `dashboards.ts`), so it owns the name and stays hoisted. A barrel whose export surface is unchanged is left untouched,

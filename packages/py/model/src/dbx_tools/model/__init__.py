@@ -62,8 +62,8 @@ from .reasoning import (
 )
 from .resolve import (
     DEFAULT_FUZZY_THRESHOLD,
+    lookup_models,
     rank_model_id,
-    rank_models,
     resolve_model,
     resolve_model_id,
     search_serving_endpoints,
@@ -110,6 +110,7 @@ __all__ = [
     "is_responses_only",
     "list_serving_endpoints",
     "list_serving_endpoints_uncached",
+    "lookup_models",
     "model_for_class",
     "model_service_names",
     "models_for_class",
@@ -117,7 +118,6 @@ __all__ = [
     "parse_model_class",
     "post_json",
     "rank_model_id",
-    "rank_models",
     "reasoningEffortsByFamily",
     "reasoningEffortsForNames",
     "reasoning_efforts_by_family",

@@ -114,6 +114,13 @@ Primary package areas:
   local user credentials and scopes with `gcloud auth application-default
 login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   to 1.85 while this workspace supports Rust 1.82.
+- `packages/rs/databricks`, `packages/js/node/databricks`, and
+  `packages/py/databricks` own common Databricks runtime utilities. Rust owns
+  Databricks App detection, cached CLI availability, and CLI token process
+  access. The Node package combines those generated bindings with its direct
+  workspace client, filesystem, cloud, and network modules. During UniFFI
+  mapping, reuse the existing root Node project at the conventional path and
+  add binding metadata to that project instead of creating a second package.
 - `packages/rs/databricks-auth`, `packages/js/node/databricks-auth`,
   `packages/py/databricks-auth`, and `packages/js/cli/auth` - Databricks U2M and
   M2M OAuth, secure token storage, generated Node/Python bindings, and the
@@ -125,13 +132,14 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   sorted scopes, optional group assumption, persistent token storage, and the
   same check-lock-check refresh path. The CLI delegates OAuth, profile
   resolution, refresh, locking, and storage to the Node binding package.
-  `databricks_cli_available()` caches whether `databricks auth --help` succeeds.
-  Automatic U2M uses `databricks auth token --profile` for refresh when
-  available, otherwise it uses the native file flow. Explicit file and memory
-  selections always use the native flow, and memory performs no file access.
-  M2M always stays native. File-backed refresh locks cover the whole store;
-  read-modify-write uses a separate short-held file lock. Preserve other entries
-  in `~/.databricks/token-cache.json`. Only the incoming Node package is named
+  Outside Databricks Apps, automatic U2M uses `databricks auth token --profile`
+  for refresh when the shared Databricks crate reports the CLI is available;
+  otherwise it uses the native file flow. Inside a Databricks App, automatic
+  storage resolves to memory and does not use the CLI. Explicit file, memory,
+  and custom storage selections remain unchanged. M2M always stays native.
+  File-backed refresh locks cover the whole store; read-modify-write uses a
+  separate short-held file lock. Preserve other entries in
+  `~/.databricks/token-cache.json`. Only the incoming Node package is named
   `auth-gate`; `shared-auth` and `ui-auth` keep their existing names.
   Profile files are parsed once per absolute path and cached for the process
   lifetime, including missing files and parse errors, so repeated factories do
@@ -255,8 +263,8 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   Same add-on shape as node-email.
 - `packages/js/ui/appkit` — AppKit UI/Tailwind foundation used by feature UI
   packages.
-- `packages/js/node/databricks` and `packages/js/node/databricks-zerobus` —
-  workspace/cloud/Zerobus infrastructure helpers.
+- `packages/js/node/databricks-zerobus` builds Zerobus infrastructure on the
+  shared Databricks workspace and cloud utilities.
 - `packages/js/shared/core`, `packages/js/node/core`, and `packages/js/node/path`
   — cross-runtime and Node utility foundations.
 - `packages/py/core` — dependency-free Python configuration and identity helpers
@@ -325,7 +333,15 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   adds live endpoint discovery, fuzzy model resolution, and tool-capability
   filtering; then delegates to LiteLLM's built-in Databricks provider.
   `/v1/models` keeps exact ids in the OpenAI-standard `data` envelope plus the
-  Codex `models` extension. `dbx-litellm models` prints name then id by default,
+  Codex `models` extension. Inference `dbx-access` records include the client
+  requested model, resolved endpoint, and requesting IP. `/v1/models` records
+  include the requesting IP and a family-count summary derived with the model
+  package's canonical parser. `GET /v1/models/lookup` is part of the LiteLLM
+  OpenAPI surface, exposes the owning `ModelQuery` fields as query parameters,
+  and returns the same complete `RankedModel` payload as
+  `dbx-litellm lookup --output json`. Both call `lookup_models` directly; an
+  omitted search returns all eligible models.
+  `dbx-litellm models` prints name then id by default,
   adds owner, context, and reasoning with `--extended` / `--all`, or returns
   that same payload with `--output json`. `dbx-litellm lookup <keyword>` uses
   the shared standard model ranking and shows name, id, and score in rank order.
@@ -391,12 +407,22 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   hardcoded package paths. Release generation uses one matrix
   row per selected target, builds the Cargo workspace once in that row, and
   packages every discovered UniFFI binding and release-enabled binary from the
-  shared output. Install Bun and run `bun install` only when a discovered
-  binding has a Node facade; Python-only bindings need uv but not Bun, and
+  shared output. Generated Node facades carry `dbxToolsConfig.uniffi = true`;
+  generated Python facades carry `[tool.dbx_tools.config] uniffi = true`.
+  These are public packages skipped by the standard Node/Python publishers so
+  the Rust flow publishes them exactly once. Do not mark them private. Install
+  Bun and run `bun install` only when a discovered binding has a Node facade; Python-only bindings need uv but not Bun, and
   binary-only targets need neither. `rustVersion` is the package compatibility
   floor written to Cargo manifests; `releaseRustVersion` is the build toolchain
   and defaults to `stable`, so a newly resolved dependency cannot make current
   Cargo metadata unreadable while the package still advertises its older MSRV.
+  Node packages containing the complete `bindings.ts` / `_bindings.ts` /
+  `_bindings-ffi.ts` triplet export `bindings.ts` directly from the root barrel,
+  without a `bindings` namespace. Python keeps `bindings.py` internally and
+  generates a complete package-root `__init__.py` with no editable marker
+  blocks. Node generation fails on binding-name conflicts, and Python generation
+  refuses to overwrite a non-generated package root. Consumers import from the
+  package root.
   `ubrnRustVersion` defaults to that release toolchain and installs another
   toolchain only when explicitly overridden. Cache the final host UBRN executable
   by pinned UBRN version, runner OS/architecture, and Rust toolchain. A hit skips
@@ -576,13 +602,12 @@ Docs site rules:
   and generates the Python package pages under `/packages/py-*`. Python packages
   have no TypeDoc API pages; keep install and runtime guidance in their READMEs
   and summarize them in the root README's Python Packages table.
-- A `private: true` package is EXCLUDED from the site by both generators. A
-  private package never reaches npm, so a page for it documents something a
-  reader cannot install. Both `discoverPackages()` functions filter on it, which
-  is also what relaxes the missing-README throw to published packages only: an
-  unpublished spike may have no docs, a published package may not. Keep a README
-  on a private package for contributors anyway (say it is unpublished), and keep
-  it out of the root README's package tables.
+- A JavaScript `private: true` package is excluded from the site by both
+  JavaScript package generators because it never reaches npm. This also relaxes
+  the missing-README requirement for unpublished spikes. Python packages use no
+  custom private marker; UniFFI packages carry
+  `[tool.dbx_tools.config] uniffi = true`, are published by the Rust flow, and
+  remain included in public docs.
 - `docs/scripts/sync-readmes.mjs` generates the Starlight site under
   `.docs-build/site`.
 - `docs/scripts/generate-api-docs.mjs` generates TypeDoc Markdown into the same
@@ -1721,6 +1746,8 @@ Inside an established workspace the CLI only forwards, so prefer the
 
 Barrels re-export every exporting file under `src/` except names starting with
 `_`; a package's barrel lives at its ROOT (`index.ts`), re-exporting `./src/*`.
+Every barrel exports `PACKAGE_IDENTIFIER` and `PACKAGE_VERSION` from its own
+generated `package.json`; a version-only change rewrites the barrel.
 Each module gets an `export * as <ns>` line, and on top of that every name that
 is UNIQUE across the package is HOISTED flat as well - `export { ... }` for
 non-function values (classes, consts, enums, …), `export type { ... }` for

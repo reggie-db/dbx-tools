@@ -66,7 +66,7 @@ def resolve_model_id(
     )
 
 
-def rank_models(
+def lookup_models(
     endpoints: Iterable[ServingEndpointSummary | dict[str, object]],
     query: ModelQuery | dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
@@ -147,7 +147,7 @@ def rank_model_id(
     )
     if exact is not None:
         return ResolvedModel(modelId=exact.name, matched=True, score=0)
-    ranked = rank_models(
+    ranked = lookup_models(
         summaries,
         ModelQuery(
             search=search,
@@ -181,7 +181,7 @@ def resolve_model(
             if requires_tools:
                 _assert_tool_support(summaries, explicit)
             return ResolvedModelSelection(modelId=explicit, source="explicit")
-        ranked = rank_models(
+        ranked = lookup_models(
             summaries,
             ModelQuery(
                 search=explicit,
@@ -207,7 +207,7 @@ def resolve_model(
                 return ResolvedModelSelection(modelId=fallback, source="fallback")
 
     source = "class" if model_class is not None else "fallback"
-    ranked = rank_models(
+    ranked = lookup_models(
         summaries,
         ModelQuery(modelClass=model_class, requiresTools=requires_tools, limit=1),
     )

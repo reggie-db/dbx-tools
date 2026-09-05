@@ -33,12 +33,15 @@ as the default, account/workspace token endpoint resolution, and optional
 `assume_group`. Access tokens use the same persistent stores,
 check-lock-check refresh, and storage-adapter locks as U2M.
 
-Automatic U2M checks `databricks auth --help` once per process. When available,
-refresh uses `databricks auth token --profile <name>`; otherwise the native
-file-backed flow uses `~/.databricks/token-cache.json`. Explicit file storage
-always uses the native flow. Memory storage uses neither the CLI nor file
-persistence. M2M always uses its native client-credentials flow. U2M uses the
-CLI profile key, while M2M uses a distinct identity-and-scope key.
+Outside a Databricks App, automatic U2M checks `databricks auth --help` once per
+process. When available, refresh uses
+`databricks auth token --profile <name>`; otherwise the native file-backed flow
+uses `~/.databricks/token-cache.json`. Inside a Databricks App, automatic
+storage resolves to memory and does not invoke the CLI. Explicit file, memory,
+and custom storage selections retain their requested behavior. M2M always uses
+its native client-credentials flow. U2M uses the CLI profile key, while M2M uses
+a distinct identity-and-scope key. Shared App detection and CLI process access
+come from [`dbx-tools-databricks`](../databricks).
 
 The browser callback uses `OAuthTemplate` to build a self-contained HTML page
 with dbx tools colors and typography. Its image source accepts a URL or data

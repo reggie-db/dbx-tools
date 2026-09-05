@@ -1,10 +1,10 @@
 [workspace]
-members = ["packages/rs/auth", "packages/rs/databricks-auth", "packages/rs/google-auth"]
+members = ["packages/rs/auth", "packages/rs/databricks", "packages/rs/databricks-auth", "packages/rs/google-auth"]
 default-members = []
 resolver = "2"
 
 [workspace.package]
-version = "0.6.168"
+version = "0.6.169"
 edition = "2021"
 rust-version = "1.82"
 license = "Apache-2.0"

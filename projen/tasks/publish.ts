@@ -2,7 +2,7 @@
 /**
  * `bun tasks/publish.ts <version> [--registry <url>] [--exclude <dir>] [--dry-run]`
  * - ensure every workspace member and the Bun lock carry the release version,
- * then publish each non-private one with `bun publish`.
+ * then publish each package owned by the standard Node release with `bun publish`.
  *
  * Bun has no `pnpm -r publish`, so this loop is the recursive-publish stand-in.
  * It leans on native bun for everything bun already does:
@@ -338,10 +338,15 @@ for (const dir of members) {
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
     name?: string;
     private?: boolean;
+    dbxToolsConfig?: { uniffi?: boolean };
     scripts?: Record<string, string>;
   };
   if (pkg.private) {
     logger.info(`skip private ${pkg.name ?? dirname(dir)}`);
+    continue;
+  }
+  if (pkg.dbxToolsConfig?.uniffi === true) {
+    logger.info(`skip UniFFI ${pkg.name ?? dirname(dir)}`);
     continue;
   }
   // bun won't fold publishConfig into the packed manifest, so do it ourselves -

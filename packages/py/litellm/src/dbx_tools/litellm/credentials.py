@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from databricks.sdk import WorkspaceClient
-from dbx_tools.databricks_auth.bindings import (
+from dbx_tools.databricks_auth import (
     DatabricksAuthOptions,
     PersistentAuth,
     create_persistent_auth,

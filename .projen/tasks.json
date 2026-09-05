@@ -301,7 +301,7 @@
       "description": "Generate and run UniFFI Node and Python example CLIs",
       "steps": [
         {
-          "exec": "bun run rs:bindings && bun packages/js/node/auth/test/cli.ts && uv run --project packages/py/auth packages/py/auth/test/cli.py && bun packages/js/node/databricks-auth/test/cli.ts && uv run --project packages/py/databricks-auth packages/py/databricks-auth/test/cli.py && bun packages/js/node/google-auth/test/cli.ts && uv run --project packages/py/google-auth packages/py/google-auth/test/cli.py"
+          "exec": "bun run rs:bindings && bun packages/js/node/auth/test/cli.ts && uv run --project packages/py/auth packages/py/auth/test/cli.py && bun packages/js/node/databricks/test/cli.ts && uv run --project packages/py/databricks packages/py/databricks/test/cli.py && bun packages/js/node/databricks-auth/test/cli.ts && uv run --project packages/py/databricks-auth packages/py/databricks-auth/test/cli.py && bun packages/js/node/google-auth/test/cli.ts && uv run --project packages/py/google-auth packages/py/google-auth/test/cli.py"
         }
       ]
     },

@@ -7,6 +7,7 @@ import {
   DBXToolsNodeProject,
   DBXToolsPythonWorkspace,
   DBXToolsRustWorkspace,
+  DBXToolsTypeScriptProject,
   RustReleaseCpu,
   RustReleaseOs,
 } from "../src/project.ts";
@@ -310,7 +311,7 @@ describe("DBXToolsRustWorkspace", () => {
     }
   });
 
-  it("discovers crates and derives private UniFFI packages", () => {
+  it("discovers crates and marks generated packages for UniFFI publishing", () => {
     const project = new DBXToolsNodeProject({
       name: "@fixture/root",
       scope: "fixture",
@@ -341,9 +342,10 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal(rust.pythonPackages.length, 1);
     assert.equal(rust.pythonPackages[0]?.name, "fixture-databricks-auth");
     assert.equal(rust.pythonPackages[0]?.module, "fixture.databricks_auth");
-    assert.equal(rust.pythonPackages[0]?.private, true);
+    assert.equal(rust.pythonPackages[0]?.uniffi, true);
     assert.deepEqual(rust.pythonPackages[0]?.generatedSources, [
       "src/fixture/databricks_auth/bindings.py",
+      "src/fixture/databricks_auth/__init__.py",
     ]);
     assert.deepEqual(rust.pythonPackages[0]?.trustedPublisher, {
       workflowName: "rust-release",
@@ -377,7 +379,8 @@ describe("DBXToolsRustWorkspace", () => {
       readFileSync(join(outdir, "packages/js/node/databricks-auth/package.json"), "utf8"),
     ) as {
       name: string;
-      private: boolean;
+      private?: boolean;
+      dbxToolsConfig: { uniffi: boolean };
       dependencies: object;
       devDependencies: object;
       optionalDependencies: object;
@@ -387,7 +390,8 @@ describe("DBXToolsRustWorkspace", () => {
       };
     };
     assert.equal(node.name, "@fixture/databricks-auth");
-    assert.equal(node.private, true);
+    assert.equal(node.private, undefined);
+    assert.equal(node.dbxToolsConfig.uniffi, true);
     assert.equal("pg" in node.dependencies, true);
     assert.equal("@types/pg" in node.devDependencies, true);
     assert.equal("@fixture/databricks-auth-darwin-arm64" in node.optionalDependencies, true);
@@ -566,6 +570,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
     assert.match(packager, /"build",\s+"index\.ts",[\s\S]*?"--packages",\s+"external"/);
     assert.match(packager, /Object\.assign\(manifest, compiledPublish\)/);
+    assert.match(packager, /dependency\.startsWith\("catalog:"\)/);
     assert.match(packager, /manifest\.exports\["\."\]\.types = "\.\/index\.ts"/);
     assert.match(packager, /uniffi-facade-install-/);
     assert.match(packager, /facadePackage: singlePackage\(facadeOutput\)/);
@@ -587,10 +592,64 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(nodeGenerator, /values\.ubrn \? resolve\(values\.ubrn\)/);
     assert.match(nodeGenerator, /if \(!values\["skip-barrels"\]\)/);
     assert.equal(rust.pythonPackages.length, 1);
-    assert.equal(
-      readFileSync(join(outdir, "packages/js/node/databricks-auth/exports.ts"), "utf8"),
-      'export * from "./src/bindings.ts";\n',
-    );
+    assert.equal(existsSync(join(outdir, "packages/js/node/databricks-auth/exports.ts")), false);
+  });
+
+  it("reuses an existing Node project for generated bindings", () => {
+    const directory = mkdtempSync(join(tmpdir(), "project-rs-existing-node-"));
+    try {
+      mkdirSync(join(directory, "packages/rs/databricks/src"), { recursive: true });
+      writeFileSync(
+        join(directory, "packages/rs/databricks/src/lib.rs"),
+        "uniffi::setup_scaffolding!();\n",
+      );
+      mkdirSync(join(directory, "packages/js/node/databricks/src"), { recursive: true });
+      writeFileSync(
+        join(directory, "packages/js/node/databricks/src/direct.ts"),
+        "export const direct = true;\n",
+      );
+      const project = new DBXToolsNodeProject({
+        name: "@fixture/root",
+        scope: "fixture",
+        outdir: directory,
+        packageRoots: ["packages/js"],
+        defaultTagMixins: false,
+        github: false,
+      });
+      const existing = project.subprojects.find(
+        (candidate) => candidate.outdir === join(directory, "packages/js/node/databricks"),
+      );
+      assert.ok(existing instanceof DBXToolsTypeScriptProject);
+      existing.package.addField("description", "Direct and generated Databricks utilities");
+      existing.addDeps("direct-dependency@^1");
+
+      const rust = new DBXToolsRustWorkspace(project, {
+        scope: "fixture",
+        release: false,
+        packages: { databricks: { nodeDependencies: ["binding-dependency@^1"] } },
+      });
+      assert.equal(rust.nodePackages[0], existing);
+      project.synth();
+
+      const manifest = JSON.parse(readFileSync(join(existing.outdir, "package.json"), "utf8")) as {
+        private?: boolean;
+        description: string;
+        dependencies: Record<string, string>;
+        dbxToolsConfig: { uniffi: boolean };
+      };
+      assert.equal(manifest.private, undefined);
+      assert.equal(manifest.description, "Direct and generated Databricks utilities");
+      assert.equal(manifest.dbxToolsConfig.uniffi, true);
+      assert.equal(manifest.dependencies["direct-dependency"], "^1");
+      assert.equal(manifest.dependencies["binding-dependency"], "^1");
+      assert.equal(
+        readFileSync(join(existing.outdir, "src/direct.ts"), "utf8"),
+        "export const direct = true;\n",
+      );
+      assert.equal(existsSync(join(existing.outdir, "exports.ts")), false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("marks private crates as unpublished", () => {

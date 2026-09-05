@@ -61,11 +61,13 @@ standard Databricks environment variables. The secret is not accepted as a CLI
 argument or included in generated binding records.
 
 For U2M with automatic storage, the Rust package checks
-`databricks auth --help` once per process. When available, token refresh runs
-through `databricks auth token --profile <name>`. Otherwise it uses the native
-file-backed OAuth flow. Explicit file storage always uses the native flow.
-Memory storage uses neither the Databricks CLI nor file persistence. M2M always
-uses the native client-credentials flow.
+`databricks auth --help` once per process outside Databricks Apps. When
+available, token refresh runs through
+`databricks auth token --profile <name>`. Otherwise it uses the native
+file-backed OAuth flow. Automatic storage resolves to memory inside a
+Databricks App. Explicit file storage always uses the native flow. Memory
+storage uses neither the Databricks CLI nor file persistence. M2M always uses
+the native client-credentials flow.
 
 ## Package use
 

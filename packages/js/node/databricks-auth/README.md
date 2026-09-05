@@ -8,6 +8,9 @@ OAuth, profile resolution, refresh, locking, and built-in credential storage.
 Use [`@dbx-tools/cli-auth`](../../cli/auth) for the `dbx auth` Commander
 interface.
 
+Automatic storage uses memory inside a Databricks App and file storage
+elsewhere. Explicit file, memory, and custom storage selections are preserved.
+
 Import the Rust-generated binding directly:
 
 ```ts

@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from dbx_tools.google_auth.bindings import GoogleAuthOptions, create_google_auth
+from dbx_tools.google_auth import GoogleAuthOptions, create_google_auth
 
 """Google ADC binding smoke test without exposing the access token."""
 

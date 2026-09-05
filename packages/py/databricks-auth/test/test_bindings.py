@@ -1,11 +1,11 @@
-from dbx_tools.auth.bindings import (
+from dbx_tools.auth import (
     AuthOptions,
     ProviderOptions,
     StorageAdapter,
     create_provider_auth_with_storage,
     create_storage_handle,
 )
-from dbx_tools.databricks_auth.bindings import (
+from dbx_tools.databricks_auth import (
     DatabricksAuthOptions,
     create_persistent_auth_with_storage,
 )

@@ -25,6 +25,11 @@
       "type": "runtime"
     },
     {
+      "name": "@dbx-tools/databricks",
+      "version": "workspace:*",
+      "type": "runtime"
+    },
+    {
       "name": "@dbx-tools/shared-core",
       "version": "workspace:*",
       "type": "runtime"

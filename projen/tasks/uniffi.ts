@@ -21,6 +21,7 @@ import {
   addExplicitInterfaceReexports,
   addTypeScriptExtensionsToBindingImports,
   makeDefaultedInterfaceParametersOptional,
+  mergePythonBindingExports,
 } from "../src/uniffi.ts";
 
 const { values } = parseArgs({
@@ -176,6 +177,14 @@ if (values.node) {
   );
   const nodeBindings = join(nodeSource, "bindings.ts");
   const generatedFiles = [join(nodeSource, "_bindings.ts"), join(nodeSource, "_bindings-ffi.ts")];
+  const legacyExports = resolve(root, values.node, "exports.ts");
+  if (
+    existsSync(legacyExports) &&
+    readFileSync(legacyExports, "utf8").trim() === 'export * from "./src/bindings.ts";'
+  ) {
+    makeWritable(legacyExports);
+    rmSync(legacyExports, { force: true });
+  }
   replaceGenerated(join(nodeOutput, "index.ts"), nodeBindings);
   replaceGenerated(join(nodeOutput, libraryName + ".ts"), generatedFiles[0]);
   replaceGenerated(join(nodeOutput, libraryName + "-ffi.ts"), generatedFiles[1]);
@@ -259,9 +268,16 @@ if (values.python) {
   replaceGenerated(generated, pythonBindings);
   stampGeneratedPython(pythonBindings);
   const pythonInit = join(pythonPackage, "__init__.py");
-  if (!existsSync(pythonInit)) {
-    writeFileSync(pythonInit, "");
-  }
+  makeWritable(pythonInit);
+  writeFileSync(
+    pythonInit,
+    mergePythonBindingExports(
+      existsSync(pythonInit) ? readFileSync(pythonInit, "utf8") : "",
+      readFileSync(pythonBindings, "utf8"),
+      { crate, file: pythonInit },
+    ),
+  );
+  makeReadonly(pythonInit);
   const pythonLibrary = join(pythonPackage, basename(library));
   makeWritable(pythonLibrary);
   cpSync(library, pythonLibrary);

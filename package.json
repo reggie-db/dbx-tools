@@ -74,7 +74,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.168",
+  "version": "0.6.169",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -187,6 +187,7 @@
       "root": "packages/rs",
       "crates": [
         "packages/rs/auth",
+        "packages/rs/databricks",
         "packages/rs/databricks-auth",
         "packages/rs/google-auth"
       ],
@@ -201,9 +202,19 @@
           "pythonModule": "dbx_tools.auth"
         },
         {
+          "crate": "dbx-tools-databricks",
+          "rust": "packages/rs/databricks",
+          "node": "packages/js/node/databricks",
+          "nodePackage": "@dbx-tools/databricks",
+          "python": "packages/py/databricks",
+          "pythonPackage": "dbx-tools-databricks",
+          "pythonModule": "dbx_tools.databricks"
+        },
+        {
           "crate": "dbx-tools-databricks-auth",
           "dependencies": [
-            "dbx-tools-auth"
+            "dbx-tools-auth",
+            "dbx-tools-databricks"
           ],
           "rust": "packages/rs/databricks-auth",
           "node": "packages/js/node/databricks-auth",

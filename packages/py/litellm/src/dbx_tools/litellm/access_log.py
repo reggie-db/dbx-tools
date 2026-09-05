@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 from collections import OrderedDict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any
@@ -112,6 +113,8 @@ def _format(kwargs: dict[str, Any], *, status: str, response_obj: Any = None) ->
     payload = kwargs.get("standard_logging_object") or {}
     fields: list[str] = [
         f"status={status}",
+        f"ip={_request_ip(kwargs, payload) or 'unknown'}",
+        f"requested_model={_requested_model(kwargs, payload) or 'unknown'}",
         f"model={payload.get('model') or kwargs.get('model')}",
         f"call={payload.get('call_type') or kwargs.get('call_type')}",
     ]
@@ -166,6 +169,46 @@ def _format(kwargs: dict[str, Any], *, status: str, response_obj: Any = None) ->
         fields.append(f"error={str(error)[:200]!r}")
 
     return " ".join(fields)
+
+
+def normalize_request_ip(value: Any) -> str | None:
+    """Return the originating address from one IP or a forwarded IP chain."""
+    if not isinstance(value, str):
+        return None
+    address = value.split(",", 1)[0].strip()
+    return address or None
+
+
+def _requested_model(kwargs: Mapping[str, Any], payload: Mapping[str, Any]) -> str | None:
+    metadata = payload.get("metadata")
+    request_metadata = metadata if isinstance(metadata, Mapping) else {}
+    litellm_metadata = kwargs.get("litellm_metadata")
+    call_metadata = litellm_metadata if isinstance(litellm_metadata, Mapping) else {}
+    values = (
+        kwargs.get("_litellm_client_requested_model"),
+        payload.get("model_group"),
+        request_metadata.get("model_group"),
+        call_metadata.get("model_group"),
+        kwargs.get("model_group"),
+        kwargs.get("model"),
+    )
+    return next(
+        (value.strip() for value in values if isinstance(value, str) and value.strip()), None
+    )
+
+
+def _request_ip(kwargs: Mapping[str, Any], payload: Mapping[str, Any]) -> str | None:
+    metadata = payload.get("metadata")
+    request_metadata = metadata if isinstance(metadata, Mapping) else {}
+    litellm_metadata = kwargs.get("litellm_metadata")
+    call_metadata = litellm_metadata if isinstance(litellm_metadata, Mapping) else {}
+    values = (
+        payload.get("requester_ip_address"),
+        request_metadata.get("requester_ip_address"),
+        call_metadata.get("requester_ip_address"),
+        kwargs.get("requester_ip_address"),
+    )
+    return next((address for value in values if (address := normalize_request_ip(value))), None)
 
 
 def _elapsed(start: Any, end: Any) -> float | None:

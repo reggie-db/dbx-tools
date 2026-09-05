@@ -124,10 +124,11 @@ function discoverPackages() {
  * Every package under `packages/py/`, as site pages alongside the JavaScript
  * ones.
  *
- * They are published to GitHub rather than npm and installed by Git URL, so the
- * distribution name comes out of `pyproject.toml` instead of a `package.json`.
- * The layout is flat (`packages/py/<name>`, no tier segment), which is why they
- * all share one `python` group rather than reusing {@link packageGroup}.
+ * Their distribution name comes out of `pyproject.toml` instead of a
+ * `package.json`. The layout is flat (`packages/py/<name>`, no tier segment),
+ * which is why they all share one `python` group rather than reusing
+ * {@link packageGroup}. UniFFI packages remain public even though the Rust
+ * release flow publishes them.
  */
 function discoverPythonPackages() {
   const dir = path.join(root, "packages/py");
@@ -137,7 +138,6 @@ function discoverPythonPackages() {
     .filter((ent) => ent.isDirectory())
     .map((ent) => path.join(dir, ent.name))
     .filter((pkgDir) => fs.existsSync(path.join(pkgDir, "pyproject.toml")))
-    .filter((pkgDir) => !pythonPrivate(path.join(pkgDir, "pyproject.toml")))
     .map((pkgDir) => {
       const readme = path.join(pkgDir, "README.md");
       const relDir = posix(path.relative(root, pkgDir));
@@ -199,13 +199,6 @@ function rustPrivate(manifest) {
 function pythonDistribution(pyproject) {
   const match = read(pyproject).match(/^\s*name\s*=\s*["']([^"']+)["']/m);
   return match?.[1];
-}
-
-/** Whether `[tool.dbx-tools] private = true` marks a Python package unpublished. */
-function pythonPrivate(pyproject) {
-  const source = read(pyproject);
-  const section = source.match(/^\[tool\.dbx-tools\]\s*\n([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? "";
-  return /^\s*private\s*=\s*true\s*$/m.test(section);
 }
 
 /**
@@ -334,14 +327,10 @@ function assertRustWorkspaceReadmeLinks(packages, mappings) {
   const rootReadme = path.join(root, "README.md");
   for (const pkg of packages.filter((candidate) => candidate.group === "rust")) {
     const source = read(pkg.readme);
-    for (const match of source.matchAll(
-      /\[workspace README\]\(([^)#]+)(#[^)]+)?\)/gi,
-    )) {
+    for (const match of source.matchAll(/\[workspace README\]\(([^)#]+)(#[^)]+)?\)/gi)) {
       const target = path.resolve(pkg.dir, match[1].trim());
       if (target !== rootReadme) {
-        throw new Error(
-          `Rust workspace README link must resolve to README.md: ${pkg.relDir}`,
-        );
+        throw new Error(`Rust workspace README link must resolve to README.md: ${pkg.relDir}`);
       }
       const expected = `[workspace README](${withBase("/")}${match[2] ?? ""})`;
       const generated = transformLinks(match[0], pkg.dir, mappings);

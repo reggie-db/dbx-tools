@@ -1,5 +1,4 @@
 mod client;
-mod databricks_cli;
 mod m2m;
 mod oauth;
 mod oauth_endpoints;
@@ -7,7 +6,6 @@ mod profile;
 mod storage;
 
 pub use client::{AuthClient, AuthOptions};
-pub use databricks_cli::databricks_cli_available;
 pub use dbx_tools_auth::AuthSession;
 pub use dbx_tools_auth::{default_callback_image_src, OAuthTemplate, OAuthTemplateContext};
 pub use dbx_tools_auth::{
@@ -15,6 +13,7 @@ pub use dbx_tools_auth::{
 };
 use dbx_tools_auth::{BindingResult, StorageHandle};
 pub use dbx_tools_auth::{Error, Result};
+use dbx_tools_databricks::{databricks_cli_available, is_databricks_app};
 pub use m2m::MachineToMachineFlow;
 pub use oauth::OAuthFlow;
 pub use profile::{
@@ -111,9 +110,14 @@ pub async fn create_persistent_auth(
     storage: Option<Storage>,
 ) -> BindingResult<Arc<PersistentAuth>> {
     let profile = resolve_profile(&options)?;
-    let use_databricks_cli =
-        should_use_databricks_cli(profile.auth_kind, storage, databricks_cli_available());
-    let backend = storage_backend(storage);
+    let in_app = is_databricks_app();
+    let use_databricks_cli = should_use_databricks_cli(
+        profile.auth_kind,
+        storage,
+        in_app,
+        databricks_cli_available(),
+    );
+    let backend = storage_backend(storage, in_app);
     let store = open_binding_store(&options, backend).await?;
     create_persistent_auth_with_store(options, profile, store, use_databricks_cli).await
 }
@@ -147,17 +151,21 @@ async fn create_persistent_auth_with_store(
 fn should_use_databricks_cli(
     auth_kind: AuthKind,
     storage: Option<Storage>,
+    in_app: bool,
     available: bool,
 ) -> bool {
     auth_kind == AuthKind::UserToMachine
+        && !in_app
         && available
         && storage.is_none_or(|storage| storage == Storage::Auto)
 }
 
-fn storage_backend(storage: Option<Storage>) -> Storage {
+fn storage_backend(storage: Option<Storage>, in_app: bool) -> Storage {
     match storage {
         Some(Storage::Memory) => Storage::Memory,
-        Some(Storage::File) | Some(Storage::Auto) | None => Storage::File,
+        Some(Storage::File) => Storage::File,
+        Some(Storage::Auto) | None if in_app => Storage::Memory,
+        Some(Storage::Auto) | None => Storage::File,
     }
 }
 
@@ -279,40 +287,57 @@ mod tests {
         assert!(should_use_databricks_cli(
             AuthKind::UserToMachine,
             None,
+            false,
             true
         ));
         assert!(should_use_databricks_cli(
             AuthKind::UserToMachine,
             Some(Storage::Auto),
+            false,
             true
         ));
         assert!(!should_use_databricks_cli(
             AuthKind::UserToMachine,
             Some(Storage::File),
+            false,
             true
         ));
         assert!(!should_use_databricks_cli(
             AuthKind::UserToMachine,
             Some(Storage::Memory),
+            false,
             true
         ));
         assert!(!should_use_databricks_cli(
             AuthKind::MachineToMachine,
             None,
+            false,
             true
         ));
         assert!(!should_use_databricks_cli(
             AuthKind::UserToMachine,
             None,
+            false,
             false
+        ));
+        assert!(!should_use_databricks_cli(
+            AuthKind::UserToMachine,
+            None,
+            true,
+            true
         ));
     }
 
     #[test]
-    fn automatic_storage_is_file_and_memory_stays_memory() {
-        assert_eq!(storage_backend(None), Storage::File);
-        assert_eq!(storage_backend(Some(Storage::Auto)), Storage::File);
-        assert_eq!(storage_backend(Some(Storage::File)), Storage::File);
-        assert_eq!(storage_backend(Some(Storage::Memory)), Storage::Memory);
+    fn automatic_storage_tracks_the_runtime_and_explicit_storage_is_preserved() {
+        assert_eq!(storage_backend(None, false), Storage::File);
+        assert_eq!(storage_backend(Some(Storage::Auto), false), Storage::File);
+        assert_eq!(storage_backend(None, true), Storage::Memory);
+        assert_eq!(storage_backend(Some(Storage::Auto), true), Storage::Memory);
+        assert_eq!(storage_backend(Some(Storage::File), true), Storage::File);
+        assert_eq!(
+            storage_backend(Some(Storage::Memory), true),
+            Storage::Memory
+        );
     }
 }

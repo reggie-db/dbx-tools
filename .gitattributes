@@ -36,6 +36,7 @@
 /packages/py/auth/pyproject.toml linguist-generated
 /packages/py/core/pyproject.toml linguist-generated
 /packages/py/databricks-auth/pyproject.toml linguist-generated
+/packages/py/databricks/pyproject.toml linguist-generated
 /packages/py/google-auth/pyproject.toml linguist-generated
 /packages/py/graphiti/pyproject.toml linguist-generated
 /packages/py/litellm/pyproject.toml linguist-generated

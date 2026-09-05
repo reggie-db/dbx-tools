@@ -94,19 +94,6 @@ export async function createPersistentAuthWithStorage(options: DatabricksAuthOpt
     }
     }
 
-/**
- * Whether `databricks auth --help` succeeds in this process environment.
- */
-export function databricksCliAvailable(): boolean {
-    return FfiConverterBool.lift(uniffiCaller.rustCall(
-            /*caller:*/ (callStatus) => {
-                return nativeModule().uniffi_dbx_tools_databricks_auth_fn_func_databricks_cli_available(
-                callStatus);
-            },
-            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
-    ));
-    }
-
 const stringConverter = (() => {
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
@@ -707,9 +694,6 @@ function uniffiEnsureInitialized() {
     }
     if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth_with_storage() !== 13490) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth_with_storage");
-    }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_func_databricks_cli_available() !== 64750) {
-        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_func_databricks_cli_available");
     }
     if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_challenge() !== 37216) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_challenge");

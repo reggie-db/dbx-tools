@@ -29,8 +29,8 @@ export interface PythonPackageOptions extends DBXToolsProjectOptions {
   /** Workspace package directories rendered as standalone Git dependencies. */
   readonly internalDependencies?: readonly string[];
   readonly scripts?: Readonly<Record<string, string>>;
-  /** Keep this package unpublished and out of public docs and releases. */
-  readonly private?: boolean;
+  /** Publish this package through the Rust UniFFI release flow instead of the Python workflow. */
+  readonly uniffi?: boolean;
   /** Generated source files excluded from strict static analysis. Package-relative. */
   readonly generatedSources?: readonly string[];
   /** Trusted publisher used outside the standard Python release workflow. */
@@ -214,8 +214,8 @@ export class DBXToolsPythonProject extends python.PythonProject implements DBXTo
     if (pkg.scripts) {
       this.uv.file.addOverride("project.scripts", pkg.scripts);
     }
-    if (pkg.private) {
-      this.uv.file.addOverride("tool.dbx-tools.private", true);
+    if (pkg.uniffi !== undefined) {
+      this.uv.file.addOverride("tool.dbx_tools.config.uniffi", pkg.uniffi);
     }
     formatPyproject(this.uv.file);
     this.uv.file.readonly = true;
@@ -319,7 +319,7 @@ export class DBXToolsPythonWorkspace extends Component {
       projectVscode(project)?.settings.addSetting("python.defaultInterpreterPath", interpreterPath);
     }
 
-    if (options.release && this.packages.some((pkg) => !pkg.packageOptions.private)) {
+    if (options.release && this.packages.some((pkg) => pkg.packageOptions.uniffi !== true)) {
       if (isDBXToolsJavaScriptProject()(project)) {
         project.dbxToolsConfig.pythonReleaseWorkflow =
           releaseOptions.workflowName ?? "python-release";
@@ -643,7 +643,7 @@ export class DBXToolsPythonWorkspace extends Component {
 
   private publications(options: PythonReleaseOptions): readonly PythonPublication[] {
     return this.packages
-      .filter((pkg) => !pkg.packageOptions.private)
+      .filter((pkg) => pkg.packageOptions.uniffi !== true)
       .map((pkg) => ({
         directory: pkg.packageOptions.directory,
         distribution: pkg.packageOptions.name,

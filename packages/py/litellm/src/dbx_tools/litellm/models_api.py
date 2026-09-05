@@ -5,15 +5,26 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections import Counter
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Annotated, Any
 
 from databricks.sdk.errors import DatabricksError
-from dbx_tools.model import ServingEndpointSummary, reasoning_efforts_by_family
-from fastapi import Request, Response
+from dbx_tools.model import (
+    ModelQuery,
+    RankedModel,
+    ServingEndpointSummary,
+    lookup_models,
+    reasoning_efforts_by_family,
+)
+from dbx_tools.model.models import parse_model_name
+from fastapi import Depends, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from litellm import model_cost
+
+from .access_log import logger as access_logger
+from .access_log import normalize_request_ip
 
 _EFFORT_DESCRIPTIONS = {
     "low": "Faster responses with lighter reasoning",
@@ -52,7 +63,7 @@ def augment_models_payload(
 
 
 def install_models_compatibility_middleware() -> None:
-    from litellm.proxy.proxy_server import app
+    from litellm.proxy.proxy_server import app, user_api_key_auth
 
     from .provider import dbx_provider
 
@@ -60,16 +71,71 @@ def install_models_compatibility_middleware() -> None:
         return
     app.state.dbx_models_compatibility = True
 
+    @app.get(
+        "/v1/models/lookup",
+        dependencies=[Depends(user_api_key_auth)],
+        operation_id="lookupModels",
+        response_model=list[RankedModel],
+        response_model_exclude_none=True,
+        summary="Rank available models",
+        tags=["model management"],
+    )
+    async def lookup_model_endpoints(
+        request: Request,
+        query: Annotated[ModelQuery, Query()],
+    ) -> list[dict[str, object]]:
+        try:
+            catalogue = await asyncio.to_thread(dbx_provider.backend.catalogue)
+            result = lookup_models(catalogue.endpoints, query)
+        except (DatabricksError, OSError, RuntimeError, ValueError) as error:
+            logger.warning("Live model lookup failed: %s", error)
+            result = []
+        access_logger.info(
+            "status=ok ip=%s call=model_lookup search=%r matches=%d",
+            _request_ip(request),
+            query.search,
+            len(result),
+        )
+        return result
+
+    # OpenAI places model operations under `/v1/models`. LiteLLM's dynamic
+    # `/v1/models/{model_id}` route is registered first, so this static extension
+    # must precede it to keep "lookup" from being interpreted as a model id.
+    lookup_route = next(
+        route for route in app.router.routes if getattr(route, "path", None) == "/v1/models/lookup"
+    )
+    model_route_index = next(
+        index
+        for index, route in enumerate(app.router.routes)
+        if _route_contains_path(route, "/v1/models/{model_id}")
+    )
+    app.router.routes.remove(lookup_route)
+    app.router.routes.insert(model_route_index, lookup_route)
+
     @app.middleware("http")
     async def models_envelope(request: Request, call_next: Any) -> Response:
         response = await call_next(request)
-        if request.scope.get("path") != "/v1/models" or response.status_code != 200:
+        if request.scope.get("path") != "/v1/models":
+            return response
+        request_ip = _request_ip(request)
+        if response.status_code != 200:
+            access_logger.warning(
+                "status=error ip=%s call=models http_status=%d",
+                request_ip,
+                response.status_code,
+            )
             return response
 
         body = b"".join([chunk async for chunk in response.body_iterator])
         try:
             payload = json.loads(body)
         except (TypeError, ValueError):
+            access_logger.warning(
+                "status=error ip=%s call=models http_status=%d summary=%r",
+                request_ip,
+                response.status_code,
+                "invalid response payload",
+            )
             return Response(
                 content=body,
                 status_code=response.status_code,
@@ -83,11 +149,19 @@ def install_models_compatibility_middleware() -> None:
             endpoints = None
             logger.warning("Live model discovery failed; using LiteLLM registry: %s", error)
         payload = augment_models_payload(payload, endpoints)
+        access_logger.info(
+            "status=ok ip=%s call=models http_status=%d summary=%r",
+            request_ip,
+            response.status_code,
+            model_summary(payload),
+        )
         return JSONResponse(
             content=payload,
             status_code=response.status_code,
             headers=_response_headers(response),
         )
+
+    app.openapi_schema = None
 
 
 def list_models_payload(
@@ -100,6 +174,44 @@ def list_models_payload(
     running proxy whose LiteLLM config advertises the same routes.
     """
     return augment_models_payload(_PROXY_MODEL_SEED, endpoints)
+
+
+def model_summary(payload: Any) -> str:
+    """Summarize advertised models by parsed model family."""
+    data = payload.get("data") if isinstance(payload, Mapping) else None
+    if not isinstance(data, Sequence) or isinstance(data, (str, bytes, bytearray)):
+        return "0 models"
+    families: Counter[str] = Counter()
+    total = 0
+    for item in data:
+        if not isinstance(item, Mapping):
+            continue
+        model_id = item.get("id")
+        if not isinstance(model_id, str) or model_id in _ROUTE_MODEL_IDS:
+            continue
+        parsed = parse_model_name(model_id)
+        families[parsed.family.value if parsed is not None else "other"] += 1
+        total += 1
+    noun = "model" if total == 1 else "models"
+    if not families:
+        return f"{total} {noun}"
+    counts = ", ".join(f"{count} {family}" for family, count in sorted(families.items()))
+    return f"{total} {noun} ({counts})"
+
+
+def _request_ip(request: Request) -> str:
+    forwarded = normalize_request_ip(request.headers.get("x-forwarded-for"))
+    if forwarded is not None:
+        return forwarded
+    client = request.client
+    return normalize_request_ip(client.host if client is not None else None) or "unknown"
+
+
+def _route_contains_path(route: Any, path: str) -> bool:
+    if getattr(route, "path", None) == path:
+        return True
+    router = getattr(route, "original_router", None)
+    return any(_route_contains_path(candidate, path) for candidate in getattr(router, "routes", ()))
 
 
 def _codex_models(data: Sequence[Any]) -> list[dict[str, Any]]:

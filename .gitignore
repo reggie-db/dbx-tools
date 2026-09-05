@@ -99,6 +99,9 @@ target/
 packages/js/node/auth/src/*dbx_tools_auth.*
 packages/py/auth/src/dbx_tools/auth/bindings.py
 packages/py/auth/src/dbx_tools/auth/*dbx_tools_auth.*
+packages/js/node/databricks/src/*dbx_tools_databricks.*
+packages/py/databricks/src/dbx_tools/databricks/bindings.py
+packages/py/databricks/src/dbx_tools/databricks/*dbx_tools_databricks.*
 packages/js/node/databricks-auth/src/*dbx_tools_databricks_auth.*
 packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py
 packages/py/databricks-auth/src/dbx_tools/databricks_auth/*dbx_tools_databricks_auth.*
@@ -110,6 +113,7 @@ packages/py/google-auth/src/dbx_tools/google_auth/*dbx_tools_google_auth.*
 !/.github/workflows/rust-release.yml
 !/pyproject.toml
 !/packages/py/auth/pyproject.toml
+!/packages/py/databricks/pyproject.toml
 !/packages/py/databricks-auth/pyproject.toml
 !/packages/py/google-auth/pyproject.toml
 !/packages/py/core/pyproject.toml

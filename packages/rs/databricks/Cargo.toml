@@ -1,0 +1,22 @@
+[package]
+name = "dbx-tools-databricks"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Shared Databricks runtime and CLI utilities"
+license = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "dbx_tools_databricks"
+path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]
+
+[[bin]]
+name = "dbx-tools-databricks-uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+thiserror = { workspace = true }
+uniffi = { workspace = true }
+url = { workspace = true }

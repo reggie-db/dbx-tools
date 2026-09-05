@@ -3,6 +3,5 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/google-auth";
-export * as bindings from "./src/bindings.ts";
-export { uniffiModule } from "./src/bindings.ts";
-export * from "./exports.ts";
+export const PACKAGE_VERSION = "0.6.169";
+export * from "./src/bindings.ts";

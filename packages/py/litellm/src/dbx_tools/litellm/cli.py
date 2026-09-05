@@ -200,12 +200,12 @@ def _models_payload(profile: str | None) -> Any:
 
 def _lookup_models(keyword: str, profile: str | None) -> list[dict[str, object]]:
     """Rank live endpoints using the shared model package's standard policy."""
-    from dbx_tools.model import rank_models
+    from dbx_tools.model import lookup_models
 
     endpoints = _discover_endpoints(profile)
     if endpoints is None:
         return []
-    return rank_models(endpoints, {"search": keyword})
+    return lookup_models(endpoints, {"search": keyword})
 
 
 def _discover_endpoints(profile: str | None) -> Sequence[Any] | None:

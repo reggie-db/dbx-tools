@@ -39,11 +39,14 @@
 **/*.lock
 packages/js/node/auth/src/bindings.ts
 packages/js/node/auth/src/_bindings*.ts
+packages/js/node/databricks/src/bindings.ts
+packages/js/node/databricks/src/_bindings*.ts
 packages/js/node/databricks-auth/src/bindings.ts
 packages/js/node/databricks-auth/src/_bindings*.ts
 packages/js/node/google-auth/src/bindings.ts
 packages/js/node/google-auth/src/_bindings*.ts
 packages/py/auth/pyproject.toml
+packages/py/databricks/pyproject.toml
 packages/py/databricks-auth/pyproject.toml
 packages/py/google-auth/pyproject.toml
 packages/py/core/pyproject.toml
@@ -82,7 +85,6 @@ build.ts
 dev.ts
 package.json
 test/tsconfig.json
-exports.ts
 uniffi-bindgen.rs
 uniffi.toml
 packages/example/app/appkit-demo/index.ts

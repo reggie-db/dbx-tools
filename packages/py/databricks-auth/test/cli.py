@@ -2,8 +2,8 @@ import asyncio
 import json
 import sys
 
-from dbx_tools.auth.bindings import AuthError, AuthOptions
-from dbx_tools.databricks_auth.bindings import DatabricksAuthOptions, create_persistent_auth
+from dbx_tools.auth import AuthError, AuthOptions
+from dbx_tools.databricks_auth import DatabricksAuthOptions, create_persistent_auth
 
 profile = sys.argv[1] if len(sys.argv) > 1 else None
 options = DatabricksAuthOptions(profile=profile)

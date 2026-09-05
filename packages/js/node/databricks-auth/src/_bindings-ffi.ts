@@ -285,11 +285,6 @@ const DEFINITIONS = {
       ret: FfiType.Handle,
       hasRustCallStatus: false,
     },
-    "uniffi_dbx_tools_databricks_auth_fn_func_databricks_cli_available": {
-      args: [],
-      ret: FfiType.Int8,
-      hasRustCallStatus: true,
-    },
     "uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_challenge": {
       args: [FfiType.Handle],
       ret: FfiType.Handle,
@@ -331,11 +326,6 @@ const DEFINITIONS = {
       hasRustCallStatus: false,
     },
     "uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth_with_storage": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_checksum_func_databricks_cli_available": {
       args: [],
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
@@ -444,7 +434,6 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_databricks_auth_fn_free_persistentauth(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): void;
     uniffi_dbx_tools_databricks_auth_fn_func_create_persistent_auth(options: Uint8Array, storage: Uint8Array): bigint;
     uniffi_dbx_tools_databricks_auth_fn_func_create_persistent_auth_with_storage(options: Uint8Array, storage: bigint): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_func_databricks_cli_available(uniffi_out_err: UniffiRustCallStatus): number;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_challenge(uniffiSelf: bigint): bigint;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_force_refresh_token(uniffiSelf: bigint): bigint;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_logout(uniffiSelf: bigint): bigint;
@@ -454,7 +443,6 @@ interface NativeModuleInterface {
     ffi_dbx_tools_databricks_auth_uniffi_contract_version(): number;
     uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth(): number;
     uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth_with_storage(): number;
-    uniffi_dbx_tools_databricks_auth_checksum_func_databricks_cli_available(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_challenge(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_force_refresh_token(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_logout(): number;

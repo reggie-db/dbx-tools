@@ -268,8 +268,9 @@ export function orderRustBindings(bindings: readonly RustBindingMapping[]): Rust
   const completed = new Set<string>();
   const visit = (binding: RustBindingMapping): void => {
     if (completed.has(binding.crate)) return;
-    if (visiting.has(binding.crate))
+    if (visiting.has(binding.crate)) {
       throw new Error(`Cyclic Rust binding dependency: ${binding.crate}`);
+    }
     visiting.add(binding.crate);
     for (const name of binding.dependencies ?? []) {
       const dependency = bindings.find((candidate) => candidate.crate === name);
@@ -446,7 +447,7 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
   }
 }
 
-/** Generated Rust workspace plus convention-derived private UniFFI packages. */
+/** Generated Rust workspace plus convention-derived UniFFI facade packages. */
 export class DBXToolsRustWorkspace {
   readonly packages: readonly DBXToolsRustProject[];
   readonly nodePackages: readonly DBXToolsTypeScriptProject[];
@@ -585,11 +586,14 @@ export class DBXToolsRustWorkspace {
           name: pkg.crateName,
           module,
           description: `Python bindings for ${pkg.crateName}`,
-          private: true,
+          uniffi: true,
           internalDependencies: bindingDependencies(pkg, "python").map(
             (dependency) => dependency.packageOptions.directory,
           ),
-          generatedSources: [`src/${module.replaceAll(".", "/")}/bindings.py`],
+          generatedSources: [
+            `src/${module.replaceAll(".", "/")}/bindings.py`,
+            `src/${module.replaceAll(".", "/")}/__init__.py`,
+          ],
           trustedPublisher: {
             workflowName: options.releaseWorkflowName ?? "rust-release",
             environment: `pypi-${pkg.crateName}`,
@@ -610,21 +614,23 @@ export class DBXToolsRustWorkspace {
       const directory = binding.packageOptions.directory;
       const memberPath = `${nodeRoot}/${directory}`;
       const found = existing.get(memberPath);
-      const node =
-        found instanceof DBXToolsTypeScriptProject
-          ? found
-          : new DBXToolsTypeScriptProject({
-              parent: project,
-              outdir: memberPath,
-              name: `@${scope}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
-              tags: ["node"],
-            });
+      const existingNode = found instanceof DBXToolsTypeScriptProject ? found : undefined;
+      const node = existingNode
+        ? existingNode
+        : new DBXToolsTypeScriptProject({
+            parent: project,
+            outdir: memberPath,
+            name: `@${scope}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
+            tags: ["node"],
+          });
       node.package.addField(
         "name",
         `@${scope}/${directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}`,
       );
-      node.package.addField("private", true);
-      node.package.addField("description", `Node bindings for ${binding.crateName}`);
+      node.dbxToolsConfig.uniffi = true;
+      if (!existingNode) {
+        node.package.addField("description", `Node bindings for ${binding.crateName}`);
+      }
       const nativeTargets = releaseTargets(options);
       if (options.release ?? true) {
         node.package.addField(
@@ -650,9 +656,6 @@ export class DBXToolsRustWorkspace {
       if (binding.packageOptions.nodeDevDependencies?.length) {
         node.addDevDeps(...binding.packageOptions.nodeDevDependencies);
       }
-      new TextFile(node, "exports.ts", {
-        lines: ['export * from "./src/bindings.ts";', ""],
-      });
       nodePackages.push(node);
     }
     this.nodePackages = nodePackages;

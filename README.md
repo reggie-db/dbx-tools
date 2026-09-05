@@ -167,6 +167,7 @@ export function App() {
 | Genie streaming and schemas    | [`@dbx-tools/genie`](packages/js/node/genie), [`@dbx-tools/shared-genie`](packages/js/shared/genie)                                                                                                                         |
 | Model Serving selection        | [`@dbx-tools/model`](packages/js/node/model), [`@dbx-tools/shared-model`](packages/js/shared/model)                                                                                                                         |
 | Local model proxy              | [`dbx-tools-litellm`](packages/py/litellm)                                                                                                                                                                                  |
+| Databricks runtime utilities   | [`@dbx-tools/databricks`](packages/js/node/databricks), [`dbx-tools-databricks`](packages/py/databricks)                                                                                                                    |
 | Databricks OAuth tokens        | [`@dbx-tools/cli-auth`](packages/js/cli/auth)                                                                                                                                                                               |
 | Public tunnel + access gate    | [`@dbx-tools/tunnel`](packages/js/node/tunnel), [`@dbx-tools/cli-tunnel`](packages/js/cli/tunnel)                                                                                                                           |
 | Passwordless authentication    | [`@dbx-tools/auth-gate`](packages/js/node/auth-gate), [`@dbx-tools/shared-auth`](packages/js/shared/auth), [`@dbx-tools/ui-auth`](packages/js/ui/auth)                                                                      |
@@ -193,7 +194,7 @@ runtime behavior, module maps, and links to adjacent packages.
 Install the published Python packages by distribution name:
 
 ```bash
-uv add dbx-tools-core dbx-tools-postgres dbx-tools-model dbx-tools-litellm dbx-tools-graphiti
+uv add dbx-tools-core dbx-tools-postgres dbx-tools-model dbx-tools-litellm dbx-tools-graphiti dbx-tools-auth dbx-tools-databricks dbx-tools-databricks-auth dbx-tools-google-auth
 ```
 
 The Python packages support Python 3.10 through 3.13.
@@ -203,18 +204,24 @@ The root uv workspace contains these Python counterparts:
 Rust-backed authentication is also available as
 [`dbx-tools-auth`](packages/py/auth) for provider-neutral OAuth and
 [`dbx-tools-databricks-auth`](packages/py/databricks-auth) for Databricks profiles,
-and [`dbx-tools-google-auth`](packages/py/google-auth) for Google ADC. Their Node
-counterparts are [`@dbx-tools/auth`](packages/js/node/auth),
+and [`dbx-tools-google-auth`](packages/py/google-auth) for Google ADC. Shared
+Databricks runtime detection is available from
+[`dbx-tools-databricks`](packages/py/databricks). Their Node counterparts are
+[`@dbx-tools/auth`](packages/js/node/auth), [`@dbx-tools/databricks`](packages/js/node/databricks),
 [`@dbx-tools/databricks-auth`](packages/js/node/databricks-auth), and
 [`@dbx-tools/google-auth`](packages/js/node/google-auth).
 
-| Package                                      | Purpose                                                                                                                                                                                                                                                                                                          |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`dbx-tools-core`](packages/py/core)         | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                                                           |
-| [`dbx-tools-postgres`](packages/py/postgres) | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope.                               |
-| [`dbx-tools-model`](packages/py/model)       | Lists and classifies Databricks Model Serving endpoints, derives canonical first-party service names, parses model identities, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies. |
-| [`dbx-tools-litellm`](packages/py/litellm)   | Adds explicit-profile Databricks endpoint discovery and fuzzy, tool-aware model routing while leaving request conversion, transport, streaming, retries, embeddings, and Responses bridging to LiteLLM's built-in Databricks provider.                                                                           |
-| [`dbx-tools-graphiti`](packages/py/graphiti) | Launches upstream Graphiti's MCP server with native Neo4j 5 and a managed Databricks LiteLLM proxy, using GPT and GTE defaults without requiring a caller-authored Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.                               |
+| Package                                                    | Purpose                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`dbx-tools-core`](packages/py/core)                       | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                                                           |
+| [`dbx-tools-auth`](packages/py/auth)                       | Exposes provider-neutral OAuth, token lifecycle, file or memory storage, locking, and caller-implemented storage adapters through generated Rust bindings.                                                                                                                                                       |
+| [`dbx-tools-databricks`](packages/py/databricks)           | Detects Databricks App runtimes and reports cached Databricks CLI availability through shared Rust utilities.                                                                                                                                                                                                    |
+| [`dbx-tools-databricks-auth`](packages/py/databricks-auth) | Adds Databricks U2M browser OAuth, M2M client credentials, profile resolution, and App-aware automatic storage over the shared auth lifecycle.                                                                                                                                                                   |
+| [`dbx-tools-google-auth`](packages/py/google-auth)         | Resolves Google Application Default Credentials and keeps short-lived access tokens in process memory.                                                                                                                                                                                                           |
+| [`dbx-tools-postgres`](packages/py/postgres)               | Parses the same Lakebase/Postgres address forms as the Node AppKit helper, creates credential-injected SQLAlchemy engines, provides connection-correct sync/async advisory locks with cross-runtime lock ids, and exposes the Node `PostgresTopicBus` lifecycle and wire envelope.                               |
+| [`dbx-tools-model`](packages/py/model)                     | Lists and classifies Databricks Model Serving endpoints, derives canonical first-party service names, parses model identities, resolves model intent, builds authenticated invocation requests, sanitizes OpenAI chat payloads, and validates embedding responses without AppKit or Mastra runtime dependencies. |
+| [`dbx-tools-litellm`](packages/py/litellm)                 | Adds explicit-profile Databricks endpoint discovery and fuzzy, tool-aware model routing while leaving request conversion, transport, streaming, retries, embeddings, and Responses bridging to LiteLLM's built-in Databricks provider.                                                                           |
+| [`dbx-tools-graphiti`](packages/py/graphiti)               | Launches upstream Graphiti's MCP server with native Neo4j 5 and a managed Databricks LiteLLM proxy, using GPT and GTE defaults without requiring a caller-authored Graphiti config file, plus Postgres write journaling that reconstructs ephemeral graph storage after a restart.                               |
 
 ### Load One Brand File
 
