@@ -7,6 +7,7 @@ import { after, before, describe, it } from "node:test";
 
 import {
   npmReleaseMatches,
+  packNpmPackage,
   readNpmArchiveIdentity,
   type NpmReleaseIdentity,
 } from "../tasks/publish-npm.ts";
@@ -14,10 +15,11 @@ import {
 let outdir: string;
 let archive: string;
 let identity: NpmReleaseIdentity;
+let packageDir: string;
 
 before(() => {
   outdir = mkdtempSync(join(tmpdir(), "npm-release-"));
-  const packageDir = join(outdir, "package");
+  packageDir = join(outdir, "package");
   mkdirSync(packageDir);
   writeFileSync(
     join(packageDir, "package.json"),
@@ -49,6 +51,13 @@ describe("npm release recovery", () => {
       }),
       true,
     );
+  });
+
+  it("packs a package into the requested directory", () => {
+    const destination = join(outdir, "packed");
+    mkdirSync(destination);
+    const packed = packNpmPackage(packageDir, destination);
+    assert.equal(readNpmArchiveIdentity(packed).name, "@fixture/native");
   });
 
   it("publishes an absent version", () => {

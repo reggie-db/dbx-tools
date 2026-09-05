@@ -109,6 +109,31 @@ export function readNpmArchiveIdentity(path: string): NpmReleaseIdentity {
   };
 }
 
+export function packNpmPackage(
+  directory: string,
+  destination: string,
+  path = process.env.PATH ?? "",
+): string {
+  const executable = process.versions.bun ? process.execPath : "bun";
+  exec.spawnSync(
+    executable,
+    ["pm", "pack", "--destination", destination, "--ignore-scripts", "--quiet"],
+    {
+      cwd: directory,
+      env: { ...process.env, PATH: path },
+      stdout: "inherit",
+      stderr: "inherit",
+      stdin: "ignore",
+      check: true,
+    },
+  );
+  const archives = readdirSync(destination).filter((file) => file.endsWith(".tgz"));
+  if (archives.length !== 1) {
+    throw new Error(`Expected one packed npm archive, found ${archives.length}`);
+  }
+  return join(destination, archives[0]);
+}
+
 export async function publishNpmArchives(options: {
   readonly directory: string;
   readonly dryRun?: boolean;

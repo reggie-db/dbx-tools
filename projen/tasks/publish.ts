@@ -74,7 +74,12 @@ import { exec } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import ts from "typescript";
 import { parse } from "yaml";
-import { npmReleaseMatches, publishedNpmRelease, readNpmArchiveIdentity } from "./publish-npm.ts";
+import {
+  npmReleaseMatches,
+  packNpmPackage,
+  publishedNpmRelease,
+  readNpmArchiveIdentity,
+} from "./publish-npm.ts";
 
 const logger = log.logger("dbx-tools:publish");
 
@@ -391,13 +396,7 @@ await runConcurrent(publishable, concurrency, async ({ dir, name }) => {
   if (!dryRun) {
     const packed = mkdtempSync(join(tmpdir(), "dbx-tools-npm-release-"));
     try {
-      const archive = join(packed, "package.tgz");
-      run(
-        dir,
-        "bun",
-        ["pm", "pack", "--destination", packed, "--filename", "package.tgz", "--ignore-scripts"],
-        path,
-      );
+      const archive = packNpmPackage(dir, packed, path);
       const local = readNpmArchiveIdentity(archive);
       if (local.name !== name || local.version !== version) {
         throw new Error(
