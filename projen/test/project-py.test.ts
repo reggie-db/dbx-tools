@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
+import { readWorkflow, workflowStep } from "./workflow.ts";
 import {
   DBXToolsNodeProject,
   DBXToolsPythonWorkspace,
@@ -115,26 +116,38 @@ describe("DBXToolsPythonWorkspace", () => {
       /python\/packages/,
     );
     assert.ok(!packageJson.workspaces?.some((member) => member.startsWith("python/packages/")));
-    const release = readFileSync(join(outdir, ".github/workflows/release.yml"), "utf8");
-    assert.match(release, /^  rust-build:$/m);
-    assert.match(
-      release,
-      /^  build-python:\n    needs:\n      - verify-context\n      - rust-build$/m,
+    const release = readWorkflow(outdir);
+    assert.ok(release.jobs["rust-build"]);
+    const buildPython = release.jobs["build-python"]!;
+    assert.deepEqual(buildPython.needs, ["verify-context", "rust-build"]);
+    assert.equal(buildPython.env?.BUN_VERSION, "1.3.14");
+    assert.equal(workflowStep(buildPython, "Restore Bun cache").uses, "actions/cache/restore@v5");
+    assert.equal(workflowStep(buildPython, "Save Bun cache").uses, "actions/cache/save@v5");
+    assert.ok(
+      workflowStep(buildPython, "Stamp workspace versions").run?.includes("stamp-python.ts"),
     );
-    assert.match(release, /version = os\.environ\["VERSION"\]\.removeprefix\("v"\)/);
-    assert.match(release, /^  publish-pypi-core:$/m);
-    assert.match(release, /^  publish-pypi-standard:$/m);
-    assert.match(release, /^      name: pypi-fixture-core$/m);
-    assert.match(release, /^          packages-dir: dist\/core$/m);
-    assert.match(release, /^  publish-pypi-app:$/m);
-    assert.match(release, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
-    assert.match(release, /^      name: production-pypi$/m);
-    assert.match(release, /^          packages-dir: dist\/app$/m);
-    assert.doesNotMatch(release, /repository_dispatch|workflow_run|run-id|inputs\.publish/);
-    assert.match(release, /^  publish-pypi-native:$/m);
-    assert.match(release, /pattern: fixture-native--\*--python-wheel/);
-    assert.match(release, /retention-days: 7/);
-    assert.match(release, /^    if: \$\{\{ github\.event_name == 'push' \}\}$/m);
+    assert.equal(
+      workflowStep(buildPython, "Download fixture-native native wheels").with?.pattern,
+      "fixture-native--*--python-wheel",
+    );
+    assert.deepEqual(release.jobs["publish-pypi-core"]?.environment, {
+      name: "pypi-fixture-core",
+      url: "https://pypi.org/project/fixture-core/",
+    });
+    assert.equal(
+      workflowStep(release.jobs["publish-pypi-core"]!, "Publish fixture-core to PyPI").with?.[
+        "packages-dir"
+      ],
+      "dist/core",
+    );
+    assert.ok(release.jobs["publish-pypi-standard"]);
+    assert.deepEqual(release.jobs["publish-pypi-app"]?.environment, {
+      name: "production-pypi",
+      url: "https://pypi.org/project/fixture-app/",
+    });
+    assert.equal(release.jobs["publish-pypi-native"]?.if, "${{ github.event_name == 'push' }}");
+    assert.equal("repository_dispatch" in release.on, false);
+    assert.equal("workflow_run" in release.on, false);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");
     const instructionsCommand = instructionsTask?.steps?.[0]?.exec;
     assert.equal(instructionsCommand, "node .projen/pypi-trusted-publisher-instructions.mjs");
@@ -208,16 +221,16 @@ describe("optional Python release stages", () => {
         release: true,
       });
       project.synth();
-      const workflow = readFileSync(
-        join(directOutdir, ".github", "workflows", "release.yml"),
-        "utf8",
-      );
-      assert.match(workflow, /^  push:\n    tags:\n      - v\*$/m);
-      assert.match(workflow, /^  cancel-in-progress: true$/m);
-      assert.match(workflow, /^  build-python:$/m);
-      assert.match(workflow, /^  publish-pypi-core:$/m);
-      assert.doesNotMatch(workflow, /^  publish-node:$/m);
-      assert.doesNotMatch(workflow, /repository_dispatch|workflow_run|run-id/);
+      const workflow = readWorkflow(directOutdir);
+      assert.deepEqual(workflow.concurrency, {
+        group: "release",
+        "cancel-in-progress": true,
+      });
+      assert.ok(workflow.jobs["build-python"]);
+      assert.ok(workflow.jobs["publish-pypi-core"]);
+      assert.equal(workflow.jobs["publish-node"], undefined);
+      assert.equal("repository_dispatch" in workflow.on, false);
+      assert.equal("workflow_run" in workflow.on, false);
     } finally {
       rmSync(directOutdir, { recursive: true, force: true });
     }

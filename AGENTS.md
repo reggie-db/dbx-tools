@@ -437,6 +437,9 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   and commit plus dry-run mode, so it builds and validates without publishing
   packages or deploying documentation. The workflow uses one `release`
   concurrency group with `cancel-in-progress: true`.
+  Release workflow generation is non-destructive: it writes `release.yml` and
+  never removes other workflow files. Consumers must explicitly delete exact
+  workflow files they no longer want.
   The Rust matrix uploads native npm archives, Python wheels, and explicit
   binaries as same-run artifacts. Node publishes native packages first with npm
   provenance, publishes normal workspace packages including Projen next, then

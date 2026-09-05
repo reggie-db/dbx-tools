@@ -3,16 +3,14 @@ import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Component, TextFile, type Project, javascript, python, vscode } from "projen";
 import type { IResolver } from "projen/lib/file";
+import { JobPermission } from "projen/lib/github/workflows-model";
 import { parse, stringify } from "smol-toml";
+import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import { projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
-import {
-  RELEASE_VERSION,
-  releaseSourceSteps,
-  releaseTagPattern,
-  releaseWorkflow,
-} from "./release.ts";
+import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
+import { releaseTagPattern, releaseWorkflow } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 /** Git location used by direct `#subdirectory=` package dependencies. */
@@ -428,14 +426,18 @@ export class DBXToolsPythonWorkspace extends Component {
     if (allPublications.length === 0) return;
     const usesRustArtifacts = uniffiPublications.length > 0;
     const workflow = releaseWorkflow(project);
-    workflow.addOverride("jobs.build-python", {
+    workflow.addJob("build-python", {
       needs: ["verify-context", ...(usesRustArtifacts ? ["rust-build"] : [])],
-      "runs-on": "ubuntu-latest",
-      permissions: { contents: "read" },
-      "timeout-minutes": 20,
+      runsOn: ["ubuntu-latest"],
+      permissions: { contents: JobPermission.READ },
+      timeoutMinutes: 20,
+      env: { BUN_VERSION },
       steps: [
         ...releaseSourceSteps(),
+        ...bunCacheRestoreSteps(project),
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
+        { name: "Install release helpers", run: "bun install" },
+        bunCacheSaveStep(),
         ...uniffiPublications.map((publication) => ({
           name: `Download ${publication.distribution} native wheels`,
           uses: "actions/download-artifact@v8",
@@ -448,7 +450,7 @@ export class DBXToolsPythonWorkspace extends Component {
         {
           name: "Stamp workspace versions",
           env: { VERSION: RELEASE_VERSION },
-          run: this.renderVersionStampScript(),
+          run: `bun node_modules/@dbx-tools/projen/tasks/stamp-python.ts "$VERSION" --root ${quote(this.repository.root)}`,
         },
         {
           name: "Build distributions",
@@ -481,7 +483,7 @@ export class DBXToolsPythonWorkspace extends Component {
       ],
     });
     for (const publication of allPublications) {
-      workflow.addOverride(`jobs.publish-pypi-${publication.directory}`, {
+      workflow.addJob(`publish-pypi-${publication.directory}`, {
         if: "${{ github.event_name == 'push' }}",
         needs: [
           "build-python",
@@ -493,9 +495,9 @@ export class DBXToolsPythonWorkspace extends Component {
             options.environmentUrl ??
             `https://pypi.org/project/${publication.distribution.replaceAll("_", "-")}/`,
         },
-        "runs-on": "ubuntu-latest",
-        permissions: { "id-token": "write" },
-        "timeout-minutes": 10,
+        runsOn: ["ubuntu-latest"],
+        permissions: { idToken: JobPermission.WRITE },
+        timeoutMinutes: 10,
         steps: [
           {
             name: "Download distributions",
@@ -669,45 +671,5 @@ export class DBXToolsPythonWorkspace extends Component {
       throw new Error(`Python repository must be hosted on GitHub: ${this.repository.url}`);
     }
     return { owner: match[1], name: match[2] };
-  }
-
-  private renderVersionStampScript(): string {
-    return [
-      `chmod -R u+w ${this.repository.root}`,
-      "python - <<'PY'",
-      "from pathlib import Path",
-      "import os",
-      "import re",
-      "",
-      'version = os.environ["VERSION"].removeprefix("v")',
-      `package_files = sorted(Path(${quote(this.repository.root)}).glob("*/pyproject.toml"))`,
-      "packages = {}",
-      "for path in package_files:",
-      '    source = path.read_text(encoding="utf-8")',
-      '    name = re.search(r\'^name = "([^"]+)"$\', source, re.MULTILINE)',
-      "    if name is None:",
-      '        raise ValueError(f"Missing project name in {path}")',
-      "    packages[name.group(1)] = path.parent.name",
-      "",
-      "for path in package_files:",
-      '    source = path.read_text(encoding="utf-8")',
-      "    source, count = re.subn(",
-      '        r\'^version = "[^"]+"$\',',
-      "        f'version = \"{version}\"',",
-      "        source,",
-      "        count=1,",
-      "        flags=re.MULTILINE,",
-      "    )",
-      "    if count != 1:",
-      '        raise ValueError(f"Expected one project version in {path}")',
-      "    for name, directory in packages.items():",
-      "        source = re.sub(",
-      `            rf'{re.escape(name)} @ git\\+[^" ]+#subdirectory=${this.repository.root}/{re.escape(directory)}',`,
-      '            f"{name}=={version}",',
-      "            source,",
-      "        )",
-      '    path.write_text(source, encoding="utf-8")',
-      "PY",
-    ].join("\n");
   }
 }

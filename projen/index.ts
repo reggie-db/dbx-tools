@@ -24,6 +24,7 @@ export * as projectPy from "./src/project-py.ts";
 export * as projectRs from "./src/project-rs.ts";
 export * as publish from "./src/publish.ts";
 export * as release from "./src/release.ts";
+export * as releaseDispatch from "./src/release-dispatch.ts";
 export * as scaffold from "./src/scaffold.ts";
 export * as tags from "./src/tags.ts";
 export * as tsconfig from "./src/tsconfig.ts";
@@ -52,8 +53,9 @@ export type { PythonRepositoryOptions, PythonPackageOptions, PythonTrustedPublis
 export { RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARGETS, DBXToolsRustProject, DBXToolsRustWorkspace } from "./src/project-rs.ts";
 export type { CargoDependencyOptions, CargoDependency, RustPackageOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustWorkspaceMapping } from "./src/project-rs.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
-export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION, DBXToolsRelease } from "./src/release.ts";
+export { DBXToolsRelease } from "./src/release.ts";
 export type { ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
+export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION } from "./src/release-dispatch.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";
 export { DBXToolsRootTsconfig } from "./src/tsconfig.ts";

@@ -1,22 +1,17 @@
 /** Unified tag-driven release workflow generation. */
-import { rmSync } from "node:fs";
-import { resolve } from "node:path";
-import { Component, type ObjectFile, YamlFile } from "projen";
-import type { JobStep } from "projen/lib/github/workflows-model";
+import { Component } from "projen";
+import { GithubWorkflow } from "projen/lib/github";
+import { JobPermission, type Job, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION, bunCacheRestoreSteps, bunCacheSaveStep } from "./bun-workflow.ts";
 import type { DBXToolsJavaScriptProject } from "./project-js.ts";
 import { applyTasks, taskScript } from "./project.ts";
+import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
 
 const NODE_VERSION = "lts/*";
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
-const RELEASE_WORKFLOW = ".github/workflows/release.yml";
 const nodeReleaseProjects = new WeakSet<DBXToolsJavaScriptProject>();
 const releaseTagPrefixes = new WeakMap<DBXToolsJavaScriptProject, string>();
-
-/** Release values resolved and verified by the workflow context job. */
-export const RELEASE_TAG = "${{ needs.verify-context.outputs.release_tag }}";
-export const RELEASE_SHA = "${{ needs.verify-context.outputs.expected_sha }}";
-export const RELEASE_VERSION = "${{ needs.verify-context.outputs.release_version }}";
+const releaseWorkflows = new WeakMap<DBXToolsJavaScriptProject, GithubWorkflow>();
 
 /** GitHub Pages configuration included in the unified release workflow. */
 export interface ReleaseDocsOptions {
@@ -34,10 +29,10 @@ export interface DBXToolsReleaseOptions {
   readonly docs?: ReleaseDocsOptions;
 }
 
-/** Locate the generated workflow so attached language workspaces can add jobs. */
-export function releaseWorkflow(project: DBXToolsJavaScriptProject): ObjectFile {
-  const workflow = project.tryFindObjectFile(RELEASE_WORKFLOW);
-  if (!workflow) throw new Error(`Missing ${RELEASE_WORKFLOW}`);
+/** Locate the unified workflow so attached language workspaces can add jobs. */
+export function releaseWorkflow(project: DBXToolsJavaScriptProject): GithubWorkflow {
+  const workflow = releaseWorkflows.get(project);
+  if (!workflow) throw new Error("Release workflow is not configured");
   return workflow;
 }
 
@@ -53,30 +48,8 @@ export function releaseTagPattern(project: DBXToolsJavaScriptProject): string {
   return `${prefix}*`;
 }
 
-/** Check out the immutable commit selected by the verified release tag. */
-export function releaseSourceSteps(): JobStep[] {
-  return [
-    {
-      name: "Checkout release commit",
-      uses: "actions/checkout@v6",
-      with: { ref: RELEASE_SHA, "fetch-depth": 1 },
-    },
-    {
-      name: "Verify release source",
-      shell: "bash",
-      env: { RELEASE_TAG, EXPECTED_SHA: RELEASE_SHA },
-      run: [
-        'git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"',
-        'test "$(git cat-file -t "$RELEASE_TAG")" = "tag"',
-        'test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"',
-        'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"',
-      ].join("\n"),
-    },
-  ];
-}
-
 /** Shared Bun, Node, cache, and install setup for Node release jobs. */
-export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): JobStep[] {
+export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): readonly JobStep[] {
   return [
     ...releaseSourceSteps(),
     ...bunCacheRestoreSteps(project),
@@ -90,13 +63,24 @@ export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): JobSt
   ];
 }
 
-function verifyContextJob(tagPrefix: string): Record<string, unknown> {
+/** Authentication, provenance, and dry-run values shared by npm publishers. */
+export function npmPublishEnvironment(): Record<string, string> {
   return {
-    "runs-on": "ubuntu-latest",
+    NPM_CONFIG_PROVENANCE: "${{ github.event_name == 'push' && 'true' || 'false' }}",
+    NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
+    NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
+    DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
+  };
+}
+
+function verifyContextJob(tagPrefix: string): Job {
+  return {
+    runsOn: ["ubuntu-latest"],
+    permissions: { contents: JobPermission.READ },
     outputs: {
-      release_tag: "${{ steps.release.outputs.release_tag }}",
-      expected_sha: "${{ steps.release.outputs.expected_sha }}",
-      release_version: "${{ steps.release.outputs.release_version }}",
+      release_tag: { stepId: "release", outputName: "release_tag" },
+      expected_sha: { stepId: "release", outputName: "expected_sha" },
+      release_version: { stepId: "release", outputName: "release_version" },
     },
     steps: [
       {
@@ -137,24 +121,18 @@ function verifyContextJob(tagPrefix: string): Record<string, unknown> {
   };
 }
 
-function nodePublishJob(project: DBXToolsJavaScriptProject): Record<string, unknown> {
+function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
   return {
     needs: ["verify-context"],
-    "runs-on": "ubuntu-latest",
-    permissions: { contents: "read", "id-token": "write" },
-    "timeout-minutes": 30,
+    runsOn: ["ubuntu-latest"],
+    permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+    timeoutMinutes: 30,
     env: { BUN_VERSION, CI: "true" },
     steps: [
       ...nodeReleaseSetupSteps(project),
       {
         name: "Compile, package, and publish npm workspace",
-        env: {
-          RELEASE_VERSION,
-          NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
-          NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
-          NPM_CONFIG_PROVENANCE: "${{ github.event_name == 'push' && 'true' || 'false' }}",
-          DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
-        },
+        env: { RELEASE_VERSION, ...npmPublishEnvironment() },
         run: [
           "chmod -R u+w . || true",
           'bun node_modules/@dbx-tools/projen/tasks/publish.ts "$RELEASE_VERSION" $DRY_RUN',
@@ -164,81 +142,83 @@ function nodePublishJob(project: DBXToolsJavaScriptProject): Record<string, unkn
   };
 }
 
-function docsJobs(project: DBXToolsJavaScriptProject, options: ReleaseDocsOptions) {
-  const cacheSteps = bunCacheRestoreSteps(project);
-  return {
-    "build-docs": {
-      needs: ["verify-context"],
-      "runs-on": "ubuntu-latest",
-      permissions: { contents: "read", pages: "write", "id-token": "write" },
-      "timeout-minutes": 30,
-      env: {
-        BUN_VERSION,
-        DOCS_SITE_URL: options.siteUrl,
-        DOCS_BASE: options.base ?? "/",
-      },
-      steps: [
-        ...releaseSourceSteps(),
-        ...cacheSteps,
-        {
-          name: "Setup Node.js",
-          uses: "actions/setup-node@v6",
-          with: { "node-version": "22" },
-        },
-        { name: "Configure Pages", uses: "actions/configure-pages@v5" },
-        { name: "Install dependencies", run: "bun install" },
-        { name: "Generate docs from READMEs", run: "bun docs/scripts/sync-readmes.mjs" },
-        {
-          name: "Check generated titles",
-          run: "bun docs/scripts/check-generated-titles.mjs",
-        },
-        { name: "Install docs dependencies", run: "bun install --cwd .docs-build/site" },
-        bunCacheSaveStep(),
-        {
-          name: "Generate TypeScript API docs",
-          run: "bun docs/scripts/generate-api-docs.mjs",
-        },
-        { name: "Build docs", run: "bun run --cwd .docs-build/site build" },
-        {
-          name: "Check generated links",
-          run: "bun run --cwd .docs-build/site check-links",
-        },
-        {
-          name: "Upload Pages artifact",
-          uses: "actions/upload-pages-artifact@v4",
-          with: { path: ".docs-build/dist" },
-        },
-      ],
+function addDocsJobs(
+  workflow: GithubWorkflow,
+  project: DBXToolsJavaScriptProject,
+  options: ReleaseDocsOptions,
+): void {
+  workflow.addJob("build-docs", {
+    needs: ["verify-context"],
+    runsOn: ["ubuntu-latest"],
+    permissions: {
+      contents: JobPermission.READ,
+      pages: JobPermission.WRITE,
+      idToken: JobPermission.WRITE,
     },
-    "deploy-docs": {
-      if: "${{ github.event_name == 'push' }}",
-      needs: ["build-docs"],
-      environment: {
-        name: "github-pages",
-        url: "${{ steps.deployment.outputs.page_url }}",
-      },
-      "runs-on": "ubuntu-latest",
-      permissions: { pages: "write", "id-token": "write" },
-      "timeout-minutes": 15,
-      steps: [
-        {
-          name: "Deploy to GitHub Pages",
-          id: "deployment",
-          uses: "actions/deploy-pages@v4",
-        },
-      ],
+    timeoutMinutes: 30,
+    env: {
+      BUN_VERSION,
+      DOCS_SITE_URL: options.siteUrl,
+      DOCS_BASE: options.base ?? "/",
     },
-  };
+    steps: [
+      ...releaseSourceSteps(),
+      ...bunCacheRestoreSteps(project),
+      {
+        name: "Setup Node.js",
+        uses: "actions/setup-node@v6",
+        with: { "node-version": "22" },
+      },
+      { name: "Configure Pages", uses: "actions/configure-pages@v5" },
+      { name: "Install dependencies", run: "bun install" },
+      { name: "Generate docs from READMEs", run: "bun docs/scripts/sync-readmes.mjs" },
+      {
+        name: "Check generated titles",
+        run: "bun docs/scripts/check-generated-titles.mjs",
+      },
+      { name: "Install docs dependencies", run: "bun install --cwd .docs-build/site" },
+      bunCacheSaveStep(),
+      {
+        name: "Generate TypeScript API docs",
+        run: "bun docs/scripts/generate-api-docs.mjs",
+      },
+      { name: "Build docs", run: "bun run --cwd .docs-build/site build" },
+      {
+        name: "Check generated links",
+        run: "bun run --cwd .docs-build/site check-links",
+      },
+      {
+        name: "Upload Pages artifact",
+        uses: "actions/upload-pages-artifact@v4",
+        with: { path: ".docs-build/dist" },
+      },
+    ],
+  });
+  workflow.addJob("deploy-docs", {
+    if: "${{ github.event_name == 'push' }}",
+    needs: ["build-docs"],
+    environment: {
+      name: "github-pages",
+      url: "${{ steps.deployment.outputs.page_url }}",
+    },
+    runsOn: ["ubuntu-latest"],
+    permissions: { pages: JobPermission.WRITE, idToken: JobPermission.WRITE },
+    timeoutMinutes: 15,
+    steps: [
+      {
+        name: "Deploy to GitHub Pages",
+        id: "deployment",
+        uses: "actions/deploy-pages@v4",
+      },
+    ],
+  });
 }
 
 /** Owns the single release workflow and the local bump task. */
 export class DBXToolsRelease extends Component {
-  private readonly docs: boolean;
-
   constructor(project: DBXToolsJavaScriptProject, options: DBXToolsReleaseOptions = {}) {
     super(project);
     const tagPrefix = options.tagPrefix ?? "v";
-    this.docs = Boolean(options.docs);
     releaseTagPrefixes.set(project, tagPrefix);
     if (options.nodeRelease !== false) nodeReleaseProjects.add(project);
     applyTasks(project, {
@@ -249,55 +229,46 @@ export class DBXToolsRelease extends Component {
       },
     });
     if (!project.github) return;
-    new YamlFile(project, RELEASE_WORKFLOW, {
-      obj: {
-        name: "release",
-        "run-name": `release \${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}`,
-        on: {
-          push: { tags: [`${tagPrefix}*`] },
-          workflow_dispatch: {
-            inputs: {
-              release_tag: {
-                description: "Annotated release tag to validate",
-                type: "string",
-                required: true,
-              },
-              expected_sha: {
-                description: "Commit the release tag must reference",
-                type: "string",
-                required: true,
-              },
-              dry_run: {
-                description: "Build and validate without publishing",
-                type: "boolean",
-                default: true,
-                required: true,
-              },
-            },
+
+    const workflow = new GithubWorkflow(project.github, "release", {
+      fileName: "release.yml",
+      limitConcurrency: true,
+      concurrencyOptions: { group: "release", cancelInProgress: true },
+    });
+    workflow.runName =
+      "release ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}";
+    workflow.on({
+      push: { tags: [`${tagPrefix}*`] },
+      workflowDispatch: {
+        inputs: {
+          release_tag: {
+            description: "Annotated release tag to validate",
+            type: "string",
+            required: true,
           },
-        },
-        concurrency: { group: "release", "cancel-in-progress": true },
-        permissions: { contents: "read" },
-        jobs: {
-          "verify-context": verifyContextJob(tagPrefix),
-          ...(options.nodeRelease === false ? {} : { "publish-node": nodePublishJob(project) }),
-          ...(options.docs ? docsJobs(project, options.docs) : {}),
+          expected_sha: {
+            description: "Commit the release tag must reference",
+            type: "string",
+            required: true,
+          },
+          dry_run: {
+            description: "Build and validate without publishing",
+            type: "boolean",
+            default: "true",
+            required: true,
+          },
         },
       },
     });
-  }
-
-  public override postSynthesize(): void {
-    const stale = [
-      "release-dispatch.yml",
-      "rust-release-dispatch.yml",
-      "rust-release.yml",
-      "node-release.yml",
-      "python-release.yml",
-      ...(this.docs ? ["docs.yml"] : []),
-    ];
-    for (const file of stale) {
-      rmSync(resolve(this.project.outdir, ".github/workflows", file), { force: true });
+    workflow.file?.addOverride("permissions.contents", "read");
+    workflow.file?.addOverride("on.workflow_dispatch.inputs.dry_run.default", true);
+    workflow.addJob("verify-context", verifyContextJob(tagPrefix));
+    if (options.nodeRelease !== false) {
+      workflow.addJob("publish-node", nodePublishJob(project));
     }
+    if (options.docs) {
+      addDocsJobs(workflow, project, options.docs);
+    }
+    releaseWorkflows.set(project, workflow);
   }
 }

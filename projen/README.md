@@ -136,6 +136,10 @@ commit but requires dry-run mode, so it builds and validates without publishing
 packages or deploying documentation. One `release` concurrency group cancels a
 superseded run.
 
+Release generation writes `release.yml` without scanning for or removing other
+workflow files. Consumers explicitly delete exact workflow files they no longer
+want.
+
 The Rust matrix has one row per target. Each row installs native dependencies,
 restores Cargo and sccache once, builds the Cargo workspace once, then packages
 every discovered output from that shared build. Rust rows prepare native npm

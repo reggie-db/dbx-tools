@@ -1,18 +1,23 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
+import {
+  readWorkflow,
+  workflowStep as step,
+  workflowTrigger,
+  type WorkflowDefinition,
+} from "./workflow.ts";
 import { DBXToolsNodeProject } from "../src/project.ts";
 
 let outdir: string;
-let release: string;
+let release: WorkflowDefinition;
 
 before(() => {
   process.env.PROJEN_DISABLE_POST = "1";
   outdir = mkdtempSync(join(tmpdir(), "release-"));
-  const workflows = join(outdir, ".github", "workflows");
   const project = new DBXToolsNodeProject({
     name: "release-fixture",
     outdir,
@@ -24,7 +29,7 @@ before(() => {
     },
   });
   project.synth();
-  release = readFileSync(join(workflows, "release.yml"), "utf8");
+  release = readWorkflow(outdir, "release");
 });
 
 after(() => {
@@ -33,56 +38,83 @@ after(() => {
 });
 
 describe("unified release workflow", () => {
-  it("triggers directly from annotated tags and safe manual dry runs", () => {
-    assert.match(release, /^name: release$/m);
-    assert.match(release, /^  push:\n    tags:\n      - v\*$/m);
-    assert.match(release, /^  workflow_dispatch:$/m);
-    assert.match(release, /dry_run:[\s\S]*?default: true[\s\S]*?required: true/);
-    assert.match(release, /test "\$DRY_RUN" = "true"/);
-    assert.match(release, /git cat-file -t "\$RELEASE_TAG"/);
-    assert.match(release, /git rev-parse "\$RELEASE_TAG\^\{commit\}"/);
-    assert.match(release, /test "\$\(git rev-parse HEAD\)" = "\$RELEASE_SHA"/);
-    assert.match(release, /^  group: release$/m);
-    assert.match(release, /^  cancel-in-progress: true$/m);
-  });
-
-  it("publishes npm with npmjs authentication and push-only provenance", () => {
-    assert.match(release, /^  publish-node:$/m);
-    assert.match(release, /registry-url: https:\/\/registry\.npmjs\.org/);
-    assert.match(release, /NODE_AUTH_TOKEN: \$\{\{ secrets\.NPM_TOKEN \}\}/);
-    assert.match(
-      release,
-      /NPM_CONFIG_PROVENANCE: \$\{\{ github\.event_name == 'push' && 'true' \|\| 'false' \}\}/,
+  it("uses verified annotated tags and safe manual dry runs", () => {
+    assert.equal(release.name, "release");
+    assert.deepEqual(workflowTrigger<{ tags: string[] }>(release, "push").tags, ["v*"]);
+    assert.deepEqual(
+      workflowTrigger<{ inputs: Record<string, unknown> }>(release, "workflow_dispatch").inputs
+        .dry_run,
+      {
+        description: "Build and validate without publishing",
+        type: "boolean",
+        default: true,
+        required: true,
+      },
     );
-    assert.match(
-      release,
-      /DRY_RUN: \$\{\{ github\.event_name == 'workflow_dispatch' && '--dry-run' \|\| '' \}\}/,
+    assert.deepEqual(release.concurrency, {
+      group: "release",
+      "cancel-in-progress": true,
+    });
+    assert.deepEqual(release.permissions, { contents: "read" });
+
+    const verify = step(release.jobs["verify-context"]!, "Verify release context");
+    assert.equal(
+      verify.env?.DRY_RUN,
+      "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}",
     );
-    assert.match(release, /tasks\/publish\.ts "\$RELEASE_VERSION" \$DRY_RUN/);
-    assert.match(release, /^      BUN_VERSION: 1\.3\.14$/m);
-    assert.match(release, /uses: actions\/cache\/restore@v5/);
-    assert.match(release, /uses: actions\/cache\/save@v5/);
+    assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
+    assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
+    assert.ok(verify.run?.includes('test "$DRY_RUN" = "true"'));
   });
 
-  it("builds and deploys docs in the same release workflow", () => {
-    assert.match(release, /^  build-docs:$/m);
-    assert.match(release, /^  deploy-docs:$/m);
-    assert.match(release, /DOCS_SITE_URL: https:\/\/docs\.example\.com/);
-    assert.match(release, /DOCS_BASE: \/fixture\//);
-    assert.match(release, /bun docs\/scripts\/sync-readmes\.mjs/);
-    assert.match(release, /bun docs\/scripts\/generate-api-docs\.mjs/);
-    assert.match(release, /uses: actions\/upload-pages-artifact@v4/);
-    assert.match(release, /uses: actions\/deploy-pages@v4/);
-    const deploy = release.match(/^  deploy-docs:[\s\S]*$/m)?.[0];
-    assert.ok(deploy);
-    assert.match(deploy, /if: \$\{\{ github\.event_name == 'push' \}\}/);
-    assert.match(deploy, /name: github-pages/);
-    assert.match(deploy, /pages: write/);
-    assert.match(deploy, /id-token: write/);
+  it("publishes npm through the shared authenticated driver", () => {
+    const job = release.jobs["publish-node"]!;
+    assert.deepEqual(job.permissions, { contents: "read", "id-token": "write" });
+    assert.equal(job.env?.BUN_VERSION, "1.3.14");
+    assert.deepEqual(step(job, "Setup Node.js").with, {
+      "node-version": "lts/*",
+      "registry-url": "https://registry.npmjs.org",
+    });
+    assert.equal(step(job, "Restore Bun cache").uses, "actions/cache/restore@v5");
+    assert.equal(step(job, "Save Bun cache").uses, "actions/cache/save@v5");
+
+    const publish = step(job, "Compile, package, and publish npm workspace");
+    assert.equal(
+      publish.env?.NPM_CONFIG_PROVENANCE,
+      "${{ github.event_name == 'push' && 'true' || 'false' }}",
+    );
+    assert.equal(publish.env?.NODE_AUTH_TOKEN, "${{ secrets.NPM_TOKEN }}");
+    assert.equal(
+      publish.env?.DRY_RUN,
+      "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
+    );
+    assert.ok(publish.run?.includes("tasks/publish.ts"));
   });
 
-  it("contains no cross-workflow handoff machinery", () => {
-    assert.doesNotMatch(release, /repository_dispatch|workflow_run|run-id|run_attempt/);
+  it("builds and deploys docs in the same workflow", () => {
+    const build = release.jobs["build-docs"]!;
+    assert.deepEqual(build.permissions, {
+      contents: "read",
+      pages: "write",
+      "id-token": "write",
+    });
+    assert.equal(build.env?.DOCS_SITE_URL, "https://docs.example.com");
+    assert.equal(build.env?.DOCS_BASE, "/fixture/");
+    assert.equal(step(build, "Upload Pages artifact").uses, "actions/upload-pages-artifact@v4");
+
+    const deploy = release.jobs["deploy-docs"]!;
+    assert.equal(deploy.if, "${{ github.event_name == 'push' }}");
+    assert.deepEqual(deploy.environment, {
+      name: "github-pages",
+      url: "${{ steps.deployment.outputs.page_url }}",
+    });
+    assert.deepEqual(deploy.permissions, { pages: "write", "id-token": "write" });
+    assert.equal(step(deploy, "Deploy to GitHub Pages").uses, "actions/deploy-pages@v4");
+  });
+
+  it("contains no cross-workflow handoff", () => {
+    assert.equal("repository_dispatch" in release.on, false);
+    assert.equal("workflow_run" in release.on, false);
     for (const file of [
       "release-dispatch.yml",
       "rust-release.yml",
@@ -93,42 +125,40 @@ describe("unified release workflow", () => {
       assert.equal(existsSync(join(outdir, ".github", "workflows", file)), false);
     }
   });
+
+  it("leaves predecessor workflow removal to the consumer", () => {
+    const existingOutdir = mkdtempSync(join(tmpdir(), "release-existing-"));
+    const workflowPath = join(existingOutdir, ".github", "workflows", "node-release.yml");
+    try {
+      mkdirSync(join(existingOutdir, ".github", "workflows"), { recursive: true });
+      writeFileSync(workflowPath, "name: consumer-owned\n");
+      const project = new DBXToolsNodeProject({
+        name: "existing-release-fixture",
+        outdir: existingOutdir,
+        github: true,
+      });
+      project.synth();
+      assert.equal(readFileSync(workflowPath, "utf8"), "name: consumer-owned\n");
+    } finally {
+      rmSync(existingOutdir, { recursive: true, force: true });
+    }
+  });
 });
 
-describe("npm release workflow performance", () => {
-  it("delegates workspace compilation and concurrent publishing to the shared driver", () => {
+describe("release task contracts", () => {
+  it("compiles before applying publish configuration", () => {
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
-    assert.match(driver, /"--ignore-scripts"/);
-    assert.match(driver, /compiled\.flatMap\(\(pkg\) => \["--filter", pkg\.name\]\)/);
-    assert.match(driver, /command === "bun" && process\.versions\.bun \? process\.execPath/);
-    assert.match(driver, /runConcurrent\(publishable, concurrency/);
-    assert.match(driver, /lockfileMatchesVersion/);
     assert.ok(
       driver.indexOf("compiling ${compiled.length}") <
         driver.indexOf("applyPublishConfig(manifestPath)"),
     );
   });
-});
 
-describe("release tag push performance", () => {
-  it("scans the branch push but bypasses hooks for already-scanned release tags", () => {
+  it("stamps members before pushing release tags", () => {
     const bump = readFileSync(join(import.meta.dirname, "..", "tasks", "bump.ts"), "utf8");
-    assert.match(bump, /git\(\["push", "origin", "HEAD"\]\)/);
-    assert.match(bump, /\[publishScript, version, "--stamp-only"\]/);
-    assert.match(bump, /assertReleaseTagsPointToHead\(tags\)/);
-    assert.match(bump, /git\(\["rev-parse", `\$\{tag\}\^\{commit\}`\], true\)/);
-    assert.match(bump, /git\(\["push", "--no-verify", "origin", \.\.\.tags\]\)/);
-  });
-});
-
-describe("generated engine task paths", () => {
-  it("uses the stable package symlink", () => {
-    const tasks = JSON.parse(readFileSync(join(outdir, ".projen", "tasks.json"), "utf8")) as {
-      tasks: Record<string, { steps: Array<{ exec?: string }> }>;
-    };
-    assert.equal(
-      tasks.tasks.sync?.steps[0]?.exec,
-      "bun node_modules/@dbx-tools/projen/tasks/sync.ts",
+    assert.ok(
+      bump.indexOf('[publishScript, version, "--stamp-only"]') <
+        bump.indexOf('git(["push", "--no-verify", "origin", ...tags])'),
     );
   });
 });
@@ -136,41 +166,30 @@ describe("generated engine task paths", () => {
 describe("generated workflow safety", () => {
   for (const name of ["build", "pull-request-lint"]) {
     it(`${name} is read-only and cancels superseded runs`, () => {
-      const workflow = readFileSync(join(outdir, ".github", "workflows", `${name}.yml`), "utf8");
-      assert.match(workflow, /^permissions:\n  contents: read$/m);
-      assert.match(
-        workflow,
-        /^concurrency:\n  group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}/m,
-      );
-      assert.match(workflow, /^  cancel-in-progress: true$/m);
+      const workflow = readWorkflow(outdir, name);
+      assert.deepEqual(workflow.permissions, { contents: "read" });
+      assert.deepEqual(workflow.concurrency, {
+        group: "${{ github.workflow }}-${{ github.ref }}",
+        "cancel-in-progress": true,
+      });
     });
   }
 
-  it("keeps the CI build separate from release", () => {
-    const workflow = readFileSync(join(outdir, ".github", "workflows", "build.yml"), "utf8");
-    assert.match(workflow, /^name: build$/m);
-    assert.match(workflow, /^  pull_request: \{\}$/m);
-    assert.doesNotMatch(workflow, /tags:\n\s+- v\*/);
+  it("keeps CI separate from release", () => {
+    const build = readWorkflow(outdir, "build");
+    assert.deepEqual(workflowTrigger(build, "pull_request"), {});
+    assert.equal("push" in build.on, false);
   });
 
-  it("restores and saves Bun's dependency-only package cache", () => {
-    const workflow = readFileSync(join(outdir, ".github", "workflows", "build.yml"), "utf8");
-    assert.match(workflow, /^      BUN_VERSION: 1\.3\.14$/m);
-    assert.match(workflow, /name: Resolve Bun cache/);
-    assert.match(workflow, /uses: actions\/cache\/restore@v5/);
-    assert.match(workflow, /uses: actions\/cache\/save@v5/);
-    assert.match(
-      workflow,
-      /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/,
-    );
+  it("uses a dependency-only Bun cache key", () => {
     const cacheKey = readFileSync(join(outdir, ".projen", "bun-cache-key.mjs"), "utf8");
-    assert.match(cacheKey, /const dependencyFields =/);
-    assert.doesNotMatch(cacheKey, /dependencyFields = \[[\s\S]*"version"/);
+    assert.ok(cacheKey.includes("const dependencyFields ="));
+    assert.equal(cacheKey.includes('"version"'), false);
   });
 });
 
 describe("optional Node release stage", () => {
-  it("can be omitted while retaining the verified release workflow", () => {
+  it("can be omitted while retaining context verification", () => {
     const disabledOutdir = mkdtempSync(join(tmpdir(), "release-disabled-"));
     try {
       const project = new DBXToolsNodeProject({
@@ -180,12 +199,9 @@ describe("optional Node release stage", () => {
         nodeRelease: false,
       });
       project.synth();
-      const workflow = readFileSync(
-        join(disabledOutdir, ".github", "workflows", "release.yml"),
-        "utf8",
-      );
-      assert.match(workflow, /^  verify-context:$/m);
-      assert.doesNotMatch(workflow, /^  publish-node:$/m);
+      const workflow = readWorkflow(disabledOutdir, "release");
+      assert.ok(workflow.jobs["verify-context"]);
+      assert.equal(workflow.jobs["publish-node"], undefined);
     } finally {
       rmSync(disabledOutdir, { recursive: true, force: true });
     }

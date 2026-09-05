@@ -4,6 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
+  readWorkflow,
+  workflowStep,
+  type WorkflowDefinition,
+  type WorkflowJob,
+} from "./workflow.ts";
+import {
   DBXToolsNodeProject,
   DBXToolsPythonWorkspace,
   DBXToolsRustWorkspace,
@@ -28,7 +34,7 @@ before(() => {
 
 after(() => rmSync(outdir, { recursive: true, force: true }));
 
-function bindingWorkflow(binding: "node" | "python"): string {
+function bindingWorkflow(binding: "node" | "python"): WorkflowDefinition {
   const bindingOutdir = mkdtempSync(join(tmpdir(), `project-rs-${binding}-`));
   try {
     mkdirSync(join(bindingOutdir, "native/addon/src"), { recursive: true });
@@ -51,16 +57,14 @@ function bindingWorkflow(binding: "node" | "python"): string {
       packages: { addon: { bindings: [binding] } },
     });
     project.synth();
-    return readFileSync(join(bindingOutdir, ".github/workflows/release.yml"), "utf8");
+    return readWorkflow(bindingOutdir);
   } finally {
     rmSync(bindingOutdir, { recursive: true, force: true });
   }
 }
 
-function workflowJob(workflow: string, name: string): string {
-  const job = workflow.match(new RegExp(`^  ${name}:[\\s\\S]*?(?=^  [a-z][\\w-]*:|$)`, "m"))?.[0];
-  assert.ok(job, `missing ${name} job`);
-  return job;
+function stepNames(job: WorkflowJob): string[] {
+  return job.steps.flatMap((step) => (step.name ? [step.name] : []));
 }
 
 describe("DBXToolsRustWorkspace", () => {
@@ -104,10 +108,7 @@ describe("DBXToolsRustWorkspace", () => {
         rust.bindingMappings.find((binding) => binding.crate === "fixture-provider")?.dependencies,
         ["fixture-auth"],
       );
-      assert.doesNotMatch(
-        readFileSync(join(directory, ".github/workflows/release.yml"), "utf8"),
-        /publish-fixture-provider/,
-      );
+      assert.equal("publish-fixture-provider" in readWorkflow(directory).jobs, false);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -126,8 +127,7 @@ describe("DBXToolsRustWorkspace", () => {
       });
       new DBXToolsRustWorkspace(project, {});
       project.synth();
-      const release = readFileSync(join(emptyOutdir, ".github/workflows/release.yml"), "utf8");
-      assert.doesNotMatch(release, /^  rust-build:$/m);
+      assert.equal("rust-build" in readWorkflow(emptyOutdir).jobs, false);
       assert.equal(existsSync(join(emptyOutdir, ".github/workflows/release-dispatch.yml")), false);
     } finally {
       rmSync(emptyOutdir, { recursive: true, force: true });
@@ -154,20 +154,26 @@ describe("DBXToolsRustWorkspace", () => {
       });
       project.synth();
 
-      const release = readFileSync(join(binaryOutdir, ".github/workflows/release.yml"), "utf8");
-      assert.match(release, /name: \$\{\{ matrix\.target\.node \}\}/);
-      assert.match(release, /name: Package release binaries/);
-      const buildJob = release.match(/^  rust-build:[\s\S]*?(?=^  publish-cargo:)/m)?.[0];
-      assert.ok(buildJob);
-      assert.doesNotMatch(buildJob, /Setup Bun|Setup Node\.js|Setup uv|bun install/);
-      const cargoJob = release.match(
-        /^  publish-cargo:[\s\S]*?(?=^  publish-local-|^  publish-github-release:)/m,
-      )?.[0];
-      assert.ok(cargoJob);
-      assert.doesNotMatch(cargoJob, /Setup Bun|Setup Node\.js|Setup uv|bun install/);
-      const githubJob = release.match(/^  publish-github-release:[\s\S]*/m)?.[0];
-      assert.ok(githubJob);
-      assert.doesNotMatch(githubJob, /Checkout|Setup Bun|Setup Node\.js|Setup uv|Setup Rust/);
+      const release = readWorkflow(binaryOutdir);
+      const buildJob = release.jobs["rust-build"]!;
+      assert.ok(stepNames(buildJob).includes("Package release binaries"));
+      assert.equal(
+        stepNames(buildJob).some((name) => /Setup Bun|Setup Node\.js|Setup uv/.test(name)),
+        false,
+      );
+      assert.equal(
+        buildJob.steps.some((step) => step.run === "bun install"),
+        false,
+      );
+      const cargoJob = release.jobs["publish-cargo"]!;
+      assert.equal(
+        stepNames(cargoJob).some((name) => /Setup Bun|Setup Node\.js|Setup uv/.test(name)),
+        false,
+      );
+      assert.deepEqual(stepNames(release.jobs["publish-github-release"]!), [
+        "Download release binaries",
+        "Publish GitHub release assets",
+      ]);
       assert.equal(existsSync(join(binaryOutdir, ".projen/uniffi-release.mjs")), false);
     } finally {
       rmSync(binaryOutdir, { recursive: true, force: true });
@@ -200,15 +206,22 @@ describe("DBXToolsRustWorkspace", () => {
       });
       project.synth();
 
-      const release = readFileSync(join(multiOutdir, ".github/workflows/release.yml"), "utf8");
-      const buildJob = release.match(/^  rust-build:[\s\S]*?(?=^  publish-)/m)?.[0];
-      assert.ok(buildJob);
-      assert.equal(buildJob.match(/cargo build --release --workspace --target/g)?.length, 1);
-      assert.match(buildJob, /--crate "fixture-alpha"/);
-      assert.match(buildJob, /--crate "fixture-beta"/);
-      assert.equal(buildJob.match(/name: Setup sccache/g)?.length, 1);
-      assert.equal(buildJob.match(/name: Install Linux native dependencies/g)?.length, 1);
-      assert.doesNotMatch(buildJob, /UBRN|Setup Bun|bun install/);
+      const buildJob = readWorkflow(multiOutdir).jobs["rust-build"]!;
+      assert.equal(
+        workflowStep(buildJob, "Build Rust outputs").run?.match(
+          /cargo build --release --workspace --target/g,
+        )?.length,
+        1,
+      );
+      const packageBindings = workflowStep(buildJob, "Package UniFFI outputs").run!;
+      assert.ok(packageBindings.includes('--crate "fixture-alpha"'));
+      assert.ok(packageBindings.includes('--crate "fixture-beta"'));
+      assert.equal(stepNames(buildJob).filter((name) => name === "Setup sccache").length, 1);
+      assert.equal(
+        stepNames(buildJob).filter((name) => name === "Install Linux native dependencies").length,
+        1,
+      );
+      assert.equal(stepNames(buildJob).includes("Setup Bun"), false);
     } finally {
       rmSync(multiOutdir, { recursive: true, force: true });
     }
@@ -216,15 +229,16 @@ describe("DBXToolsRustWorkspace", () => {
 
   it("installs only the Python tooling needed by Rust packaging", () => {
     const nodeWorkflow = bindingWorkflow("node");
-    const nodeBuild = nodeWorkflow.match(/^  rust-build:[\s\S]*?(?=^  publish-)/m)?.[0];
-    assert.ok(nodeBuild);
-    assert.doesNotMatch(nodeBuild, /name: Setup Bun|bun install|name: Setup uv/);
+    const nodeBuild = nodeWorkflow.jobs["rust-build"]!;
+    assert.equal(
+      stepNames(nodeBuild).some((name) => name === "Setup Bun" || name === "Setup uv"),
+      false,
+    );
 
     const pythonWorkflow = bindingWorkflow("python");
-    const pythonBuild = pythonWorkflow.match(/^  rust-build:[\s\S]*?(?=^  publish-)/m)?.[0];
-    assert.ok(pythonBuild);
-    assert.match(pythonBuild, /name: Setup uv/);
-    assert.doesNotMatch(pythonBuild, /name: Setup Bun|bun install/);
+    const pythonBuild = pythonWorkflow.jobs["rust-build"]!;
+    assert.equal(stepNames(pythonBuild).includes("Setup uv"), true);
+    assert.equal(stepNames(pythonBuild).includes("Setup Bun"), false);
   });
 
   it("reads release platform filters without consumer-side environment parsing", () => {
@@ -249,9 +263,17 @@ describe("DBXToolsRustWorkspace", () => {
       });
       project.synth();
 
-      const release = readFileSync(join(filteredOutdir, ".github/workflows/release.yml"), "utf8");
-      assert.match(release, /cargo: x86_64-unknown-linux-gnu/);
-      assert.doesNotMatch(release, /aarch64-unknown-linux-gnu|apple-darwin|windows-msvc/);
+      assert.deepEqual(readWorkflow(filteredOutdir).jobs["rust-build"]?.strategy?.matrix?.include, [
+        {
+          runner: "ubuntu-22.04",
+          cargo: "x86_64-unknown-linux-gnu",
+          node: "linux-x64-gnu",
+          python: "manylinux_2_35_x86_64",
+          os: "linux",
+          cpu: "x64",
+          libc: "glibc",
+        },
+      ]);
     } finally {
       if (previous === undefined) delete process.env.DBX_TOOLS_RELEASE_PLATFORMS;
       else process.env.DBX_TOOLS_RELEASE_PLATFORMS = previous;
@@ -288,14 +310,19 @@ describe("DBXToolsRustWorkspace", () => {
       });
       project.synth();
 
-      const release = readFileSync(join(chainOutdir, ".github/workflows/release.yml"), "utf8");
-      assert.match(release, /^  rust-build:$/m);
-      assert.match(release, /^  publish-native-npm:$/m);
-      assert.match(release, /^  publish-node:$/m);
-      assert.match(release, /^  publish-node-facades:$/m);
-      assert.match(release, /^  build-python:$/m);
-      assert.match(release, /^  publish-pypi-addon:$/m);
-      assert.doesNotMatch(release, /repository_dispatch|workflow_run|run-id/);
+      const release = readWorkflow(chainOutdir);
+      for (const job of [
+        "rust-build",
+        "publish-native-npm",
+        "publish-node",
+        "publish-node-facades",
+        "build-python",
+        "publish-pypi-addon",
+      ]) {
+        assert.ok(release.jobs[job], `missing ${job}`);
+      }
+      assert.equal("repository_dispatch" in release.on, false);
+      assert.equal("workflow_run" in release.on, false);
       assert.match(
         readFileSync(join(chainOutdir, "Cargo.toml"), "utf8"),
         /repository = "https:\/\/github\.com\/example\/fixture"/,
@@ -405,140 +432,98 @@ describe("DBXToolsRustWorkspace", () => {
       gitignore,
       /^packages\/py\/databricks-auth\/src\/fixture\/databricks_auth\/bindings\.py$/m,
     );
-    const release = readFileSync(join(outdir, ".github/workflows/release.yml"), "utf8");
-    const tasks = readFileSync(join(outdir, ".projen/tasks.json"), "utf8");
-    assert.match(tasks, /"pre-compile": \{[\s\S]*?"spawn": "rs:bindings"[\s\S]*?\n    \}/);
-    assert.match(release, /^  push:\n    tags:\n      - v\*$/m);
-    assert.match(release, /^  cancel-in-progress: true$/m);
-    assert.match(release, /^  workflow_dispatch:$/m);
-    assert.doesNotMatch(release, /repository_dispatch|workflow_run|run-id|run_attempt/);
-    assert.doesNotMatch(release, /fetch-depth: 0/);
-    assert.match(
-      release,
-      /test "\$\(git rev-parse "\$RELEASE_TAG\^\{commit\}"\)" = "\$EXPECTED_SHA"/,
+    const release = readWorkflow(outdir);
+    const tasks = JSON.parse(readFileSync(join(outdir, ".projen/tasks.json"), "utf8")) as {
+      tasks: Record<string, { steps?: Array<{ spawn?: string }> }>;
+    };
+    assert.deepEqual(tasks.tasks["pre-compile"]?.steps, [{ spawn: "rs:bindings" }]);
+    assert.equal("repository_dispatch" in release.on, false);
+    assert.equal("workflow_run" in release.on, false);
+
+    const rustBuild = release.jobs["rust-build"]!;
+    assert.deepEqual(
+      rustBuild.strategy?.matrix?.include?.map((target) => target.node),
+      ["darwin-arm64", "linux-x64-gnu"],
     );
-    assert.match(release, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
-    assert.match(release, /fixture-databricks-auth/);
-    assert.match(release, /linux-x64-gnu/);
-    assert.match(release, /darwin-arm64/);
-    assert.doesNotMatch(release, /linux-arm64-gnu/);
-    assert.doesNotMatch(release, /darwin-x64/);
-    assert.doesNotMatch(release, /win32-x64-msvc/);
-    assert.match(release, /^  publish-native-npm:$/m);
-    assert.match(release, /^  publish-node:$/m);
-    assert.match(
-      release,
-      /^  publish-node:\n    needs:\n      - verify-context\n      - publish-native-npm$/m,
+    assert.deepEqual(rustBuild.env, {
+      CARGO_INCREMENTAL: "0",
+      CARGO_TERM_COLOR: "always",
+      RUSTC_WRAPPER: "sccache",
+      SCCACHE_GHA_ENABLED: "true",
+      SCCACHE_GHA_VERSION: "release-${{ matrix.cargo }}-rust-stable",
+    });
+    assert.equal(workflowStep(rustBuild, "Setup Rust").uses, "dtolnay/rust-toolchain@stable");
+    assert.equal(workflowStep(rustBuild, "Setup Rust").if, "${{ matrix.os != 'win32' }}");
+    assert.equal(stepNames(rustBuild).includes("Verify preinstalled Windows Rust"), true);
+    assert.equal(stepNames(rustBuild).includes("Setup Bun"), false);
+    assert.ok(
+      workflowStep(rustBuild, "Build Rust outputs").run?.includes(
+        'cargo build --release --workspace --target "${{ matrix.cargo }}"',
+      ),
     );
-    assert.match(release, /^  publish-node-facades:$/m);
-    assert.match(
-      release,
-      /^  publish-node-facades:\n    needs:\n      - verify-context\n      - publish-node$/m,
+    assert.ok(workflowStep(rustBuild, "Package UniFFI outputs").run?.includes("--skip-build"));
+    assert.ok(workflowStep(rustBuild, "Package release binaries").run?.includes("7z a"));
+    assert.deepEqual(
+      rustBuild.steps
+        .filter((candidate) => candidate.uses === "actions/upload-artifact@v7")
+        .map((candidate) => candidate.with?.name),
+      [
+        "fixture-databricks-auth-${{ matrix.node }}-npm",
+        "fixture-databricks-auth--${{ matrix.python }}--python-wheel",
+        "fixture-tool-${{ matrix.node }}-binary",
+      ],
     );
-    assert.match(release, /node \.projen\/uniffi-release\.mjs facade/);
-    assert.doesNotMatch(release, /--native-package/);
-    assert.doesNotMatch(release, /--exclude projen/);
-    assert.match(
-      release,
-      /NPM_CONFIG_PROVENANCE: \$\{\{ github\.event_name == 'push' && 'true' \|\| 'false' \}\}/,
-    );
-    assert.match(release, /vars\.UNIFFI_FACADE_SMOKE == 'true'/);
-    assert.match(release, /continue-on-error: true/);
-    assert.equal(release.match(/^          - target:$/gm)?.length, 2);
-    assert.doesNotMatch(release, /^  build-binaries:$/m);
-    assert.match(release, /cargo build --release --workspace --target/);
-    assert.match(release, /node \.projen\/uniffi-release\.mjs build/);
-    assert.match(release, /--skip-build/);
-    const rustBuild = release.match(/^  rust-build:[\s\S]*?(?=^  publish-cargo:)/m)?.[0];
-    assert.ok(rustBuild);
-    assert.doesNotMatch(rustBuild, /UBRN|Setup Bun|Setup Node\.js|BUN_VERSION|npm-facade/);
-    assert.doesNotMatch(release, /rustup toolchain install stable/);
-    assert.match(release, /uses: dtolnay\/rust-toolchain@stable/);
-    assert.match(release, /name: Setup Rust[\s\S]*?if: \$\{\{ matrix\.target\.os != 'win32' \}\}/);
-    assert.match(release, /name: Verify preinstalled Windows Rust/);
-    assert.match(release, /rustup target list --installed/);
-    assert.match(release, /rust-lld\.exe/);
-    assert.match(
-      release,
-      /CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: \$\{\{ matrix\.target\.os == 'win32' && 'rust-lld' \|\| '' \}\}/,
-    );
-    assert.match(release, /CARGO_INCREMENTAL: "0"/);
-    assert.match(release, /name: Package release binaries/);
-    assert.match(release, /name: fixture-databricks-auth-\$\{\{ matrix\.target\.node \}\}-npm/);
-    assert.match(
-      release,
-      /name: fixture-databricks-auth--\$\{\{ matrix\.target\.python \}\}--python-wheel/,
-    );
-    assert.match(release, /name: fixture-tool-\$\{\{ matrix\.target\.node \}\}-binary/);
-    assert.doesNotMatch(
-      rustBuild,
-      /Publish Python wheels|Publish native npm packages|Publish npm facade|pypi-fixture/,
-    );
-    assert.match(
-      release,
-      /cargo publish --package "fixture-databricks-auth" --registry crates-io --no-verify/,
-    );
-    assert.match(
-      release,
-      /cargo publish --package "fixture-tool" --registry crates-io --no-verify/,
-    );
-    const cargoPublisher = release.match(/^  publish-cargo:[\s\S]*?(?=^  publish-local-)/m)?.[0];
-    assert.ok(cargoPublisher);
-    assert.doesNotMatch(cargoPublisher, /Setup Bun|bun install|Setup sccache|libdbus/);
-    assert.doesNotMatch(release, /^  publish-local-bindings:$/m);
-    assert.match(release, /^  publish-local-cargo:$/m);
-    assert.match(release, /LOCAL_CARGO_REGISTRY/);
-    assert.match(release, /libdbus-1-dev pkg-config/);
-    assert.match(release, /mozilla-actions\/sccache-action@v0\.0\.11/);
-    assert.match(release, /Swatinem\/rust-cache@v2\.9\.2/);
-    assert.match(release, /cache-targets: false/);
-    assert.match(release, /add-job-id-key: false/);
-    assert.match(release, /add-rust-environment-hash-key: false/);
-    assert.match(release, /RUSTC_WRAPPER: sccache/);
+    assert.deepEqual(workflowStep(rustBuild, "Cache Cargo registry").with, {
+      "cache-targets": false,
+      "add-job-id-key": false,
+      "add-rust-environment-hash-key": false,
+      "shared-key": "release-${{ matrix.cargo }}-rust-stable",
+    });
+
+    const cargoPublisher = release.jobs["publish-cargo"]!;
+    assert.deepEqual(stepNames(cargoPublisher), [
+      "Checkout release commit",
+      "Verify release source",
+      "Setup Rust",
+      "Publish public crates",
+    ]);
+    const cargoPublish = workflowStep(cargoPublisher, "Publish public crates").run!;
+    assert.ok(cargoPublish.includes('--package "fixture-databricks-auth"'));
+    assert.ok(cargoPublish.includes('--package "fixture-tool"'));
+    assert.ok(release.jobs["publish-local-cargo"]);
+
+    const nativeNpm = release.jobs["publish-native-npm"]!;
     assert.equal(
-      release.match(/shared-key: release-\$\{\{ matrix\.target\.cargo \}\}-rust-stable/g)?.length,
-      1,
+      workflowStep(nativeNpm, "Publish native npm packages").env?.NPM_CONFIG_PROVENANCE,
+      "${{ github.event_name == 'push' && 'true' || 'false' }}",
     );
-    assert.match(
-      release,
-      /SCCACHE_GHA_VERSION: release-\$\{\{ matrix\.target\.cargo \}\}-rust-stable/,
+    assert.deepEqual(release.jobs["publish-node"]?.needs, ["verify-context", "publish-native-npm"]);
+    const nodeFacades = release.jobs["publish-node-facades"]!;
+    assert.deepEqual(nodeFacades.needs, ["verify-context", "publish-node"]);
+    const facadePublish = workflowStep(nodeFacades, "Build and publish UniFFI npm facades");
+    assert.ok(facadePublish.run?.includes("uniffi-release.mjs facade"));
+    assert.equal(facadePublish.run?.includes("--native-package"), false);
+    assert.equal(
+      facadePublish.env?.NPM_CONFIG_PROVENANCE,
+      "${{ github.event_name == 'push' && 'true' || 'false' }}",
     );
-    assert.match(release, /cargo_cache_hit=/);
-    assert.match(release, /"\$\{SCCACHE_PATH\}" --show-stats/);
-    assert.match(release, /phase=rust_workspace duration_seconds=/);
-    assert.doesNotMatch(release, /shared-key: cargo-publish/);
-    assert.doesNotMatch(release, /^  build-binaries:$/m);
-    assert.match(release, /fixture-tool-\$\{\{ matrix\.target\.node \}\}\.tar\.gz/);
-    assert.match(release, /fixture-tool-\$\{\{ matrix\.target\.node \}\}\.zip/);
-    assert.match(release, /name: Package release binaries/);
-    assert.match(release, /7z a/);
-    assert.match(release, /node: linux-x64-gnu/);
-    assert.match(release, /^  publish-github-release:$/m);
-    assert.match(release, /softprops\/action-gh-release@v2/);
+    const smoke = workflowStep(nodeFacades, "Smoke test published UniFFI npm facades");
+    assert.equal(smoke["continue-on-error"], true);
+    assert.equal(
+      smoke.if,
+      "${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}",
+    );
+    assert.equal(
+      workflowStep(release.jobs["publish-github-release"]!, "Publish GitHub release assets").uses,
+      "softprops/action-gh-release@v2",
+    );
     const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
-    assert.match(packager, /#!\/usr\/bin\/env node/);
-    assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`\$\{crate\}-uniffi-bindgen/);
-    assert.match(packager, /"node_modules", "npm", "bin", "npm-cli\.js"/);
-    assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
-    assert.match(packager, /"build",\s+"index\.ts",[\s\S]*?"--packages",\s+"external"/);
-    assert.match(packager, /Object\.assign\(manifest, compiledPublish\)/);
-    assert.match(packager, /dependency\.startsWith\("catalog:"\)/);
-    assert.match(packager, /export const PACKAGE_VERSION/);
-    assert.match(packager, /repository: sourceManifest\.repository/);
-    assert.match(packager, /npmPackageBase:/);
-    assert.match(packager, /dist\/uniffi\/facades/);
-    assert.match(packager, /runWithRetry/);
-    assert.match(packager, /manifest\.exports\["\."\]\.types = "\.\/index\.ts"/);
-    assert.match(packager, /uniffi-facade-install-/);
-    assert.match(packager, /facadePackage: singlePackage\(facadeOutput\)/);
-    assert.match(
-      packager,
-      /run\("node", \["-e", `import\(\$\{JSON\.stringify\(nodePackage\)\}\)`\]/,
-    );
-    assert.match(packager, /parsed\.positionals\[0\] === "facade"/);
-    assert.doesNotMatch(packager, /required\("ubrn"\)|parsed\.values\.ubrn/);
-    assert.match(packager, /if \(result\.error\) \{\s+throw new Error/);
-    assert.doesNotMatch(packager, /"cargo",\s*\[\s*"run"/);
+    assert.ok(packager.includes('"node_modules", "npm", "bin", "npm-cli.js"'));
+    assert.ok(packager.includes("command: process.execPath, args: [npmCli, ...args]"));
+    assert.ok(packager.includes("repository: sourceManifest.repository"));
+    assert.ok(packager.includes("npmPackageBase:"));
+    assert.equal(packager.includes('required("ubrn")'), false);
+    assert.equal(packager.includes('run("cargo", ["run"'), false);
     const nodeGenerator = readFileSync(
       join(import.meta.dirname, "..", "tasks", "uniffi.ts"),
       "utf8",

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { project as coreProject } from "@dbx-tools/core";
 import { string } from "@dbx-tools/shared-core";
 import { Project, TextFile, javascript } from "projen";
+import { JobPermission, type JobStep } from "projen/lib/github/workflows-model";
 import { BUN_VERSION } from "./bun-workflow.ts";
 import { DBXToolsTypeScriptProject, projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
@@ -14,9 +15,12 @@ import {
   RELEASE_SHA,
   RELEASE_TAG,
   RELEASE_VERSION,
-  hasNodeRelease,
-  nodeReleaseSetupSteps,
   releaseSourceSteps,
+} from "./release-dispatch.ts";
+import {
+  hasNodeRelease,
+  npmPublishEnvironment,
+  nodeReleaseSetupSteps,
   releaseWorkflow,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
@@ -726,14 +730,19 @@ export class DBXToolsRustWorkspace {
         crate: pkg.crateName,
         binary: pkg.packageOptions.binaryName ?? pkg.crateName,
       }));
+    const orderedBindingCrates = this.bindingMappings.map((binding) => binding.crate);
     const publicCrates = this.packages
       .filter((pkg) => !pkg.packageOptions.private)
       .sort((first, second) => {
-        const order = this.bindingMappings.map((binding) => binding.crate);
-        return order.indexOf(first.crateName) - order.indexOf(second.crateName);
+        // Binding crates publish in topological order before release-only crates that may consume them.
+        const firstIndex = orderedBindingCrates.indexOf(first.crateName);
+        const secondIndex = orderedBindingCrates.indexOf(second.crateName);
+        if (firstIndex < 0) return secondIndex < 0 ? 0 : 1;
+        if (secondIndex < 0) return -1;
+        return firstIndex - secondIndex;
       })
       .map((pkg) => pkg.crateName);
-    const targetMatrix = targets.map((target) => ({ target }));
+    const targetMatrix = targets.map((target) => ({ ...target }));
     const hasPythonBindings = bindings.some((binding) => binding.python);
     const usePreinstalledWindowsRust = releaseRustVersion === "stable";
     const hasTargetOutputs =
@@ -757,30 +766,30 @@ export class DBXToolsRustWorkspace {
         `--python "${binding.python}"`,
         `--node-package "${binding.nodePackage}"`,
         `--python-package "${binding.pythonPackage}"`,
-        '--cargo-target "${{ matrix.target.cargo }}"',
-        '--node-triple "${{ matrix.target.node }}"',
-        '--python-tag "${{ matrix.target.python }}"',
-        '--os "${{ matrix.target.os }}"',
-        '--cpu "${{ matrix.target.cpu }}"',
-        '--libc "${{ matrix.target.libc }}"',
+        '--cargo-target "${{ matrix.cargo }}"',
+        '--node-triple "${{ matrix.node }}"',
+        '--python-tag "${{ matrix.python }}"',
+        '--os "${{ matrix.os }}"',
+        '--cpu "${{ matrix.cpu }}"',
+        '--libc "${{ matrix.libc }}"',
         '--version "$VERSION"',
-        `--output "dist/release/${binding.crate}/\${{ matrix.target.node }}"`,
+        `--output "dist/release/${binding.crate}/\${{ matrix.node }}"`,
         "--skip-build",
       ].join(" \\\n  "),
     );
     const binaryCommands = releaseBinaries.flatMap((pkg) => [
-      `mkdir -p "dist/release/${pkg.crate}/\${{ matrix.target.node }}/binary/stage"`,
-      `SOURCE="target/\${{ matrix.target.cargo }}/release/${pkg.binary}\${{ matrix.target.os == 'win32' && '.exe' || '' }}"`,
-      `DESTINATION="dist/release/${pkg.crate}/\${{ matrix.target.node }}/binary/stage/${pkg.binary}\${{ matrix.target.os == 'win32' && '.exe' || '' }}"`,
+      `mkdir -p "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage"`,
+      `SOURCE="target/\${{ matrix.cargo }}/release/${pkg.binary}\${{ matrix.os == 'win32' && '.exe' || '' }}"`,
+      `DESTINATION="dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage/${pkg.binary}\${{ matrix.os == 'win32' && '.exe' || '' }}"`,
       'cp "$SOURCE" "$DESTINATION"',
-      'if [ "${{ matrix.target.os }}" = "win32" ]; then',
-      `  7z a "dist/release/${pkg.crate}/\${{ matrix.target.node }}/binary/${pkg.binary}-\${{ matrix.target.node }}.zip" "$DESTINATION"`,
+      'if [ "${{ matrix.os }}" = "win32" ]; then',
+      `  7z a "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/${pkg.binary}-\${{ matrix.node }}.zip" "$DESTINATION"`,
       "else",
-      `  tar -C "dist/release/${pkg.crate}/\${{ matrix.target.node }}/binary/stage" -czf "dist/release/${pkg.crate}/\${{ matrix.target.node }}/binary/${pkg.binary}-\${{ matrix.target.node }}.tar.gz" "${pkg.binary}"`,
+      `  tar -C "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage" -czf "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/${pkg.binary}-\${{ matrix.node }}.tar.gz" "${pkg.binary}"`,
       "fi",
-      `rm -rf "dist/release/${pkg.crate}/\${{ matrix.target.node }}/binary/stage"`,
+      `rm -rf "dist/release/${pkg.crate}/\${{ matrix.node }}/binary/stage"`,
     ]);
-    const artifactSteps = [
+    const artifactSteps: JobStep[] = [
       ...bindings.flatMap((binding) => [
         ...(binding.node
           ? [
@@ -788,8 +797,8 @@ export class DBXToolsRustWorkspace {
                 name: `Upload ${binding.crate} native npm package`,
                 uses: "actions/upload-artifact@v7",
                 with: {
-                  name: `${binding.crate}-\${{ matrix.target.node }}-npm`,
-                  path: `dist/release/${binding.crate}/\${{ matrix.target.node }}/npm/*.tgz`,
+                  name: `${binding.crate}-\${{ matrix.node }}-npm`,
+                  path: `dist/release/${binding.crate}/\${{ matrix.node }}/npm/*.tgz`,
                   "retention-days": 7,
                 },
               },
@@ -801,8 +810,8 @@ export class DBXToolsRustWorkspace {
                 name: `Upload ${binding.crate} Python wheel`,
                 uses: "actions/upload-artifact@v7",
                 with: {
-                  name: `${binding.crate}--\${{ matrix.target.python }}--python-wheel`,
-                  path: `dist/release/${binding.crate}/\${{ matrix.target.node }}/python/*.whl`,
+                  name: `${binding.crate}--\${{ matrix.python }}--python-wheel`,
+                  path: `dist/release/${binding.crate}/\${{ matrix.node }}/python/*.whl`,
                   "retention-days": 7,
                 },
               },
@@ -813,22 +822,23 @@ export class DBXToolsRustWorkspace {
         name: `Upload ${pkg.crate} release binary`,
         uses: "actions/upload-artifact@v7",
         with: {
-          name: `${pkg.crate}-\${{ matrix.target.node }}-binary`,
-          path: `dist/release/${pkg.crate}/\${{ matrix.target.node }}/binary/*`,
+          name: `${pkg.crate}-\${{ matrix.node }}-binary`,
+          path: `dist/release/${pkg.crate}/\${{ matrix.node }}/binary/*`,
           "retention-days": 7,
         },
       })),
     ];
     const buildJob = {
-      name: "${{ matrix.target.node }}",
+      name: "${{ matrix.node }}",
       needs: ["verify-context"],
-      "runs-on": "${{ matrix.target.runner }}",
+      runsOn: ["${{ matrix.runner }}"],
+      permissions: { contents: JobPermission.READ },
       env: {
         ...RUST_CACHE_ENV,
-        SCCACHE_GHA_VERSION: `release-\${{ matrix.target.cargo }}-rust-${releaseRustVersion}`,
+        SCCACHE_GHA_VERSION: `release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`,
       },
       strategy: {
-        "fail-fast": false,
+        failFast: false,
         matrix: { include: targetMatrix },
       },
       steps: [
@@ -836,31 +846,31 @@ export class DBXToolsRustWorkspace {
         ...(hasPythonBindings ? [{ name: "Setup uv", uses: "astral-sh/setup-uv@v7" }] : []),
         {
           name: "Setup Rust",
-          ...(usePreinstalledWindowsRust ? { if: "${{ matrix.target.os != 'win32' }}" } : {}),
+          ...(usePreinstalledWindowsRust ? { if: "${{ matrix.os != 'win32' }}" } : {}),
           uses: `dtolnay/rust-toolchain@${releaseRustVersion}`,
-          with: { targets: "${{ matrix.target.cargo }}" },
+          with: { targets: "${{ matrix.cargo }}" },
         },
         ...(usePreinstalledWindowsRust
           ? [
               {
                 name: "Verify preinstalled Windows Rust",
-                if: "${{ matrix.target.os == 'win32' }}",
+                if: "${{ matrix.os == 'win32' }}",
                 shell: "bash",
                 run: [
                   "rustc --version --verbose",
                   "cargo --version",
-                  'rustup target list --installed | grep -Fx "${{ matrix.target.cargo }}"',
-                  'test -f "$(rustc --print sysroot)/lib/rustlib/${{ matrix.target.cargo }}/bin/rust-lld.exe"',
+                  'rustup target list --installed | grep -Fx "${{ matrix.cargo }}"',
+                  'test -f "$(rustc --print sysroot)/lib/rustlib/${{ matrix.cargo }}/bin/rust-lld.exe"',
                 ].join("\n"),
               },
             ]
           : []),
-        ...rustCacheSteps(`release-\${{ matrix.target.cargo }}-rust-${releaseRustVersion}`),
+        ...rustCacheSteps(`release-\${{ matrix.cargo }}-rust-${releaseRustVersion}`),
         {
           name: "Log cache configuration",
           shell: "bash",
           run: [
-            `echo "cargo_cache_namespace=release-\${{ matrix.target.cargo }}-rust-${releaseRustVersion}"`,
+            `echo "cargo_cache_namespace=release-\${{ matrix.cargo }}-rust-${releaseRustVersion}"`,
             'echo "cargo_cache_hit=${{ steps.cargo_cache.outputs.cache-hit }}"',
             'echo "sccache_scope=${{ github.ref }}"',
             'echo "sccache_namespace=${SCCACHE_GHA_VERSION}"',
@@ -868,7 +878,7 @@ export class DBXToolsRustWorkspace {
         },
         {
           name: "Install Linux native dependencies",
-          if: "${{ matrix.target.os == 'linux' }}",
+          if: "${{ matrix.os == 'linux' }}",
           run: "sudo apt-get update && sudo apt-get install --yes libdbus-1-dev pkg-config",
         },
         {
@@ -876,11 +886,11 @@ export class DBXToolsRustWorkspace {
           shell: "bash",
           env: {
             CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER:
-              "${{ matrix.target.os == 'win32' && 'rust-lld' || '' }}",
+              "${{ matrix.os == 'win32' && 'rust-lld' || '' }}",
           },
           run: timedBash(
             "rust_workspace",
-            'cargo build --release --workspace --target "${{ matrix.target.cargo }}"',
+            'cargo build --release --workspace --target "${{ matrix.cargo }}"',
           ),
         },
         ...(bindingCommands.length
@@ -913,14 +923,14 @@ export class DBXToolsRustWorkspace {
     };
     const workflow = releaseWorkflow(project);
     if (hasTargetOutputs && targetMatrix.length) {
-      workflow.addOverride("jobs.rust-build", buildJob);
+      workflow.addJob("rust-build", buildJob);
     }
     if (publicCrates.length) {
-      workflow.addOverride("jobs.publish-cargo", {
+      workflow.addJob("publish-cargo", {
         if: "${{ github.event_name == 'push' }}",
         needs: ["verify-context", "rust-build"],
-        "runs-on": "ubuntu-latest",
-        permissions: { contents: "read" },
+        runsOn: ["ubuntu-latest"],
+        permissions: { contents: JobPermission.READ },
         steps: [
           ...releaseSourceSteps(),
           {
@@ -936,11 +946,11 @@ export class DBXToolsRustWorkspace {
           },
         ],
       });
-      workflow.addOverride("jobs.publish-local-cargo", {
+      workflow.addJob("publish-local-cargo", {
         if: "${{ github.event_name == 'push' && vars.LOCAL_REPOSITORIES == 'true' }}",
         needs: ["verify-context", "rust-build"],
-        "runs-on": ["self-hosted"],
-        permissions: { contents: "read" },
+        runsOn: ["self-hosted"],
+        permissions: { contents: JobPermission.READ },
         steps: [
           ...releaseSourceSteps(),
           {
@@ -961,11 +971,11 @@ export class DBXToolsRustWorkspace {
       });
     }
     if (releaseBinaries.length) {
-      workflow.addOverride("jobs.publish-github-release", {
+      workflow.addJob("publish-github-release", {
         if: "${{ github.event_name == 'push' }}",
         needs: ["verify-context", "rust-build"],
-        "runs-on": "ubuntu-latest",
-        permissions: { contents: "write" },
+        runsOn: ["ubuntu-latest"],
+        permissions: { contents: JobPermission.WRITE },
         steps: [
           {
             name: "Download release binaries",
@@ -992,11 +1002,11 @@ export class DBXToolsRustWorkspace {
 
     const nodeBindings = bindings.filter((binding) => Boolean(binding.node && binding.nodePackage));
     if (nodeBindings.length && hasNodeRelease(project)) {
-      workflow.addOverride("jobs.publish-native-npm", {
+      workflow.addJob("publish-native-npm", {
         needs: ["rust-build"],
-        "runs-on": "ubuntu-latest",
-        permissions: { contents: "read", "id-token": "write" },
-        "timeout-minutes": 15,
+        runsOn: ["ubuntu-latest"],
+        permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+        timeoutMinutes: 15,
         steps: [
           {
             name: "Setup Node.js",
@@ -1014,12 +1024,7 @@ export class DBXToolsRustWorkspace {
           },
           {
             name: "Publish native npm packages",
-            env: {
-              NPM_CONFIG_PROVENANCE: "${{ github.event_name == 'push' && 'true' || 'false' }}",
-              NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
-              NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
-              DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
-            },
+            env: npmPublishEnvironment(),
             run: [
               "test \"$(find dist/uniffi/native -name '*.tgz' | wc -l | tr -d ' ')\" -gt 0",
               'for package in dist/uniffi/native/*.tgz; do npm publish "$package" --access public $DRY_RUN; done',
@@ -1027,24 +1032,23 @@ export class DBXToolsRustWorkspace {
           },
         ],
       });
-      workflow.addOverride("jobs.publish-node.needs", ["verify-context", "publish-native-npm"]);
-      workflow.addOverride("jobs.publish-node-facades", {
+      const nodeJob = workflow.getJob("publish-node");
+      if ("uses" in nodeJob) throw new Error("publish-node must be a workflow job");
+      workflow.updateJob("publish-node", {
+        ...nodeJob,
+        needs: ["verify-context", "publish-native-npm"],
+      });
+      workflow.addJob("publish-node-facades", {
         needs: ["verify-context", "publish-node"],
-        "runs-on": "ubuntu-latest",
-        permissions: { contents: "read", "id-token": "write" },
-        "timeout-minutes": 30,
+        runsOn: ["ubuntu-latest"],
+        permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+        timeoutMinutes: 30,
         env: { BUN_VERSION, CI: "true" },
         steps: [
           ...nodeReleaseSetupSteps(project),
           {
             name: "Build and publish UniFFI npm facades",
-            env: {
-              RELEASE_VERSION,
-              NPM_CONFIG_PROVENANCE: "${{ github.event_name == 'push' && 'true' || 'false' }}",
-              NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
-              NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
-              DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
-            },
+            env: { RELEASE_VERSION, ...npmPublishEnvironment() },
             run: nodeBindings
               .flatMap((binding) => {
                 const output = `dist/uniffi/facades/${binding.crate}`;
@@ -1058,7 +1062,7 @@ export class DBXToolsRustWorkspace {
           {
             name: "Smoke test published UniFFI npm facades",
             if: "${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}",
-            "continue-on-error": true,
+            continueOnError: true,
             env: { RELEASE_VERSION },
             run: [
               'SMOKE_DIR="$(mktemp -d)"',
