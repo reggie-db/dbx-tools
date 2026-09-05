@@ -13,6 +13,9 @@ const nodeReleaseProjects = new WeakSet<DBXToolsJavaScriptProject>();
 const releaseTagPrefixes = new WeakMap<DBXToolsJavaScriptProject, string>();
 const releaseWorkflows = new WeakMap<DBXToolsJavaScriptProject, GithubWorkflow>();
 
+/** Independently recoverable portions of the release workflow. */
+export type ReleaseStage = "all" | "node" | "python" | "docs";
+
 /** GitHub Pages configuration included in the unified release workflow. */
 export interface ReleaseDocsOptions {
   readonly siteUrl: string;
@@ -48,6 +51,49 @@ export function releaseTagPattern(project: DBXToolsJavaScriptProject): string {
   return `${prefix}*`;
 }
 
+/** Run a release stage on tag pushes or when selected for manual recovery. */
+export function releaseStageCondition(stage: Exclude<ReleaseStage, "all">): string {
+  return `\${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == '${stage}' }}`;
+}
+
+/** Publish a selected stage unless a manual run remains in dry-run mode. */
+export function releasePublishCondition(stage: Exclude<ReleaseStage, "all">): string {
+  return `\${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == '${stage}')) }}`;
+}
+
+/** Download release artifacts from this run or a verified earlier run. */
+export function releaseArtifactSteps(options: {
+  readonly currentName: string;
+  readonly recoveredName: string;
+  readonly pattern: string;
+  readonly path: string;
+}): readonly JobStep[] {
+  const shared = {
+    pattern: options.pattern,
+    path: options.path,
+    "merge-multiple": true,
+  };
+  return [
+    {
+      name: options.currentName,
+      if: "${{ inputs.source_run_id == '' }}",
+      uses: "actions/download-artifact@v8",
+      with: shared,
+    },
+    {
+      name: options.recoveredName,
+      if: "${{ inputs.source_run_id != '' }}",
+      uses: "actions/download-artifact@v8",
+      with: {
+        ...shared,
+        "run-id": "${{ inputs.source_run_id }}",
+        "github-token": "${{ github.token }}",
+        repository: "${{ github.repository }}",
+      },
+    },
+  ];
+}
+
 /** Shared Bun, Node, cache, and install setup for Node release jobs. */
 export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): readonly JobStep[] {
   return [
@@ -66,17 +112,19 @@ export function nodeReleaseSetupSteps(project: DBXToolsJavaScriptProject): reado
 /** Authentication, provenance, and dry-run values shared by npm publishers. */
 export function npmPublishEnvironment(): Record<string, string> {
   return {
-    NPM_CONFIG_PROVENANCE: "${{ github.event_name == 'push' && 'true' || 'false' }}",
+    NPM_CONFIG_PROVENANCE:
+      "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
     NPM_CONFIG_TOKEN: "${{ secrets.NPM_TOKEN }}",
     NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}",
-    DRY_RUN: "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
+    DRY_RUN:
+      "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
   };
 }
 
 function verifyContextJob(tagPrefix: string): Job {
   return {
     runsOn: ["ubuntu-latest"],
-    permissions: { contents: JobPermission.READ },
+    permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
     outputs: {
       release_tag: { stepId: "release", outputName: "release_tag" },
       expected_sha: { stepId: "release", outputName: "expected_sha" },
@@ -109,13 +157,38 @@ function verifyContextJob(tagPrefix: string): Job {
           'RELEASE_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"',
           'test "$(git rev-parse HEAD)" = "$RELEASE_SHA"',
           'if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then',
-          '  test "$DRY_RUN" = "true"',
+          '  test "$GITHUB_REF_TYPE" = "tag"',
+          '  test "$GITHUB_REF_NAME" = "$RELEASE_TAG"',
           '  test "$RELEASE_SHA" = "$EXPECTED_SHA"',
+          '  if [ -n "${{ inputs.source_run_id }}" ]; then',
+          '    case "${{ inputs.stage }}" in node|python) ;; *) exit 1 ;; esac',
+          '    case "${{ inputs.source_run_id }}" in *[!0-9]*|"") exit 1 ;; esac',
+          "  fi",
           "fi",
           'echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"',
           'echo "expected_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"',
           `echo "release_version=\${RELEASE_TAG#${tagPrefix}}" >> "$GITHUB_OUTPUT"`,
         ].join("\n"),
+      },
+      {
+        name: "Verify source artifact run",
+        if: "${{ inputs.source_run_id != '' }}",
+        uses: "actions/github-script@v8",
+        env: {
+          EXPECTED_SHA: "${{ steps.release.outputs.expected_sha }}",
+          SOURCE_RUN_ID: "${{ inputs.source_run_id }}",
+        },
+        with: {
+          script: [
+            "const run = await github.rest.actions.getWorkflowRun({",
+            "  owner: context.repo.owner,",
+            "  repo: context.repo.repo,",
+            "  run_id: Number(process.env.SOURCE_RUN_ID),",
+            "});",
+            'if (run.data.path !== ".github/workflows/release.yml") core.setFailed("Source run is not release.yml");',
+            'if (run.data.head_sha !== process.env.EXPECTED_SHA) core.setFailed("Source run commit does not match the release tag");',
+          ].join("\n"),
+        },
       },
     ],
   };
@@ -123,6 +196,7 @@ function verifyContextJob(tagPrefix: string): Job {
 
 function nodePublishJob(project: DBXToolsJavaScriptProject): Job {
   return {
+    if: releaseStageCondition("node"),
     needs: ["verify-context"],
     runsOn: ["ubuntu-latest"],
     permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
@@ -148,6 +222,7 @@ function addDocsJobs(
   options: ReleaseDocsOptions,
 ): void {
   workflow.addJob("build-docs", {
+    if: releaseStageCondition("docs"),
     needs: ["verify-context"],
     runsOn: ["ubuntu-latest"],
     permissions: {
@@ -195,7 +270,7 @@ function addDocsJobs(
     ],
   });
   workflow.addJob("deploy-docs", {
-    if: "${{ github.event_name == 'push' }}",
+    if: releasePublishCondition("docs"),
     needs: ["build-docs"],
     environment: {
       name: "github-pages",
@@ -250,6 +325,19 @@ export class DBXToolsRelease extends Component {
             description: "Commit the release tag must reference",
             type: "string",
             required: true,
+          },
+          stage: {
+            description: "Release stage to build, validate, or recover",
+            type: "choice",
+            options: ["all", "node", "python", "docs"],
+            default: "all",
+            required: true,
+          },
+          source_run_id: {
+            description: "Earlier release workflow run containing Rust artifacts",
+            type: "string",
+            default: "",
+            required: false,
           },
           dry_run: {
             description: "Build and validate without publishing",

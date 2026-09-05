@@ -54,7 +54,7 @@ export { RustReleaseOs, RustReleaseCpu, UNIFFI_RELEASE_TARGETS, DBXToolsRustProj
 export type { CargoDependencyOptions, CargoDependency, RustPackageOptions, DBXToolsRustWorkspaceOptions, RustReleasePlatform, UniFFIReleaseTarget, RustBindingMapping, RustWorkspaceMapping } from "./src/project-rs.ts";
 export { COMPILED_DIR, COMPILED_COMPILER_OPTIONS } from "./src/publish.ts";
 export { DBXToolsRelease } from "./src/release.ts";
-export type { ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
+export type { ReleaseStage, ReleaseDocsOptions, DBXToolsReleaseOptions } from "./src/release.ts";
 export { RELEASE_TAG, RELEASE_SHA, RELEASE_VERSION } from "./src/release-dispatch.ts";
 export { AGNOSTIC_COMPILER_OPTIONS, PACKAGE_TAG_MIXINS } from "./src/tags.ts";
 export type { PackageTag } from "./src/tags.ts";

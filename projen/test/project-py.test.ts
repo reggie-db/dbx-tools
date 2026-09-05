@@ -120,6 +120,8 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.ok(release.jobs["rust-build"]);
     const buildPython = release.jobs["build-python"]!;
     assert.deepEqual(buildPython.needs, ["verify-context", "rust-build"]);
+    assert.ok(buildPython.if?.includes("needs.rust-build.result != 'failure'"));
+    assert.deepEqual(buildPython.permissions, { actions: "read", contents: "read" });
     assert.equal(buildPython.env?.BUN_VERSION, "1.3.14");
     assert.equal(workflowStep(buildPython, "Restore Bun cache").uses, "actions/cache/restore@v5");
     assert.equal(workflowStep(buildPython, "Save Bun cache").uses, "actions/cache/save@v5");
@@ -129,6 +131,10 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.equal(
       workflowStep(buildPython, "Download fixture-native native wheels").with?.pattern,
       "fixture-native--*--python-wheel",
+    );
+    assert.equal(
+      workflowStep(buildPython, "Download recovered fixture-native native wheels").with?.["run-id"],
+      "${{ inputs.source_run_id }}",
     );
     assert.deepEqual(release.jobs["publish-pypi-core"]?.environment, {
       name: "pypi-fixture-core",
@@ -145,7 +151,16 @@ describe("DBXToolsPythonWorkspace", () => {
       name: "production-pypi",
       url: "https://pypi.org/project/fixture-app/",
     });
-    assert.equal(release.jobs["publish-pypi-native"]?.if, "${{ github.event_name == 'push' }}");
+    assert.equal(
+      release.jobs["publish-pypi-native"]?.if,
+      "${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}",
+    );
+    assert.equal(
+      workflowStep(release.jobs["publish-pypi-native"]!, "Publish fixture-native to PyPI").with?.[
+        "skip-existing"
+      ],
+      true,
+    );
     assert.equal("repository_dispatch" in release.on, false);
     assert.equal("workflow_run" in release.on, false);
     const instructionsTask = project.tasks.tryFind("pypiTrustedPublisherInstructions");

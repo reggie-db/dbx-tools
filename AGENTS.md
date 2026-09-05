@@ -440,6 +440,16 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   Release workflow generation is non-destructive: it writes `release.yml` and
   never removes other workflow files. Consumers must explicitly delete exact
   workflow files they no longer want.
+  GitHub's failed-job rerun reuses successful Rust artifacts from the same run.
+  Manual recovery selects `all`, `node`, `python`, or `docs`; a Node or Python
+  recovery can name an earlier `release.yml` run whose commit must match the
+  verified annotated tag. Dispatch the workflow with that tag as its Git ref so
+  release environment tag policies remain effective. Manual runs default to
+  dry-run, while clearing `dry_run` permits the selected publication stage. npm recovery compares the
+  staged archive integrity and repository identity before skipping an exact
+  published version. Normal workspace packages are packed with Bun for the same
+  check. PyPI publishers use Twine's hash-aware existing-file check, so matching
+  files are skipped and a same-name content mismatch fails.
   The Rust matrix uploads native npm archives, Python wheels, and explicit
   binaries as same-run artifacts. Node publishes native packages first with npm
   provenance, publishes normal workspace packages including Projen next, then

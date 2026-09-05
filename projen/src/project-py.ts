@@ -10,7 +10,13 @@ import { projectRepositoryUrl } from "./project-js.ts";
 import { isDBXToolsJavaScriptProject } from "./project-predicate.ts";
 import type { DBXToolsProject, DBXToolsProjectOptions } from "./project.ts";
 import { RELEASE_VERSION, releaseSourceSteps } from "./release-dispatch.ts";
-import { releaseTagPattern, releaseWorkflow } from "./release.ts";
+import {
+  releaseArtifactSteps,
+  releasePublishCondition,
+  releaseStageCondition,
+  releaseTagPattern,
+  releaseWorkflow,
+} from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
 
 /** Git location used by direct `#subdirectory=` package dependencies. */
@@ -427,9 +433,12 @@ export class DBXToolsPythonWorkspace extends Component {
     const usesRustArtifacts = uniffiPublications.length > 0;
     const workflow = releaseWorkflow(project);
     workflow.addJob("build-python", {
+      if: usesRustArtifacts
+        ? "${{ always() && needs.verify-context.result == 'success' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}"
+        : releaseStageCondition("python"),
       needs: ["verify-context", ...(usesRustArtifacts ? ["rust-build"] : [])],
       runsOn: ["ubuntu-latest"],
-      permissions: { contents: JobPermission.READ },
+      permissions: { actions: JobPermission.READ, contents: JobPermission.READ },
       timeoutMinutes: 20,
       env: { BUN_VERSION },
       steps: [
@@ -438,15 +447,14 @@ export class DBXToolsPythonWorkspace extends Component {
         { name: "Setup uv", uses: "astral-sh/setup-uv@v7" },
         { name: "Install release helpers", run: "bun install" },
         bunCacheSaveStep(),
-        ...uniffiPublications.map((publication) => ({
-          name: `Download ${publication.distribution} native wheels`,
-          uses: "actions/download-artifact@v8",
-          with: {
+        ...uniffiPublications.flatMap((publication) =>
+          releaseArtifactSteps({
+            currentName: `Download ${publication.distribution} native wheels`,
+            recoveredName: `Download recovered ${publication.distribution} native wheels`,
             pattern: `${publication.distribution}--*--python-wheel`,
             path: `dist/${publication.directory}`,
-            "merge-multiple": true,
-          },
-        })),
+          }),
+        ),
         {
           name: "Stamp workspace versions",
           env: { VERSION: RELEASE_VERSION },
@@ -484,8 +492,9 @@ export class DBXToolsPythonWorkspace extends Component {
     });
     for (const publication of allPublications) {
       workflow.addJob(`publish-pypi-${publication.directory}`, {
-        if: "${{ github.event_name == 'push' }}",
+        if: releasePublishCondition("python"),
         needs: [
+          "verify-context",
           "build-python",
           ...(publication.dependencies ?? []).map((dependency) => `publish-pypi-${dependency}`),
         ],
@@ -507,7 +516,10 @@ export class DBXToolsPythonWorkspace extends Component {
           {
             name: `Publish ${publication.distribution} to PyPI`,
             uses: "pypa/gh-action-pypi-publish@release/v1",
-            with: { "packages-dir": `dist/${publication.directory}` },
+            with: {
+              "packages-dir": `dist/${publication.directory}`,
+              "skip-existing": true,
+            },
           },
         ],
       });

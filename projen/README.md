@@ -140,6 +140,17 @@ Release generation writes `release.yml` without scanning for or removing other
 workflow files. Consumers explicitly delete exact workflow files they no longer
 want.
 
+Failed-job reruns consume successful Rust artifacts from the same workflow run.
+For a separate recovery run, choose `node`, `python`, or `docs` instead of
+`all`. Node and Python recovery can supply the prior `release.yml` run ID; the
+workflow verifies that run used the commit selected by the annotated release
+tag before downloading its artifacts. Dispatch the workflow with the release
+tag as its Git ref so environment tag policies still apply. Manual recovery
+defaults to dry-run and publishes only when `dry_run` is cleared. npm retries skip an exact version only
+after the local archive integrity and repository identity match registry
+metadata. PyPI retries enable Twine's hash-aware existing-file behavior, which
+skips matching files and fails when an existing filename has different content.
+
 The Rust matrix has one row per target. Each row installs native dependencies,
 restores Cargo and sccache once, builds the Cargo workspace once, then packages
 every discovered output from that shared build. Rust rows prepare native npm

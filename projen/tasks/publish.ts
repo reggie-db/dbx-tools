@@ -36,6 +36,9 @@
  *     The later `bun publish --ignore-scripts` calls therefore pack the already
  *     compiled `lib/` trees instead of serially repeating each member's
  *     `prepack`. Packages retain their `prepack` task for standalone publishes.
+ *   - **release recovery** packs each exact version before upload and compares
+ *     its integrity and repository identity with registry metadata. A matching
+ *     immutable version is skipped, while any mismatch fails the retry.
  *
  * `--dry-run` forwards to `bun publish`: it packs + validates
  * but uploads nothing, so the `release` workflow is testable end-to-end via a
@@ -56,12 +59,22 @@
  * content, which already equals the release version, so the worktree is never
  * left regressed.
  */
-import { chmodSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { exec } from "@dbx-tools/core";
 import { log } from "@dbx-tools/shared-core";
 import ts from "typescript";
 import { parse } from "yaml";
+import { npmReleaseMatches, publishedNpmRelease, readNpmArchiveIdentity } from "./publish-npm.ts";
 
 const logger = log.logger("dbx-tools:publish");
 
@@ -375,6 +388,31 @@ logger.info(
   `${dryRun ? "dry-run packing" : "publishing"} ${publishable.length} packages with concurrency ${concurrency}`,
 );
 await runConcurrent(publishable, concurrency, async ({ dir, name }) => {
+  if (!dryRun) {
+    const packed = mkdtempSync(join(tmpdir(), "dbx-tools-npm-release-"));
+    try {
+      const archive = join(packed, "package.tgz");
+      run(
+        dir,
+        "bun",
+        ["pm", "pack", "--destination", packed, "--filename", "package.tgz", "--ignore-scripts"],
+        path,
+      );
+      const local = readNpmArchiveIdentity(archive);
+      if (local.name !== name || local.version !== version) {
+        throw new Error(
+          `Packed npm identity ${local.name}@${local.version} does not match ${name}@${version}`,
+        );
+      }
+      const published = await publishedNpmRelease(local.name, local.version, registry);
+      if (npmReleaseMatches(local, published)) {
+        logger.info(`skip published ${name} @ ${version}`);
+        return;
+      }
+    } finally {
+      rmSync(packed, { recursive: true, force: true });
+    }
+  }
   logger.info(`${dryRun ? "dry-run publishing" : "publishing"} ${name} @ ${version}`);
   await runAsync(dir, "bun", ["publish", ...publishArgs], path);
 });

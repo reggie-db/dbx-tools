@@ -21,6 +21,8 @@ import {
   hasNodeRelease,
   npmPublishEnvironment,
   nodeReleaseSetupSteps,
+  releaseArtifactSteps,
+  releaseStageCondition,
   releaseWorkflow,
 } from "./release.ts";
 import { readWorkspaceVersion } from "./workspace-version.ts";
@@ -829,6 +831,7 @@ export class DBXToolsRustWorkspace {
       })),
     ];
     const buildJob = {
+      if: "${{ github.event_name == 'push' || inputs.stage == 'all' }}",
       name: "${{ matrix.node }}",
       needs: ["verify-context"],
       runsOn: ["${{ matrix.runner }}"],
@@ -1003,32 +1006,28 @@ export class DBXToolsRustWorkspace {
     const nodeBindings = bindings.filter((binding) => Boolean(binding.node && binding.nodePackage));
     if (nodeBindings.length && hasNodeRelease(project)) {
       workflow.addJob("publish-native-npm", {
-        needs: ["rust-build"],
+        if: "${{ always() && needs.verify-context.result == 'success' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
+        needs: ["verify-context", "rust-build"],
         runsOn: ["ubuntu-latest"],
-        permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
+        permissions: {
+          actions: JobPermission.READ,
+          contents: JobPermission.READ,
+          idToken: JobPermission.WRITE,
+        },
         timeoutMinutes: 15,
+        env: { BUN_VERSION, CI: "true" },
         steps: [
-          {
-            name: "Setup Node.js",
-            uses: "actions/setup-node@v6",
-            with: { "node-version": "lts/*", "registry-url": "https://registry.npmjs.org" },
-          },
-          {
-            name: "Download native npm packages",
-            uses: "actions/download-artifact@v8",
-            with: {
-              pattern: "*-npm",
-              path: "dist/uniffi/native",
-              "merge-multiple": true,
-            },
-          },
+          ...nodeReleaseSetupSteps(project),
+          ...releaseArtifactSteps({
+            currentName: "Download native npm packages",
+            recoveredName: "Download recovered native npm packages",
+            pattern: "*-npm",
+            path: "dist/uniffi/native",
+          }),
           {
             name: "Publish native npm packages",
-            env: npmPublishEnvironment(),
-            run: [
-              "test \"$(find dist/uniffi/native -name '*.tgz' | wc -l | tr -d ' ')\" -gt 0",
-              'for package in dist/uniffi/native/*.tgz; do npm publish "$package" --access public $DRY_RUN; done',
-            ].join("\n"),
+            env: { RELEASE_VERSION, ...npmPublishEnvironment() },
+            run: 'bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" $DRY_RUN',
           },
         ],
       });
@@ -1036,9 +1035,11 @@ export class DBXToolsRustWorkspace {
       if ("uses" in nodeJob) throw new Error("publish-node must be a workflow job");
       workflow.updateJob("publish-node", {
         ...nodeJob,
+        if: "${{ always() && needs.verify-context.result == 'success' && needs.publish-native-npm.result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}",
         needs: ["verify-context", "publish-native-npm"],
       });
       workflow.addJob("publish-node-facades", {
+        if: releaseStageCondition("node"),
         needs: ["verify-context", "publish-node"],
         runsOn: ["ubuntu-latest"],
         permissions: { contents: JobPermission.READ, idToken: JobPermission.WRITE },
@@ -1054,7 +1055,7 @@ export class DBXToolsRustWorkspace {
                 const output = `dist/uniffi/facades/${binding.crate}`;
                 return [
                   `node .projen/uniffi-release.mjs facade --node "${binding.node}" --node-package "${binding.nodePackage}" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "${output}"`,
-                  `for package in ${output}/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done`,
+                  `bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "${output}/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN`,
                 ];
               })
               .join("\n"),

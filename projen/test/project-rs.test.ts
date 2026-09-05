@@ -441,6 +441,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.equal("workflow_run" in release.on, false);
 
     const rustBuild = release.jobs["rust-build"]!;
+    assert.equal(rustBuild.if, "${{ github.event_name == 'push' || inputs.stage == 'all' }}");
     assert.deepEqual(
       rustBuild.strategy?.matrix?.include?.map((target) => target.node),
       ["darwin-arm64", "linux-x64-gnu"],
@@ -493,19 +494,34 @@ describe("DBXToolsRustWorkspace", () => {
     assert.ok(release.jobs["publish-local-cargo"]);
 
     const nativeNpm = release.jobs["publish-native-npm"]!;
+    assert.deepEqual(nativeNpm.needs, ["verify-context", "rust-build"]);
+    assert.deepEqual(nativeNpm.permissions, {
+      actions: "read",
+      contents: "read",
+      "id-token": "write",
+    });
+    assert.equal(
+      workflowStep(nativeNpm, "Download recovered native npm packages").with?.["run-id"],
+      "${{ inputs.source_run_id }}",
+    );
     assert.equal(
       workflowStep(nativeNpm, "Publish native npm packages").env?.NPM_CONFIG_PROVENANCE,
-      "${{ github.event_name == 'push' && 'true' || 'false' }}",
+      "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
+    );
+    assert.ok(
+      workflowStep(nativeNpm, "Publish native npm packages").run?.includes("publish-npm.ts"),
     );
     assert.deepEqual(release.jobs["publish-node"]?.needs, ["verify-context", "publish-native-npm"]);
+    assert.ok(release.jobs["publish-node"]?.if?.includes("needs.publish-native-npm.result"));
     const nodeFacades = release.jobs["publish-node-facades"]!;
     assert.deepEqual(nodeFacades.needs, ["verify-context", "publish-node"]);
     const facadePublish = workflowStep(nodeFacades, "Build and publish UniFFI npm facades");
     assert.ok(facadePublish.run?.includes("uniffi-release.mjs facade"));
+    assert.ok(facadePublish.run?.includes("publish-npm.ts"));
     assert.equal(facadePublish.run?.includes("--native-package"), false);
     assert.equal(
       facadePublish.env?.NPM_CONFIG_PROVENANCE,
-      "${{ github.event_name == 'push' && 'true' || 'false' }}",
+      "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
     );
     const smoke = workflowStep(nodeFacades, "Smoke test published UniFFI npm facades");
     assert.equal(smoke["continue-on-error"], true);

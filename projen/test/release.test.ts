@@ -38,37 +38,59 @@ after(() => {
 });
 
 describe("unified release workflow", () => {
-  it("uses verified annotated tags and safe manual dry runs", () => {
+  it("uses verified annotated tags and selective manual recovery", () => {
     assert.equal(release.name, "release");
     assert.deepEqual(workflowTrigger<{ tags: string[] }>(release, "push").tags, ["v*"]);
-    assert.deepEqual(
-      workflowTrigger<{ inputs: Record<string, unknown> }>(release, "workflow_dispatch").inputs
-        .dry_run,
-      {
-        description: "Build and validate without publishing",
-        type: "boolean",
-        default: true,
-        required: true,
-      },
-    );
+    const inputs = workflowTrigger<{ inputs: Record<string, unknown> }>(
+      release,
+      "workflow_dispatch",
+    ).inputs;
+    assert.deepEqual(inputs.dry_run, {
+      description: "Build and validate without publishing",
+      type: "boolean",
+      default: true,
+      required: true,
+    });
+    assert.deepEqual(inputs.stage, {
+      description: "Release stage to build, validate, or recover",
+      type: "choice",
+      options: ["all", "node", "python", "docs"],
+      default: "all",
+      required: true,
+    });
+    assert.deepEqual(inputs.source_run_id, {
+      description: "Earlier release workflow run containing Rust artifacts",
+      type: "string",
+      default: "",
+      required: false,
+    });
     assert.deepEqual(release.concurrency, {
       group: "release",
       "cancel-in-progress": true,
     });
     assert.deepEqual(release.permissions, { contents: "read" });
 
-    const verify = step(release.jobs["verify-context"]!, "Verify release context");
+    const verifyJob = release.jobs["verify-context"]!;
+    assert.deepEqual(verifyJob.permissions, { actions: "read", contents: "read" });
+    const verify = step(verifyJob, "Verify release context");
     assert.equal(
       verify.env?.DRY_RUN,
       "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}",
     );
     assert.ok(verify.run?.includes('test "$(git cat-file -t "$RELEASE_TAG")" = "tag"'));
     assert.ok(verify.run?.includes('test "$(git rev-parse HEAD)" = "$RELEASE_SHA"'));
-    assert.ok(verify.run?.includes('test "$DRY_RUN" = "true"'));
+    assert.ok(verify.run?.includes('test "$GITHUB_REF_TYPE" = "tag"'));
+    assert.ok(verify.run?.includes('test "$GITHUB_REF_NAME" = "$RELEASE_TAG"'));
+    assert.ok(verify.run?.includes("inputs.source_run_id"));
+    assert.equal(step(verifyJob, "Verify source artifact run").uses, "actions/github-script@v8");
   });
 
   it("publishes npm through the shared authenticated driver", () => {
     const job = release.jobs["publish-node"]!;
+    assert.equal(
+      job.if,
+      "${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node' }}",
+    );
     assert.deepEqual(job.permissions, { contents: "read", "id-token": "write" });
     assert.equal(job.env?.BUN_VERSION, "1.3.14");
     assert.deepEqual(step(job, "Setup Node.js").with, {
@@ -81,18 +103,22 @@ describe("unified release workflow", () => {
     const publish = step(job, "Compile, package, and publish npm workspace");
     assert.equal(
       publish.env?.NPM_CONFIG_PROVENANCE,
-      "${{ github.event_name == 'push' && 'true' || 'false' }}",
+      "${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}",
     );
     assert.equal(publish.env?.NODE_AUTH_TOKEN, "${{ secrets.NPM_TOKEN }}");
     assert.equal(
       publish.env?.DRY_RUN,
-      "${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}",
+      "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}",
     );
     assert.ok(publish.run?.includes("tasks/publish.ts"));
   });
 
-  it("builds and deploys docs in the same workflow", () => {
+  it("builds and selectively deploys docs in the same workflow", () => {
     const build = release.jobs["build-docs"]!;
+    assert.equal(
+      build.if,
+      "${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs' }}",
+    );
     assert.deepEqual(build.permissions, {
       contents: "read",
       pages: "write",
@@ -103,7 +129,10 @@ describe("unified release workflow", () => {
     assert.equal(step(build, "Upload Pages artifact").uses, "actions/upload-pages-artifact@v4");
 
     const deploy = release.jobs["deploy-docs"]!;
-    assert.equal(deploy.if, "${{ github.event_name == 'push' }}");
+    assert.equal(
+      deploy.if,
+      "${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'docs')) }}",
+    );
     assert.deepEqual(deploy.environment, {
       name: "github-pages",
       url: "${{ steps.deployment.outputs.page_url }}",

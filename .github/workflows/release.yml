@@ -16,6 +16,21 @@ on:
         description: Commit the release tag must reference
         type: string
         required: true
+      stage:
+        description: Release stage to build, validate, or recover
+        type: choice
+        options:
+          - all
+          - node
+          - python
+          - docs
+        default: all
+        required: true
+      source_run_id:
+        description: Earlier release workflow run containing Rust artifacts
+        type: string
+        default: ""
+        required: false
       dry_run:
         description: Build and validate without publishing
         type: boolean
@@ -28,6 +43,7 @@ jobs:
   verify-context:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
     outputs:
       release_tag: ${{ steps.release.outputs.release_tag }}
@@ -53,13 +69,34 @@ jobs:
           RELEASE_SHA="$(git rev-parse "$RELEASE_TAG^{commit}")"
           test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            test "$DRY_RUN" = "true"
+            test "$GITHUB_REF_TYPE" = "tag"
+            test "$GITHUB_REF_NAME" = "$RELEASE_TAG"
             test "$RELEASE_SHA" = "$EXPECTED_SHA"
+            if [ -n "${{ inputs.source_run_id }}" ]; then
+              case "${{ inputs.stage }}" in node|python) ;; *) exit 1 ;; esac
+              case "${{ inputs.source_run_id }}" in *[!0-9]*|"") exit 1 ;; esac
+            fi
           fi
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "expected_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "release_version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
         shell: bash
+      - name: Verify source artifact run
+        id: verify_source_artifact_run
+        if: ${{ inputs.source_run_id != '' }}
+        uses: actions/github-script@v8
+        env:
+          EXPECTED_SHA: ${{ steps.release.outputs.expected_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        with:
+          script: |-
+            const run = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: Number(process.env.SOURCE_RUN_ID),
+            });
+            if (run.data.path !== ".github/workflows/release.yml") core.setFailed("Source run is not release.yml");
+            if (run.data.head_sha !== process.env.EXPECTED_SHA) core.setFailed("Source run commit does not match the release tag");
   publish-node:
     needs:
       - verify-context
@@ -71,6 +108,7 @@ jobs:
     env:
       BUN_VERSION: 1.3.14
       CI: "true"
+    if: ${{ always() && needs.verify-context.result == 'success' && needs.publish-native-npm.result == 'success' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}
     steps:
       - name: Checkout release commit
         id: checkout_release_commit
@@ -127,10 +165,10 @@ jobs:
         id: compile_package_and_publish_npm_workspace
         env:
           RELEASE_VERSION: ${{ needs.verify-context.outputs.release_version }}
-          NPM_CONFIG_PROVENANCE: ${{ github.event_name == 'push' && 'true' || 'false' }}
+          NPM_CONFIG_PROVENANCE: ${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
         run: |-
           chmod -R u+w . || true
           bun node_modules/@dbx-tools/projen/tasks/publish.ts "$RELEASE_VERSION" $DRY_RUN
@@ -146,6 +184,7 @@ jobs:
       BUN_VERSION: 1.3.14
       DOCS_SITE_URL: https://docs.dbx.tools
       DOCS_BASE: /
+    if: ${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'docs' }}
     steps:
       - name: Checkout release commit
         id: checkout_release_commit
@@ -233,7 +272,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'docs')) }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
@@ -251,6 +290,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_GHA_ENABLED: "true"
       SCCACHE_GHA_VERSION: release-${{ matrix.cargo }}-rust-stable
+    if: ${{ github.event_name == 'push' || inputs.stage == 'all' }}
     steps:
       - name: Checkout release commit
         id: checkout_release_commit
@@ -561,35 +601,98 @@ jobs:
           cargo publish --package "dbx-tools-databricks-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-google-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
   publish-native-npm:
-    needs: rust-build
+    needs:
+      - verify-context
+      - rust-build
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       id-token: write
+    env:
+      BUN_VERSION: 1.3.14
+      CI: "true"
+    if: ${{ always() && needs.verify-context.result == 'success' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node') }}
     steps:
+      - name: Checkout release commit
+        id: checkout_release_commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.verify-context.outputs.expected_sha }}
+          fetch-depth: 1
+      - name: Verify release source
+        id: verify_release_source
+        env:
+          RELEASE_TAG: ${{ needs.verify-context.outputs.release_tag }}
+          EXPECTED_SHA: ${{ needs.verify-context.outputs.expected_sha }}
+        run: |-
+          git fetch --force origin "+refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git cat-file -t "$RELEASE_TAG")" = "tag"
+          test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$EXPECTED_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+        shell: bash
+      - name: Setup Bun
+        id: setup_bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Resolve Bun cache
+        id: bun_cache_metadata
+        run: |-
+          echo "path=$(bun pm cache)" >> "$GITHUB_OUTPUT"
+          echo "dependency_hash=$(node .projen/bun-cache-key.mjs)" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - name: Restore Bun cache
+        id: bun_cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ steps.bun_cache_metadata.outputs.path }}
+          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ env.BUN_VERSION }}-${{ steps.bun_cache_metadata.outputs.dependency_hash }}
+          restore-keys: bun-${{ runner.os }}-${{ runner.arch }}-${{ env.BUN_VERSION }}-
       - name: Setup Node.js
         id: setup_node_js
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
           registry-url: https://registry.npmjs.org
+      - name: Install
+        id: install
+        run: bun install
+      - name: Save Bun cache
+        id: save_bun_cache
+        if: ${{ steps.bun_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.bun_cache_metadata.outputs.path }}
+          key: ${{ steps.bun_cache.outputs.cache-primary-key }}
       - name: Download native npm packages
         id: download_native_npm_packages
+        if: ${{ inputs.source_run_id == '' }}
         uses: actions/download-artifact@v8
         with:
           pattern: "*-npm"
           path: dist/uniffi/native
           merge-multiple: true
+      - name: Download recovered native npm packages
+        id: download_recovered_native_npm_packages
+        if: ${{ inputs.source_run_id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*-npm"
+          path: dist/uniffi/native
+          merge-multiple: true
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
       - name: Publish native npm packages
         id: publish_native_npm_packages
         env:
-          NPM_CONFIG_PROVENANCE: ${{ github.event_name == 'push' && 'true' || 'false' }}
+          RELEASE_VERSION: ${{ needs.verify-context.outputs.release_version }}
+          NPM_CONFIG_PROVENANCE: ${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}
-        run: |-
-          test "$(find dist/uniffi/native -name '*.tgz' | wc -l | tr -d ' ')" -gt 0
-          for package in dist/uniffi/native/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
+        run: bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory dist/uniffi/native --version "$RELEASE_VERSION" $DRY_RUN
     timeout-minutes: 15
   publish-node-facades:
     needs:
@@ -602,6 +705,7 @@ jobs:
     env:
       BUN_VERSION: 1.3.14
       CI: "true"
+    if: ${{ github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'node' }}
     steps:
       - name: Checkout release commit
         id: checkout_release_commit
@@ -658,19 +762,19 @@ jobs:
         id: build_and_publish_uniffi_npm_facades
         env:
           RELEASE_VERSION: ${{ needs.verify-context.outputs.release_version }}
-          NPM_CONFIG_PROVENANCE: ${{ github.event_name == 'push' && 'true' || 'false' }}
+          NPM_CONFIG_PROVENANCE: ${{ (github.event_name == 'push' || inputs.dry_run == false) && 'true' || 'false' }}
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
         run: |-
           node .projen/uniffi-release.mjs facade --node "packages/js/node/auth" --node-package "@dbx-tools/auth" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-auth"
-          for package in dist/uniffi/facades/dbx-tools-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
+          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-auth/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
           node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks" --node-package "@dbx-tools/databricks" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-databricks"
-          for package in dist/uniffi/facades/dbx-tools-databricks/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
+          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-databricks/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
           node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks-auth" --node-package "@dbx-tools/databricks-auth" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-databricks-auth"
-          for package in dist/uniffi/facades/dbx-tools-databricks-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
+          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-databricks-auth/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
           node .projen/uniffi-release.mjs facade --node "packages/js/node/google-auth" --node-package "@dbx-tools/google-auth" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-google-auth"
-          for package in dist/uniffi/facades/dbx-tools-google-auth/npm-facade/*.tgz; do npm publish "$package" --access public $DRY_RUN; done
+          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-google-auth/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
       - name: Smoke test published UniFFI npm facades
         id: smoke_test_published_uniffi_npm_facades
         if: ${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}
@@ -697,9 +801,11 @@ jobs:
       - rust-build
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
     env:
       BUN_VERSION: 1.3.14
+    if: ${{ always() && needs.verify-context.result == 'success' && needs.rust-build.result != 'failure' && needs.rust-build.result != 'cancelled' && (github.event_name == 'push' || inputs.stage == 'all' || inputs.stage == 'python') }}
     steps:
       - name: Checkout release commit
         id: checkout_release_commit
@@ -751,32 +857,80 @@ jobs:
           key: ${{ steps.bun_cache.outputs.cache-primary-key }}
       - name: Download dbx-tools-auth native wheels
         id: download_dbx-tools-auth_native_wheels
+        if: ${{ inputs.source_run_id == '' }}
         uses: actions/download-artifact@v8
         with:
           pattern: dbx-tools-auth--*--python-wheel
           path: dist/auth
           merge-multiple: true
+      - name: Download recovered dbx-tools-auth native wheels
+        id: download_recovered_dbx-tools-auth_native_wheels
+        if: ${{ inputs.source_run_id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-auth--*--python-wheel
+          path: dist/auth
+          merge-multiple: true
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
       - name: Download dbx-tools-databricks native wheels
         id: download_dbx-tools-databricks_native_wheels
+        if: ${{ inputs.source_run_id == '' }}
         uses: actions/download-artifact@v8
         with:
           pattern: dbx-tools-databricks--*--python-wheel
           path: dist/databricks
           merge-multiple: true
+      - name: Download recovered dbx-tools-databricks native wheels
+        id: download_recovered_dbx-tools-databricks_native_wheels
+        if: ${{ inputs.source_run_id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-databricks--*--python-wheel
+          path: dist/databricks
+          merge-multiple: true
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
       - name: Download dbx-tools-databricks-auth native wheels
         id: download_dbx-tools-databricks-auth_native_wheels
+        if: ${{ inputs.source_run_id == '' }}
         uses: actions/download-artifact@v8
         with:
           pattern: dbx-tools-databricks-auth--*--python-wheel
           path: dist/databricks-auth
           merge-multiple: true
+      - name: Download recovered dbx-tools-databricks-auth native wheels
+        id: download_recovered_dbx-tools-databricks-auth_native_wheels
+        if: ${{ inputs.source_run_id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-databricks-auth--*--python-wheel
+          path: dist/databricks-auth
+          merge-multiple: true
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
       - name: Download dbx-tools-google-auth native wheels
         id: download_dbx-tools-google-auth_native_wheels
+        if: ${{ inputs.source_run_id == '' }}
         uses: actions/download-artifact@v8
         with:
           pattern: dbx-tools-google-auth--*--python-wheel
           path: dist/google-auth
           merge-multiple: true
+      - name: Download recovered dbx-tools-google-auth native wheels
+        id: download_recovered_dbx-tools-google-auth_native_wheels
+        if: ${{ inputs.source_run_id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-google-auth--*--python-wheel
+          path: dist/google-auth
+          merge-multiple: true
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
       - name: Stamp workspace versions
         id: stamp_workspace_versions
         env:
@@ -812,14 +966,16 @@ jobs:
           retention-days: 7
     timeout-minutes: 20
   publish-pypi-core:
-    needs: build-python
+    needs:
+      - verify-context
+      - build-python
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-core
       url: https://pypi.org/project/dbx-tools-core/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -832,16 +988,19 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/core
+          skip-existing: true
     timeout-minutes: 10
   publish-pypi-postgres:
-    needs: build-python
+    needs:
+      - verify-context
+      - build-python
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-postgres
       url: https://pypi.org/project/dbx-tools-postgres/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -854,16 +1013,19 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/postgres
+          skip-existing: true
     timeout-minutes: 10
   publish-pypi-model:
-    needs: build-python
+    needs:
+      - verify-context
+      - build-python
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-model
       url: https://pypi.org/project/dbx-tools-model/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -876,16 +1038,19 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/model
+          skip-existing: true
     timeout-minutes: 10
   publish-pypi-litellm:
-    needs: build-python
+    needs:
+      - verify-context
+      - build-python
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-litellm
       url: https://pypi.org/project/dbx-tools-litellm/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -898,16 +1063,19 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/litellm
+          skip-existing: true
     timeout-minutes: 10
   publish-pypi-graphiti:
-    needs: build-python
+    needs:
+      - verify-context
+      - build-python
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-graphiti
       url: https://pypi.org/project/dbx-tools-graphiti/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -920,16 +1088,19 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/graphiti
+          skip-existing: true
     timeout-minutes: 10
   publish-pypi-auth:
-    needs: build-python
+    needs:
+      - verify-context
+      - build-python
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-auth
       url: https://pypi.org/project/dbx-tools-auth/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -942,16 +1113,19 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/auth
+          skip-existing: true
     timeout-minutes: 10
   publish-pypi-databricks:
-    needs: build-python
+    needs:
+      - verify-context
+      - build-python
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi-dbx-tools-databricks
       url: https://pypi.org/project/dbx-tools-databricks/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -964,9 +1138,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/databricks
+          skip-existing: true
     timeout-minutes: 10
   publish-pypi-databricks-auth:
     needs:
+      - verify-context
       - build-python
       - publish-pypi-auth
       - publish-pypi-databricks
@@ -976,7 +1152,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-databricks-auth
       url: https://pypi.org/project/dbx-tools-databricks-auth/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -989,9 +1165,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/databricks-auth
+          skip-existing: true
     timeout-minutes: 10
   publish-pypi-google-auth:
     needs:
+      - verify-context
       - build-python
       - publish-pypi-auth
     runs-on: ubuntu-latest
@@ -1000,7 +1178,7 @@ jobs:
     environment:
       name: pypi-dbx-tools-google-auth
       url: https://pypi.org/project/dbx-tools-google-auth/
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
         id: download_distributions
@@ -1013,6 +1191,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/google-auth
+          skip-existing: true
     timeout-minutes: 10
 permissions:
   contents: read
