@@ -28,6 +28,7 @@ export interface CargoDependencyOptions {
   readonly workspace?: boolean;
   readonly path?: string;
   readonly optional?: boolean;
+  readonly package?: string;
   readonly defaultFeatures?: boolean;
   readonly features?: readonly string[];
 }
@@ -250,6 +251,7 @@ export interface RustBindingMapping {
   readonly pythonPackage?: string;
   readonly pythonModule?: string;
   readonly facadeTarget?: boolean;
+  readonly dependencies?: readonly string[];
 }
 
 /** Persisted Rust workspace state consumed by `sync --watch`. */
@@ -258,6 +260,28 @@ export interface RustWorkspaceMapping {
   readonly crates: readonly string[];
   readonly bindings: readonly RustBindingMapping[];
   readonly releaseWorkflow?: string;
+}
+
+export function orderRustBindings(bindings: readonly RustBindingMapping[]): RustBindingMapping[] {
+  const ordered: RustBindingMapping[] = [];
+  const visiting = new Set<string>();
+  const completed = new Set<string>();
+  const visit = (binding: RustBindingMapping): void => {
+    if (completed.has(binding.crate)) return;
+    if (visiting.has(binding.crate))
+      throw new Error(`Cyclic Rust binding dependency: ${binding.crate}`);
+    visiting.add(binding.crate);
+    for (const name of binding.dependencies ?? []) {
+      const dependency = bindings.find((candidate) => candidate.crate === name);
+      if (!dependency) throw new Error(`Missing Rust binding dependency: ${name}`);
+      visit(dependency);
+    }
+    visiting.delete(binding.crate);
+    completed.add(binding.crate);
+    ordered.push(binding);
+  };
+  for (const binding of bindings) visit(binding);
+  return ordered;
 }
 
 function rustSources(directory: string): string[] {
@@ -297,6 +321,7 @@ function cargoDependency(
     ...(!value.version && value.path && workspaceVersion ? { version: workspaceVersion } : {}),
     ...(value.workspace ? { workspace: true } : {}),
     ...(value.path ? { path: value.path } : {}),
+    ...(value.package ? { package: value.package } : {}),
     ...(value.optional ? { optional: true } : {}),
     ...(value.defaultFeatures === false ? { "default-features": false } : {}),
     ...(value.features?.length ? { features: [...value.features] } : {}),
@@ -369,7 +394,7 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
       ...(this.uniffi || binary
         ? {
             bin: this.uniffi
-              ? { name: "uniffi-bindgen", path: "uniffi-bindgen.rs" }
+              ? { name: `${crateName}-uniffi-bindgen`, path: "uniffi-bindgen.rs" }
               : { name: binaryName, path: "src/main.rs" },
           }
         : {}),
@@ -450,27 +475,75 @@ export class DBXToolsRustWorkspace {
     );
 
     const bindings = this.packages.filter((pkg) => pkg.uniffi);
-    this.bindingMappings = bindings.map((pkg) => {
-      const targets = pkg.packageOptions.bindings ?? ["node", "python"];
-      const packageName = pkg.packageOptions.directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
-      return {
-        crate: pkg.crateName,
-        rust: `${root}/${pkg.packageOptions.directory}`,
-        ...(targets.includes("node")
-          ? {
-              node: `${nodeRoot}/${pkg.packageOptions.directory}`,
-              nodePackage: `@${scope}/${packageName}`,
-            }
-          : {}),
-        ...(targets.includes("python")
-          ? {
-              python: `${options.pythonRoot ?? "packages/py"}/${pkg.packageOptions.directory}`,
-              pythonPackage: pkg.crateName,
-              pythonModule: pythonModuleName(pythonModulePrefix, pkg.packageOptions.directory),
-            }
-          : {}),
-      };
-    });
+    const bindingDependencies = (pkg: DBXToolsRustProject, language: "node" | "python") =>
+      bindings.filter(
+        (dependency) =>
+          dependency !== pkg &&
+          (dependency.packageOptions.bindings ?? ["node", "python"]).includes(language) &&
+          Object.entries(pkg.packageOptions.dependencies ?? {}).some(([name, value]) => {
+            const resolved =
+              typeof value === "object" && value.workspace
+                ? (options.workspaceDependencies?.[name] ?? value)
+                : value;
+            return (
+              name === dependency.crateName ||
+              (typeof resolved === "object" &&
+                (resolved.package === dependency.crateName ||
+                  (resolved.path !== undefined &&
+                    resolve(
+                      typeof value === "object" && value.workspace ? project.outdir : pkg.outdir,
+                      resolved.path,
+                    ) === dependency.outdir)))
+            );
+          }),
+      );
+    this.bindingMappings = orderRustBindings(
+      bindings.map((pkg) => {
+        const targets = pkg.packageOptions.bindings ?? ["node", "python"];
+        const packageName = pkg.packageOptions.directory.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+        const dependencies = [
+          ...new Set([...bindingDependencies(pkg, "node"), ...bindingDependencies(pkg, "python")]),
+        ].map((dependency) => dependency.crateName);
+        return {
+          crate: pkg.crateName,
+          ...(dependencies.length ? { dependencies } : {}),
+          rust: `${root}/${pkg.packageOptions.directory}`,
+          ...(targets.includes("node")
+            ? {
+                node: `${nodeRoot}/${pkg.packageOptions.directory}`,
+                nodePackage: `@${scope}/${packageName}`,
+              }
+            : {}),
+          ...(targets.includes("python")
+            ? {
+                python: `${options.pythonRoot ?? "packages/py"}/${pkg.packageOptions.directory}`,
+                pythonPackage: pkg.crateName,
+                pythonModule: pythonModuleName(pythonModulePrefix, pkg.packageOptions.directory),
+              }
+            : {}),
+        };
+      }),
+    );
+    for (const pkg of bindings) {
+      const dependencies = bindingDependencies(pkg, "python");
+      if (dependencies.length === 0) continue;
+      pkg.tryRemoveFile("uniffi.toml");
+      new TextFile(pkg, "uniffi.toml", {
+        lines: renderToml({
+          "bindings.python": { cdylib_name: pkg.crateName.replaceAll("-", "_") },
+          "bindings.typescript": { strictTypeChecking: true },
+          ...pkg.packageOptions.uniffiConfig,
+          "bindings.python.external_packages": Object.fromEntries(
+            dependencies.map((dependency) => [
+              dependency.crateName.replaceAll("-", "_"),
+              `${pythonModuleName(pythonModulePrefix, dependency.packageOptions.directory)}.bindings`,
+            ]),
+          ),
+        })
+          .trimEnd()
+          .split("\n"),
+      });
+    }
     const releaseEnabled =
       (options.release ?? true) &&
       (this.bindingMappings.length > 0 ||
@@ -513,6 +586,9 @@ export class DBXToolsRustWorkspace {
           module,
           description: `Python bindings for ${pkg.crateName}`,
           private: true,
+          internalDependencies: bindingDependencies(pkg, "python").map(
+            (dependency) => dependency.packageOptions.directory,
+          ),
           generatedSources: [`src/${module.replaceAll(".", "/")}/bindings.py`],
           trustedPublisher: {
             workflowName: options.releaseWorkflowName ?? "rust-release",
@@ -562,6 +638,11 @@ export class DBXToolsRustWorkspace {
         );
       }
       node.addDeps("@ubjs/core@0.31.0-5", "@ubjs/node@0.31.0-5");
+      node.addDeps(
+        ...bindingDependencies(binding, "node").map(
+          (dependency) => `@${scope}/${dependency.packageOptions.directory}@workspace:*`,
+        ),
+      );
       if (binding.packageOptions.nodeDependencies?.length) {
         node.addDeps(...binding.packageOptions.nodeDependencies);
       }
@@ -667,6 +748,10 @@ export class DBXToolsRustWorkspace {
       }));
     const publicCrates = this.packages
       .filter((pkg) => !pkg.packageOptions.private)
+      .sort((first, second) => {
+        const order = this.bindingMappings.map((binding) => binding.crate);
+        return order.indexOf(first.crateName) - order.indexOf(second.crateName);
+      })
       .map((pkg) => pkg.crateName);
     const targetMatrix = targets.map((target, index) => ({
       target: { ...target, facade: index === 0 },
@@ -953,7 +1038,10 @@ export class DBXToolsRustWorkspace {
         `publish-${binding.crate}`,
         {
           if: "${{ github.event_name == 'repository_dispatch' }}",
-          needs: ["build"],
+          needs: [
+            "build",
+            ...(binding.dependencies ?? []).map((dependency) => `publish-${dependency}`),
+          ],
           "runs-on": "ubuntu-latest",
           permissions: {
             contents: "read",

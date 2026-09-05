@@ -234,8 +234,7 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
 // tag, and the native OAuth implementation stays in the generated auth binding.
 project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
   p.package.addField("description", "Commander CLI for Databricks OAuth");
-  p.addDeps("@dbx-tools/databricks-auth@workspace:*", "pg@^8.22.0");
-  p.addDevDeps("@types/pg@^8");
+  p.addDeps("@dbx-tools/databricks-auth@workspace:*", "@dbx-tools/auth@workspace:*");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -868,16 +867,13 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     uuid: { version: "1", features: ["v4"] },
   },
   packages: {
-    "databricks-auth": {
-      description: "Databricks OAuth with secure credential storage",
-      nodeDependencies: ["pg@^8.22.0"],
-      nodeDevDependencies: ["@types/pg@^8"],
+    auth: {
+      description: "Provider-neutral OAuth, credential storage, and locking",
       defaultFeatures: ["keyring"],
       features: { keyring: ["dep:keyring"] },
       dependencies: {
         "async-trait": { workspace: true },
         base64: { workspace: true },
-        configparser: { workspace: true },
         directories: { workspace: true },
         fs4: { workspace: true },
         keyring: { workspace: true, optional: true },
@@ -885,7 +881,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         open: { workspace: true },
         reqwest: { workspace: true },
         serde: { workspace: true },
-        "serde_json": { workspace: true },
+        serde_json: { workspace: true },
         sha2: { workspace: true },
         thiserror: { workspace: true },
         time: { workspace: true },
@@ -893,6 +889,25 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         uniffi: { workspace: true },
         url: { workspace: true },
         uuid: { workspace: true },
+      },
+      devDependencies: { tempfile: { workspace: true } },
+    },
+    "databricks-auth": {
+      description: "Databricks OAuth with secure credential storage",
+      defaultFeatures: ["keyring"],
+      features: { keyring: ["dbx-tools-auth/keyring"] },
+      dependencies: {
+        "dbx-tools-auth": { path: "../auth", version: root.version, defaultFeatures: false },
+        "async-trait": { workspace: true },
+        configparser: { workspace: true },
+        directories: { workspace: true },
+        reqwest: { workspace: true },
+        serde: { workspace: true },
+        sha2: { workspace: true },
+        time: { workspace: true },
+        tokio: { workspace: true },
+        uniffi: { workspace: true },
+        url: { workspace: true },
       },
       devDependencies: { tempfile: { workspace: true } },
     },

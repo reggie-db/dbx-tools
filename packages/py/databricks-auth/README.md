@@ -1,13 +1,14 @@
 # dbx-tools-databricks-auth
 
-Private generated Python bindings for the Rust `dbx-tools-databricks-auth`
+Generated Python bindings for the Rust `dbx-tools-databricks-auth`
 package.
 
 The [Rust package](../../rs/databricks-auth/README.md) owns U2M and M2M OAuth,
-profile resolution, refresh, locking, and built-in credential storage.
+profile resolution and endpoint policy. Shared `dbx_tools.auth` owns OAuth,
+refresh, locking, and built-in credential storage.
 
 ```python
-from dbx_tools.databricks_auth.bindings import (
+from dbx_tools.databricks_auth import (
     DatabricksAuthOptions,
     create_persistent_auth,
 )
@@ -20,3 +21,7 @@ token = await auth.token()
 
 M2M reads the client secret from the selected Databricks profile or
 `DATABRICKS_CLIENT_SECRET`.
+
+Custom stores implement `dbx_tools.auth.StorageAdapter`. Pass
+`create_storage_handle(adapter)` to `create_persistent_auth_with_storage` to
+preserve callback ownership across the native library boundary.

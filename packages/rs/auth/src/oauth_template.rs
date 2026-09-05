@@ -34,7 +34,7 @@ struct CallbackBrand {
 
 /// Values displayed by the browser OAuth callback.
 pub struct OAuthTemplateContext<'a> {
-    /// Databricks host linked from a successful callback.
+    /// Provider host linked from a successful callback.
     pub host: Option<&'a str>,
     /// OAuth error identifier displayed by an unsuccessful callback.
     pub error: Option<&'a str>,

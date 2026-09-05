@@ -7,12 +7,12 @@
  * @module
  */
 
-import { bindings as authBindings, postgres as authPostgres } from "@dbx-tools/databricks-auth";
+import * as databricksAuth from "@dbx-tools/databricks-auth";
+import * as auth from "@dbx-tools/auth";
 import { string as sharedString } from "@dbx-tools/shared-core";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
-import { Pool } from "pg";
 
-type StorageName = "auto" | "memory" | "file" | "keyring" | "postgres";
+type StorageName = "auto" | "memory" | "file" | "keyring";
 
 interface AuthCliOptions {
   profile?: string;
@@ -28,7 +28,6 @@ interface AuthCliOptions {
   storage: StorageName;
   cacheDir?: string;
   callbackImageSrc?: string;
-  postgresUrl?: string;
   lockTimeoutSeconds: string;
   loginTimeoutSeconds: string;
   refreshBufferSeconds: string;
@@ -41,24 +40,18 @@ interface TokenCommandOptions {
 }
 
 interface AuthContext {
-  auth: authBindings.PersistentAuthLike;
+  auth: databricksAuth.PersistentAuthLike;
   close(): Promise<void>;
   storage?: StorageName;
 }
 
 interface AuthCliDependencies {
-  createPersistentAuth: typeof authBindings.createPersistentAuth;
-  createPersistentAuthWithStorage: typeof authBindings.createPersistentAuthWithStorage;
-  createPostgresPool(connectionString: string): Pool;
-  createPostgresStorage: typeof authPostgres.createStorage;
+  createPersistentAuth: typeof databricksAuth.createPersistentAuth;
   writeJson(value: unknown): void;
 }
 
 const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
-  createPersistentAuth: authBindings.createPersistentAuth,
-  createPersistentAuthWithStorage: authBindings.createPersistentAuthWithStorage,
-  createPostgresPool: (connectionString) => new Pool({ connectionString }),
-  createPostgresStorage: authPostgres.createStorage,
+  createPersistentAuth: databricksAuth.createPersistentAuth,
   writeJson: (value) => {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   },
@@ -80,29 +73,29 @@ function parseInteger(value: string | bigint, name: string, signed: boolean): bi
 }
 
 /** Translate the CLI storage name to the generated UniFFI enum. */
-function bindingStorage(storage: Exclude<StorageName, "postgres">): authBindings.Storage {
+function bindingStorage(storage: StorageName): auth.Storage {
   switch (storage) {
     case "auto":
-      return authBindings.Storage.Auto;
+      return auth.Storage.Auto;
     case "memory":
-      return authBindings.Storage.Memory;
+      return auth.Storage.Memory;
     case "file":
-      return authBindings.Storage.File;
+      return auth.Storage.File;
     case "keyring":
-      return authBindings.Storage.Keyring;
+      return auth.Storage.Keyring;
   }
 }
 
 /** Translate the generated UniFFI enum to the CLI status value. */
-function storageName(storage: authBindings.Storage): Exclude<StorageName, "postgres"> {
+function storageName(storage: auth.Storage): StorageName {
   switch (storage) {
-    case authBindings.Storage.Auto:
+    case auth.Storage.Auto:
       return "auto";
-    case authBindings.Storage.Memory:
+    case auth.Storage.Memory:
       return "memory";
-    case authBindings.Storage.File:
+    case auth.Storage.File:
       return "file";
-    case authBindings.Storage.Keyring:
+    case auth.Storage.Keyring:
       return "keyring";
     default:
       throw new Error(`Unknown Databricks auth storage value: ${storage}`);
@@ -110,8 +103,8 @@ function storageName(storage: authBindings.Storage): Exclude<StorageName, "postg
 }
 
 /** Build the generated options record from parsed Commander values. */
-function bindingOptions(options: AuthCliOptions): authBindings.DatabricksAuthOptions {
-  return authBindings.DatabricksAuthOptions.create({
+function bindingOptions(options: AuthCliOptions): databricksAuth.DatabricksAuthOptions {
+  return databricksAuth.DatabricksAuthOptions.create({
     profile: options.profile,
     host: options.host,
     accountId: options.accountId,
@@ -144,36 +137,13 @@ async function openAuth(
   options: AuthCliOptions,
   dependencies: AuthCliDependencies,
 ): Promise<AuthContext> {
-  const authOptions = bindingOptions(options);
-  if (options.storage !== "postgres" && options.postgresUrl === undefined) {
-    return {
-      auth: await dependencies.createPersistentAuth(authOptions, bindingStorage(options.storage)),
-      close: async () => {},
-    };
-  }
-  if (!options.postgresUrl) {
-    throw new InvalidArgumentError(
-      "--postgres-url or DBX_TOOLS_U2M_POSTGRES_URL is required for Postgres storage",
-    );
-  }
-
-  const pool = dependencies.createPostgresPool(options.postgresUrl);
-  try {
-    const auth = await dependencies.createPersistentAuthWithStorage(
-      authOptions,
-      dependencies.createPostgresStorage(pool),
-    );
-    return {
-      auth,
-      storage: "postgres",
-      close: async () => {
-        await pool.end();
-      },
-    };
-  } catch (error) {
-    await pool.end();
-    throw error;
-  }
+  return {
+    auth: await dependencies.createPersistentAuth(
+      bindingOptions(options),
+      bindingStorage(options.storage),
+    ),
+    close: async () => {},
+  };
 }
 
 /** Execute an auth action and close resources owned by the command. */
@@ -191,7 +161,7 @@ async function withAuth(
 }
 
 /** Shape a generated token record for stable CLI JSON output. */
-function tokenJson(token: authBindings.AccessToken): Record<string, unknown> {
+function tokenJson(token: auth.AccessToken): Record<string, unknown> {
   return {
     access_token: token.accessToken,
     token_type: token.tokenType,
@@ -237,7 +207,7 @@ function addCommonOptions(program: Command): Command {
     )
     .addOption(
       new Option("--storage <storage>", "Credential storage")
-        .choices(["auto", "memory", "file", "keyring", "postgres"])
+        .choices(["auto", "memory", "file", "keyring"])
         .default("auto")
         .env("DBX_TOOLS_U2M_STORAGE"),
     )
@@ -248,11 +218,6 @@ function addCommonOptions(program: Command): Command {
       new Option(
         "--callback-image-src <src>",
         "Callback logo URL or data URI (defaults to dbx tools branding)",
-      ),
-    )
-    .addOption(
-      new Option("--postgres-url <url>", "Postgres credential storage URL").env(
-        "DBX_TOOLS_U2M_POSTGRES_URL",
       ),
     )
     .addOption(

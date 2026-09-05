@@ -200,6 +200,12 @@ The Python packages support Python 3.10 through 3.13.
 
 The root uv workspace contains these Python counterparts:
 
+Rust-backed authentication is also available as
+[`dbx-tools-auth`](packages/py/auth) for provider-neutral OAuth and
+[`dbx-tools-databricks-auth`](packages/py/databricks-auth) for Databricks profiles.
+Their Node counterparts are [`@dbx-tools/auth`](packages/js/node/auth) and
+[`@dbx-tools/databricks-auth`](packages/js/node/databricks-auth).
+
 | Package                                      | Purpose                                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`dbx-tools-core`](packages/py/core)         | Loads scoped configuration from constant data, the environment, project `.env` files, validated Databricks bundles, and App YAML with the same precedence as Node, plus dependency-free identity helpers and locked mise-backed executable resolution.                                                           |

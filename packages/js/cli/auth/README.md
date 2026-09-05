@@ -13,7 +13,7 @@ Key features:
 - M2M client-credentials tokens with HTTP Basic client authentication;
 - U2M preference by default, with standard M2M resolution available through
   `--no-prefer-user-to-machine`;
-- secure keyring storage by default, with file, memory, and Postgres options;
+- secure keyring storage by default, with file and memory options;
 - access-token lookup, optional login, and forced refresh;
 - profile and host resolution compatible with Databricks configuration;
 - JSON output that excludes refresh credentials;
@@ -47,10 +47,9 @@ succeeds. `token` mints an M2M token when no cached token exists; U2M requires
 - `--no-prefer-user-to-machine` keeps an implicitly selected M2M profile.
 - `--scopes <scopes>` accepts a comma-separated value and may be repeated.
 - `--target workspace|account|unified` selects the OAuth target.
-- `--storage auto|memory|file|keyring|postgres` selects credential storage.
+- `--storage auto|memory|file|keyring` selects credential storage.
 - `--cache-dir <path>` selects the file-storage directory.
 - `--callback-image-src <src>` sets the callback logo URL or data URI.
-- `--postgres-url <url>` supplies the Postgres storage connection.
 - `--lock-timeout-seconds`, `--login-timeout-seconds`, and
   `--refresh-buffer-seconds` control auth timing.
 
@@ -60,21 +59,6 @@ variables. U2M storage and timeout options read the matching
 M2M reads `client_id` and `client_secret` from the selected profile or their
 standard Databricks environment variables. The secret is not accepted as a CLI
 argument or included in generated binding records.
-
-## Postgres storage
-
-```sh
-dbx auth \
-  --profile DEFAULT \
-  --storage postgres \
-  --postgres-url postgresql://localhost/auth \
-  token
-```
-
-The CLI creates a `pg.Pool`, passes it to
-`@dbx-tools/databricks-auth`'s `postgres.createStorage`, and closes the pool
-after the command. The database role needs permission to create and modify the
-credential table and use advisory locks.
 
 ## Package use
 

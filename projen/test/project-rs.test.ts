@@ -57,6 +57,54 @@ function bindingWorkflow(binding: "node" | "python"): string {
 }
 
 describe("DBXToolsRustWorkspace", () => {
+  it("imports shared binding contracts through workspace dependencies", () => {
+    const directory = mkdtempSync(join(tmpdir(), "project-rs-shared-"));
+    try {
+      for (const name of ["auth", "provider"]) {
+        mkdirSync(join(directory, `packages/rs/${name}/src`), { recursive: true });
+        writeFileSync(
+          join(directory, `packages/rs/${name}/src/lib.rs`),
+          "uniffi::setup_scaffolding!();\n",
+        );
+      }
+      const project = new DBXToolsNodeProject({
+        name: "@fixture/shared",
+        scope: "fixture",
+        outdir: directory,
+        packageRoots: ["packages/js"],
+        defaultTagMixins: false,
+        github: true,
+        nodeReleaseWorkflowName: false,
+      });
+      const rust = new DBXToolsRustWorkspace(project, {
+        workspaceDependencies: { shared: { package: "fixture-auth", path: "packages/rs/auth" } },
+        packages: { provider: { dependencies: { shared: { workspace: true } } } },
+      });
+      project.synth();
+      assert.deepEqual(
+        rust.pythonPackages.find((pkg) => pkg.directory === "provider")?.internalDependencies,
+        ["auth"],
+      );
+      const manifest = JSON.parse(
+        readFileSync(join(directory, "packages/js/node/provider/package.json"), "utf8"),
+      );
+      assert.equal(manifest.dependencies["@fixture/auth"], "workspace:*");
+      assert.match(
+        readFileSync(join(directory, "packages/rs/provider/uniffi.toml"), "utf8"),
+        /fixture_auth = "fixture.auth.bindings"/,
+      );
+      assert.deepEqual(
+        rust.bindingMappings.find((binding) => binding.crate === "fixture-provider")?.dependencies,
+        ["fixture-auth"],
+      );
+      assert.match(
+        readFileSync(join(directory, ".github/workflows/rust-release.yml"), "utf8"),
+        /publish-fixture-provider:[\s\S]*?needs:[\s\S]*?publish-fixture-auth/,
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("omits Rust release workflows when no releasable Rust package exists", () => {
     const emptyOutdir = mkdtempSync(join(tmpdir(), "project-rs-empty-"));
     try {
@@ -513,7 +561,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /softprops\/action-gh-release@v2/);
     const packager = readFileSync(join(outdir, ".projen/uniffi-release.mjs"), "utf8");
     assert.match(packager, /#!\/usr\/bin\/env node/);
-    assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`uniffi-bindgen/);
+    assert.match(packager, /"target",\s+cargoTarget,\s+"release",\s+`\$\{crate\}-uniffi-bindgen/);
     assert.match(packager, /"node_modules", "npm", "bin", "npm-cli\.js"/);
     assert.match(packager, /command: process\.execPath, args: \[npmCli, \.\.\.args\]/);
     assert.match(packager, /"build",\s+"index\.ts",[\s\S]*?"--packages",\s+"external"/);

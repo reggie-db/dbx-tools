@@ -3,3 +3,6 @@ cdylib_name = "dbx_tools_databricks_auth"
 
 [bindings.typescript]
 strictTypeChecking = true
+
+[bindings.python.external_packages]
+dbx_tools_auth = "dbx_tools.auth.bindings"

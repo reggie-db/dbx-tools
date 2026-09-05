@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { spawnSync } from "node:child_process";
 import { makeReadonly, makeWritable, stampGenerated } from "../src/generated.ts";
+import type { RustWorkspaceMapping } from "../src/project-rs.ts";
 import {
   addExplicitInterfaceReexports,
   addTypeScriptExtensionsToBindingImports,
@@ -44,6 +45,11 @@ const root = values.root
   : resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const crate = values.crate;
 const libraryName = crate.replaceAll("-", "_");
+const workspace = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).dbxToolsConfig
+  ?.rust as RustWorkspaceMapping | undefined;
+const binding = workspace?.bindings.find((binding) => binding.crate === crate);
+const dependencies =
+  workspace?.bindings.filter((candidate) => binding?.dependencies?.includes(candidate.crate)) ?? [];
 const extension =
   process.platform === "darwin" ? "dylib" : process.platform === "win32" ? "dll" : "so";
 const prefix = process.platform === "win32" ? "" : "lib";
@@ -62,6 +68,8 @@ const run = (command: string, args: string[]) => {
   const stderr = normalizedOutput(result.stderr ?? "");
   if (stdout) process.stdout.write(`${stdout}\n`);
   if (stderr) process.stderr.write(`${stderr}\n`);
+  if (result.error)
+    throw new Error(`${command} failed: ${result.error.message}`, { cause: result.error });
   if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
 };
 
@@ -127,42 +135,60 @@ if (values.node) {
   const generatedModules = readdirSync(nodeOutput).filter(
     (file) => file.endsWith(".ts") && file !== "index.ts",
   );
-  const linkedComponents = generatedModules.length > 2;
+  for (const dependency of dependencies) {
+    if (!dependency.nodePackage) throw new Error(`Missing Node binding for ${dependency.crate}`);
+    const namespace = dependency.crate.replaceAll("-", "_");
+    for (const file of readdirSync(nodeOutput).filter((file) => file.endsWith(".ts"))) {
+      const path = join(nodeOutput, file);
+      const source = readFileSync(path, "utf8")
+        .replace(
+          new RegExp(`import (\\w+) from ["']\\./${namespace}["'];`, "g"),
+          `import { uniffiModule as $1 } from "${dependency.nodePackage}";`,
+        )
+        .replaceAll(`'./${namespace}'`, `'${dependency.nodePackage}'`)
+        .replaceAll(`"./${namespace}"`, `"${dependency.nodePackage}"`);
+      writeFileSync(path, source);
+    }
+    for (const suffix of [".ts", "-ffi.ts"]) {
+      const file = `${namespace}${suffix}`;
+      rmSync(join(nodeOutput, file), { force: true });
+      const index = generatedModules.indexOf(file);
+      if (index >= 0) generatedModules.splice(index, 1);
+    }
+  }
+  const ownModules = generatedModules.filter(
+    (file) => file === `${libraryName}.ts` || file === `${libraryName}-ffi.ts`,
+  );
+  if (ownModules.length !== 2 || generatedModules.length !== 2) {
+    throw new Error(`Unmapped UniFFI components in ${crate}: ${generatedModules.join(", ")}`);
+  }
+  writeFileSync(
+    join(nodeOutput, "index.ts"),
+    [
+      `export * from './${libraryName}';`,
+      `import uniffiModule from './${libraryName}';`,
+      "uniffiModule.initialize();",
+      "export { uniffiModule };",
+      "export async function uniffiInitAsync() {}",
+      "",
+    ].join("\n"),
+  );
   const nodeBindings = join(nodeSource, "bindings.ts");
-  const linkedNames = new Map(generatedModules.map((file) => [file, `_bindings-${file}`]));
-  const generatedFiles = linkedComponents
-    ? generatedModules.map((file) => join(nodeSource, linkedNames.get(file)!))
-    : [join(nodeSource, "_bindings.ts"), join(nodeSource, "_bindings-ffi.ts")];
+  const generatedFiles = [join(nodeSource, "_bindings.ts"), join(nodeSource, "_bindings-ffi.ts")];
   replaceGenerated(join(nodeOutput, "index.ts"), nodeBindings);
-  if (linkedComponents) {
-    for (const file of generatedModules) {
-      replaceGenerated(join(nodeOutput, file), join(nodeSource, linkedNames.get(file)!));
-    }
-  } else {
-    replaceGenerated(join(nodeOutput, `${libraryName}.ts`), generatedFiles[0]);
-    replaceGenerated(join(nodeOutput, `${libraryName}-ffi.ts`), generatedFiles[1]);
-    writeFileSync(
-      nodeBindings,
-      readFileSync(nodeBindings, "utf8").replaceAll(`./${libraryName}`, "./_bindings"),
-    );
-    writeFileSync(
-      generatedFiles[0],
-      readFileSync(generatedFiles[0], "utf8").replaceAll(`./${libraryName}-ffi`, "./_bindings-ffi"),
-    );
-  }
-  if (linkedComponents) {
-    for (const file of [nodeBindings, ...generatedFiles]) {
-      let source = readFileSync(file, "utf8");
-      for (const [generated, destination] of linkedNames) {
-        const from = generated.slice(0, -3);
-        const to = destination.slice(0, -3);
-        source = source
-          .replaceAll(`'./${from}'`, `'./${to}'`)
-          .replaceAll(`"./${from}"`, `"./${to}"`);
-      }
-      writeFileSync(file, source);
-    }
-  }
+  replaceGenerated(join(nodeOutput, libraryName + ".ts"), generatedFiles[0]);
+  replaceGenerated(join(nodeOutput, libraryName + "-ffi.ts"), generatedFiles[1]);
+  writeFileSync(
+    nodeBindings,
+    readFileSync(nodeBindings, "utf8").replaceAll("./" + libraryName, "./_bindings"),
+  );
+  writeFileSync(
+    generatedFiles[0],
+    readFileSync(generatedFiles[0], "utf8").replaceAll(
+      "./" + libraryName + "-ffi",
+      "./_bindings-ffi",
+    ),
+  );
   for (const file of generatedFiles) {
     writeFileSync(file, makeDefaultedInterfaceParametersOptional(readFileSync(file, "utf8")));
   }
@@ -214,21 +240,19 @@ if (values.python) {
     crate.replace(/^dbx-tools-/, "").replaceAll("-", "_"),
   );
   const pythonOutput = mkdtempSync(join(tmpdir(), `${libraryName}-python-`));
-  run("cargo", [
-    "run",
-    "--release",
-    "--package",
-    crate,
-    "--bin",
-    "uniffi-bindgen",
-    "--",
-    "generate",
-    "--language",
-    "python",
-    "--out-dir",
-    pythonOutput,
-    library,
-  ]);
+  run(
+    join(targetDirectory, `${crate}-uniffi-bindgen${process.platform === "win32" ? ".exe" : ""}`),
+    [
+      "generate",
+      "--language",
+      "python",
+      "--crate",
+      libraryName,
+      "--out-dir",
+      pythonOutput,
+      library,
+    ],
+  );
   const generated = join(pythonOutput, `${libraryName}.py`);
   const pythonBindings = join(pythonPackage, "bindings.py");
   replaceGenerated(generated, pythonBindings);

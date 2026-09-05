@@ -103,8 +103,22 @@ can load from `node_modules`. The generated barrel exports the binding API from
 the package root. Do not create a `nodeExports` binding subpath or a
 handwritten type facade.
 
+Rust dependencies between binding-enabled workspace crates become Node
+`workspace:*` and Python `internalDependencies` automatically. Python generation
+selects the owning crate and supplies `external_packages` imports. UBRN currently
+emits every linked component; the generation task discards dependency outputs
+and rewrites their imports to the owning package root, including its generated
+`uniffiModule` converter table. It never copies a dependency's records or enums.
+Foreign callback adapters must first be wrapped in an object created by their
+own native library (`createStorageHandle` for auth), because callback registries
+are library-local. Release wheels replace sibling Git requirements with matching
+native-wheel versions, and dependent publishers wait for their dependencies.
+Each crate builds its own `<crate>-uniffi-bindgen` executable so a workspace
+build has no colliding binary outputs. Packaging runs that prebuilt executable.
+
 `sync --watch` runs a focused Rust watcher beside the OpenAPI watcher. Changes
-inside an existing UniFFI crate regenerate only that crate's bindings; adding or
+inside an existing UniFFI crate regenerate that crate and its dependent bindings
+in dependency order; adding or
 removing a crate or `setup_scaffolding!()` marker triggers a full synth. Repos
 without Rust crates start no Rust watcher. When Rust projects are detected,
 Cargo is required and the focused task fails immediately if it is unavailable.
@@ -148,7 +162,7 @@ and select `rust-lld` for the workspace build. Cargo registry caches
 and the `SCCACHE_GHA_VERSION` namespace stay stable per target/toolchain across
 version tags. Cache keys, restore results, sccache statistics, and phase timings
 are written to each build log. Python generation executes the already-built
-`target/<triple>/release/uniffi-bindgen` directly. Artifact packaging therefore
+`target/<triple>/release/<crate>-uniffi-bindgen` directly. Artifact packaging therefore
 does no Rust compilation after the main workspace build.
 
 Artifacts identify their crate, target, and type. Download-only publication

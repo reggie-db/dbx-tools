@@ -1,14 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  Storage,
-  type AccessToken,
-  type DatabricksAuthOptions,
-  type PersistentAuthLike,
-  type StorageAdapter,
-} from "@dbx-tools/databricks-auth";
-import type { Pool } from "pg";
+import { type DatabricksAuthOptions, type PersistentAuthLike } from "@dbx-tools/databricks-auth";
+import { Storage, type AccessToken } from "@dbx-tools/auth";
 
 import { buildProgram } from "../src/cli.ts";
 
@@ -23,6 +17,9 @@ function fakeAuth(calls: string[]): PersistentAuthLike {
   return {
     async challenge() {
       calls.push("challenge");
+    },
+    async refreshRejectedToken() {
+      return TOKEN;
     },
     async forceRefreshToken() {
       calls.push("force-refresh");
@@ -150,49 +147,5 @@ describe("auth CLI", () => {
     assert.equal(capturedOptions?.loginTimeoutSeconds, 34n);
     assert.equal(capturedOptions?.refreshBufferSeconds, -5n);
     assert.equal(capturedStorage, Storage.Memory);
-  });
-
-  it("uses the Node Postgres adapter and closes the owned pool", async () => {
-    const calls: string[] = [];
-    const output: unknown[] = [];
-    const pool = {
-      async end() {
-        calls.push("pool:end");
-      },
-    } as unknown as Pool;
-
-    await buildProgram("dbx auth", {
-      createPostgresPool: (connectionString) => {
-        calls.push(`pool:${connectionString}`);
-        return pool;
-      },
-      createPostgresStorage: () => {
-        calls.push("storage:create");
-        return {} as StorageAdapter;
-      },
-      createPersistentAuthWithStorage: async () => {
-        calls.push("auth:create-postgres");
-        return fakeAuth(calls);
-      },
-      writeJson: (value) => output.push(value),
-    }).parseAsync(
-      ["--postgres-url", "postgresql://localhost/auth", "--storage", "postgres", "status"],
-      { from: "user" },
-    );
-
-    assert.deepEqual(calls, [
-      "pool:postgresql://localhost/auth",
-      "storage:create",
-      "auth:create-postgres",
-      "status",
-      "pool:end",
-    ]);
-    assert.deepEqual(output, [
-      {
-        profile: "TEST",
-        host: "https://example.cloud.databricks.com",
-        storage: "postgres",
-      },
-    ]);
   });
 });

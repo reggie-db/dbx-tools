@@ -29,6 +29,9 @@ index-strategy = "unsafe-best-match"
 [tool.uv.workspace]
 members = ["packages/py/*"]
 
+[tool.uv.sources.dbx-tools-auth]
+workspace = true
+
 [tool.uv.sources.dbx-tools-databricks-auth]
 workspace = true
 
@@ -49,4 +52,4 @@ workspace = true
 
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
-project-excludes = ["packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py"]
+project-excludes = ["packages/py/auth/src/dbx_tools/auth/bindings.py", "packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py"]

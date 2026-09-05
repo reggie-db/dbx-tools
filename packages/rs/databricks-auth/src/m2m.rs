@@ -1,55 +1,36 @@
-use oauth2::{basic::BasicClient, AuthType, ClientId, ClientSecret, Scope, TokenUrl};
-
-use crate::{oauth_endpoints, token::OAuthTokenResponse, Error, Profile, Result, Token};
-
-/// Databricks OAuth client-credentials flow for service principals.
+use crate::{oauth_endpoints, Profile, Result, Token};
 pub struct MachineToMachineFlow {
     profile: Profile,
     http: reqwest::Client,
 }
-
 impl MachineToMachineFlow {
-    /// Create an M2M flow for a resolved profile.
     pub fn new(profile: Profile) -> Result<Self> {
-        let http = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()?;
-        Ok(Self { profile, http })
+        Ok(Self {
+            profile,
+            http: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()?,
+        })
     }
-
-    /// Mint a token using HTTP Basic client authentication.
     pub async fn token(&self) -> Result<Token> {
         let endpoints = oauth_endpoints::resolve(&self.profile, &self.http).await?;
-        let client_secret = self.profile.client_secret().ok_or_else(|| {
-            Error::Config(format!(
-                "profile {} requires client_secret for oauth-m2m",
-                self.profile.name
-            ))
-        })?;
-        let client = BasicClient::new(ClientId::new(self.profile.client_id.clone()))
-            .set_client_secret(ClientSecret::new(client_secret.to_owned()))
-            .set_auth_type(AuthType::BasicAuth)
-            .set_token_uri(
-                TokenUrl::new(endpoints.token_endpoint)
-                    .map_err(|error| Error::OAuth(error.to_string()))?,
-            );
-        let mut request = client.exchange_client_credentials();
-        let scopes = self.profile.machine_scopes();
-        for scope in &scopes {
-            request = request.add_scope(Scope::new(scope.clone()));
-        }
-        if let Some(group_id) = self.profile.group_id.as_deref() {
-            request = request.add_extra_param("assume_group", group_id);
-        }
-        let response: OAuthTokenResponse =
-            request.request_async(&self.http).await.map_err(|error| {
-                Error::OAuth(format!("client-credentials exchange failed: {error}"))
-            })?;
-        let mut token = Token::from_response(&response, time::OffsetDateTime::now_utc(), None)?;
-        if token.scopes.is_empty() {
-            token.scopes = scopes;
-        }
-        Ok(token)
+        dbx_tools_auth::OAuthFlow::new(dbx_tools_auth::OAuthConfig {
+            provider: "databricks".into(),
+            authorization_endpoint: endpoints.authorization_endpoint,
+            token_endpoint: endpoints.token_endpoint,
+            client_id: self.profile.client_id.clone(),
+            client_secret: self.profile.client_secret().map(str::to_owned),
+            scopes: self.profile.machine_scopes(),
+            extra_token_params: self
+                .profile
+                .group_id
+                .iter()
+                .map(|group| ("assume_group".into(), group.clone()))
+                .collect(),
+            host: Some(self.profile.host.to_string()),
+        })?
+        .client_credentials()
+        .await
     }
 }
 

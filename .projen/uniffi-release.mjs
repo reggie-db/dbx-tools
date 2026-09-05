@@ -92,9 +92,17 @@ const testNodeFacade = ({ facadePackage, manifest, nativePackage, nodePackage })
   const installDirectory = mkdtempSync(join(tmpdir(), "uniffi-facade-install-"));
   try {
     const workspacePackages = localWorkspacePackages();
+    const bindings =
+      JSON.parse(readFileSync(join(root, "package.json"), "utf8")).dbxToolsConfig?.rust?.bindings ??
+      [];
     const localDependencies = Object.keys(manifest.dependencies ?? {}).flatMap((name, index) => {
       const workspaceVersion = workspacePackages.get(name);
       if (!workspaceVersion) return [];
+      const binding = bindings.find((binding) => binding.nodePackage === name);
+      if (binding) {
+        const output = resolve(root, "dist/release", binding.crate, required("node-triple"));
+        return [singlePackage(join(output, "npm-facade")), singlePackage(join(output, "npm"))];
+      }
       const directory = join(installDirectory, "local-dependencies", String(index));
       mkdirSync(directory, { recursive: true });
       writeFileSync(
@@ -274,6 +282,19 @@ const packagePython = ({
   const pyproject = join(pythonRoot, "pyproject.toml");
   writable(pyproject);
   writeFileSync(pyproject, replaceVersion(readFileSync(pyproject, "utf8"), version));
+  const workspaceBindings =
+    JSON.parse(readFileSync(join(root, "package.json"), "utf8")).dbxToolsConfig?.rust?.bindings ??
+    [];
+  let metadata = readFileSync(pyproject, "utf8");
+  for (const binding of workspaceBindings) {
+    if (!binding.pythonPackage) continue;
+    const escaped = binding.pythonPackage.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    metadata = metadata.replace(
+      new RegExp(`"${escaped} @ git\\+[^"\\n]+"`, "g"),
+      JSON.stringify(`${binding.pythonPackage}==${version}`),
+    );
+  }
+  writeFileSync(pyproject, metadata);
 
   const packageName = crate.replace(/^dbx-tools-/, "").replaceAll("-", "_");
   const packageDirectory = resolve(pythonRoot, "src", "dbx_tools", packageName);
@@ -283,10 +304,19 @@ const packagePython = ({
     "target",
     cargoTarget,
     "release",
-    `uniffi-bindgen${os === "win32" ? ".exe" : ""}`,
+    `${crate}-uniffi-bindgen${os === "win32" ? ".exe" : ""}`,
   );
   if (!existsSync(generator)) throw new Error(`Missing UniFFI generator ${generator}`);
-  run(generator, ["generate", "--language", "python", "--out-dir", generatedDirectory, library]);
+  run(generator, [
+    "generate",
+    "--language",
+    "python",
+    "--crate",
+    crate.replaceAll("-", "_"),
+    "--out-dir",
+    generatedDirectory,
+    library,
+  ]);
   const bindings = join(packageDirectory, "bindings.py");
   writable(bindings);
   const body = readFileSync(join(generatedDirectory, `${crate.replaceAll("-", "_")}.py`), "utf8");

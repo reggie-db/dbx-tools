@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { RustWorkspaceMapping } from "../src/project-rs.ts";
-import { rustStructureChanged } from "../tasks/rust.ts";
+import { affectedRustBindings, rustStructureChanged } from "../tasks/rust.ts";
 
 const directories: string[] = [];
 
@@ -37,6 +37,21 @@ function fixture(): { root: string; config: RustWorkspaceMapping } {
 }
 
 describe("Rust watch structure detection", () => {
+  it("rebuilds shared bindings before dependent native libraries", () => {
+    const bindings = [
+      { crate: "consumer", rust: "consumer", dependencies: ["shared"] },
+      { crate: "shared", rust: "shared" },
+      { crate: "unrelated", rust: "unrelated" },
+    ];
+    assert.deepEqual(
+      affectedRustBindings(bindings, new Set(["shared"])).map((binding) => binding.crate),
+      ["shared", "consumer"],
+    );
+    assert.deepEqual(
+      affectedRustBindings(bindings, new Set(["consumer"])).map((binding) => binding.crate),
+      ["consumer"],
+    );
+  });
   it("keeps ordinary UniFFI source edits on the targeted generation path", () => {
     const { root, config } = fixture();
     writeFileSync(

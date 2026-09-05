@@ -11,11 +11,6 @@
       "type": "build"
     },
     {
-      "name": "@types/pg",
-      "version": "^8",
-      "type": "build"
-    },
-    {
       "name": "typescript",
       "type": "build"
     },
@@ -23,6 +18,11 @@
       "name": "uniffi-bindgen-react-native",
       "version": "0.31.0-5",
       "type": "build"
+    },
+    {
+      "name": "@dbx-tools/auth",
+      "version": "workspace:*",
+      "type": "runtime"
     },
     {
       "name": "@dbx-tools/shared-core",
@@ -37,11 +37,6 @@
     {
       "name": "@ubjs/node",
       "version": "0.31.0-5",
-      "type": "runtime"
-    },
-    {
-      "name": "pg",
-      "version": "^8.22.0",
       "type": "runtime"
     }
   ],

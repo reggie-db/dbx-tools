@@ -8,6 +8,7 @@ import { readDbxToolsConfig, repoRoot } from "../src/packages.ts";
 import {
   discoverRustCrates,
   hasUniFFIBindings,
+  orderRustBindings,
   type RustBindingMapping,
   type RustWorkspaceMapping,
 } from "../src/project-rs.ts";
@@ -84,6 +85,19 @@ function generate(binding: RustBindingMapping): void {
   if (result.status !== 0) throw new Error(`binding generation exited with ${result.status}`);
 }
 
+export function affectedRustBindings(
+  bindings: readonly RustBindingMapping[],
+  changed: ReadonlySet<string>,
+): RustBindingMapping[] {
+  const affected = new Set(changed);
+  const ordered = orderRustBindings(bindings);
+  for (const binding of ordered) {
+    if (binding.dependencies?.some((dependency) => affected.has(dependency)))
+      affected.add(binding.crate);
+  }
+  return ordered.filter((binding) => affected.has(binding.crate));
+}
+
 const config = rustConfig();
 
 async function main(): Promise<void> {
@@ -92,7 +106,7 @@ async function main(): Promise<void> {
     throw new Error("Cargo is required because Rust projects were detected");
   }
   if (!process.argv.includes("--watch")) {
-    for (const binding of config.bindings) generate(binding);
+    for (const binding of orderRustBindings(config.bindings)) generate(binding);
     return;
   }
 
@@ -109,7 +123,7 @@ async function main(): Promise<void> {
         const binding = ownerBinding(path, refreshed.bindings);
         if (binding) targets.set(binding.crate, binding);
       }
-      for (const binding of targets.values()) {
+      for (const binding of affectedRustBindings(refreshed.bindings, new Set(targets.keys()))) {
         logger.start(`generating ${binding.crate} bindings`);
         generate(binding);
         logger.success(`generated ${binding.crate} bindings`);
@@ -121,7 +135,7 @@ async function main(): Promise<void> {
       const binding = ownerBinding(path, latest.bindings);
       if (binding) targets.set(binding.crate, binding);
     }
-    for (const binding of targets.values()) {
+    for (const binding of affectedRustBindings(latest.bindings, new Set(targets.keys()))) {
       logger.start(`generating ${binding.crate} bindings`);
       generate(binding);
       logger.success(`generated ${binding.crate} bindings`);

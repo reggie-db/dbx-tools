@@ -4,5 +4,5 @@
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/databricks-auth";
 export * as bindings from "./src/bindings.ts";
-export * as postgres from "./src/postgres.ts";
+export { uniffiModule } from "./src/bindings.ts";
 export * from "./exports.ts";

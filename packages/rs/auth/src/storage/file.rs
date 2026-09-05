@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 
-use super::{CredentialStore, StorageLock};
+use super::{CredentialStore, FileLayout, StorageLock};
 use crate::{Error, Result, Token};
 
 const TOKEN_CACHE_VERSION: u8 = 1;
@@ -35,16 +35,26 @@ impl Default for TokenCache {
 pub struct FileStore {
     root: PathBuf,
     token_cache: PathBuf,
+    layout: FileLayout,
 }
 
 impl FileStore {
     pub fn new(root: PathBuf) -> Result<Self> {
+        Self::with_layout(root, FileLayout::Single)
+    }
+
+    pub fn with_layout(root: PathBuf, layout: FileLayout) -> Result<Self> {
         std::fs::create_dir_all(&root)?;
         set_private_directory(&root)?;
         Ok(Self {
             token_cache: root.join("token-cache.json"),
             root,
+            layout,
         })
+    }
+
+    fn credential_store(&self, key: &str) -> Result<Self> {
+        Self::new(self.root.join(key_hash(key)))
     }
 
     fn lock_path(&self, profile: &str) -> PathBuf {
@@ -149,6 +159,9 @@ impl Drop for FileLock {
 #[async_trait]
 impl CredentialStore for FileStore {
     async fn load(&self, profile: &str) -> Result<Option<Token>> {
+        if self.layout == FileLayout::PerCredential {
+            return self.credential_store(profile)?.load(profile).await;
+        }
         let _lock = self.acquire_cache_lock().await?;
         self.read_cache()
             .await?
@@ -159,6 +172,9 @@ impl CredentialStore for FileStore {
     }
 
     async fn save(&self, profile: &str, token: &Token) -> Result<()> {
+        if self.layout == FileLayout::PerCredential {
+            return self.credential_store(profile)?.save(profile, token).await;
+        }
         let _lock = self.acquire_cache_lock().await?;
         let mut cache = self.read_cache().await?;
         cache
@@ -168,13 +184,19 @@ impl CredentialStore for FileStore {
     }
 
     async fn delete(&self, profile: &str) -> Result<()> {
+        if self.layout == FileLayout::PerCredential {
+            return self.credential_store(profile)?.delete(profile).await;
+        }
         let _lock = self.acquire_cache_lock().await?;
         let mut cache = self.read_cache().await?;
         cache.tokens.remove(profile);
         self.write_cache(&cache).await
     }
 
-    async fn lock(&self, _profile: &str, timeout: Duration) -> Result<Box<dyn StorageLock>> {
+    async fn lock(&self, profile: &str, timeout: Duration) -> Result<Box<dyn StorageLock>> {
+        if self.layout == FileLayout::PerCredential {
+            return self.credential_store(profile)?.lock(profile, timeout).await;
+        }
         Ok(Box::new(
             acquire_lock(
                 self.root.join("token-cache.refresh.lock"),

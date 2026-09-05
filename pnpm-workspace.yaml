@@ -11,6 +11,7 @@ packages:
   - packages/js/node/appkit-graphiti
   - packages/js/node/appkit-mastra
   - packages/js/node/appkit-web-search
+  - packages/js/node/auth
   - packages/js/node/auth-gate
   - packages/js/node/core
   - packages/js/node/databricks

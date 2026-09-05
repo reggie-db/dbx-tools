@@ -1,8 +1,8 @@
 # dbx-tools-databricks-auth
 
 Databricks OAuth library with U2M browser login and M2M client credentials. It
-owns profile resolution, token generation and refresh, generic storage traits,
-and memory/file/keyring stores.
+owns Databricks profile resolution and endpoint policy, and delegates OAuth,
+token lifecycle, storage, and locking to [`dbx-tools-auth`](../auth).
 
 The crate exports UniFFI bindings consumed by
 [`@dbx-tools/databricks-auth`](../../js/node/databricks-auth) and
@@ -32,7 +32,7 @@ file locks, so simultaneous CLI and library refreshes are not serialized.
 
 The browser callback uses `OAuthTemplate` to build a self-contained HTML page
 with dbx tools colors and typography. Its image source accepts a URL or data
-URI. The crate includes copies of the root `brand.yaml` and light logo, embeds
+URI. The shared auth crate includes copies of the root `brand.yaml` and light logo, embeds
 the logo as a data URI, and reads its fallback text, colors, and typography from
 the copied YAML. Set `AuthOptions.callback_image_src`, or construct an
 `OAuthTemplate` and pass it through `OAuthFlow::with_template`, to use another

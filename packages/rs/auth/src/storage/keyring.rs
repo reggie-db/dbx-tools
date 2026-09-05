@@ -7,7 +7,6 @@ use keyring::Entry;
 use super::{CredentialStore, FileStore, StorageLock};
 use crate::{Error, Result, Token};
 
-const SERVICE: &str = "databricks-cli";
 const PROBE_ACCOUNT_PREFIX: &str = "__probe_";
 const GO_KEYRING_BASE64_PREFIX: &str = "go-keyring-base64:";
 const GO_KEYRING_HEX_PREFIX: &str = "go-keyring-encoded:";
@@ -19,21 +18,25 @@ struct KeyringEntry {
 
 pub struct KeyringStore {
     lock_store: FileStore,
+    service: String,
 }
 
 impl KeyringStore {
-    fn new(cache_dir: PathBuf) -> Result<Self> {
+    fn new(cache_dir: PathBuf, service: String) -> Result<Self> {
         Ok(Self {
             lock_store: FileStore::new(cache_dir.join("locks"))?,
+            service,
         })
     }
 
-    pub async fn open_for_read(cache_dir: PathBuf) -> Result<Self> {
-        let store = Self::new(cache_dir)?;
+    pub async fn open_for_service(cache_dir: PathBuf, service: String) -> Result<Self> {
+        let store = Self::new(cache_dir, service.clone())?;
         let account = format!("{PROBE_ACCOUNT_PREFIX}{}", uuid::Uuid::new_v4());
-        tokio::task::spawn_blocking(move || match Self::entry(&account)?.get_password() {
-            Ok(_) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(error) => Err(keyring_error(error)),
+        tokio::task::spawn_blocking(move || {
+            match Self::entry(&service, &account)?.get_password() {
+                Ok(_) | Err(keyring::Error::NoEntry) => Ok(()),
+                Err(error) => Err(keyring_error(error)),
+            }
         })
         .await
         .map_err(|error| Error::Storage(format!("keyring read probe task failed: {error}")))??;
@@ -41,9 +44,10 @@ impl KeyringStore {
     }
 
     async fn prepare_write_probe(&self) -> Result<()> {
+        let service = self.service.clone();
         let account = format!("{PROBE_ACCOUNT_PREFIX}{}", uuid::Uuid::new_v4());
         tokio::task::spawn_blocking(move || {
-            let entry = Entry::new(SERVICE, &account).map_err(keyring_error)?;
+            let entry = Entry::new(&service, &account).map_err(keyring_error)?;
             entry.set_password("probe").map_err(keyring_error)?;
             entry.delete_credential().map_err(keyring_error)?;
             Ok::<_, Error>(())
@@ -53,8 +57,8 @@ impl KeyringStore {
         Ok(())
     }
 
-    fn entry(profile: &str) -> Result<Entry> {
-        Entry::new(SERVICE, profile).map_err(keyring_error)
+    fn entry(service: &str, profile: &str) -> Result<Entry> {
+        Entry::new(service, profile).map_err(keyring_error)
     }
 }
 
@@ -62,29 +66,25 @@ fn decode_keyring_value(raw: &str) -> Result<String> {
     if let Some(value) = raw.strip_prefix(GO_KEYRING_BASE64_PREFIX) {
         return STANDARD
             .decode(value)
-            .map_err(|error| Error::Storage(format!("invalid Databricks keyring base64: {error}")))
+            .map_err(|error| Error::Storage(format!("invalid keyring base64: {error}")))
             .and_then(|value| {
-                String::from_utf8(value).map_err(|error| {
-                    Error::Storage(format!("invalid Databricks keyring UTF-8: {error}"))
-                })
+                String::from_utf8(value)
+                    .map_err(|error| Error::Storage(format!("invalid keyring UTF-8: {error}")))
             });
     }
     if let Some(value) = raw.strip_prefix(GO_KEYRING_HEX_PREFIX) {
         if value.len() % 2 != 0 {
-            return Err(Error::Storage(
-                "invalid Databricks keyring hex: odd length".into(),
-            ));
+            return Err(Error::Storage("invalid keyring hex: odd length".into()));
         }
         let bytes = (0..value.len())
             .step_by(2)
             .map(|index| {
-                u8::from_str_radix(&value[index..index + 2], 16).map_err(|error| {
-                    Error::Storage(format!("invalid Databricks keyring hex: {error}"))
-                })
+                u8::from_str_radix(&value[index..index + 2], 16)
+                    .map_err(|error| Error::Storage(format!("invalid keyring hex: {error}")))
             })
             .collect::<Result<Vec<_>>>()?;
         return String::from_utf8(bytes)
-            .map_err(|error| Error::Storage(format!("invalid Databricks keyring UTF-8: {error}")));
+            .map_err(|error| Error::Storage(format!("invalid keyring UTF-8: {error}")));
     }
     Ok(raw.to_owned())
 }
@@ -92,15 +92,18 @@ fn decode_keyring_value(raw: &str) -> Result<String> {
 #[async_trait]
 impl CredentialStore for KeyringStore {
     async fn load(&self, profile: &str) -> Result<Option<Token>> {
+        let service = self.service.clone();
         let profile = profile.to_owned();
-        tokio::task::spawn_blocking(move || match Self::entry(&profile)?.get_password() {
-            Ok(raw) => {
-                let raw = decode_keyring_value(&raw)?;
-                Ok(Some(serde_json::from_str::<KeyringEntry>(&raw)?.token))
-            }
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(error) => Err(keyring_error(error)),
-        })
+        tokio::task::spawn_blocking(
+            move || match Self::entry(&service, &profile)?.get_password() {
+                Ok(raw) => {
+                    let raw = decode_keyring_value(&raw)?;
+                    Ok(Some(serde_json::from_str::<KeyringEntry>(&raw)?.token))
+                }
+                Err(keyring::Error::NoEntry) => Ok(None),
+                Err(error) => Err(keyring_error(error)),
+            },
+        )
         .await
         .map_err(|error| Error::Storage(format!("keyring read task failed: {error}")))?
     }
@@ -110,12 +113,13 @@ impl CredentialStore for KeyringStore {
     }
 
     async fn save(&self, profile: &str, token: &Token) -> Result<()> {
+        let service = self.service.clone();
         let profile = profile.to_owned();
         let raw = serde_json::to_string(&KeyringEntry {
             token: token.clone(),
         })?;
         tokio::task::spawn_blocking(move || {
-            Self::entry(&profile)?
+            Self::entry(&service, &profile)?
                 .set_password(&raw)
                 .map_err(keyring_error)
         })
@@ -124,10 +128,13 @@ impl CredentialStore for KeyringStore {
     }
 
     async fn delete(&self, profile: &str) -> Result<()> {
+        let service = self.service.clone();
         let profile = profile.to_owned();
-        tokio::task::spawn_blocking(move || match Self::entry(&profile)?.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(error) => Err(keyring_error(error)),
+        tokio::task::spawn_blocking(move || {
+            match Self::entry(&service, &profile)?.delete_credential() {
+                Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+                Err(error) => Err(keyring_error(error)),
+            }
         })
         .await
         .map_err(|error| Error::Storage(format!("keyring delete task failed: {error}")))?
@@ -135,7 +142,9 @@ impl CredentialStore for KeyringStore {
 
     async fn lock(&self, profile: &str, timeout: Duration) -> Result<Box<dyn StorageLock>> {
         Ok(Box::new(
-            self.lock_store.acquire_file_lock(profile, timeout).await?,
+            self.lock_store
+                .acquire_file_lock(&format!("{}\0{profile}", self.service), timeout)
+                .await?,
         ))
     }
 

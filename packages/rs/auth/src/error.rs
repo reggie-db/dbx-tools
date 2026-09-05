@@ -10,9 +10,9 @@ pub enum Error {
     OAuth(String),
     #[error("credential storage error: {0}")]
     Storage(String),
-    #[error("timed out waiting for credential lock for profile {0}")]
+    #[error("timed out waiting for credential lock {0}")]
     LockTimeout(String),
-    #[error("browser login is required for profile {0}")]
+    #[error("browser login is required for credential {0}")]
     LoginRequired(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),

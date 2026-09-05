@@ -96,6 +96,9 @@ jspm_packages/
 .dev.client.test/
 **/.logs/
 target/
+packages/js/node/auth/src/*dbx_tools_auth.*
+packages/py/auth/src/dbx_tools/auth/bindings.py
+packages/py/auth/src/dbx_tools/auth/*dbx_tools_auth.*
 packages/js/node/databricks-auth/src/*dbx_tools_databricks_auth.*
 packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py
 packages/py/databricks-auth/src/dbx_tools/databricks_auth/*dbx_tools_databricks_auth.*
@@ -103,6 +106,7 @@ packages/py/databricks-auth/src/dbx_tools/databricks_auth/*dbx_tools_databricks_
 !/.projen/uniffi-release.mjs
 !/.github/workflows/rust-release.yml
 !/pyproject.toml
+!/packages/py/auth/pyproject.toml
 !/packages/py/databricks-auth/pyproject.toml
 !/packages/py/core/pyproject.toml
 !/packages/py/postgres/pyproject.toml

@@ -1,5 +1,5 @@
 [workspace]
-members = ["packages/rs/databricks-auth"]
+members = ["packages/rs/auth", "packages/rs/databricks-auth"]
 default-members = []
 resolver = "2"
 

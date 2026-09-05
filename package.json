@@ -88,6 +88,7 @@
     "packages/js/node/appkit-graphiti",
     "packages/js/node/appkit-mastra",
     "packages/js/node/appkit-web-search",
+    "packages/js/node/auth",
     "packages/js/node/auth-gate",
     "packages/js/node/core",
     "packages/js/node/databricks",
@@ -184,11 +185,24 @@
     "rust": {
       "root": "packages/rs",
       "crates": [
+        "packages/rs/auth",
         "packages/rs/databricks-auth"
       ],
       "bindings": [
         {
+          "crate": "dbx-tools-auth",
+          "rust": "packages/rs/auth",
+          "node": "packages/js/node/auth",
+          "nodePackage": "@dbx-tools/auth",
+          "python": "packages/py/auth",
+          "pythonPackage": "dbx-tools-auth",
+          "pythonModule": "dbx_tools.auth"
+        },
+        {
           "crate": "dbx-tools-databricks-auth",
+          "dependencies": [
+            "dbx-tools-auth"
+          ],
           "rust": "packages/rs/databricks-auth",
           "node": "packages/js/node/databricks-auth",
           "nodePackage": "@dbx-tools/databricks-auth",

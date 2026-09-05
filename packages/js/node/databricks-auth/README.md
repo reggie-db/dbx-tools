@@ -1,6 +1,6 @@
 # @dbx-tools/databricks-auth
 
-Private generated Node bindings for the Rust `dbx-tools-databricks-auth`
+Generated Node bindings for the Rust `dbx-tools-databricks-auth`
 package.
 
 The [Rust package](../../../rs/databricks-auth/README.md) owns U2M and M2M
@@ -11,7 +11,8 @@ interface.
 Import the Rust-generated binding directly:
 
 ```ts
-import { createPersistentAuth, DatabricksAuthOptions, Storage } from "@dbx-tools/databricks-auth";
+import { createPersistentAuth, DatabricksAuthOptions } from "@dbx-tools/databricks-auth";
+import { Storage } from "@dbx-tools/auth";
 
 const auth = await createPersistentAuth(
   DatabricksAuthOptions.create({ profile: "DEFAULT" }),
@@ -26,25 +27,19 @@ to `false` to keep standard M2M resolution for an implicitly selected service
 principal profile. M2M reads `client_secret` from the selected Databricks
 profile or `DATABRICKS_CLIENT_SECRET`.
 
-Pass a caller-owned `pg.Pool` when credentials and advisory locks should be
-shared through Postgres:
+Custom persistence stays supported without a database dependency:
 
 ```ts
-import {
-  createPersistentAuthWithStorage,
-  DatabricksAuthOptions,
-  postgres,
-} from "@dbx-tools/databricks-auth";
+import { createStorageHandle, type StorageAdapter } from "@dbx-tools/auth";
+import { createPersistentAuthWithStorage, DatabricksAuthOptions } from "@dbx-tools/databricks-auth";
 
 const auth = await createPersistentAuthWithStorage(
   DatabricksAuthOptions.create({ profile: "DEFAULT" }),
-  postgres.createStorage(pool),
+  createStorageHandle(adapter),
 );
 ```
 
-The adapter stores refresh credentials as sensitive JSON. Its first read is
-read-only; it creates the token table only when Rust is about to log in or save
-a refreshed token.
-
-The package root exports the generated UniFFI API directly and exposes the
-`bindings` and `postgres` namespaces.
+Here `adapter` is your implementation of the generated `StorageAdapter`.
+The shared handle keeps callback execution in its owning native library.
+The package root exports Databricks-specific bindings; shared token, storage,
+and error contracts are imported directly from `@dbx-tools/auth`.

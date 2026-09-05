@@ -275,21 +275,6 @@ const DEFINITIONS = {
       ret: FfiType.Void,
       hasRustCallStatus: true,
     },
-    "uniffi_dbx_tools_databricks_auth_fn_clone_storageadapter": {
-      args: [FfiType.Handle],
-      ret: FfiType.Handle,
-      hasRustCallStatus: true,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_free_storageadapter": {
-      args: [FfiType.Handle],
-      ret: FfiType.Void,
-      hasRustCallStatus: true,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_init_callback_vtable_storageadapter": {
-      args: [FfiType.Reference(FfiType.Struct("VTableCallbackInterfaceDbxToolsDatabricksAuthStorageAdapter"))],
-      ret: FfiType.Void,
-      hasRustCallStatus: false,
-    },
     "uniffi_dbx_tools_databricks_auth_fn_func_create_persistent_auth": {
       args: [FfiType.RustBuffer, FfiType.RustBuffer],
       ret: FfiType.Handle,
@@ -329,41 +314,6 @@ const DEFINITIONS = {
       args: [FfiType.Handle, FfiType.RustBuffer],
       ret: FfiType.Handle,
       hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_load": {
-      args: [FfiType.Handle, FfiType.RustBuffer],
-      ret: FfiType.Handle,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_prepare_write": {
-      args: [FfiType.Handle],
-      ret: FfiType.Handle,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_save": {
-      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.RustBuffer],
-      ret: FfiType.Handle,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_remove": {
-      args: [FfiType.Handle, FfiType.RustBuffer],
-      ret: FfiType.Handle,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_acquire_lock": {
-      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.UInt64],
-      ret: FfiType.Handle,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_release_lock": {
-      args: [FfiType.Handle, FfiType.RustBuffer],
-      ret: FfiType.Handle,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_name": {
-      args: [FfiType.Handle],
-      ret: FfiType.RustBuffer,
-      hasRustCallStatus: true,
     },
     "ffi_dbx_tools_databricks_auth_uniffi_contract_version": {
       args: [],
@@ -410,41 +360,6 @@ const DEFINITIONS = {
       ret: FfiType.UInt16,
       hasRustCallStatus: false,
     },
-    "uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_load": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_prepare_write": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_save": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_remove": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_acquire_lock": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_release_lock": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
-    "uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_name": {
-      args: [],
-      ret: FfiType.UInt16,
-      hasRustCallStatus: false,
-    },
   },
   callbacks: {
     "RustFutureContinuationCallback": {
@@ -457,91 +372,11 @@ const DEFINITIONS = {
       ret: FfiType.Void,
       hasRustCallStatus: false,
     },
-    "ForeignFutureCompleterust_buffer": {
-      args: [FfiType.Handle, FfiType.Struct("ForeignFutureResultRustBuffer")],
-      ret: FfiType.Void,
-      hasRustCallStatus: false,
-    },
-    "CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod0": {
-      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.Callback("ForeignFutureCompleterust_buffer"), FfiType.Handle],
-      ret: FfiType.Struct("ForeignFutureDroppedCallbackStruct"),
-      hasRustCallStatus: false,
-      outReturn: true,
-    },
-    "ForeignFutureCompletevoid": {
-      args: [FfiType.Handle, FfiType.Struct("ForeignFutureResultVoid")],
-      ret: FfiType.Void,
-      hasRustCallStatus: false,
-    },
-    "CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod1": {
-      args: [FfiType.Handle, FfiType.Callback("ForeignFutureCompletevoid"), FfiType.Handle],
-      ret: FfiType.Struct("ForeignFutureDroppedCallbackStruct"),
-      hasRustCallStatus: false,
-      outReturn: true,
-    },
-    "CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod2": {
-      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.RustBuffer, FfiType.Callback("ForeignFutureCompletevoid"), FfiType.Handle],
-      ret: FfiType.Struct("ForeignFutureDroppedCallbackStruct"),
-      hasRustCallStatus: false,
-      outReturn: true,
-    },
-    "CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod3": {
-      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.Callback("ForeignFutureCompletevoid"), FfiType.Handle],
-      ret: FfiType.Struct("ForeignFutureDroppedCallbackStruct"),
-      hasRustCallStatus: false,
-      outReturn: true,
-    },
-    "CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod4": {
-      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.UInt64, FfiType.Callback("ForeignFutureCompleterust_buffer"), FfiType.Handle],
-      ret: FfiType.Struct("ForeignFutureDroppedCallbackStruct"),
-      hasRustCallStatus: false,
-      outReturn: true,
-    },
-    "CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod5": {
-      args: [FfiType.Handle, FfiType.RustBuffer, FfiType.Callback("ForeignFutureCompletevoid"), FfiType.Handle],
-      ret: FfiType.Struct("ForeignFutureDroppedCallbackStruct"),
-      hasRustCallStatus: false,
-      outReturn: true,
-    },
-    "CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod6": {
-      args: [FfiType.Handle],
-      ret: FfiType.RustBuffer,
-      hasRustCallStatus: true,
-      outReturn: true,
-    },
-    "CallbackInterfaceCloneDbxToolsDatabricksAuth_StorageAdapter": {
-      args: [FfiType.Handle],
-      ret: FfiType.Handle,
-      hasRustCallStatus: false,
-    },
-    "CallbackInterfaceFreeDbxToolsDatabricksAuth_StorageAdapter": {
-      args: [FfiType.Handle],
-      ret: FfiType.Void,
-      hasRustCallStatus: false,
-    },
   },
   structs: {
     "ForeignFutureDroppedCallbackStruct": [
       { name: "handle", type: FfiType.Handle },
       { name: "free", type: FfiType.Callback("ForeignFutureDroppedCallback") },
-    ],
-    "ForeignFutureResultRustBuffer": [
-      { name: "return_value", type: FfiType.RustBuffer },
-      { name: "call_status", type: FfiType.RustCallStatus },
-    ],
-    "ForeignFutureResultVoid": [
-      { name: "call_status", type: FfiType.RustCallStatus },
-    ],
-    "VTableCallbackInterfaceDbxToolsDatabricksAuthStorageAdapter": [
-      { name: "uniffi_free", type: FfiType.Callback("CallbackInterfaceFreeDbxToolsDatabricksAuth_StorageAdapter") },
-      { name: "uniffi_clone", type: FfiType.Callback("CallbackInterfaceCloneDbxToolsDatabricksAuth_StorageAdapter") },
-      { name: "load", type: FfiType.Callback("CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod0") },
-      { name: "prepare_write", type: FfiType.Callback("CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod1") },
-      { name: "save", type: FfiType.Callback("CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod2") },
-      { name: "remove", type: FfiType.Callback("CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod3") },
-      { name: "acquire_lock", type: FfiType.Callback("CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod4") },
-      { name: "release_lock", type: FfiType.Callback("CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod5") },
-      { name: "name", type: FfiType.Callback("CallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod6") },
     ],
   },
 } as const;
@@ -597,9 +432,6 @@ interface NativeModuleInterface {
     ffi_dbx_tools_databricks_auth_rust_future_free_void(handle: bigint): void;
     uniffi_dbx_tools_databricks_auth_fn_clone_persistentauth(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): bigint;
     uniffi_dbx_tools_databricks_auth_fn_free_persistentauth(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): void;
-    uniffi_dbx_tools_databricks_auth_fn_clone_storageadapter(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_free_storageadapter(ptr: bigint, uniffi_out_err: UniffiRustCallStatus): void;
-    uniffi_dbx_tools_databricks_auth_fn_init_callback_vtable_storageadapter(vtable: UniffiVTableCallbackInterfaceDbxToolsDatabricksAuthStorageAdapter): void;
     uniffi_dbx_tools_databricks_auth_fn_func_create_persistent_auth(options: Uint8Array, storage: Uint8Array): bigint;
     uniffi_dbx_tools_databricks_auth_fn_func_create_persistent_auth_with_storage(options: Uint8Array, storage: bigint): bigint;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_challenge(uniffiSelf: bigint): bigint;
@@ -608,13 +440,6 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_refresh_rejected_token(uniffiSelf: bigint, staleAccessToken: Uint8Array): bigint;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_status(uniffiSelf: bigint, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     uniffi_dbx_tools_databricks_auth_fn_method_persistentauth_token(uniffiSelf: bigint, login: Uint8Array): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_load(uniffiSelf: bigint, profile: Uint8Array): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_prepare_write(uniffiSelf: bigint): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_save(uniffiSelf: bigint, profile: Uint8Array, token: Uint8Array): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_remove(uniffiSelf: bigint, profile: Uint8Array): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_acquire_lock(uniffiSelf: bigint, profile: Uint8Array, timeoutMillis: bigint): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_release_lock(uniffiSelf: bigint, lease: Uint8Array): bigint;
-    uniffi_dbx_tools_databricks_auth_fn_method_storageadapter_name(uniffiSelf: bigint, uniffi_out_err: UniffiRustCallStatus): Uint8Array;
     ffi_dbx_tools_databricks_auth_uniffi_contract_version(): number;
     uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth(): number;
     uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth_with_storage(): number;
@@ -624,13 +449,6 @@ interface NativeModuleInterface {
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_refresh_rejected_token(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_status(): number;
     uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_token(): number;
-    uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_load(): number;
-    uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_prepare_write(): number;
-    uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_save(): number;
-    uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_remove(): number;
-    uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_acquire_lock(): number;
-    uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_release_lock(): number;
-    uniffi_dbx_tools_databricks_auth_checksum_method_storageadapter_name(): number;
     // Codegen call sites use these via `nativeModule().rustbuffer_alloc(...)`
     // and `nativeModule().rustbuffer_free(...)`. The runtime's registered
     // module exposes them as method properties.
@@ -657,33 +475,4 @@ export type UniffiForeignFutureDroppedCallback = (handle: bigint) => void;
 export type UniffiForeignFutureDroppedCallbackStruct = {
   handle: bigint;
   free: UniffiForeignFutureDroppedCallback;
-};
-export type UniffiForeignFutureResultRustBuffer = {
-  return_value: Uint8Array;
-  call_status: UniffiRustCallStatus;
-};
-export type UniffiForeignFutureCompleterustBuffer = (callbackData: bigint, result: UniffiForeignFutureResultRustBuffer) => void;
-type UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod0 = (uniffiHandle: bigint, profile: Uint8Array, uniffiFutureCallback: UniffiForeignFutureCompleterustBuffer, uniffiCallbackData: bigint) => UniffiForeignFutureDroppedCallbackStruct;
-export type UniffiForeignFutureResultVoid = {
-  call_status: UniffiRustCallStatus;
-};
-export type UniffiForeignFutureCompletevoid = (callbackData: bigint, result: UniffiForeignFutureResultVoid) => void;
-type UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod1 = (uniffiHandle: bigint, uniffiFutureCallback: UniffiForeignFutureCompletevoid, uniffiCallbackData: bigint) => UniffiForeignFutureDroppedCallbackStruct;
-type UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod2 = (uniffiHandle: bigint, profile: Uint8Array, token: Uint8Array, uniffiFutureCallback: UniffiForeignFutureCompletevoid, uniffiCallbackData: bigint) => UniffiForeignFutureDroppedCallbackStruct;
-type UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod3 = (uniffiHandle: bigint, profile: Uint8Array, uniffiFutureCallback: UniffiForeignFutureCompletevoid, uniffiCallbackData: bigint) => UniffiForeignFutureDroppedCallbackStruct;
-type UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod4 = (uniffiHandle: bigint, profile: Uint8Array, timeoutMillis: bigint, uniffiFutureCallback: UniffiForeignFutureCompleterustBuffer, uniffiCallbackData: bigint) => UniffiForeignFutureDroppedCallbackStruct;
-type UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod5 = (uniffiHandle: bigint, lease: Uint8Array, uniffiFutureCallback: UniffiForeignFutureCompletevoid, uniffiCallbackData: bigint) => UniffiForeignFutureDroppedCallbackStruct;
-type UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod6 = (uniffiHandle: bigint) => Uint8Array;
-type UniffiCallbackInterfaceCloneDbxToolsDatabricksAuthStorageAdapter = (handle: bigint) => UniffiResult<void>;
-type UniffiCallbackInterfaceFreeDbxToolsDatabricksAuthStorageAdapter = (handle: bigint) => void;
-export type UniffiVTableCallbackInterfaceDbxToolsDatabricksAuthStorageAdapter = {
-  uniffi_free: UniffiCallbackInterfaceFreeDbxToolsDatabricksAuthStorageAdapter;
-  uniffi_clone: UniffiCallbackInterfaceCloneDbxToolsDatabricksAuthStorageAdapter;
-  load: UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod0;
-  prepare_write: UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod1;
-  save: UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod2;
-  remove: UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod3;
-  acquire_lock: UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod4;
-  release_lock: UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod5;
-  name: UniffiCallbackInterfaceDbxToolsDatabricksAuthStorageAdapterMethod6;
 };

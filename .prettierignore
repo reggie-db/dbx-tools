@@ -37,8 +37,11 @@
 **/*-lock.yaml
 **/*-lock.yml
 **/*.lock
+packages/js/node/auth/src/bindings.ts
+packages/js/node/auth/src/_bindings*.ts
 packages/js/node/databricks-auth/src/bindings.ts
 packages/js/node/databricks-auth/src/_bindings*.ts
+packages/py/auth/pyproject.toml
 packages/py/databricks-auth/pyproject.toml
 packages/py/core/pyproject.toml
 packages/py/postgres/pyproject.toml
@@ -89,6 +92,7 @@ packages/js/node/appkit/index.ts
 packages/js/node/appkit-graphiti/index.ts
 packages/js/node/appkit-mastra/index.ts
 packages/js/node/appkit-web-search/index.ts
+packages/js/node/auth/index.ts
 packages/js/node/auth-gate/index.ts
 packages/js/node/core/index.ts
 packages/js/node/databricks/index.ts

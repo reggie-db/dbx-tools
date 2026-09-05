@@ -1,39 +1,9 @@
-mod file;
-mod memory;
-
+use crate::{profile::configured_auth_storage, resolve_config_file, Error, Result};
 #[cfg(feature = "keyring")]
-mod keyring;
-
-use std::{path::PathBuf, sync::Arc, time::Duration};
-
-use async_trait::async_trait;
+pub use dbx_tools_auth::KeyringStore;
+pub use dbx_tools_auth::{CredentialStore, FileStore, MemoryStore, StorageLock, StoreBackend};
 use directories::UserDirs;
-
-use crate::{profile::configured_auth_storage, resolve_config_file, Error, Result, Token};
-
-pub use file::FileStore;
-#[cfg(feature = "keyring")]
-pub use keyring::KeyringStore;
-pub use memory::MemoryStore;
-
-#[async_trait]
-pub trait StorageLock: Send + Sync {
-    async fn release(self: Box<Self>) -> Result<()> {
-        Ok(())
-    }
-}
-
-#[async_trait]
-pub trait CredentialStore: Send + Sync {
-    async fn load(&self, profile: &str) -> Result<Option<Token>>;
-    async fn prepare_write(&self) -> Result<()> {
-        Ok(())
-    }
-    async fn save(&self, profile: &str, token: &Token) -> Result<()>;
-    async fn delete(&self, profile: &str) -> Result<()>;
-    async fn lock(&self, profile: &str, timeout: Duration) -> Result<Box<dyn StorageLock>>;
-    fn name(&self) -> &'static str;
-}
+use std::{path::PathBuf, sync::Arc};
 
 #[derive(Clone, Debug, Default)]
 pub struct StoreOptions {
@@ -42,35 +12,19 @@ pub struct StoreOptions {
     pub config_file: Option<PathBuf>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum StoreBackend {
-    #[default]
-    Auto,
-    Memory,
-    File,
-    Keyring,
-}
-
 pub async fn open_store(options: StoreOptions) -> Result<Arc<dyn CredentialStore>> {
-    let cache_dir = match options.cache_dir {
+    let directory = match options.cache_dir {
         Some(directory) => directory,
         None => default_cache_dir()?,
     };
     let backend = resolve_backend(options.backend, options.config_file.as_deref())?;
-    match backend {
-        StoreBackend::Memory => Ok(Arc::new(MemoryStore::new(cache_dir.join("memory-locks"))?)),
-        StoreBackend::File => Ok(Arc::new(FileStore::new(cache_dir)?)),
-        StoreBackend::Keyring => open_keyring_for_read(cache_dir).await,
-        StoreBackend::Auto => {
-            #[cfg(feature = "keyring")]
-            {
-                if let Ok(store) = KeyringStore::open_for_read(cache_dir.clone()).await {
-                    return Ok(Arc::new(store));
-                }
-            }
-            Ok(Arc::new(FileStore::new(cache_dir)?))
-        }
-    }
+    dbx_tools_auth::open_store(
+        backend,
+        directory,
+        "databricks-cli".into(),
+        dbx_tools_auth::FileLayout::Single,
+    )
+    .await
 }
 
 fn default_cache_dir() -> Result<PathBuf> {
@@ -105,19 +59,5 @@ fn parse_databricks_storage(value: &str, source: &str) -> Result<StoreBackend> {
         value => Err(Error::Config(format!(
             "{source}: unknown storage mode {value:?} (want plaintext or secure)"
         ))),
-    }
-}
-
-async fn open_keyring_for_read(cache_dir: PathBuf) -> Result<Arc<dyn CredentialStore>> {
-    #[cfg(feature = "keyring")]
-    {
-        Ok(Arc::new(KeyringStore::open_for_read(cache_dir).await?))
-    }
-    #[cfg(not(feature = "keyring"))]
-    {
-        let _ = cache_dir;
-        Err(crate::Error::Config(
-            "keyring support was not compiled in".into(),
-        ))
     }
 }

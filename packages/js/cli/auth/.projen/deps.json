@@ -11,13 +11,13 @@
       "type": "build"
     },
     {
-      "name": "@types/pg",
-      "version": "^8",
+      "name": "typescript",
       "type": "build"
     },
     {
-      "name": "typescript",
-      "type": "build"
+      "name": "@dbx-tools/auth",
+      "version": "workspace:*",
+      "type": "runtime"
     },
     {
       "name": "@dbx-tools/databricks-auth",
@@ -32,11 +32,6 @@
     {
       "name": "commander",
       "version": "catalog:",
-      "type": "runtime"
-    },
-    {
-      "name": "pg",
-      "version": "^8.22.0",
       "type": "runtime"
     }
   ],

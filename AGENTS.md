@@ -86,6 +86,15 @@ Primary package areas:
   to be a separate `shared-sdk-model` package with exactly one consumer.
 - `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
   Serving endpoint selection and shared schemas/classification.
+- `packages/rs/auth`, `packages/js/node/auth`, and `packages/py/auth` own
+  provider-neutral OAuth, token lifecycle, credential storage, and locking.
+  Providers supply endpoints and acquisition policy; optional profiles and
+  canonical scope sets select credentials. Shared UniFFI contracts belong to
+  this crate, and dependent bindings import them rather than generating copies.
+  `StorageAdapter` remains caller-implementable. Pass it through the shared
+  crate's `createStorageHandle` / `create_storage_handle` before handing it to
+  Databricks auth: the handle keeps callbacks in their owning native library.
+  Do not restore a Postgres adapter or Postgres dependency to auth or its CLI.
 - `packages/rs/databricks-auth`, `packages/js/node/databricks-auth`,
   `packages/py/databricks-auth`, and `packages/js/cli/auth` - Databricks U2M and
   M2M OAuth, secure token storage, generated Node/Python bindings, and the
@@ -108,7 +117,7 @@ Primary package areas:
   TypeScript or Python copies of generated records, enums, interfaces, or module
   shapes. Commit the target-independent generated Node TypeScript and import it
   from the standard `@dbx-tools/databricks-auth` package root; only native
-  libraries stay ignored. `OAuthTemplate`
+  libraries stay ignored. The shared auth crate owns `OAuthTemplate`, which
   renders the browser callback from a Rust string with dbx tools colors and a
   configurable image source. The crate copies the root brand YAML and light
   logo, embeds the logo as a data URI, and reads fallback styling from the YAML.
@@ -398,7 +407,7 @@ Primary package areas:
   uses its own `cancel-in-progress: true` concurrency group as a fallback;
   partial publication from the superseded run is accepted.
   Packaging must
-  execute the target-specific `uniffi-bindgen` binary produced by that workspace
+  execute the target-specific `<crate>-uniffi-bindgen` binary produced by that workspace
   build, never `cargo run`, so no Rust compilation occurs after the main build.
   Node archive packaging invokes npm's JavaScript CLI through `node.exe` on
   Windows. Current Node security releases reject direct `.cmd` process spawning,
