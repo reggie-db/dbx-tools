@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-branding";
-export const PACKAGE_VERSION = "0.6.178";
+export const PACKAGE_VERSION = "0.6.179";
 export * as browser from "./src/browser.ts";
 export * as generatedAssets from "./src/generated/assets.ts";
 export * as reactBrand from "./src/react/brand.tsx";

@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-auth"
-version = "0.6.178"
+version = "0.6.179"
 description = "Python bindings for dbx-tools-auth"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
