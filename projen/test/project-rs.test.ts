@@ -478,7 +478,7 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(release, /name: fixture-databricks-auth-\$\{\{ matrix\.target\.node \}\}-npm/);
     assert.match(
       release,
-      /name: fixture-databricks-auth-\$\{\{ matrix\.target\.python \}\}-python-wheel/,
+      /name: fixture-databricks-auth--\$\{\{ matrix\.target\.python \}\}--python-wheel/,
     );
     assert.match(release, /name: fixture-tool-\$\{\{ matrix\.target\.node \}\}-binary/);
     assert.doesNotMatch(

@@ -139,7 +139,8 @@ function lockfileMatchesVersion(
 
 /** Spawn `command` in `cwd` with `PATH` overridden, failing the task on non-zero. */
 function run(cwd: string, command: string, args: string[], path: string): void {
-  exec.spawnSync(command, args, {
+  const executable = command === "bun" && process.versions.bun ? process.execPath : command;
+  exec.spawnSync(executable, args, {
     cwd,
     stdout: "inherit",
     stderr: "inherit",
@@ -151,7 +152,8 @@ function run(cwd: string, command: string, args: string[], path: string): void {
 
 /** Asynchronous counterpart used for bounded parallel stamping and publishing. */
 async function runAsync(cwd: string, command: string, args: string[], path: string): Promise<void> {
-  await exec.spawn(command, args, {
+  const executable = command === "bun" && process.versions.bun ? process.execPath : command;
+  await exec.spawn(executable, args, {
     cwd,
     stdout: "inherit",
     stderr: "inherit",

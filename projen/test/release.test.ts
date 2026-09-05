@@ -74,6 +74,7 @@ describe("npm release workflow performance", () => {
     const driver = readFileSync(join(import.meta.dirname, "..", "tasks", "publish.ts"), "utf8");
     assert.match(driver, /"--ignore-scripts"/);
     assert.match(driver, /compiled\.flatMap\(\(pkg\) => \["--filter", pkg\.name\]\)/);
+    assert.match(driver, /command === "bun" && process\.versions\.bun \? process\.execPath/);
     assert.match(driver, /runConcurrent\(publishable, concurrency/);
     assert.match(driver, /lockfileMatchesVersion/);
   });
@@ -83,6 +84,7 @@ describe("release tag push performance", () => {
   it("scans the branch push but bypasses hooks for already-scanned release tags", () => {
     const bump = readFileSync(join(import.meta.dirname, "..", "tasks", "bump.ts"), "utf8");
     assert.match(bump, /git\(\["push", "origin", "HEAD"\]\)/);
+    assert.match(bump, /\[publishScript, version, "--stamp-only"\]/);
     assert.match(bump, /assertReleaseTagsPointToHead\(tags\)/);
     assert.match(bump, /git\(\["rev-parse", `\$\{tag\}\^\{commit\}`\], true\)/);
     assert.match(bump, /git\(\["push", "--no-verify", "origin", \.\.\.tags\]\)/);

@@ -233,7 +233,7 @@ jobs:
       - name: Upload dbx-tools-auth Python wheel
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-auth-${{ matrix.target.python }}-python-wheel
+          name: dbx-tools-auth--${{ matrix.target.python }}--python-wheel
           path: dist/release/dbx-tools-auth/${{ matrix.target.node }}/python/*.whl
           retention-days: 7
       - name: Upload dbx-tools-databricks native npm package
@@ -245,7 +245,7 @@ jobs:
       - name: Upload dbx-tools-databricks Python wheel
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-databricks-${{ matrix.target.python }}-python-wheel
+          name: dbx-tools-databricks--${{ matrix.target.python }}--python-wheel
           path: dist/release/dbx-tools-databricks/${{ matrix.target.node }}/python/*.whl
           retention-days: 7
       - name: Upload dbx-tools-databricks-auth native npm package
@@ -257,7 +257,7 @@ jobs:
       - name: Upload dbx-tools-databricks-auth Python wheel
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-databricks-auth-${{ matrix.target.python }}-python-wheel
+          name: dbx-tools-databricks-auth--${{ matrix.target.python }}--python-wheel
           path: dist/release/dbx-tools-databricks-auth/${{ matrix.target.node }}/python/*.whl
           retention-days: 7
       - name: Upload dbx-tools-google-auth native npm package
@@ -269,7 +269,7 @@ jobs:
       - name: Upload dbx-tools-google-auth Python wheel
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-google-auth-${{ matrix.target.python }}-python-wheel
+          name: dbx-tools-google-auth--${{ matrix.target.python }}--python-wheel
           path: dist/release/dbx-tools-google-auth/${{ matrix.target.node }}/python/*.whl
           retention-days: 7
       - name: Log sccache statistics

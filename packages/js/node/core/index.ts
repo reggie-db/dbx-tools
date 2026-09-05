@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/core";
-export const PACKAGE_VERSION = "0.6.171";
+export const PACKAGE_VERSION = "0.6.172";
 export * as bin from "./src/bin.ts";
 export * as brand from "./src/brand.ts";
 export * as bundle from "./src/bundle.ts";

@@ -135,8 +135,8 @@ function assertReleaseTagsPointToHead(tags: readonly string[]): void {
  * (not-yet-published) version into the COMMITTED manifest breaks the release
  * workflow's initial `bun install`, which checks out that commit before anything
  * is published. Sibling versions are resolved transiently at publish time instead:
- * `projen-release` runs `tasks/publish.ts --stamp-only` (set versions + refresh
- * lockfile), then `bun publish` in `projen/` strips `workspace:*` to those versions.
+ * The bump stamps every workspace member before committing so independently
+ * synthesized members and the Bun lock resolve the same release version.
  */
 function writeManifestVersion(pkgPath: string, version: string): void {
   const { mode } = statSync(pkgPath);
@@ -304,6 +304,16 @@ program
             ...process.env,
             ...(releasePlatforms ? { DBX_TOOLS_RELEASE_PLATFORMS: releasePlatforms } : {}),
           },
+        });
+      }
+      if (opts.version) {
+        const publishScript = fileURLToPath(new URL("./publish.ts", import.meta.url));
+        exec.spawnSync("bun", [publishScript, version, "--stamp-only"], {
+          cwd: process.cwd(),
+          stdout: "inherit",
+          stderr: "inherit",
+          stdin: "ignore",
+          check: true,
         });
       }
 

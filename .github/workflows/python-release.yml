@@ -61,7 +61,7 @@ jobs:
         if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-auth-*-python-wheel
+          pattern: dbx-tools-auth--*--python-wheel
           path: dist/auth
           merge-multiple: true
           run-id: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}
@@ -71,7 +71,7 @@ jobs:
         if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-databricks-*-python-wheel
+          pattern: dbx-tools-databricks--*--python-wheel
           path: dist/databricks
           merge-multiple: true
           run-id: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}
@@ -81,7 +81,7 @@ jobs:
         if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-databricks-auth-*-python-wheel
+          pattern: dbx-tools-databricks-auth--*--python-wheel
           path: dist/databricks-auth
           merge-multiple: true
           run-id: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}
@@ -91,7 +91,7 @@ jobs:
         if: ${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-google-auth-*-python-wheel
+          pattern: dbx-tools-google-auth--*--python-wheel
           path: dist/google-auth
           merge-multiple: true
           run-id: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.rust_run_id || github.event.workflow_run.id }}

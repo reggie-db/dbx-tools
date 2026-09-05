@@ -814,7 +814,7 @@ export class DBXToolsRustWorkspace {
                 name: `Upload ${binding.crate} Python wheel`,
                 uses: "actions/upload-artifact@v7",
                 with: {
-                  name: `${binding.crate}-\${{ matrix.target.python }}-python-wheel`,
+                  name: `${binding.crate}--\${{ matrix.target.python }}--python-wheel`,
                   path: `dist/release/${binding.crate}/\${{ matrix.target.node }}/python/*.whl`,
                   "retention-days": 7,
                 },

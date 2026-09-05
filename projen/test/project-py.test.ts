@@ -132,7 +132,7 @@ describe("DBXToolsPythonWorkspace", () => {
     assert.doesNotMatch(release, /inputs\.publish/);
     assert.doesNotMatch(release, /^  publish:$/m);
     assert.match(release, /^  publish-native:$/m);
-    assert.match(release, /pattern: fixture-native-\*-python-wheel/);
+    assert.match(release, /pattern: fixture-native--\*--python-wheel/);
     assert.match(
       release,
       /run-id: \$\{\{ github\.event_name == 'repository_dispatch' && github\.event\.client_payload\.rust_run_id \|\| github\.event\.workflow_run\.id \}\}/,

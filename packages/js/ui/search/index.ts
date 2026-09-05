@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/ui-search";
-export const PACKAGE_VERSION = "0.6.171";
+export const PACKAGE_VERSION = "0.6.172";
 export * as reactSearchBox from "./src/react/search-box.tsx";
 export * as reactSearchResults from "./src/react/search-results.tsx";
 export * as reactUseSearch from "./src/react/use-search.ts";

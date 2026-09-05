@@ -580,7 +580,7 @@ export class DBXToolsPythonWorkspace extends Component {
           if: "${{ github.event_name == 'repository_dispatch' || github.event_name == 'workflow_run' }}",
           uses: "actions/download-artifact@v8",
           with: {
-            pattern: `${publication.distribution}-*-python-wheel`,
+            pattern: `${publication.distribution}--*--python-wheel`,
             path: `dist/${publication.directory}`,
             "merge-multiple": true,
             "run-id":
