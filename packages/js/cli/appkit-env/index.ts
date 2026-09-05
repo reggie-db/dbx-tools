@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/cli-appkit-env";
-export const PACKAGE_VERSION = "0.6.174";
+export const PACKAGE_VERSION = "0.6.175";
 export * as cli from "./src/cli.ts";
 export * as envExport from "./src/env-export.ts";
 export { CommanderError } from "./src/cli.ts";

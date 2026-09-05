@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-mastra";
-export const PACKAGE_VERSION = "0.6.174";
+export const PACKAGE_VERSION = "0.6.175";
 export * as agents from "./src/agents.ts";
 export * as chart from "./src/chart.ts";
 export * as config from "./src/config.ts";

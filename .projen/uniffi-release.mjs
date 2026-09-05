@@ -277,6 +277,17 @@ const packageNodeFacade = ({ output, nodeDirectory, nodePackage, version, native
       rmSync(join(facadeDirectory, "src", file), { force: true });
     }
   }
+  const ffiBindings = join(facadeDirectory, "src", "_bindings-ffi.ts");
+  writable(ffiBindings);
+  const ffiSource = readFileSync(ffiBindings, "utf8");
+  const packageSource = ffiSource.replace(
+    /(\s+callerUrl: import\.meta\.url,\n)(\s+\}\);)/,
+    `$1      npmPackageBase: ${JSON.stringify(`${nodePackage}-`)},\n      tripleStyle: "node",\n$2`,
+  );
+  if (packageSource === ffiSource) {
+    throw new Error(`Could not configure native package lookup in ${ffiBindings}`);
+  }
+  writeFileSync(ffiBindings, packageSource);
   const manifestPath = join(facadeDirectory, "package.json");
   writable(manifestPath);
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

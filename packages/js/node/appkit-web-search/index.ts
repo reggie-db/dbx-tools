@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/appkit-web-search";
-export const PACKAGE_VERSION = "0.6.174";
+export const PACKAGE_VERSION = "0.6.175";
 export * as allowlist from "./src/allowlist.ts";
 export * as config from "./src/config.ts";
 export * as defaults from "./src/defaults.ts";
