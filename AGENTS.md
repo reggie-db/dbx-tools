@@ -1823,7 +1823,11 @@ Change a tag, a hook, or `.projenrc.ts` and re-synth — never edit generated fi
   `bun publish --ignore-scripts` calls so uploads overlap without repeating each
   package's `prepack`. Keep `prepack` on each package anyway: a standalone
   `bun publish` still needs to build itself. The driver first checks whether the
-  manifests and Bun workspace lock already carry the release version. A normal
+  manifests and Bun workspace lock already carry the release version. Compile
+  while manifests still point at workspace source, then apply `publishConfig`;
+  switching to `lib/` first makes clean-checkout consumers resolve declaration
+  files that their dependency has not emitted yet.
+  A normal
   bump's synth/install makes both current, so it skips no-op version stamping and
   another install. When either is stale (notably a workflow-dispatch dry version),
   it stamps the manifests, deletes `bun.lock`, and runs `bun install` before

@@ -349,11 +349,6 @@ for (const dir of members) {
     logger.info(`skip UniFFI ${pkg.name ?? dirname(dir)}`);
     continue;
   }
-  // bun won't fold publishConfig into the packed manifest, so do it ourselves -
-  // otherwise the tarball's `bin`/`main`/`exports` stay pointed at `.ts` source.
-  const manifestPath = join(dir, "package.json");
-  unlockManifest(manifestPath);
-  applyPublishConfig(manifestPath);
   publishable.push({
     dir,
     name: pkg.name ?? dirname(dir),
@@ -365,6 +360,15 @@ const compiled = publishable.filter((pkg) => pkg.compile);
 if (compiled.length > 0) {
   logger.info(`compiling ${compiled.length} publishable packages from the workspace root`);
   run(root, "bun", ["run", ...compiled.flatMap((pkg) => ["--filter", pkg.name]), "compile"], path);
+}
+
+// Compile against workspace source exports first. Switching manifests to their
+// publishConfig entries before compilation makes consumers resolve sibling
+// `lib/*.d.ts` files that have not been emitted yet in a clean checkout.
+for (const { dir } of publishable) {
+  const manifestPath = join(dir, "package.json");
+  unlockManifest(manifestPath);
+  applyPublishConfig(manifestPath);
 }
 
 logger.info(

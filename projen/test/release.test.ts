@@ -77,6 +77,10 @@ describe("npm release workflow performance", () => {
     assert.match(driver, /command === "bun" && process\.versions\.bun \? process\.execPath/);
     assert.match(driver, /runConcurrent\(publishable, concurrency/);
     assert.match(driver, /lockfileMatchesVersion/);
+    assert.ok(
+      driver.indexOf("compiling ${compiled.length}") <
+        driver.indexOf("applyPublishConfig(manifestPath)"),
+    );
   });
 });
 
