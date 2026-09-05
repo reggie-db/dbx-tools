@@ -64,6 +64,26 @@ const run = (command, args, cwd = root) => {
   if (result.status !== 0) throw new Error(`${invocation.command} exited with ${result.status}`);
 };
 
+const runWithRetry = (command, args, cwd = root, attempts = 6) => {
+  const signal = new Int32Array(new SharedArrayBuffer(4));
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const invocation = commandInvocation(command, args);
+    const result = spawnSync(invocation.command, invocation.args, { cwd, stdio: "inherit" });
+    if (result.error) {
+      throw new Error(`${invocation.command} failed: ${result.error.message}`, {
+        cause: result.error,
+      });
+    }
+    if (result.status === 0) return;
+    if (attempt === attempts) {
+      throw new Error(
+        `${invocation.command} exited with ${result.status} after ${attempts} attempts`,
+      );
+    }
+    Atomics.wait(signal, 0, 0, 10_000);
+  }
+};
+
 const singlePackage = (directory) => {
   const packages = readdirSync(directory)
     .filter((file) => file.endsWith(".tgz"))
@@ -131,6 +151,16 @@ const testNodeFacade = ({
       if (!workspaceVersion) return [];
       const binding = bindings.find((binding) => binding.nodePackage === name);
       if (binding) {
+        const stagedFacade = resolve(root, "dist/uniffi/facades", binding.crate, "npm-facade");
+        const stagedNative = resolve(root, "dist/uniffi/native");
+        const nativeName = existsSync(stagedNative)
+          ? readdirSync(stagedNative).find((file) =>
+              file.startsWith(`${binding.crate}-${required("node-triple")}-`),
+            )
+          : undefined;
+        if (existsSync(stagedFacade) && nativeName) {
+          return [singlePackage(stagedFacade), join(stagedNative, nativeName)];
+        }
         const output = resolve(root, "dist/release", binding.crate, required("node-triple"));
         if (existsSync(join(output, "npm-facade")) && existsSync(join(output, "npm"))) {
           return [singlePackage(join(output, "npm-facade")), singlePackage(join(output, "npm"))];
@@ -164,7 +194,7 @@ const testNodeFacade = ({
       join(installDirectory, "package.json"),
       `${JSON.stringify({ private: true, type: "module" })}\n`,
     );
-    run(
+    runWithRetry(
       "npm",
       [
         "install",

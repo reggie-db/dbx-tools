@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-email";
-export const PACKAGE_VERSION = "0.6.175";
+export const PACKAGE_VERSION = "0.6.176";
 export * as email from "./src/email.ts";
 export { emailAttachmentSchema, emailMessageSchema, emailResultSchema, emailSendersSchema } from "./src/email.ts";
 export type { EmailAttachment, EmailMessage, EmailResult, EmailSenders } from "./src/email.ts";

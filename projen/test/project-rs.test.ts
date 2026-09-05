@@ -545,6 +545,8 @@ describe("DBXToolsRustWorkspace", () => {
     assert.match(packager, /export const PACKAGE_VERSION/);
     assert.match(packager, /repository: sourceManifest\.repository/);
     assert.match(packager, /npmPackageBase:/);
+    assert.match(packager, /dist\/uniffi\/facades/);
+    assert.match(packager, /runWithRetry/);
     assert.match(packager, /manifest\.exports\["\."\]\.types = "\.\/index\.ts"/);
     assert.match(packager, /uniffi-facade-install-/);
     assert.match(packager, /facadePackage: singlePackage\(facadeOutput\)/);

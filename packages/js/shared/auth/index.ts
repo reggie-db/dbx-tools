@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-auth";
-export const PACKAGE_VERSION = "0.6.175";
+export const PACKAGE_VERSION = "0.6.176";
 export * as auth from "./src/auth.ts";
 export { SESSION_COOKIE_NAME, authRequestSchema, authRequestResultSchema, authVerifySchema, authVerifyResultSchema, authLogoutResultSchema, authStatusSchema } from "./src/auth.ts";
 export type { AuthRequest, AuthRequestResult, AuthVerify, AuthVerifyResult, AuthLogoutResult, AuthStatus } from "./src/auth.ts";
