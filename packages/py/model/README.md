@@ -25,6 +25,9 @@ Key features:
 - score-driven model classification with family fallbacks;
 - reasoning-effort levels inferred from Databricks served-entity identity, with
   endpoint-family fallback for summaries that omit it;
+- daily retirement-status discovery from the Databricks policy page, with a
+  disk and memory cache plus a generated fallback, so endpoint listing excludes
+  deprecated models even when the serving API reports them as ready;
 - flexible family, version, and model parsing shared by classification,
   reasoning, sorting, and downstream integrations;
 - exact and fuzzy endpoint resolution with deterministic class ordering;
@@ -54,6 +57,14 @@ print(
 The Python port intentionally omits AppKit `CacheManager` integration,
 Mastra-specific adapters, and browser-only schemas. Callers can cache the plain
 Pydantic results with their preferred Python cache.
+
+Endpoint listing excludes deprecated models by default. Pass
+`include_deprecated=True` to include them alongside current endpoints.
+`ModelQuery.include_deprecated` defaults to `False` and applies the same
+behavior during model lookup through the `includeDeprecated` wire field. Every
+endpoint carries a `status: ModelStatus` field. `model_status.get()` resolves
+that dataclass from all known endpoint identities so additional status fields
+can be added in one place.
 
 Model-name parsing produces provider-neutral components without maintaining a
 second family registry:
@@ -86,6 +97,8 @@ and embedding normalization is the repetitive part.
 - `classify`, `classes`, `fallback` — model taxonomy and ordering;
 - `resolve` — exact/fuzzy ranking and single-model selection;
 - `serving` — structural `WorkspaceClient` endpoint listing;
+- `model_status` - daily Databricks retirement-page refresh, parsing, caching,
+  generated fallback selection, and centralized `ModelStatus` resolution;
 - `invoke` - URLs, Responses-only policy, process-serialized SDK authentication
   headers, and JSON POST helpers;
 - `chat`, `embedding` — request repair/sanitization and response extraction.

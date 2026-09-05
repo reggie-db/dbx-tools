@@ -47,6 +47,10 @@ pip install "dbx-tools-core @ git+https://github.com/reggie-db/dbx-tools.git@mai
   same loose configuration coercions as `@dbx-tools/core`.
 - Stable-key, FNV hash, and identifier functions preserve deterministic Node and
   Python identity contracts.
+- `cache.file_lock()` provides a cross-platform process and thread lock around
+  cache refreshes and other shared filesystem operations.
+- `cache.check_lock_check()` centralizes the cached-read, lock, cached-read,
+  load sequence so concurrent processes share one refresh.
 - `bin.resolve()` reuses executables from `PATH`, otherwise performs a
   check-lock-check mise installation and returns the path reported by
   `mise which`.
@@ -108,6 +112,8 @@ production.
 
 ## Modules
 
+- `cache` - platform cache paths, cross-process file locking, and
+  check-lock-check loading;
 - `bin` — locked mise bootstrap, tool installation, executable resolution, and
   native asyncio subprocess creation;
 - `config` — layered environment, dotenv, Databricks bundle, and app YAML configuration;

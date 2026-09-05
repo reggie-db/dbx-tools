@@ -3,7 +3,7 @@
 // Hand edits are overwritten on the next watch; this file is read-only.
 
 export const PACKAGE_IDENTIFIER = "@dbx-tools/shared-fs";
-export const PACKAGE_VERSION = "0.6.179";
+export const PACKAGE_VERSION = "0.6.180";
 export * as baseFS from "./src/base-fs.ts";
 export * as fs from "./src/fs.ts";
 export * as memoryFS from "./src/memory-fs.ts";

@@ -39,8 +39,13 @@ def test_catalogue_uses_the_model_cache_ttl(
     def monotonic() -> float:
         return now
 
-    def list_endpoints(_: object) -> list[ServingEndpointSummary]:
+    def list_endpoints(
+        _: object,
+        *,
+        include_deprecated: bool = False,
+    ) -> list[ServingEndpointSummary]:
         nonlocal calls
+        assert include_deprecated is True
         calls += 1
         version = "5-6-sol" if calls == 1 else "5-6-terra"
         return [ServingEndpointSummary(name=f"databricks-gpt-{version}")]
@@ -69,7 +74,7 @@ def test_resolve_uses_provider_neutral_model_parsing(
     monkeypatch.setattr(
         backend_module,
         "list_serving_endpoints",
-        lambda _: [
+        lambda _, *, include_deprecated=False: [
             ServingEndpointSummary(
                 name="databricks-qwen35-122b-a10b",
                 task="llm/v1/chat",
@@ -87,8 +92,13 @@ def test_model_cache_can_be_forced_before_expiry(
 ) -> None:
     calls = 0
 
-    def list_endpoints(_: object) -> list[ServingEndpointSummary]:
+    def list_endpoints(
+        _: object,
+        *,
+        include_deprecated: bool = False,
+    ) -> list[ServingEndpointSummary]:
         nonlocal calls
+        assert include_deprecated is True
         calls += 1
         return [ServingEndpointSummary(name=f"custom-{calls}")]
 

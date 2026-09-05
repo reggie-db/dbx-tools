@@ -7,7 +7,6 @@ import logging
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import threading
 import urllib.request
@@ -18,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 """Locked mise-backed executable installation and async process creation."""
+
+from .cache import file_lock, platform_cache_root
 
 Executable = str | bytes | os.PathLike[str] | os.PathLike[bytes]
 
@@ -215,55 +216,7 @@ def _is_executable(path: Path) -> bool:
 def _install_lock(parts: list[str]) -> Iterator[None]:
     """Serialize installations across threads and Python processes."""
     digest = hashlib.sha256("\0".join(parts).encode()).hexdigest()
-    lock_root = _cache_root() / "dbx-tools" / "bin-locks"
-    lock_root.mkdir(parents=True, exist_ok=True)
+    lock_root = platform_cache_root() / "dbx-tools" / "bin-locks"
     path = lock_root / f"{digest}.lock"
-    with _THREAD_LOCK, path.open("a+b") as handle:
-        _lock_file(handle)
-        try:
-            yield
-        finally:
-            _unlock_file(handle)
-
-
-def _cache_root() -> Path:
-    """Return the platform cache root used for installation locks."""
-    configured = os.getenv("XDG_CACHE_HOME")
-    if configured:
-        return Path(configured).expanduser()
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Caches"
-    if os.name == "nt":
-        return Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-    return Path.home() / ".cache"
-
-
-def _lock_file(handle: Any) -> None:
-    """Acquire an operating-system lock for an open lock file."""
-    if os.name == "nt":
-        import msvcrt
-
-        handle.seek(0)
-        if handle.read(1) != b"\0":
-            handle.seek(0)
-            handle.write(b"\0")
-            handle.flush()
-        handle.seek(0)
-        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-        return
-    import fcntl
-
-    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-
-
-def _unlock_file(handle: Any) -> None:
-    """Release an operating-system lock for an open lock file."""
-    if os.name == "nt":
-        import msvcrt
-
-        handle.seek(0)
-        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-        return
-    import fcntl
-
-    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    with _THREAD_LOCK, file_lock(path):
+        yield

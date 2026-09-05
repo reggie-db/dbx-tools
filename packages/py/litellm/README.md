@@ -68,6 +68,8 @@ Text output puts the display name first, followed by the exact model id.
 models in rank order with their scores. `lookup --output json` and
 `GET /v1/models/lookup?search=<keyword>` return the same
 `[{"score": ..., "modelClass": ..., "endpoint": {...}}]` ranked-model payload.
+`retired-models <output>` refreshes the generated Python fallback used by
+projen post-synth after its daily TTL expires.
 
 The equivalent module invocation is:
 
@@ -175,7 +177,11 @@ The response preserves the OpenAI-standard `data` list and the additional Codex
 catalogue and seed routes. `GET /v1/models/lookup` accepts every `ModelQuery`
 field as a query parameter, ranks the catalogue with the same `lookup_models`
 function as `dbx-litellm lookup`, and is included in the LiteLLM OpenAPI schema.
-Omitting `search` returns every eligible model.
+Omitting `search` returns every eligible model. Deprecated models are excluded
+by default; pass `includeDeprecated=true` to include them alongside current
+models. The standard `/v1/models` response excludes deprecated models.
+Model-list JSON, Codex model entries, lookup endpoints, and CLI tables include
+the model `status`.
 Library-only service names from `dbx-tools-model` are not projected into the
 model-list HTTP or CLI response.
 

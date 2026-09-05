@@ -6,6 +6,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .model_status import ModelStatus
+
 """Model contracts and shared model-name parsing."""
 
 
@@ -99,12 +101,14 @@ class ServingEndpointSummary(WireModel):
     dimension: int | None = None
     reasoning_efforts: tuple[ReasoningEffort, ...] = Field(default=(), alias="reasoningEfforts")
     service_names: dict[ModelService, str] = Field(default_factory=dict, alias="serviceNames")
+    status: ModelStatus = Field(default_factory=ModelStatus)
 
 
 class ModelQuery(WireModel):
     search: str | None = None
     model_class: ModelClass | None = Field(default=None, alias="modelClass")
     requires_tools: bool | None = Field(default=None, alias="requiresTools")
+    include_deprecated: bool = Field(default=False, alias="includeDeprecated")
     limit: int | None = None
     threshold: float | None = None
 

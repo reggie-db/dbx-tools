@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import dbx_tools.litellm.cli as cli_module
 import pytest
-from dbx_tools.model import ModelClass, ServingEndpointSummary
+from dbx_tools.model import ModelClass, ServingEndpointSummary, model_status
 
 
 def test_models_command_prints_text_table(
@@ -48,6 +49,8 @@ def test_models_command_prints_text_table(
     assert "272,000" not in output
     assert "low, medium" not in output
     assert output.strip().startswith("NAME")
+    assert "STATUS" in output
+    assert "available" in output
 
 
 def test_models_command_extended_table_puts_name_first(
@@ -81,6 +84,7 @@ def test_models_command_extended_table_puts_name_first(
     assert "NAME         ID" in output
     assert "272,000" in output
     assert "medium" in output
+    assert "STATUS" in output
 
 
 def test_models_command_prints_json(
@@ -124,6 +128,23 @@ def test_models_command_empty_catalogue_is_readable(
     assert capsys.readouterr().out.strip() == "No models found."
 
 
+def test_retired_models_command_generates_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "_retired_models.py"
+    generated: list[Path] = []
+    monkeypatch.setattr(
+        model_status,
+        "generate_retired_models",
+        lambda path: generated.append(path),
+    )
+
+    cli_module.main(["retired-models", str(output)])
+
+    assert generated == [output]
+
+
 def test_lookup_command_prints_name_id_and_score(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -135,6 +156,7 @@ def test_lookup_command_prints_name_id_and_score(
                 "endpoint": {
                     "name": "databricks-gpt-5-6-sol",
                     "displayName": "GPT 5.6 Sol",
+                    "status": {"deprecated": True},
                 },
                 "score": 0.125,
             }
@@ -147,6 +169,7 @@ def test_lookup_command_prints_name_id_and_score(
     assert output.strip().startswith("NAME")
     assert "GPT 5.6 Sol" in output
     assert "databricks-gpt-5-6-sol" in output
+    assert "deprecated" in output
     assert "0.125" in output
 
 

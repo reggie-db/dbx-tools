@@ -14,7 +14,7 @@ from dbx_tools.litellm.models_api import (
     list_models_payload,
     model_summary,
 )
-from dbx_tools.model import ModelService, ServingEndpointSummary, lookup_models
+from dbx_tools.model import ModelService, ModelStatus, ServingEndpointSummary, lookup_models
 from fastapi import Request
 
 
@@ -50,6 +50,8 @@ def test_standard_models_view_uses_exact_ids_and_openai_data_envelope() -> None:
     ]
     assert all("alias" not in model for model in augmented["data"])
     assert augmented["data"][0]["context_window"] == 272_000
+    assert augmented["data"][0]["status"] == {"deprecated": False}
+    assert augmented["models"][0]["status"] == {"deprecated": False}
     assert augmented["models"][0]["default_reasoning_level"] == "medium"
 
 
@@ -98,7 +100,23 @@ def test_live_discovery_removes_stale_registry_models() -> None:
     augmented = augment_models_payload(payload, [])
 
     assert [model["id"] for model in augmented["data"]] == ["custom-route"]
+    assert augmented["data"][0]["status"] == {"deprecated": False}
     assert [model["slug"] for model in augmented["models"]] == ["custom-route"]
+    assert augmented["models"][0]["status"] == {"deprecated": False}
+
+
+def test_standard_view_excludes_deprecated_models() -> None:
+    endpoints = [
+        ServingEndpointSummary(name="databricks-gemini-3-1-pro"),
+        ServingEndpointSummary(
+            name="databricks-gemini-2-5-pro",
+            status=ModelStatus(deprecated=True),
+        ),
+    ]
+
+    augmented = augment_models_payload({"object": "list", "data": []}, endpoints)
+
+    assert [model["id"] for model in augmented["data"]] == ["dbx/databricks-gemini-3-1-pro"]
 
 
 def test_existing_codex_envelope_is_not_replaced() -> None:
@@ -175,6 +193,7 @@ def test_lookup_payload_returns_scores_and_complete_models() -> None:
                 "description": "Primary coding model",
                 "reasoningEfforts": [],
                 "serviceNames": {},
+                "status": {"deprecated": False},
             },
         }
     ]
@@ -205,6 +224,7 @@ def test_lookup_endpoint_is_in_litellm_openapi() -> None:
     assert operation["operationId"] == "lookupModels"
     assert operation["responses"]["200"]["content"]["application/json"]["schema"]["items"]["$ref"]
     assert {parameter["name"] for parameter in operation["parameters"]} == {
+        "includeDeprecated",
         "limit",
         "modelClass",
         "requiresTools",

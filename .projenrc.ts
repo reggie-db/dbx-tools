@@ -15,10 +15,37 @@
  * `dbx-tools` root task first (see below); a normal consumer constructs,
  * `applyToProjects`es, synths.
  */
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 import { project, project as projenProject, projectJs } from "@dbx-tools/projen";
-import { DependencyType } from "projen";
+import { Component, DependencyType } from "projen";
 
 const SCOPE = "dbx-tools";
+
+/** Generate the committed model-retirement fallback after project synthesis. */
+class RetiredModelsSource extends Component {
+  /** Invoke the existing LiteLLM command after generated manifests are available. */
+  public override postSynthesize(): void {
+    const generatedSource = resolve(
+      this.project.outdir,
+      "packages/py/model/src/dbx_tools/model/_retired_models.py",
+    );
+    execFileSync(
+      "uv",
+      [
+        "run",
+        "--package",
+        "dbx-tools-litellm",
+        "dbx-litellm",
+        "retired-models",
+        generatedSource,
+      ],
+      {
+        stdio: "inherit",
+      },
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Root construction
@@ -962,7 +989,15 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
   {
     directory: "model",
     description: "Databricks Model Serving invocation, classification, and endpoint resolution",
-    dependencies: ["databricks-sdk>=0.63.0", "pydantic>=2.9"],
+    internalDependencies: ["core"],
+    dependencies: [
+      "beautifulsoup4>=4.13,<5",
+      "cachetools>=5.5,<7",
+      "databricks-sdk>=0.63.0",
+      "html5lib>=1.1,<2",
+      "pydantic>=2.9",
+    ],
+    generatedSources: ["src/dbx_tools/model/_retired_models.py"],
   },
   {
     directory: "litellm",
@@ -1021,6 +1056,7 @@ new projenProject.DBXToolsPythonWorkspace(root, {
   },
   release: true,
 });
+new RetiredModelsSource(root);
 root.addTask("demo:emitter", {
   exec: "bun scripts/run-demo.ts --emitter-only",
   description: "Emit local Python hello-world messages onto the demo bus",

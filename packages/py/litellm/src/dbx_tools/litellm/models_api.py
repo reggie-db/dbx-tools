@@ -7,11 +7,13 @@ import json
 import logging
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from typing import Annotated, Any
 
 from databricks.sdk.errors import DatabricksError
 from dbx_tools.model import (
     ModelQuery,
+    ModelStatus,
     RankedModel,
     ServingEndpointSummary,
     lookup_models,
@@ -334,7 +336,7 @@ def _discovered_models(
 
     seen: set[str] = set()
     for endpoint in endpoints:
-        if endpoint.name in seen:
+        if endpoint.status.deprecated or endpoint.name in seen:
             continue
         existing = registry.get(endpoint.name)
         result.append(
@@ -426,6 +428,7 @@ def _model_entry(
         "owned_by": owned_by,
     }
     entry["name"] = _portable_display_name(model_id, endpoint)
+    entry["status"] = _status_dict(endpoint)
     context_window = _context_window(model_id, existing)
     if context_window is not None:
         entry["context_window"] = context_window
@@ -444,7 +447,7 @@ def _model_entry(
 def _custom_models(data: Sequence[Any]) -> list[Any]:
     """Retain explicit non-Databricks models while dropping route placeholders."""
     return [
-        item
+        _with_default_status(item)
         for item in data
         if not (
             isinstance(item, Mapping)
@@ -455,6 +458,18 @@ def _custom_models(data: Sequence[Any]) -> list[Any]:
             )
         )
     ]
+
+
+def _with_default_status(item: Any) -> Any:
+    """Add the default status to an informational model entry."""
+    if not isinstance(item, Mapping):
+        return item
+    return {**item, "status": item.get("status", _status_dict())}
+
+
+def _status_dict(endpoint: ServingEndpointSummary | None = None) -> dict[str, Any]:
+    """Serialize the centralized model status for informational outputs."""
+    return asdict(endpoint.status if endpoint is not None else ModelStatus())
 
 
 def _databricks_slug(model_id: str) -> str | None:
@@ -478,6 +493,7 @@ def _codex_model(slug: str, item: Mapping[str, Any], *, priority: int) -> dict[s
         "slug": slug,
         "display_name": str(item.get("name") or _portable_display_name(slug, None)),
         "description": "Databricks Model Serving endpoint",
+        "status": item.get("status", _status_dict()),
         "default_reasoning_level": default_effort,
         "supported_reasoning_levels": [
             {

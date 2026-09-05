@@ -70,8 +70,12 @@ def lookup_models(
     endpoints: Iterable[ServingEndpointSummary | dict[str, object]],
     query: ModelQuery | dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
-    summaries = [_summary(endpoint) for endpoint in endpoints]
     request = query if isinstance(query, ModelQuery) else ModelQuery.model_validate(query or {})
+    summaries = [
+        summary
+        for endpoint in endpoints
+        if not (summary := _summary(endpoint)).status.deprecated or request.include_deprecated
+    ]
     classified = classified_summaries(summaries)
     eligible = (
         classes_at_or_below(request.model_class)

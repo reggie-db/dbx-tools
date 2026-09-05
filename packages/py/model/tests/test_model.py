@@ -10,12 +10,14 @@ import pytest
 from dbx_tools.model import (
     ModelClass,
     ModelService,
+    ModelStatus,
     ReasoningEffort,
     ServingEndpointSummary,
     auth_headers,
     extract_embedding,
     invocations_url,
     list_serving_endpoints,
+    lookup_models,
     post_json,
     rank_model_id,
     reasoning_efforts_by_family,
@@ -92,6 +94,11 @@ class FakeResponse:
         return b'{"ok":true}'
 
 
+@pytest.fixture(autouse=True)
+def _disable_retired_model_refresh(monkeypatch) -> None:
+    monkeypatch.setattr("dbx_tools.model.serving.model_status.retired_model_names", frozenset)
+
+
 def test_list_serving_endpoints_returns_stable_models() -> None:
     client = SimpleNamespace(serving_endpoints=FakeServingEndpoints())
 
@@ -109,13 +116,46 @@ def test_list_serving_endpoints_returns_stable_models() -> None:
         ReasoningEffort.XHIGH,
         ReasoningEffort.MAX,
     )
-    assert endpoints[0].service_names == {
-        ModelService.ANTHROPIC: "claude-sonnet-4-6"
-    }
+    assert endpoints[0].service_names == {ModelService.ANTHROPIC: "claude-sonnet-4-6"}
     assert endpoints[1].model_class == ModelClass.CHAT_FAST
     custom = next(endpoint for endpoint in endpoints if endpoint.name == "reasoning-primary")
     assert custom.reasoning_efforts[-1] == ReasoningEffort.MAX
     assert custom.service_names == {ModelService.OPENAI: "gpt-5.6-sol"}
+
+
+def test_list_serving_endpoints_excludes_retired_entity(monkeypatch) -> None:
+    client = SimpleNamespace(
+        serving_endpoints=SimpleNamespace(
+            list=lambda: [
+                SimpleNamespace(
+                    name="legacy-model",
+                    task="llm/v1/chat",
+                    state=None,
+                    description=None,
+                    tags=[],
+                    config=SimpleNamespace(
+                        served_entities=[
+                            SimpleNamespace(
+                                entity_name="system.ai.gemini-2-5-pro",
+                                foundation_model=None,
+                                external_model=None,
+                            )
+                        ]
+                    ),
+                )
+            ]
+        )
+    )
+    monkeypatch.setattr(
+        "dbx_tools.model.serving.model_status.retired_model_names",
+        lambda: frozenset({"Gemini 2.5 Pro"}),
+    )
+
+    assert list_serving_endpoints(client) == []
+    endpoints = list_serving_endpoints(client, include_deprecated=True)
+    assert len(endpoints) == 1
+    assert endpoints[0].name == "legacy-model"
+    assert endpoints[0].status.deprecated is True
 
 
 def test_reasoning_efforts_are_inferred_from_family_and_served_entity() -> None:
@@ -223,6 +263,31 @@ def test_resolve_model_fuzzy_name_and_embedding_dimension() -> None:
     assert extract_embedding({"data": [{"embedding": [1, 2, 3]}]}, 3) == [1.0, 2.0, 3.0]
     with pytest.raises(ValueError, match="Expected embedding dimension 2"):
         extract_embedding({"data": [{"embedding": [1, 2, 3]}]}, 2)
+
+
+def test_lookup_models_can_include_deprecated_models() -> None:
+    endpoints = [
+        ServingEndpointSummary(
+            name="databricks-gemini-3-1-pro",
+            task="llm/v1/chat",
+            modelClass=ModelClass.CHAT_BALANCED,
+        ),
+        ServingEndpointSummary(
+            name="databricks-gemini-2-5-pro",
+            task="llm/v1/chat",
+            modelClass=ModelClass.CHAT_BALANCED,
+            status=ModelStatus(deprecated=True),
+        ),
+    ]
+
+    current = lookup_models(endpoints)
+    including_deprecated = lookup_models(endpoints, {"includeDeprecated": True})
+
+    assert [item["endpoint"]["name"] for item in current] == ["databricks-gemini-3-1-pro"]
+    assert [item["endpoint"]["name"] for item in including_deprecated] == [
+        "databricks-gemini-3-1-pro",
+        "databricks-gemini-2-5-pro",
+    ]
 
 
 def test_repair_trailing_assistant_messages_preserves_valid_tool_results() -> None:

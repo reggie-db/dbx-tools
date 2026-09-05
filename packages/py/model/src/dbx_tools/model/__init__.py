@@ -39,6 +39,7 @@ from .invoke import (
     responses_upstream_url,
     responses_url,
 )
+from .model_status import ModelStatus
 from .models import (
     EndpointCapabilities,
     ModelClass,
@@ -89,6 +90,7 @@ __all__ = [
     "ModelProfile",
     "ModelQuery",
     "ModelService",
+    "ModelStatus",
     "RankedModel",
     "ReasoningEffort",
     "ResolvedModel",

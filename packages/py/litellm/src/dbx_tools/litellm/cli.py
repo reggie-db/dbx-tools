@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from importlib import resources
+from pathlib import Path
 from typing import Annotated, Any
 
 from cyclopts import App, Parameter
@@ -19,7 +20,7 @@ from .backend import (
     require_profile,
 )
 
-_COMMANDS = frozenset({"lookup", "models"})
+_COMMANDS = frozenset({"lookup", "models", "retired-models"})
 logger = logging.getLogger(__name__)
 
 
@@ -104,6 +105,19 @@ class Lookup(ProfileOptions):
         print(_format_lookup_text(ranked))
 
 
+@dataclass
+class RetiredModels:
+    """Refresh the generated fallback from the Databricks retirement policy."""
+
+    output: Annotated[Path, Parameter(help="Generated Python module path.")]
+
+    def __call__(self) -> None:
+        """Generate the retired-model fallback when its daily TTL has expired."""
+        from dbx_tools.model.model_status import generate_retired_models
+
+        generate_retired_models(self.output)
+
+
 _APP = App(
     name="dbx-litellm",
     help=(
@@ -115,6 +129,7 @@ _APP = App(
 )
 _APP.command(Models, name="models")
 _APP.command(Lookup, name="lookup")
+_APP.command(RetiredModels, name="retired-models")
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -228,17 +243,17 @@ def _format_models_text(payload: Mapping[str, Any], *, extended: bool = False) -
     items = data if isinstance(data, Sequence) and not isinstance(data, (str, bytes)) else ()
     reasoning_by_id = _reasoning_by_id(payload)
     rows = [_model_row(item, reasoning_by_id) for item in items if isinstance(item, Mapping)]
-    headers = ("NAME", "ID", "OWNER", "CONTEXT", "REASONING")
+    headers = ("NAME", "ID", "STATUS", "OWNER", "CONTEXT", "REASONING")
     if not extended:
-        headers = headers[:2]
-        rows = [row[:2] for row in rows]
+        headers = headers[:3]
+        rows = [row[:3] for row in rows]
     return _format_table(headers, rows, empty="No models found.")
 
 
 def _model_row(
     item: Mapping[str, Any],
     reasoning_by_id: Mapping[str, str],
-) -> tuple[str, str, str, str, str]:
+) -> tuple[str, str, str, str, str, str]:
     model_id = _text(item.get("id"))
     context = item.get("context_window")
     if not isinstance(context, int):
@@ -246,6 +261,7 @@ def _model_row(
     return (
         _text(item.get("name")),
         model_id,
+        _status_text(item.get("status")),
         _text(item.get("owned_by")),
         f"{context:,}" if isinstance(context, int) and context > 0 else "",
         reasoning_by_id.get(model_id, ""),
@@ -254,7 +270,7 @@ def _model_row(
 
 def _format_lookup_text(ranked: Sequence[Mapping[str, Any]]) -> str:
     """Render ranked model matches with lower-is-better scores."""
-    rows: list[tuple[str, str, str]] = []
+    rows: list[tuple[str, str, str, str]] = []
     for match in ranked:
         endpoint = match.get("endpoint")
         if not isinstance(endpoint, Mapping):
@@ -264,10 +280,11 @@ def _format_lookup_text(ranked: Sequence[Mapping[str, Any]]) -> str:
             (
                 _text(endpoint.get("displayName")) or _text(endpoint.get("name")),
                 _text(endpoint.get("name")),
+                _status_text(endpoint.get("status")),
                 f"{score:.3f}" if isinstance(score, (int, float)) else "",
             )
         )
-    return _format_table(("NAME", "ID", "SCORE"), rows, empty="No matching models found.")
+    return _format_table(("NAME", "ID", "STATUS", "SCORE"), rows, empty="No matching models found.")
 
 
 def _format_table(
@@ -319,6 +336,13 @@ def _reasoning_by_id(payload: Mapping[str, Any]) -> dict[str, str]:
 
 def _text(value: object) -> str:
     return value if isinstance(value, str) else ""
+
+
+def _status_text(value: object) -> str:
+    """Render the current model status for informational tables."""
+    if isinstance(value, Mapping) and value.get("deprecated") is True:
+        return "deprecated"
+    return "available"
 
 
 def _run_proxy(arguments: Sequence[str]) -> None:

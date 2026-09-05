@@ -5,6 +5,7 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any, Protocol
 
+from . import model_status
 from .classes import MODEL_CLASS_ORDER
 from .classify import classified_summaries, supports_tools_by_family
 from .models import ModelProfile, ModelService, ServingEndpointSummary, model_service_names
@@ -19,8 +20,15 @@ class WorkspaceClientLike(Protocol):
     serving_endpoints: ServingEndpointsApi
 
 
-def list_serving_endpoints(client: WorkspaceClientLike) -> list[ServingEndpointSummary]:
-    summaries = list_serving_endpoints_uncached(client)
+def list_serving_endpoints(
+    client: WorkspaceClientLike,
+    *,
+    include_deprecated: bool = False,
+) -> list[ServingEndpointSummary]:
+    summaries = list_serving_endpoints_uncached(
+        client,
+        include_deprecated=include_deprecated,
+    )
     buckets = classified_summaries(summaries)
     classes = {
         endpoint.name: model_class
@@ -32,13 +40,21 @@ def list_serving_endpoints(client: WorkspaceClientLike) -> list[ServingEndpointS
     return summaries
 
 
-def list_serving_endpoints_uncached(client: WorkspaceClientLike) -> list[ServingEndpointSummary]:
+def list_serving_endpoints_uncached(
+    client: WorkspaceClientLike,
+    *,
+    include_deprecated: bool = False,
+) -> list[ServingEndpointSummary]:
     summaries = []
+    retired = model_status.retired_model_names()
     for endpoint in client.serving_endpoints.list():
         name = _value(endpoint, "name")
         if not isinstance(name, str) or not name:
             continue
         identities = _model_identities(endpoint, name)
+        status = model_status.get(identities, retired)
+        if status.deprecated and not include_deprecated:
+            continue
         summaries.append(
             ServingEndpointSummary(
                 name=name,
@@ -50,6 +66,7 @@ def list_serving_endpoints_uncached(client: WorkspaceClientLike) -> list[Serving
                 profile=_extract_profile(endpoint),
                 reasoningEfforts=reasoning_efforts_for_names(identities),
                 serviceNames=_service_names(identities),
+                status=status,
             )
         )
     return summaries

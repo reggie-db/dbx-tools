@@ -138,7 +138,9 @@ class DatabricksLiteLLMBackend:
     @cachedmethod(lambda self: self._catalogue_cache)
     def catalogue(self) -> ModelCatalogue:
         """Return one TTL-cached endpoint snapshot."""
-        endpoints = tuple(list_serving_endpoints(self._credentials.client()))
+        endpoints = tuple(
+            list_serving_endpoints(self._credentials.client(), include_deprecated=True)
+        )
         return ModelCatalogue(endpoints=endpoints)
 
     def refresh_catalogue(self) -> ModelCatalogue:
