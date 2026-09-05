@@ -44,7 +44,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.166",
+  "version": "0.6.167",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -58,11 +58,11 @@
   ],
   "private": true,
   "optionalDependencies": {
-    "@dbx-tools/databricks-auth-linux-x64-gnu": "0.6.166",
-    "@dbx-tools/databricks-auth-linux-arm64-gnu": "0.6.166",
-    "@dbx-tools/databricks-auth-darwin-x64": "0.6.166",
-    "@dbx-tools/databricks-auth-darwin-arm64": "0.6.166",
-    "@dbx-tools/databricks-auth-win32-x64-msvc": "0.6.166"
+    "@dbx-tools/databricks-auth-linux-x64-gnu": "0.6.167",
+    "@dbx-tools/databricks-auth-linux-arm64-gnu": "0.6.167",
+    "@dbx-tools/databricks-auth-darwin-x64": "0.6.167",
+    "@dbx-tools/databricks-auth-darwin-arm64": "0.6.167",
+    "@dbx-tools/databricks-auth-win32-x64-msvc": "0.6.167"
   },
   "dbxToolsConfig": {
     "tags": [

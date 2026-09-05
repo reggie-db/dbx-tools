@@ -16,16 +16,11 @@ crate-type = ["lib", "cdylib"]
 name = "dbx-tools-auth-uniffi-bindgen"
 path = "uniffi-bindgen.rs"
 
-[features]
-default = ["keyring"]
-keyring = ["dep:keyring"]
-
 [dependencies]
 async-trait = { workspace = true }
 base64 = { workspace = true }
 directories = { workspace = true }
 fs4 = { workspace = true }
-keyring = { workspace = true, optional = true }
 oauth2 = { workspace = true }
 open = { workspace = true }
 reqwest = { workspace = true }

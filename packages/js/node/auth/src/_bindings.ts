@@ -22,6 +22,9 @@ const uniffiIsDebug =
 
 // Public interface members begin here.
 
+/**
+ * Trim, sort, and deduplicate scopes for requests and credential identities.
+ */
 export function canonicalScopes(scopes: Array<string>): Array<string> {
     const __rb: Uint8Array = uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
@@ -38,6 +41,9 @@ export function canonicalScopes(scopes: Array<string>): Array<string> {
     }
     }
 
+/**
+ * Construct a provider with built-in persistent storage and shared lifecycle defaults.
+ */
 export async function createProviderAuth(options: ProviderOptions, asyncOpts_?: { signal: AbortSignal }): Promise<ProviderAuthLike> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -69,13 +75,16 @@ export async function createProviderAuth(options: ProviderOptions, asyncOpts_?: 
     }
     }
 
-export async function createProviderAuthWithStorage(options: ProviderOptions, storage: StorageAdapter, asyncOpts_?: { signal: AbortSignal }): Promise<ProviderAuthLike> /*throws*/ {
+/**
+ * Construct a provider from the same owning-library storage handle used by Databricks auth.
+ */
+export async function createProviderAuthWithStorage(options: ProviderOptions, storage: StorageHandleLike, asyncOpts_?: { signal: AbortSignal }): Promise<ProviderAuthLike> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
         return await uniffiRustCallAsync(
             /*rustCaller:*/ uniffiCaller,
             /*rustFutureFunc:*/ () => {
-                return nativeModule().uniffi_dbx_tools_auth_fn_func_create_provider_auth_with_storage(FfiConverterTypeProviderOptions.lower(options, nativeModule().rustbuffer_alloc),FfiConverterTypeStorageAdapter.lower(storage, nativeModule().rustbuffer_alloc)
+                return nativeModule().uniffi_dbx_tools_auth_fn_func_create_provider_auth_with_storage(FfiConverterTypeProviderOptions.lower(options, nativeModule().rustbuffer_alloc),FfiConverterTypeStorageHandle.lower(storage, nativeModule().rustbuffer_alloc)
                 );
             },
             /*pollFunc:*/ nativeModule().ffi_dbx_tools_auth_rust_future_poll_u64,
@@ -100,6 +109,9 @@ export async function createProviderAuthWithStorage(options: ProviderOptions, st
     }
     }
 
+/**
+ * Wrap custom storage before passing it into another provider's native library.
+ */
 export function createStorageHandle(storage: StorageAdapter): StorageHandleLike {
     return FfiConverterTypeStorageHandle.lift(uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
@@ -111,6 +123,9 @@ export function createStorageHandle(storage: StorageAdapter): StorageHandleLike 
     ));
     }
 
+/**
+ * Derive a stable provider/profile/scope-set identity without storing raw scopes in the key.
+ */
 export function credentialKey(provider: string, profile: string | undefined, scopes: Array<string>): string {
     const __rb: Uint8Array = uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
@@ -150,6 +165,9 @@ const stringConverter = (() => {
 })();
 const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
 
+/**
+ * Public credential result; deliberately excludes the refresh token.
+ */
 export type AccessToken = {
     accessToken: string,
     tokenType: string,
@@ -201,6 +219,79 @@ const FfiConverterTypeAccessToken = (() => {
     return new FFIConverter();
 })();
 
+/**
+ * Shared lifecycle configuration embedded by every provider's binding options.
+ */
+export type AuthOptions = {
+    /**
+     * Renew credentials this many seconds before expiry; negative values are allowed.
+     */
+    refreshBufferSeconds: bigint,
+    /**
+     * Maximum time spent waiting for the credential store's refresh lock.
+     */
+    lockTimeoutSeconds: bigint,
+    /**
+     * Maximum time allowed for a new interactive login.
+     */
+    loginTimeoutSeconds: bigint,
+    /**
+     * Logo URL or data URI displayed by the browser callback page.
+     */
+    callbackImageSrc?: string
+}
+
+/**
+ * Generated factory for {@link AuthOptions} record objects.
+ */
+export const AuthOptions = (() => {
+    const defaults = () => ({
+        refreshBufferSeconds: BigInt("300"),
+        lockTimeoutSeconds: BigInt("30"),
+        loginTimeoutSeconds: BigInt("3600"),
+        callbackImageSrc: undefined
+    });
+    const create = (() => {
+        return uniffiCreateRecord<AuthOptions, ReturnType<typeof defaults>>(defaults);
+    })();
+    return Object.freeze({
+        create,
+        new: create,
+        defaults: () => Object.freeze(defaults()) as Partial<AuthOptions>,
+    });
+})();
+
+const FfiConverterTypeAuthOptions = (() => {
+    type TypeName = AuthOptions;
+    class FFIConverter extends AbstractFfiConverterByteArray<TypeName> {
+        readFromCursor(c: Cursor): TypeName {
+            return {
+                refreshBufferSeconds: FfiConverterInt64.readFromCursor(c),
+                lockTimeoutSeconds: FfiConverterUInt64.readFromCursor(c),
+                loginTimeoutSeconds: FfiConverterUInt64.readFromCursor(c),
+                callbackImageSrc: FfiConverterOptionalString.readFromCursor(c)
+            };
+        }
+        writeIntoCursor(value: TypeName, c: Cursor): void {
+            FfiConverterInt64.writeIntoCursor(value.refreshBufferSeconds, c);
+            FfiConverterUInt64.writeIntoCursor(value.lockTimeoutSeconds, c);
+            FfiConverterUInt64.writeIntoCursor(value.loginTimeoutSeconds, c);
+            FfiConverterOptionalString.writeIntoCursor(value.callbackImageSrc, c);
+        }
+        allocationSize(value: TypeName): number {
+            return FfiConverterInt64.allocationSize(value.refreshBufferSeconds) +
+             FfiConverterUInt64.allocationSize(value.lockTimeoutSeconds) +
+             FfiConverterUInt64.allocationSize(value.loginTimeoutSeconds) +
+             FfiConverterOptionalString.allocationSize(value.callbackImageSrc);
+
+        }
+    };
+    return new FFIConverter();
+})();
+
+/**
+ * OAuth grant used to acquire and renew credentials.
+ */
 export enum OAuthGrant {
     AuthorizationCode,
     ClientCredentials
@@ -232,8 +323,7 @@ const FfiConverterTypeOAuthGrant = (() => {
 export enum Storage {
     Auto,
     Memory,
-    File,
-    Keyring
+    File
 }
 
 const FfiConverterTypeStorage = (() => {
@@ -244,7 +334,6 @@ const FfiConverterTypeStorage = (() => {
                 case 1: return Storage.Auto;
                 case 2: return Storage.Memory;
                 case 3: return Storage.File;
-                case 4: return Storage.Keyring;
                 default: throw new UniffiInternalError.UnexpectedEnumCase();
             }
         }
@@ -253,7 +342,6 @@ const FfiConverterTypeStorage = (() => {
                 case Storage.Auto: return c.writeI32(1);
                 case Storage.Memory: return c.writeI32(2);
                 case Storage.File: return c.writeI32(3);
-                case Storage.Keyring: return c.writeI32(4);
             }
         }
         allocationSize(value: TypeName): number {
@@ -291,23 +379,58 @@ const FfiConverterTypeFileLayout = (() => {
     return new FFIConverter();
 })();
 
+/**
+ * Provider-specific OAuth identity, endpoints, storage, and shared lifecycle options.
+ */
 export type ProviderOptions = {
+    /**
+     * Stable provider identity used to isolate stored credentials.
+     */
     provider: string,
+    /**
+     * OAuth application identifier.
+     */
     clientId: string,
+    /**
+     * Provider's token exchange endpoint.
+     */
     tokenEndpoint: string,
+    /**
+     * Required browser authorization endpoint for authorization-code grants.
+     */
     authorizationEndpoint?: string,
+    /**
+     * Secret for confidential clients; never returned in access-token results.
+     */
     clientSecret?: string,
+    /**
+     * Optional namespace for multiple accounts under one provider.
+     */
     profile?: string,
+    /**
+     * Requested scopes, trimmed, sorted, and deduplicated before use.
+     */
     scopes: Array<string>,
+    /**
+     * Defaults to authorization code with PKCE when omitted.
+     */
     grant?: OAuthGrant,
+    /**
+     * Override the provider-neutral credential directory.
+     */
     cacheDir?: string,
-    keyringService?: string,
+    /**
+     * Select a built-in store; omission uses file storage.
+     */
     storage?: Storage,
+    /**
+     * Select a shared cache file or independent credential files.
+     */
     fileLayout?: FileLayout,
-    callbackImageSrc?: string,
-    lockTimeoutSeconds: bigint,
-    loginTimeoutSeconds: bigint,
-    refreshBufferSeconds: bigint
+    /**
+     * Shared lifecycle configuration; omission uses `AuthOptions::default()`.
+     */
+    auth?: AuthOptions
 }
 
 /**
@@ -321,13 +444,9 @@ export const ProviderOptions = (() => {
         scopes: [],
         grant: undefined,
         cacheDir: undefined,
-        keyringService: undefined,
         storage: undefined,
         fileLayout: undefined,
-        callbackImageSrc: undefined,
-        lockTimeoutSeconds: BigInt("30"),
-        loginTimeoutSeconds: BigInt("3600"),
-        refreshBufferSeconds: BigInt("300")
+        auth: undefined
     });
     const create = (() => {
         return uniffiCreateRecord<ProviderOptions, ReturnType<typeof defaults>>(defaults);
@@ -353,13 +472,9 @@ const FfiConverterTypeProviderOptions = (() => {
                 scopes: FfiConverterSequenceString.readFromCursor(c),
                 grant: FfiConverterOptionalTypeOAuthGrant.readFromCursor(c),
                 cacheDir: FfiConverterOptionalString.readFromCursor(c),
-                keyringService: FfiConverterOptionalString.readFromCursor(c),
                 storage: FfiConverterOptionalTypeStorage.readFromCursor(c),
                 fileLayout: FfiConverterOptionalTypeFileLayout.readFromCursor(c),
-                callbackImageSrc: FfiConverterOptionalString.readFromCursor(c),
-                lockTimeoutSeconds: FfiConverterUInt64.readFromCursor(c),
-                loginTimeoutSeconds: FfiConverterUInt64.readFromCursor(c),
-                refreshBufferSeconds: FfiConverterInt64.readFromCursor(c)
+                auth: FfiConverterOptionalTypeAuthOptions.readFromCursor(c)
             };
         }
         writeIntoCursor(value: TypeName, c: Cursor): void {
@@ -372,13 +487,9 @@ const FfiConverterTypeProviderOptions = (() => {
             FfiConverterSequenceString.writeIntoCursor(value.scopes, c);
             FfiConverterOptionalTypeOAuthGrant.writeIntoCursor(value.grant, c);
             FfiConverterOptionalString.writeIntoCursor(value.cacheDir, c);
-            FfiConverterOptionalString.writeIntoCursor(value.keyringService, c);
             FfiConverterOptionalTypeStorage.writeIntoCursor(value.storage, c);
             FfiConverterOptionalTypeFileLayout.writeIntoCursor(value.fileLayout, c);
-            FfiConverterOptionalString.writeIntoCursor(value.callbackImageSrc, c);
-            FfiConverterUInt64.writeIntoCursor(value.lockTimeoutSeconds, c);
-            FfiConverterUInt64.writeIntoCursor(value.loginTimeoutSeconds, c);
-            FfiConverterInt64.writeIntoCursor(value.refreshBufferSeconds, c);
+            FfiConverterOptionalTypeAuthOptions.writeIntoCursor(value.auth, c);
         }
         allocationSize(value: TypeName): number {
             return FfiConverterString.allocationSize(value.provider) +
@@ -390,13 +501,9 @@ const FfiConverterTypeProviderOptions = (() => {
              FfiConverterSequenceString.allocationSize(value.scopes) +
              FfiConverterOptionalTypeOAuthGrant.allocationSize(value.grant) +
              FfiConverterOptionalString.allocationSize(value.cacheDir) +
-             FfiConverterOptionalString.allocationSize(value.keyringService) +
              FfiConverterOptionalTypeStorage.allocationSize(value.storage) +
              FfiConverterOptionalTypeFileLayout.allocationSize(value.fileLayout) +
-             FfiConverterOptionalString.allocationSize(value.callbackImageSrc) +
-             FfiConverterUInt64.allocationSize(value.lockTimeoutSeconds) +
-             FfiConverterUInt64.allocationSize(value.loginTimeoutSeconds) +
-             FfiConverterInt64.allocationSize(value.refreshBufferSeconds);
+             FfiConverterOptionalTypeAuthOptions.allocationSize(value.auth);
 
         }
     };
@@ -501,11 +608,26 @@ const FfiConverterTypeAuthError = (() => {
     return new FFIConverter();
 })();
 
+/**
+ * Generic OAuth provider using the shared persistent credential lifecycle.
+ */
 export interface ProviderAuthLike {
 
+/**
+ * Renew the credential even if it has not entered its refresh window.
+ */
     forceRefreshToken(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+/**
+ * Delete the stored credential while holding its refresh lock.
+ */
     logout(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
+/**
+ * Reuse a concurrent replacement or renew the rejected access token.
+ */
     refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+/**
+ * True forces login, false forbids interactive login, and omission permits missing-token login.
+ */
     token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
 /**
@@ -514,6 +636,9 @@ export interface ProviderAuthLike {
 export type ProviderAuthInterface = ProviderAuthLike;
 
 
+/**
+ * Generic OAuth provider using the shared persistent credential lifecycle.
+ */
 export class ProviderAuth extends UniffiAbstractObject implements ProviderAuthLike {
 
     readonly [uniffiTypeNameSymbol] = "ProviderAuth";
@@ -529,6 +654,9 @@ private constructor(pointer: UniffiHandle) {
 
 
 
+/**
+ * Renew the credential even if it has not entered its refresh window.
+ */
     async forceRefreshToken(asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -570,6 +698,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Delete the stored credential while holding its refresh lock.
+ */
     async logout(asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -597,6 +728,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Reuse a concurrent replacement or renew the rejected access token.
+ */
     async refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -638,6 +772,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * True forces login, false forbids interactive login, and omission permits missing-token login.
+ */
     async token(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -759,18 +896,53 @@ const uniffiTypeProviderAuthObjectFactory: UniffiObjectFactory<ProviderAuthLike>
 }})();
 const FfiConverterTypeProviderAuth = new FfiConverterObject(uniffiTypeProviderAuthObjectFactory);
 
+/**
+ * Foreign-language persistence contract; implement every method in Node or Python.
+ *
+ * UniFFI callback interfaces do not inherit Rust default method bodies. A store
+ * must explicitly implement locking and may implement `prepare_write` as a no-op
+ * when writes need no preflight. Credential JSON can contain refresh tokens.
+ */
 export interface StorageAdapter {
 
+/**
+ * Load credential JSON, returning None when the key does not exist.
+ */
     load(profile: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<string | undefined>;
+/**
+ * Check write readiness before a provider rotates a refresh token.
+ */
     prepareWrite(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
+/**
+ * Persist credential JSON without discarding unrelated keys.
+ */
     save(profile: string, token: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
+/**
+ * Delete only the specified credential.
+ */
     remove(profile: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
+/**
+ * Acquire an exclusive refresh lease or fail within the timeout.
+ */
     acquireLock(profile: string, timeoutMillis: bigint, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<string>;
+/**
+ * Release the lease returned by `acquire_lock`.
+ */
     releaseLock(lease: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
+/**
+ * Return a human-readable backend identifier.
+ */
     name(): string;
 }
 
 
+/**
+ * Foreign-language persistence contract; implement every method in Node or Python.
+ *
+ * UniFFI callback interfaces do not inherit Rust default method bodies. A store
+ * must explicitly implement locking and may implement `prepare_write` as a no-op
+ * when writes need no preflight. Credential JSON can contain refresh tokens.
+ */
 export class StorageAdapterImpl extends UniffiAbstractObject implements StorageAdapter {
 
     readonly [uniffiTypeNameSymbol] = "StorageAdapterImpl";
@@ -786,6 +958,9 @@ private constructor(pointer: UniffiHandle) {
 
 
 
+/**
+ * Load credential JSON, returning None when the key does not exist.
+ */
     async load(profile: string, asyncOpts_?: { signal: AbortSignal }): Promise<string | undefined> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -827,6 +1002,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Check write readiness before a provider rotates a refresh token.
+ */
     async prepareWrite(asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -854,6 +1032,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Persist credential JSON without discarding unrelated keys.
+ */
     async save(profile: string, token: string, asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -881,6 +1062,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Delete only the specified credential.
+ */
     async remove(profile: string, asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -908,6 +1092,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Acquire an exclusive refresh lease or fail within the timeout.
+ */
     async acquireLock(profile: string, timeoutMillis: bigint, asyncOpts_?: { signal: AbortSignal }): Promise<string> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -949,6 +1136,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Release the lease returned by `acquire_lock`.
+ */
     async releaseLock(lease: string, asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -976,6 +1166,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Return a human-readable backend identifier.
+ */
     name(): string {
     const __rb: Uint8Array = uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
@@ -1382,6 +1575,9 @@ const uniffiCallbackInterfaceStorageAdapter: { vtable: any; register: () => void
     },
 };
 
+/**
+ * Keeps storage callbacks in the native library that owns their converters.
+ */
 export interface StorageHandleLike {
 
 }
@@ -1391,6 +1587,9 @@ export interface StorageHandleLike {
 export type StorageHandleInterface = StorageHandleLike;
 
 
+/**
+ * Keeps storage callbacks in the native library that owns their converters.
+ */
 export class StorageHandle extends UniffiAbstractObject implements StorageHandleLike {
 
     readonly [uniffiTypeNameSymbol] = "StorageHandle";
@@ -1501,6 +1700,9 @@ const FfiConverterOptionalTypeStorage = new FfiConverterOptional(FfiConverterTyp
 // FfiConverter for FileLayout | undefined
 const FfiConverterOptionalTypeFileLayout = new FfiConverterOptional(FfiConverterTypeFileLayout);
 
+// FfiConverter for AuthOptions | undefined
+const FfiConverterOptionalTypeAuthOptions = new FfiConverterOptional(FfiConverterTypeAuthOptions);
+
 // FfiConverter for boolean | undefined
 const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
 
@@ -1523,52 +1725,52 @@ function uniffiEnsureInitialized() {
     if (bindingsContractVersion !== scaffoldingContractVersion) {
         throw new UniffiInternalError.ContractVersionMismatch(scaffoldingContractVersion, bindingsContractVersion);
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_canonical_scopes() !== 22573) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_canonical_scopes() !== 18689) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_func_canonical_scopes");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_create_provider_auth() !== 16647) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_create_provider_auth() !== 20751) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_func_create_provider_auth");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_create_provider_auth_with_storage() !== 6526) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_create_provider_auth_with_storage() !== 25852) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_func_create_provider_auth_with_storage");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_create_storage_handle() !== 36583) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_create_storage_handle() !== 15844) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_func_create_storage_handle");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_credential_key() !== 928) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_func_credential_key() !== 22562) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_func_credential_key");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_providerauth_force_refresh_token() !== 51877) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_providerauth_force_refresh_token() !== 35205) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_providerauth_force_refresh_token");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_providerauth_logout() !== 39298) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_providerauth_logout() !== 58116) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_providerauth_logout");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_providerauth_refresh_rejected_token() !== 24325) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_providerauth_refresh_rejected_token() !== 40032) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_providerauth_refresh_rejected_token");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_providerauth_token() !== 33575) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_providerauth_token() !== 54952) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_providerauth_token");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_load() !== 10076) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_load() !== 2549) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_storageadapter_load");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_prepare_write() !== 36624) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_prepare_write() !== 1371) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_storageadapter_prepare_write");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_save() !== 59014) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_save() !== 50464) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_storageadapter_save");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_remove() !== 45198) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_remove() !== 46592) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_storageadapter_remove");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_acquire_lock() !== 27809) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_acquire_lock() !== 13715) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_storageadapter_acquire_lock");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_release_lock() !== 10855) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_release_lock() !== 42072) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_storageadapter_release_lock");
     }
-    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_name() !== 29114) {
+    if (nativeModule().uniffi_dbx_tools_auth_checksum_method_storageadapter_name() !== 674) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_auth_checksum_method_storageadapter_name");
     }
 
@@ -1580,6 +1782,7 @@ export default Object.freeze({
   converters: {
     FfiConverterTypeAccessToken,
     FfiConverterTypeAuthError,
+    FfiConverterTypeAuthOptions,
     FfiConverterTypeFileLayout,
     FfiConverterTypeOAuthGrant,
     FfiConverterTypeProviderAuth,

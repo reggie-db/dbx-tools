@@ -845,10 +845,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     configparser: "3",
     directories: "6",
     fs4: "0.13",
-    keyring: {
-      version: "3",
-      features: ["apple-native", "windows-native", "sync-secret-service"],
-    },
+    "google-cloud-auth": "=0.18.0",
     oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
     open: "5",
     reqwest: { version: "0.12", defaultFeatures: false, features: ["json", "rustls-tls"] },
@@ -869,14 +866,11 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
   packages: {
     auth: {
       description: "Provider-neutral OAuth, credential storage, and locking",
-      defaultFeatures: ["keyring"],
-      features: { keyring: ["dep:keyring"] },
       dependencies: {
         "async-trait": { workspace: true },
         base64: { workspace: true },
         directories: { workspace: true },
         fs4: { workspace: true },
-        keyring: { workspace: true, optional: true },
         oauth2: { workspace: true },
         open: { workspace: true },
         reqwest: { workspace: true },
@@ -894,8 +888,6 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     },
     "databricks-auth": {
       description: "Databricks OAuth with secure credential storage",
-      defaultFeatures: ["keyring"],
-      features: { keyring: ["dbx-tools-auth/keyring"] },
       dependencies: {
         "dbx-tools-auth": { path: "../auth", version: root.version, defaultFeatures: false },
         "async-trait": { workspace: true },
@@ -903,6 +895,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         directories: { workspace: true },
         reqwest: { workspace: true },
         serde: { workspace: true },
+        "serde_json": { workspace: true },
         sha2: { workspace: true },
         time: { workspace: true },
         tokio: { workspace: true },
@@ -910,6 +903,17 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         url: { workspace: true },
       },
       devDependencies: { tempfile: { workspace: true } },
+    },
+    "google-auth": {
+      description: "Google Application Default Credentials with in-process token caching",
+      dependencies: {
+        "async-trait": { workspace: true },
+        "dbx-tools-auth": { path: "../auth", version: root.version, defaultFeatures: false },
+        "google-cloud-auth": { workspace: true },
+        time: { workspace: true },
+        tokio: { workspace: true },
+        uniffi: { workspace: true },
+      },
     },
   },
 });

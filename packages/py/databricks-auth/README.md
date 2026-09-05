@@ -22,6 +22,11 @@ token = await auth.token()
 M2M reads the client secret from the selected Databricks profile or
 `DATABRICKS_CLIENT_SECRET`.
 
+For lifecycle overrides, import `AuthOptions` from `dbx_tools.auth` and pass
+`DatabricksAuthOptions(auth=AuthOptions(lock_timeout_seconds=10))`. This is the
+same record accepted by generic OAuth providers. Omit `auth` for Rust defaults;
+move former flattened timeout and callback-image fields into this shared record.
+
 Custom stores implement `dbx_tools.auth.StorageAdapter`. Pass
 `create_storage_handle(adapter)` to `create_persistent_auth_with_storage` to
 preserve callback ownership across the native library boundary.

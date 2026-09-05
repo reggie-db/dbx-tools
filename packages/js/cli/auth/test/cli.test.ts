@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { type DatabricksAuthOptions, type PersistentAuthLike } from "@dbx-tools/databricks-auth";
 import { Storage, type AccessToken } from "@dbx-tools/auth";
+import { type DatabricksAuthOptions, type PersistentAuthLike } from "@dbx-tools/databricks-auth";
 
 import { buildProgram } from "../src/cli.ts";
 
@@ -33,7 +33,7 @@ function fakeAuth(calls: string[]): PersistentAuthLike {
       return {
         profile: "TEST",
         host: "https://example.cloud.databricks.com",
-        storage: Storage.Keyring,
+        storage: Storage.File,
       };
     },
     async token(login) {
@@ -90,7 +90,7 @@ describe("auth CLI", () => {
       {
         profile: "TEST",
         host: "https://example.cloud.databricks.com",
-        storage: "keyring",
+        storage: "file",
       },
     ]);
   });
@@ -141,11 +141,11 @@ describe("auth CLI", () => {
     assert.equal(capturedOptions?.authType, "oauth-m2m");
     assert.equal(capturedOptions?.groupId, "group");
     assert.equal(capturedOptions?.preferUserToMachine, false);
-    assert.equal(capturedOptions?.callbackImageSrc, "data:image/svg+xml,logo");
+    assert.equal(capturedOptions?.auth?.callbackImageSrc, "data:image/svg+xml,logo");
     assert.deepEqual(capturedOptions?.scopes, ["scope-a", "scope-b", "scope-c"]);
-    assert.equal(capturedOptions?.lockTimeoutSeconds, 12n);
-    assert.equal(capturedOptions?.loginTimeoutSeconds, 34n);
-    assert.equal(capturedOptions?.refreshBufferSeconds, -5n);
+    assert.equal(capturedOptions?.auth?.lockTimeoutSeconds, 12n);
+    assert.equal(capturedOptions?.auth?.loginTimeoutSeconds, 34n);
+    assert.equal(capturedOptions?.auth?.refreshBufferSeconds, -5n);
     assert.equal(capturedStorage, Storage.Memory);
   });
 });

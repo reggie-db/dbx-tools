@@ -90,9 +90,9 @@ dbx auth status --profile my-workspace
 ```
 
 The auth command uses the generated Databricks auth bindings for preferred U2M
-browser OAuth, M2M client credentials, refresh, locking, and keyring, file,
-memory, or Postgres storage. See [`@dbx-tools/cli-auth`](../auth) for the
-complete command and option surface.
+browser OAuth, M2M client credentials, refresh, locking, and file or memory
+storage. See [`@dbx-tools/cli-auth`](../auth) for the complete command and
+option surface.
 
 ## Put A Gated Public URL In Front Of A Command
 

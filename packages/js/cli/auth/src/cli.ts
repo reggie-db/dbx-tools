@@ -7,12 +7,12 @@
  * @module
  */
 
-import * as databricksAuth from "@dbx-tools/databricks-auth";
 import * as auth from "@dbx-tools/auth";
+import * as databricksAuth from "@dbx-tools/databricks-auth";
 import { string as sharedString } from "@dbx-tools/shared-core";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 
-type StorageName = "auto" | "memory" | "file" | "keyring";
+type StorageName = "auto" | "memory" | "file";
 
 interface AuthCliOptions {
   profile?: string;
@@ -81,8 +81,6 @@ function bindingStorage(storage: StorageName): auth.Storage {
       return auth.Storage.Memory;
     case "file":
       return auth.Storage.File;
-    case "keyring":
-      return auth.Storage.Keyring;
   }
 }
 
@@ -95,8 +93,6 @@ function storageName(storage: auth.Storage): StorageName {
       return "memory";
     case auth.Storage.File:
       return "file";
-    case auth.Storage.Keyring:
-      return "keyring";
     default:
       throw new Error(`Unknown Databricks auth storage value: ${storage}`);
   }
@@ -116,18 +112,20 @@ function bindingOptions(options: AuthCliOptions): databricksAuth.DatabricksAuthO
     scopes: options.scopes?.length ? options.scopes : undefined,
     target: options.target,
     cacheDir: options.cacheDir,
-    callbackImageSrc: options.callbackImageSrc,
-    lockTimeoutSeconds: parseInteger(options.lockTimeoutSeconds, "--lock-timeout-seconds", false),
-    loginTimeoutSeconds: parseInteger(
-      options.loginTimeoutSeconds,
-      "--login-timeout-seconds",
-      false,
-    ),
-    refreshBufferSeconds: parseInteger(
-      options.refreshBufferSeconds,
-      "--refresh-buffer-seconds",
-      true,
-    ),
+    auth: auth.AuthOptions.create({
+      callbackImageSrc: options.callbackImageSrc,
+      lockTimeoutSeconds: parseInteger(options.lockTimeoutSeconds, "--lock-timeout-seconds", false),
+      loginTimeoutSeconds: parseInteger(
+        options.loginTimeoutSeconds,
+        "--login-timeout-seconds",
+        false,
+      ),
+      refreshBufferSeconds: parseInteger(
+        options.refreshBufferSeconds,
+        "--refresh-buffer-seconds",
+        true,
+      ),
+    }),
     preferUserToMachine: options.preferUserToMachine,
   });
 }
@@ -207,7 +205,7 @@ function addCommonOptions(program: Command): Command {
     )
     .addOption(
       new Option("--storage <storage>", "Credential storage")
-        .choices(["auto", "memory", "file", "keyring"])
+        .choices(["auto", "memory", "file"])
         .default("auto")
         .env("DBX_TOOLS_U2M_STORAGE"),
     )

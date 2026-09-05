@@ -1,4 +1,9 @@
-use std::{env, fmt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    env, fmt,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+};
 
 use configparser::ini::Ini;
 use directories::UserDirs;
@@ -13,6 +18,14 @@ pub const DEFAULT_CONFIG_FILE: &str = "~/.databrickscfg";
 const SETTINGS_SECTION: &str = "__settings__";
 const AUTH_TYPE_DATABRICKS_CLI: &str = "databricks-cli";
 const AUTH_TYPE_M2M: &str = "oauth-m2m";
+static CONFIG_CACHE: OnceLock<Mutex<HashMap<PathBuf, CachedConfig>>> = OnceLock::new();
+
+#[derive(Clone)]
+enum CachedConfig {
+    Loaded(Arc<Ini>),
+    Missing,
+    Invalid(String),
+}
 
 /// OAuth strategy selected from Databricks configuration.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -63,11 +76,11 @@ impl Profile {
         let profile_name = resolve_auth_profile_name(
             requested_name.as_deref(),
             explicit_profile,
-            config.as_ref(),
+            config.as_deref(),
             prefer_user_to_machine,
         )?;
         let configured = config
-            .as_ref()
+            .as_deref()
             .map(|config| load_profile(config, &profile_name))
             .unwrap_or_default();
 
@@ -209,7 +222,8 @@ impl fmt::Debug for Profile {
     }
 }
 
-#[derive(Clone, Debug)]
+/// Databricks profile overrides; debug output never includes the client secret.
+#[derive(Clone)]
 pub struct ProfileOptions {
     pub profile: Option<String>,
     pub host: Option<String>,
@@ -227,6 +241,22 @@ pub struct ProfileOptions {
     pub config_file: Option<PathBuf>,
     /// Whether implicit M2M defaults should select one matching U2M profile.
     pub prefer_user_to_machine: bool,
+}
+
+impl fmt::Debug for ProfileOptions {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProfileOptions")
+            .field("profile", &self.profile)
+            .field("host", &self.host)
+            .field("client_id", &self.client_id)
+            .field("auth_type", &self.auth_type)
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "[REDACTED]"),
+            )
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for ProfileOptions {
@@ -260,7 +290,7 @@ struct RawProfile {
     auth_type: Option<String>,
 }
 
-pub fn resolve_config_file(explicit: Option<&std::path::Path>) -> Result<PathBuf> {
+pub fn resolve_config_file(explicit: Option<&Path>) -> Result<PathBuf> {
     let path = explicit
         .map(PathBuf::from)
         .or_else(|| env_nonempty("DATABRICKS_CONFIG_FILE").map(PathBuf::from))
@@ -282,14 +312,43 @@ fn expand_home(path: PathBuf) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn load_config(path: &std::path::Path) -> Result<Option<Ini>> {
-    if !path.exists() {
-        return Ok(None);
+fn load_config(path: &Path) -> Result<Option<Arc<Ini>>> {
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        env::current_dir()
+            .map_err(|error| Error::Config(format!("could not resolve profile path: {error}")))?
+            .join(path)
+    };
+    let mut cache = CONFIG_CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| Error::Config("Databricks profile cache lock is poisoned".into()))?;
+    if let Some(cached) = cache.get(&path) {
+        return cached_config(cached);
     }
-    let mut ini = Ini::new_cs();
-    ini.load(path)
-        .map_err(|error| Error::Config(format!("could not read {}: {error}", path.display())))?;
-    Ok(Some(ini))
+    let loaded = if path.exists() {
+        let mut ini = Ini::new_cs();
+        match ini.load(&path) {
+            Ok(_) => CachedConfig::Loaded(Arc::new(ini)),
+            Err(error) => {
+                CachedConfig::Invalid(format!("could not read {}: {error}", path.display()))
+            }
+        }
+    } else {
+        CachedConfig::Missing
+    };
+    let result = cached_config(&loaded);
+    cache.insert(path, loaded);
+    result
+}
+
+fn cached_config(cached: &CachedConfig) -> Result<Option<Arc<Ini>>> {
+    match cached {
+        CachedConfig::Loaded(config) => Ok(Some(Arc::clone(config))),
+        CachedConfig::Missing => Ok(None),
+        CachedConfig::Invalid(error) => Err(Error::Config(error.clone())),
+    }
 }
 
 fn resolve_auth_profile_name(
@@ -430,13 +489,6 @@ fn load_profile(ini: &Ini, name: &str) -> RawProfile {
     }
 }
 
-pub(crate) fn configured_auth_storage(path: &std::path::Path) -> Result<Option<String>> {
-    Ok(load_config(path)?
-        .and_then(|config| config.get(SETTINGS_SECTION, "auth_storage"))
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty()))
-}
-
 fn normalize_host(value: &str) -> Result<Url> {
     let value = value.trim().trim_end_matches('/');
     let value = if value.starts_with("http://") || value.starts_with("https://") {
@@ -474,6 +526,38 @@ fn split_list(value: String) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_files_are_cached_by_absolute_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("databrickscfg");
+        std::fs::write(&path, "[DEFAULT]\nhost = first.example\n").unwrap();
+
+        let first = load_config(&path).unwrap().unwrap();
+        assert_eq!(
+            first.get("DEFAULT", "host").as_deref(),
+            Some("first.example")
+        );
+
+        std::fs::write(&path, "[DEFAULT]\nhost = second.example\n").unwrap();
+        let second = load_config(&path).unwrap().unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(
+            second.get("DEFAULT", "host").as_deref(),
+            Some("first.example")
+        );
+    }
+
+    #[test]
+    fn profile_option_debug_redacts_client_secrets() {
+        let options = ProfileOptions {
+            client_secret: Some("sensitive-client-secret".into()),
+            ..ProfileOptions::default()
+        };
+        let debug = format!("{options:?}");
+        assert!(!debug.contains("sensitive-client-secret"));
+        assert!(debug.contains("[REDACTED]"));
+    }
 
     #[test]
     fn configured_default_precedes_legacy_default() {

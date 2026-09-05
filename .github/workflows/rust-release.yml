@@ -275,6 +275,24 @@ jobs:
             --version "${VERSION#v}" \
             --output "dist/release/dbx-tools-databricks-auth/${{ matrix.target.node }}" \
             --skip-build
+          node .projen/uniffi-release.mjs build \
+            --crate "dbx-tools-google-auth" \
+            --node "packages/js/node/google-auth" \
+            --python "packages/py/google-auth" \
+            --node-package "@dbx-tools/google-auth" \
+            --python-package "dbx-tools-google-auth" \
+            --node-generator "projen/tasks/uniffi.ts" \
+            --ubrn "$UBRN_EXECUTABLE" \
+            --cargo-target "${{ matrix.target.cargo }}" \
+            --node-triple "${{ matrix.target.node }}" \
+            --python-tag "${{ matrix.target.python }}" \
+            --os "${{ matrix.target.os }}" \
+            --cpu "${{ matrix.target.cpu }}" \
+            --libc "${{ matrix.target.libc }}" \
+            --facade "${{ matrix.target.facade }}" \
+            --version "${VERSION#v}" \
+            --output "dist/release/dbx-tools-google-auth/${{ matrix.target.node }}" \
+            --skip-build
       - name: Upload dbx-tools-auth native npm package
         uses: actions/upload-artifact@v7
         with:
@@ -307,6 +325,22 @@ jobs:
         with:
           name: dbx-tools-databricks-auth-${{ matrix.target.python }}-python-wheel
           path: dist/release/dbx-tools-databricks-auth/${{ matrix.target.node }}/python/*.whl
+      - name: Upload dbx-tools-google-auth native npm package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dbx-tools-google-auth-${{ matrix.target.node }}-npm
+          path: dist/release/dbx-tools-google-auth/${{ matrix.target.node }}/npm/*.tgz
+      - name: Upload dbx-tools-google-auth npm facade
+        if: ${{ matrix.target.facade }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: dbx-tools-google-auth-npm-facade
+          path: dist/release/dbx-tools-google-auth/${{ matrix.target.node }}/npm-facade/*.tgz
+      - name: Upload dbx-tools-google-auth Python wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: dbx-tools-google-auth-${{ matrix.target.python }}-python-wheel
+          path: dist/release/dbx-tools-google-auth/${{ matrix.target.node }}/python/*.whl
       - name: Log sccache statistics
         if: ${{ always() }}
         shell: bash
@@ -400,6 +434,51 @@ jobs:
           merge-multiple: true
       - name: Publish Python wheels
         run: uv publish --trusted-publishing always dist/python/*.whl
+  publish-dbx-tools-google-auth:
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    needs:
+      - build
+      - publish-dbx-tools-auth
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: pypi-dbx-tools-google-auth
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          registry-url: https://registry.npmjs.org
+      - name: Download native npm packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-google-auth-*-npm
+          path: dist/npm
+          merge-multiple: true
+      - name: Download npm facade
+        uses: actions/download-artifact@v8
+        with:
+          name: dbx-tools-google-auth-npm-facade
+          path: dist/npm-facade
+      - name: Publish native npm packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: for package in dist/npm/*.tgz; do npm publish "$package" --access public; done
+      - name: Publish npm facade
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: for package in dist/npm-facade/*.tgz; do npm publish "$package" --access public; done
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+      - name: Download Python wheels
+        uses: actions/download-artifact@v8
+        with:
+          pattern: dbx-tools-google-auth-*-python-wheel
+          path: dist/python
+          merge-multiple: true
+      - name: Publish Python wheels
+        run: uv publish --trusted-publishing always dist/python/*.whl
   publish-cargo:
     if: ${{ github.event_name == 'repository_dispatch' }}
     needs:
@@ -432,6 +511,7 @@ jobs:
         run: |-
           cargo publish --package "dbx-tools-auth" --registry crates-io --no-verify
           cargo publish --package "dbx-tools-databricks-auth" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-google-auth" --registry crates-io --no-verify
   publish-local-bindings:
     if: ${{ github.event_name == 'repository_dispatch' && vars.LOCAL_REPOSITORIES == 'true' }}
     needs:
@@ -509,12 +589,14 @@ jobs:
         run: |-
           cargo publish --package "dbx-tools-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
           cargo publish --package "dbx-tools-databricks-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-google-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
   dispatch-downstream:
     if: ${{ github.event_name == 'repository_dispatch' }}
     needs:
       - build
       - publish-dbx-tools-auth
       - publish-dbx-tools-databricks-auth
+      - publish-dbx-tools-google-auth
       - publish-cargo
     runs-on: ubuntu-latest
     permissions:

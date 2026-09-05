@@ -57,22 +57,8 @@ impl FileStore {
         Self::new(self.root.join(key_hash(key)))
     }
 
-    fn lock_path(&self, profile: &str) -> PathBuf {
-        self.root
-            .join("locks")
-            .join(format!("{}.lock", key_hash(profile)))
-    }
-
     fn cache_lock_path(&self) -> PathBuf {
         self.root.join("token-cache.lock")
-    }
-
-    pub(crate) async fn acquire_file_lock(
-        &self,
-        profile: &str,
-        timeout: Duration,
-    ) -> Result<FileLock> {
-        acquire_lock(self.lock_path(profile), profile.to_owned(), timeout).await
     }
 
     async fn acquire_cache_lock(&self) -> Result<FileLock> {

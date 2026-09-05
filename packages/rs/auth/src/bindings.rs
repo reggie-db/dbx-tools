@@ -3,16 +3,29 @@ use std::{sync::Arc, time::Duration};
 
 #[uniffi::export(with_foreign)]
 #[async_trait::async_trait]
+/// Foreign-language persistence contract; implement every method in Node or Python.
+///
+/// UniFFI callback interfaces do not inherit Rust default method bodies. A store
+/// must explicitly implement locking and may implement `prepare_write` as a no-op
+/// when writes need no preflight. Credential JSON can contain refresh tokens.
 pub trait StorageAdapter: Send + Sync {
+    /// Load credential JSON, returning None when the key does not exist.
     async fn load(&self, profile: String) -> BindingResult<Option<String>>;
+    /// Check write readiness before a provider rotates a refresh token.
     async fn prepare_write(&self) -> BindingResult<()>;
+    /// Persist credential JSON without discarding unrelated keys.
     async fn save(&self, profile: String, token: String) -> BindingResult<()>;
+    /// Delete only the specified credential.
     async fn remove(&self, profile: String) -> BindingResult<()>;
+    /// Acquire an exclusive refresh lease or fail within the timeout.
     async fn acquire_lock(&self, profile: String, timeout_millis: u64) -> BindingResult<String>;
+    /// Release the lease returned by `acquire_lock`.
     async fn release_lock(&self, lease: String) -> BindingResult<()>;
+    /// Return a human-readable backend identifier.
     fn name(&self) -> String;
 }
 
+/// Public credential result; deliberately excludes the refresh token.
 #[derive(Clone, uniffi::Record)]
 pub struct AccessToken {
     pub access_token: String,
@@ -42,11 +55,13 @@ pub struct ForeignStore {
 }
 
 #[derive(uniffi::Object)]
+/// Keeps storage callbacks in the native library that owns their converters.
 pub struct StorageHandle {
     pub store: Arc<dyn CredentialStore>,
 }
 
 #[uniffi::export]
+/// Wrap custom storage before passing it into another provider's native library.
 pub fn create_storage_handle(storage: Arc<dyn StorageAdapter>) -> Arc<StorageHandle> {
     Arc::new(StorageHandle {
         store: Arc::new(ForeignStore { storage }),

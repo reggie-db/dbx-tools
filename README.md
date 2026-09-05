@@ -202,9 +202,11 @@ The root uv workspace contains these Python counterparts:
 
 Rust-backed authentication is also available as
 [`dbx-tools-auth`](packages/py/auth) for provider-neutral OAuth and
-[`dbx-tools-databricks-auth`](packages/py/databricks-auth) for Databricks profiles.
-Their Node counterparts are [`@dbx-tools/auth`](packages/js/node/auth) and
-[`@dbx-tools/databricks-auth`](packages/js/node/databricks-auth).
+[`dbx-tools-databricks-auth`](packages/py/databricks-auth) for Databricks profiles,
+and [`dbx-tools-google-auth`](packages/py/google-auth) for Google ADC. Their Node
+counterparts are [`@dbx-tools/auth`](packages/js/node/auth),
+[`@dbx-tools/databricks-auth`](packages/js/node/databricks-auth), and
+[`@dbx-tools/google-auth`](packages/js/node/google-auth).
 
 | Package                                      | Purpose                                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

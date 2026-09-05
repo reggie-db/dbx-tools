@@ -1,24 +1,40 @@
-use std::{collections::HashMap, path::PathBuf, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex as StdMutex},
+    time::Duration,
+};
 
 use async_trait::async_trait;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, OwnedMutexGuard, RwLock};
 
-use super::{CredentialStore, FileStore, StorageLock};
-use crate::{Result, Token};
+use super::{CredentialStore, StorageLock};
+use crate::{Error, Result, Token};
 
 pub struct MemoryStore {
     tokens: RwLock<HashMap<String, Token>>,
-    lock_store: FileStore,
+    locks: StdMutex<HashMap<String, Arc<Mutex<()>>>>,
 }
 
 impl MemoryStore {
-    pub fn new(lock_directory: PathBuf) -> Result<Self> {
-        Ok(Self {
+    pub fn new() -> Self {
+        Self {
             tokens: RwLock::new(HashMap::new()),
-            lock_store: FileStore::new(lock_directory)?,
-        })
+            locks: StdMutex::new(HashMap::new()),
+        }
     }
 }
+
+impl Default for MemoryStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+struct MemoryLock {
+    _guard: OwnedMutexGuard<()>,
+}
+
+impl StorageLock for MemoryLock {}
 
 #[async_trait]
 impl CredentialStore for MemoryStore {
@@ -40,9 +56,21 @@ impl CredentialStore for MemoryStore {
     }
 
     async fn lock(&self, profile: &str, timeout: Duration) -> Result<Box<dyn StorageLock>> {
-        Ok(Box::new(
-            self.lock_store.acquire_file_lock(profile, timeout).await?,
-        ))
+        let gate = {
+            let mut locks = self
+                .locks
+                .lock()
+                .map_err(|_| Error::Storage("memory lock registry is poisoned".into()))?;
+            Arc::clone(
+                locks
+                    .entry(profile.to_owned())
+                    .or_insert_with(|| Arc::new(Mutex::new(()))),
+            )
+        };
+        let guard = tokio::time::timeout(timeout, gate.lock_owned())
+            .await
+            .map_err(|_| Error::LockTimeout(profile.to_owned()))?;
+        Ok(Box::new(MemoryLock { _guard: guard }))
     }
 
     fn name(&self) -> &'static str {

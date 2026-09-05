@@ -1,35 +1,38 @@
 mod file;
-#[cfg(feature = "keyring")]
-mod keyring;
 mod memory;
 
-#[cfg(not(feature = "keyring"))]
-use crate::Error;
 use crate::{Result, Token};
 use async_trait::async_trait;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 pub use file::FileStore;
-#[cfg(feature = "keyring")]
-pub use keyring::KeyringStore;
 pub use memory::MemoryStore;
 
 #[async_trait]
+/// Exclusive refresh lease; RAII locks can use the default consuming release.
 pub trait StorageLock: Send + Sync {
+    /// Release explicitly; dropping the consumed lock also releases RAII resources.
     async fn release(self: Box<Self>) -> Result<()> {
         Ok(())
     }
 }
 
 #[async_trait]
+/// Credential persistence with exclusive refresh coordination.
 pub trait CredentialStore: Send + Sync {
+    /// Load the credential for exactly one key.
     async fn load(&self, key: &str) -> Result<Option<Token>>;
+    /// Preflight writes before token rotation; stores needing no probe inherit the no-op.
     async fn prepare_write(&self) -> Result<()> {
         Ok(())
     }
+    /// Persist a credential while preserving unrelated keys.
     async fn save(&self, key: &str, token: &Token) -> Result<()>;
+    /// Delete a credential, succeeding if it is already absent.
     async fn delete(&self, key: &str) -> Result<()>;
+    /// Acquire an exclusive refresh lease or fail within the timeout.
     async fn lock(&self, key: &str, timeout: Duration) -> Result<Box<dyn StorageLock>>;
+    /// Return the backend identifier used by session status.
     fn name(&self) -> &'static str;
 }
 
@@ -39,7 +42,6 @@ pub enum Storage {
     Auto,
     Memory,
     File,
-    Keyring,
 }
 
 pub type StoreBackend = Storage;
@@ -54,27 +56,10 @@ pub enum FileLayout {
 pub async fn open_store(
     backend: Storage,
     directory: PathBuf,
-    service: String,
     layout: FileLayout,
 ) -> Result<Arc<dyn CredentialStore>> {
     match backend {
-        Storage::Memory => Ok(Arc::new(MemoryStore::new(directory.join("memory-locks"))?)),
-        Storage::File => Ok(Arc::new(FileStore::with_layout(directory, layout)?)),
-        Storage::Auto | Storage::Keyring => {
-            #[cfg(feature = "keyring")]
-            match KeyringStore::open_for_service(directory.clone(), service).await {
-                Ok(store) => return Ok(Arc::new(store)),
-                Err(error) if backend == Storage::Keyring => return Err(error),
-                Err(_) => (),
-            }
-            #[cfg(not(feature = "keyring"))]
-            {
-                let _ = service;
-                if backend == Storage::Keyring {
-                    return Err(Error::Config("keyring support was not compiled in".into()));
-                }
-            }
-            Ok(Arc::new(FileStore::with_layout(directory, layout)?))
-        }
+        Storage::Memory => Ok(Arc::new(MemoryStore::new())),
+        Storage::Auto | Storage::File => Ok(Arc::new(FileStore::with_layout(directory, layout)?)),
     }
 }

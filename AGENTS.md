@@ -91,10 +91,29 @@ Primary package areas:
   Providers supply endpoints and acquisition policy; optional profiles and
   canonical scope sets select credentials. Shared UniFFI contracts belong to
   this crate, and dependent bindings import them rather than generating copies.
+  Rust and UniFFI records use composition, not class inheritance: provider
+  options embed the shared `AuthOptions` record as optional `auth`. Omission
+  uses its Rust defaults. Keep lifecycle durations and callback configuration
+  in that record, not flattened copies in each provider. Generated Node and
+  Python bindings must import the same owning record. Use trait default methods
+  for shared lifecycle forwarding; never default required storage locks or
+  provider refresh operations to unsafe no-ops or interactive authentication.
   `StorageAdapter` remains caller-implementable. Pass it through the shared
   crate's `createStorageHandle` / `create_storage_handle` before handing it to
-  Databricks auth: the handle keeps callbacks in their owning native library.
-  Do not restore a Postgres adapter or Postgres dependency to auth or its CLI.
+  either provider factory: the handle keeps callbacks in their owning native library.
+  Built-in storage is file or memory only. Do not add keychain access, a
+  Postgres adapter, or a Postgres dependency to auth or its CLI.
+- `packages/rs/google-auth`, `packages/js/node/google-auth`, and
+  `packages/py/google-auth` provide Google Application Default Credentials
+  through Google's native `google-cloud-auth` Rust crate. ADC discovery checks
+  `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known
+  `application_default_credentials.json`, then the metadata service. ADC is the
+  only persistent credential store; shared auth keeps short-lived tokens in
+  process memory with in-process refresh locks. The package never invokes
+  gcloud, starts Google login, or rewrites ADC. Configure
+  local user credentials and scopes with `gcloud auth application-default
+login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
+  to 1.85 while this workspace supports Rust 1.82.
 - `packages/rs/databricks-auth`, `packages/js/node/databricks-auth`,
   `packages/py/databricks-auth`, and `packages/js/cli/auth` - Databricks U2M and
   M2M OAuth, secure token storage, generated Node/Python bindings, and the
@@ -106,13 +125,17 @@ Primary package areas:
   sorted scopes, optional group assumption, persistent token storage, and the
   same check-lock-check refresh path. The CLI delegates OAuth, profile
   resolution, refresh, locking, and storage to the Node binding package.
-  Built-in storage shares the Databricks CLI's `~/.databricks/token-cache.json`
-  and `databricks-cli` keyring service. File-backed refresh locks cover the
-  whole store, not individual profiles; read-modify-write uses a separate
-  short-held file lock. CLI processes do not honor these Rust locks, so this
-  does not promise cross-tool refresh serialization. Preserve other entries
-  when updating the shared file. Only the incoming Node package is named
+  `databricks_cli_available()` caches whether `databricks auth --help` succeeds.
+  Automatic U2M uses `databricks auth token --profile` for refresh when
+  available, otherwise it uses the native file flow. Explicit file and memory
+  selections always use the native flow, and memory performs no file access.
+  M2M always stays native. File-backed refresh locks cover the whole store;
+  read-modify-write uses a separate short-held file lock. Preserve other entries
+  in `~/.databricks/token-cache.json`. Only the incoming Node package is named
   `auth-gate`; `shared-auth` and `ui-auth` keep their existing names.
+  Profile files are parsed once per absolute path and cached for the process
+  lifetime, including missing files and parse errors, so repeated factories do
+  not reread configuration from disk.
   Rust and UniFFI own the complete cross-language contract. Never hand-maintain
   TypeScript or Python copies of generated records, enums, interfaces, or module
   shapes. Commit the target-independent generated Node TypeScript and import it
@@ -302,10 +325,13 @@ Primary package areas:
   adds live endpoint discovery, fuzzy model resolution, and tool-capability
   filtering; then delegates to LiteLLM's built-in Databricks provider.
   `/v1/models` keeps exact ids in the OpenAI-standard `data` envelope plus the
-  Codex `models` extension. The Python model package enriches library endpoint
-  lookups with a `serviceNames` map keyed by its well-known first-party service
-  enum. LiteLLM does not expose that field, an alternate alias route, or a
-  separate model-list CLI command. Keep authentication,
+  Codex `models` extension. `dbx-litellm models` prints name then id by default,
+  adds owner, context, and reasoning with `--extended` / `--all`, or returns
+  that same payload with `--output json`. `dbx-litellm lookup <keyword>` uses
+  the shared standard model ranking and shows name, id, and score in rank order.
+  The Python model package enriches library endpoint lookups with a
+  `serviceNames` map keyed by its well-known first-party service enum. LiteLLM
+  does not expose that field or an alternate alias route. Keep authentication,
   transport, parameter mapping, streaming, retries, embeddings, and
   Chat↔Responses conversion in LiteLLM. Compatibility guards may repair only
   documented Databricks serving constraints: assistant text prefill, the JSON
@@ -1534,10 +1560,10 @@ the enclosing build already compiled; package `prepack` remains for a standalone
 `bun publish`.
 
 Notes on the bun test task: the suites still use `node:test` (bun's `bun test`
-runs them with its own fast runner). The generated task is
-`find test -name '*.test.ts' | grep -q . && bun test test || true` because
-`bun test` exits non-zero when it matches no files - the guard makes a package
-with no tests a no-op. bun does NOT support `describe()` nested inside `test()`
+runs them with its own fast runner). The generated task runs `bun test test`
+with a separate `find test -name '*.test.ts' | grep -q .` condition because
+`bun test` exits non-zero when it matches no files. The condition makes a package
+with no tests a no-op without swallowing real test failures. bun does NOT support `describe()` nested inside `test()`
 (bun issue #5090); keep suites flat.
 
 ## Package registries: public npm and PyPI are NOT reachable
@@ -1727,7 +1753,7 @@ bun run --filter @dbx-tools/demo-appkit-app build    # Bun.build production bund
 ```
 
 The deployed demo keeps its public OTP shell small: `main.tsx` imports AuthGate
-from the focused `@dbx-tools/ui-email/react/auth-gate` subpath and lazy-loads the
+from the focused `@dbx-tools/ui-auth/react` subpath and lazy-loads the
 application only after the gate admits the visitor, `App.tsx` lazy-loads each
 feature route, `ui-mastra` dynamically imports Echarts, chat export,
 `sql-formatter`, and a fine-grained Shiki runtime with only its eight supported

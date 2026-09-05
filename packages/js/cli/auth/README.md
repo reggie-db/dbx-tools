@@ -13,7 +13,7 @@ Key features:
 - M2M client-credentials tokens with HTTP Basic client authentication;
 - U2M preference by default, with standard M2M resolution available through
   `--no-prefer-user-to-machine`;
-- secure keyring storage by default, with file and memory options;
+- Databricks CLI refresh when available, with native file fallback;
 - access-token lookup, optional login, and forced refresh;
 - profile and host resolution compatible with Databricks configuration;
 - JSON output that excludes refresh credentials;
@@ -47,7 +47,7 @@ succeeds. `token` mints an M2M token when no cached token exists; U2M requires
 - `--no-prefer-user-to-machine` keeps an implicitly selected M2M profile.
 - `--scopes <scopes>` accepts a comma-separated value and may be repeated.
 - `--target workspace|account|unified` selects the OAuth target.
-- `--storage auto|memory|file|keyring` selects credential storage.
+- `--storage auto|memory|file` selects credential storage.
 - `--cache-dir <path>` selects the file-storage directory.
 - `--callback-image-src <src>` sets the callback logo URL or data URI.
 - `--lock-timeout-seconds`, `--login-timeout-seconds`, and
@@ -59,6 +59,13 @@ variables. U2M storage and timeout options read the matching
 M2M reads `client_id` and `client_secret` from the selected profile or their
 standard Databricks environment variables. The secret is not accepted as a CLI
 argument or included in generated binding records.
+
+For U2M with automatic storage, the Rust package checks
+`databricks auth --help` once per process. When available, token refresh runs
+through `databricks auth token --profile <name>`. Otherwise it uses the native
+file-backed OAuth flow. Explicit file storage always uses the native flow.
+Memory storage uses neither the Databricks CLI nor file persistence. M2M always
+uses the native client-credentials flow.
 
 ## Package use
 

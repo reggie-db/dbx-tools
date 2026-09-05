@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dbx_tools.litellm.models_api import (
     augment_models_payload,
+    list_models_payload,
 )
 from dbx_tools.model import ServingEndpointSummary
 
@@ -99,3 +100,12 @@ def test_non_list_payload_is_unchanged() -> None:
     payload = {"data": "not-a-list"}
 
     assert augment_models_payload(payload) is payload
+
+
+def test_cli_seed_matches_packaged_proxy_routes() -> None:
+    endpoint = ServingEndpointSummary(name="databricks-gpt-5-6-sol")
+
+    augmented = list_models_payload([endpoint])
+
+    assert [model["id"] for model in augmented["data"]] == ["dbx/databricks-gpt-5-6-sol"]
+    assert [model["slug"] for model in augmented["models"]] == ["dbx/databricks-gpt-5-6-sol"]

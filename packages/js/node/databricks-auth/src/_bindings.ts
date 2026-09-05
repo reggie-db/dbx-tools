@@ -9,12 +9,12 @@
 import nativeModule from "./_bindings-ffi.ts";
 import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct,
 } from "./_bindings-ffi.ts";
-import { type AccessToken, type StorageHandleLike, AuthError, Storage,
+import { type AccessToken, type AuthOptions, type StorageHandleLike, AuthError, Storage,
 } from "@dbx-tools/auth";
-import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterInt64, FfiConverterObject, FfiConverterOptional, FfiConverterUInt64, RustBuffer, UniffiAbstractObject, UniffiInternalError, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiRustCallAsync, uniffiTypeNameSymbol,
+import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, AbstractFfiConverterByteArray, Cursor, FfiConverterArray, FfiConverterBool, FfiConverterObject, FfiConverterOptional, RustBuffer, UniffiAbstractObject, UniffiInternalError, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiRustCallAsync, uniffiTypeNameSymbol,
 } from "@ubjs/core";
 import { uniffiModule as uniffiDbxToolsAuthModule } from "@dbx-tools/auth";
-const { FfiConverterTypeAccessToken, FfiConverterTypeAuthError, FfiConverterTypeStorage, FfiConverterTypeStorageHandle } = uniffiDbxToolsAuthModule.converters;
+const { FfiConverterTypeAccessToken, FfiConverterTypeAuthError, FfiConverterTypeAuthOptions, FfiConverterTypeStorage, FfiConverterTypeStorageHandle } = uniffiDbxToolsAuthModule.converters;
 const uniffiCaller = new UniffiRustCaller(() => ({ code: 0 }));
 
 const uniffiIsDebug =
@@ -26,6 +26,9 @@ const uniffiIsDebug =
 
 // Public interface members begin here.
 
+/**
+ * Resolve a Databricks profile and open built-in credential storage.
+ */
 export async function createPersistentAuth(options: DatabricksAuthOptions, storage: Storage | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<PersistentAuthLike> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -57,6 +60,9 @@ export async function createPersistentAuth(options: DatabricksAuthOptions, stora
     }
     }
 
+/**
+ * Resolve a Databricks profile using a shared owning-library storage handle.
+ */
 export async function createPersistentAuthWithStorage(options: DatabricksAuthOptions, storage: StorageHandleLike, asyncOpts_?: { signal: AbortSignal }): Promise<PersistentAuthLike> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -88,6 +94,19 @@ export async function createPersistentAuthWithStorage(options: DatabricksAuthOpt
     }
     }
 
+/**
+ * Whether `databricks auth --help` succeeds in this process environment.
+ */
+export function databricksCliAvailable(): boolean {
+    return FfiConverterBool.lift(uniffiCaller.rustCall(
+            /*caller:*/ (callStatus) => {
+                return nativeModule().uniffi_dbx_tools_databricks_auth_fn_func_databricks_cli_available(
+                callStatus);
+            },
+            /*liftString:*/ FfiConverterString.lift.bind(FfiConverterString),
+    ));
+    }
+
 const stringConverter = (() => {
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
@@ -113,11 +132,29 @@ const FfiConverterString = uniffiCreateFfiConverterString(stringConverter);
  * Configuration shared by the generated Node and Python auth bindings.
  */
 export type DatabricksAuthOptions = {
+    /**
+     * Explicit profile name; explicit choices are never remapped to another profile.
+     */
     profile?: string,
+    /**
+     * Override the workspace or account host.
+     */
     host?: string,
+    /**
+     * Account identifier for account-scoped authentication.
+     */
     accountId?: string,
+    /**
+     * Workspace identifier for unified authentication.
+     */
     workspaceId?: string,
+    /**
+     * Override the Databricks CLI configuration file.
+     */
     configFile?: string,
+    /**
+     * Override the OAuth application identifier.
+     */
     clientId?: string,
     /**
      * Optional group role requested by M2M token generation.
@@ -127,16 +164,22 @@ export type DatabricksAuthOptions = {
      * Explicit Databricks authentication strategy.
      */
     authType?: string,
+    /**
+     * Override profile scopes; omission preserves profile/default scope resolution.
+     */
     scopes?: Array<string>,
+    /**
+     * Target kind: workspace, account, or unified.
+     */
     target?: string,
+    /**
+     * Override the directory containing the shared CLI token cache.
+     */
     cacheDir?: string,
     /**
-     * Logo URL or data URI displayed by the browser callback page.
+     * Shared lifecycle configuration; omission uses `AuthOptions::default()`.
      */
-    callbackImageSrc?: string,
-    lockTimeoutSeconds: bigint,
-    loginTimeoutSeconds: bigint,
-    refreshBufferSeconds: bigint,
+    auth?: AuthOptions,
     /**
      * Whether implicit M2M defaults should select one matching U2M profile.
      */
@@ -159,10 +202,7 @@ export const DatabricksAuthOptions = (() => {
         scopes: undefined,
         target: undefined,
         cacheDir: undefined,
-        callbackImageSrc: undefined,
-        lockTimeoutSeconds: BigInt("30"),
-        loginTimeoutSeconds: BigInt("3600"),
-        refreshBufferSeconds: BigInt("300"),
+        auth: undefined,
         preferUserToMachine: true
     });
     const create = (() => {
@@ -191,10 +231,7 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
                 scopes: FfiConverterOptionalSequenceString.readFromCursor(c),
                 target: FfiConverterOptionalString.readFromCursor(c),
                 cacheDir: FfiConverterOptionalString.readFromCursor(c),
-                callbackImageSrc: FfiConverterOptionalString.readFromCursor(c),
-                lockTimeoutSeconds: FfiConverterUInt64.readFromCursor(c),
-                loginTimeoutSeconds: FfiConverterUInt64.readFromCursor(c),
-                refreshBufferSeconds: FfiConverterInt64.readFromCursor(c),
+                auth: FfiConverterOptionalTypeAuthOptions.readFromCursor(c),
                 preferUserToMachine: FfiConverterBool.readFromCursor(c)
             };
         }
@@ -210,10 +247,7 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
             FfiConverterOptionalSequenceString.writeIntoCursor(value.scopes, c);
             FfiConverterOptionalString.writeIntoCursor(value.target, c);
             FfiConverterOptionalString.writeIntoCursor(value.cacheDir, c);
-            FfiConverterOptionalString.writeIntoCursor(value.callbackImageSrc, c);
-            FfiConverterUInt64.writeIntoCursor(value.lockTimeoutSeconds, c);
-            FfiConverterUInt64.writeIntoCursor(value.loginTimeoutSeconds, c);
-            FfiConverterInt64.writeIntoCursor(value.refreshBufferSeconds, c);
+            FfiConverterOptionalTypeAuthOptions.writeIntoCursor(value.auth, c);
             FfiConverterBool.writeIntoCursor(value.preferUserToMachine, c);
         }
         allocationSize(value: TypeName): number {
@@ -228,10 +262,7 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
              FfiConverterOptionalSequenceString.allocationSize(value.scopes) +
              FfiConverterOptionalString.allocationSize(value.target) +
              FfiConverterOptionalString.allocationSize(value.cacheDir) +
-             FfiConverterOptionalString.allocationSize(value.callbackImageSrc) +
-             FfiConverterUInt64.allocationSize(value.lockTimeoutSeconds) +
-             FfiConverterUInt64.allocationSize(value.loginTimeoutSeconds) +
-             FfiConverterInt64.allocationSize(value.refreshBufferSeconds) +
+             FfiConverterOptionalTypeAuthOptions.allocationSize(value.auth) +
              FfiConverterBool.allocationSize(value.preferUserToMachine);
 
         }
@@ -239,6 +270,9 @@ const FfiConverterTypeDatabricksAuthOptions = (() => {
     return new FFIConverter();
 })();
 
+/**
+ * Resolved Databricks identity and active storage backend.
+ */
 export type DatabricksAuthStatus = {
     profile: string,
     host: string,
@@ -286,13 +320,34 @@ const FfiConverterTypeDatabricksAuthStatus = (() => {
     return new FFIConverter();
 })();
 
+/**
+ * Databricks binding facade over the shared persistent authentication lifecycle.
+ */
 export interface PersistentAuthLike {
 
+/**
+ * Start an explicit login and persist the resulting credential.
+ */
     challenge(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
+/**
+ * Renew the stored credential even before its refresh window.
+ */
     forceRefreshToken(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+/**
+ * Delete the credential while holding the store's refresh lock.
+ */
     logout(asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<void>;
+/**
+ * Reuse another caller's replacement or renew the rejected token.
+ */
     refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
+/**
+ * Return the resolved identity and active built-in storage backend.
+ */
     status(): DatabricksAuthStatus;
+/**
+ * True forces login, false forbids interactive login, and omission permits missing-token login.
+ */
     token(login?: boolean | undefined, asyncOpts_?: { signal: AbortSignal }) /*throws*/: Promise<AccessToken>;
 }
 /**
@@ -301,6 +356,9 @@ export interface PersistentAuthLike {
 export type PersistentAuthInterface = PersistentAuthLike;
 
 
+/**
+ * Databricks binding facade over the shared persistent authentication lifecycle.
+ */
 export class PersistentAuth extends UniffiAbstractObject implements PersistentAuthLike {
 
     readonly [uniffiTypeNameSymbol] = "PersistentAuth";
@@ -316,6 +374,9 @@ private constructor(pointer: UniffiHandle) {
 
 
 
+/**
+ * Start an explicit login and persist the resulting credential.
+ */
     async challenge(asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -343,6 +404,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Renew the stored credential even before its refresh window.
+ */
     async forceRefreshToken(asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -384,6 +448,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Delete the credential while holding the store's refresh lock.
+ */
     async logout(asyncOpts_?: { signal: AbortSignal }): Promise<void> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -411,6 +478,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Reuse another caller's replacement or renew the rejected token.
+ */
     async refreshRejectedToken(staleAccessToken: string, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -452,6 +522,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * Return the resolved identity and active built-in storage backend.
+ */
     status(): DatabricksAuthStatus {
     const __rb: Uint8Array = uniffiCaller.rustCall(
             /*caller:*/ (callStatus) => {
@@ -468,6 +541,9 @@ private constructor(pointer: UniffiHandle) {
     }
     }
 
+/**
+ * True forces login, false forbids interactive login, and omission permits missing-token login.
+ */
     async token(login: boolean | undefined = undefined, asyncOpts_?: { signal: AbortSignal }): Promise<AccessToken> /*throws*/ {
     const __stack = uniffiIsDebug ? new Error().stack : undefined;
     try {
@@ -598,6 +674,9 @@ const FfiConverterSequenceString = new FfiConverterArray(FfiConverterString);
 // FfiConverter for Array<string> | undefined
 const FfiConverterOptionalSequenceString = new FfiConverterOptional(FfiConverterSequenceString);
 
+// FfiConverter for AuthOptions | undefined
+const FfiConverterOptionalTypeAuthOptions = new FfiConverterOptional(FfiConverterTypeAuthOptions);
+
 // FfiConverter for boolean | undefined
 const FfiConverterOptionalBoolean = new FfiConverterOptional(FfiConverterBool);
 
@@ -623,28 +702,31 @@ function uniffiEnsureInitialized() {
     if (bindingsContractVersion !== scaffoldingContractVersion) {
         throw new UniffiInternalError.ContractVersionMismatch(scaffoldingContractVersion, bindingsContractVersion);
     }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth() !== 40656) {
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth() !== 4759) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth");
     }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth_with_storage() !== 1043) {
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth_with_storage() !== 13490) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_func_create_persistent_auth_with_storage");
     }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_challenge() !== 39859) {
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_func_databricks_cli_available() !== 64750) {
+        throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_func_databricks_cli_available");
+    }
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_challenge() !== 37216) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_challenge");
     }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_force_refresh_token() !== 21349) {
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_force_refresh_token() !== 36142) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_force_refresh_token");
     }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_logout() !== 42685) {
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_logout() !== 36284) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_logout");
     }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_refresh_rejected_token() !== 23475) {
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_refresh_rejected_token() !== 46661) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_refresh_rejected_token");
     }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_status() !== 24573) {
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_status() !== 65334) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_status");
     }
-    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_token() !== 42981) {
+    if (nativeModule().uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_token() !== 21614) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_databricks_auth_checksum_method_persistentauth_token");
     }
 

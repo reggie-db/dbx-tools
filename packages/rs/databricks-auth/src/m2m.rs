@@ -42,12 +42,11 @@ mod tests {
     use url::Url;
 
     use super::*;
-    use crate::{AuthClient, AuthKind, AuthOptions, MemoryStore, TargetKind};
+    use crate::{AuthClient, AuthKind, AuthOptions, AuthSession, MemoryStore, TargetKind};
 
     #[tokio::test]
     async fn mints_and_caches_an_account_token_with_cli_request_semantics() {
         let (host, server) = start_server(1).await;
-        let directory = tempfile::tempdir().unwrap();
         let profile = Profile {
             name: "service".into(),
             host: Url::parse(&host).unwrap(),
@@ -63,8 +62,9 @@ mod tests {
         let client = Arc::new(
             AuthClient::new(
                 profile,
-                Arc::new(MemoryStore::new(directory.path().join("locks")).unwrap()),
+                Arc::new(MemoryStore::new()),
                 AuthOptions::default(),
+                false,
             )
             .unwrap(),
         );
@@ -119,7 +119,6 @@ mod tests {
     #[tokio::test]
     async fn force_refresh_discovers_a_workspace_token_without_a_cached_credential() {
         let (host, server) = start_server(2).await;
-        let directory = tempfile::tempdir().unwrap();
         let profile = Profile {
             name: "service".into(),
             host: Url::parse(&host).unwrap(),
@@ -134,8 +133,9 @@ mod tests {
         };
         let client = AuthClient::new(
             profile,
-            Arc::new(MemoryStore::new(directory.path().join("locks")).unwrap()),
+            Arc::new(MemoryStore::new()),
             AuthOptions::default(),
+            false,
         )
         .unwrap();
 

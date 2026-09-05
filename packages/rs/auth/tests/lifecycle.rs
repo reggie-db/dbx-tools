@@ -1,6 +1,6 @@
 use dbx_tools_auth::{
-    credential_key, AuthClient, AuthOptions, CredentialStore, FileLayout, FileStore, Result, Token,
-    TokenProvider,
+    credential_key, AuthClient, AuthOptions, AuthSession, CredentialStore, Error, FileLayout,
+    FileStore, Result, Token, TokenProvider,
 };
 use std::{
     sync::{
@@ -13,6 +13,87 @@ use time::OffsetDateTime;
 
 struct Provider {
     calls: AtomicUsize,
+}
+
+struct Session(AuthClient);
+
+impl AuthSession for Session {
+    fn auth_client(&self) -> &AuthClient {
+        &self.0
+    }
+}
+
+#[test]
+fn lifecycle_options_have_shared_defaults_and_signed_refresh_windows() {
+    let options = AuthOptions::default();
+    assert_eq!(options.lock_timeout(), Duration::from_secs(30));
+    assert_eq!(options.login_timeout(), Duration::from_secs(3600));
+    assert_eq!(options.refresh_buffer(), time::Duration::seconds(300));
+    let options = AuthOptions {
+        refresh_buffer_seconds: -5,
+        ..options
+    };
+    assert_eq!(options.refresh_buffer(), time::Duration::seconds(-5));
+}
+
+#[tokio::test]
+async fn session_defaults_preserve_login_policy_refresh_and_logout() {
+    let directory = tempfile::tempdir().unwrap();
+    let provider = Arc::new(Provider {
+        calls: AtomicUsize::new(0),
+    });
+    let store = Arc::new(FileStore::new(directory.path().to_path_buf()).unwrap());
+    let session = Session(AuthClient::new(
+        "key".into(),
+        provider.clone(),
+        store.clone(),
+        AuthOptions::default(),
+    ));
+    assert!(matches!(
+        session.token_with_login(Some(false)).await,
+        Err(Error::LoginRequired(_))
+    ));
+    assert!(matches!(
+        session.force_refresh().await,
+        Err(Error::LoginRequired(_))
+    ));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        session.token_with_login(None).await.unwrap().access_token,
+        "access-0"
+    );
+    assert_eq!(
+        session
+            .token_with_login(Some(false))
+            .await
+            .unwrap()
+            .access_token,
+        "access-0"
+    );
+    assert_eq!(
+        session
+            .token_with_login(Some(true))
+            .await
+            .unwrap()
+            .access_token,
+        "access-1"
+    );
+    assert_eq!(
+        session
+            .refresh_rejected_token("access-0")
+            .await
+            .unwrap()
+            .access_token,
+        "access-1"
+    );
+    assert_eq!(
+        session.force_refresh().await.unwrap().access_token,
+        "access-2"
+    );
+    assert!(session.token().await.unwrap().refresh_token.is_none());
+    assert_eq!(session.store_name(), "file");
+    session.logout().await.unwrap();
+    assert!(store.load("key").await.unwrap().is_none());
 }
 
 #[async_trait::async_trait]

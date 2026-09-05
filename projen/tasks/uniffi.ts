@@ -1,4 +1,5 @@
 #!/usr/bin/env -S bun
+import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -14,7 +15,6 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { spawnSync } from "node:child_process";
 import { makeReadonly, makeWritable, stampGenerated } from "../src/generated.ts";
 import type { RustWorkspaceMapping } from "../src/project-rs.ts";
 import {
@@ -68,8 +68,9 @@ const run = (command: string, args: string[]) => {
   const stderr = normalizedOutput(result.stderr ?? "");
   if (stdout) process.stdout.write(`${stdout}\n`);
   if (stderr) process.stderr.write(`${stderr}\n`);
-  if (result.error)
+  if (result.error) {
     throw new Error(`${command} failed: ${result.error.message}`, { cause: result.error });
+  }
   if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
 };
 
@@ -259,10 +260,7 @@ if (values.python) {
   stampGeneratedPython(pythonBindings);
   const pythonInit = join(pythonPackage, "__init__.py");
   if (!existsSync(pythonInit)) {
-    writeFileSync(
-      pythonInit,
-      `\"\"\"Python bindings for ${crate}.\"\"\"\n\nfrom .bindings import *  # noqa: F403\n`,
-    );
+    writeFileSync(pythonInit, "");
   }
   const pythonLibrary = join(pythonPackage, basename(library));
   makeWritable(pythonLibrary);

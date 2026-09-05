@@ -25,6 +25,15 @@ _ROUTE_MODEL_IDS = frozenset({"*", "databricks/*", "dbx/*"})
 logger = logging.getLogger(__name__)
 
 
+_PROXY_MODEL_SEED: dict[str, Any] = {
+    "object": "list",
+    "data": [
+        {"id": "*", "object": "model"},
+        {"id": "dbx/*", "object": "model"},
+    ],
+}
+
+
 def augment_models_payload(
     payload: Any,
     endpoints: Sequence[ServingEndpointSummary] | None = None,
@@ -79,6 +88,18 @@ def install_models_compatibility_middleware() -> None:
             status_code=response.status_code,
             headers=_response_headers(response),
         )
+
+
+def list_models_payload(
+    endpoints: Sequence[ServingEndpointSummary] | None = None,
+) -> Any:
+    """Return the `/v1/models` envelope advertised by the packaged proxy.
+
+    The seed is the packaged route placeholders (`*` and `dbx/*`). Live
+    discovery replaces those with exact `dbx/<endpoint>` ids, matching a
+    running proxy whose LiteLLM config advertises the same routes.
+    """
+    return augment_models_payload(_PROXY_MODEL_SEED, endpoints)
 
 
 def _codex_models(data: Sequence[Any]) -> list[dict[str, Any]]:

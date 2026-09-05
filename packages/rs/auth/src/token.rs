@@ -28,7 +28,7 @@ pub struct Token {
 
 impl Token {
     pub fn needs_refresh(&self, now: OffsetDateTime, buffer: Duration) -> bool {
-        self.expires_at.is_some_and(|expiry| expiry <= now + buffer)
+        self.expires_at.is_some_and(|expiry| expiry - now <= buffer)
     }
 
     pub fn is_valid(&self, now: OffsetDateTime) -> bool {
@@ -92,6 +92,20 @@ impl Token {
 #[cfg(test)]
 mod tests {
     use super::Token;
+
+    #[test]
+    fn refresh_window_handles_full_binding_integer_range() {
+        let now = time::OffsetDateTime::now_utc();
+        let token = Token {
+            access_token: "access".into(),
+            token_type: "Bearer".into(),
+            refresh_token: None,
+            expires_at: Some(now),
+            scopes: vec![],
+        };
+        assert!(token.needs_refresh(now, time::Duration::seconds(i64::MAX)));
+        assert!(!token.needs_refresh(now, time::Duration::seconds(i64::MIN)));
+    }
 
     #[test]
     fn reads_databricks_cli_rfc3339_expiry() {

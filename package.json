@@ -74,7 +74,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.166",
+  "version": "0.6.167",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -97,6 +97,7 @@
     "packages/js/node/email",
     "packages/js/node/fs",
     "packages/js/node/genie",
+    "packages/js/node/google-auth",
     "packages/js/node/model",
     "packages/js/node/path",
     "packages/js/node/postgres",
@@ -186,7 +187,8 @@
       "root": "packages/rs",
       "crates": [
         "packages/rs/auth",
-        "packages/rs/databricks-auth"
+        "packages/rs/databricks-auth",
+        "packages/rs/google-auth"
       ],
       "bindings": [
         {
@@ -209,6 +211,18 @@
           "python": "packages/py/databricks-auth",
           "pythonPackage": "dbx-tools-databricks-auth",
           "pythonModule": "dbx_tools.databricks_auth"
+        },
+        {
+          "crate": "dbx-tools-google-auth",
+          "dependencies": [
+            "dbx-tools-auth"
+          ],
+          "rust": "packages/rs/google-auth",
+          "node": "packages/js/node/google-auth",
+          "nodePackage": "@dbx-tools/google-auth",
+          "python": "packages/py/google-auth",
+          "pythonPackage": "dbx-tools-google-auth",
+          "pythonModule": "dbx_tools.google_auth"
         }
       ],
       "releaseWorkflow": "rust-release"

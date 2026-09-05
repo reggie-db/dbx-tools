@@ -1,4 +1,5 @@
 mod client;
+mod databricks_cli;
 mod m2m;
 mod oauth;
 mod oauth_endpoints;
@@ -6,6 +7,8 @@ mod profile;
 mod storage;
 
 pub use client::{AuthClient, AuthOptions};
+pub use databricks_cli::databricks_cli_available;
+pub use dbx_tools_auth::AuthSession;
 pub use dbx_tools_auth::{default_callback_image_src, OAuthTemplate, OAuthTemplateContext};
 pub use dbx_tools_auth::{
     AccessToken, AuthError as DatabricksAuthError, Storage, StorageAdapter, Token,
@@ -18,28 +21,30 @@ pub use profile::{
     resolve_config_file, AuthKind, Profile, ProfileOptions, TargetKind, DEFAULT_ACCOUNTS_HOST,
     DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE,
 };
-use std::{path::PathBuf, sync::Arc, time::Duration};
-#[cfg(feature = "keyring")]
-pub use storage::KeyringStore;
+use std::{path::PathBuf, sync::Arc};
 pub use storage::{
     open_store, CredentialStore, FileStore, MemoryStore, StorageLock, StoreBackend, StoreOptions,
 };
 
-use time::Duration as TimeDuration;
-
 /// Configuration shared by the generated Node and Python auth bindings.
 #[derive(Clone, uniffi::Record)]
 pub struct DatabricksAuthOptions {
+    /// Explicit profile name; explicit choices are never remapped to another profile.
     #[uniffi(default = None)]
     pub profile: Option<String>,
+    /// Override the workspace or account host.
     #[uniffi(default = None)]
     pub host: Option<String>,
+    /// Account identifier for account-scoped authentication.
     #[uniffi(default = None)]
     pub account_id: Option<String>,
+    /// Workspace identifier for unified authentication.
     #[uniffi(default = None)]
     pub workspace_id: Option<String>,
+    /// Override the Databricks CLI configuration file.
     #[uniffi(default = None)]
     pub config_file: Option<String>,
+    /// Override the OAuth application identifier.
     #[uniffi(default = None)]
     pub client_id: Option<String>,
     /// Optional group role requested by M2M token generation.
@@ -48,21 +53,18 @@ pub struct DatabricksAuthOptions {
     /// Explicit Databricks authentication strategy.
     #[uniffi(default = None)]
     pub auth_type: Option<String>,
+    /// Override profile scopes; omission preserves profile/default scope resolution.
     #[uniffi(default = None)]
     pub scopes: Option<Vec<String>>,
+    /// Target kind: workspace, account, or unified.
     #[uniffi(default = None)]
     pub target: Option<String>,
+    /// Override the directory containing the shared CLI token cache.
     #[uniffi(default = None)]
     pub cache_dir: Option<String>,
-    /// Logo URL or data URI displayed by the browser callback page.
+    /// Shared lifecycle configuration; omission uses `AuthOptions::default()`.
     #[uniffi(default = None)]
-    pub callback_image_src: Option<String>,
-    #[uniffi(default = 30)]
-    pub lock_timeout_seconds: u64,
-    #[uniffi(default = 3600)]
-    pub login_timeout_seconds: u64,
-    #[uniffi(default = 300)]
-    pub refresh_buffer_seconds: i64,
+    pub auth: Option<AuthOptions>,
     /// Whether implicit M2M defaults should select one matching U2M profile.
     #[uniffi(default = true)]
     pub prefer_user_to_machine: bool,
@@ -82,16 +84,14 @@ impl Default for DatabricksAuthOptions {
             scopes: None,
             target: None,
             cache_dir: None,
-            callback_image_src: None,
-            lock_timeout_seconds: 30,
-            login_timeout_seconds: 3600,
-            refresh_buffer_seconds: 300,
+            auth: None,
             prefer_user_to_machine: true,
         }
     }
 }
 
 #[derive(Clone, uniffi::Record)]
+/// Resolved Databricks identity and active storage backend.
 pub struct DatabricksAuthStatus {
     pub profile: String,
     pub host: String,
@@ -99,32 +99,70 @@ pub struct DatabricksAuthStatus {
 }
 
 #[derive(uniffi::Object)]
+/// Databricks binding facade over the shared persistent authentication lifecycle.
 pub struct PersistentAuth {
     inner: AuthClient,
 }
 
 #[uniffi::export(async_runtime = "tokio", default(storage = None))]
+/// Resolve a Databricks profile and open built-in credential storage.
 pub async fn create_persistent_auth(
     options: DatabricksAuthOptions,
     storage: Option<Storage>,
 ) -> BindingResult<Arc<PersistentAuth>> {
-    let store = open_binding_store(&options, storage).await?;
-    create_persistent_auth_with_store(options, store).await
+    let profile = resolve_profile(&options)?;
+    let use_databricks_cli =
+        should_use_databricks_cli(profile.auth_kind, storage, databricks_cli_available());
+    let backend = storage_backend(storage);
+    let store = open_binding_store(&options, backend).await?;
+    create_persistent_auth_with_store(options, profile, store, use_databricks_cli).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+/// Resolve a Databricks profile using a shared owning-library storage handle.
 pub async fn create_persistent_auth_with_storage(
     options: DatabricksAuthOptions,
     storage: Arc<StorageHandle>,
 ) -> BindingResult<Arc<PersistentAuth>> {
-    create_persistent_auth_with_store(options, storage.store.clone()).await
+    let profile = resolve_profile(&options)?;
+    create_persistent_auth_with_store(options, profile, storage.store.clone(), false).await
 }
 
 async fn create_persistent_auth_with_store(
     options: DatabricksAuthOptions,
+    profile: Profile,
     store: Arc<dyn CredentialStore>,
+    use_databricks_cli: bool,
 ) -> BindingResult<Arc<PersistentAuth>> {
-    let profile = Profile::from_sources(ProfileOptions {
+    let inner = AuthClient::new(
+        profile,
+        store,
+        options.auth.unwrap_or_default(),
+        use_databricks_cli,
+    )
+    .map_err(binding_error)?;
+    Ok(Arc::new(PersistentAuth { inner }))
+}
+
+fn should_use_databricks_cli(
+    auth_kind: AuthKind,
+    storage: Option<Storage>,
+    available: bool,
+) -> bool {
+    auth_kind == AuthKind::UserToMachine
+        && available
+        && storage.is_none_or(|storage| storage == Storage::Auto)
+}
+
+fn storage_backend(storage: Option<Storage>) -> Storage {
+    match storage {
+        Some(Storage::Memory) => Storage::Memory,
+        Some(Storage::File) | Some(Storage::Auto) | None => Storage::File,
+    }
+}
+
+fn resolve_profile(options: &DatabricksAuthOptions) -> BindingResult<Profile> {
+    Profile::from_sources(ProfileOptions {
         profile: options.profile.clone(),
         host: options.host.clone(),
         account_id: options.account_id.clone(),
@@ -138,37 +176,27 @@ async fn create_persistent_auth_with_store(
         config_file: options.config_file.as_deref().map(PathBuf::from),
         prefer_user_to_machine: options.prefer_user_to_machine,
     })
-    .map_err(binding_error)?;
-    let inner = AuthClient::new(
-        profile,
-        store,
-        AuthOptions {
-            refresh_buffer: TimeDuration::seconds(options.refresh_buffer_seconds),
-            lock_timeout: Duration::from_secs(options.lock_timeout_seconds),
-            login_timeout: Duration::from_secs(options.login_timeout_seconds),
-            callback_image_src: options.callback_image_src.clone(),
-        },
-    )
-    .map_err(binding_error)?;
-    Ok(Arc::new(PersistentAuth { inner }))
+    .map_err(binding_error)
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 impl PersistentAuth {
+    /// Start an explicit login and persist the resulting credential.
     pub async fn challenge(&self) -> BindingResult<()> {
         self.inner.login().await.map(|_| ()).map_err(binding_error)
     }
 
+    /// True forces login, false forbids interactive login, and omission permits missing-token login.
     #[uniffi::method(default(login = None))]
     pub async fn token(&self, login: Option<bool>) -> BindingResult<AccessToken> {
-        let token = match login {
-            Some(true) => self.inner.login().await,
-            None => self.inner.token_or_login().await,
-            Some(false) => self.inner.token().await,
-        };
-        token.map(Into::into).map_err(binding_error)
+        self.inner
+            .token_with_login(login)
+            .await
+            .map(Into::into)
+            .map_err(binding_error)
     }
 
+    /// Renew the stored credential even before its refresh window.
     pub async fn force_refresh_token(&self) -> BindingResult<AccessToken> {
         self.inner
             .force_refresh()
@@ -177,6 +205,7 @@ impl PersistentAuth {
             .map_err(binding_error)
     }
 
+    /// Reuse another caller's replacement or renew the rejected token.
     pub async fn refresh_rejected_token(
         &self,
         stale_access_token: String,
@@ -188,10 +217,12 @@ impl PersistentAuth {
             .map_err(binding_error)
     }
 
+    /// Delete the credential while holding the store's refresh lock.
     pub async fn logout(&self) -> BindingResult<()> {
         self.inner.logout().await.map_err(binding_error)
     }
 
+    /// Return the resolved identity and active built-in storage backend.
     pub fn status(&self) -> DatabricksAuthStatus {
         DatabricksAuthStatus {
             profile: self.inner.profile().name.clone(),
@@ -203,12 +234,11 @@ impl PersistentAuth {
 
 async fn open_binding_store(
     options: &DatabricksAuthOptions,
-    storage: Option<Storage>,
+    storage: Storage,
 ) -> BindingResult<Arc<dyn CredentialStore>> {
     open_store(StoreOptions {
-        backend: storage,
+        backend: Some(storage),
         cache_dir: options.cache_dir.as_deref().map(PathBuf::from),
-        config_file: options.config_file.as_deref().map(PathBuf::from),
     })
     .await
     .map_err(binding_error)
@@ -228,7 +258,6 @@ fn parse_target(value: &str) -> BindingResult<TargetKind> {
 fn storage_from_name(name: &str) -> Storage {
     match name {
         "memory" => Storage::Memory,
-        "keyring" => Storage::Keyring,
         _ => Storage::File,
     }
 }
@@ -240,3 +269,50 @@ fn binding_error(error: impl std::fmt::Display) -> DatabricksAuthError {
 }
 
 uniffi::setup_scaffolding!();
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_refresh_requires_available_automatic_u2m() {
+        assert!(should_use_databricks_cli(
+            AuthKind::UserToMachine,
+            None,
+            true
+        ));
+        assert!(should_use_databricks_cli(
+            AuthKind::UserToMachine,
+            Some(Storage::Auto),
+            true
+        ));
+        assert!(!should_use_databricks_cli(
+            AuthKind::UserToMachine,
+            Some(Storage::File),
+            true
+        ));
+        assert!(!should_use_databricks_cli(
+            AuthKind::UserToMachine,
+            Some(Storage::Memory),
+            true
+        ));
+        assert!(!should_use_databricks_cli(
+            AuthKind::MachineToMachine,
+            None,
+            true
+        ));
+        assert!(!should_use_databricks_cli(
+            AuthKind::UserToMachine,
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn automatic_storage_is_file_and_memory_stays_memory() {
+        assert_eq!(storage_backend(None), Storage::File);
+        assert_eq!(storage_backend(Some(Storage::Auto)), Storage::File);
+        assert_eq!(storage_backend(Some(Storage::File)), Storage::File);
+        assert_eq!(storage_backend(Some(Storage::Memory)), Storage::Memory);
+    }
+}

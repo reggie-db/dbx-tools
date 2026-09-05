@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-python-workspace"
-version = "0.6.166"
+version = "0.6.167"
 requires-python = ">=3.10,<3.14"
 dependencies = ["dbx-tools-graphiti"]
 
@@ -35,6 +35,9 @@ workspace = true
 [tool.uv.sources.dbx-tools-databricks-auth]
 workspace = true
 
+[tool.uv.sources.dbx-tools-google-auth]
+workspace = true
+
 [tool.uv.sources.dbx-tools-core]
 workspace = true
 
@@ -52,4 +55,4 @@ workspace = true
 
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
-project-excludes = ["packages/py/auth/src/dbx_tools/auth/bindings.py", "packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py"]
+project-excludes = ["packages/py/auth/src/dbx_tools/auth/bindings.py", "packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py", "packages/py/google-auth/src/dbx_tools/google_auth/bindings.py"]

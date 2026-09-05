@@ -1,0 +1,25 @@
+[package]
+name = "dbx-tools-google-auth"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Google Application Default Credentials with in-process token caching"
+license = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "dbx_tools_google_auth"
+path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]
+
+[[bin]]
+name = "dbx-tools-google-auth-uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+async-trait = { workspace = true }
+dbx-tools-auth = { version = "0.6.167", path = "../auth", default-features = false }
+google-cloud-auth = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+uniffi = { workspace = true }

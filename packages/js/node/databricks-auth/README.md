@@ -21,7 +21,8 @@ const auth = await createPersistentAuth(
 const token = await auth.token(false);
 ```
 
-Set `callbackImageSrc` on `DatabricksAuthOptions` to use a logo URL or data URI
+Set `auth: AuthOptions.create({ callbackImageSrc: "https://example.com/logo.svg" })`
+on `DatabricksAuthOptions`, importing `AuthOptions` from `@dbx-tools/auth`, to use a logo URL or data URI
 on the browser callback page. `preferUserToMachine` defaults to `true`; set it
 to `false` to keep standard M2M resolution for an implicitly selected service
 principal profile. M2M reads `client_secret` from the selected Databricks

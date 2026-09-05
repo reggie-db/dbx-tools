@@ -16,8 +16,7 @@ fn token(value: &str) -> Token {
 
 #[tokio::test]
 async fn memory_store_round_trips_tokens() {
-    let directory = tempdir().unwrap();
-    let store = MemoryStore::new(directory.path().to_path_buf()).unwrap();
+    let store = MemoryStore::new();
     store.save("profile", &token("access")).await.unwrap();
     assert_eq!(
         store.load("profile").await.unwrap().unwrap().access_token,

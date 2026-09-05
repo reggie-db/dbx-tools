@@ -1,52 +1,59 @@
 use crate::{
-    AccessToken, AuthClient, AuthError, AuthOptions, BindingResult, CredentialStore, FileLayout,
-    ForeignStore, OAuthConfig, OAuthFlow, OAuthTemplate, Result, Storage, StorageAdapter, Token,
+    AccessToken, AuthClient, AuthError, AuthOptions, AuthSession, BindingResult, CredentialStore,
+    FileLayout, OAuthConfig, OAuthFlow, OAuthTemplate, Result, Storage, StorageHandle, Token,
     TokenProvider,
 };
 use sha2::{Digest, Sha256};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 #[derive(Clone, Copy, Debug, Default, uniffi::Enum)]
+/// OAuth grant used to acquire and renew credentials.
 pub enum OAuthGrant {
     #[default]
     AuthorizationCode,
     ClientCredentials,
 }
 
+/// Provider-specific OAuth identity, endpoints, storage, and shared lifecycle options.
 #[derive(Clone, uniffi::Record)]
 pub struct ProviderOptions {
+    /// Stable provider identity used to isolate stored credentials.
     pub provider: String,
+    /// OAuth application identifier.
     pub client_id: String,
+    /// Provider's token exchange endpoint.
     pub token_endpoint: String,
+    /// Required browser authorization endpoint for authorization-code grants.
     #[uniffi(default = None)]
     pub authorization_endpoint: Option<String>,
+    /// Secret for confidential clients; never returned in access-token results.
     #[uniffi(default = None)]
     pub client_secret: Option<String>,
+    /// Optional namespace for multiple accounts under one provider.
     #[uniffi(default = None)]
     pub profile: Option<String>,
+    /// Requested scopes, trimmed, sorted, and deduplicated before use.
     #[uniffi(default = [])]
     pub scopes: Vec<String>,
+    /// Defaults to authorization code with PKCE when omitted.
     #[uniffi(default = None)]
     pub grant: Option<OAuthGrant>,
+    /// Override the provider-neutral credential directory.
     #[uniffi(default = None)]
     pub cache_dir: Option<String>,
-    #[uniffi(default = None)]
-    pub keyring_service: Option<String>,
+    /// Select a built-in store; omission uses file storage.
     #[uniffi(default = None)]
     pub storage: Option<Storage>,
+    /// Select a shared cache file or independent credential files.
     #[uniffi(default = None)]
     pub file_layout: Option<FileLayout>,
+    /// Shared lifecycle configuration; omission uses `AuthOptions::default()`.
     #[uniffi(default = None)]
-    pub callback_image_src: Option<String>,
-    #[uniffi(default = 30)]
-    pub lock_timeout_seconds: u64,
-    #[uniffi(default = 3600)]
-    pub login_timeout_seconds: u64,
-    #[uniffi(default = 300)]
-    pub refresh_buffer_seconds: i64,
+    pub auth: Option<AuthOptions>,
 }
 
 #[uniffi::export]
+/// Trim, sort, and deduplicate scopes for requests and credential identities.
 pub fn canonical_scopes(scopes: Vec<String>) -> Vec<String> {
     let mut scopes: Vec<_> = scopes
         .into_iter()
@@ -59,6 +66,7 @@ pub fn canonical_scopes(scopes: Vec<String>) -> Vec<String> {
 }
 
 #[uniffi::export]
+/// Derive a stable provider/profile/scope-set identity without storing raw scopes in the key.
 pub fn credential_key(provider: String, profile: Option<String>, scopes: Vec<String>) -> String {
     let scope_hash = format!(
         "{:x}",
@@ -92,6 +100,7 @@ impl TokenProvider for ProviderFlow {
 }
 
 #[derive(uniffi::Object)]
+/// Generic OAuth provider using the shared persistent credential lifecycle.
 pub struct ProviderAuth {
     inner: AuthClient,
 }
@@ -106,6 +115,7 @@ fn create(
     options: ProviderOptions,
     store: Arc<dyn CredentialStore>,
 ) -> BindingResult<Arc<ProviderAuth>> {
+    let auth = options.auth.unwrap_or_default();
     if options.provider.trim().is_empty() {
         return Err(failure("provider must not be empty"));
     }
@@ -130,22 +140,13 @@ fn create(
         host: None,
     })
     .map_err(failure)?
-    .with_template(OAuthTemplate::new(options.callback_image_src.clone()));
-    let inner = AuthClient::new(
-        key,
-        Arc::new(ProviderFlow { flow, grant }),
-        store,
-        AuthOptions {
-            refresh_buffer: time::Duration::seconds(options.refresh_buffer_seconds),
-            lock_timeout: Duration::from_secs(options.lock_timeout_seconds),
-            login_timeout: Duration::from_secs(options.login_timeout_seconds),
-            callback_image_src: options.callback_image_src,
-        },
-    );
+    .with_template(OAuthTemplate::new(auth.callback_image_src.clone()));
+    let inner = AuthClient::new(key, Arc::new(ProviderFlow { flow, grant }), store, auth);
     Ok(Arc::new(ProviderAuth { inner }))
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+/// Construct a provider with built-in persistent storage and shared lifecycle defaults.
 pub async fn create_provider_auth(options: ProviderOptions) -> BindingResult<Arc<ProviderAuth>> {
     let directory = match &options.cache_dir {
         Some(directory) => PathBuf::from(directory),
@@ -154,14 +155,9 @@ pub async fn create_provider_auth(options: ProviderOptions) -> BindingResult<Arc
             .home_dir()
             .join(".dbx-tools/auth"),
     };
-    let service = options
-        .keyring_service
-        .clone()
-        .unwrap_or_else(|| "dbx-tools-auth".into());
     let store = crate::open_store(
         options.storage.unwrap_or_default(),
         directory,
-        service,
         options.file_layout.unwrap_or_default(),
     )
     .await
@@ -170,25 +166,26 @@ pub async fn create_provider_auth(options: ProviderOptions) -> BindingResult<Arc
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+/// Construct a provider from the same owning-library storage handle used by Databricks auth.
 pub async fn create_provider_auth_with_storage(
     options: ProviderOptions,
-    storage: Arc<dyn StorageAdapter>,
+    storage: Arc<StorageHandle>,
 ) -> BindingResult<Arc<ProviderAuth>> {
-    create(options, Arc::new(ForeignStore { storage }))
+    create(options, storage.store.clone())
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 impl ProviderAuth {
+    /// True forces login, false forbids interactive login, and omission permits missing-token login.
     #[uniffi::method(default(login = None))]
     pub async fn token(&self, login: Option<bool>) -> BindingResult<AccessToken> {
-        match login {
-            Some(true) => self.inner.login().await,
-            Some(false) => self.inner.token().await,
-            None => self.inner.token_or_login().await,
-        }
-        .map(Into::into)
-        .map_err(failure)
+        self.inner
+            .token_with_login(login)
+            .await
+            .map(Into::into)
+            .map_err(failure)
     }
+    /// Renew the credential even if it has not entered its refresh window.
     pub async fn force_refresh_token(&self) -> BindingResult<AccessToken> {
         self.inner
             .force_refresh()
@@ -196,6 +193,7 @@ impl ProviderAuth {
             .map(Into::into)
             .map_err(failure)
     }
+    /// Reuse a concurrent replacement or renew the rejected access token.
     pub async fn refresh_rejected_token(
         &self,
         stale_access_token: String,
@@ -206,6 +204,7 @@ impl ProviderAuth {
             .map(Into::into)
             .map_err(failure)
     }
+    /// Delete the stored credential while holding its refresh lock.
     pub async fn logout(&self) -> BindingResult<()> {
         self.inner.logout().await.map_err(failure)
     }

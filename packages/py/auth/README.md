@@ -3,27 +3,37 @@
 Generated Python bindings for [provider-neutral Rust authentication](../../rs/auth).
 Rust owns OAuth, persistent stores, locking, and token refresh.
 
+Both provider option records compose the shared `AuthOptions` record as `auth`.
+For example, import `AuthOptions` from `dbx_tools.auth` and pass
+`auth=AuthOptions(lock_timeout_seconds=10)` to either `ProviderOptions` or
+`DatabricksAuthOptions`. Omission uses Rust's lifecycle defaults. Former flattened
+timeout and callback-image fields now belong inside `auth`; see the
+[shared options guide](../../rs/auth/README.md#shared-options-and-provider-implementations).
+
 ```python
 import os
 from dbx_tools.auth import OAuthGrant, ProviderOptions, create_provider_auth
 
-auth = await create_provider_auth(ProviderOptions(
-    provider="example",
-    token_endpoint="https://identity.example.com/oauth/token",
-    client_id=os.environ["OAUTH_CLIENT_ID"],
-    client_secret=os.environ["OAUTH_CLIENT_SECRET"],
-    grant=OAuthGrant.CLIENT_CREDENTIALS,
-    scopes=["read"],
-))
+auth = await create_provider_auth(
+    ProviderOptions(
+        provider="example",
+        token_endpoint="https://identity.example.com/oauth/token",
+        client_id=os.environ["OAUTH_CLIENT_ID"],
+        client_secret=os.environ["OAUTH_CLIENT_SECRET"],
+        grant=OAuthGrant.CLIENT_CREDENTIALS,
+        scopes=["read"],
+    )
+)
 token = await auth.token(False)
 ```
 
 Profiles are optional. Scope sets are trimmed, deduplicated, and sorted before
 selecting a credential. `FileLayout.SINGLE` and `FileLayout.PER_CREDENTIAL`
-select shared-file or per-identity storage. `cache_dir` and `keyring_service`
-override generic defaults. `StorageAdapter` supports custom persistence;
+select shared-file or per-identity storage. `cache_dir` overrides the generic
+file location. `StorageAdapter` supports custom persistence;
 `create_storage_handle` keeps its callbacks in this library when passing the
-store to Databricks auth.
+store to either provider's `create_*_auth_with_storage` factory. Generic
+providers now accept the handle too, rather than a raw adapter.
 
 Install a published native wheel with `pip install dbx-tools-auth`. Repository
 installation is also available with

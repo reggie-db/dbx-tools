@@ -20,6 +20,7 @@ packages:
   - packages/js/node/email
   - packages/js/node/fs
   - packages/js/node/genie
+  - packages/js/node/google-auth
   - packages/js/node/model
   - packages/js/node/path
   - packages/js/node/postgres

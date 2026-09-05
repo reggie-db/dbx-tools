@@ -52,6 +52,21 @@ The launcher listens on `127.0.0.1` by default. Pass an explicit LiteLLM
 `--host` value or set `HOST` to expose it on another interface.
 `--profile` is available as an override but is not required.
 
+List the same models `GET /v1/models` would return, without starting the proxy:
+
+```bash
+uv run dbx-litellm models
+uv run dbx-litellm models --extended
+uv run dbx-litellm models --output json
+uv run dbx-litellm lookup gpt
+```
+
+Text output puts the display name first, followed by the exact model id.
+`--extended` or `--all` adds owner, context window, and reasoning levels.
+`--output json` prints the OpenAI `data` list plus the Codex `models` envelope.
+`lookup` uses the same standard ranking as model resolution and prints matching
+models in rank order with their scores. It also accepts `--output json`.
+
 The equivalent module invocation is:
 
 ```bash
@@ -154,8 +169,9 @@ from a static list in this package:
 `GET /v1/models` lazily reads the same five-minute catalogue cache used by
 requests and publishes each exact endpoint as `dbx/<endpoint>`.
 The response preserves the OpenAI-standard `data` list and the additional Codex
-`models` envelope. Library-only service names from `dbx-tools-model` are not
-projected into this HTTP response.
+`models` envelope. `dbx-litellm models` builds that payload from the same
+catalogue and seed routes. Library-only service names from `dbx-tools-model`
+are not projected into this HTTP or CLI response.
 
 The packaged proxy keeps exact workspace endpoint ids in the `dbx/*` namespace
 so callers can distinguish this discovery-and-routing layer from LiteLLM's
@@ -174,8 +190,8 @@ serve different purposes:
 | Provider prompt cache        | Databricks/model-provider managed                                                                 | Repeated prompt prefixes                                      | Provider-defined lifetime and eviction                                                                        | Reduce billed/counted repeated input tokens; GPT is automatic, Claude uses explicit breakpoints added here |
 
 The endpoint catalogue is process memory. Databricks credentials use the Rust
-package's secure keyring/file storage and cross-process locks. The reasoning
-cache can be moved or assigned a shorter TTL with the environment variables
+package's CLI/file/memory policy and refresh locks. The reasoning cache can be
+moved or assigned a shorter TTL with the environment variables
 under [Automatic reasoning effort](#automatic-reasoning-effort). Prompt-cache
 contents remain provider-side; this package only supplies Claude's cache markers
 and reports the usage fields returned by the provider.
@@ -453,6 +469,8 @@ Run the offline package checks:
 uv run pytest packages/py/model packages/py/litellm -q
 uv run ruff check packages/py/model packages/py/litellm
 uv run dbx-litellm --help
+uv run dbx-litellm models --help
+uv run dbx-litellm lookup --help
 ```
 
 Then start the proxy and exercise live discovery before inference:

@@ -102,12 +102,16 @@ packages/py/auth/src/dbx_tools/auth/*dbx_tools_auth.*
 packages/js/node/databricks-auth/src/*dbx_tools_databricks_auth.*
 packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py
 packages/py/databricks-auth/src/dbx_tools/databricks_auth/*dbx_tools_databricks_auth.*
+packages/js/node/google-auth/src/*dbx_tools_google_auth.*
+packages/py/google-auth/src/dbx_tools/google_auth/bindings.py
+packages/py/google-auth/src/dbx_tools/google_auth/*dbx_tools_google_auth.*
 !/Cargo.toml
 !/.projen/uniffi-release.mjs
 !/.github/workflows/rust-release.yml
 !/pyproject.toml
 !/packages/py/auth/pyproject.toml
 !/packages/py/databricks-auth/pyproject.toml
+!/packages/py/google-auth/pyproject.toml
 !/packages/py/core/pyproject.toml
 !/packages/py/postgres/pyproject.toml
 !/packages/py/model/pyproject.toml

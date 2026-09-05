@@ -1,10 +1,11 @@
 use crate::{
-    AuthKind, CredentialStore, MachineToMachineFlow, OAuthFlow, OAuthTemplate, Profile, Result,
-    Token,
+    databricks_cli::DatabricksCliFlow, AuthKind, AuthSession, CredentialStore,
+    MachineToMachineFlow, OAuthFlow, OAuthTemplate, Profile, Result, Token,
 };
 pub use dbx_tools_auth::AuthOptions;
 use std::{sync::Arc, time::Duration};
 
+/// Databricks profile and acquisition policy over the shared `AuthSession` lifecycle.
 pub struct AuthClient {
     profile: Profile,
     inner: dbx_tools_auth::AuthClient,
@@ -12,6 +13,7 @@ pub struct AuthClient {
 
 enum AuthFlow {
     UserToMachine(OAuthFlow),
+    UserToMachineCli(DatabricksCliFlow),
     MachineToMachine(MachineToMachineFlow),
 }
 
@@ -20,12 +22,18 @@ impl AuthClient {
         profile: Profile,
         store: Arc<dyn CredentialStore>,
         options: AuthOptions,
+        use_databricks_cli: bool,
     ) -> Result<Self> {
         let flow = match profile.auth_kind {
-            AuthKind::UserToMachine => AuthFlow::UserToMachine(
-                OAuthFlow::new(profile.clone())?
-                    .with_template(OAuthTemplate::new(options.callback_image_src.clone())),
-            ),
+            AuthKind::UserToMachine => {
+                let native = OAuthFlow::new(profile.clone())?
+                    .with_template(OAuthTemplate::new(options.callback_image_src.clone()));
+                if use_databricks_cli {
+                    AuthFlow::UserToMachineCli(DatabricksCliFlow::new(native, profile.name.clone()))
+                } else {
+                    AuthFlow::UserToMachine(native)
+                }
+            }
             AuthKind::MachineToMachine => {
                 AuthFlow::MachineToMachine(MachineToMachineFlow::new(profile.clone())?)
             }
@@ -37,26 +45,11 @@ impl AuthClient {
     pub fn profile(&self) -> &Profile {
         &self.profile
     }
-    pub fn store_name(&self) -> &'static str {
-        self.inner.store_name()
-    }
-    pub async fn login(&self) -> Result<Token> {
-        self.inner.login().await
-    }
-    pub async fn token(&self) -> Result<Token> {
-        self.inner.token().await
-    }
-    pub async fn token_or_login(&self) -> Result<Token> {
-        self.inner.token_or_login().await
-    }
-    pub async fn force_refresh(&self) -> Result<Token> {
-        self.inner.force_refresh().await
-    }
-    pub async fn refresh_rejected_token(&self, stale: &str) -> Result<Token> {
-        self.inner.refresh_rejected_token(stale).await
-    }
-    pub async fn logout(&self) -> Result<()> {
-        self.inner.logout().await
+}
+
+impl AuthSession for AuthClient {
+    fn auth_client(&self) -> &dbx_tools_auth::AuthClient {
+        &self.inner
     }
 }
 
@@ -65,16 +58,25 @@ impl dbx_tools_auth::TokenProvider for AuthFlow {
     async fn authenticate(&self, timeout: Duration) -> Result<Token> {
         match self {
             Self::UserToMachine(flow) => flow.login(timeout).await,
+            Self::UserToMachineCli(flow) => flow.authenticate(timeout).await,
+            Self::MachineToMachine(flow) => flow.token().await,
+        }
+    }
+    async fn login(&self, timeout: Duration) -> Result<Token> {
+        match self {
+            Self::UserToMachine(flow) => flow.login(timeout).await,
+            Self::UserToMachineCli(flow) => flow.login(timeout).await,
             Self::MachineToMachine(flow) => flow.token().await,
         }
     }
     async fn refresh(&self, token: &Token) -> Result<Token> {
         match self {
             Self::UserToMachine(flow) => flow.refresh(token).await,
+            Self::UserToMachineCli(flow) => flow.refresh(token).await,
             Self::MachineToMachine(flow) => flow.token().await,
         }
     }
     fn can_authenticate_silently(&self) -> bool {
-        matches!(self, Self::MachineToMachine(_))
+        matches!(self, Self::UserToMachineCli(_) | Self::MachineToMachine(_))
     }
 }
