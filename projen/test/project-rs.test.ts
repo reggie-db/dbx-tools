@@ -188,6 +188,55 @@ describe("DBXToolsRustWorkspace", () => {
     }
   });
 
+  it("excludes source-only crates from incompatible release operating systems", () => {
+    const platformOutdir = mkdtempSync(join(tmpdir(), "project-rs-platform-"));
+    try {
+      mkdirSync(join(platformOutdir, "packages/rs/platform-helper/src"), { recursive: true });
+      writeFileSync(
+        join(platformOutdir, "packages/rs/platform-helper/src/lib.rs"),
+        "pub fn value() {}\n",
+      );
+      mkdirSync(join(platformOutdir, "packages/rs/tool/src"), { recursive: true });
+      writeFileSync(join(platformOutdir, "packages/rs/tool/src/main.rs"), "fn main() {}\n");
+      const project = new DBXToolsNodeProject({
+        name: "@fixture/platform-root",
+        scope: "fixture",
+        outdir: platformOutdir,
+        packageRoots: ["packages/js"],
+        defaultTagMixins: false,
+        github: true,
+        nodeRelease: false,
+      });
+      new DBXToolsRustWorkspace(project, {
+        releasePlatforms: [
+          { os: RustReleaseOs.LINUX, cpu: RustReleaseCpu.X64 },
+          { os: RustReleaseOs.WINDOWS, cpu: RustReleaseCpu.X64 },
+        ],
+        packages: {
+          "platform-helper": {
+            private: true,
+            releaseExcludeOs: [RustReleaseOs.WINDOWS],
+          },
+          tool: { release: true },
+        },
+      });
+      project.synth();
+
+      const buildJob = readWorkflow(platformOutdir).jobs["rust-build"]!;
+      const matrix = buildJob.strategy?.matrix?.include ?? [];
+      assert.equal(matrix.find((target) => target.os === "linux")?.cargoExcludes, "");
+      assert.equal(
+        matrix.find((target) => target.os === "win32")?.cargoExcludes,
+        "--exclude fixture-platform-helper",
+      );
+      assert.ok(
+        workflowStep(buildJob, "Build Rust outputs").run?.includes("${{ matrix.cargoExcludes }}"),
+      );
+    } finally {
+      rmSync(platformOutdir, { recursive: true, force: true });
+    }
+  });
+
   it("builds every discovered binding once in each target job", () => {
     const multiOutdir = mkdtempSync(join(tmpdir(), "project-rs-multi-"));
     try {

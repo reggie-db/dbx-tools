@@ -46,6 +46,8 @@ export interface RustPackageOptions {
   readonly private?: boolean;
   /** Build this crate's binary for each target and attach it to the GitHub release. */
   readonly release?: boolean;
+  /** Omit this source-only crate from release workspace builds on these operating systems. */
+  readonly releaseExcludeOs?: readonly RustReleaseOs[];
   readonly dependencies?: Readonly<Record<string, CargoDependency>>;
   readonly devDependencies?: Readonly<Record<string, CargoDependency>>;
   readonly features?: Readonly<Record<string, readonly string[]>>;
@@ -503,6 +505,23 @@ export class DBXToolsRustWorkspace {
     const bindings = this.packages.filter((pkg) => pkg.uniffi);
     const packageDependencies = (pkg: DBXToolsRustProject) =>
       rustPackageDependencies(this.packages, pkg, project.outdir, options.workspaceDependencies);
+    for (const pkg of this.packages) {
+      const excludedOs = new Set(pkg.packageOptions.releaseExcludeOs ?? []);
+      if (excludedOs.size && (pkg.uniffi || pkg.packageOptions.release)) {
+        throw new Error(
+          `${pkg.crateName} cannot set releaseExcludeOs because it produces target-specific release artifacts`,
+        );
+      }
+      for (const dependency of packageDependencies(pkg)) {
+        for (const os of dependency.packageOptions.releaseExcludeOs ?? []) {
+          if (!excludedOs.has(os)) {
+            throw new Error(
+              `${pkg.crateName} must exclude ${os} release builds because it depends on ${dependency.crateName}`,
+            );
+          }
+        }
+      }
+    }
     const bindingDependencies = (pkg: DBXToolsRustProject, language: "node" | "python") =>
       bindings.filter(
         (dependency) =>
@@ -760,7 +779,16 @@ export class DBXToolsRustWorkspace {
           ).map((dependency) => dependency.crateName),
         })),
     ).map((pkg) => pkg.crate);
-    const targetMatrix = targets.map((target) => ({ ...target }));
+    const hasReleaseExclusions = this.packages.some(
+      (pkg) => pkg.packageOptions.releaseExcludeOs?.length,
+    );
+    const targetMatrix = targets.map((target) => {
+      const cargoExcludes = this.packages
+        .filter((pkg) => pkg.packageOptions.releaseExcludeOs?.includes(target.os))
+        .map((pkg) => `--exclude ${pkg.crateName}`)
+        .join(" ");
+      return { ...target, ...(hasReleaseExclusions ? { cargoExcludes } : {}) };
+    });
     const hasPythonBindings = bindings.some((binding) => binding.python);
     const usePreinstalledWindowsRust = releaseRustVersion === "stable";
     const hasTargetOutputs =
@@ -909,7 +937,9 @@ export class DBXToolsRustWorkspace {
           },
           run: timedBash(
             "rust_workspace",
-            'cargo build --release --workspace --target "${{ matrix.cargo }}"',
+            `cargo build --release --workspace --target "\${{ matrix.cargo }}"${
+              hasReleaseExclusions ? " ${{ matrix.cargoExcludes }}" : ""
+            }`,
           ),
         },
         ...(bindingCommands.length

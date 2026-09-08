@@ -153,7 +153,11 @@ skips matching files and fails when an existing filename has different content.
 
 The Rust matrix has one row per target. Each row installs native dependencies,
 restores Cargo and sccache once, builds the Cargo workspace once, then packages
-every discovered output from that shared build. Rust rows prepare native npm
+every discovered output from that shared build. Set a source-only crate's
+`releaseExcludeOs` package option to omit it from incompatible rows through
+Cargo `--exclude`; crates that produce UniFFI or release-binary artifacts cannot
+use this option because every configured target must produce their artifacts.
+Rust rows prepare native npm
 archives and Python wheels; they do not install Bun or UBRN and do not build
 Node facades. A binary-only row therefore installs no language package tool.
 `rustVersion` remains the MSRV recorded in package manifests, while

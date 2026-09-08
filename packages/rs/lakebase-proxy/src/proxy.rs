@@ -29,7 +29,8 @@ use pgwire::{
             Authentication, BackendKeyData, NegotiateProtocolVersion, ParameterStatus, SecretKey,
             SslRequest, Startup,
         },
-        PgWireBackendMessage, PgWireFrontendMessage, ProtocolVersion, SslNegotiationMetaMessage,
+        DecodeContext, PgWireBackendMessage, PgWireFrontendMessage, ProtocolVersion,
+        SslNegotiationMetaMessage,
     },
     tokio::{client::PgWireMessageClientCodec, server::PgWireMessageServerCodec},
 };
@@ -39,7 +40,7 @@ use tokio::{
     net::TcpStream,
 };
 use tokio_rustls::{client::TlsStream, TlsConnector};
-use tokio_util::codec::Framed;
+use tokio_util::codec::{Decoder, Encoder, Framed};
 
 use crate::databricks::{DatabricksError, LakebaseClient, ResolvedLakebase};
 use dbx_tools_databricks::{parse_lakebase_address, DatabricksClientError};
@@ -168,7 +169,7 @@ impl PostgresProxy {
                 return Ok(());
             }
         };
-        let (upstream, info, protocol) = match tokio::time::timeout_at(
+        let (upstream, info, protocol, transaction, negotiation) = match tokio::time::timeout_at(
             startup_deadline,
             connect_upstream(&startup, &resolved, &password, self.tls.clone()),
         )
@@ -189,12 +190,15 @@ impl PostgresProxy {
         let secret = synthetic_secret(protocol, process_id);
         send_startup_complete(
             &mut local,
-            &info,
-            process_id,
-            secret.clone(),
-            startup.protocol_number_major,
-            startup.protocol_number_minor,
-            protocol,
+            StartupCompletion {
+                info: &info,
+                process_id,
+                secret: secret.clone(),
+                requested: (startup.protocol_number_major, startup.protocol_number_minor),
+                protocol,
+                transaction,
+                negotiation,
+            },
         )
         .await?;
         let cancel_target = CancelTarget {
@@ -257,7 +261,16 @@ async fn connect_upstream(
     resolved: &ResolvedLakebase,
     password: &str,
     tls: TlsConnector,
-) -> Result<(UpstreamFramed, ServerInformation, ProtocolVersion), ProxyError> {
+) -> Result<
+    (
+        UpstreamFramed,
+        ServerInformation,
+        ProtocolVersion,
+        TransactionStatus,
+        Option<(i32, Vec<String>)>,
+    ),
+    ProxyError,
+> {
     let mut config = Config::new();
     config
         .host(&resolved.host)
@@ -272,7 +285,7 @@ async fn connect_upstream(
     .unwrap_or(ProtocolVersion::PROTOCOL3_0);
     config.protocol_version(protocol);
     let config = Arc::new(config);
-    let framed = connect_tls_socket(&resolved.host, resolved.port, tls).await?;
+    let framed = connect_tls_socket(&resolved.host, resolved.port, tls, protocol).await?;
     let mut client = StartupClient::new(framed, Arc::clone(&config), protocol);
     let mut parameters = startup.parameters.clone();
     parameters.insert("user".into(), resolved.user.clone());
@@ -280,12 +293,27 @@ async fn connect_upstream(
     let mut handler = ProxyStartupHandler {
         inner: DefaultStartupHandler::new(),
         parameters,
+        negotiation: None,
     };
     handler.startup(&mut client).await?;
     while let Some(message) = client.next().await {
-        if let ReadyState::Ready(info) = handler.on_message(&mut client, message?).await? {
+        let message = message?;
+        if let PgWireBackendMessage::NegotiateProtocolVersion(value) = &message {
+            handler.negotiation = Some((
+                value.newest_minor_protocol,
+                value.unsupported_options.clone(),
+            ));
+        }
+        if let ReadyState::Ready(info) = handler.on_message(&mut client, message).await? {
             let protocol = client.protocol_version();
-            return Ok((client.into_inner(), info, protocol));
+            let transaction = client.transaction_status();
+            return Ok((
+                client.into_inner(),
+                info,
+                protocol,
+                transaction,
+                handler.negotiation,
+            ));
         }
     }
     Err(ProxyError::Connect(
@@ -297,6 +325,7 @@ async fn connect_tls_socket(
     host: &str,
     port: u16,
     tls: TlsConnector,
+    protocol: ProtocolVersion,
 ) -> Result<UpstreamFramed, ProxyError> {
     let tcp = TcpStream::connect((host, port)).await?;
     tcp.set_nodelay(true)?;
@@ -321,29 +350,32 @@ async fn connect_tls_socket(
     let server_name = rustls::pki_types::ServerName::try_from(host.to_owned())
         .map_err(|error| ProxyError::Connect(error.to_string()))?;
     let stream = tls.connect(server_name, prefixed).await?;
-    Ok(Framed::new(stream, PgWireMessageClientCodec::default()))
+    Ok(Framed::new(stream, ProxyClientCodec::new(protocol)))
 }
 
 async fn send_startup_complete(
     socket: &mut LocalFramed,
-    info: &ServerInformation,
-    process_id: i32,
-    secret: SecretKey,
-    requested_major: u16,
-    requested_minor: u16,
-    protocol: ProtocolVersion,
+    completion: StartupCompletion<'_>,
 ) -> Result<(), io::Error> {
-    if ProtocolVersion::from_version_number(requested_major, requested_minor) != Some(protocol) {
+    if let Some((newest, unsupported)) = completion.negotiation {
         socket
             .feed(PgWireBackendMessage::NegotiateProtocolVersion(
-                NegotiateProtocolVersion::new(protocol.into(), vec![]),
+                NegotiateProtocolVersion::new(newest, unsupported),
+            ))
+            .await?;
+    } else if ProtocolVersion::from_version_number(completion.requested.0, completion.requested.1)
+        != Some(completion.protocol)
+    {
+        socket
+            .feed(PgWireBackendMessage::NegotiateProtocolVersion(
+                NegotiateProtocolVersion::new(completion.protocol.into(), vec![]),
             ))
             .await?;
     }
     socket
         .feed(PgWireBackendMessage::Authentication(Authentication::Ok))
         .await?;
-    for (name, value) in &info.parameters {
+    for (name, value) in &completion.info.parameters {
         socket
             .feed(PgWireBackendMessage::ParameterStatus(ParameterStatus::new(
                 name.clone(),
@@ -353,15 +385,26 @@ async fn send_startup_complete(
     }
     socket
         .feed(PgWireBackendMessage::BackendKeyData(BackendKeyData::new(
-            process_id, secret,
+            completion.process_id,
+            completion.secret,
         )))
         .await?;
     socket
         .feed(PgWireBackendMessage::ReadyForQuery(ReadyForQuery::new(
-            TransactionStatus::Idle,
+            completion.transaction,
         )))
         .await?;
     socket.flush().await
+}
+
+struct StartupCompletion<'a> {
+    info: &'a ServerInformation,
+    process_id: i32,
+    secret: SecretKey,
+    requested: (u16, u16),
+    protocol: ProtocolVersion,
+    transaction: TransactionStatus,
+    negotiation: Option<(i32, Vec<String>)>,
 }
 
 async fn tunnel(local: LocalFramed, upstream: UpstreamFramed) -> Result<(), io::Error> {
@@ -369,12 +412,20 @@ async fn tunnel(local: LocalFramed, upstream: UpstreamFramed) -> Result<(), io::
     let upstream_parts = upstream.into_parts();
     let mut local = local_parts.io;
     let mut upstream = upstream_parts.io;
+    if !local_parts.write_buf.is_empty() {
+        local.write_all(&local_parts.write_buf).await?;
+    }
+    if !upstream_parts.write_buf.is_empty() {
+        upstream.write_all(&upstream_parts.write_buf).await?;
+    }
     if !upstream_parts.read_buf.is_empty() {
         local.write_all(&upstream_parts.read_buf).await?;
     }
     if !local_parts.read_buf.is_empty() {
         upstream.write_all(&local_parts.read_buf).await?;
     }
+    local.flush().await?;
+    upstream.flush().await?;
     tokio::io::copy_bidirectional(&mut local, &mut upstream).await?;
     Ok(())
 }
@@ -402,10 +453,43 @@ fn synthetic_secret(protocol: ProtocolVersion, process_id: i32) -> SecretKey {
 
 type LocalFramed = Framed<TcpStream, PgWireMessageServerCodec<()>>;
 type TlsIo = TlsStream<PrefixedIo<TcpStream>>;
-type UpstreamFramed = Framed<TlsIo, PgWireMessageClientCodec>;
+type UpstreamFramed = Framed<TlsIo, ProxyClientCodec>;
+
+struct ProxyClientCodec {
+    context: DecodeContext,
+}
+
+impl ProxyClientCodec {
+    fn new(protocol: ProtocolVersion) -> Self {
+        Self {
+            context: DecodeContext::new(protocol),
+        }
+    }
+}
+
+impl Decoder for ProxyClientCodec {
+    type Item = PgWireBackendMessage;
+    type Error = PgWireError;
+
+    fn decode(&mut self, source: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        PgWireBackendMessage::decode(source, &self.context)
+    }
+}
+
+impl Encoder<PgWireFrontendMessage> for ProxyClientCodec {
+    type Error = PgWireError;
+
+    fn encode(
+        &mut self,
+        message: PgWireFrontendMessage,
+        destination: &mut BytesMut,
+    ) -> Result<(), Self::Error> {
+        message.encode(destination)
+    }
+}
 
 struct StartupClient<S> {
-    socket: Framed<S, PgWireMessageClientCodec>,
+    socket: Framed<S, ProxyClientCodec>,
     config: Arc<Config>,
     parameters: BTreeMap<String, String>,
     process_id: i32,
@@ -416,10 +500,11 @@ struct StartupClient<S> {
 
 impl<S> StartupClient<S> {
     fn new(
-        socket: Framed<S, PgWireMessageClientCodec>,
+        mut socket: Framed<S, ProxyClientCodec>,
         config: Arc<Config>,
         protocol: ProtocolVersion,
     ) -> Self {
+        socket.codec_mut().context.protocol_version = protocol;
         Self {
             socket,
             config,
@@ -431,7 +516,7 @@ impl<S> StartupClient<S> {
         }
     }
 
-    fn into_inner(self) -> Framed<S, PgWireMessageClientCodec> {
+    fn into_inner(self) -> Framed<S, ProxyClientCodec> {
         self.socket
     }
 }
@@ -500,6 +585,7 @@ impl<S> UpstreamClientInfo for StartupClient<S> {
 
     fn set_protocol_version(&mut self, protocol: ProtocolVersion) {
         self.protocol = protocol;
+        self.socket.codec_mut().context.protocol_version = protocol;
     }
 
     fn transaction_status(&self) -> TransactionStatus {
@@ -514,6 +600,7 @@ impl<S> UpstreamClientInfo for StartupClient<S> {
 struct ProxyStartupHandler {
     inner: DefaultStartupHandler,
     parameters: BTreeMap<String, String>,
+    negotiation: Option<(i32, Vec<String>)>,
 }
 
 #[async_trait::async_trait]
@@ -575,7 +662,7 @@ impl StartupHandler for ProxyStartupHandler {
 
 #[derive(Clone, Default)]
 struct CancellationRegistry {
-    targets: Arc<tokio::sync::Mutex<HashMap<(i32, SecretKey), CancelTarget>>>,
+    targets: Arc<tokio::sync::Mutex<HashMap<(i32, Bytes), CancelTarget>>>,
 }
 
 impl CancellationRegistry {
@@ -583,14 +670,14 @@ impl CancellationRegistry {
         self.targets
             .lock()
             .await
-            .insert((process_id, secret), target);
+            .insert((process_id, secret.to_bytes()), target);
     }
 
     async fn remove(&self, process_id: i32, secret: &SecretKey) {
         self.targets
             .lock()
             .await
-            .remove(&(process_id, secret.clone()));
+            .remove(&(process_id, secret.to_bytes()));
     }
 
     async fn cancel(&self, request: CancelRequest) {
@@ -598,7 +685,7 @@ impl CancellationRegistry {
             .targets
             .lock()
             .await
-            .get(&(request.pid, request.secret_key))
+            .get(&(request.pid, request.secret_key.to_bytes()))
             .cloned();
         if let Some(target) = target {
             let _ = target.cancel().await;
@@ -617,7 +704,13 @@ struct CancelTarget {
 
 impl CancelTarget {
     async fn cancel(&self) -> Result<(), ProxyError> {
-        let mut socket = connect_tls_socket(&self.host, self.port, self.tls.clone()).await?;
+        let mut socket = connect_tls_socket(
+            &self.host,
+            self.port,
+            self.tls.clone(),
+            ProtocolVersion::PROTOCOL3_0,
+        )
+        .await?;
         socket
             .send(PgWireFrontendMessage::CancelRequest(CancelRequest::new(
                 self.process_id,

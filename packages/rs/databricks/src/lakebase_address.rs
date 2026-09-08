@@ -155,17 +155,16 @@ fn parse_uri(value: &str) -> ParsedAddress {
             "prefer" => Some(SslMode::Prefer),
             _ => None,
         });
-    ParsedAddress {
-        user: (!url.username().is_empty()).then(|| decode(url.username())),
-        host: url.host_str().map(str::to_owned),
-        port: url.port(),
-        database: {
-            let database = decode(url.path().trim_start_matches('/'));
-            (!database.is_empty()).then_some(database)
-        },
-        ssl_mode,
-        ..Default::default()
+    let target = decode(url.path().trim_start_matches('/'));
+    let mut parsed = parse_resource_path(Some(&target));
+    if parsed == ParsedAddress::default() && !target.is_empty() {
+        parsed.database = Some(target);
     }
+    parsed.user = (!url.username().is_empty()).then(|| decode(url.username()));
+    parsed.host = url.host_str().map(str::to_owned);
+    parsed.port = url.port();
+    parsed.ssl_mode = ssl_mode;
+    parsed
 }
 
 fn is_hostname(value: &str) -> bool {

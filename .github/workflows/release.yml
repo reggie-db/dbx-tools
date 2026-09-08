@@ -357,7 +357,7 @@ jobs:
         run: |-
           SECONDS=0
           trap 'status=$?; echo "phase=rust_workspace duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
-          cargo build --release --workspace --target "${{ matrix.cargo }}"
+          cargo build --release --workspace --target "${{ matrix.cargo }}" ${{ matrix.cargoExcludes }}
         shell: bash
       - name: Package UniFFI outputs
         id: package_uniffi_outputs
@@ -464,6 +464,7 @@ jobs:
             os: linux
             cpu: x64
             libc: glibc
+            cargoExcludes: ""
           - runner: ubuntu-24.04-arm
             cargo: aarch64-unknown-linux-gnu
             node: linux-arm64-gnu
@@ -471,24 +472,28 @@ jobs:
             os: linux
             cpu: arm64
             libc: glibc
+            cargoExcludes: ""
           - runner: macos-15-intel
             cargo: x86_64-apple-darwin
             node: darwin-x64
             python: macosx_13_0_x86_64
             os: darwin
             cpu: x64
+            cargoExcludes: ""
           - runner: macos-14
             cargo: aarch64-apple-darwin
             node: darwin-arm64
             python: macosx_11_0_arm64
             os: darwin
             cpu: arm64
+            cargoExcludes: ""
           - runner: windows-latest
             cargo: x86_64-pc-windows-msvc
             node: win32-x64-msvc
             python: win_amd64
             os: win32
             cpu: x64
+            cargoExcludes: --exclude dbx-tools-lakebase-proxy
   publish-cargo:
     needs:
       - verify-context

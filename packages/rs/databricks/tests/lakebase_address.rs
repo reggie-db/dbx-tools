@@ -40,6 +40,13 @@ fn parses_canonical_lakebase_resource_paths() {
         endpoint.endpoint.as_deref(),
         Some("projects/sample-project/branches/production/endpoints/primary")
     );
+    let endpoint_url = parse_address(Some(
+        "postgresql://profile@localhost:5432/projects/sample-project/branches/production/endpoints/primary?sslmode=disable",
+    ));
+    assert_eq!(endpoint_url.project.as_deref(), Some("sample-project"));
+    assert_eq!(endpoint_url.branch.as_deref(), Some("production"));
+    assert_eq!(endpoint_url.endpoint_id.as_deref(), Some("primary"));
+    assert_eq!(endpoint_url.user.as_deref(), Some("profile"));
 
     let database = parse_resource_path(Some(
         "projects/sample-project/branches/production/databases/application",
