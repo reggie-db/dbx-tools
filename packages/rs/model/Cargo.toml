@@ -1,0 +1,29 @@
+[package]
+name = "dbx-tools-model"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Databricks model discovery, caching, classification, and fuzzy resolution"
+license = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "dbx_tools_model"
+path = "src/lib.rs"
+
+[dependencies]
+dbx-tools-core = { version = "0.6.183", path = "../core" }
+difflib-fast = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+scraper = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+wiremock = { workspace = true }

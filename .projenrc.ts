@@ -30,6 +30,10 @@ class RetiredModelsSource extends Component {
       this.project.outdir,
       "packages/py/model/src/dbx_tools/model/_retired_models.py",
     );
+    const staticSource = resolve(
+      this.project.outdir,
+      "packages/rs/model/assets/retired-models.json",
+    );
     execFileSync(
       "uv",
       [
@@ -39,6 +43,8 @@ class RetiredModelsSource extends Component {
         "dbx-litellm",
         "retired-models",
         generatedSource,
+        "--static-output",
+        staticSource,
       ],
       {
         stdio: "inherit",
@@ -258,10 +264,10 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
 });
 
 // cli-auth: the `dbx auth` OAuth command group. Commander comes from the cli
-// tag, and the native OAuth implementation stays in the generated auth binding.
+// tag, and the native OAuth implementation stays in the generated client binding.
 project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
   p.package.addField("description", "Commander CLI for Databricks OAuth");
-  p.addDeps("@dbx-tools/databricks-auth@workspace:*", "@dbx-tools/auth@workspace:*");
+  p.addDeps("@dbx-tools/client@workspace:*");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -875,11 +881,14 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     base64: "0.22",
     configparser: "3",
     directories: "6",
+    "difflib-fast": "0.3.5",
     fs4: "0.13",
     "google-cloud-auth": "=0.18.0",
     oauth2: { version: "5", defaultFeatures: false, features: ["reqwest", "rustls-tls"] },
     open: "5",
     reqwest: { version: "0.12", defaultFeatures: false, features: ["json", "rustls-tls"] },
+    regex: "1",
+    scraper: "0.24",
     serde: { version: "1", features: ["derive"] },
     "serde_json": "1",
     sha2: "0.10",
@@ -890,26 +899,33 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       version: "1",
       features: ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"],
     },
+    tracing: "0.1",
     uniffi: { version: "=0.31", features: ["cli", "tokio"] },
     url: { version: "2", features: ["serde"] },
     uuid: { version: "1", features: ["v4"] },
+    wiremock: "0.6",
   },
   packages: {
-    databricks: {
-      description: "Shared Databricks runtime and CLI utilities",
+    core: {
+      description: "Databricks-agnostic Rust cache and filesystem primitives",
       dependencies: {
+        directories: { workspace: true },
+        fs4: { workspace: true },
+        serde: { workspace: true },
+        "serde_json": { workspace: true },
+        tempfile: { workspace: true },
         thiserror: { workspace: true },
-        uniffi: { workspace: true },
-        url: { workspace: true },
+        tokio: { workspace: true },
       },
     },
-    auth: {
-      description: "Provider-neutral OAuth, credential storage, and locking",
+    client: {
+      description: "Databricks runtime and authentication client",
       dependencies: {
         "async-trait": { workspace: true },
         base64: { workspace: true },
+        configparser: { workspace: true },
+        [`${root.scope}-core`]: { path: "../core", version: root.version },
         directories: { workspace: true },
-        fs4: { workspace: true },
         oauth2: { workspace: true },
         open: { workspace: true },
         reqwest: { workspace: true },
@@ -925,38 +941,68 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
       },
       devDependencies: { tempfile: { workspace: true } },
     },
-    "databricks-auth": {
-      description: "Databricks OAuth with secure credential storage",
+    google: {
+      description: "Google integrations including Application Default Credentials",
       dependencies: {
-        "dbx-tools-auth": { path: "../auth", version: root.version, defaultFeatures: false },
-        "dbx-tools-databricks": {
-          path: "../databricks",
+        "async-trait": { workspace: true },
+        [`${root.scope}-client`]: {
+          path: "../client",
           version: root.version,
           defaultFeatures: false,
         },
-        "async-trait": { workspace: true },
-        configparser: { workspace: true },
-        directories: { workspace: true },
-        reqwest: { workspace: true },
-        serde: { workspace: true },
-        "serde_json": { workspace: true },
-        sha2: { workspace: true },
-        time: { workspace: true },
-        tokio: { workspace: true },
-        uniffi: { workspace: true },
-        url: { workspace: true },
-      },
-      devDependencies: { tempfile: { workspace: true } },
-    },
-    "google-auth": {
-      description: "Google Application Default Credentials with in-process token caching",
-      dependencies: {
-        "async-trait": { workspace: true },
-        "dbx-tools-auth": { path: "../auth", version: root.version, defaultFeatures: false },
         "google-cloud-auth": { workspace: true },
         time: { workspace: true },
         tokio: { workspace: true },
         uniffi: { workspace: true },
+      },
+    },
+    model: {
+      description: "Databricks model discovery, caching, classification, and fuzzy resolution",
+      dependencies: {
+        [`${root.scope}-core`]: { path: "../core", version: root.version },
+        "difflib-fast": { workspace: true },
+        regex: { workspace: true },
+        reqwest: { workspace: true },
+        scraper: { workspace: true },
+        serde: { workspace: true },
+        "serde_json": { workspace: true },
+        sha2: { workspace: true },
+        thiserror: { workspace: true },
+        tokio: { workspace: true },
+        tracing: { workspace: true },
+      },
+      devDependencies: {
+        tempfile: { workspace: true },
+        wiremock: { workspace: true },
+      },
+    },
+    "model-proxy": {
+      description: "Multi-protocol Databricks model proxy",
+      release: true,
+      binaryName: "dbx-model-proxy",
+      dependencies: {
+        "aigw-anthropic": "=0.6.0",
+        "aigw-core": "=0.6.0",
+        "aigw-openai": "=0.6.0",
+        "async-stream": "0.3",
+        "async-trait": { workspace: true },
+        axum: "0.8",
+        clap: { version: "4.6", features: ["derive", "env"] },
+        [`${root.scope}-client`]: {
+          path: "../client",
+          version: root.version,
+          defaultFeatures: false,
+        },
+        [`${root.scope}-model`]: { path: "../model", version: root.version },
+        "eventsource-stream": "0.2",
+        "futures-util": "0.3",
+        reqwest: { workspace: true, features: ["stream"] },
+        serde: { workspace: true },
+        "serde_json": { workspace: true },
+        thiserror: { workspace: true },
+        tokio: { workspace: true, features: ["signal"] },
+        tracing: { workspace: true },
+        "tracing-subscriber": { version: "0.3", features: ["env-filter"] },
       },
     },
   },
@@ -1003,7 +1049,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     directory: "litellm",
     description:
       "LiteLLM Databricks provider with live endpoint discovery and fuzzy model resolution",
-    internalDependencies: ["databricks-auth", "model"],
+    internalDependencies: ["client", "model"],
     dependencies: [
       "cachetools>=5.5,<7",
       "cyclopts>=4.11,<6",

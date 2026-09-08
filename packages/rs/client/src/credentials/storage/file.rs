@@ -1,0 +1,201 @@
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    time::Duration,
+};
+
+use async_trait::async_trait;
+use dbx_tools_core::{FileLock, FileLockError};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use tokio::io::AsyncWriteExt;
+
+use super::{CredentialStore, FileLayout, StorageLock};
+use crate::{Error, Result, Token};
+
+const TOKEN_CACHE_VERSION: u8 = 1;
+
+#[derive(Serialize, Deserialize)]
+struct TokenCache {
+    version: u8,
+    #[serde(default)]
+    tokens: HashMap<String, serde_json::Value>,
+}
+
+impl Default for TokenCache {
+    fn default() -> Self {
+        Self {
+            version: TOKEN_CACHE_VERSION,
+            tokens: HashMap::new(),
+        }
+    }
+}
+
+pub struct FileStore {
+    root: PathBuf,
+    token_cache: PathBuf,
+    layout: FileLayout,
+}
+
+impl FileStore {
+    pub fn new(root: PathBuf) -> Result<Self> {
+        Self::with_layout(root, FileLayout::Single)
+    }
+
+    pub fn with_layout(root: PathBuf, layout: FileLayout) -> Result<Self> {
+        std::fs::create_dir_all(&root)?;
+        set_private_directory(&root)?;
+        Ok(Self {
+            token_cache: root.join("token-cache.json"),
+            root,
+            layout,
+        })
+    }
+
+    fn credential_store(&self, key: &str) -> Result<Self> {
+        Self::new(self.root.join(key_hash(key)))
+    }
+
+    fn cache_lock_path(&self) -> PathBuf {
+        self.root.join("token-cache.lock")
+    }
+
+    async fn acquire_cache_lock(&self) -> Result<FileLock> {
+        acquire_lock(
+            self.cache_lock_path(),
+            "token-cache.json".to_owned(),
+            Duration::from_secs(30),
+        )
+        .await
+    }
+
+    async fn read_cache(&self) -> Result<TokenCache> {
+        match tokio::fs::read(&self.token_cache).await {
+            Ok(raw) => {
+                let cache: TokenCache = serde_json::from_slice(&raw)?;
+                if cache.version != TOKEN_CACHE_VERSION {
+                    return Err(Error::Storage(format!(
+                        "token cache needs version {TOKEN_CACHE_VERSION}, got {}",
+                        cache.version
+                    )));
+                }
+                Ok(cache)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(TokenCache::default()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    async fn write_cache(&self, cache: &TokenCache) -> Result<()> {
+        let temporary = self
+            .root
+            .join(format!(".token-cache-{}.tmp", uuid::Uuid::new_v4()));
+        let raw = serde_json::to_vec_pretty(cache)?;
+        let mut options = tokio::fs::OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&temporary).await?;
+        file.write_all(&raw).await?;
+        file.sync_all().await?;
+        drop(file);
+        set_private_file(&temporary)?;
+        tokio::fs::rename(&temporary, &self.token_cache).await?;
+        Ok(())
+    }
+}
+
+async fn acquire_lock(path: PathBuf, name: String, timeout: Duration) -> Result<FileLock> {
+    FileLock::acquire(path, timeout)
+        .await
+        .map_err(|error| match error {
+            FileLockError::LockTimeout(_) => Error::LockTimeout(name),
+            error => Error::Storage(error.to_string()),
+        })
+}
+
+impl StorageLock for FileLock {}
+
+#[async_trait]
+impl CredentialStore for FileStore {
+    async fn load(&self, profile: &str) -> Result<Option<Token>> {
+        if self.layout == FileLayout::PerCredential {
+            return self.credential_store(profile)?.load(profile).await;
+        }
+        let _lock = self.acquire_cache_lock().await?;
+        self.read_cache()
+            .await?
+            .tokens
+            .remove(profile)
+            .map(|value| serde_json::from_value(value).map_err(Into::into))
+            .transpose()
+    }
+
+    async fn save(&self, profile: &str, token: &Token) -> Result<()> {
+        if self.layout == FileLayout::PerCredential {
+            return self.credential_store(profile)?.save(profile, token).await;
+        }
+        let _lock = self.acquire_cache_lock().await?;
+        let mut cache = self.read_cache().await?;
+        cache
+            .tokens
+            .insert(profile.to_owned(), serde_json::to_value(token)?);
+        self.write_cache(&cache).await
+    }
+
+    async fn delete(&self, profile: &str) -> Result<()> {
+        if self.layout == FileLayout::PerCredential {
+            return self.credential_store(profile)?.delete(profile).await;
+        }
+        let _lock = self.acquire_cache_lock().await?;
+        let mut cache = self.read_cache().await?;
+        cache.tokens.remove(profile);
+        self.write_cache(&cache).await
+    }
+
+    async fn lock(&self, profile: &str, timeout: Duration) -> Result<Box<dyn StorageLock>> {
+        if self.layout == FileLayout::PerCredential {
+            return self.credential_store(profile)?.lock(profile, timeout).await;
+        }
+        Ok(Box::new(
+            acquire_lock(
+                self.root.join("token-cache.refresh.lock"),
+                "token-cache.json".to_owned(),
+                timeout,
+            )
+            .await?,
+        ))
+    }
+
+    fn name(&self) -> &'static str {
+        "file"
+    }
+}
+
+fn key_hash(profile: &str) -> String {
+    format!("{:x}", Sha256::digest(profile.as_bytes()))
+}
+
+#[cfg(unix)]
+fn set_private_file(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_private_file(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_private_directory(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_private_directory(_path: &Path) -> Result<()> {
+    Ok(())
+}

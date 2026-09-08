@@ -328,6 +328,26 @@ def test_rank_model_id_preserves_an_exact_embedding_endpoint() -> None:
     assert resolved.matched is True
 
 
+def test_rank_model_id_prefers_gpt_5_6_sol_over_luna() -> None:
+    endpoints = [
+        ServingEndpointSummary(
+            name="databricks-gpt-5-6-luna",
+            modelClass=ModelClass.CHAT_BALANCED,
+            task="llm/v1/chat",
+        ),
+        ServingEndpointSummary(
+            name="databricks-gpt-5-6-sol",
+            modelClass=ModelClass.CHAT_BALANCED,
+            task="llm/v1/chat",
+        ),
+    ]
+
+    resolved = rank_model_id(endpoints, "gpt")
+
+    assert resolved.model_id == "databricks-gpt-5-6-sol"
+    assert resolved.matched is True
+
+
 def test_rank_model_id_restricts_fuzzy_matches_to_model_class() -> None:
     endpoints = [
         ServingEndpointSummary(

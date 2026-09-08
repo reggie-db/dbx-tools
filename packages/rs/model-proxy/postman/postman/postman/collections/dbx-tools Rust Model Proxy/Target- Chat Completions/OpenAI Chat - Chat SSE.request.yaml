@@ -1,0 +1,16 @@
+$kind: http-request
+name: OpenAI Chat -> Chat SSE
+url: "{{baseUrl}}/v1/chat/completions"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: text/event-stream
+body:
+  type: json
+  content: |-
+    {
+      "model": "{{chatModel}}",
+      "messages": [{"role": "user", "content": "Count from one to three."}],
+      "stream": true
+    }
+order: 2000

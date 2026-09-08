@@ -21,17 +21,14 @@
   "devDependencies": {
     "@types/bun": "1.3.14",
     "@types/node": "catalog:",
-    "typescript": "^5.9.3",
-    "uniffi-bindgen-react-native": "0.31.0-5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@databricks/appkit": "catalog:",
     "@dbx-tools/appkit": "workspace:*",
     "@dbx-tools/core": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
-    "@dbx-tools/shared-fs": "workspace:*",
-    "@ubjs/core": "0.31.0-5",
-    "@ubjs/node": "0.31.0-5"
+    "@dbx-tools/shared-fs": "workspace:*"
   },
   "main": "index.ts",
   "license": "UNLICENSED",
@@ -47,7 +44,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.182",
+  "version": "0.6.183",
   "types": "index.ts",
   "type": "module",
   "exports": {
@@ -59,15 +56,7 @@
     "src",
     "lib"
   ],
-  "optionalDependencies": {
-    "@dbx-tools/databricks-linux-x64-gnu": "0.6.182",
-    "@dbx-tools/databricks-linux-arm64-gnu": "0.6.182",
-    "@dbx-tools/databricks-darwin-x64": "0.6.182",
-    "@dbx-tools/databricks-darwin-arm64": "0.6.182",
-    "@dbx-tools/databricks-win32-x64-msvc": "0.6.182"
-  },
   "dbxToolsConfig": {
-    "uniffi": true,
     "tags": [
       "node"
     ]

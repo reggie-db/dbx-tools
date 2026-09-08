@@ -1,0 +1,16 @@
+$kind: http-request
+name: OpenAI Responses -> Responses
+url: "{{baseUrl}}/v1/responses"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "model": "{{responsesModel}}",
+      "instructions": "Answer concisely.",
+      "input": "Return the word responses.",
+      "stream": false
+    }
+order: 5000

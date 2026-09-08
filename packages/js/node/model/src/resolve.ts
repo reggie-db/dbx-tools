@@ -112,6 +112,13 @@ function matchBucket(score: number | undefined): number {
   return Math.round((score ?? 0) * 1000);
 }
 
+function modelVariantRank(name: string): number {
+  if (!/(?:^|[-_.])gpt(?:[-_.]|$)/i.test(name)) return 2;
+  if (/(?:^|[-_.])sol(?:[-_.]|$)/i.test(name)) return 0;
+  if (/(?:^|[-_.])luna(?:[-_.]|$)/i.test(name)) return 1;
+  return 2;
+}
+
 /**
  * Rank the live catalogue against a {@link ModelQuery}, best-first.
  *
@@ -123,7 +130,8 @@ function matchBucket(score: number | undefined): number {
  *
  * 1. With a `search`, only endpoints matching it survive, ordered by match
  *    distance (bucketed via {@link matchBucket} so near-identical scores tie),
- *    then by class (more capable first), then by the stable within-class rank.
+ *    then by version, preferred model variant, class (more capable first), and
+ *    the stable within-class rank.
  * 2. Without a `search`, the class-then-rank candidate order stands.
  *
  * A `limit` truncates the result. Returns `[]` when nothing is eligible or
@@ -179,6 +187,8 @@ export function lookupModels(
             if (byVersion !== 0) return byVersion;
           }
         }
+        const byVariant = modelVariantRank(a.endpoint.name) - modelVariantRank(b.endpoint.name);
+        if (byVariant !== 0) return byVariant;
         return MODEL_CLASS_ORDER.indexOf(a.modelClass) - MODEL_CLASS_ORDER.indexOf(b.modelClass);
       });
   } else {

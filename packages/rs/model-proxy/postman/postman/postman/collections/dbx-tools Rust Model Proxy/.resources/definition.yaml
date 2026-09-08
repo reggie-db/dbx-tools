@@ -1,0 +1,6 @@
+$kind: collection
+description: Exercises OpenAI Chat, OpenAI Responses, Codex, and Anthropic Messages clients against Chat Completions and Responses targets.
+variables:
+  baseUrl: http://127.0.0.1:4000
+  chatModel: databricks-meta-llama-3-3-70b-instruct
+  responsesModel: databricks-gpt-5-4

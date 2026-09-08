@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-python-workspace"
-version = "0.6.182"
+version = "0.6.183"
 requires-python = ">=3.11,<3.14"
 dependencies = ["dbx-tools-graphiti"]
 
@@ -28,16 +28,10 @@ index-strategy = "unsafe-best-match"
 [tool.uv.workspace]
 members = ["packages/py/*"]
 
-[tool.uv.sources.dbx-tools-auth]
+[tool.uv.sources.dbx-tools-client]
 workspace = true
 
-[tool.uv.sources.dbx-tools-databricks]
-workspace = true
-
-[tool.uv.sources.dbx-tools-databricks-auth]
-workspace = true
-
-[tool.uv.sources.dbx-tools-google-auth]
+[tool.uv.sources.dbx-tools-google]
 workspace = true
 
 [tool.uv.sources.dbx-tools-core]
@@ -57,4 +51,4 @@ workspace = true
 
 [tool.pyrefly]
 ignore-errors-in-generated-code = true
-project-excludes = ["packages/py/auth/src/dbx_tools/auth/bindings.py", "packages/py/auth/src/dbx_tools/auth/__init__.py", "packages/py/databricks/src/dbx_tools/databricks/bindings.py", "packages/py/databricks/src/dbx_tools/databricks/__init__.py", "packages/py/databricks-auth/src/dbx_tools/databricks_auth/bindings.py", "packages/py/databricks-auth/src/dbx_tools/databricks_auth/__init__.py", "packages/py/google-auth/src/dbx_tools/google_auth/bindings.py", "packages/py/google-auth/src/dbx_tools/google_auth/__init__.py", "packages/py/model/src/dbx_tools/model/_retired_models.py"]
+project-excludes = ["packages/py/client/src/dbx_tools/client/bindings.py", "packages/py/client/src/dbx_tools/client/__init__.py", "packages/py/google/src/dbx_tools/google/bindings.py", "packages/py/google/src/dbx_tools/google/__init__.py", "packages/py/model/src/dbx_tools/model/_retired_models.py"]

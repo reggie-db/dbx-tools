@@ -124,6 +124,7 @@ def lookup_models(
                     if versioned_family_search
                     else []
                 ),
+                _model_variant_rank(candidate.endpoint.name),
                 MODEL_CLASS_ORDER.index(candidate.model_class),
             )
         )
@@ -244,6 +245,17 @@ def _token_distance(token: str, name: str) -> float:
         (SequenceMatcher(None, token, segment).ratio() for segment in segments), default=0
     )
     return 1 - similarity
+
+
+def _model_variant_rank(name: str) -> int:
+    parsed = parse_model_name(name)
+    if parsed is None or parsed.family != ModelFamily.GPT:
+        return 2
+    if "sol" in parsed.model:
+        return 0
+    if "luna" in parsed.model:
+        return 1
+    return 2
 
 
 def _assert_tool_support(endpoints: list[ServingEndpointSummary], model_id: str) -> None:

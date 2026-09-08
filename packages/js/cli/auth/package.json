@@ -24,8 +24,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/auth": "workspace:*",
-    "@dbx-tools/databricks-auth": "workspace:*",
+    "@dbx-tools/client": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:"
   },
@@ -47,7 +46,7 @@
       "./package.json": "./package.json"
     }
   },
-  "version": "0.6.182",
+  "version": "0.6.183",
   "types": "index.ts",
   "type": "module",
   "exports": {

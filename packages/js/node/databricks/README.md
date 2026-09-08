@@ -10,8 +10,6 @@ Key features:
 
 - Workspace URL and numeric workspace id resolution from AppKit context,
   Databricks SDK config, env, and config files.
-- Rust-backed Databricks App detection shared with authentication providers.
-- Cached detection of whether the Databricks CLI auth surface is available.
 - `DatabricksFileSystem` (`FileSystem` over workspace files, UC volumes, and DBFS)
   with intelligent roots: `/Workspace/...`, `/Volumes/...` (also `/Volume/...` and
   `catalog.schema.volume`), `~` → `/Workspace/Users/<userName>`, and `/dbfs/...`.
@@ -23,27 +21,13 @@ Key features:
 - DNS A/AAAA lookup helpers for Databricks and adjacent service hosts.
 - Memoized outbound public-IP discovery for setup and diagnostics.
 
-## Detect The Runtime
-
-```ts
-import { databricksCliAvailable, isDatabricksApp } from "@dbx-tools/databricks";
-
-const inApp = isDatabricksApp();
-const hasDatabricksAuth = databricksCliAvailable();
-```
-
-`isDatabricksApp()` honors `DBX_TOOLS_DATABRICKS_APP_ENV`, then requires a
-valid `DATABRICKS_APP_NAME`, HTTP(S) `DATABRICKS_HOST`, and
-`DATABRICKS_APP_PORT`. `databricksCliAvailable()` caches whether
-`databricks auth --help` succeeds for the process. The generated bindings and
-the package's direct TypeScript modules share this package root.
-
 ## Relationship To Native AppKit
 
 Use native AppKit for its standard workspace client and plugin integrations.
-Use this package when code also needs App detection shared with Rust,
-Databricks filesystem root normalization, cloud region discovery, network
-helpers, or workspace identity fallbacks outside an AppKit request.
+Use this package when code needs Databricks filesystem root normalization,
+cloud region discovery, network helpers, or workspace identity fallbacks
+outside an AppKit request. Use [`@dbx-tools/client`](../client) for Rust-backed
+App detection and authentication.
 
 ## Databricks filesystem
 
@@ -127,8 +111,6 @@ short-lived reuse.
 - `workspace` - workspace URL/id, `tryGetWorkspaceClient` / `getWorkspaceClient`, and current username.
 - `cloud` - provider/region detection from public cloud IP ranges.
 - `net` - DNS A/AAAA resolution and outbound public-IP discovery.
-- package root - Rust-backed `isDatabricksApp` and
-  `databricksCliAvailable`.
 
 Zerobus endpoint construction builds on these helpers in
 [`@dbx-tools/databricks-zerobus`](../databricks-zerobus).

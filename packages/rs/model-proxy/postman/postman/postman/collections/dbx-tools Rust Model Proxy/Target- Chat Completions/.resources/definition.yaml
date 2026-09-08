@@ -1,0 +1,4 @@
+$kind: collection
+name: "Target: Chat Completions"
+description: Start the proxy with --target chat before running this folder.
+order: 2000

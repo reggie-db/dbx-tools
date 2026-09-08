@@ -11,16 +11,15 @@ packages:
   - packages/js/node/appkit-graphiti
   - packages/js/node/appkit-mastra
   - packages/js/node/appkit-web-search
-  - packages/js/node/auth
   - packages/js/node/auth-gate
+  - packages/js/node/client
   - packages/js/node/core
   - packages/js/node/databricks
-  - packages/js/node/databricks-auth
   - packages/js/node/databricks-zerobus
   - packages/js/node/email
   - packages/js/node/fs
   - packages/js/node/genie
-  - packages/js/node/google-auth
+  - packages/js/node/google
   - packages/js/node/model
   - packages/js/node/path
   - packages/js/node/postgres

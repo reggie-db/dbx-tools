@@ -108,6 +108,14 @@ describe("DBXToolsRustWorkspace", () => {
         rust.bindingMappings.find((binding) => binding.crate === "fixture-provider")?.dependencies,
         ["fixture-auth"],
       );
+      const cargoPublish = workflowStep(
+        readWorkflow(directory).jobs["publish-cargo"]!,
+        "Publish public crates",
+      ).run!;
+      assert.ok(
+        cargoPublish.indexOf('--package "fixture-auth"') <
+          cargoPublish.indexOf('--package "fixture-provider"'),
+      );
       assert.equal("publish-fixture-provider" in readWorkflow(directory).jobs, false);
     } finally {
       rmSync(directory, { recursive: true, force: true });

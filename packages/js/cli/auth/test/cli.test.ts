@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Storage, type AccessToken } from "@dbx-tools/auth";
-import { type DatabricksAuthOptions, type PersistentAuthLike } from "@dbx-tools/databricks-auth";
+import {
+  type AccessToken,
+  type DatabricksAuthOptions,
+  type PersistentAuthLike,
+  Storage,
+} from "@dbx-tools/client";
 
 import { buildProgram } from "../src/cli.ts";
 

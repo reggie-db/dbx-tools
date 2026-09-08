@@ -444,6 +444,34 @@ export class DBXToolsRustProject extends Project implements DBXToolsProject {
   }
 }
 
+function rustPackageDependencies(
+  packages: readonly DBXToolsRustProject[],
+  pkg: DBXToolsRustProject,
+  root: string,
+  workspaceDependencies: Readonly<Record<string, CargoDependency>> | undefined,
+): DBXToolsRustProject[] {
+  return packages.filter(
+    (dependency) =>
+      dependency !== pkg &&
+      Object.entries(pkg.packageOptions.dependencies ?? {}).some(([name, value]) => {
+        const resolved =
+          typeof value === "object" && value.workspace
+            ? (workspaceDependencies?.[name] ?? value)
+            : value;
+        return (
+          name === dependency.crateName ||
+          (typeof resolved === "object" &&
+            (resolved.package === dependency.crateName ||
+              (resolved.path !== undefined &&
+                resolve(
+                  typeof value === "object" && value.workspace ? root : pkg.outdir,
+                  resolved.path,
+                ) === dependency.outdir)))
+        );
+      }),
+  );
+}
+
 /** Generated Rust workspace plus convention-derived UniFFI facade packages. */
 export class DBXToolsRustWorkspace {
   readonly packages: readonly DBXToolsRustProject[];
@@ -473,27 +501,13 @@ export class DBXToolsRustWorkspace {
     );
 
     const bindings = this.packages.filter((pkg) => pkg.uniffi);
+    const packageDependencies = (pkg: DBXToolsRustProject) =>
+      rustPackageDependencies(this.packages, pkg, project.outdir, options.workspaceDependencies);
     const bindingDependencies = (pkg: DBXToolsRustProject, language: "node" | "python") =>
       bindings.filter(
         (dependency) =>
-          dependency !== pkg &&
           (dependency.packageOptions.bindings ?? ["node", "python"]).includes(language) &&
-          Object.entries(pkg.packageOptions.dependencies ?? {}).some(([name, value]) => {
-            const resolved =
-              typeof value === "object" && value.workspace
-                ? (options.workspaceDependencies?.[name] ?? value)
-                : value;
-            return (
-              name === dependency.crateName ||
-              (typeof resolved === "object" &&
-                (resolved.package === dependency.crateName ||
-                  (resolved.path !== undefined &&
-                    resolve(
-                      typeof value === "object" && value.workspace ? project.outdir : pkg.outdir,
-                      resolved.path,
-                    ) === dependency.outdir)))
-            );
-          }),
+          packageDependencies(pkg).includes(dependency),
       );
     this.bindingMappings = orderRustBindings(
       bindings.map((pkg) => {
@@ -732,18 +746,20 @@ export class DBXToolsRustWorkspace {
         crate: pkg.crateName,
         binary: pkg.packageOptions.binaryName ?? pkg.crateName,
       }));
-    const orderedBindingCrates = this.bindingMappings.map((binding) => binding.crate);
-    const publicCrates = this.packages
-      .filter((pkg) => !pkg.packageOptions.private)
-      .sort((first, second) => {
-        // Binding crates publish in topological order before release-only crates that may consume them.
-        const firstIndex = orderedBindingCrates.indexOf(first.crateName);
-        const secondIndex = orderedBindingCrates.indexOf(second.crateName);
-        if (firstIndex < 0) return secondIndex < 0 ? 0 : 1;
-        if (secondIndex < 0) return -1;
-        return firstIndex - secondIndex;
-      })
-      .map((pkg) => pkg.crateName);
+    const publicCrates = orderRustBindings(
+      this.packages
+        .filter((pkg) => !pkg.packageOptions.private)
+        .map((pkg) => ({
+          crate: pkg.crateName,
+          rust: pkg.outdir,
+          dependencies: rustPackageDependencies(
+            this.packages,
+            pkg,
+            project.outdir,
+            options.workspaceDependencies,
+          ).map((dependency) => dependency.crateName),
+        })),
+    ).map((pkg) => pkg.crate);
     const targetMatrix = targets.map((target) => ({ ...target }));
     const hasPythonBindings = bindings.some((binding) => binding.python);
     const usePreinstalledWindowsRust = releaseRustVersion === "stable";

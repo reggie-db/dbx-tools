@@ -1,0 +1,18 @@
+$kind: http-request
+name: Anthropic Messages -> Chat SSE
+url: "{{baseUrl}}/v1/messages"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: text/event-stream
+  anthropic-version: 2023-06-01
+body:
+  type: json
+  content: |-
+    {
+      "model": "{{chatModel}}",
+      "max_tokens": 128,
+      "messages": [{"role": "user", "content": "Count from one to three."}],
+      "stream": true
+    }
+order: 4000

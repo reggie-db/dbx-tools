@@ -2,13 +2,12 @@
  * `dbx auth` Commander program for Databricks OAuth.
  *
  * The command delegates profile resolution, browser OAuth, token refresh,
- * locking, and credential storage to `@dbx-tools/databricks-auth`.
+ * locking, and credential storage to `@dbx-tools/client`.
  *
  * @module
  */
 
-import * as auth from "@dbx-tools/auth";
-import * as databricksAuth from "@dbx-tools/databricks-auth";
+import * as client from "@dbx-tools/client";
 import { string as sharedString } from "@dbx-tools/shared-core";
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 
@@ -40,18 +39,18 @@ interface TokenCommandOptions {
 }
 
 interface AuthContext {
-  auth: databricksAuth.PersistentAuthLike;
+  auth: client.PersistentAuthLike;
   close(): Promise<void>;
   storage?: StorageName;
 }
 
 interface AuthCliDependencies {
-  createPersistentAuth: typeof databricksAuth.createPersistentAuth;
+  createPersistentAuth: typeof client.createPersistentAuth;
   writeJson(value: unknown): void;
 }
 
 const DEFAULT_DEPENDENCIES: AuthCliDependencies = {
-  createPersistentAuth: databricksAuth.createPersistentAuth,
+  createPersistentAuth: client.createPersistentAuth,
   writeJson: (value) => {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
   },
@@ -73,25 +72,25 @@ function parseInteger(value: string | bigint, name: string, signed: boolean): bi
 }
 
 /** Translate the CLI storage name to the generated UniFFI enum. */
-function bindingStorage(storage: StorageName): auth.Storage {
+function bindingStorage(storage: StorageName): client.Storage {
   switch (storage) {
     case "auto":
-      return auth.Storage.Auto;
+      return client.Storage.Auto;
     case "memory":
-      return auth.Storage.Memory;
+      return client.Storage.Memory;
     case "file":
-      return auth.Storage.File;
+      return client.Storage.File;
   }
 }
 
 /** Translate the generated UniFFI enum to the CLI status value. */
-function storageName(storage: auth.Storage): StorageName {
+function storageName(storage: client.Storage): StorageName {
   switch (storage) {
-    case auth.Storage.Auto:
+    case client.Storage.Auto:
       return "auto";
-    case auth.Storage.Memory:
+    case client.Storage.Memory:
       return "memory";
-    case auth.Storage.File:
+    case client.Storage.File:
       return "file";
     default:
       throw new Error(`Unknown Databricks auth storage value: ${storage}`);
@@ -99,8 +98,8 @@ function storageName(storage: auth.Storage): StorageName {
 }
 
 /** Build the generated options record from parsed Commander values. */
-function bindingOptions(options: AuthCliOptions): databricksAuth.DatabricksAuthOptions {
-  return databricksAuth.DatabricksAuthOptions.create({
+function bindingOptions(options: AuthCliOptions): client.DatabricksAuthOptions {
+  return client.DatabricksAuthOptions.create({
     profile: options.profile,
     host: options.host,
     accountId: options.accountId,
@@ -112,7 +111,7 @@ function bindingOptions(options: AuthCliOptions): databricksAuth.DatabricksAuthO
     scopes: options.scopes?.length ? options.scopes : undefined,
     target: options.target,
     cacheDir: options.cacheDir,
-    auth: auth.AuthOptions.create({
+    auth: client.AuthOptions.create({
       callbackImageSrc: options.callbackImageSrc,
       lockTimeoutSeconds: parseInteger(options.lockTimeoutSeconds, "--lock-timeout-seconds", false),
       loginTimeoutSeconds: parseInteger(
@@ -159,7 +158,7 @@ async function withAuth(
 }
 
 /** Shape a generated token record for stable CLI JSON output. */
-function tokenJson(token: auth.AccessToken): Record<string, unknown> {
+function tokenJson(token: client.AccessToken): Record<string, unknown> {
   return {
     access_token: token.accessToken,
     token_type: token.tokenType,

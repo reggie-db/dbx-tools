@@ -1,0 +1,15 @@
+$kind: http-request
+name: Responses -> Chat is rejected
+url: "{{baseUrl}}/v1/responses"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "model": "{{chatModel}}",
+      "input": "This combination should be rejected.",
+      "stream": false
+    }
+order: 5000

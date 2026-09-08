@@ -1,0 +1,4 @@
+$kind: collection
+name: "Target: Responses"
+description: Start the proxy with --target responses before running this folder.
+order: 3000

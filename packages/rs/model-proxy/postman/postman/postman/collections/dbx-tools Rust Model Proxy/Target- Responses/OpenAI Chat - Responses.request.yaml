@@ -1,0 +1,15 @@
+$kind: http-request
+name: OpenAI Chat -> Responses
+url: "{{baseUrl}}/v1/chat/completions"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "model": "{{responsesModel}}",
+      "messages": [{"role": "user", "content": "Return the word responses."}],
+      "stream": false
+    }
+order: 1000

@@ -201,6 +201,13 @@ describe("lookupModels", () => {
     assert.deepEqual(names(ranked), [OPUS_8, OPUS_7, OPUS_6]);
   });
 
+  it("prefers GPT 5.6 Sol over Luna", () => {
+    const ranked = lookupModels([chat("databricks-gpt-5-6-luna"), chat("databricks-gpt-5-6-sol")], {
+      search: "gpt",
+    });
+    assert.deepEqual(names(ranked), ["databricks-gpt-5-6-sol", "databricks-gpt-5-6-luna"]);
+  });
+
   it("with no search, orders by class then within-class rank", () => {
     const ranked = lookupModels(TIERED);
     assert.deepEqual(names(ranked), [OPUS_8, SONNET, HAIKU_5]);

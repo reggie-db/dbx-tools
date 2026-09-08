@@ -1,0 +1,39 @@
+[package]
+name = "dbx-tools-client"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Databricks runtime and authentication client"
+license = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "dbx_tools_client"
+path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]
+
+[[bin]]
+name = "dbx-tools-client-uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+async-trait = { workspace = true }
+base64 = { workspace = true }
+configparser = { workspace = true }
+dbx-tools-core = { version = "0.6.183", path = "../core" }
+directories = { workspace = true }
+oauth2 = { workspace = true }
+open = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+uniffi = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

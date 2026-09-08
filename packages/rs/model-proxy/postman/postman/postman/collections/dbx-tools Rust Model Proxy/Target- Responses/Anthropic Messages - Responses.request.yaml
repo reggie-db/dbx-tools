@@ -1,0 +1,17 @@
+$kind: http-request
+name: Anthropic Messages -> Responses
+url: "{{baseUrl}}/v1/messages"
+method: POST
+headers:
+  Content-Type: application/json
+  anthropic-version: 2023-06-01
+body:
+  type: json
+  content: |-
+    {
+      "model": "{{responsesModel}}",
+      "max_tokens": 128,
+      "messages": [{"role": "user", "content": "Return the word anthropic."}],
+      "stream": false
+    }
+order: 3000

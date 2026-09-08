@@ -86,76 +86,82 @@ Primary package areas:
   to be a separate `shared-sdk-model` package with exactly one consumer.
 - `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
   Serving endpoint selection and shared schemas/classification.
-- `packages/rs/auth`, `packages/js/node/auth`, and `packages/py/auth` own
-  provider-neutral OAuth, token lifecycle, credential storage, and locking.
-  Providers supply endpoints and acquisition policy; optional profiles and
-  canonical scope sets select credentials. Shared UniFFI contracts belong to
-  this crate, and dependent bindings import them rather than generating copies.
-  Rust and UniFFI records use composition, not class inheritance: provider
-  options embed the shared `AuthOptions` record as optional `auth`. Omission
-  uses its Rust defaults. Keep lifecycle durations and callback configuration
-  in that record, not flattened copies in each provider. Generated Node and
-  Python bindings must import the same owning record. Use trait default methods
-  for shared lifecycle forwarding; never default required storage locks or
-  provider refresh operations to unsafe no-ops or interactive authentication.
-  `StorageAdapter` remains caller-implementable. Pass it through the shared
-  crate's `createStorageHandle` / `create_storage_handle` before handing it to
-  either provider factory: the handle keeps callbacks in their owning native library.
-  Built-in storage is file or memory only. Do not add keychain access, a
-  Postgres adapter, or a Postgres dependency to auth or its CLI.
-- `packages/rs/google-auth`, `packages/js/node/google-auth`, and
-  `packages/py/google-auth` provide Google Application Default Credentials
-  through Google's native `google-cloud-auth` Rust crate. ADC discovery checks
+- `packages/rs/client`, `packages/js/node/client`, and `packages/py/client` own
+  the complete Databricks Rust client surface. The Rust crate contains
+  Databricks App detection, cached CLI availability, CLI token process access,
+  profile resolution, U2M, M2M, PAT authentication, provider-neutral token
+  lifecycle, and credential storage. Databricks-specific authentication lives
+  under `src/auth`; generic OAuth flow, templates, and provider factories live
+  under `src/oauth`; credential records, token lifecycle, and storage stay
+  under `src/credentials` because they are not OAuth-specific. Do not restore
+  separate Rust `auth`, `databricks-auth`, or `databricks` utility crates.
+  Providers supply endpoints and acquisition policy; `AuthOptions` owns shared
+  lifecycle durations and callback configuration. `StorageAdapter` remains
+  caller-implementable, and `createStorageHandle` / `create_storage_handle`
+  keeps callbacks in the native library that owns their converters. Built-in
+  storage is file or memory only. Do not add keychain access, a Postgres
+  adapter, or a Postgres dependency. Credential storage uses
+  `packages/rs/core`'s `FileLock`; keep lock acquisition and timeout mechanics
+  in core. U2M is preferred by default. An explicit profile is never remapped.
+  Profiles containing both client ID and secret remain M2M even when
+  `auth_type` is absent. Outside Databricks Apps, automatic U2M uses
+  `databricks auth token --profile` when the CLI is available; otherwise it
+  uses the native browser flow. Inside an App, automatic storage resolves to
+  memory and does not invoke the CLI. App auth has two explicit types:
+  `app_obo` reads `x-forwarded-access-token` case-insensitively from
+  `createPersistentAuthForRequest` / `create_persistent_auth_for_request`
+  headers and returns it directly without caching or refreshing; `app_sp` uses `DATABRICKS_HOST`,
+  `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`. Automatic resolution
+  inside an App prefers an available OBO request token, then App SP. An explicit
+  profile or auth type suppresses that automatic tiering, and a profile forced
+  inside an App reads its profile credentials instead of ambient App
+  credentials. PAT reads the explicit option, selected profile, or
+  `DATABRICKS_TOKEN`. File-backed refresh locks preserve unrelated entries in
+  `~/.databricks/token-cache.json`. Profile files are parsed once per absolute
+  path, including missing files and parse errors. Rust and UniFFI own the
+  cross-language contract; commit generated bindings and import them from
+  `@dbx-tools/client` or `dbx_tools.client`.
+- `packages/rs/core` owns Databricks-agnostic, dependency-light Rust runtime
+  primitives. Its file cache performs check-lock-check-load under a
+  cross-process `FileLock` and publishes values with an atomic rename. Reuse it
+  instead of adding package-local TTL files or lock loops. Do not move OAuth,
+  Databricks profiles, SDK behavior, or provider policy into core.
+- `packages/rs/google`, `packages/js/node/google`, and `packages/py/google`
+  contain Google integrations. The current surface is Google Application
+  Default Credentials through the native `google-cloud-auth` crate, sharing
+  the auth lifecycle exported by `client`. ADC checks
   `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known
   `application_default_credentials.json`, then the metadata service. ADC is the
-  only persistent credential store; shared auth keeps short-lived tokens in
-  process memory with in-process refresh locks. The package never invokes
-  gcloud, starts Google login, or rewrites ADC. Configure
-  local user credentials and scopes with `gcloud auth application-default
-login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
-  to 1.85 while this workspace supports Rust 1.82.
-- `packages/rs/databricks`, `packages/js/node/databricks`, and
-  `packages/py/databricks` own common Databricks runtime utilities. Rust owns
-  Databricks App detection, cached CLI availability, and CLI token process
-  access. The Node package combines those generated bindings with its direct
-  workspace client, filesystem, cloud, and network modules. During UniFFI
-  mapping, reuse the existing root Node project at the conventional path and
-  add binding metadata to that project instead of creating a second package.
-- `packages/rs/databricks-auth`, `packages/js/node/databricks-auth`,
-  `packages/py/databricks-auth`, and `packages/js/cli/auth` - Databricks U2M,
-  M2M, and PAT authentication, secure token storage, generated Node/Python
-  bindings, and the `dbx auth` Commander interface. U2M is preferred by default. A profile
-  selected by option or `DATABRICKS_CONFIG_PROFILE` is never remapped. Profiles
-  containing both client ID and secret remain M2M even when `auth_type` is
-  absent; the preference only selects a unique matching U2M profile for an
-  implicit M2M default. M2M uses HTTP Basic client credentials,
-  sorted scopes, optional group assumption, persistent token storage, and the
-  same check-lock-check refresh path. The CLI delegates OAuth, profile
-  resolution, refresh, locking, and storage to the Node binding package.
-  Outside Databricks Apps, automatic U2M uses `databricks auth token --profile`
-  for refresh when the shared Databricks crate reports the CLI is available;
-  otherwise it uses the native file flow. Inside a Databricks App, automatic
-  storage resolves to memory and does not use the CLI. Explicit file, memory,
-  and custom storage selections remain unchanged. M2M always stays native.
-  PAT reads `token` from an explicit option, the selected profile, or
-  `DATABRICKS_TOKEN`. Automatic profile selection ignores PAT configuration
-  inside an App so ambient app credentials win; explicitly selected PAT
-  remains valid.
-  File-backed refresh locks cover the whole store; read-modify-write uses a
-  separate short-held file lock. Preserve other entries in
-  `~/.databricks/token-cache.json`. Only the incoming Node package is named
-  `auth-gate`; `shared-auth` and `ui-auth` keep their existing names.
-  Profile files are parsed once per absolute path and cached for the process
-  lifetime, including missing files and parse errors, so repeated factories do
-  not reread configuration from disk.
-  Rust and UniFFI own the complete cross-language contract. Never hand-maintain
-  TypeScript or Python copies of generated records, enums, interfaces, or module
-  shapes. Commit the target-independent generated Node TypeScript and import it
-  from the standard `@dbx-tools/databricks-auth` package root; only native
-  libraries stay ignored. The shared auth crate owns `OAuthTemplate`, which
-  renders the browser callback from a Rust string with dbx tools colors and a
-  configurable image source. The crate copies the root brand YAML and light
-  logo, embeds the logo as a data URI, and reads fallback styling from the YAML.
+  only persistent credential store; short-lived tokens stay in process memory.
+  The package never invokes gcloud, starts Google login, or rewrites ADC. Use
+  `gcloud auth application-default login` to configure local credentials and
+  scopes. Keep `google-cloud-auth` exact-pinned at 0.18.0 because 0.19 raises
+  its MSRV to 1.85 while this workspace supports Rust 1.82.
+- `packages/rs/model` owns Rust Databricks endpoint discovery, file-backed
+  catalogue caching, model-name parsing, classification, and fuzzy ranking.
+  It intentionally has no UniFFI scaffolding. Keep deterministic behavior
+  aligned with `packages/py/model`; `difflib-fast` supplies Python-compatible
+  short-string similarity. The model proxy resolves loose names such as `gpt`
+  through this crate before selecting an inference route. Across TypeScript,
+  Python, and Rust, a GPT family search sorts by descending version and prefers
+  the `sol` variant over `luna` when both have the same version.
+  `ServingEndpointSummary.modelServiceName` prefers
+  `served_entities[].foundation_model.name` over the entity alias because the
+  latter can still be the `databricks-*` endpoint id. Foundation metadata may
+  itself return `system.ai.databricks-*`, which the Codex gateway does not
+  accept. Codex listing and inference derive `system.ai.<model>` by removing
+  the leading `databricks-` from the serving endpoint name. The serving
+  endpoint name remains the OpenAI-facing id.
+  Retirement status refreshes the Databricks Foundation Model retirement page
+  through a daily `FileCache` and falls back to the generated
+  `assets/retired-models.json` snapshot. The existing Python generator writes
+  both language snapshots from one download.
+- `packages/rs/model-proxy` is the public `dbx-model-proxy` Rust binary that
+  exposes OpenAI Chat, OpenAI Responses, Anthropic Messages, Codex Responses,
+  and live model-list compatibility over Databricks. It depends on `client` for
+  credentials and on `model` for cached discovery and ranking. Releases publish
+  the crate to Cargo and attach the compiled binary for each selected platform
+  to the GitHub release.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search
@@ -339,7 +345,7 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   cache or Mastra dependencies;
   deterministic behavior belongs in the colocated model polyglot tests.
 - `packages/py/litellm` - thin routing and discovery around LiteLLM 1.99's
-  native Databricks and OpenAI providers. `dbx_tools.databricks_auth` owns profile
+  native Databricks and OpenAI providers. `dbx_tools.client` owns profile
   selection, U2M/M2M/PAT credentials, storage, locking, and refresh; endpoint
   discovery creates an SDK client with its current token. The routing hook may
   change only the resolved model, native provider, base URL, credentials, and
@@ -399,7 +405,7 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   CLI-over-environment settings. Default to Databricks GPT plus the
   1024-dimensional GTE embedding endpoint, and let an explicit LiteLLM URL
   disable proxy ownership. Managed mode passes an optional profile override or
-  `DATABRICKS_CONFIG_PROFILE` to LiteLLM; `dbx_tools.databricks_auth` owns
+  `DATABRICKS_CONFIG_PROFILE` to LiteLLM; `dbx_tools.client` owns
   fallback and ambient App authentication. A Databricks App with
   `DATABRICKS_HOST` does not require or synthesize a profile. Reuse `uv` from
   `PATH`; ask mise to
@@ -488,7 +494,9 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   Artifact names identify crate, target, and type (`npm`, `python-wheel`, or
   `binary`). Rust jobs publish non-private Cargo crates from a source-only
   `cargo publish --no-verify` job and upload prebuilt binaries to the GitHub
-  release. They never publish npm or PyPI packages.
+  release. Cargo crates publish in dependency order across both UniFFI and
+  source-only crates, so a public binary can consume workspace libraries on its
+  first release. They never publish npm or PyPI packages.
   `bun run bump --os <os> --arch <arch>` accepts repeatable selectors and
   generates their Cartesian product; omit both to restore the maintained full
   matrix. GitHub environments referenced by release jobs must permit the

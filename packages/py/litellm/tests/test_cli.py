@@ -156,7 +156,7 @@ def test_retired_models_command_generates_fallback(
     monkeypatch.setattr(
         model_status,
         "generate_retired_models",
-        lambda path: generated.append(path),
+        lambda path, **_: generated.append(path),
     )
 
     cli_module.main(["retired-models", str(output)])

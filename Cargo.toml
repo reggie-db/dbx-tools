@@ -1,10 +1,10 @@
 [workspace]
-members = ["packages/rs/auth", "packages/rs/databricks", "packages/rs/databricks-auth", "packages/rs/google-auth"]
-default-members = []
+members = ["packages/rs/client", "packages/rs/core", "packages/rs/google", "packages/rs/model", "packages/rs/model-proxy"]
+default-members = ["packages/rs/core", "packages/rs/model", "packages/rs/model-proxy"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.182"
+version = "0.6.183"
 edition = "2021"
 rust-version = "1.82"
 license = "Apache-2.0"
@@ -15,11 +15,14 @@ async-trait = "0.1"
 base64 = "0.22"
 configparser = "3"
 directories = "6"
+difflib-fast = "0.3.5"
 fs4 = "0.13"
 google-cloud-auth = "=0.18.0"
 oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls"] }
 open = "5"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+regex = "1"
+scraper = "0.24"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
@@ -27,6 +30,8 @@ tempfile = "3"
 thiserror = "2"
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1"
 uniffi = { version = "=0.31", features = ["cli", "tokio"] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
+wiremock = "0.6"

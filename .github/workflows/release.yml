@@ -367,11 +367,11 @@ jobs:
           SECONDS=0
           trap 'status=$?; echo "phase=uniffi_packaging duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
           node .projen/uniffi-release.mjs build \
-            --crate "dbx-tools-auth" \
-            --node "packages/js/node/auth" \
-            --python "packages/py/auth" \
-            --node-package "@dbx-tools/auth" \
-            --python-package "dbx-tools-auth" \
+            --crate "dbx-tools-client" \
+            --node "packages/js/node/client" \
+            --python "packages/py/client" \
+            --node-package "@dbx-tools/client" \
+            --python-package "dbx-tools-client" \
             --cargo-target "${{ matrix.cargo }}" \
             --node-triple "${{ matrix.node }}" \
             --python-tag "${{ matrix.python }}" \
@@ -379,14 +379,14 @@ jobs:
             --cpu "${{ matrix.cpu }}" \
             --libc "${{ matrix.libc }}" \
             --version "$VERSION" \
-            --output "dist/release/dbx-tools-auth/${{ matrix.node }}" \
+            --output "dist/release/dbx-tools-client/${{ matrix.node }}" \
             --skip-build
           node .projen/uniffi-release.mjs build \
-            --crate "dbx-tools-databricks" \
-            --node "packages/js/node/databricks" \
-            --python "packages/py/databricks" \
-            --node-package "@dbx-tools/databricks" \
-            --python-package "dbx-tools-databricks" \
+            --crate "dbx-tools-google" \
+            --node "packages/js/node/google" \
+            --python "packages/py/google" \
+            --node-package "@dbx-tools/google" \
+            --python-package "dbx-tools-google" \
             --cargo-target "${{ matrix.cargo }}" \
             --node-triple "${{ matrix.node }}" \
             --python-tag "${{ matrix.python }}" \
@@ -394,94 +394,59 @@ jobs:
             --cpu "${{ matrix.cpu }}" \
             --libc "${{ matrix.libc }}" \
             --version "$VERSION" \
-            --output "dist/release/dbx-tools-databricks/${{ matrix.node }}" \
-            --skip-build
-          node .projen/uniffi-release.mjs build \
-            --crate "dbx-tools-databricks-auth" \
-            --node "packages/js/node/databricks-auth" \
-            --python "packages/py/databricks-auth" \
-            --node-package "@dbx-tools/databricks-auth" \
-            --python-package "dbx-tools-databricks-auth" \
-            --cargo-target "${{ matrix.cargo }}" \
-            --node-triple "${{ matrix.node }}" \
-            --python-tag "${{ matrix.python }}" \
-            --os "${{ matrix.os }}" \
-            --cpu "${{ matrix.cpu }}" \
-            --libc "${{ matrix.libc }}" \
-            --version "$VERSION" \
-            --output "dist/release/dbx-tools-databricks-auth/${{ matrix.node }}" \
-            --skip-build
-          node .projen/uniffi-release.mjs build \
-            --crate "dbx-tools-google-auth" \
-            --node "packages/js/node/google-auth" \
-            --python "packages/py/google-auth" \
-            --node-package "@dbx-tools/google-auth" \
-            --python-package "dbx-tools-google-auth" \
-            --cargo-target "${{ matrix.cargo }}" \
-            --node-triple "${{ matrix.node }}" \
-            --python-tag "${{ matrix.python }}" \
-            --os "${{ matrix.os }}" \
-            --cpu "${{ matrix.cpu }}" \
-            --libc "${{ matrix.libc }}" \
-            --version "$VERSION" \
-            --output "dist/release/dbx-tools-google-auth/${{ matrix.node }}" \
+            --output "dist/release/dbx-tools-google/${{ matrix.node }}" \
             --skip-build
         shell: bash
-      - name: Upload dbx-tools-auth native npm package
-        id: upload_dbx-tools-auth_native_npm_package
+      - name: Package release binaries
+        id: package_release_binaries
+        run: |-
+          SECONDS=0
+          trap 'status=$?; echo "phase=binary_packaging duration_seconds=$SECONDS status=$status"; exit "$status"' EXIT
+          mkdir -p "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage"
+          SOURCE="target/${{ matrix.cargo }}/release/dbx-model-proxy${{ matrix.os == 'win32' && '.exe' || '' }}"
+          DESTINATION="dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage/dbx-model-proxy${{ matrix.os == 'win32' && '.exe' || '' }}"
+          cp "$SOURCE" "$DESTINATION"
+          if [ "${{ matrix.os }}" = "win32" ]; then
+            7z a "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/dbx-model-proxy-${{ matrix.node }}.zip" "$DESTINATION"
+          else
+            tar -C "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage" -czf "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/dbx-model-proxy-${{ matrix.node }}.tar.gz" "dbx-model-proxy"
+          fi
+          rm -rf "dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/stage"
+        shell: bash
+      - name: Upload dbx-tools-client native npm package
+        id: upload_dbx-tools-client_native_npm_package
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-auth-${{ matrix.node }}-npm
-          path: dist/release/dbx-tools-auth/${{ matrix.node }}/npm/*.tgz
+          name: dbx-tools-client-${{ matrix.node }}-npm
+          path: dist/release/dbx-tools-client/${{ matrix.node }}/npm/*.tgz
           retention-days: 7
-      - name: Upload dbx-tools-auth Python wheel
-        id: upload_dbx-tools-auth_python_wheel
+      - name: Upload dbx-tools-client Python wheel
+        id: upload_dbx-tools-client_python_wheel
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-auth--${{ matrix.python }}--python-wheel
-          path: dist/release/dbx-tools-auth/${{ matrix.node }}/python/*.whl
+          name: dbx-tools-client--${{ matrix.python }}--python-wheel
+          path: dist/release/dbx-tools-client/${{ matrix.node }}/python/*.whl
           retention-days: 7
-      - name: Upload dbx-tools-databricks native npm package
-        id: upload_dbx-tools-databricks_native_npm_package
+      - name: Upload dbx-tools-google native npm package
+        id: upload_dbx-tools-google_native_npm_package
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-databricks-${{ matrix.node }}-npm
-          path: dist/release/dbx-tools-databricks/${{ matrix.node }}/npm/*.tgz
+          name: dbx-tools-google-${{ matrix.node }}-npm
+          path: dist/release/dbx-tools-google/${{ matrix.node }}/npm/*.tgz
           retention-days: 7
-      - name: Upload dbx-tools-databricks Python wheel
-        id: upload_dbx-tools-databricks_python_wheel
+      - name: Upload dbx-tools-google Python wheel
+        id: upload_dbx-tools-google_python_wheel
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-databricks--${{ matrix.python }}--python-wheel
-          path: dist/release/dbx-tools-databricks/${{ matrix.node }}/python/*.whl
+          name: dbx-tools-google--${{ matrix.python }}--python-wheel
+          path: dist/release/dbx-tools-google/${{ matrix.node }}/python/*.whl
           retention-days: 7
-      - name: Upload dbx-tools-databricks-auth native npm package
-        id: upload_dbx-tools-databricks-auth_native_npm_package
+      - name: Upload dbx-tools-model-proxy release binary
+        id: upload_dbx-tools-model-proxy_release_binary
         uses: actions/upload-artifact@v7
         with:
-          name: dbx-tools-databricks-auth-${{ matrix.node }}-npm
-          path: dist/release/dbx-tools-databricks-auth/${{ matrix.node }}/npm/*.tgz
-          retention-days: 7
-      - name: Upload dbx-tools-databricks-auth Python wheel
-        id: upload_dbx-tools-databricks-auth_python_wheel
-        uses: actions/upload-artifact@v7
-        with:
-          name: dbx-tools-databricks-auth--${{ matrix.python }}--python-wheel
-          path: dist/release/dbx-tools-databricks-auth/${{ matrix.node }}/python/*.whl
-          retention-days: 7
-      - name: Upload dbx-tools-google-auth native npm package
-        id: upload_dbx-tools-google-auth_native_npm_package
-        uses: actions/upload-artifact@v7
-        with:
-          name: dbx-tools-google-auth-${{ matrix.node }}-npm
-          path: dist/release/dbx-tools-google-auth/${{ matrix.node }}/npm/*.tgz
-          retention-days: 7
-      - name: Upload dbx-tools-google-auth Python wheel
-        id: upload_dbx-tools-google-auth_python_wheel
-        uses: actions/upload-artifact@v7
-        with:
-          name: dbx-tools-google-auth--${{ matrix.python }}--python-wheel
-          path: dist/release/dbx-tools-google-auth/${{ matrix.node }}/python/*.whl
+          name: dbx-tools-model-proxy-${{ matrix.node }}-binary
+          path: dist/release/dbx-tools-model-proxy/${{ matrix.node }}/binary/*
           retention-days: 7
       - name: Log sccache statistics
         id: log_sccache_statistics
@@ -558,10 +523,11 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |-
-          cargo publish --package "dbx-tools-auth" --registry crates-io --no-verify
-          cargo publish --package "dbx-tools-databricks" --registry crates-io --no-verify
-          cargo publish --package "dbx-tools-databricks-auth" --registry crates-io --no-verify
-          cargo publish --package "dbx-tools-google-auth" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-core" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-client" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-google" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-model" --registry crates-io --no-verify
+          cargo publish --package "dbx-tools-model-proxy" --registry crates-io --no-verify
   publish-local-cargo:
     needs:
       - verify-context
@@ -596,10 +562,35 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.LOCAL_CARGO_TOKEN }}
         run: |-
-          cargo publish --package "dbx-tools-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
-          cargo publish --package "dbx-tools-databricks" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
-          cargo publish --package "dbx-tools-databricks-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
-          cargo publish --package "dbx-tools-google-auth" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-core" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-client" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-google" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-model" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+          cargo publish --package "dbx-tools-model-proxy" --registry "${{ vars.LOCAL_CARGO_REGISTRY }}" --no-verify
+  publish-github-release:
+    needs:
+      - verify-context
+      - rust-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: ${{ github.event_name == 'push' }}
+    steps:
+      - name: Download release binaries
+        id: download_release_binaries
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*-binary"
+          path: dist/rust-release
+          merge-multiple: true
+      - name: Publish GitHub release assets
+        id: publish_github_release_assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/rust-release/*
+          generate-release-notes: true
+          tag_name: ${{ needs.verify-context.outputs.release_tag }}
+          target_commitish: ${{ needs.verify-context.outputs.expected_sha }}
   publish-native-npm:
     needs:
       - verify-context
@@ -767,14 +758,10 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
         run: |-
-          node .projen/uniffi-release.mjs facade --node "packages/js/node/auth" --node-package "@dbx-tools/auth" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-auth"
-          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-auth/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
-          node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks" --node-package "@dbx-tools/databricks" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-databricks"
-          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-databricks/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
-          node .projen/uniffi-release.mjs facade --node "packages/js/node/databricks-auth" --node-package "@dbx-tools/databricks-auth" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-databricks-auth"
-          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-databricks-auth/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
-          node .projen/uniffi-release.mjs facade --node "packages/js/node/google-auth" --node-package "@dbx-tools/google-auth" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-google-auth"
-          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-google-auth/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/client" --node-package "@dbx-tools/client" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-client"
+          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-client/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
+          node .projen/uniffi-release.mjs facade --node "packages/js/node/google" --node-package "@dbx-tools/google" --node-triple "linux-x64-gnu" --version "$RELEASE_VERSION" --output "dist/uniffi/facades/dbx-tools-google"
+          bun node_modules/@dbx-tools/projen/tasks/publish-npm.ts --directory "dist/uniffi/facades/dbx-tools-google/npm-facade" --version "$RELEASE_VERSION" $DRY_RUN
       - name: Smoke test published UniFFI npm facades
         id: smoke_test_published_uniffi_npm_facades
         if: ${{ github.event_name == 'push' && vars.UNIFFI_FACADE_SMOKE == 'true' }}
@@ -785,14 +772,10 @@ jobs:
           trap 'rm -rf "$SMOKE_DIR"' EXIT
           cd "$SMOKE_DIR"
           npm init --yes >/dev/null
-          npm install --ignore-scripts --no-audit --no-fund --package-lock=false "@dbx-tools/auth@$RELEASE_VERSION"
-          node -e 'import("@dbx-tools/auth")'
-          npm install --ignore-scripts --no-audit --no-fund --package-lock=false "@dbx-tools/databricks@$RELEASE_VERSION"
-          node -e 'import("@dbx-tools/databricks")'
-          npm install --ignore-scripts --no-audit --no-fund --package-lock=false "@dbx-tools/databricks-auth@$RELEASE_VERSION"
-          node -e 'import("@dbx-tools/databricks-auth")'
-          npm install --ignore-scripts --no-audit --no-fund --package-lock=false "@dbx-tools/google-auth@$RELEASE_VERSION"
-          node -e 'import("@dbx-tools/google-auth")'
+          npm install --ignore-scripts --no-audit --no-fund --package-lock=false "@dbx-tools/client@$RELEASE_VERSION"
+          node -e 'import("@dbx-tools/client")'
+          npm install --ignore-scripts --no-audit --no-fund --package-lock=false "@dbx-tools/google@$RELEASE_VERSION"
+          node -e 'import("@dbx-tools/google")'
         continue-on-error: true
     timeout-minutes: 30
   build-python:
@@ -855,78 +838,40 @@ jobs:
         with:
           path: ${{ steps.bun_cache_metadata.outputs.path }}
           key: ${{ steps.bun_cache.outputs.cache-primary-key }}
-      - name: Download dbx-tools-auth native wheels
-        id: download_dbx-tools-auth_native_wheels
+      - name: Download dbx-tools-client native wheels
+        id: download_dbx-tools-client_native_wheels
         if: ${{ inputs.source_run_id == '' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-auth--*--python-wheel
-          path: dist/auth
+          pattern: dbx-tools-client--*--python-wheel
+          path: dist/client
           merge-multiple: true
-      - name: Download recovered dbx-tools-auth native wheels
-        id: download_recovered_dbx-tools-auth_native_wheels
+      - name: Download recovered dbx-tools-client native wheels
+        id: download_recovered_dbx-tools-client_native_wheels
         if: ${{ inputs.source_run_id != '' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-auth--*--python-wheel
-          path: dist/auth
+          pattern: dbx-tools-client--*--python-wheel
+          path: dist/client
           merge-multiple: true
           run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-      - name: Download dbx-tools-databricks native wheels
-        id: download_dbx-tools-databricks_native_wheels
+      - name: Download dbx-tools-google native wheels
+        id: download_dbx-tools-google_native_wheels
         if: ${{ inputs.source_run_id == '' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-databricks--*--python-wheel
-          path: dist/databricks
+          pattern: dbx-tools-google--*--python-wheel
+          path: dist/google
           merge-multiple: true
-      - name: Download recovered dbx-tools-databricks native wheels
-        id: download_recovered_dbx-tools-databricks_native_wheels
+      - name: Download recovered dbx-tools-google native wheels
+        id: download_recovered_dbx-tools-google_native_wheels
         if: ${{ inputs.source_run_id != '' }}
         uses: actions/download-artifact@v8
         with:
-          pattern: dbx-tools-databricks--*--python-wheel
-          path: dist/databricks
-          merge-multiple: true
-          run-id: ${{ inputs.source_run_id }}
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-      - name: Download dbx-tools-databricks-auth native wheels
-        id: download_dbx-tools-databricks-auth_native_wheels
-        if: ${{ inputs.source_run_id == '' }}
-        uses: actions/download-artifact@v8
-        with:
-          pattern: dbx-tools-databricks-auth--*--python-wheel
-          path: dist/databricks-auth
-          merge-multiple: true
-      - name: Download recovered dbx-tools-databricks-auth native wheels
-        id: download_recovered_dbx-tools-databricks-auth_native_wheels
-        if: ${{ inputs.source_run_id != '' }}
-        uses: actions/download-artifact@v8
-        with:
-          pattern: dbx-tools-databricks-auth--*--python-wheel
-          path: dist/databricks-auth
-          merge-multiple: true
-          run-id: ${{ inputs.source_run_id }}
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-      - name: Download dbx-tools-google-auth native wheels
-        id: download_dbx-tools-google-auth_native_wheels
-        if: ${{ inputs.source_run_id == '' }}
-        uses: actions/download-artifact@v8
-        with:
-          pattern: dbx-tools-google-auth--*--python-wheel
-          path: dist/google-auth
-          merge-multiple: true
-      - name: Download recovered dbx-tools-google-auth native wheels
-        id: download_recovered_dbx-tools-google-auth_native_wheels
-        if: ${{ inputs.source_run_id != '' }}
-        uses: actions/download-artifact@v8
-        with:
-          pattern: dbx-tools-google-auth--*--python-wheel
-          path: dist/google-auth
+          pattern: dbx-tools-google--*--python-wheel
+          path: dist/google
           merge-multiple: true
           run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
@@ -952,10 +897,8 @@ jobs:
           test "$(find dist/model -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
           test "$(find dist/litellm -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
           test "$(find dist/graphiti -maxdepth 1 -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l | tr -d ' ')" -eq 2
-          find dist/auth -maxdepth 1 -name '*.whl' -print -quit | grep -q .
-          find dist/databricks -maxdepth 1 -name '*.whl' -print -quit | grep -q .
-          find dist/databricks-auth -maxdepth 1 -name '*.whl' -print -quit | grep -q .
-          find dist/google-auth -maxdepth 1 -name '*.whl' -print -quit | grep -q .
+          find dist/client -maxdepth 1 -name '*.whl' -print -quit | grep -q .
+          find dist/google -maxdepth 1 -name '*.whl' -print -quit | grep -q .
           find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) -print0 | xargs -0 uvx twine check
       - name: Upload distributions
         id: upload_distributions
@@ -1090,7 +1033,7 @@ jobs:
           packages-dir: dist/graphiti
           skip-existing: true
     timeout-minutes: 10
-  publish-pypi-auth:
+  publish-pypi-client:
     needs:
       - verify-context
       - build-python
@@ -1098,8 +1041,8 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: pypi-dbx-tools-auth
-      url: https://pypi.org/project/dbx-tools-auth/
+      name: pypi-dbx-tools-client
+      url: https://pypi.org/project/dbx-tools-client/
     if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
@@ -1108,23 +1051,24 @@ jobs:
         with:
           name: python-distributions
           path: dist
-      - name: Publish dbx-tools-auth to PyPI
-        id: publish_dbx-tools-auth_to_pypi
+      - name: Publish dbx-tools-client to PyPI
+        id: publish_dbx-tools-client_to_pypi
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/auth
+          packages-dir: dist/client
           skip-existing: true
     timeout-minutes: 10
-  publish-pypi-databricks:
+  publish-pypi-google:
     needs:
       - verify-context
       - build-python
+      - publish-pypi-client
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
-      name: pypi-dbx-tools-databricks
-      url: https://pypi.org/project/dbx-tools-databricks/
+      name: pypi-dbx-tools-google
+      url: https://pypi.org/project/dbx-tools-google/
     if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
     steps:
       - name: Download distributions
@@ -1133,64 +1077,11 @@ jobs:
         with:
           name: python-distributions
           path: dist
-      - name: Publish dbx-tools-databricks to PyPI
-        id: publish_dbx-tools-databricks_to_pypi
+      - name: Publish dbx-tools-google to PyPI
+        id: publish_dbx-tools-google_to_pypi
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist/databricks
-          skip-existing: true
-    timeout-minutes: 10
-  publish-pypi-databricks-auth:
-    needs:
-      - verify-context
-      - build-python
-      - publish-pypi-auth
-      - publish-pypi-databricks
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: pypi-dbx-tools-databricks-auth
-      url: https://pypi.org/project/dbx-tools-databricks-auth/
-    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
-    steps:
-      - name: Download distributions
-        id: download_distributions
-        uses: actions/download-artifact@v8
-        with:
-          name: python-distributions
-          path: dist
-      - name: Publish dbx-tools-databricks-auth to PyPI
-        id: publish_dbx-tools-databricks-auth_to_pypi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/databricks-auth
-          skip-existing: true
-    timeout-minutes: 10
-  publish-pypi-google-auth:
-    needs:
-      - verify-context
-      - build-python
-      - publish-pypi-auth
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: pypi-dbx-tools-google-auth
-      url: https://pypi.org/project/dbx-tools-google-auth/
-    if: ${{ github.event_name == 'push' || (inputs.dry_run == false && (inputs.stage == 'all' || inputs.stage == 'python')) }}
-    steps:
-      - name: Download distributions
-        id: download_distributions
-        uses: actions/download-artifact@v8
-        with:
-          name: python-distributions
-          path: dist
-      - name: Publish dbx-tools-google-auth to PyPI
-        id: publish_dbx-tools-google-auth_to_pypi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/google-auth
+          packages-dir: dist/google
           skip-existing: true
     timeout-minutes: 10
 permissions:

@@ -74,7 +74,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.182",
+  "version": "0.6.183",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -88,16 +88,15 @@
     "packages/js/node/appkit-graphiti",
     "packages/js/node/appkit-mastra",
     "packages/js/node/appkit-web-search",
-    "packages/js/node/auth",
     "packages/js/node/auth-gate",
+    "packages/js/node/client",
     "packages/js/node/core",
     "packages/js/node/databricks",
-    "packages/js/node/databricks-auth",
     "packages/js/node/databricks-zerobus",
     "packages/js/node/email",
     "packages/js/node/fs",
     "packages/js/node/genie",
-    "packages/js/node/google-auth",
+    "packages/js/node/google",
     "packages/js/node/model",
     "packages/js/node/path",
     "packages/js/node/postgres",
@@ -186,54 +185,33 @@
     "rust": {
       "root": "packages/rs",
       "crates": [
-        "packages/rs/auth",
-        "packages/rs/databricks",
-        "packages/rs/databricks-auth",
-        "packages/rs/google-auth"
+        "packages/rs/client",
+        "packages/rs/core",
+        "packages/rs/google",
+        "packages/rs/model",
+        "packages/rs/model-proxy"
       ],
       "bindings": [
         {
-          "crate": "dbx-tools-auth",
-          "rust": "packages/rs/auth",
-          "node": "packages/js/node/auth",
-          "nodePackage": "@dbx-tools/auth",
-          "python": "packages/py/auth",
-          "pythonPackage": "dbx-tools-auth",
-          "pythonModule": "dbx_tools.auth"
+          "crate": "dbx-tools-client",
+          "rust": "packages/rs/client",
+          "node": "packages/js/node/client",
+          "nodePackage": "@dbx-tools/client",
+          "python": "packages/py/client",
+          "pythonPackage": "dbx-tools-client",
+          "pythonModule": "dbx_tools.client"
         },
         {
-          "crate": "dbx-tools-databricks",
-          "rust": "packages/rs/databricks",
-          "node": "packages/js/node/databricks",
-          "nodePackage": "@dbx-tools/databricks",
-          "python": "packages/py/databricks",
-          "pythonPackage": "dbx-tools-databricks",
-          "pythonModule": "dbx_tools.databricks"
-        },
-        {
-          "crate": "dbx-tools-databricks-auth",
+          "crate": "dbx-tools-google",
           "dependencies": [
-            "dbx-tools-auth",
-            "dbx-tools-databricks"
+            "dbx-tools-client"
           ],
-          "rust": "packages/rs/databricks-auth",
-          "node": "packages/js/node/databricks-auth",
-          "nodePackage": "@dbx-tools/databricks-auth",
-          "python": "packages/py/databricks-auth",
-          "pythonPackage": "dbx-tools-databricks-auth",
-          "pythonModule": "dbx_tools.databricks_auth"
-        },
-        {
-          "crate": "dbx-tools-google-auth",
-          "dependencies": [
-            "dbx-tools-auth"
-          ],
-          "rust": "packages/rs/google-auth",
-          "node": "packages/js/node/google-auth",
-          "nodePackage": "@dbx-tools/google-auth",
-          "python": "packages/py/google-auth",
-          "pythonPackage": "dbx-tools-google-auth",
-          "pythonModule": "dbx_tools.google_auth"
+          "rust": "packages/rs/google",
+          "node": "packages/js/node/google",
+          "nodePackage": "@dbx-tools/google",
+          "python": "packages/py/google",
+          "pythonPackage": "dbx-tools-google",
+          "pythonModule": "dbx_tools.google"
         }
       ]
     },

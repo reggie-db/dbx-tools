@@ -1,5 +1,0 @@
-[bindings.python]
-cdylib_name = "dbx_tools_auth"
-
-[bindings.typescript]
-strictTypeChecking = true

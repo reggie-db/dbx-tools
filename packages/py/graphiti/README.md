@@ -48,7 +48,7 @@ uv run dbx-graphiti start
 
 The launcher passes `--profile` or `DATABRICKS_CONFIG_PROFILE` through when
 set. Otherwise `dbx-tools-litellm` delegates profile and ambient App
-authentication to `dbx-tools-databricks-auth`.
+authentication to `dbx-tools-client`.
 
 The first run downloads about 120 MB of Neo4j plus the pinned Graphiti release,
 creates Graphiti's `uv` environment, generates a local Neo4j password, starts

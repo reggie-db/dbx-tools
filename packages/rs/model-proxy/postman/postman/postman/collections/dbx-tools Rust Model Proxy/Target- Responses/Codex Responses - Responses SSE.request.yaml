@@ -1,0 +1,18 @@
+$kind: http-request
+name: Codex Responses -> Responses SSE
+url: "{{baseUrl}}/v1/responses"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: text/event-stream
+  originator: codex_cli_rs
+body:
+  type: json
+  content: |-
+    {
+      "model": "{{responsesModel}}",
+      "instructions": "Answer concisely.",
+      "input": "Count from one to three.",
+      "stream": true
+    }
+order: 6000

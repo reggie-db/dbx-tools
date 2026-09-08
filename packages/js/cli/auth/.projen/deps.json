@@ -15,12 +15,7 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/auth",
-      "version": "workspace:*",
-      "type": "runtime"
-    },
-    {
-      "name": "@dbx-tools/databricks-auth",
+      "name": "@dbx-tools/client",
       "version": "workspace:*",
       "type": "runtime"
     },

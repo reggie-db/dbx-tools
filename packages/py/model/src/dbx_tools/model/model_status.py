@@ -81,15 +81,27 @@ def get(identities: Iterable[str], retired: frozenset[str] | None = None) -> Mod
     )
 
 
-def generate_retired_models(output: Path, now: datetime | None = None) -> bool:
+def generate_retired_models(
+    output: Path,
+    now: datetime | None = None,
+    static_output: Path | None = None,
+) -> bool:
     """Refresh the generated fallback when its embedded timestamp is at least one day old."""
     checked_at = _utc_now() if now is None else now.astimezone(UTC)
-    digest = hashlib.sha256(str(output.resolve()).encode()).hexdigest()
+    outputs = [output.resolve()]
+    if static_output is not None:
+        outputs.append(static_output.resolve())
+    digest = hashlib.sha256("|".join(map(str, outputs)).encode()).hexdigest()
     lock_path = platform_cache_root() / "dbx-tools" / "model" / f"{digest}.lock"
     return check_lock_check(
         lock_path,
-        lambda: False if _generated_is_fresh(output, checked_at) else None,
-        lambda: _refresh_generated(output, checked_at),
+        lambda: (
+            False
+            if _generated_is_fresh(output, checked_at)
+            and (static_output is None or _static_generated_is_fresh(static_output, checked_at))
+            else None
+        ),
+        lambda: _refresh_generated(output, static_output, checked_at),
     )
 
 
@@ -129,11 +141,13 @@ def _refresh_cache(cache_path: Path, fallback: frozenset[str]) -> frozenset[str]
         return fallback
 
 
-def _refresh_generated(output: Path, now: datetime) -> bool:
+def _refresh_generated(output: Path, static_output: Path | None, now: datetime) -> bool:
     """Fetch and persist one generated fallback snapshot."""
     html = _download_html()
     names = parse_retired_models(html)
     _write_generated(output, names, now)
+    if static_output is not None:
+        _write_static_generated(static_output, names, now)
     return True
 
 
@@ -261,6 +275,18 @@ def _generated_is_fresh(path: Path, now: datetime) -> bool:
     return now - generated < RETIRED_MODELS_TTL
 
 
+def _static_generated_is_fresh(path: Path, now: datetime) -> bool:
+    """Return whether the generated static snapshot remains inside the daily TTL."""
+    try:
+        payload = json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return False
+    return isinstance(payload, dict) and _cache_is_fresh(
+        {"updatedAt": payload.get("generatedAt")},
+        now,
+    )
+
+
 def _write_generated(path: Path, names: tuple[str, ...], now: datetime) -> None:
     """Atomically write and protect the generated fallback module."""
     values = "".join(f"    {name!r},\n" for name in names)
@@ -277,6 +303,19 @@ def _write_generated(path: Path, names: tuple[str, ...], now: datetime) -> None:
     if path.exists():
         path.chmod(0o644)
     _atomic_write(path, content)
+    path.chmod(0o444)
+
+
+def _write_static_generated(path: Path, names: tuple[str, ...], now: datetime) -> None:
+    """Atomically write the language-neutral generated fallback snapshot."""
+    payload = {
+        "generatedAt": now.isoformat(),
+        "models": names,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.chmod(0o644)
+    _atomic_write(path, f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n")
     path.chmod(0o444)
 
 

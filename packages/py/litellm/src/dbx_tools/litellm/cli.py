@@ -107,12 +107,16 @@ class RetiredModels:
     """Refresh the generated fallback from the Databricks retirement policy."""
 
     output: Annotated[Path, Parameter(help="Generated Python module path.")]
+    static_output: Annotated[
+        Path | None,
+        Parameter(name="--static-output", help="Generated language-neutral snapshot path."),
+    ] = None
 
     def __call__(self) -> None:
         """Generate the retired-model fallback when its daily TTL has expired."""
         from dbx_tools.model.model_status import generate_retired_models
 
-        generate_retired_models(self.output)
+        generate_retired_models(self.output, static_output=self.static_output)
 
 
 _APP = App(

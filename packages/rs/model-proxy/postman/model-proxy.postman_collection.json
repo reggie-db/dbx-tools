@@ -1,0 +1,357 @@
+{
+  "info": {
+    "_postman_id": "6ec4f3bd-4515-47f4-8f3e-f99b6c2228ca",
+    "name": "dbx-tools Rust Model Proxy",
+    "description": "Exercises OpenAI Chat, OpenAI Responses, Codex, and Anthropic Messages clients against Chat Completions and Responses targets.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:4000"
+    },
+    {
+      "key": "chatModel",
+      "value": "databricks-meta-llama-3-3-70b-instruct"
+    },
+    {
+      "key": "responsesModel",
+      "value": "databricks-gpt-5-4"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/healthz"
+      }
+    },
+    {
+      "name": "Models",
+      "item": [
+        {
+          "name": "OpenAI models",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/models"
+          }
+        },
+        {
+          "name": "OpenAI extended GPT search",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/models?search=gpt&extended=true"
+          }
+        },
+        {
+          "name": "Codex models",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "originator",
+                "value": "codex_cli_rs"
+              }
+            ],
+            "url": "{{baseUrl}}/v1/models"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Target: Chat Completions",
+      "description": "Start the proxy with --target chat before running this folder.",
+      "item": [
+        {
+          "name": "OpenAI Chat -> Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{chatModel}}\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"Return the word chat.\"}],\n  \"stream\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/chat/completions"
+          }
+        },
+        {
+          "name": "OpenAI Chat -> Chat SSE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{chatModel}}\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"Count from one to three.\"}],\n  \"stream\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/chat/completions"
+          }
+        },
+        {
+          "name": "Anthropic Messages -> Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{chatModel}}\",\n  \"max_tokens\": 128,\n  \"messages\": [{\"role\": \"user\", \"content\": \"Return the word anthropic.\"}],\n  \"stream\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/messages"
+          }
+        },
+        {
+          "name": "Anthropic Messages -> Chat SSE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{chatModel}}\",\n  \"max_tokens\": 128,\n  \"messages\": [{\"role\": \"user\", \"content\": \"Count from one to three.\"}],\n  \"stream\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/messages"
+          }
+        },
+        {
+          "name": "Responses -> Chat is rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{chatModel}}\",\n  \"input\": \"This combination should be rejected.\",\n  \"stream\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/responses"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Target: Responses",
+      "description": "Start the proxy with --target responses before running this folder.",
+      "item": [
+        {
+          "name": "OpenAI Chat -> Responses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{responsesModel}}\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"Return the word responses.\"}],\n  \"stream\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/chat/completions"
+          }
+        },
+        {
+          "name": "OpenAI Chat -> Responses SSE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{responsesModel}}\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"Count from one to three.\"}],\n  \"stream\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/chat/completions"
+          }
+        },
+        {
+          "name": "Anthropic Messages -> Responses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{responsesModel}}\",\n  \"max_tokens\": 128,\n  \"messages\": [{\"role\": \"user\", \"content\": \"Return the word anthropic.\"}],\n  \"stream\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/messages"
+          }
+        },
+        {
+          "name": "Anthropic Messages -> Responses SSE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{responsesModel}}\",\n  \"max_tokens\": 128,\n  \"messages\": [{\"role\": \"user\", \"content\": \"Count from one to three.\"}],\n  \"stream\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/messages"
+          }
+        },
+        {
+          "name": "OpenAI Responses -> Responses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{responsesModel}}\",\n  \"instructions\": \"Answer concisely.\",\n  \"input\": \"Return the word responses.\",\n  \"stream\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/responses"
+          }
+        },
+        {
+          "name": "Codex Responses -> Responses SSE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              },
+              {
+                "key": "originator",
+                "value": "codex_cli_rs"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{responsesModel}}\",\n  \"instructions\": \"Answer concisely.\",\n  \"input\": \"Count from one to three.\",\n  \"stream\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/v1/responses"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -67,6 +67,26 @@ def test_generator_rechecks_freshness_after_lock(monkeypatch, tmp_path: Path) ->
     )
 
 
+def test_generator_writes_language_neutral_static_snapshot(monkeypatch, tmp_path: Path) -> None:
+    now = datetime(2026, 9, 5, tzinfo=UTC)
+    python_output = tmp_path / "_retired_models.py"
+    static_output = tmp_path / "retired-models.json"
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setattr(model_status, "_download_html", lambda: _RETIREMENT_HTML)
+
+    assert model_status.generate_retired_models(
+        python_output,
+        now,
+        static_output,
+    )
+
+    payload = json.loads(static_output.read_text())
+    assert payload == {
+        "generatedAt": now.isoformat(),
+        "models": ["DBRX", "DBRX Instruct", "Gemini 2.5 Pro"],
+    }
+
+
 def test_fresh_disk_cache_is_authoritative(monkeypatch, tmp_path: Path) -> None:
     cache = tmp_path / "retired_models.cache"
     now = datetime(2026, 9, 5, tzinfo=UTC)
