@@ -1,8 +1,9 @@
 # dbx-tools-databricks-auth
 
-Databricks OAuth library with U2M browser login and M2M client credentials. It
-owns Databricks profile resolution and endpoint policy, and delegates OAuth,
-token lifecycle, storage, and locking to [`dbx-tools-auth`](../auth).
+Databricks authentication library with U2M browser login, M2M client
+credentials, and personal access tokens. It owns Databricks profile resolution
+and endpoint policy, and delegates OAuth, token lifecycle, storage, and locking
+to [`dbx-tools-auth`](../auth).
 
 The crate exports UniFFI bindings consumed by
 [`@dbx-tools/databricks-auth`](../../js/node/databricks-auth) and
@@ -26,6 +27,11 @@ Profile configuration is parsed once per absolute file path and cached for the
 process lifetime. Loaded profiles, missing files, and parse failures all reuse
 the cached result, so constructing multiple clients does not repeatedly access
 the profile file.
+
+PAT profiles read `token` from the selected Databricks profile or
+`DATABRICKS_TOKEN`. An explicit PAT profile remains valid inside a Databricks
+App. Automatic profile resolution in an App ignores PAT configuration so
+ambient app credentials take precedence.
 
 M2M follows the Databricks OAuth request shape: HTTP Basic client
 authentication, `grant_type=client_credentials`, sorted scopes with `all-apis`

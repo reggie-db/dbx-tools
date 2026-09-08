@@ -30,48 +30,13 @@ MAX_LOG_ENTRIES = 4096
 
 
 @dataclass(frozen=True)
-class ReasoningLogState:
-    requested: str
-    selected: str | None = None
-
-
-@dataclass(frozen=True)
 class ModelLogState:
     requested: str
     resolved: str
 
 
-_reasoning_log_state: OrderedDict[str, ReasoningLogState] = OrderedDict()
 _model_log_state: OrderedDict[str, ModelLogState] = OrderedDict()
-_reasoning_log_lock = Lock()
 _model_log_lock = Lock()
-
-
-def record_reasoning_log_state(
-    call_id: str | None,
-    *,
-    requested: str,
-    selected: str | None = None,
-) -> None:
-    if not call_id:
-        return
-    with _reasoning_log_lock:
-        current = _reasoning_log_state.get(call_id)
-        _reasoning_log_state[call_id] = ReasoningLogState(
-            requested=requested,
-            selected=selected if selected is not None else current.selected if current else None,
-        )
-        _reasoning_log_state.move_to_end(call_id)
-        while len(_reasoning_log_state) > MAX_LOG_ENTRIES:
-            _reasoning_log_state.popitem(last=False)
-
-
-def reasoning_log_state(kwargs: dict[str, Any]) -> ReasoningLogState | None:
-    call_id = _call_id(kwargs)
-    if call_id is None:
-        return None
-    with _reasoning_log_lock:
-        return _reasoning_log_state.get(call_id)
 
 
 def record_model_log_state(
@@ -151,12 +116,6 @@ def _format(kwargs: dict[str, Any], *, status: str, response_obj: Any = None) ->
         f"model={model_route.resolved if model_route else payload.get('model') or kwargs.get('model')}",
         f"call={payload.get('call_type') or kwargs.get('call_type')}",
     ]
-
-    thinking = reasoning_log_state(kwargs)
-    if thinking is not None:
-        fields.append(f"thinking_requested={thinking.requested}")
-        if thinking.selected is not None:
-            fields.append(f"thinking_selected={thinking.selected}")
 
     started = payload.get("startTime")
     completed = payload.get("completionStartTime")

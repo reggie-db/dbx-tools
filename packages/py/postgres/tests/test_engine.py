@@ -154,7 +154,7 @@ def test_autoscaling_credentials_are_injected_per_physical_connect() -> None:
 def test_workspace_credential_refresh_uses_expiration_metadata(
     monkeypatch: Any,
 ) -> None:
-    now = dt.datetime(2026, 8, 7, tzinfo=dt.timezone.utc)
+    now = dt.datetime(2026, 8, 7, tzinfo=dt.UTC)
     clock = [now]
     database = FakeDatabase(expiration_time=(now + dt.timedelta(minutes=10)).isoformat())
     client = workspace()

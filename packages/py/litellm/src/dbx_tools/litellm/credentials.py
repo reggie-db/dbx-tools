@@ -15,15 +15,19 @@ from dbx_tools.databricks_auth import (
 
 """Databricks credentials backed by the Rust authentication package."""
 
+CODEX_API_PATH = "/ai-gateway/codex/v1"
+MLFLOW_API_PATH = "/ai-gateway/mlflow/v1"
 _T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
 class Credentials:
-    """A bearer token and the serving base URL it authenticates against."""
+    """A bearer token and the Databricks inference URLs it authenticates."""
 
     token: str
     api_base: str
+    codex_api_base: str
+    mlflow_api_base: str
 
 
 class _AsyncBridge:
@@ -55,7 +59,6 @@ class DatabricksCredentials:
     """Serve Rust-managed U2M or M2M credentials to LiteLLM and the SDK."""
 
     def __init__(self, *, profile: str | None) -> None:
-        self.profile = profile
         self._bridge = _AsyncBridge()
         self._auth: PersistentAuth = self._bridge.run(
             create_persistent_auth(
@@ -66,8 +69,11 @@ class DatabricksCredentials:
             )
         )
         status = self._auth.status()
+        self.profile = status.profile
         self._host = status.host.rstrip("/")
         self._api_base = f"{self._host}/serving-endpoints"
+        self._codex_api_base = f"{self._host}{CODEX_API_PATH}"
+        self._mlflow_api_base = f"{self._host}{MLFLOW_API_PATH}"
 
     @property
     def api_base(self) -> str:
@@ -77,12 +83,12 @@ class DatabricksCredentials:
     def current(self) -> Credentials:
         """Return a token through Rust's persistent check-lock-check cache."""
         token = self._bridge.run(self._auth.token(False))
-        return Credentials(token=token.access_token, api_base=self._api_base)
-
-    def refresh(self, stale: Credentials) -> Credentials:
-        """Refresh a rejected token unless another caller already advanced it."""
-        token = self._bridge.run(self._auth.refresh_rejected_token(stale.token))
-        return Credentials(token=token.access_token, api_base=self._api_base)
+        return Credentials(
+            token=token.access_token,
+            api_base=self._api_base,
+            codex_api_base=self._codex_api_base,
+            mlflow_api_base=self._mlflow_api_base,
+        )
 
     def client(self) -> WorkspaceClient:
         """Create an SDK client using the current Rust-managed bearer token."""

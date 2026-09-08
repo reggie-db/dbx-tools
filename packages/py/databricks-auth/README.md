@@ -3,9 +3,9 @@
 Generated Python bindings for the Rust `dbx-tools-databricks-auth`
 package.
 
-The [Rust package](../../rs/databricks-auth/README.md) owns U2M and M2M OAuth,
-profile resolution and endpoint policy. Shared `dbx_tools.auth` owns OAuth,
-refresh, locking, and built-in credential storage.
+The [Rust package](../../rs/databricks-auth/README.md) owns U2M, M2M, and PAT
+authentication, profile resolution, and endpoint policy. Shared
+`dbx_tools.auth` owns OAuth, refresh, locking, and built-in credential storage.
 
 Automatic storage uses memory inside a Databricks App and file storage
 elsewhere. Explicit file, memory, and custom storage selections are preserved.
@@ -24,6 +24,10 @@ token = await auth.token()
 
 M2M reads the client secret from the selected Databricks profile or
 `DATABRICKS_CLIENT_SECRET`.
+
+PAT reads `token` from the selected profile or `DATABRICKS_TOKEN`. Automatic
+profile selection ignores PAT configuration inside a Databricks App; explicit
+PAT choices remain valid.
 
 For lifecycle overrides, import `AuthOptions` from `dbx_tools.auth` and pass
 `DatabricksAuthOptions(auth=AuthOptions(lock_timeout_seconds=10))`. This is the

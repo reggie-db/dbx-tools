@@ -78,11 +78,9 @@ implementation effort, not elapsed-time commitments.
 | A05 | Output policy / OPEN | `projen/tasks/uniffi-release.mjs:59`; `projen/tasks/publish-uniffi-local.ts:24` | Low | Inherited child output bypasses the symbol normalization used in `projen/tasks/uniffi.ts:60`. | Consolidate bounded/streaming normalization policy without buffering unbounded release logs. |
 | A06 | Documentation / OPEN | `packages/rs/auth/src/oauth.rs:22`; `packages/rs/auth/src/token.rs:46` | Medium | Public Rust transport/token APIs still lack rustdoc; the new lifecycle and callback boundaries are documented, not every existing API. | Document transport/error/expiry invariants and then establish a missing-docs ratchet by module. |
 | A07 | Type hygiene / OPEN | `packages/js/node/path/src/find.ts:49` | Low | The IgnoreLike guard uses `as any` despite already checking for an object. | Narrow with the existing record guard or an indexed unknown record; keep callable-field validation. |
-| A08 | Resource hygiene / OPEN | `packages/py/litellm/src/dbx_tools/litellm/backend.py:54` | Medium | Default-profile lookup runs a subprocess without a timeout; a hung CLI can stall startup. | Bound profile enumeration and report a specific timeout error; add a subprocess-failure test. |
-| A09 | Lint / OPEN | `packages/py/databricks-auth/test/cli.py:48` | Low | The existing broad exception handler triggers Ruff BLE001; this is a diagnostic CLI, not a swallowed runtime error. | Catch the generated auth error specifically, or document an intentional top-level diagnostic exception policy. |
 | R07 | Documentation / RESOLVED | `AGENTS.md:1544`; `AGENTS.md:1737` | Medium | Instructions described a failure-swallowing test command and an obsolete auth UI import. | Instructions now match the separate test condition and actual `@dbx-tools/ui-auth/react` import. |
 
-## Top five remaining fixes
+## Top four remaining fixes
 
 1. **Generated secret redaction (A01):** introduce Rust-owned sensitive-field
    metadata, consume it in binding generation, and assert Python string/repr
@@ -96,10 +94,6 @@ implementation effort, not elapsed-time commitments.
 4. **Consistent process failures (A04/A05):** centralize launch-error handling
    and output normalization, with standalone release generation retaining its
    no-workspace-install property. Test missing executable and signal termination.
-5. **Bound profile enumeration (A08):** provide a finite subprocess timeout,
-   preserve CLI stderr for ordinary failures, and distinguish a timeout from
-   absent or ambiguous profiles.
-
 ## Quick wins
 
 - [x] Share auth lifecycle options and wrapper defaults (R01–R03).
@@ -107,7 +101,6 @@ implementation effort, not elapsed-time commitments.
 - [x] Remove refresh date overflow and redact Rust option debug output (R05/R06).
 - [x] Correct stale test-runner and auth UI instructions (R07).
 - [ ] Report `spawnSync.error` in local publishing (A04).
-- [ ] Bound default-profile CLI enumeration (A08).
 - [ ] Add a module-level Rust missing-docs baseline before expanding enforcement (A06).
 
 ## Things that look bad but are actually fine
@@ -125,8 +118,8 @@ implementation effort, not elapsed-time commitments.
   (`packages/rs/auth/src/bindings.rs:5`).
 - Graphiti's broad process-launch catch stops Neo4j and rethrows; it is resource
   cleanup, not swallowed failure (`packages/py/graphiti/src/dbx_tools/graphiti/runtime.py:138`).
-- Graphiti already imports LiteLLM's `require_profile`; a second Python profile
-  resolver is not justified (`packages/py/graphiti/src/dbx_tools/graphiti/runtime.py:23`).
+- Graphiti passes its optional profile through to LiteLLM;
+  `dbx_tools.databricks_auth` owns fallback profile resolution.
 - The large chat hook maintains per-turn model/thread routing. File size alone
   does not justify splitting its state ownership; the comments explain the
   concurrent-thread constraints (`packages/js/ui/mastra/src/react/mastra-chat.tsx:279`).

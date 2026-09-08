@@ -2,11 +2,11 @@
 
 [project]
 name = "dbx-tools-litellm"
-version = "0.6.180"
-description = "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution"
+version = "0.6.181"
+description = "LiteLLM Databricks provider with live endpoint discovery and fuzzy model resolution"
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
-dependencies = ["cachetools>=5.5,<7", "cyclopts>=4.11,<6", "databricks-sdk>=0.63.0", "diskcache>=5.6", "fastapi<0.140.7", "litellm[proxy]==1.96.2", "pillow>=10.0", "dbx-tools-databricks-auth @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/databricks-auth", "dbx-tools-model @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/model"]
+requires-python = ">=3.11,<3.14"
+dependencies = ["cachetools>=5.5,<7", "cyclopts>=4.11,<6", "databricks-sdk>=0.63.0", "fastapi>=0.136.3,<1", "litellm[proxy]==1.99.0", "dbx-tools-databricks-auth @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/databricks-auth", "dbx-tools-model @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/model"]
 
 [project.urls]
 Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/litellm"

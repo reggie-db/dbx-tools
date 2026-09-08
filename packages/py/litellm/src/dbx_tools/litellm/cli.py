@@ -15,10 +15,7 @@ from typing import Annotated, Any
 
 from cyclopts import App, Parameter
 
-from .backend import (
-    DATABRICKS_PROFILE_ENV,
-    require_profile,
-)
+DATABRICKS_PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
 
 _COMMANDS = frozenset({"lookup", "models", "retired-models"})
 logger = logging.getLogger(__name__)
@@ -49,9 +46,9 @@ class CliOptions(ProfileOptions):
 
     def __call__(self) -> None:
         """Resolve authentication and run LiteLLM with forwarded arguments."""
-        profile = require_profile(self.profile)
-        if profile:
-            os.environ[DATABRICKS_PROFILE_ENV] = profile
+        from .backend import get_backend
+
+        get_backend(self.profile)
         if not os.getenv("HOST") and not _has_option(self.proxy_args, "--host"):
             self.proxy_args.extend(["--host", "127.0.0.1"])
 
@@ -227,9 +224,9 @@ def _discover_endpoints(profile: str | None) -> Sequence[Any] | None:
     """Load live endpoints while preserving the model-list registry fallback."""
     from databricks.sdk.errors import DatabricksError
 
-    from .backend import DatabricksLiteLLMBackend
+    from .backend import get_backend
 
-    backend = DatabricksLiteLLMBackend(profile=profile)
+    backend = get_backend(profile)
     try:
         return backend.catalogue().endpoints
     except (DatabricksError, OSError, RuntimeError, ValueError) as error:
@@ -349,8 +346,6 @@ def _run_proxy(arguments: Sequence[str]) -> None:
     from litellm.proxy.proxy_cli import run_server
 
     from .models_api import install_models_compatibility_middleware
-    from .patches import apply_litellm_patches
 
-    apply_litellm_patches()
     install_models_compatibility_middleware()
     run_server.main(args=list(arguments), prog_name="dbx-litellm")

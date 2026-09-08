@@ -58,6 +58,7 @@ mod tests {
             target: TargetKind::Account,
             auth_kind: AuthKind::MachineToMachine,
             client_secret: Some("secret".into()),
+            access_token: None,
         };
         let client = Arc::new(
             AuthClient::new(
@@ -130,6 +131,7 @@ mod tests {
             target: TargetKind::Workspace,
             auth_kind: AuthKind::MachineToMachine,
             client_secret: Some("secret".into()),
+            access_token: None,
         };
         let client = AuthClient::new(
             profile,

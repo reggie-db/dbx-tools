@@ -4,20 +4,13 @@ from __future__ import annotations
 
 import threading
 
-from dbx_tools.model import is_responses_only
-
 import litellm
 
 _registered: set[str] = set()
 _registry_lock = threading.RLock()
 
 
-def requires_responses_api(model: str) -> bool:
-    """Return whether a Databricks endpoint rejects Chat Completions."""
-    return is_responses_only(model)
-
-
-def register_streaming_support(model: str) -> None:
+def register_streaming_support(model: str, *, responses: bool) -> None:
     """Declare a resolved Databricks endpoint as natively streamable.
 
     LiteLLM decides whether to fake a stream by looking the model up in its
@@ -37,7 +30,7 @@ def register_streaming_support(model: str) -> None:
         {
             qualified: {
                 "litellm_provider": "databricks",
-                "mode": "responses" if requires_responses_api(model) else "chat",
+                "mode": "responses" if responses else "chat",
                 "supports_native_streaming": True,
             }
         }

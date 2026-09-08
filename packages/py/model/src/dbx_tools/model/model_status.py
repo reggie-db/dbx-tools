@@ -8,7 +8,7 @@ import os
 import traceback
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -83,7 +83,7 @@ def get(identities: Iterable[str], retired: frozenset[str] | None = None) -> Mod
 
 def generate_retired_models(output: Path, now: datetime | None = None) -> bool:
     """Refresh the generated fallback when its embedded timestamp is at least one day old."""
-    checked_at = _utc_now() if now is None else now.astimezone(timezone.utc)
+    checked_at = _utc_now() if now is None else now.astimezone(UTC)
     digest = hashlib.sha256(str(output.resolve()).encode()).hexdigest()
     lock_path = platform_cache_root() / "dbx-tools" / "model" / f"{digest}.lock"
     return check_lock_check(
@@ -220,7 +220,7 @@ def _cache_is_fresh(payload: dict[str, Any], now: datetime) -> bool:
     if not isinstance(updated_at, str):
         return False
     try:
-        updated = datetime.fromisoformat(updated_at).astimezone(timezone.utc)
+        updated = datetime.fromisoformat(updated_at).astimezone(UTC)
     except ValueError as error:
         _LOGGER.warning("Databricks retired-model cache has an invalid timestamp: %s", error)
         return False
@@ -254,7 +254,7 @@ def _generated_is_fresh(path: Path, now: datetime) -> bool:
         _LOGGER.warning("Generated retired models at %s have no GENERATED_AT value", path)
         return False
     try:
-        generated = datetime.fromisoformat(generated_at).astimezone(timezone.utc)
+        generated = datetime.fromisoformat(generated_at).astimezone(UTC)
     except ValueError as error:
         _LOGGER.warning("Generated retired models have an invalid timestamp: %s", error)
         return False
@@ -316,4 +316,4 @@ def _model_key(value: str) -> str:
 
 def _utc_now() -> datetime:
     """Return an aware UTC timestamp."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)

@@ -4,8 +4,6 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from dbx_tools.litellm.backend import DATABRICKS_PROFILE_ENV, require_profile
-
 """Model and proxy settings for the native Graphiti launcher."""
 
 DEFAULT_LITELLM_HOST = "127.0.0.1"
@@ -14,6 +12,7 @@ DEFAULT_MODEL = "dbx/databricks-gpt-5-nano"
 DEFAULT_EMBEDDER_MODEL = "dbx/databricks-gte-large-en"
 DEFAULT_EMBEDDER_DIMENSIONS = 1024
 DEFAULT_STRUCTURED_OUTPUT_MODE = "json_object"
+_PROFILE_ENV = "DATABRICKS_CONFIG_PROFILE"
 
 
 @dataclass(frozen=True)
@@ -90,11 +89,7 @@ class ModelSettings:
             DEFAULT_EMBEDDER_DIMENSIONS,
             "EMBEDDER_DIMENSIONS",
         )
-        resolved_profile = (
-            require_profile(profile, environ=env)
-            if resolved_manage
-            else _text(profile) or _text(env.get(DATABRICKS_PROFILE_ENV))
-        )
+        resolved_profile = _text(profile) or _text(env.get(_PROFILE_ENV))
         return cls(
             profile=resolved_profile,
             manage_litellm=resolved_manage,
@@ -139,7 +134,7 @@ class ModelSettings:
     def databricks_environment(self) -> dict[str, str]:
         """Resolved profile environment shared by managed child processes."""
         if self.profile:
-            return {DATABRICKS_PROFILE_ENV: self.profile}
+            return {_PROFILE_ENV: self.profile}
         return {}
 
     def public_settings(self) -> dict[str, object]:

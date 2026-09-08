@@ -3,44 +3,13 @@ from __future__ import annotations
 import litellm
 import pytest
 from dbx_tools.litellm import models
-from dbx_tools.litellm.models import (
-    register_streaming_support,
-    requires_responses_api,
-)
+from dbx_tools.litellm.models import register_streaming_support
 from litellm.llms.databricks.responses.transformation import DatabricksResponsesAPIConfig
 
 
 @pytest.fixture(autouse=True)
 def _clear_registry() -> None:
     models._registered.clear()
-
-
-@pytest.mark.parametrize(
-    ("model", "expected"),
-    [
-        ("databricks-gpt-5-5-pro", True),
-        ("codex-mini", True),
-        ("databricks-claude-sonnet-4-5", False),
-        ("databricks-gpt-5-mini", False),
-        # GPT >=5.4 refuses function tools on Chat Completions and must route
-        # natively. Expectations verified against the live endpoints.
-        ("databricks-gpt-5-6-sol", True),
-        ("databricks-gpt-5-4-mini", True),
-        ("databricks-gpt-6", True),
-        ("databricks-gpt-5", False),
-        ("databricks-gpt-5-1", False),
-        ("databricks-gpt-5-nano", False),
-        # gpt-oss is a separate family whose version parses as a parameter count
-        # (120b -> 120); it must not trip the GPT version threshold.
-        ("databricks-gpt-oss-120b", False),
-        ("databricks-gpt-oss-20b", False),
-        # A caller-qualified name resolves the same way.
-        ("databricks/databricks-gpt-5-6-sol", True),
-        ("databricks-meta-llama-3-1-8b-instruct", False),
-    ],
-)
-def test_requires_responses_api(model: str, expected: bool) -> None:
-    assert requires_responses_api(model) is expected
 
 
 def test_registration_marks_model_as_natively_streamable() -> None:
@@ -50,7 +19,7 @@ def test_registration_marks_model_as_natively_streamable() -> None:
     config = DatabricksResponsesAPIConfig()
     model = "databricks/databricks-gpt-5-5-pro"
 
-    register_streaming_support("databricks-gpt-5-5-pro")
+    register_streaming_support("databricks-gpt-5-5-pro", responses=True)
 
     assert (
         config.should_fake_stream(model=model, stream=True, custom_llm_provider="databricks")
@@ -60,9 +29,15 @@ def test_registration_marks_model_as_natively_streamable() -> None:
 
 
 def test_registration_accepts_an_already_qualified_model() -> None:
-    register_streaming_support("databricks/databricks-gpt-5-5-pro")
+    register_streaming_support("databricks/databricks-gpt-5-5-pro", responses=True)
 
     assert "databricks/databricks-gpt-5-5-pro" in models._registered
+
+
+def test_registration_accepts_model_service_names() -> None:
+    register_streaming_support("system.ai.gpt-5-6-sol", responses=True)
+
+    assert "databricks/system.ai.gpt-5-6-sol" in models._registered
 
 
 def test_registration_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,7 +45,7 @@ def test_registration_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(litellm, "register_model", lambda payload: calls.append(payload))
 
     for _ in range(3):
-        register_streaming_support("databricks-gpt-5-5-pro")
+        register_streaming_support("databricks-gpt-5-5-pro", responses=True)
 
     assert len(calls) == 1
 
@@ -79,8 +54,8 @@ def test_registered_mode_follows_the_endpoint_api(monkeypatch: pytest.MonkeyPatc
     calls: list[dict[str, object]] = []
     monkeypatch.setattr(litellm, "register_model", lambda payload: calls.append(payload))
 
-    register_streaming_support("databricks-gpt-5-5-pro")
-    register_streaming_support("databricks-claude-sonnet-4-5")
+    register_streaming_support("databricks-gpt-5-5-pro", responses=True)
+    register_streaming_support("databricks-claude-sonnet-4-5", responses=False)
 
     modes = {model: info["mode"] for payload in calls for model, info in payload.items()}
     assert modes == {

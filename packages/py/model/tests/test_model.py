@@ -4,6 +4,7 @@ import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
+from typing import Self
 from urllib.request import Request
 
 import pytest
@@ -24,7 +25,6 @@ from dbx_tools.model import (
     repair_trailing_assistant_messages,
     resolve_model,
 )
-from typing_extensions import Self
 
 
 class FakeServingEndpoints:
@@ -323,6 +323,30 @@ def test_rank_model_id_preserves_an_exact_embedding_endpoint() -> None:
     ]
 
     resolved = rank_model_id(endpoints, "databricks-gte-large-en")
+
+    assert resolved.model_id == "databricks-gte-large-en"
+    assert resolved.matched is True
+
+
+def test_rank_model_id_restricts_fuzzy_matches_to_model_class() -> None:
+    endpoints = [
+        ServingEndpointSummary(
+            name="databricks-gte-large-en",
+            model_class=ModelClass.EMBEDDING,
+            task="llm/v1/embeddings",
+        ),
+        ServingEndpointSummary(
+            name="databricks-gpt-5-6-sol",
+            model_class=ModelClass.CHAT_BALANCED,
+            task="llm/v1/chat",
+        ),
+    ]
+
+    resolved = rank_model_id(
+        endpoints,
+        "gte",
+        model_class=ModelClass.EMBEDDING,
+    )
 
     assert resolved.model_id == "databricks-gte-large-en"
     assert resolved.matched is True

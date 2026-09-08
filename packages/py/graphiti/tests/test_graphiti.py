@@ -154,17 +154,10 @@ def test_model_settings_default_to_managed_databricks_models() -> None:
     assert settings.profile == "DEFAULT"
 
 
-def test_model_settings_use_databricks_cli_default(monkeypatch) -> None:
-    resolve_profile = Mock(return_value="DEFAULT")
-    monkeypatch.setattr(
-        "dbx_tools.graphiti.settings.require_profile",
-        resolve_profile,
-    )
-
+def test_model_settings_delegate_default_profile_resolution() -> None:
     settings = ModelSettings.resolve(environ={})
 
-    assert settings.profile == "DEFAULT"
-    resolve_profile.assert_called_once_with(None, environ={})
+    assert settings.profile is None
 
 
 def test_model_settings_use_ambient_databricks_app_auth() -> None:

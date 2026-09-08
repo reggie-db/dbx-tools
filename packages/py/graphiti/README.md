@@ -21,7 +21,7 @@ uv add "dbx-tools-graphiti @ git+https://github.com/reggie-db/dbx-tools.git@main
 - launches upstream Graphiti's HTTP MCP server at `http://127.0.0.1:8000/mcp/`;
 - runs Neo4j Community 5.26 as a native background process;
 - starts `dbx-tools-litellm` with an optional profile override, resolved local
-  CLI fallback, or ambient Databricks App authentication;
+  Databricks authentication, or ambient Databricks App authentication;
 - supervises Graphiti and managed LiteLLM with Honcho so they share one
   lifecycle, receive SIGTERM as process groups, and receive SIGKILL after
   Honcho's bounded shutdown grace if needed;
@@ -46,11 +46,9 @@ installs `uv` only when it is not already available:
 uv run dbx-graphiti start
 ```
 
-The launcher uses `DATABRICKS_CONFIG_PROFILE` when set. Otherwise it runs
-`databricks auth profiles --output json --skip-validate` and uses the entry
-marked `"default": true`, then the profile named `DEFAULT`, then the sole
-configured profile. `--profile <name>` is an optional override, not a
-requirement.
+The launcher passes `--profile` or `DATABRICKS_CONFIG_PROFILE` through when
+set. Otherwise `dbx-tools-litellm` delegates profile and ambient App
+authentication to `dbx-tools-databricks-auth`.
 
 The first run downloads about 120 MB of Neo4j plus the pinned Graphiti release,
 creates Graphiti's `uv` environment, generates a local Neo4j password, starts
@@ -179,9 +177,8 @@ requires the argument. Model and server settings resolve from CLI option,
 environment variable, then package default:
 
 - `--profile` / `DATABRICKS_CONFIG_PROFILE`: an optional Databricks profile
-  override for managed LiteLLM. When both are absent, the launcher uses the CLI
-  profile marked as default, the profile named `DEFAULT`, or the sole profile
-  in that order.
+  override for managed LiteLLM. When both are absent, the auth package resolves
+  the active Databricks identity.
 - `--model` / `MODEL_NAME`: defaults to
   `dbx/databricks-gpt-5-nano`.
 - `--embedder-model` / `EMBEDDER_MODEL`: defaults to

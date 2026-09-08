@@ -2,10 +2,10 @@
 
 [project]
 name = "dbx-tools-databricks-auth"
-version = "0.6.180"
+version = "0.6.181"
 description = "Python bindings for dbx-tools-databricks-auth"
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.11,<3.14"
 dependencies = ["dbx-tools-auth @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/auth", "dbx-tools-databricks @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/databricks"]
 
 [project.urls]

@@ -122,9 +122,9 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   mapping, reuse the existing root Node project at the conventional path and
   add binding metadata to that project instead of creating a second package.
 - `packages/rs/databricks-auth`, `packages/js/node/databricks-auth`,
-  `packages/py/databricks-auth`, and `packages/js/cli/auth` - Databricks U2M and
-  M2M OAuth, secure token storage, generated Node/Python bindings, and the
-  `dbx auth` Commander interface. U2M is preferred by default. A profile
+  `packages/py/databricks-auth`, and `packages/js/cli/auth` - Databricks U2M,
+  M2M, and PAT authentication, secure token storage, generated Node/Python
+  bindings, and the `dbx auth` Commander interface. U2M is preferred by default. A profile
   selected by option or `DATABRICKS_CONFIG_PROFILE` is never remapped. Profiles
   containing both client ID and secret remain M2M even when `auth_type` is
   absent; the preference only selects a unique matching U2M profile for an
@@ -137,6 +137,10 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   otherwise it uses the native file flow. Inside a Databricks App, automatic
   storage resolves to memory and does not use the CLI. Explicit file, memory,
   and custom storage selections remain unchanged. M2M always stays native.
+  PAT reads `token` from an explicit option, the selected profile, or
+  `DATABRICKS_TOKEN`. Automatic profile selection ignores PAT configuration
+  inside an App so ambient app credentials win; explicitly selected PAT
+  remains valid.
   File-backed refresh locks cover the whole store; read-modify-write uses a
   separate short-held file lock. Preserve other entries in
   `~/.databricks/token-cache.json`. Only the incoming Node package is named
@@ -329,55 +333,50 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   fields remain centralized. It excludes models named by the authoritative live
   snapshot or the generated fallback by default, and includes them alongside
   current models when `include_deprecated=True`.
-  `ModelQuery.include_deprecated` defaults false so `/v1/models/lookup` can
+  `ModelQuery.include_deprecated` defaults false so LiteLLM's `/lookup` can
   expose the same behavior as the `includeDeprecated` query parameter. It
   mirrors the reusable `shared/model` + `node/model` contract without AppKit
   cache or Mastra dependencies;
   deterministic behavior belongs in the colocated model polyglot tests.
-- `packages/py/litellm` — thin LiteLLM integration for Databricks Model
-  Serving. An explicit profile is an optional override; otherwise it resolves
-  `DATABRICKS_CONFIG_PROFILE`, then inspects
-  `databricks auth profiles --output json --skip-validate`: use the entry
-  marked `default: true`, else the profile
-  named `DEFAULT`, else the sole configured profile, and fail when several
-  unmarked profiles remain. The TypeScript model proxy uses the same local
-  precedence. A
-  Databricks App with `DATABRICKS_HOST` uses ambient service-principal
-  authentication and does not require or synthesize a profile;
-  adds live endpoint discovery, fuzzy model resolution, and tool-capability
-  filtering; then delegates to LiteLLM's built-in Databricks provider.
-  `/v1/models` keeps exact ids in the OpenAI-standard `data` envelope plus the
-  Codex `models` extension. Inference `dbx-access` records include the client
-  requested model, resolved endpoint, and requesting IP. Non-streaming Chat and
-  Responses JSON responses return the resolved endpoint as `model` and the
-  client's value as `requestedModel`. `/v1/models` records include the requesting IP and
-  a family-count summary derived with the model package's canonical parser.
-  `GET /v1/models/lookup` is part of the LiteLLM
-  OpenAPI surface, exposes the owning `ModelQuery` fields as query parameters,
-  and returns the same complete `RankedModel` payload as
-  `dbx-litellm lookup --output json`. Both call `lookup_models` directly; an
-  omitted search returns all eligible models.
-  `dbx-litellm models` prints name then id by default,
-  adds owner, context, and reasoning with `--extended` / `--all`, or returns
-  that same payload with `--output json`. `dbx-litellm lookup <keyword>` uses
-  the shared standard model ranking and shows name, id, and score in rank order.
-  The Python model package enriches library endpoint lookups with a
-  `serviceNames` map keyed by its well-known first-party service enum. LiteLLM
-  does not expose that field or an alternate alias route. Keep authentication,
-  transport, parameter mapping, streaming, retries, embeddings, and
-  Chat↔Responses conversion in LiteLLM. Compatibility guards may repair only
-  documented Databricks serving constraints: assistant text prefill, the JSON
-  prompt rule, Claude cache breakpoints, request size, and rejected Chat-only
-  parameters. Do not add general provider conversion here. The Responses
-  pre-call hook may change only the resolved
-  model identifier so Responses-only endpoints reach LiteLLM's native
-  Databricks Responses provider. `dbx_tools.databricks_auth` owns credentials
-  with `prefer_user_to_machine=false`; Rust handles U2M/M2M selection,
-  persistence, check-lock-check refresh, and rejected-token comparison. Endpoint
-  discovery creates an SDK client with the current Rust-managed token.
-  LiteLLM is exact-pinned because the remaining narrow monkey-patches touch
-  private APIs. Keep the FastAPI upper bound until LiteLLM includes its
-  `get_flat_params` compatibility fix.
+- `packages/py/litellm` - thin routing and discovery around LiteLLM 1.99's
+  native Databricks and OpenAI providers. `dbx_tools.databricks_auth` owns profile
+  selection, U2M/M2M/PAT credentials, storage, locking, and refresh; endpoint
+  discovery creates an SDK client with its current token. The routing hook may
+  change only the resolved model, native provider, base URL, credentials, and
+  identified Codex originator. For the Responses-to-Chat bridge it also enables
+  LiteLLM's native parameter dropping and removes reasoning only when the cached
+  endpoint record has no reasoning efforts. Never otherwise transform messages,
+  tools, reasoning, images, or provider parameters here.
+  Foundation model services use their `system.ai.*` identity through
+  `${DATABRICKS_HOST}/ai-gateway/mlflow/v1`; embeddings use the same base.
+  Codex-originated OpenAI GPT Responses use
+  `${DATABRICKS_HOST}/ai-gateway/codex/v1/responses`. Other text-model
+  Responses use LiteLLM's native Responses-to-Chat bridge on the MLflow surface.
+  Custom endpoints stay on `${DATABRICKS_HOST}/serving-endpoints`.
+  `/v1/models` uses the live workspace catalogue. Standard clients receive
+  exact endpoint ids in the OpenAI `data` envelope. Codex originators also
+  receive the `models` extension with native
+  `databricks/system.ai.*` GPT and OSS ids. Codex requires every record to carry
+  `supported_reasoning_levels`; use an empty list when the endpoint effort list
+  is empty, and add a default only when it is non-empty. Claude and other model
+  services without Codex gateway support remain on the
+  MLflow-compatible surface. Codex eligibility is exclusion-based: exclude
+  Claude, Gemini, Inkling, and embedding families so newly parsed text-model
+  families remain eligible by default.
+  `GET /lookup` exposes the owning `ModelQuery` fields and returns complete
+  `RankedModel` records; an omitted search returns every eligible model.
+  `dbx-litellm models` and `dbx-litellm lookup` call the same catalogue and
+  ranking code.
+  `dbx-access` records include requested model, resolved endpoint, requesting
+  IP, latency, usage, cache counts, and streaming mode. Non-streaming Chat and
+  Responses JSON includes resolved `model`, client `requestedModel`, and exact
+  `requestEndpoint`. The capability-aware HTTP transport learns optional
+  top-level parameters from structured gateway rejections, retries the active
+  request without them, and caches the route-and-model-specific result for one
+  day. Required protocol fields are never removed. Do not hardcode model
+  families or parameter names into that cache. LiteLLM owns request conversion,
+  tools, streaming, and standard retries. Keep the package exact-pinned while
+  private response, streaming, and HTTP-handler hooks remain version-sensitive.
 - `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
   server with a Neo4j 5 backend and a managed `dbx-tools-litellm` process.
   It must not use containers: provision Java, uv, Neo4j, and the pinned Graphiti
@@ -394,12 +393,11 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   process, while the launcher constructs the command and environment from
   CLI-over-environment settings. Default to Databricks GPT plus the
   1024-dimensional GTE embedding endpoint, and let an explicit LiteLLM URL
-  disable proxy ownership. Managed mode resolves
-  an optional profile override, then `DATABRICKS_CONFIG_PROFILE`, and otherwise
-  uses the same marked-default, named-`DEFAULT`, sole-profile precedence as
-  LiteLLM. A Databricks App with `DATABRICKS_HOST`
-  uses ambient service-principal authentication and does not require or
-  synthesize a profile. Reuse `uv` from `PATH`; ask mise to
+  disable proxy ownership. Managed mode passes an optional profile override or
+  `DATABRICKS_CONFIG_PROFILE` to LiteLLM; `dbx_tools.databricks_auth` owns
+  fallback and ambient App authentication. A Databricks App with
+  `DATABRICKS_HOST` does not require or synthesize a profile. Reuse `uv` from
+  `PATH`; ask mise to
   install its pinned uv only when none is available. Ephemeral graph backends
   can be wrapped with `DelegatingGraphDriver`, which delegates to any upstream
   `GraphDriver` while write-ahead journaling mutations through a supplied
@@ -502,11 +500,9 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   through `internalDependencies`; the component generates their standalone Git
   requirements.
   Keep the root and every member's `requires-python` generated from the same
-  `pythonRequires` value; the default Databricks serverless notebook runtime is
-  part of the supported floor and must be covered by the Python test matrix.
-  The shared range ends below Python 3.14 because the exact-pinned LiteLLM
-  dependency does not publish support for 3.14; claiming the open-ended range
-  makes uv reject the entire workspace even when running Python 3.10. The root
+  `pythonRequires` value. The shared range starts at Python 3.11 because
+  LiteLLM 1.99 imports Python 3.11 typing APIs, and ends below Python 3.14
+  because that exact pin does not publish support for 3.14. The root
   uv workspace uses `index-strategy = "unsafe-best-match"` because both configured
   package indexes are trusted and the corporate mirror can lag the local devpi
   index containing the exact LiteLLM pin. The root workspace depends on

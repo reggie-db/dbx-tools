@@ -9,7 +9,6 @@ from dbx_tools.litellm.access_log import (
     DbxAccessLogger,
     _format,
     record_model_log_state,
-    record_reasoning_log_state,
 )
 
 
@@ -89,45 +88,6 @@ def test_resolved_model_state_overrides_mutated_litellm_names() -> None:
 
     assert "requested_model=gemini" in line
     assert "model=databricks-gemini-3-8-flash" in line
-
-
-def test_reports_explicit_requested_thinking_level() -> None:
-    record_reasoning_log_state("explicit-call", requested="high")
-
-    line = _format({**payload(), "litellm_call_id": "explicit-call"}, status="ok")
-
-    assert "thinking_requested=high" in line
-    assert "thinking_selected" not in line
-
-
-def test_reports_auto_requested_and_selected_thinking_levels() -> None:
-    record_reasoning_log_state("auto-call", requested="auto")
-    record_reasoning_log_state("auto-call", requested="auto", selected="medium")
-
-    line = _format({**payload(), "litellm_call_id": "auto-call"}, status="ok")
-
-    assert "thinking_requested=auto" in line
-    assert "thinking_selected=medium" in line
-
-
-def test_reports_numeric_requested_and_selected_thinking_levels() -> None:
-    record_reasoning_log_state("numeric-call", requested="0.5", selected="medium")
-
-    line = _format({**payload(), "litellm_call_id": "numeric-call"}, status="ok")
-
-    assert "thinking_requested=0.5" in line
-    assert "thinking_selected=medium" in line
-
-
-def test_reads_call_id_from_litellm_params() -> None:
-    record_reasoning_log_state("nested-call", requested="low")
-
-    line = _format(
-        {**payload(), "litellm_params": {"litellm_call_id": "nested-call"}},
-        status="ok",
-    )
-
-    assert "thinking_requested=low" in line
 
 
 def test_real_stream_is_not_flagged_as_emulated() -> None:

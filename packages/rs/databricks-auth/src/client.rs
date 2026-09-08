@@ -15,6 +15,7 @@ enum AuthFlow {
     UserToMachine(OAuthFlow),
     UserToMachineCli(DatabricksCliFlow),
     MachineToMachine(MachineToMachineFlow),
+    PersonalAccessToken(Token),
 }
 
 struct DatabricksCliFlow {
@@ -59,6 +60,16 @@ impl AuthClient {
             AuthKind::MachineToMachine => {
                 AuthFlow::MachineToMachine(MachineToMachineFlow::new(profile.clone())?)
             }
+            AuthKind::PersonalAccessToken => AuthFlow::PersonalAccessToken(Token {
+                access_token: profile
+                    .access_token()
+                    .ok_or_else(|| Error::Config("pat requires token".into()))?
+                    .to_owned(),
+                token_type: "Bearer".into(),
+                refresh_token: None,
+                expires_at: None,
+                scopes: Vec::new(),
+            }),
         };
         let inner =
             dbx_tools_auth::AuthClient::new(profile.cache_key(), Arc::new(flow), store, options);
@@ -82,6 +93,7 @@ impl dbx_tools_auth::TokenProvider for AuthFlow {
             Self::UserToMachine(flow) => flow.login(timeout).await,
             Self::UserToMachineCli(flow) => flow.token(false).await,
             Self::MachineToMachine(flow) => flow.token().await,
+            Self::PersonalAccessToken(token) => Ok(token.clone()),
         }
     }
     async fn login(&self, timeout: Duration) -> Result<Token> {
@@ -89,6 +101,7 @@ impl dbx_tools_auth::TokenProvider for AuthFlow {
             Self::UserToMachine(flow) => flow.login(timeout).await,
             Self::UserToMachineCli(flow) => flow.native.login(timeout).await,
             Self::MachineToMachine(flow) => flow.token().await,
+            Self::PersonalAccessToken(token) => Ok(token.clone()),
         }
     }
     async fn refresh(&self, token: &Token) -> Result<Token> {
@@ -96,16 +109,22 @@ impl dbx_tools_auth::TokenProvider for AuthFlow {
             Self::UserToMachine(flow) => flow.refresh(token).await,
             Self::UserToMachineCli(flow) => flow.token(true).await,
             Self::MachineToMachine(flow) => flow.token().await,
+            Self::PersonalAccessToken(token) => Ok(token.clone()),
         }
     }
     fn can_authenticate_silently(&self) -> bool {
-        matches!(self, Self::UserToMachineCli(_) | Self::MachineToMachine(_))
+        matches!(
+            self,
+            Self::UserToMachineCli(_) | Self::MachineToMachine(_) | Self::PersonalAccessToken(_)
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{MemoryStore, TargetKind};
+    use url::Url;
 
     #[test]
     fn parses_databricks_cli_token_json() {
@@ -116,5 +135,33 @@ mod tests {
         assert_eq!(token.access_token, "access");
         assert_eq!(token.refresh_token.as_deref(), Some("refresh"));
         assert_eq!(token.scopes, ["all-apis", "offline_access"]);
+    }
+
+    #[tokio::test]
+    async fn personal_access_token_authenticates_silently() {
+        let profile = Profile {
+            name: "DEFAULT".into(),
+            host: Url::parse("https://workspace.example").unwrap(),
+            account_id: None,
+            workspace_id: None,
+            client_id: String::new(),
+            group_id: None,
+            scopes: Vec::new(),
+            target: TargetKind::Workspace,
+            auth_kind: AuthKind::PersonalAccessToken,
+            client_secret: None,
+            access_token: Some("access".into()),
+        };
+        let client = AuthClient::new(
+            profile,
+            Arc::new(MemoryStore::new()),
+            AuthOptions::default(),
+            false,
+        )
+        .unwrap();
+
+        let token = client.token_with_login(Some(false)).await.unwrap();
+
+        assert_eq!(token.access_token, "access");
     }
 }

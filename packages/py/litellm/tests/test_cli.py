@@ -3,9 +3,28 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import dbx_tools.litellm.backend as backend_module
 import dbx_tools.litellm.cli as cli_module
 import pytest
 from dbx_tools.model import ModelClass, ServingEndpointSummary, model_status
+
+
+def test_proxy_uses_databricks_auth_profile_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    profiles: list[str | None] = []
+    proxy_arguments: list[str] = []
+    monkeypatch.setattr(
+        backend_module, "get_backend", lambda profile=None: profiles.append(profile)
+    )
+    monkeypatch.setattr(
+        cli_module,
+        "_run_proxy",
+        lambda arguments: proxy_arguments.extend(arguments),
+    )
+
+    cli_module.main(["--profile", "other", "--port", "4000"])
+
+    assert profiles == ["other"]
+    assert proxy_arguments[:2] == ["--port", "4000"]
 
 
 def test_models_command_prints_text_table(

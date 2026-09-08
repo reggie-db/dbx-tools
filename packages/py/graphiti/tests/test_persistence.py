@@ -156,8 +156,9 @@ def test_postgres_journal_provisions_qualified_schema() -> None:
         assert engine.connection.statements[0] == (
             'CREATE SCHEMA IF NOT EXISTS "dbx_tools_graphiti"'
         )
-        assert 'CREATE TABLE IF NOT EXISTS "dbx_tools_graphiti"."graphiti_write_journal"' in (
-            engine.connection.statements[1]
+        assert (
+            'CREATE TABLE IF NOT EXISTS "dbx_tools_graphiti"."graphiti_write_journal"'
+            in (engine.connection.statements[1])
         )
 
     asyncio.run(run())
@@ -303,7 +304,7 @@ def test_session_execute_write_records_committed_attempt() -> None:
 
 def test_journal_codec_round_trips_supported_graphiti_values() -> None:
     value = {
-        "datetime": dt.datetime(2026, 8, 13, 12, 30, tzinfo=dt.timezone.utc),
+        "datetime": dt.datetime(2026, 8, 13, 12, 30, tzinfo=dt.UTC),
         "date": dt.date(2026, 8, 13),
         "time": dt.time(12, 30),
         "duration": dt.timedelta(seconds=9.5),

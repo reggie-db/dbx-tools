@@ -18,6 +18,7 @@ pub const DEFAULT_CONFIG_FILE: &str = "~/.databrickscfg";
 const SETTINGS_SECTION: &str = "__settings__";
 const AUTH_TYPE_DATABRICKS_CLI: &str = "databricks-cli";
 const AUTH_TYPE_M2M: &str = "oauth-m2m";
+const AUTH_TYPE_PAT: &str = "pat";
 static CONFIG_CACHE: OnceLock<Mutex<HashMap<PathBuf, CachedConfig>>> = OnceLock::new();
 
 #[derive(Clone)]
@@ -27,7 +28,7 @@ enum CachedConfig {
     Invalid(String),
 }
 
-/// OAuth strategy selected from Databricks configuration.
+/// Authentication strategy selected from Databricks configuration.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AuthKind {
     /// Interactive user authorization with refresh-token storage.
@@ -35,6 +36,8 @@ pub enum AuthKind {
     UserToMachine,
     /// Service-principal client credentials.
     MachineToMachine,
+    /// Static personal access token.
+    PersonalAccessToken,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -56,9 +59,10 @@ pub struct Profile {
     pub group_id: Option<String>,
     pub scopes: Vec<String>,
     pub target: TargetKind,
-    /// OAuth strategy resolved for this profile.
+    /// Authentication strategy resolved for this profile.
     pub auth_kind: AuthKind,
     pub(crate) client_secret: Option<String>,
+    pub(crate) access_token: Option<String>,
 }
 
 impl Profile {
@@ -79,10 +83,11 @@ impl Profile {
             config.as_deref(),
             prefer_user_to_machine,
         )?;
-        let configured = config
-            .as_deref()
-            .map(|config| load_profile(config, &profile_name))
-            .unwrap_or_default();
+        let configured = configured_profile(
+            config.as_deref(),
+            &profile_name,
+            options.skip_implicit_pat && !explicit_profile,
+        );
 
         let host = options
             .host
@@ -106,6 +111,11 @@ impl Profile {
             .client_secret
             .or_else(|| env_nonempty("DATABRICKS_CLIENT_SECRET"))
             .or(configured.client_secret);
+        let access_token = options
+            .access_token
+            .or_else(|| env_nonempty("DATABRICKS_TOKEN"))
+            .or(configured.access_token)
+            .filter(|token| !token.is_empty());
         let group_id = options
             .group_id
             .or_else(|| env_nonempty("DATABRICKS_GROUP_ID"))
@@ -118,6 +128,7 @@ impl Profile {
             auth_type.as_deref(),
             client_id.as_deref(),
             client_secret.as_deref(),
+            access_token.as_deref(),
         )?;
         let client_id = match auth_kind {
             AuthKind::UserToMachine => client_id.unwrap_or_else(|| DEFAULT_CLIENT_ID.to_owned()),
@@ -126,6 +137,7 @@ impl Profile {
                     "profile {profile_name} requires client_id for oauth-m2m"
                 ))
             })?,
+            AuthKind::PersonalAccessToken => client_id.unwrap_or_default(),
         };
         let scopes = options
             .scopes
@@ -150,12 +162,14 @@ impl Profile {
             target,
             auth_kind,
             client_secret,
+            access_token,
         })
     }
 
     pub fn cache_key(&self) -> String {
         match self.auth_kind {
             AuthKind::UserToMachine => self.name.clone(),
+            AuthKind::PersonalAccessToken => format!("{}-pat", self.name),
             AuthKind::MachineToMachine => {
                 let scopes = self.machine_scopes();
                 let identity = format!(
@@ -178,6 +192,10 @@ impl Profile {
 
     pub(crate) fn client_secret(&self) -> Option<&str> {
         self.client_secret.as_deref()
+    }
+
+    pub(crate) fn access_token(&self) -> Option<&str> {
+        self.access_token.as_deref()
     }
 
     pub fn effective_scopes(&self) -> Vec<String> {
@@ -218,6 +236,10 @@ impl fmt::Debug for Profile {
                 "client_secret",
                 &self.client_secret.as_ref().map(|_| "[REDACTED]"),
             )
+            .field(
+                "access_token",
+                &self.access_token.as_ref().map(|_| "[REDACTED]"),
+            )
             .finish()
     }
 }
@@ -232,15 +254,19 @@ pub struct ProfileOptions {
     pub client_id: Option<String>,
     /// M2M secret accepted by the Rust API and redacted from debug output.
     pub client_secret: Option<String>,
+    /// Personal access token accepted by the Rust API and redacted from debug output.
+    pub access_token: Option<String>,
     /// Optional group role requested by M2M.
     pub group_id: Option<String>,
-    /// Explicit Databricks auth type, such as `databricks-cli` or `oauth-m2m`.
+    /// Explicit Databricks auth type: `databricks-cli`, `oauth-m2m`, or `pat`.
     pub auth_type: Option<String>,
     pub scopes: Option<Vec<String>>,
     pub target: Option<TargetKind>,
     pub config_file: Option<PathBuf>,
     /// Whether implicit M2M defaults should select one matching U2M profile.
     pub prefer_user_to_machine: bool,
+    /// Whether an implicit PAT profile should be ignored.
+    pub skip_implicit_pat: bool,
 }
 
 impl fmt::Debug for ProfileOptions {
@@ -255,6 +281,10 @@ impl fmt::Debug for ProfileOptions {
                 "client_secret",
                 &self.client_secret.as_ref().map(|_| "[REDACTED]"),
             )
+            .field(
+                "access_token",
+                &self.access_token.as_ref().map(|_| "[REDACTED]"),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -268,12 +298,14 @@ impl Default for ProfileOptions {
             workspace_id: None,
             client_id: None,
             client_secret: None,
+            access_token: None,
             group_id: None,
             auth_type: None,
             scopes: None,
             target: None,
             config_file: None,
             prefer_user_to_machine: true,
+            skip_implicit_pat: false,
         }
     }
 }
@@ -285,6 +317,7 @@ struct RawProfile {
     workspace_id: Option<String>,
     client_id: Option<String>,
     client_secret: Option<String>,
+    access_token: Option<String>,
     group_id: Option<String>,
     scopes: Option<String>,
     auth_type: Option<String>,
@@ -351,6 +384,20 @@ fn cached_config(cached: &CachedConfig) -> Result<Option<Arc<Ini>>> {
     }
 }
 
+fn configured_profile(config: Option<&Ini>, name: &str, skip_pat: bool) -> RawProfile {
+    let configured = config
+        .map(|config| load_profile(config, name))
+        .unwrap_or_default();
+    if skip_pat
+        && (configured.auth_type.as_deref() == Some(AUTH_TYPE_PAT)
+            || configured.access_token.is_some())
+    {
+        RawProfile::default()
+    } else {
+        configured
+    }
+}
+
 fn resolve_auth_profile_name(
     requested: Option<&str>,
     explicit: bool,
@@ -358,14 +405,14 @@ fn resolve_auth_profile_name(
     prefer_user_to_machine: bool,
 ) -> Result<String> {
     let selected = resolve_profile_name(requested, config)?;
-    if explicit || !prefer_user_to_machine {
+    if explicit {
         return Ok(selected);
     }
     let Some(config) = config else {
         return Ok(selected);
     };
     let selected_profile = load_profile(config, &selected);
-    if !is_m2m_profile(&selected_profile) {
+    if !is_m2m_profile(&selected_profile) || !prefer_user_to_machine {
         return Ok(selected);
     }
     if selected_profile.host.is_none() {
@@ -427,6 +474,7 @@ fn resolve_auth_kind(
     auth_type: Option<&str>,
     client_id: Option<&str>,
     client_secret: Option<&str>,
+    access_token: Option<&str>,
 ) -> Result<AuthKind> {
     match auth_type {
         Some(AUTH_TYPE_DATABRICKS_CLI) => Ok(AuthKind::UserToMachine),
@@ -438,6 +486,12 @@ fn resolve_auth_kind(
             }
             Ok(AuthKind::MachineToMachine)
         }
+        Some(AUTH_TYPE_PAT) => {
+            if access_token.is_none() {
+                return Err(Error::Config("pat requires token".into()));
+            }
+            Ok(AuthKind::PersonalAccessToken)
+        }
         Some(auth_type) => Err(Error::Config(format!(
             "authentication type {auth_type} is not supported"
         ))),
@@ -445,6 +499,7 @@ fn resolve_auth_kind(
         None if client_secret.is_some() => Err(Error::Config(
             "oauth-m2m client_secret requires client_id".into(),
         )),
+        None if access_token.is_some() => Ok(AuthKind::PersonalAccessToken),
         None => Ok(AuthKind::UserToMachine),
     }
 }
@@ -480,6 +535,7 @@ fn load_profile(ini: &Ini, name: &str) -> RawProfile {
         workspace_id: ini.get(name, "workspace_id"),
         client_id: ini.get(name, "client_id"),
         client_secret: ini.get(name, "client_secret"),
+        access_token: ini.get(name, "token"),
         group_id: ini.get(name, "group_id"),
         scopes: ini.get(name, "scopes"),
         auth_type: ini
@@ -552,10 +608,12 @@ mod tests {
     fn profile_option_debug_redacts_client_secrets() {
         let options = ProfileOptions {
             client_secret: Some("sensitive-client-secret".into()),
+            access_token: Some("sensitive-access-token".into()),
             ..ProfileOptions::default()
         };
         let debug = format!("{options:?}");
         assert!(!debug.contains("sensitive-client-secret"));
+        assert!(!debug.contains("sensitive-access-token"));
         assert!(debug.contains("[REDACTED]"));
     }
 
@@ -641,13 +699,36 @@ mod tests {
     }
 
     #[test]
-    fn non_m2m_default_is_not_remapped() {
+    fn implicit_pat_default_is_not_remapped() {
         let mut config = mixed_auth_config();
         config.set("DEFAULT", "auth_type", Some("pat".into()));
-        assert_eq!(
-            resolve_auth_profile_name(None, false, Some(&config), true).unwrap(),
-            "DEFAULT"
-        );
+        for prefer_user_to_machine in [true, false] {
+            assert_eq!(
+                resolve_auth_profile_name(None, false, Some(&config), prefer_user_to_machine,)
+                    .unwrap(),
+                "DEFAULT"
+            );
+        }
+    }
+
+    #[test]
+    fn implicit_pat_configuration_can_be_skipped() {
+        let mut config = Ini::new_cs();
+        config.set("DEFAULT", "host", Some("https://workspace.example".into()));
+        config.set("DEFAULT", "auth_type", Some("pat".into()));
+        config.set("DEFAULT", "token", Some("access".into()));
+
+        let configured = configured_profile(Some(&config), "DEFAULT", false);
+        assert_eq!(configured.auth_type.as_deref(), Some("pat"));
+        assert_eq!(configured.access_token.as_deref(), Some("access"));
+
+        let skipped = configured_profile(Some(&config), "DEFAULT", true);
+        assert!(skipped.auth_type.is_none());
+        assert!(skipped.access_token.is_none());
+
+        config.remove_key("DEFAULT", "auth_type");
+        let inferred = configured_profile(Some(&config), "DEFAULT", true);
+        assert!(inferred.access_token.is_none());
     }
 
     #[test]
@@ -709,19 +790,28 @@ mod tests {
     #[test]
     fn resolves_explicit_and_default_m2m_credentials() {
         assert_eq!(
-            resolve_auth_kind(Some(AUTH_TYPE_M2M), Some("client"), Some("secret")).unwrap(),
+            resolve_auth_kind(Some(AUTH_TYPE_M2M), Some("client"), Some("secret"), None,).unwrap(),
             AuthKind::MachineToMachine
         );
         assert_eq!(
-            resolve_auth_kind(None, Some("client"), Some("secret")).unwrap(),
+            resolve_auth_kind(None, Some("client"), Some("secret"), None).unwrap(),
             AuthKind::MachineToMachine
         );
         assert_eq!(
-            resolve_auth_kind(None, Some("client"), None).unwrap(),
+            resolve_auth_kind(None, Some("client"), None, None).unwrap(),
             AuthKind::UserToMachine
         );
-        assert!(resolve_auth_kind(Some(AUTH_TYPE_M2M), Some("client"), None).is_err());
-        assert!(resolve_auth_kind(None, None, Some("secret")).is_err());
+        assert_eq!(
+            resolve_auth_kind(Some(AUTH_TYPE_PAT), None, None, Some("token")).unwrap(),
+            AuthKind::PersonalAccessToken
+        );
+        assert_eq!(
+            resolve_auth_kind(None, None, None, Some("token")).unwrap(),
+            AuthKind::PersonalAccessToken
+        );
+        assert!(resolve_auth_kind(Some(AUTH_TYPE_M2M), Some("client"), None, None).is_err());
+        assert!(resolve_auth_kind(Some(AUTH_TYPE_PAT), None, None, None).is_err());
+        assert!(resolve_auth_kind(None, None, Some("secret"), None).is_err());
     }
 
     #[test]
@@ -764,6 +854,24 @@ mod tests {
     }
 
     #[test]
+    fn pat_profile_uses_a_distinct_key_and_redacts_its_token() {
+        let directory = tempfile::tempdir().unwrap();
+        let profile = Profile::from_sources(ProfileOptions {
+            profile: Some("personal".into()),
+            host: Some("http://127.0.0.1:8080".into()),
+            access_token: Some("credential-value".into()),
+            auth_type: Some(AUTH_TYPE_PAT.into()),
+            config_file: Some(directory.path().join("missing")),
+            ..ProfileOptions::default()
+        })
+        .unwrap();
+
+        assert_eq!(profile.auth_kind, AuthKind::PersonalAccessToken);
+        assert_eq!(profile.cache_key(), "personal-pat");
+        assert!(!format!("{profile:?}").contains("credential-value"));
+    }
+
+    #[test]
     fn m2m_cache_keys_include_client_group_and_scopes() {
         let profile = Profile {
             name: "service".into(),
@@ -776,6 +884,7 @@ mod tests {
             target: TargetKind::Workspace,
             auth_kind: AuthKind::MachineToMachine,
             client_secret: Some("credential-value".into()),
+            access_token: None,
         };
         let key = profile.cache_key();
         assert!(key.starts_with("service-oauth-m2m-"));

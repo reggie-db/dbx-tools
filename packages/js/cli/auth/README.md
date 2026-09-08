@@ -5,12 +5,13 @@ Databricks OAuth commands mounted under `dbx auth`.
 The package uses the generated
 [`@dbx-tools/databricks-auth`](../../node/databricks-auth) bindings for profile
 resolution, U2M browser authorization, M2M client credentials, token refresh,
-locking, and credential storage.
+PAT access, locking, and credential storage.
 
 Key features:
 
 - browser login for workspace, account, and unified OAuth targets;
 - M2M client-credentials tokens with HTTP Basic client authentication;
+- PAT profiles from Databricks configuration or `DATABRICKS_TOKEN`;
 - U2M preference by default, with standard M2M resolution available through
   `--no-prefer-user-to-machine`;
 - Databricks CLI refresh when available, with native file fallback;
@@ -43,7 +44,7 @@ succeeds. `token` mints an M2M token when no cached token exists; U2M requires
 - `--config-file <path>` selects the Databricks configuration file.
 - `--client-id <id>` selects the OAuth client.
 - `--group-id <id>` requests an assumed group role for M2M.
-- `--auth-type databricks-cli|oauth-m2m` selects the auth strategy.
+- `--auth-type databricks-cli|oauth-m2m|pat` selects the auth strategy.
 - `--no-prefer-user-to-machine` keeps an implicitly selected M2M profile.
 - `--scopes <scopes>` accepts a comma-separated value and may be repeated.
 - `--target workspace|account|unified` selects the OAuth target.
@@ -59,6 +60,7 @@ variables. U2M storage and timeout options read the matching
 M2M reads `client_id` and `client_secret` from the selected profile or their
 standard Databricks environment variables. The secret is not accepted as a CLI
 argument or included in generated binding records.
+PAT reads `token` from the selected profile or `DATABRICKS_TOKEN`.
 
 For U2M with automatic storage, the Rust package checks
 `databricks auth --help` once per process outside Databricks Apps. When
@@ -67,7 +69,8 @@ available, token refresh runs through
 file-backed OAuth flow. Automatic storage resolves to memory inside a
 Databricks App. Explicit file storage always uses the native flow. Memory
 storage uses neither the Databricks CLI nor file persistence. M2M always uses
-the native client-credentials flow.
+the native client-credentials flow. Automatic profile selection ignores PAT
+configuration inside a Databricks App; an explicit profile can still use PAT.
 
 ## Package use
 

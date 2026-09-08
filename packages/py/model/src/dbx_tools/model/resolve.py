@@ -138,6 +138,7 @@ def rank_model_id(
     *,
     threshold: float = DEFAULT_FUZZY_THRESHOLD,
     requires_tools: bool = False,
+    model_class: ModelClass | None = None,
 ) -> ResolvedModel:
     summaries = [_summary(endpoint) for endpoint in endpoints]
     exact = next(
@@ -145,6 +146,7 @@ def rank_model_id(
             endpoint
             for endpoint in summaries
             if endpoint.name == search
+            and (model_class is None or endpoint.model_class == model_class)
             and (not requires_tools or endpoint_capabilities(endpoint).tools)
         ),
         None,
@@ -158,6 +160,7 @@ def rank_model_id(
             limit=1,
             threshold=threshold,
             requiresTools=requires_tools,
+            modelClass=model_class,
         ),
     )
     if not ranked:

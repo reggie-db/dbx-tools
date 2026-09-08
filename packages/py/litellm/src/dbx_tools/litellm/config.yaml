@@ -1,57 +1,9 @@
 model_list:
-  - &dbx_route
-    model_name: "dbx/*"
-    litellm_params: &dbx_params
-      model: "dbx/*"
-      # LiteLLM's Databricks provider hardcodes a supported-param allowlist
-      # (get_supported_openai_params) and raises UnsupportedParamsError for
-      # anything else, even when the endpoint would accept it. Listing a param
-      # here forces it through.
-      #
-      # `parallel_tool_calls` is real tool-calling behaviour, not bookkeeping, so
-      # it must be forwarded rather than dropped: this route reaches the Responses
-      # surfaces, and both /serving-endpoints/responses and .../open-responses
-      # echo it back and honour it. Codex sends it on every tool-carrying turn.
-      allowed_openai_params:
-        - reasoning_effort
-        - thinking
-        - parallel_tool_calls
-  # Unqualified human-friendly names remain accepted for fuzzy resolution, but
-  # /v1/models advertises only the explicit dbx/* surface above.
-  - <<: *dbx_route
-    model_name: "*"
-    litellm_params: *dbx_params
+  - model_name: "*"
+    litellm_params:
+      model: "databricks/*"
 
 litellm_settings:
-  # Silently drop client params the endpoints genuinely reject instead of failing
-  # the turn. Codex also sends `web_search_options`, which both surfaces refuse
-  # ("Extra inputs are not permitted" / "Unknown parameter"), and OpenAI-platform
-  # bookkeeping (store/metadata/service_tier/prompt_cache_key/safety_identifier)
-  # that has no bearing on the completion. Without this the request 400s and the
-  # client can do nothing about it. Params listed in allowed_openai_params above
-  # are still forwarded — drop_params only removes what the provider rejects.
-  drop_params: true
   callbacks:
-    - config_provider.dbx_payload_guard
-    - config_provider.dbx_auto_reasoning
-    - config_provider.dbx_responses_router
+    - config_provider.dbx_model_router
     - config_provider.dbx_access_logger
-  custom_provider_map:
-    - provider: dbx
-      custom_handler: config_provider.dbx_provider
-
-router_settings:
-  # LiteLLM applies exponential backoff with jitter and honors provider
-  # Retry-After headers. Two seconds grows to roughly one minute across the
-  # five rate-limit retries, enough to cross a workspace TPM window.
-  retry_after: 2
-  # Unclassified errors are not retried. The policy below opts in only the
-  # transient categories that can succeed without changing the request.
-  num_retries: 0
-  retry_policy:
-    BadRequestErrorRetries: 0
-    RateLimitErrorRetries: 5
-    TimeoutErrorRetries: 3
-    InternalServerErrorRetries: 3
-    AuthenticationErrorRetries: 0
-    ContentPolicyViolationErrorRetries: 0

@@ -87,7 +87,7 @@ class _CachedCredentialProvider:
         self._load = load
         self._lock = threading.RLock()
         self._token: str | None = None
-        self._renew_at = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+        self._renew_at = dt.datetime.min.replace(tzinfo=dt.UTC)
 
     def __call__(self) -> str:
         token = self._token
@@ -262,9 +262,9 @@ def _credential_renewal(expiration: dt.datetime | None) -> dt.datetime:
     if expiration is None:
         return now + _DEFAULT_CREDENTIAL_LIFETIME
     normalized = (
-        expiration.astimezone(dt.timezone.utc)
+        expiration.astimezone(dt.UTC)
         if expiration.tzinfo is not None
-        else expiration.replace(tzinfo=dt.timezone.utc)
+        else expiration.replace(tzinfo=dt.UTC)
     )
     return max(normalized - _CREDENTIAL_REFRESH_LEAD, now + _MINIMUM_CREDENTIAL_LIFETIME)
 
@@ -274,7 +274,7 @@ def _credential_expiration(value: object) -> dt.datetime | None:
         return value
     if isinstance(value, (int, float)):
         try:
-            return dt.datetime.fromtimestamp(value, tz=dt.timezone.utc)
+            return dt.datetime.fromtimestamp(value, tz=dt.UTC)
         except (OSError, OverflowError, ValueError):
             return None
     if not isinstance(value, str) or not value.strip():
@@ -295,7 +295,7 @@ def _mapping_credential_expiration(credential: Mapping[str, object]) -> dt.datet
 
 
 def _utcnow() -> dt.datetime:
-    return dt.datetime.now(tz=dt.timezone.utc)
+    return dt.datetime.now(tz=dt.UTC)
 
 
 def _default_provider(

@@ -7,7 +7,13 @@ from typing import Any
 
 import dbx_tools.litellm.credentials as credentials_module
 import pytest
-from dbx_tools.litellm.credentials import Credentials, DatabricksCredentials
+from dbx_tools.litellm.credentials import (
+    CODEX_API_PATH,
+    MLFLOW_API_PATH,
+    Credentials,
+    DatabricksCredentials,
+)
+from litellm.llms.databricks.responses.transformation import DatabricksResponsesAPIConfig
 
 """Tests for the Rust-backed LiteLLM credential adapter."""
 
@@ -19,21 +25,15 @@ class FakeAuth:
 
     def __init__(self) -> None:
         self.token_calls: list[bool | None] = []
-        self.rejected_tokens: list[str] = []
 
     def status(self) -> SimpleNamespace:
         """Return the resolved host."""
-        return SimpleNamespace(host=HOST)
+        return SimpleNamespace(profile="RESOLVED", host=HOST)
 
     async def token(self, login: bool | None = None) -> SimpleNamespace:
         """Return one access token."""
         self.token_calls.append(login)
         return SimpleNamespace(access_token="current-token")
-
-    async def refresh_rejected_token(self, stale: str) -> SimpleNamespace:
-        """Return a token for a rejected credential."""
-        self.rejected_tokens.append(stale)
-        return SimpleNamespace(access_token="refreshed-token")
 
 
 class FakeBridge:
@@ -47,11 +47,13 @@ class FakeBridge:
 def build(auth: FakeAuth) -> DatabricksCredentials:
     """Construct the adapter around a fake generated auth object."""
     credentials = DatabricksCredentials.__new__(DatabricksCredentials)
-    credentials.profile = "TEST"
+    credentials.profile = "RESOLVED"
     credentials._bridge = FakeBridge()
     credentials._auth = auth
     credentials._host = HOST
     credentials._api_base = f"{HOST}/serving-endpoints"
+    credentials._codex_api_base = f"{HOST}{CODEX_API_PATH}"
+    credentials._mlflow_api_base = f"{HOST}{MLFLOW_API_PATH}"
     return credentials
 
 
@@ -68,7 +70,10 @@ def test_constructor_disables_u2m_preference(monkeypatch: pytest.MonkeyPatch) ->
 
     credentials = DatabricksCredentials(profile="TEST")
 
-    assert credentials.profile == "TEST"
+    assert credentials.profile == "RESOLVED"
+    assert credentials.api_base == f"{HOST}/serving-endpoints"
+    assert credentials._codex_api_base == f"{HOST}/ai-gateway/codex/v1"
+    assert credentials._mlflow_api_base == f"{HOST}/ai-gateway/mlflow/v1"
     assert captured[0].profile == "TEST"
     assert captured[0].prefer_user_to_machine is False
 
@@ -82,19 +87,19 @@ def test_current_uses_rust_token_cache() -> None:
     assert current == Credentials(
         token="current-token",
         api_base=f"{HOST}/serving-endpoints",
+        codex_api_base=f"{HOST}/ai-gateway/codex/v1",
+        mlflow_api_base=f"{HOST}/ai-gateway/mlflow/v1",
     )
     assert auth.token_calls == [False]
 
 
-def test_refresh_delegates_rejected_token_comparison_to_rust() -> None:
-    auth = FakeAuth()
-    credentials = build(auth)
-    stale = Credentials(token="stale-token", api_base=f"{HOST}/serving-endpoints")
+def test_codex_base_builds_the_gateway_responses_url() -> None:
+    config = DatabricksResponsesAPIConfig()
 
-    current = credentials.refresh(stale)
-
-    assert current.token == "refreshed-token"
-    assert auth.rejected_tokens == ["stale-token"]
+    assert (
+        config.get_complete_url(f"{HOST}{CODEX_API_PATH}", {})
+        == f"{HOST}/ai-gateway/codex/v1/responses"
+    )
 
 
 def test_workspace_client_uses_rust_managed_token(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1002,22 +1002,14 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
   {
     directory: "litellm",
     description:
-      "LiteLLM custom provider for Databricks Model Serving with live fuzzy model resolution",
+      "LiteLLM Databricks provider with live endpoint discovery and fuzzy model resolution",
     internalDependencies: ["databricks-auth", "model"],
     dependencies: [
       "cachetools>=5.5,<7",
       "cyclopts>=4.11,<6",
       "databricks-sdk>=0.63.0",
-      "diskcache>=5.6",
-      // LiteLLM 1.96.2 imports `get_flat_dependant`, removed in FastAPI
-      // 0.140.7. Keep the cap until LiteLLM ships its `get_flat_params` fix.
-      "fastapi<0.140.7",
-      // Exact because `patches.py` guards two upstream defects through private
-      // LiteLLM APIs; upgrade only with offline tests and a proxy startup smoke.
-      "litellm[proxy]==1.96.2",
-      // Pillow lets the payload guard downscale oversize base64 images so a
-      // request stays under Databricks' 32 MiB request-body limit.
-      "pillow>=10.0",
+      "fastapi>=0.136.3,<1",
+      "litellm[proxy]==1.99.0",
     ],
     scripts: {
       "dbx-litellm": "dbx_tools.litellm.cli:main",
@@ -1042,15 +1034,14 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
 new projenProject.DBXToolsPythonWorkspace(root, {
   packages: pythonPackages,
   dependencies: ["dbx-tools-graphiti"],
-  // The exact LiteLLM pin does not support Python 3.14, so an open-ended
-  // range makes uv reject the workspace even under a supported interpreter.
-  requiresPython: ">=3.10,<3.14",
+  // LiteLLM 1.99 imports Python 3.11 typing APIs and does not support 3.14.
+  requiresPython: ">=3.11,<3.14",
+  ruffTarget: "py311",
   // This workspace uses two trusted corporate indexes. The first can lag the
   // local devpi index, so uv must consider the pinned version from both.
   indexStrategy: "unsafe-best-match",
   lintPaths: ["packages/py", "packages/example/python", "packages/example/notebooks"],
   ruffPerFileIgnores: {
-    "packages/py/litellm/src/dbx_tools/litellm/reasoning.py": ["BLE001"],
     "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py": ["BLE001"],
     "packages/example/notebooks/*.py": ["BLE001", "F821"],
   },

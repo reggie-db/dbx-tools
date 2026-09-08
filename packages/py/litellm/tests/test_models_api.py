@@ -2,157 +2,96 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from types import SimpleNamespace
 from typing import Any
 
 from dbx_tools.litellm.models_api import (
     _model_identity_response,
+    _request_endpoint,
     _request_ip,
-    _route_contains_path,
-    augment_models_payload,
     install_models_compatibility_middleware,
     list_models_payload,
     model_summary,
 )
-from dbx_tools.model import ModelService, ModelStatus, ServingEndpointSummary, lookup_models
+from dbx_tools.model import ModelStatus, ReasoningEffort, ServingEndpointSummary
 from fastapi import Request
 
 
-def test_standard_models_view_uses_exact_ids_and_openai_data_envelope() -> None:
-    payload = {
-        "object": "list",
-        "data": [
-            {"id": "*", "object": "model"},
-            {"id": "dbx/*", "object": "model"},
-            {
-                "id": "databricks/databricks-gpt-5-6-sol",
-                "object": "model",
-                "max_input_tokens": 272_000,
-            },
-            {
-                "id": "databricks/databricks-claude-opus-5",
-                "object": "model",
-                "max_input_tokens": 200_000,
-            },
-        ],
-    }
-
-    augmented = augment_models_payload(payload)
-
-    assert augmented["object"] == "list"
-    assert [model["id"] for model in augmented["data"]] == [
-        "dbx/databricks-gpt-5-6-sol",
-        "dbx/databricks-claude-opus-5",
-    ]
-    assert [model["slug"] for model in augmented["models"]] == [
-        "dbx/databricks-gpt-5-6-sol",
-        "dbx/databricks-claude-opus-5",
-    ]
-    assert all("alias" not in model for model in augmented["data"])
-    assert augmented["data"][0]["context_window"] == 272_000
-    assert augmented["data"][0]["status"] == {"deprecated": False}
-    assert augmented["models"][0]["status"] == {"deprecated": False}
-    assert augmented["models"][0]["default_reasoning_level"] == "medium"
-
-
-def test_standard_view_can_include_explicit_native_databricks_models() -> None:
-    payload = {
-        "object": "list",
-        "data": [
-            {"id": "databricks/*", "object": "model"},
-            {"id": "databricks/databricks-gpt-5-6-sol", "object": "model"},
-        ],
-    }
-
-    augmented = augment_models_payload(
-        payload,
-        [ServingEndpointSummary(name="databricks-gpt-5-6-sol")],
-    )
-
-    assert [model["id"] for model in augmented["data"]] == [
-        "dbx/databricks-gpt-5-6-sol",
-        "databricks/databricks-gpt-5-6-sol",
-    ]
-
-
-def test_standard_view_does_not_expose_library_service_names() -> None:
-    endpoint = ServingEndpointSummary(
-        name="databricks-gpt-5-6-sol",
-        serviceNames={ModelService.OPENAI: "gpt-5.6-sol"},
-    )
-
-    augmented = augment_models_payload({"object": "list", "data": []}, [endpoint])
-
-    assert "serviceNames" not in augmented["data"][0]
-    assert "service_names" not in augmented["data"][0]
-
-
-def test_live_discovery_removes_stale_registry_models() -> None:
-    payload = {
-        "object": "list",
-        "data": [
-            {"id": "*", "object": "model"},
-            {"id": "custom-route", "object": "model"},
-            {"id": "databricks/databricks-gpt-5", "object": "model"},
-        ],
-    }
-
-    augmented = augment_models_payload(payload, [])
-
-    assert [model["id"] for model in augmented["data"]] == ["custom-route"]
-    assert augmented["data"][0]["status"] == {"deprecated": False}
-    assert [model["slug"] for model in augmented["models"]] == ["custom-route"]
-    assert augmented["models"][0]["status"] == {"deprecated": False}
-
-
-def test_standard_view_excludes_deprecated_models() -> None:
-    endpoints = [
-        ServingEndpointSummary(name="databricks-gemini-3-1-pro"),
+def endpoints() -> list[ServingEndpointSummary]:
+    """Return representative live catalogue entries."""
+    return [
         ServingEndpointSummary(
-            name="databricks-gemini-2-5-pro",
+            name="databricks-gpt-5-6-sol",
+            displayName="GPT 5.6 Sol",
+            reasoningEfforts=[ReasoningEffort.LOW, ReasoningEffort.MEDIUM],
+        ),
+        ServingEndpointSummary(
+            name="custom-detector",
+            displayName="Custom Detector",
+        ),
+        ServingEndpointSummary(
+            name="databricks-glm-5-2",
+            displayName="GLM 5.2",
+        ),
+        ServingEndpointSummary(
+            name="retired-model",
             status=ModelStatus(deprecated=True),
         ),
     ]
 
-    augmented = augment_models_payload({"object": "list", "data": []}, endpoints)
 
-    assert [model["id"] for model in augmented["data"]] == ["dbx/databricks-gemini-3-1-pro"]
+def test_standard_models_are_live_endpoint_records() -> None:
+    payload = list_models_payload(endpoints(), include_codex=False)
 
-
-def test_existing_codex_envelope_is_not_replaced() -> None:
-    payload = {"data": [], "models": [{"slug": "existing"}]}
-
-    assert augment_models_payload(payload) is payload
-
-
-def test_non_list_payload_is_unchanged() -> None:
-    payload = {"data": "not-a-list"}
-
-    assert augment_models_payload(payload) is payload
-
-
-def test_cli_seed_matches_packaged_proxy_routes() -> None:
-    endpoint = ServingEndpointSummary(name="databricks-gpt-5-6-sol")
-
-    augmented = list_models_payload([endpoint])
-
-    assert [model["id"] for model in augmented["data"]] == ["dbx/databricks-gpt-5-6-sol"]
-    assert [model["slug"] for model in augmented["models"]] == ["dbx/databricks-gpt-5-6-sol"]
-
-
-def test_model_summary_counts_each_advertised_family() -> None:
-    payload = {
+    assert payload == {
+        "object": "list",
         "data": [
-            {"id": "dbx/databricks-gpt-5-6-sol"},
-            {"id": "dbx/databricks-gpt-5-5"},
-            {"id": "dbx/databricks-claude-opus-4-1"},
-            {"id": "dbx/databricks-claude-sonnet-4-6"},
-            {"id": "dbx/databricks-claude-haiku-4-5"},
-            {"id": "custom-route"},
-        ]
+            {
+                "id": "databricks-gpt-5-6-sol",
+                "object": "model",
+                "owned_by": "databricks",
+                "name": "GPT 5.6 Sol",
+                "status": {"deprecated": False},
+            },
+            {
+                "id": "custom-detector",
+                "object": "model",
+                "owned_by": "databricks",
+                "name": "Custom Detector",
+                "status": {"deprecated": False},
+            },
+            {
+                "id": "databricks-glm-5-2",
+                "object": "model",
+                "owned_by": "databricks",
+                "name": "GLM 5.2",
+                "status": {"deprecated": False},
+            },
+        ],
     }
 
-    assert model_summary(payload) == "6 models (3 claude, 2 gpt, 1 other)"
+
+def test_codex_models_use_model_services_and_discovered_efforts() -> None:
+    payload = list_models_payload(endpoints())
+    models = payload["models"]
+
+    assert [model["slug"] for model in models] == [
+        "databricks/system.ai.gpt-5-6-sol",
+        "databricks/system.ai.glm-5-2",
+    ]
+    assert models[0]["default_reasoning_level"] == "medium"
+    assert [level["effort"] for level in models[0]["supported_reasoning_levels"]] == [
+        "low",
+        "medium",
+    ]
+    assert models[0]["priority"] == 1
+    assert models[1]["priority"] == 2
+    assert models[0]["base_instructions"]
+    assert "default_reasoning_level" not in models[1]
+    assert models[1]["supported_reasoning_levels"] == []
+
+
+def test_model_summary_counts_live_families() -> None:
+    assert model_summary(list_models_payload(endpoints())) == "3 models (1 glm, 1 gpt, 1 other)"
 
 
 def test_models_request_uses_originating_forwarded_ip() -> None:
@@ -167,62 +106,14 @@ def test_models_request_uses_originating_forwarded_ip() -> None:
     assert _request_ip(request) == "203.0.113.9"
 
 
-def test_lookup_payload_returns_scores_and_complete_models() -> None:
-    matches = lookup_models(
-        [
-            ServingEndpointSummary(
-                name="databricks-gpt-5-6-sol",
-                displayName="GPT 5.6 Sol",
-                task="llm/v1/chat",
-                state="READY",
-                description="Primary coding model",
-            )
-        ],
-        {"search": "gpt"},
-    )
-
-    assert matches == [
-        {
-            "score": matches[0]["score"],
-            "modelClass": "chat-balanced",
-            "endpoint": {
-                "name": "databricks-gpt-5-6-sol",
-                "displayName": "GPT 5.6 Sol",
-                "task": "llm/v1/chat",
-                "state": "READY",
-                "description": "Primary coding model",
-                "reasoningEfforts": [],
-                "serviceNames": {},
-                "status": {"deprecated": False},
-            },
-        }
-    ]
-
-
-def test_empty_lookup_returns_all_eligible_models() -> None:
-    matches = lookup_models(
-        [
-            ServingEndpointSummary(name="databricks-gpt-5-6", task="llm/v1/chat"),
-            ServingEndpointSummary(name="databricks-claude-sonnet-4-6", task="llm/v1/chat"),
-        ]
-    )
-
-    endpoints = [match["endpoint"] for match in matches]
-    assert all(isinstance(endpoint, dict) for endpoint in endpoints)
-    assert {endpoint["name"] for endpoint in endpoints if isinstance(endpoint, dict)} == {
-        "databricks-claude-sonnet-4-6",
-        "databricks-gpt-5-6",
-    }
-
-
-def test_lookup_endpoint_is_in_litellm_openapi() -> None:
+def test_lookup_endpoint_is_package_specific() -> None:
     from litellm.proxy.proxy_server import app
 
     install_models_compatibility_middleware()
 
-    operation = app.openapi()["paths"]["/v1/models/lookup"]["get"]
+    operation = app.openapi()["paths"]["/lookup"]["get"]
     assert operation["operationId"] == "lookupModels"
-    assert operation["responses"]["200"]["content"]["application/json"]["schema"]["items"]["$ref"]
+    assert "/v1/models/lookup" not in app.openapi()["paths"]
     assert {parameter["name"] for parameter in operation["parameters"]} == {
         "includeDeprecated",
         "limit",
@@ -231,26 +122,35 @@ def test_lookup_endpoint_is_in_litellm_openapi() -> None:
         "search",
         "threshold",
     }
-    lookup_index = next(
-        index
-        for index, route in enumerate(app.router.routes)
-        if getattr(route, "path", None) == "/v1/models/lookup"
-    )
-    model_index = next(
-        index
-        for index, route in enumerate(app.router.routes)
-        if _route_contains_path(route, "/v1/models/{model_id}")
-    )
-    assert lookup_index < model_index
 
 
-async def test_response_includes_requested_and_resolved_models() -> None:
+def test_request_endpoint_completes_known_databricks_bases() -> None:
+    assert (
+        _request_endpoint(
+            "https://workspace.example.com/ai-gateway/codex/v1",
+            "/v1/responses",
+        )
+        == "https://workspace.example.com/ai-gateway/codex/v1/responses"
+    )
+    assert (
+        _request_endpoint(
+            "https://workspace.example.com/ai-gateway/mlflow/v1",
+            "/v1/chat/completions",
+        )
+        == "https://workspace.example.com/ai-gateway/mlflow/v1/chat/completions"
+    )
+
+
+async def test_response_includes_model_identity_and_endpoint() -> None:
     class Response:
         status_code = 200
         media_type = "application/json"
 
         def __init__(self) -> None:
-            self.headers = {"content-type": "application/json"}
+            self.headers = {
+                "content-type": "application/json",
+                "x-litellm-model-api-base": "https://workspace.example.com/ai-gateway/codex/v1",
+            }
             self.body_iterator = self._body()
 
         async def _body(self) -> AsyncIterator[bytes]:
@@ -266,11 +166,13 @@ async def test_response_includes_requested_and_resolved_models() -> None:
     response = await _model_identity_response(
         response_source,
         {"model": "gemini"},
-        SimpleNamespace(backend=Backend()),
+        Backend(),
+        request_path="/v1/responses",
     )
 
     assert json.loads(bytes(response.body)) == {
         "model": "databricks-gemini-3-8-flash",
         "requestedModel": "gemini",
+        "requestEndpoint": "https://workspace.example.com/ai-gateway/codex/v1/responses",
         "choices": [],
     }

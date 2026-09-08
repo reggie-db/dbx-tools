@@ -10,8 +10,9 @@ from cachetools import TTLCache
 from dbx_tools.litellm.backend import (
     DEFAULT_MODEL_CACHE_TTL_SECONDS,
     DatabricksLiteLLMBackend,
+    codex_gateway_model_name,
 )
-from dbx_tools.model import ServingEndpointSummary
+from dbx_tools.model import ModelClass, ReasoningEffort, ServingEndpointSummary
 
 
 def _backend(
@@ -28,6 +29,21 @@ def _backend(
         timer=timer,
     )
     return backend
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("databricks-kimi-k3", "system.ai.kimi-k3"),
+        ("databricks-glm-5-2", "system.ai.glm-5-2"),
+        ("databricks-grok-4", "system.ai.grok-4"),
+        ("databricks-claude-opus-5", None),
+        ("databricks-gemini-3-1-pro", None),
+        ("databricks-qwen3-embedding-0-6b", None),
+    ],
+)
+def test_codex_model_policy_is_exclusion_based(model: str, expected: str | None) -> None:
+    assert codex_gateway_model_name(model) == expected
 
 
 def test_catalogue_uses_the_model_cache_ttl(
@@ -68,6 +84,25 @@ def test_catalogue_uses_the_model_cache_ttl(
     assert calls == 2
 
 
+def test_reasoning_efforts_use_cached_endpoint_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        backend_module,
+        "list_serving_endpoints",
+        lambda _, *, include_deprecated=False: [
+            ServingEndpointSummary(
+                name="databricks-gpt-5-6-sol",
+                reasoningEfforts=[ReasoningEffort.MEDIUM],
+            )
+        ],
+    )
+    backend = _backend()
+
+    assert backend.reasoning_efforts("system.ai.gpt-5-6-sol") == (ReasoningEffort.MEDIUM,)
+    assert backend.reasoning_efforts("system.ai.llama-4-maverick") == ()
+
+
 def test_resolve_uses_provider_neutral_model_parsing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -81,10 +116,33 @@ def test_resolve_uses_provider_neutral_model_parsing(
             )
         ],
     )
-    monkeypatch.setattr(backend_module, "register_streaming_support", lambda _: None)
     backend = _backend()
 
     assert backend.resolve(" qwen3.5-122b-a10b ") == "databricks-qwen35-122b-a10b"
+
+
+def test_resolve_falls_back_within_requested_model_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        backend_module,
+        "list_serving_endpoints",
+        lambda _, *, include_deprecated=False: [
+            ServingEndpointSummary(
+                name="databricks-gte-large-en",
+                model_class=ModelClass.EMBEDDING,
+                task="llm/v1/embeddings",
+            ),
+            ServingEndpointSummary(
+                name="databricks-gpt-5-6-sol",
+                model_class=ModelClass.CHAT_BALANCED,
+                task="llm/v1/chat",
+            ),
+        ],
+    )
+    backend = _backend()
+
+    assert backend.resolve("gte", model_class=ModelClass.EMBEDDING) == "databricks-gte-large-en"
 
 
 def test_model_cache_can_be_forced_before_expiry(

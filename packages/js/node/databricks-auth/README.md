@@ -3,8 +3,8 @@
 Generated Node bindings for the Rust `dbx-tools-databricks-auth`
 package.
 
-The [Rust package](../../../rs/databricks-auth/README.md) owns U2M and M2M
-OAuth, profile resolution, refresh, locking, and built-in credential storage.
+The [Rust package](../../../rs/databricks-auth/README.md) owns U2M, M2M, and PAT
+authentication, profile resolution, refresh, locking, and built-in credential storage.
 Use [`@dbx-tools/cli-auth`](../../cli/auth) for the `dbx auth` Commander
 interface.
 
@@ -30,6 +30,10 @@ on the browser callback page. `preferUserToMachine` defaults to `true`; set it
 to `false` to keep standard M2M resolution for an implicitly selected service
 principal profile. M2M reads `client_secret` from the selected Databricks
 profile or `DATABRICKS_CLIENT_SECRET`.
+
+PAT reads `token` from the selected profile or `DATABRICKS_TOKEN`. Automatic
+profile selection ignores PAT configuration inside a Databricks App; explicit
+PAT choices remain valid.
 
 Custom persistence stays supported without a database dependency:
 

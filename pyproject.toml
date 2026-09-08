@@ -2,19 +2,18 @@
 
 [project]
 name = "dbx-tools-python-workspace"
-version = "0.6.180"
-requires-python = ">=3.10,<3.14"
+version = "0.6.181"
+requires-python = ">=3.11,<3.14"
 dependencies = ["dbx-tools-graphiti"]
 
 [dependency-groups]
 dev = ["pytest>=8.4,<9", "pytest-asyncio>=1.1,<2", "pyyaml>=6.0,<7", "ruff>=0.12,<1"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint.per-file-ignores]
-"packages/py/litellm/src/dbx_tools/litellm/reasoning.py" = ["BLE001"]
 "packages/py/postgres/src/dbx_tools/postgres/topic_bus.py" = ["BLE001"]
 "packages/example/notebooks/*.py" = ["BLE001", "F821"]
 

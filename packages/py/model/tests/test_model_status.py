@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from dbx_tools.model import model_status
@@ -61,7 +61,7 @@ def test_generator_rechecks_freshness_after_lock(monkeypatch, tmp_path: Path) ->
     assert (
         model_status.generate_retired_models(
             tmp_path / "_retired_models.py",
-            datetime(2026, 9, 5, tzinfo=timezone.utc),
+            datetime(2026, 9, 5, tzinfo=UTC),
         )
         is False
     )
@@ -69,7 +69,7 @@ def test_generator_rechecks_freshness_after_lock(monkeypatch, tmp_path: Path) ->
 
 def test_fresh_disk_cache_is_authoritative(monkeypatch, tmp_path: Path) -> None:
     cache = tmp_path / "retired_models.cache"
-    now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 5, tzinfo=UTC)
     cache.write_text(
         json.dumps(
             {
@@ -103,7 +103,7 @@ def test_refresh_error_is_cached_with_detail_and_uses_fallback(
     caplog,
 ) -> None:
     cache = tmp_path / "retired_models.cache"
-    now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 5, tzinfo=UTC)
     fallback = frozenset({"Generated fallback"})
     monkeypatch.setattr(model_status, "_utc_now", lambda: now)
     monkeypatch.setattr(

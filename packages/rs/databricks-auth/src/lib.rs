@@ -109,8 +109,8 @@ pub async fn create_persistent_auth(
     options: DatabricksAuthOptions,
     storage: Option<Storage>,
 ) -> BindingResult<Arc<PersistentAuth>> {
-    let profile = resolve_profile(&options)?;
     let in_app = is_databricks_app();
+    let profile = resolve_profile(&options, in_app)?;
     let use_databricks_cli = should_use_databricks_cli(
         profile.auth_kind,
         storage,
@@ -128,7 +128,7 @@ pub async fn create_persistent_auth_with_storage(
     options: DatabricksAuthOptions,
     storage: Arc<StorageHandle>,
 ) -> BindingResult<Arc<PersistentAuth>> {
-    let profile = resolve_profile(&options)?;
+    let profile = resolve_profile(&options, is_databricks_app())?;
     create_persistent_auth_with_store(options, profile, storage.store.clone(), false).await
 }
 
@@ -169,7 +169,7 @@ fn storage_backend(storage: Option<Storage>, in_app: bool) -> Storage {
     }
 }
 
-fn resolve_profile(options: &DatabricksAuthOptions) -> BindingResult<Profile> {
+fn resolve_profile(options: &DatabricksAuthOptions, in_app: bool) -> BindingResult<Profile> {
     Profile::from_sources(ProfileOptions {
         profile: options.profile.clone(),
         host: options.host.clone(),
@@ -177,12 +177,14 @@ fn resolve_profile(options: &DatabricksAuthOptions) -> BindingResult<Profile> {
         workspace_id: options.workspace_id.clone(),
         client_id: options.client_id.clone(),
         client_secret: None,
+        access_token: None,
         group_id: options.group_id.clone(),
         auth_type: options.auth_type.clone(),
         scopes: options.scopes.clone(),
         target: options.target.as_deref().map(parse_target).transpose()?,
         config_file: options.config_file.as_deref().map(PathBuf::from),
         prefer_user_to_machine: options.prefer_user_to_machine,
+        skip_implicit_pat: in_app,
     })
     .map_err(binding_error)
 }
@@ -310,6 +312,12 @@ mod tests {
         ));
         assert!(!should_use_databricks_cli(
             AuthKind::MachineToMachine,
+            None,
+            false,
+            true
+        ));
+        assert!(!should_use_databricks_cli(
+            AuthKind::PersonalAccessToken,
             None,
             false,
             true
