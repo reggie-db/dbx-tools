@@ -86,50 +86,44 @@ Primary package areas:
   to be a separate `shared-sdk-model` package with exactly one consumer.
 - `packages/js/node/model` and `packages/js/shared/model` - intent-based Model
   Serving endpoint selection and shared schemas/classification.
-- `packages/rs/client`, `packages/js/node/client`, and `packages/py/client` own
-  the complete Databricks Rust client surface. The Rust crate contains
-  Databricks App detection, cached CLI availability, CLI token process access,
-  profile resolution, U2M, M2M, PAT authentication, provider-neutral token
-  lifecycle, and credential storage. Databricks-specific authentication lives
-  under `src/auth`; generic OAuth flow, templates, and provider factories live
-  under `src/oauth`; credential records, token lifecycle, and storage stay
-  under `src/credentials` because they are not OAuth-specific. Do not restore
-  separate Rust `auth`, `databricks-auth`, or `databricks` utility crates.
+- `packages/rs/databricks`, `packages/js/node/databricks`, and
+  `packages/py/databricks` own the complete Databricks Rust surface. The Rust
+  crate contains Databricks App detection, cached CLI availability, CLI token
+  process access, profile resolution, U2M, M2M, PAT authentication,
+  provider-neutral token lifecycle, credential storage, file locking, and file
+  caching. Databricks-specific authentication lives under `src/auth`; generic
+  OAuth flow, templates, and provider factories live under `src/oauth`;
+  credential records, token lifecycle, and storage stay under `src/credentials`
+  because they are not OAuth-specific. `FileCache` and `FileLock` remain root
+  modules. Do not restore separate Rust `core`, `client`, `auth`, or
+  `databricks-auth` crates.
   Providers supply endpoints and acquisition policy; `AuthOptions` owns shared
   lifecycle durations and callback configuration. `StorageAdapter` remains
-  caller-implementable, and `createStorageHandle` / `create_storage_handle`
-  keeps callbacks in the native library that owns their converters. Built-in
-  storage is file or memory only. Do not add keychain access, a Postgres
-  adapter, or a Postgres dependency. Credential storage uses
-  `packages/rs/core`'s `FileLock`; keep lock acquisition and timeout mechanics
-  in core. U2M is preferred by default. An explicit profile is never remapped.
-  Profiles containing both client ID and secret remain M2M even when
-  `auth_type` is absent. Outside Databricks Apps, automatic U2M uses
+  caller-implementable. Built-in storage is file or memory only. Do not add
+  keychain access, a Postgres adapter, or a Postgres dependency. U2M is
+  preferred by default. An explicit profile is never remapped. Profiles
+  containing both client ID and secret remain M2M even when `auth_type` is
+  absent. Outside Databricks Apps, automatic U2M uses
   `databricks auth token --profile` when the CLI is available; otherwise it
   uses the native browser flow. Inside an App, automatic storage resolves to
   memory and does not invoke the CLI. App auth has two explicit types:
   `app_obo` reads `x-forwarded-access-token` case-insensitively from
   `createPersistentAuthForRequest` / `create_persistent_auth_for_request`
-  headers and returns it directly without caching or refreshing; `app_sp` uses `DATABRICKS_HOST`,
-  `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET`. Automatic resolution
-  inside an App prefers an available OBO request token, then App SP. An explicit
-  profile or auth type suppresses that automatic tiering, and a profile forced
-  inside an App reads its profile credentials instead of ambient App
-  credentials. PAT reads the explicit option, selected profile, or
-  `DATABRICKS_TOKEN`. File-backed refresh locks preserve unrelated entries in
-  `~/.databricks/token-cache.json`. Profile files are parsed once per absolute
-  path, including missing files and parse errors. Rust and UniFFI own the
-  cross-language contract; commit generated bindings and import them from
-  `@dbx-tools/client` or `dbx_tools.client`.
-- `packages/rs/core` owns Databricks-agnostic, dependency-light Rust runtime
-  primitives. Its file cache performs check-lock-check-load under a
-  cross-process `FileLock` and publishes values with an atomic rename. Reuse it
-  instead of adding package-local TTL files or lock loops. Do not move OAuth,
-  Databricks profiles, SDK behavior, or provider policy into core.
+  headers and returns it directly without caching or refreshing; `app_sp` uses
+  `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` and
+  shares the complete M2M implementation. Automatic App resolution prefers an
+  available OBO request token, then App SP. An explicit profile or auth type
+  suppresses automatic tiering, and a profile forced inside an App reads its
+  profile credentials instead of ambient App credentials. File-backed refresh
+  locks preserve unrelated entries in `~/.databricks/token-cache.json`.
+  Profile files are parsed once per absolute path, including missing files and
+  parse errors. Rust and UniFFI own the cross-language contract; commit
+  generated bindings and import them from `@dbx-tools/databricks` or
+  `dbx_tools.databricks`.
 - `packages/rs/google`, `packages/js/node/google`, and `packages/py/google`
   contain Google integrations. The current surface is Google Application
   Default Credentials through the native `google-cloud-auth` crate, sharing
-  the auth lifecycle exported by `client`. ADC checks
+  the auth lifecycle exported by `databricks`. ADC checks
   `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known
   `application_default_credentials.json`, then the metadata service. ADC is the
   only persistent credential store; short-lived tokens stay in process memory.
@@ -345,7 +339,7 @@ Primary package areas:
   cache or Mastra dependencies;
   deterministic behavior belongs in the colocated model polyglot tests.
 - `packages/py/litellm` - thin routing and discovery around LiteLLM 1.99's
-  native Databricks and OpenAI providers. `dbx_tools.client` owns profile
+  native Databricks and OpenAI providers. `dbx_tools.databricks` owns profile
   selection, U2M/M2M/PAT credentials, storage, locking, and refresh; endpoint
   discovery creates an SDK client with its current token. The routing hook may
   change only the resolved model, native provider, base URL, credentials, and
@@ -405,7 +399,7 @@ Primary package areas:
   CLI-over-environment settings. Default to Databricks GPT plus the
   1024-dimensional GTE embedding endpoint, and let an explicit LiteLLM URL
   disable proxy ownership. Managed mode passes an optional profile override or
-  `DATABRICKS_CONFIG_PROFILE` to LiteLLM; `dbx_tools.client` owns
+  `DATABRICKS_CONFIG_PROFILE` to LiteLLM; `dbx_tools.databricks` owns
   fallback and ambient App authentication. A Databricks App with
   `DATABRICKS_HOST` does not require or synthesize a profile. Reuse `uv` from
   `PATH`; ask mise to

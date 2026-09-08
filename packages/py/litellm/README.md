@@ -47,7 +47,7 @@ An explicit profile is optional:
 uv run dbx-litellm --profile my-workspace --port 4000
 ```
 
-`dbx_tools.client` owns profile selection, U2M, M2M, and PAT authentication,
+`dbx_tools.databricks` owns profile selection, U2M, M2M, and PAT authentication,
 storage, locking, and token refresh. The proxy reads the resolved profile and
 host from that package rather than invoking the Databricks CLI itself.
 Explicit PAT profiles are supported. Automatic profile resolution ignores PAT

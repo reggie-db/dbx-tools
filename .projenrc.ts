@@ -264,10 +264,10 @@ project.applyToProjects(root, { identifierName: "cli-appkit-env", tags: "cli" },
 });
 
 // cli-auth: the `dbx auth` OAuth command group. Commander comes from the cli
-// tag, and the native OAuth implementation stays in the generated client binding.
+// tag, and the native OAuth implementation stays in the generated Databricks binding.
 project.applyToProjects(root, { identifierName: "cli-auth", tags: "cli" }, (p) => {
   p.package.addField("description", "Commander CLI for Databricks OAuth");
-  p.addDeps("@dbx-tools/client@workspace:*");
+  p.addDeps("@dbx-tools/databricks@workspace:*");
 });
 
 // node-genie: the server-side Genie driver (live chat + space metadata).
@@ -906,32 +906,21 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     wiremock: "0.6",
   },
   packages: {
-    core: {
-      description: "Databricks-agnostic Rust cache and filesystem primitives",
-      dependencies: {
-        directories: { workspace: true },
-        fs4: { workspace: true },
-        serde: { workspace: true },
-        "serde_json": { workspace: true },
-        tempfile: { workspace: true },
-        thiserror: { workspace: true },
-        tokio: { workspace: true },
-      },
-    },
-    client: {
-      description: "Databricks runtime and authentication client",
+    databricks: {
+      description: "Databricks runtime, authentication, caching, and filesystem primitives",
       dependencies: {
         "async-trait": { workspace: true },
         base64: { workspace: true },
         configparser: { workspace: true },
-        [`${root.scope}-core`]: { path: "../core", version: root.version },
         directories: { workspace: true },
+        fs4: { workspace: true },
         oauth2: { workspace: true },
         open: { workspace: true },
         reqwest: { workspace: true },
         serde: { workspace: true },
         serde_json: { workspace: true },
         sha2: { workspace: true },
+        tempfile: { workspace: true },
         thiserror: { workspace: true },
         time: { workspace: true },
         tokio: { workspace: true },
@@ -939,14 +928,13 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         url: { workspace: true },
         uuid: { workspace: true },
       },
-      devDependencies: { tempfile: { workspace: true } },
     },
     google: {
       description: "Google integrations including Application Default Credentials",
       dependencies: {
         "async-trait": { workspace: true },
-        [`${root.scope}-client`]: {
-          path: "../client",
+        [`${root.scope}-databricks`]: {
+          path: "../databricks",
           version: root.version,
           defaultFeatures: false,
         },
@@ -959,7 +947,7 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
     model: {
       description: "Databricks model discovery, caching, classification, and fuzzy resolution",
       dependencies: {
-        [`${root.scope}-core`]: { path: "../core", version: root.version },
+        [`${root.scope}-databricks`]: { path: "../databricks", version: root.version },
         "difflib-fast": { workspace: true },
         regex: { workspace: true },
         reqwest: { workspace: true },
@@ -988,8 +976,8 @@ const rustWorkspace = new projenProject.DBXToolsRustWorkspace(root, {
         "async-trait": { workspace: true },
         axum: "0.8",
         clap: { version: "4.6", features: ["derive", "env"] },
-        [`${root.scope}-client`]: {
-          path: "../client",
+        [`${root.scope}-databricks`]: {
+          path: "../databricks",
           version: root.version,
           defaultFeatures: false,
         },
@@ -1049,7 +1037,7 @@ const pythonPackages: projenProject.PythonPackageOptions[] = [
     directory: "litellm",
     description:
       "LiteLLM Databricks provider with live endpoint discovery and fuzzy model resolution",
-    internalDependencies: ["client", "model"],
+    internalDependencies: ["databricks", "model"],
     dependencies: [
       "cachetools>=5.5,<7",
       "cyclopts>=4.11,<6",

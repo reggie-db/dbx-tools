@@ -89,7 +89,6 @@
     "packages/js/node/appkit-mastra",
     "packages/js/node/appkit-web-search",
     "packages/js/node/auth-gate",
-    "packages/js/node/client",
     "packages/js/node/core",
     "packages/js/node/databricks",
     "packages/js/node/databricks-zerobus",
@@ -185,26 +184,25 @@
     "rust": {
       "root": "packages/rs",
       "crates": [
-        "packages/rs/client",
-        "packages/rs/core",
+        "packages/rs/databricks",
         "packages/rs/google",
         "packages/rs/model",
         "packages/rs/model-proxy"
       ],
       "bindings": [
         {
-          "crate": "dbx-tools-client",
-          "rust": "packages/rs/client",
-          "node": "packages/js/node/client",
-          "nodePackage": "@dbx-tools/client",
-          "python": "packages/py/client",
-          "pythonPackage": "dbx-tools-client",
-          "pythonModule": "dbx_tools.client"
+          "crate": "dbx-tools-databricks",
+          "rust": "packages/rs/databricks",
+          "node": "packages/js/node/databricks",
+          "nodePackage": "@dbx-tools/databricks",
+          "python": "packages/py/databricks",
+          "pythonPackage": "dbx-tools-databricks",
+          "pythonModule": "dbx_tools.databricks"
         },
         {
           "crate": "dbx-tools-google",
           "dependencies": [
-            "dbx-tools-client"
+            "dbx-tools-databricks"
           ],
           "rust": "packages/rs/google",
           "node": "packages/js/node/google",

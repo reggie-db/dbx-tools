@@ -12,7 +12,6 @@ packages:
   - packages/js/node/appkit-mastra
   - packages/js/node/appkit-web-search
   - packages/js/node/auth-gate
-  - packages/js/node/client
   - packages/js/node/core
   - packages/js/node/databricks
   - packages/js/node/databricks-zerobus

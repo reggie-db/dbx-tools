@@ -24,7 +24,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@dbx-tools/client": "workspace:*",
+    "@dbx-tools/databricks": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "commander": "catalog:"
   },

@@ -12,4 +12,4 @@ const token = await auth.token();
 
 ADC checks `GOOGLE_APPLICATION_CREDENTIALS`, gcloud's well-known credentials
 file, then the Google Cloud metadata service. It never invokes gcloud or
-rewrites ADC. Shared token lifecycle types come from `@dbx-tools/client`.
+rewrites ADC. Shared token lifecycle types come from `@dbx-tools/databricks`.

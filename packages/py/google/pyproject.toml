@@ -6,7 +6,7 @@ version = "0.6.183"
 description = "Python bindings for dbx-tools-google"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-dependencies = ["dbx-tools-client @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/client"]
+dependencies = ["dbx-tools-databricks @ git+https://github.com/reggie-db/dbx-tools.git@main#subdirectory=packages/py/databricks"]
 
 [project.urls]
 Source = "https://github.com/reggie-db/dbx-tools/tree/main/packages/py/google"

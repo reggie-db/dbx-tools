@@ -17,7 +17,7 @@ OpenAI Chat Completions and Anthropic Messages requests can target either
 Databricks Chat Completions or Responses. Native Responses input currently
 targets Responses without conversion.
 
-Authentication comes from `dbx-tools-client`. The proxy resolves the
+Authentication comes from `dbx-tools-databricks`. The proxy resolves the
 selected Databricks profile, obtains cached or refreshed credentials, and
 retries one upstream `401` after refreshing the rejected token.
 `dbx-tools-model` discovers the workspace's serving endpoints, caches the

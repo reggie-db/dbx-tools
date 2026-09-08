@@ -24,7 +24,7 @@
     "uniffi-bindgen-react-native": "0.31.0-5"
   },
   "dependencies": {
-    "@dbx-tools/client": "workspace:*",
+    "@dbx-tools/databricks": "workspace:*",
     "@dbx-tools/shared-core": "workspace:*",
     "@ubjs/core": "0.31.0-5",
     "@ubjs/node": "0.31.0-5"

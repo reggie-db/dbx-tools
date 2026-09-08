@@ -32,7 +32,7 @@ use axum::{
     Json, Router,
 };
 use clap::{Parser, ValueEnum};
-use dbx_tools_client::{create_persistent_auth, DatabricksAuthOptions, PersistentAuth};
+use dbx_tools_databricks::{create_persistent_auth, DatabricksAuthOptions, PersistentAuth};
 use dbx_tools_model::{codex_model_name, models_payload, ModelClient};
 use eventsource_stream::Eventsource;
 use futures_util::{StreamExt, TryStreamExt};

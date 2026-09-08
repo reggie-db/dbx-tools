@@ -5,7 +5,7 @@ Rust model discovery and fuzzy endpoint resolution for Databricks.
 Key features:
 
 - Lists live Databricks serving endpoints.
-- Caches the catalogue on disk with `dbx-tools-core`.
+- Caches the catalogue on disk with `dbx-tools-databricks`.
 - Refreshes Databricks retirement metadata daily with a generated fallback.
 - Parses provider, family, version, and model components.
 - Classifies chat and embedding endpoints.

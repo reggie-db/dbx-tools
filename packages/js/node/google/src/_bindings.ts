@@ -10,11 +10,11 @@ import nativeModule from "./_bindings-ffi.ts";
 import { type UniffiRustFutureContinuationCallback, type UniffiForeignFutureDroppedCallback, type UniffiForeignFutureDroppedCallbackStruct,
 } from "./_bindings-ffi.ts";
 import { type AccessToken, type AuthOptions, AuthError,
-} from "@dbx-tools/client";
+} from "@dbx-tools/databricks";
 import { type FfiConverter, type UniffiByteArray, type UniffiGcObject, type UniffiHandle, type UniffiObjectFactory, AbstractFfiConverterByteArray, Cursor, FfiConverterObject, FfiConverterOptional, FfiConverterUInt64, RustBuffer, UniffiAbstractObject, UniffiInternalError, UniffiRustCaller, destructorGuardSymbol, pointerLiteralSymbol, uniffiCreateFfiConverterString, uniffiCreateRecord, uniffiRustCallAsync, uniffiTypeNameSymbol,
 } from "@ubjs/core";
-import { uniffiModule as uniffiDbxToolsClientModule } from "@dbx-tools/client";
-const { FfiConverterTypeAccessToken, FfiConverterTypeAuthError, FfiConverterTypeAuthOptions } = uniffiDbxToolsClientModule.converters;
+import { uniffiModule as uniffiDbxToolsDatabricksModule } from "@dbx-tools/databricks";
+const { FfiConverterTypeAccessToken, FfiConverterTypeAuthError, FfiConverterTypeAuthOptions } = uniffiDbxToolsDatabricksModule.converters;
 const uniffiCaller = new UniffiRustCaller(() => ({ code: 0 }));
 
 const uniffiIsDebug =
@@ -523,22 +523,22 @@ function uniffiEnsureInitialized() {
     if (bindingsContractVersion !== scaffoldingContractVersion) {
         throw new UniffiInternalError.ContractVersionMismatch(scaffoldingContractVersion, bindingsContractVersion);
     }
-    if (nativeModule().uniffi_dbx_tools_google_checksum_func_create_google_auth() !== 7350) {
+    if (nativeModule().uniffi_dbx_tools_google_checksum_func_create_google_auth() !== 59487) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_func_create_google_auth");
     }
-    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_force_refresh_token() !== 4490) {
+    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_force_refresh_token() !== 7675) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_force_refresh_token");
     }
-    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_logout() !== 12267) {
+    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_logout() !== 3793) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_logout");
     }
-    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_refresh_rejected_token() !== 53955) {
+    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_refresh_rejected_token() !== 39595) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_refresh_rejected_token");
     }
     if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_status() !== 21388) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_status");
     }
-    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_token() !== 26772) {
+    if (nativeModule().uniffi_dbx_tools_google_checksum_method_googleauth_token() !== 23432) {
         throw new UniffiInternalError.ApiChecksumMismatch("uniffi_dbx_tools_google_checksum_method_googleauth_token");
     }
 

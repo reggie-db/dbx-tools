@@ -20,7 +20,7 @@
       "type": "build"
     },
     {
-      "name": "@dbx-tools/client",
+      "name": "@dbx-tools/databricks",
       "version": "workspace:*",
       "type": "runtime"
     },

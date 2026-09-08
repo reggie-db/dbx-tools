@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, time::Duration};
 
-use dbx_tools_core::FileCache;
+use dbx_tools_databricks::FileCache;
 use dbx_tools_model::{
     endpoints_from_response, lookup_models, model_search_query, model_service_names,
     models_payload, parse_model_name, parse_retired_models, rank_model_id, status_from_names,

@@ -1,6 +1,6 @@
 [workspace]
-members = ["packages/rs/client", "packages/rs/core", "packages/rs/google", "packages/rs/model", "packages/rs/model-proxy"]
-default-members = ["packages/rs/core", "packages/rs/model", "packages/rs/model-proxy"]
+members = ["packages/rs/databricks", "packages/rs/google", "packages/rs/model", "packages/rs/model-proxy"]
+default-members = ["packages/rs/model", "packages/rs/model-proxy"]
 resolver = "2"
 
 [workspace.package]

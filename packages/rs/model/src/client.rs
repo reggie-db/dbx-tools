@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
-use dbx_tools_core::{platform_cache_root, FileCache, FileCacheError};
+use dbx_tools_databricks::{platform_cache_root, FileCache, FileCacheError};
 use reqwest::header::AUTHORIZATION;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
