@@ -26,6 +26,10 @@ _REJECTION_PATTERNS = (
     ),
     re.compile(r"""unsupported parameter\s+["'](?P<name>[A-Za-z_][\w.-]*)["']""", re.IGNORECASE),
 )
+_INVALID_RESPONSE_ITEM_ID = re.compile(
+    r"""Invalid 'input\[(?P<index>\d+)\]\.id'.*Expected an ID that begins with 'fc'""",
+    re.IGNORECASE,
+)
 _handler: AdaptiveHTTPHandler | None = None
 _handler_lock = RLock()
 logger = logging.getLogger(__name__)
@@ -68,6 +72,31 @@ def _request_with_payload(
         content=content,
         extensions=request.extensions,
     )
+
+
+def _repair_response_item_id(
+    payload: Mapping[str, Any],
+    error_payload: object,
+) -> Mapping[str, Any] | None:
+    message = _error_message(error_payload)
+    match = _INVALID_RESPONSE_ITEM_ID.search(message) if message is not None else None
+    items = payload.get("input")
+    if match is None or not isinstance(items, list):
+        return None
+    index = int(match.group("index"))
+    if index >= len(items) or not isinstance(items[index], Mapping):
+        return None
+    item = items[index]
+    item_id = item.get("id")
+    if not isinstance(item_id, str) or item_id.startswith("fc"):
+        return None
+    repaired_item = dict(item)
+    if repaired_item.get("type") == "function_call" and "call_id" not in repaired_item:
+        repaired_item["call_id"] = item_id
+    repaired_item.pop("id")
+    repaired_items = list(items)
+    repaired_items[index] = repaired_item
+    return {**payload, "input": repaired_items}
 
 
 class UnsupportedParameterCache:
@@ -157,15 +186,20 @@ class AdaptiveTransport(httpx.AsyncBaseTransport):
             except (TypeError, ValueError):
                 return response
             parameter = self._cache.learn(capability_key, error_payload, active_payload)
-            if parameter is None:
-                return response
-            logger.info(
-                "Retrying model %s without rejected parameter %s",
-                model,
-                parameter,
-            )
+            if parameter is not None:
+                logger.info(
+                    "Retrying model %s without rejected parameter %s",
+                    model,
+                    parameter,
+                )
+                active_payload = self._cache.apply(capability_key, active_payload)
+            else:
+                repaired = _repair_response_item_id(active_payload, error_payload)
+                if repaired is None:
+                    return response
+                logger.info("Retrying model %s without invalid response item ID", model)
+                active_payload = repaired
             await response.aclose()
-            active_payload = self._cache.apply(capability_key, active_payload)
         return response
 
     async def aclose(self) -> None:

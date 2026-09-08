@@ -156,3 +156,56 @@ async def test_transport_retries_and_reuses_learned_capabilities() -> None:
             "input": "hello",
         },
     ]
+
+
+async def test_transport_repairs_invalid_response_item_id() -> None:
+    cache = UnsupportedParameterCache(ttl_seconds=60)
+    attempts: list[dict[str, object]] = []
+
+    async def send(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        attempts.append(payload)
+        function_call = payload["input"][0]
+        if "id" in function_call:
+            return httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "message": (
+                            "Invalid 'input[0].id': 'call_test'. "
+                            "Expected an ID that begins with 'fc'."
+                        ),
+                    }
+                },
+                request=request,
+            )
+        return httpx.Response(200, json={"status": "completed"}, request=request)
+
+    transport = AdaptiveTransport(
+        cache,
+        transport=httpx.MockTransport(send),
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        response = await client.post(
+            "https://workspace.example/responses",
+            json={
+                "model": "system.ai.gpt-5-6-sol",
+                "input": [
+                    {
+                        "type": "function_call",
+                        "id": "call_test",
+                        "name": "echo",
+                        "arguments": "{}",
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    assert attempts[0]["input"][0]["id"] == "call_test"
+    assert attempts[1]["input"][0] == {
+        "type": "function_call",
+        "call_id": "call_test",
+        "name": "echo",
+        "arguments": "{}",
+    }

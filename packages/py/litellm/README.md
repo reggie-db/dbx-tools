@@ -154,6 +154,10 @@ OpenAI models use `{"type":"web_search"}`. Gemini web search uses
 `google_search` through Chat or the Gemini API. Claude web search requires an
 MCP search server.
 
+Responses-only hosted tools are not available on the Chat bridge. LiteLLM
+drops those unsupported parameters while preserving function tools accepted by
+the Chat model.
+
 ## Adaptive parameter support
 
 Model-specific Open Responses support is not present in the serving-endpoint
@@ -163,7 +167,9 @@ field name, retries without it, and caches the rejection by gateway route and
 resolved model for one day. The cache expires so newly enabled model
 capabilities are tried again.
 Required protocol fields such as `model`, `input`, `messages`, and `stream` are
-never removed.
+never removed. When a replayed function-call item uses its `call_` value as the
+item `id`, the transport preserves `call_id`, removes the invalid item `id`, and
+retries after the gateway reports the `fc_` namespace requirement.
 
 ## Response annotations and access logs
 

@@ -352,6 +352,8 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   Codex-originated OpenAI GPT Responses use
   `${DATABRICKS_HOST}/ai-gateway/codex/v1/responses`. Other text-model
   Responses use LiteLLM's native Responses-to-Chat bridge on the MLflow surface.
+  The bridge drops Responses-only hosted tools while preserving compatible
+  function tools.
   Custom endpoints stay on `${DATABRICKS_HOST}/serving-endpoints`.
   `/v1/models` uses the live workspace catalogue. Standard clients receive
   exact endpoint ids in the OpenAI `data` envelope. Codex originators also
@@ -377,6 +379,9 @@ login`. Keep `google-cloud-auth` exact-pinned at 0.18.0: 0.19 raises its MSRV
   families or parameter names into that cache. LiteLLM owns request conversion,
   tools, streaming, and standard retries. Keep the package exact-pinned while
   private response, streaming, and HTTP-handler hooks remain version-sensitive.
+  A function-call replay whose item `id` incorrectly contains its `call_` value
+  may drop that item `id` only after the gateway reports the required `fc_`
+  namespace; preserve `call_id` and retry without inventing an identifier.
 - `packages/py/graphiti` — native local launcher for upstream Graphiti's MCP
   server with a Neo4j 5 backend and a managed `dbx-tools-litellm` process.
   It must not use containers: provision Java, uv, Neo4j, and the pinned Graphiti
