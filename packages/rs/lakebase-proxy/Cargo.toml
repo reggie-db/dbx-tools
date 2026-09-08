@@ -1,0 +1,42 @@
+[package]
+name = "dbx-tools-lakebase-proxy"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Loopback PostgreSQL proxy for Databricks Lakebase"
+license = { workspace = true }
+repository = { workspace = true }
+publish = false
+
+[lib]
+name = "dbx_tools_lakebase_proxy"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dbx-lakebase-proxy"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true }
+dbx-tools-databricks = { version = "0.6.184", path = "../databricks", default-features = false }
+futures = { workspace = true }
+mini-moka = { workspace = true }
+pgwire = { workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true }
+tokio-rustls = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+webpki-roots = { workspace = true }
+
+[dev-dependencies]
+rcgen = { workspace = true }
+tempfile = { workspace = true }
+tokio-postgres = { workspace = true }
+wiremock = { workspace = true }

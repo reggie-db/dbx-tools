@@ -18,7 +18,7 @@ path = "uniffi-bindgen.rs"
 
 [dependencies]
 async-trait = { workspace = true }
-dbx-tools-databricks = { version = "0.6.183", path = "../databricks", default-features = false }
+dbx-tools-databricks = { version = "0.6.184", path = "../databricks", default-features = false }
 google-cloud-auth = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true }

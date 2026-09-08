@@ -2,7 +2,7 @@
 
 [project]
 name = "dbx-tools-google"
-version = "0.6.183"
+version = "0.6.184"
 description = "Python bindings for dbx-tools-google"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"

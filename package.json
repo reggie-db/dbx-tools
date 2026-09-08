@@ -74,7 +74,7 @@
     "protobufjs",
     "unrs-resolver"
   ],
-  "version": "0.6.183",
+  "version": "0.6.184",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -186,6 +186,7 @@
       "crates": [
         "packages/rs/databricks",
         "packages/rs/google",
+        "packages/rs/lakebase-proxy",
         "packages/rs/model",
         "packages/rs/model-proxy"
       ],

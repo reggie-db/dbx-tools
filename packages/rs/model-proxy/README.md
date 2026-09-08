@@ -34,6 +34,10 @@ cargo run --manifest-path packages/rs/model-proxy/Cargo.toml -- \
 The server listens on `127.0.0.1:4000` by default. `--port` reads
 `DATABRICKS_APP_PORT` when present.
 
+`LOG_LEVEL` accepts `debug`, `info`, `warn`, or `error`, case-insensitively,
+and defaults to `info`. Request summaries include protocol, selected model,
+streaming mode, status, and latency without logging request bodies or tokens.
+
 Import `postman/model-proxy.postman_collection.json` into Postman. The
 collection has separate folders for `--target chat` and `--target responses`;
 restart the proxy with the folder's documented command before running it. Set

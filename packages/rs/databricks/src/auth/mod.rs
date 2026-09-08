@@ -15,8 +15,9 @@ pub use client::DatabricksAuthClient;
 pub use m2m::MachineToMachineFlow;
 pub use oauth::OAuthFlow;
 pub use profile::{
-    resolve_config_file, AuthKind, Profile, ProfileOptions, TargetKind, AUTH_TYPE_APP_OBO,
-    AUTH_TYPE_APP_SP, DEFAULT_ACCOUNTS_HOST, DEFAULT_CLIENT_ID, DEFAULT_CONFIG_FILE,
+    config_profile_exists, resolve_config_file, AuthKind, Profile, ProfileOptions, TargetKind,
+    AUTH_TYPE_APP_OBO, AUTH_TYPE_APP_SP, DEFAULT_ACCOUNTS_HOST, DEFAULT_CLIENT_ID,
+    DEFAULT_CONFIG_FILE,
 };
 pub use storage::{open_databricks_store, StoreOptions};
 

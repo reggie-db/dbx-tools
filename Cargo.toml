@@ -1,27 +1,35 @@
 [workspace]
-members = ["packages/rs/databricks", "packages/rs/google", "packages/rs/model", "packages/rs/model-proxy"]
-default-members = ["packages/rs/model", "packages/rs/model-proxy"]
+members = ["packages/rs/databricks", "packages/rs/google", "packages/rs/lakebase-proxy", "packages/rs/model", "packages/rs/model-proxy"]
+default-members = ["packages/rs/lakebase-proxy", "packages/rs/model", "packages/rs/model-proxy"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.183"
+version = "0.6.184"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.89"
 license = "Apache-2.0"
 repository = "https://github.com/reggie-db/dbx-tools"
 
 [workspace.dependencies]
 async-trait = "0.1"
 base64 = "0.22"
+bytes = "1"
+clap = { version = "4.6", features = ["derive", "env"] }
 configparser = "3"
 directories = "6"
 difflib-fast = "0.3.5"
 fs4 = "0.13"
+futures = "0.3"
 google-cloud-auth = "=0.18.0"
+mini-moka = "0.10"
 oauth2 = { version = "5", default-features = false, features = ["reqwest", "rustls-tls"] }
 open = "5"
+percent-encoding = "2"
+pgwire = { version = "=0.41.0", default-features = false, features = ["client-api-ring", "server-api-ring"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 regex = "1"
+rcgen = "0.14"
+rustls = "0.23"
 scraper = "0.24"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -30,8 +38,13 @@ tempfile = "3"
 thiserror = "2"
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-postgres = "0.7"
+tokio-util = { version = "0.7", features = ["codec"] }
+tokio-rustls = "0.26"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uniffi = { version = "=0.31", features = ["cli", "tokio"] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
+webpki-roots = "1"
 wiremock = "0.6"

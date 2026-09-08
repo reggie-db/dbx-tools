@@ -362,6 +362,16 @@ pub fn resolve_config_file(explicit: Option<&Path>) -> Result<PathBuf> {
     expand_home(path)
 }
 
+pub fn config_profile_exists(profile: &str, config_file: Option<&Path>) -> Result<bool> {
+    if profile.trim().is_empty() || profile == SETTINGS_SECTION {
+        return Ok(false);
+    }
+    let path = resolve_config_file(config_file)?;
+    Ok(load_config(&path)?
+        .as_deref()
+        .is_some_and(|config| config.sections().iter().any(|name| name == profile)))
+}
+
 fn expand_home(path: PathBuf) -> Result<PathBuf> {
     let value = path.to_string_lossy();
     if value == "~" || value.starts_with("~/") || value.starts_with("~\\") {

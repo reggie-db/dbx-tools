@@ -95,8 +95,14 @@ Primary package areas:
   OAuth flow, templates, and provider factories live under `src/oauth`;
   credential records, token lifecycle, and storage stay under `src/credentials`
   because they are not OAuth-specific. `FileCache` and `FileLock` remain root
-  modules. Do not restore separate Rust `core`, `client`, `auth`, or
-  `databricks-auth` crates.
+  modules. `lakebase_address` mirrors the Node AppKit parser for PostgreSQL
+  URLs, canonical resource paths, hostnames, and project ids;
+  `lakebase-proxy` consumes it rather than maintaining another parser.
+  `DatabricksClient` owns authenticated JSON requests and one rejected-token
+  retry so consumers do not repeat auth header and 401 logic. `log` initializes
+  tracing from `LOG_LEVEL` using the shared four-level parser (`debug`, `info`,
+  `warn`, `error`, case-insensitive, unknown values default to `info`). Do not
+  restore separate Rust `core`, `client`, `auth`, or `databricks-auth` crates.
   Providers supply endpoints and acquisition policy; `AuthOptions` owns shared
   lifecycle durations and callback configuration. `StorageAdapter` remains
   caller-implementable. Built-in storage is file or memory only. Do not add
@@ -129,8 +135,7 @@ Primary package areas:
   only persistent credential store; short-lived tokens stay in process memory.
   The package never invokes gcloud, starts Google login, or rewrites ADC. Use
   `gcloud auth application-default login` to configure local credentials and
-  scopes. Keep `google-cloud-auth` exact-pinned at 0.18.0 because 0.19 raises
-  its MSRV to 1.85 while this workspace supports Rust 1.82.
+  scopes. Keep `google-cloud-auth` exact-pinned at the tested 0.18.0 API.
 - `packages/rs/model` owns Rust Databricks endpoint discovery, file-backed
   catalogue caching, model-name parsing, classification, and fuzzy ranking.
   It intentionally has no UniFFI scaffolding. Keep deterministic behavior
@@ -152,10 +157,29 @@ Primary package areas:
   both language snapshots from one download.
 - `packages/rs/model-proxy` is the public `dbx-model-proxy` Rust binary that
   exposes OpenAI Chat, OpenAI Responses, Anthropic Messages, Codex Responses,
-  and live model-list compatibility over Databricks. It depends on `client` for
-  credentials and on `model` for cached discovery and ranking. Releases publish
-  the crate to Cargo and attach the compiled binary for each selected platform
-  to the GitHub release.
+  and live model-list compatibility over Databricks. It depends on `databricks`
+  for credentials and on `model` for cached discovery and ranking. Releases
+  publish the crate to Cargo and attach the compiled binary for each selected
+  platform to the GitHub release. It logs payload-free request summaries with
+  model, protocol, status, streaming mode, and latency.
+- `packages/rs/lakebase-proxy` is the private `dbx-lakebase-proxy` loopback
+  pgwire proxy for Databricks Lakebase. A startup user selects a Databricks
+  profile only when that profile exists; otherwise standard Databricks auth
+  resolution applies, and Apps use automatic App auth. `--profile` forces an
+  override. Startup database values use `lakebase_address` resource paths,
+  hosts, or project ids, with missing branch, endpoint, and database discovered
+  through the API. The proxy never pools or multiplexes: every local connection
+  gets one fresh Lakebase credential and one certificate-verified upstream TLS
+  connection. Local TLS is refused and local clients use `sslmode=disable`.
+  After authentication, startup parameters are preserved except for resolved
+  user/database and protocol bytes are tunneled opaquely, including prepared
+  statements, COPY, LISTEN/NOTIFY, and cancellation. Synthetic local
+  cancellation keys map to real upstream keys only for the connection
+  lifetime. Auth sessions and discovery metadata use bounded `mini-moka`
+  caches. Individual connections log at `debug`; one-minute aggregate
+  connection statistics log at `info`. The package stays private and out of
+  public package lists. pgwire 0.41.0 sets the Rust workspace compatibility
+  floor to 1.89.
 - `packages/js/node/search`, `packages/js/shared/search`, and
   `packages/js/ui/search` - extensions around AppKit's beta `aiSearch` plugin:
   agent tools, federated search, Vector Search index lifecycle, reusable search

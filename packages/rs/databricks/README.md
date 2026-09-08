@@ -9,6 +9,11 @@ Key features:
 - Profile, account, workspace, scope, and endpoint resolution.
 - Shared token lifecycle with file, memory, or caller-provided storage.
 - Cross-process file locking and file-backed TTL caches.
+- Flexible Lakebase addresses covering PostgreSQL URLs, resource paths,
+  hostnames, and project ids.
+- `DatabricksClient` for authenticated JSON REST calls with one rejected-token
+  refresh retry.
+- Shared tracing initialization from `LOG_LEVEL`, defaulting to `info`.
 - UniFFI bindings published as `@dbx-tools/databricks` and
   `dbx-tools-databricks`.
 

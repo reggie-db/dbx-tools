@@ -4,7 +4,7 @@ use std::{
     io,
     net::IpAddr,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use aigw_anthropic::{
@@ -32,14 +32,15 @@ use axum::{
     Json, Router,
 };
 use clap::{Parser, ValueEnum};
-use dbx_tools_databricks::{create_persistent_auth, DatabricksAuthOptions, PersistentAuth};
+use dbx_tools_databricks::{
+    create_persistent_auth, init_logging, DatabricksAuthOptions, PersistentAuth,
+};
 use dbx_tools_model::{codex_model_name, models_payload, ModelClient};
 use eventsource_stream::Eventsource;
 use futures_util::{StreamExt, TryStreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 const CHAT_PATH: &str = "serving-endpoints/chat/completions";
 const CODEX_RESPONSES_PATH: &str = "ai-gateway/codex/v1/responses";
@@ -145,9 +146,7 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
+    init_logging()?;
     let Cli {
         profile,
         host,
@@ -207,15 +206,27 @@ async fn list_models(
     Query(query): Query<ModelsQuery>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, ProxyError> {
+    let started = Instant::now();
     let originator = request_originator(&headers);
+    let codex = originator.is_some_and(is_codex_originator);
     let token = state.tokens.token().await?;
     let endpoints = state.models.models(&token, false).await?;
-    Ok(Json(models_payload(
-        &endpoints,
-        query.search.as_deref(),
-        query.extended,
-        originator.is_some_and(is_codex_originator),
-    )))
+    let payload = models_payload(&endpoints, query.search.as_deref(), query.extended, codex);
+    let count = payload
+        .get(if codex { "models" } else { "data" })
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .unwrap_or_default();
+    info!(
+        route = "/v1/models",
+        format = if codex { "codex" } else { "openai" },
+        search = query.search.as_deref().unwrap_or_default(),
+        extended = query.extended,
+        models = count,
+        latency_ms = started.elapsed().as_millis(),
+        "model request completed"
+    );
+    Ok(Json(payload))
 }
 
 async fn proxy(
@@ -224,6 +235,7 @@ async fn proxy(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, ProxyError> {
+    let started = Instant::now();
     let mut input: Value = serde_json::from_slice(&body)?;
     let requested_model = input
         .get("model")
@@ -271,6 +283,16 @@ async fn proxy(
     let status = StatusCode::from_u16(upstream.status().as_u16())
         .map_err(|error| ProxyError::Upstream(error.to_string()))?;
     if status.is_success() && streaming {
+        info!(
+            ?client_wire,
+            ?target,
+            requested_model,
+            resolved_model = model,
+            streaming,
+            status = status.as_u16(),
+            latency_ms = started.elapsed().as_millis(),
+            "model stream connected"
+        );
         return stream_response(client_wire, target, upstream, model);
     }
     let response_body = upstream
@@ -278,10 +300,30 @@ async fn proxy(
         .await
         .map_err(|error| ProxyError::Upstream(error.to_string()))?;
     if !status.is_success() {
+        info!(
+            ?client_wire,
+            ?target,
+            requested_model,
+            resolved_model = model,
+            streaming,
+            status = status.as_u16(),
+            latency_ms = started.elapsed().as_millis(),
+            "model request completed"
+        );
         return Ok((status, response_body).into_response());
     }
 
     let output = adapt_response(client_wire, target, status, &response_body)?;
+    info!(
+        ?client_wire,
+        ?target,
+        requested_model,
+        resolved_model = model,
+        streaming,
+        status = status.as_u16(),
+        latency_ms = started.elapsed().as_millis(),
+        "model request completed"
+    );
     Ok((status, [(header::CONTENT_TYPE, "application/json")], output).into_response())
 }
 
